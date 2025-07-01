@@ -15,8 +15,7 @@ services:
   HomeGlow-Frontend:
     container_name: HomeGlow-Frontend
     build:
-      context: https://github.com/jherforthummm
-      /homeglow.git#main:client
+      context: https://github.com/jherforth/homeglow.git#main:client
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
