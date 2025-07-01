@@ -3,6 +3,7 @@ import { Container, Grid } from '@mui/material';
 import CalendarWidget from './components/CalendarWidget';
 import PhotoWidget from './components/PhotoWidget';
 import ChoreWidget from './components/ChoreWidget';
+import AdminPanel from './components/AdminPanel';
 
 const App = () => {
   return (
@@ -16,6 +17,9 @@ const App = () => {
         </Grid>
         <Grid item xs={4}>
           <ChoreWidget />
+        </Grid>
+        <Grid item xs={4}>
+          <AdminPanel />
         </Grid>
       </Grid>
     </Container>
