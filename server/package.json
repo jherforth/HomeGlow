@@ -8,9 +8,10 @@
   },
   "dependencies": {
     "axios": "^1.6.0",
-    "cors": "^2.8.5",
+    "@fastify/cors": "^10.0.0",
+    "@fastify/static": "^8.0.0",
     "dotenv": "^16.0.3",
-    "express": "^4.18.2",
+    "fastify": "^5.0.0",
     "ical-generator": "^4.1.0",
     "sqlite3": "^5.1.6"
   }

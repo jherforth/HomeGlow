@@ -1,16 +1,18 @@
-const express = require('express');
+const fastify = require('fastify')({ logger: false });
 const sqlite3 = require('sqlite3').verbose();
-const cors = require('cors');
 const ical = require('ical-generator');
 const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
 
-const app = express();
-app.use(cors());
-app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Register CORS and static file plugins
+fastify.register(require('@fastify/cors'));
+fastify.register(require('@fastify/static'), {
+  root: path.join(__dirname, 'Uploads'),
+  prefix: '/uploads/',
+});
 
+// Initialize SQLite database
 const db = new sqlite3.Database('./tasks.db', (err) => {
   if (err) {
     console.error('Database connection error:', err);
@@ -40,95 +42,105 @@ const db = new sqlite3.Database('./tasks.db', (err) => {
   }
 });
 
+// Parse JSON bodies
+fastify.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
+  try {
+    const json = JSON.parse(body);
+    done(null, json);
+  } catch (err) {
+    done(err);
+  }
+});
+
 // Chore routes
-app.get('/api/chores', (req, res) => {
+fastify.get('/api/chores', async (request, reply) => {
   db.all('SELECT * FROM chores', [], (err, rows) => {
     if (err) {
-      res.status(500).json({ error: 'Failed to fetch chores' });
+      reply.status(500).send({ error: 'Failed to fetch chores' });
     } else {
-      res.json(rows);
+      reply.send(rows);
     }
   });
 });
 
-app.post('/api/chores', (req, res) => {
-  const { user_id, title, description, completed } = req.body;
+fastify.post('/api/chores', async (request, reply) => {
+  const { user_id, title, description, completed } = request.body;
   db.run(
     'INSERT INTO chores (user_id, title, description, completed) VALUES (?, ?, ?, ?)',
     [user_id, title, description, completed],
     function (err) {
       if (err) {
-        res.status(500).json({ error: 'Failed to add chore' });
+        reply.status(500).send({ error: 'Failed to add chore' });
       } else {
-        res.json({ id: this.lastID });
+        reply.send({ id: this.lastID });
       }
     }
   );
 });
 
-app.patch('/api/chores/:id', (req, res) => {
-  const { id } = req.params;
-  const { completed } = req.body;
+fastify.patch('/api/chores/:id', async (request, reply) => {
+  const { id } = request.params;
+  const { completed } = request.body;
   db.run(
     'UPDATE chores SET completed = ? WHERE id = ?',
     [completed, id],
     (err) => {
       if (err) {
-        res.status(500).json({ error: 'Failed to update chore' });
+        reply.status(500).send({ error: 'Failed to update chore' });
       } else {
-        res.json({ success: true });
+        reply.send({ success: true });
       }
     }
   );
 });
 
 // User routes
-app.post('/api/users', (req, res) => {
-  const { username, email, profile_picture } = req.body;
+fastify.post('/api/users', async (request, reply) => {
+  const { username, email, profile_picture } = request.body;
   db.run(
     'INSERT INTO users (username, email, profile_picture) VALUES (?, ?, ?)',
     [username, email, profile_picture],
     function (err) {
       if (err) {
-        res.status(500).json({ error: 'Failed to add user' });
+        reply.status(500).send({ error: 'Failed to add user' });
       } else {
-        res.json({ id: this.lastID });
+        reply.send({ id: this.lastID });
       }
     }
   );
 });
 
 // Calendar routes
-app.get('/api/calendar', (req, res) => {
+fastify.get('/api/calendar', async (request, reply) => {
   db.all('SELECT * FROM events', [], (err, rows) => {
     if (err) {
-      res.status(500).json({ error: 'Failed to fetch events' });
+      reply.status(500).send({ error: 'Failed to fetch events' });
     } else {
-      res.json(rows);
+      reply.send(rows);
     }
   });
 });
 
-app.post('/api/calendar', (req, res) => {
-  const { user_id, summary, start, end, description } = req.body;
+fastify.post('/api/calendar', async (request, reply) => {
+  const { user_id, summary, start, end, description } = request.body;
   db.run(
     'INSERT INTO events (user_id, summary, start, end, description) VALUES (?, ?, ?, ?, ?)',
     [user_id, summary, start, end, description],
     function (err) {
       if (err) {
-        res.status(500).json({ error: 'Failed to add event' });
+        reply.status(500).send({ error: 'Failed to add event' });
       } else {
-        res.json({ id: this.lastID });
+        reply.send({ id: this.lastID });
       }
     }
   );
 });
 
-app.get('/api/calendar/ics', (req, res) => {
+fastify.get('/api/calendar/ics', async (request, reply) => {
   const calendar = ical({ name: 'HomeGlow Calendar' });
   db.all('SELECT * FROM events', [], (err, rows) => {
     if (err) {
-      res.status(500).send('Failed to generate iCalendar');
+      reply.status(500).send('Failed to generate iCalendar');
     } else {
       rows.forEach((event) => {
         calendar.createEvent({
@@ -138,13 +150,18 @@ app.get('/api/calendar/ics', (req, res) => {
           description: event.description,
         });
       });
-      res.set('Content-Type', 'text/calendar');
-      res.send(calendar.toString());
+      reply.header('Content-Type', 'text/calendar');
+      reply.send(calendar.toString());
     }
   });
 });
 
+// Start server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+fastify.listen({ port: PORT, host: '0.0.0.0' }, (err) => {
+  if (err) {
+    console.error('Server error:', err);
+    process.exit(1);
+  }
   console.log(`Server running on port ${PORT}`);
 });
