@@ -1,6 +1,6 @@
 services:
   HomeGlow-Backend:
-    container_name: homeglow-backend
+    container_name: HomeGlow-Backend
     build:
       context: ./server
       dockerfile: Dockerfile
@@ -13,13 +13,13 @@ services:
       - NODE_ENV=production
       - PORT=5000
   HomeGlow-Frontend:
-    container_name: homeglow-frontend
+    container_name: HomeGlow-Frontend
     build:
       context: ./client
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
     depends_on:
-      - homeglow-backend
+      - HomeGlow-Backend
     environment:
-      - REACT_APP_API_URL=http://homeglow-backend:5000
+      - REACT_APP_API_URL=http://HomeGlow-Backend:5000

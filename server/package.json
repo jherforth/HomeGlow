@@ -1,5 +1,5 @@
 {
-  "name": "homeglow-server",
+  "name": "HomeGlow-Server",
   "version": "1.0.0",
   "description": "Backend for HomeGlow dashboard",
   "main": "index.js",
