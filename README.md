@@ -27,5 +27,70 @@ Self hosted home display project to be deployed in docker
 
 1. **Clone the Repository**:
    ```bash
-   git clone https://github.com/your-username/homeglow.git
+   git clone https://github.com/jherforth/homeglow.git
    cd homeglow
+
+2. **update server/.env**:
+  PORT=5000
+  NEXTCLOUD_URL=https://your-nextcloud-instance.com
+  NEXTCLOUD_USERNAME=your-username
+  NEXTCLOUD_PASSWORD=your-password
+  IMMICH_URL=https://your-immich-instance.com
+  IMMICH_API_KEY=your-immich-api-key
+
+3. **update client/.env**
+  REACT_APP_API_URL=http://backend:5000
+
+4. **run the build**
+  ```bash
+  docker-compose up --build -d
+
+5. **access your app**
+  http://your-server-ip:3000
+
+6. **secure with nginx and certbot**
+  ```bash
+  sudo apt update
+  sudo apt install nginx certbot python3-certbot-nginx
+
+7. **configure nginx /etc/nginx/sites-available/homeglow**
+
+  server {
+      listen 80;
+      server_name your-domain.com;
+      location / {
+          proxy_pass http://localhost:3000;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+      }
+      location /api {
+          proxy_pass http://localhost:5000;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+      }
+  }
+
+8. **enable and secure**
+  ```bash
+  sudo ln -s /etc/nginx/sites-available/homeglow /etc/nginx/sites-enabled/
+  sudo systemctl restart nginx
+  sudo certbot --nginx -d your-domain.com
+
+### Optional:
+
+1. **install dependencies**
+  ```bash
+  cd server
+  npm install
+  cd ../client
+  npm install
+
+2. **run backend**
+  ```bash
+  cd server
+  npm start
+
+3. **run frontend**
+  ```bash
+  cd client
+  npm start
