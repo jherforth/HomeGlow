@@ -8,27 +8,26 @@ const CalendarWidget = () => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    axios
-      .get(`${process.env.REACT_APP_API_URL}/api/calendar`)
-      .then((response) => {
+    const fetchEvents = async () => {
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/calendar`);
         setEvents(response.data);
         setError(null);
-      })
-      .catch((error) => {
+      } catch (error) {
         console.error('Error fetching calendar events:', error);
-        setError('Failed to load calendar events');
-      });
+        setError('Cannot connect to calendar service. Please check Nextcloud settings.');
+      }
+    };
+    fetchEvents();
   }, []);
 
   return (
     <Card className="card">
       <Typography variant="h6">Calendar</Typography>
       {error && <Typography color="error">{error}</Typography>}
-      {events.length === 0 && !error && <Typography>No events found</Typography>}
+      {events.length === 0 && !error && <Typography>No events available</Typography>}
       {events.map((event) => (
-        <Typography key={event.id} style={{ marginBottom: '8px' }}>
-          {event.summary} - {event.start}
-        </Typography>
+        <Typography key={event.id}>{event.summary} - {event.start}</Typography>
       ))}
     </Card>
   );

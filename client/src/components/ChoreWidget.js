@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { Button, Card, Typography, TextField } from '@mui/material';
 import Hammer from 'hammerjs';
+import '../index.css';
 
 const ChoreWidget = () => {
   const [chores, setChores] = useState([]);
@@ -10,16 +11,17 @@ const ChoreWidget = () => {
   const cardRef = useRef(null);
 
   useEffect(() => {
-    axios
-      .get(`${process.env.REACT_APP_API_URL}/api/chores`)
-      .then((response) => {
+    const fetchChores = async () => {
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/chores`);
         setChores(response.data);
         setError(null);
-      })
-      .catch((error) => {
+      } catch (error) {
         console.error('Error fetching chores:', error);
-        setError('Failed to load chores');
-      });
+        setError('Cannot connect to chore service. Please try again later.');
+      }
+    };
+    fetchChores();
   }, []);
 
   useEffect(() => {
@@ -46,7 +48,7 @@ const ChoreWidget = () => {
       setError(null);
     } catch (error) {
       console.error('Error marking chore complete:', error);
-      setError('Failed to mark chore as complete');
+      setError('Failed to update chore. Please try again.');
     }
   };
 
@@ -71,7 +73,7 @@ const ChoreWidget = () => {
       setError(null);
     } catch (error) {
       console.error('Error adding chore:', error);
-      setError('Failed to add chore');
+      setError('Failed to add chore. Please try again.');
     }
   };
 
@@ -79,6 +81,7 @@ const ChoreWidget = () => {
     <Card className="card" ref={cardRef}>
       <Typography variant="h6">Chores</Typography>
       {error && <Typography color="error">{error}</Typography>}
+      {chores.length === 0 && !error && <Typography>No chores available</Typography>}
       {chores.map((chore) => (
         <Typography
           key={chore.id}

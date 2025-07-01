@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { Button, Card, Typography, TextField, Box } from '@mui/material';
+import { Button, Card, Typography, TextField, Box, Switch, FormControlLabel } from '@mui/material';
+import '../index.css';
 
-const AdminPanel = () => {
+const AdminPanel = ({ setWidgetSettings }) => {
   const [formData, setFormData] = useState({
     username: '',
     email: '',
@@ -10,6 +11,19 @@ const AdminPanel = () => {
   });
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [toggles, setToggles] = useState(() => {
+    const saved = localStorage.getItem('widgetSettings');
+    return saved ? JSON.parse(saved) : { chores: false, calendar: false, photos: false };
+  });
+
+  // Handle widget toggle changes
+  const handleToggleChange = (event) => {
+    const { name, checked } = event.target;
+    const newToggles = { ...toggles, [name]: checked };
+    setToggles(newToggles);
+    setWidgetSettings(newToggles);
+    localStorage.setItem('widgetSettings', JSON.stringify(newToggles));
+  };
 
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -62,10 +76,29 @@ const AdminPanel = () => {
 
   return (
     <Card className="card">
-      <Typography variant="h6">Admin Panel - Add User</Typography>
+      <Typography variant="h6">Admin Panel</Typography>
       {error && <Typography color="error">{error}</Typography>}
       {success && <Typography color="success.main">{success}</Typography>}
+      <Box sx={{ mt: 2 }}>
+        <Typography variant="subtitle1">Widget Toggles</Typography>
+        <FormControlLabel
+          control={<Switch checked={toggles.chores} onChange={handleToggleChange} name="chores" />}
+          label="Chores Widget"
+          className="toggle-label"
+        />
+        <FormControlLabel
+          control={<Switch checked={toggles.calendar} onChange={handleToggleChange} name="calendar" />}
+          label="Calendar Widget"
+          className="toggle-label"
+        />
+        <FormControlLabel
+          control={<Switch checked={toggles.photos} onChange={handleToggleChange} name="photos" />}
+          label="Photos Widget"
+          className="toggle-label"
+        />
+      </Box>
       <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
+        <Typography variant="subtitle1">Add User</Typography>
         <TextField
           name="username"
           value={formData.username}

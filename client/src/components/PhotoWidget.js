@@ -8,22 +8,24 @@ const PhotoWidget = () => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    axios
-      .get(`${process.env.REACT_APP_API_URL}/api/photos`)
-      .then((response) => {
+    const fetchPhotos = async () => {
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/photos`);
         setPhotos(response.data);
         setError(null);
-      })
-      .catch((error) => {
+      } catch (error) {
         console.error('Error fetching photos:', error);
-        setError('Failed to load photos');
-      });
+        setError('Cannot connect to photo service. Please check Immich settings.');
+      }
+    };
+    fetchPhotos();
   }, []);
 
   return (
     <Card className="card">
       <Typography variant="h6">Photos</Typography>
       {error && <Typography color="error">{error}</Typography>}
+      {photos.length === 0 && !error && <Typography>No photos available</Typography>}
       {photos.map((photo) => (
         <CardMedia
           key={photo.id}
@@ -31,12 +33,7 @@ const PhotoWidget = () => {
           height="140"
           image={photo.url}
           alt={photo.name}
-          style={{
-            borderRadius: '8px',
-            marginBottom: '8px',
-            border: '1px solid var(--card-border)',
-            objectFit: 'cover',
-          }}
+          style={{ marginBottom: '8px', borderRadius: '8px' }}
         />
       ))}
     </Card>
