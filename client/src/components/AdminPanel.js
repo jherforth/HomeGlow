@@ -11,18 +11,15 @@ const AdminPanel = () => {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
-  // Handle text input changes
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
     setError(null);
     setSuccess(null);
   };
 
-  // Handle file input for profile picture
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Validate file type and size (max 1MB)
       if (!['image/jpeg', 'image/png'].includes(file.type)) {
         setError('Only JPEG or PNG images are allowed');
         return;
@@ -31,7 +28,6 @@ const AdminPanel = () => {
         setError('Image size must be less than 1MB');
         return;
       }
-      // Convert to base64
       const reader = new FileReader();
       reader.onloadend = () => {
         setFormData({ ...formData, profilePicture: reader.result });
@@ -42,7 +38,6 @@ const AdminPanel = () => {
     }
   };
 
-  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.username.trim() || !formData.email.trim()) {
@@ -66,7 +61,7 @@ const AdminPanel = () => {
   };
 
   return (
-    <Card style={{ padding: '20px', width: '300px', touchAction: 'manipulation' }}>
+    <Card className="card">
       <Typography variant="h6">Admin Panel - Add User</Typography>
       {error && <Typography color="error">{error}</Typography>}
       {success && <Typography color="success.main">{success}</Typography>}
@@ -108,13 +103,16 @@ const AdminPanel = () => {
             <img
               src={formData.profilePicture}
               alt="Profile Preview"
-              style={{ maxWidth: '100px', maxHeight: '100px' }}
+              style={{
+                maxWidth: '100px',
+                maxHeight: '100px',
+                borderRadius: '8px',
+                border: '1px solid var(--card-border)',
+              }}
             />
           </Box>
         )}
-        <Button type="submit" variant="contained" fullWidth>
-          Add User
-        </Button>
+        <Button type="submit">Add User</Button>
       </Box>
     </Card>
   );

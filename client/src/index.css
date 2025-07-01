@@ -1,0 +1,115 @@
+/* Web 3.0-inspired global styles with light and dark themes */
+
+/* Default: Light Theme */
+:root {
+  --background: #f4f4f9;
+  --card-bg: rgba(255, 255, 255, 0.8);
+  --card-border: rgba(255, 255, 255, 0.2);
+  --text-color: #1a1a2e;
+  --accent: #6e44ff;
+  --gradient: linear-gradient(45deg, #6e44ff, #00ddeb);
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  --backdrop-blur: blur(10px);
+}
+
+/* Dark Theme */
+[data-theme="dark"] {
+  --background: #0a0a1a;
+  --card-bg: rgba(30, 30, 50, 0.7);
+  --card-border: rgba(100, 100, 150, 0.3);
+  --text-color: #e6e6fa;
+  --accent: #00ddeb;
+  --gradient: linear-gradient(45deg, #00ddeb, #ff6b6b);
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--background);
+  color: var(--text-color);
+  transition: background 0.3s ease, color 0.3s ease;
+  touch-action: manipulation; /* Ensures touch responsiveness */
+}
+
+.container {
+  padding: 20px;
+  min-height: 100vh;
+  background: var(--gradient);
+  background-attachment: fixed;
+}
+
+.grid-item {
+  display: flex;
+  justify-content: center;
+}
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 20px;
+  backdrop-filter: var(--backdrop-blur);
+  box-shadow: var(--shadow);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  width: 300px;
+  touch-action: manipulation;
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+}
+
+h6, h1 {
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--text-color);
+}
+
+button {
+  background: var(--gradient);
+  color: var(--text-color);
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: background 0.3s ease;
+  touch-action: manipulation;
+}
+
+button:hover {
+  filter: brightness(1.1);
+}
+
+.theme-toggle {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 50%;
+  padding: 10px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  backdrop-filter: var(--backdrop-blur);
+  box-shadow: var(--shadow);
+}
+
+/* Ensure Material-UI components adapt to themes */
+.MuiTextField-root input,
+.MuiTextField-root label,
+.MuiTypography-root {
+  color: var(--text-color) !important;
+}
+
+.MuiTextField-root .MuiOutlinedInput-notchedOutline {
+  border-color: var(--card-border) !important;
+}
+
+.MuiListItemText-primary,
+.MuiListItemText-secondary {
+  color: var(--text-color) !important;
+}

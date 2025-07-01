@@ -6,6 +6,7 @@
     "@emotion/react": "^11.11.1",
     "@emotion/styled": "^11.11.0",
     "@mui/material": "^5.14.0",
+    "@mui/icons-material": "^5.14.0",
     "axios": "^1.6.0",
     "hammerjs": "^2.0.8",
     "react": "^18.2.0",
