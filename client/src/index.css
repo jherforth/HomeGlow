@@ -1,6 +1,4 @@
 /* Web 3.0-inspired global styles with light and dark themes */
-
-/* Default: Light Theme */
 :root {
   --background: #f4f4f9;
   --card-bg: rgba(255, 255, 255, 0.8);
@@ -12,7 +10,6 @@
   --backdrop-blur: blur(10px);
 }
 
-/* Dark Theme */
 [data-theme="dark"] {
   --background: #0a0a1a;
   --card-bg: rgba(30, 30, 50, 0.7);
@@ -29,7 +26,7 @@ body {
   background: var(--background);
   color: var(--text-color);
   transition: background 0.3s ease, color 0.3s ease;
-  touch-action: manipulation; /* Ensures touch responsiveness */
+  touch-action: manipulation;
 }
 
 .container {
@@ -96,6 +93,60 @@ button:hover {
   cursor: pointer;
   backdrop-filter: var(--backdrop-blur);
   box-shadow: var(--shadow);
+}
+
+/* Toggle switch for Web 3.0 */
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+  color: var(--text-color);
+}
+
+.toggle-switch {
+  position: relative;
+  width: 48px;
+  height: 24px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 24px;
+  transition: 0.3s;
+  backdrop-filter: var(--backdrop-blur);
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 2.5px;
+  background: var(--accent);
+  border-radius: 50%;
+  transition: 0.3s;
+}
+
+input:checked + .toggle-slider {
+  background: var(--gradient);
+}
+
+input:checked + .toggle-slider:before {
+  transform: translateX(24px);
 }
 
 /* Ensure Material-UI components adapt to themes */
