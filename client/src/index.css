@@ -165,3 +165,11 @@ input:checked+.toggle-slider:before {
 .MuiListItemText-secondary {
   color: var(--text-color) !important;
 }
+
+.card.transparent-card {
+  background: rgba(255, 255, 255, 0.2) !important; /* Light theme transparency */
+}
+
+[data-theme="dark"] .card.transparent-card {
+  background: rgba(30, 30, 50, 0.3) !important; /* Dark theme transparency */
+}
