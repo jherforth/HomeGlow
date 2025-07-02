@@ -1,8 +1,15 @@
-FROM node:24
+# File: client/Dockerfile
+FROM node:24 AS build
 WORKDIR /app
 COPY package*.json ./
 RUN npm install -g npm@latest
-RUN npm install || { echo 'npm install failed'; exit 1; }
+RUN npm install --production=false
 COPY . .
+RUN npm run build
+
+FROM node:24-alpine AS production
+WORKDIR /app
+COPY --from=build /app/dist ./dist
+RUN npm install -g serve
 EXPOSE 3000
-CMD ["npm", "run", "dev"]
+CMD ["serve", "-s", "dist", "-l", "3000"]
