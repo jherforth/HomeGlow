@@ -6,6 +6,6 @@ COPY package*.json ./
 RUN npm install -g npm@latest
 RUN npm install || { echo 'npm install failed'; exit 1; }
 COPY . .
-RUN mkdir -p /app/uploads/users
+RUN mkdir -p /app/uploads/users && chmod -R 777 /app/uploads
 EXPOSE 5000
 CMD ["node", "index.js"]

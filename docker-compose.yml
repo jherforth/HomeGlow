@@ -5,7 +5,7 @@ services:
       context: ./server
       dockerfile: Dockerfile
     ports:
-      - "5010:5000"
+      - "5000:5000"
     volumes:
       - ./tasks.db:/app/tasks.db
       - ./uploads:/app/uploads
@@ -18,7 +18,7 @@ services:
       context: ./client
       dockerfile: Dockerfile
     ports:
-      - "3010:3000"
+      - "3000:3000"
     depends_on:
       - homeglow-backend
     environment:

@@ -10,7 +10,7 @@ fastify.register(require('@fastify/cors'));
 
 // Serve static files for uploads
 fastify.register(require('@fastify/static'), {
-  root: path.join(__dirname, 'Uploads'),
+  root: path.join(__dirname, 'uploads'),
   prefix: '/Uploads/',
 });
 
@@ -18,35 +18,37 @@ fastify.register(require('@fastify/static'), {
 const dbPath = path.resolve(__dirname, 'tasks.db');
 async function initializeDatabase() {
   try {
-    await fs.access(path.dirname(dbPath));
-  } catch (error) {
     await fs.mkdir(path.dirname(dbPath), { recursive: true });
+    await fs.chmod(path.dirname(dbPath), 0o777); // Ensure directory is writable
+    const db = new Database(dbPath, { verbose: console.log });
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS chores (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        title TEXT,
+        description TEXT,
+        completed BOOLEAN
+      );
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT,
+        email TEXT,
+        profile_picture TEXT
+      );
+      CREATE TABLE IF NOT EXISTS events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        summary TEXT,
+        start TEXT,
+        end TEXT,
+        description TEXT
+      );
+    `);
+    return db;
+  } catch (error) {
+    console.error('Failed to initialize database:', error);
+    throw error;
   }
-  const db = new Database(dbPath, { verbose: console.log });
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS chores (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER,
-      title TEXT,
-      description TEXT,
-      completed BOOLEAN
-    );
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT,
-      email TEXT,
-      profile_picture TEXT
-    );
-    CREATE TABLE IF NOT EXISTS events (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER,
-      summary TEXT,
-      start TEXT,
-      end TEXT,
-      description TEXT
-    );
-  `);
-  return db;
 }
 
 // Chore routes

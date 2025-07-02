@@ -2,7 +2,7 @@ FROM node:24
 WORKDIR /app
 COPY package*.json ./
 RUN npm install -g npm@latest
-RUN npm install
+RUN npm install || { echo 'npm install failed'; exit 1; }
 COPY . .
 EXPOSE 3000
 CMD ["npm", "run", "dev"]
