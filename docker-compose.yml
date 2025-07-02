@@ -17,6 +17,8 @@ services:
     build:
       context: ./client
       dockerfile: Dockerfile
+      args: # <--- ADD THIS SECTION
+        - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY} # <--- ADD THIS LINE
     ports:
       - "3000:3000"
     depends_on:
