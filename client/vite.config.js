@@ -11,7 +11,4 @@ export default defineConfig({
       usePolling: true,
     },
   },
-  define: {
-    'process.env': process.env,
-  },
 });
