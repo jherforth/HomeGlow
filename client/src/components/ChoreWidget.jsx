@@ -13,7 +13,7 @@ const ChoreWidget = () => {
   useEffect(() => {
     const fetchChores = async () => {
       try {
-        const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/chores`);
+        const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`);
         // Ensure response.data is an array before setting state
         setChores(Array.isArray(response.data) ? response.data : []);
         setError(null);
@@ -38,7 +38,7 @@ const ChoreWidget = () => {
 
   const markChoreComplete = async (choreId) => {
     try {
-      await axios.patch(`${process.env.REACT_APP_API_URL}/api/chores/${choreId}`, {
+      await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores/${choreId}`, {
         completed: true,
       });
       setChores(
@@ -63,7 +63,7 @@ const ChoreWidget = () => {
       return;
     }
     try {
-      const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/chores`, {
+      const response = await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`, {
         user_id: 1,
         title: newChore.title,
         description: newChore.description,

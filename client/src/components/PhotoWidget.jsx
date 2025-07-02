@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { Card, CardMedia, Typography } from '@mui/material';
-import '../index.css';
+import { Card, Typography, Button, Box } from '@mui/material';
 
 const PhotoWidget = () => {
   const [photos, setPhotos] = useState([]);
@@ -10,32 +9,59 @@ const PhotoWidget = () => {
   useEffect(() => {
     const fetchPhotos = async () => {
       try {
-        const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/photos`);
+        const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/photos`);
         setPhotos(response.data);
         setError(null);
       } catch (error) {
         console.error('Error fetching photos:', error);
-        setError('Cannot connect to photo service. Please check Immich settings.');
+        setError('Cannot connect to photo service. Please try again later.');
       }
     };
     fetchPhotos();
   }, []);
 
+  const handleUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('photo', file);
+
+    try {
+      await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/photos/upload`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      // Re-fetch photos after successful upload
+      const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/photos`);
+      setPhotos(response.data);
+      setError(null);
+    } catch (error) {
+      console.error('Error uploading photo:', error);
+      setError('Failed to upload photo. Please try again.');
+    }
+  };
+
   return (
     <Card className="card">
       <Typography variant="h6">Photos</Typography>
       {error && <Typography color="error">{error}</Typography>}
-      {photos.length === 0 && !error && <Typography>No photos available</Typography>}
-      {photos.map((photo) => (
-        <CardMedia
-          key={photo.id}
-          component="img"
-          height="140"
-          image={photo.url}
-          alt={photo.name}
-          style={{ marginBottom: '8px', borderRadius: '8px' }}
-        />
-      ))}
+      <Box sx={{ height: 200, overflowY: 'auto', mt: 2 }}>
+        {photos.length === 0 && !error && <Typography>No photos available</Typography>}
+        {photos.map((photo) => (
+          <img
+            key={photo.id}
+            src={`${import.meta.env.VITE_REACT_APP_API_URL}/Uploads/${photo.filename}`}
+            alt={photo.filename}
+            style={{ width: '100%', marginBottom: '8px', borderRadius: '4px' }}
+          />
+        ))}
+      </Box>
+      <Button variant="contained" component="label" sx={{ mt: 2 }}>
+        Upload Photo
+        <input type="file" hidden onChange={handleUpload} />
+      </Button>
     </Card>
   );
 };

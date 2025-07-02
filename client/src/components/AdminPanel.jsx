@@ -60,7 +60,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
       return;
     }
     try {
-      await axios.post(`${process.env.REACT_APP_API_URL}/api/users`, {
+      await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users`, {
         username: formData.username,
         email: formData.email,
         profile_picture: formData.profilePicture,
