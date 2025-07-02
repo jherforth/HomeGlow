@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Grid, IconButton } from '@mui/material';
 import { Brightness4, Brightness7 } from '@mui/icons-material';
-import CalendarWidget from './components/CalendarWidget';
-import PhotoWidget from './components/PhotoWidget';
-import ChoreWidget from './components/ChoreWidget';
-import AdminPanel from './components/AdminPanel';
+import CalendarWidget from './components/CalendarWidget.jsx';
+import PhotoWidget from './components/PhotoWidget.jsx';
+import ChoreWidget from './components/ChoreWidget.jsx';
+import AdminPanel from './components/AdminPanel.jsx';
 import './index.css';
 
 const App = () => {
