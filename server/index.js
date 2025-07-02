@@ -1,6 +1,5 @@
 const fastify = require('fastify')({ logger: true });
-const { Low } = require('lowdb');
-const { JSONFile } = require('lowdb/node');
+const Database = require('better-sqlite3');
 const ical = require('ical-generator');
 const path = require('path');
 const fs = require('fs').promises;
@@ -15,21 +14,38 @@ fastify.register(require('@fastify/static'), {
   prefix: '/Uploads/',
 });
 
-// Initialize LowDB
-const dbPath = path.resolve(__dirname, 'tasks.json');
+// Initialize database
+const dbPath = path.resolve(__dirname, 'tasks.db');
 async function initializeDatabase() {
   try {
     await fs.access(path.dirname(dbPath));
   } catch (error) {
     await fs.mkdir(path.dirname(dbPath), { recursive: true });
   }
-  const adapter = new JSONFile(dbPath);
-  const db = new Low(adapter, {
-    chores: [],
-    users: [],
-    events: [],
-  });
-  await db.read();
+  const db = new Database(dbPath, { verbose: console.log });
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS chores (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      title TEXT,
+      description TEXT,
+      completed BOOLEAN
+    );
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT,
+      email TEXT,
+      profile_picture TEXT
+    );
+    CREATE TABLE IF NOT EXISTS events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      summary TEXT,
+      start TEXT,
+      end TEXT,
+      description TEXT
+    );
+  `);
   return db;
 }
 
@@ -37,7 +53,9 @@ async function initializeDatabase() {
 fastify.get('/api/chores', async (request, reply) => {
   try {
     const db = await initializeDatabase();
-    return db.data.chores;
+    const rows = db.prepare('SELECT * FROM chores').all();
+    db.close();
+    return rows;
   } catch (error) {
     console.error('Error fetching chores:', error);
     reply.status(500).send({ error: 'Failed to fetch chores' });
@@ -48,10 +66,10 @@ fastify.post('/api/chores', async (request, reply) => {
   const { user_id, title, description, completed } = request.body;
   try {
     const db = await initializeDatabase();
-    const newChore = { id: db.data.chores.length + 1, user_id, title, description, completed };
-    db.data.chores.push(newChore);
-    await db.write();
-    return { id: newChore.id };
+    const stmt = db.prepare('INSERT INTO chores (user_id, title, description, completed) VALUES (?, ?, ?, ?)');
+    const info = stmt.run(user_id, title, description, completed);
+    db.close();
+    return { id: info.lastInsertRowid };
   } catch (error) {
     console.error('Error adding chore:', error);
     reply.status(500).send({ error: 'Failed to add chore' });
@@ -63,14 +81,10 @@ fastify.patch('/api/chores/:id', async (request, reply) => {
   const { completed } = request.body;
   try {
     const db = await initializeDatabase();
-    const chore = db.data.chores.find((c) => c.id === parseInt(id));
-    if (chore) {
-      chore.completed = completed;
-      await db.write();
-      return { success: true };
-    } else {
-      reply.status(404).send({ error: 'Chore not found' });
-    }
+    const stmt = db.prepare('UPDATE chores SET completed = ? WHERE id = ?');
+    stmt.run(completed, id);
+    db.close();
+    return { success: true };
   } catch (error) {
     console.error('Error updating chore:', error);
     reply.status(500).send({ error: 'Failed to update chore' });
@@ -82,10 +96,10 @@ fastify.post('/api/users', async (request, reply) => {
   const { username, email, profile_picture } = request.body;
   try {
     const db = await initializeDatabase();
-    const newUser = { id: db.data.users.length + 1, username, email, profile_picture };
-    db.data.users.push(newUser);
-    await db.write();
-    return { id: newUser.id };
+    const stmt = db.prepare('INSERT INTO users (username, email, profile_picture) VALUES (?, ?, ?)');
+    const info = stmt.run(username, email, profile_picture);
+    db.close();
+    return { id: info.lastInsertRowid };
   } catch (error) {
     console.error('Error adding user:', error);
     reply.status(500).send({ error: 'Failed to add user' });
@@ -96,7 +110,9 @@ fastify.post('/api/users', async (request, reply) => {
 fastify.get('/api/calendar', async (request, reply) => {
   try {
     const db = await initializeDatabase();
-    return db.data.events;
+    const rows = db.prepare('SELECT * FROM events').all();
+    db.close();
+    return rows;
   } catch (error) {
     console.error('Error fetching events:', error);
     reply.status(500).send({ error: 'Failed to fetch events' });
@@ -107,10 +123,10 @@ fastify.post('/api/calendar', async (request, reply) => {
   const { user_id, summary, start, end, description } = request.body;
   try {
     const db = await initializeDatabase();
-    const newEvent = { id: db.data.events.length + 1, user_id, summary, start, end, description };
-    db.data.events.push(newEvent);
-    await db.write();
-    return { id: newEvent.id };
+    const stmt = db.prepare('INSERT INTO events (user_id, summary, start, end, description) VALUES (?, ?, ?, ?, ?)');
+    const info = stmt.run(user_id, summary, start, end, description);
+    db.close();
+    return { id: info.lastInsertRowid };
   } catch (error) {
     console.error('Error adding event:', error);
     reply.status(500).send({ error: 'Failed to add event' });
@@ -120,8 +136,10 @@ fastify.post('/api/calendar', async (request, reply) => {
 fastify.get('/api/calendar/ics', async (request, reply) => {
   try {
     const db = await initializeDatabase();
+    const rows = db.prepare('SELECT * FROM events').all();
+    db.close();
     const calendar = ical({ name: 'HomeGlow Calendar' });
-    db.data.events.forEach((event) => {
+    rows.forEach((event) => {
       calendar.createEvent({
         start: new Date(event.start),
         end: new Date(event.end),
