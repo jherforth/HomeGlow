@@ -58,7 +58,8 @@ body {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
 }
 
-h6, h1 {
+h6,
+h1 {
   font-weight: 700;
   letter-spacing: 0.5px;
   color: var(--text-color);
@@ -141,11 +142,11 @@ button:hover {
   transition: 0.3s;
 }
 
-input:checked + .toggle-slider {
+input:checked+.toggle-slider {
   background: var(--gradient);
 }
 
-input:checked + .toggle-slider:before {
+input:checked+.toggle-slider:before {
   transform: translateX(24px);
 }
 
@@ -163,10 +164,4 @@ input:checked + .toggle-slider:before {
 .MuiListItemText-primary,
 .MuiListItemText-secondary {
   color: var(--text-color) !important;
-}
-
-/* Add this to the end of your file */
-.transparent-card {
-  background-color: transparent !important;
-  box-shadow: none !important;
 }
