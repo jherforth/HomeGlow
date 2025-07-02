@@ -14,7 +14,8 @@ const ChoreWidget = () => {
     const fetchChores = async () => {
       try {
         const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/chores`);
-        setChores(response.data);
+        // Ensure response.data is an array before setting state
+        setChores(Array.isArray(response.data) ? response.data : []);
         setError(null);
       } catch (error) {
         console.error('Error fetching chores:', error);
@@ -82,7 +83,8 @@ const ChoreWidget = () => {
       <Typography variant="h6">Chores</Typography>
       {error && <Typography color="error">{error}</Typography>}
       {chores.length === 0 && !error && <Typography>No chores available</Typography>}
-      {chores.map((chore) => (
+      {/* Ensure chores is an array before mapping */}
+      {Array.isArray(chores) && chores.map((chore) => (
         <Typography
           key={chore.id}
           data-chore-id={chore.id}
