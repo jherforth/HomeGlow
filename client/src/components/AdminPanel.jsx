@@ -18,6 +18,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
       calendar: { enabled: false, transparent: false },
       photos: { enabled: false, transparent: false },
       weather: { enabled: false, transparent: false },
+      menu: { enabled: false, transparent: false }, // Add menu widget settings
     };
     // Merge saved settings with defaults to ensure new properties are present
     return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
@@ -163,6 +164,24 @@ const AdminPanel = ({ setWidgetSettings }) => {
               <FormControlLabel
                 control={<Switch checked={toggles.weather.transparent} onChange={handleToggleChange} name="weather.transparent" />}
                 label="Weather Transparent"
+                className="toggle-label"
+              />
+            </Box>
+          )}
+        </Box>
+
+        {/* Menu Widget Toggles */}
+        <Box sx={{ mb: 1 }}>
+          <FormControlLabel
+            control={<Switch checked={toggles.menu.enabled} onChange={handleToggleChange} name="menu.enabled" />}
+            label="Enable Menu Widget"
+            className="toggle-label"
+          />
+          {toggles.menu.enabled && ( // Conditionally render transparency toggle
+            <Box sx={{ ml: 4 }}> {/* Indent */}
+              <FormControlLabel
+                control={<Switch checked={toggles.menu.transparent} onChange={handleToggleChange} name="menu.transparent" />}
+                label="Menu Transparent"
                 className="toggle-label"
               />
             </Box>

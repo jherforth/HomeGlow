@@ -7,6 +7,7 @@ import PhotoWidget from './components/PhotoWidget.jsx';
 import ChoreWidget from './components/ChoreWidget.jsx';
 import AdminPanel from './components/AdminPanel.jsx';
 import WeatherWidget from './components/WeatherWidget.jsx';
+import MenuWidget from './components/MenuWidget.jsx'; // Import the new MenuWidget
 import './index.css';
 
 const App = () => {
@@ -18,6 +19,7 @@ const App = () => {
       calendar: { enabled: false, transparent: false },
       photos: { enabled: false, transparent: false },
       weather: { enabled: false, transparent: false },
+      menu: { enabled: false, transparent: false }, // Add menu widget settings
     };
     return savedSettings ? { ...defaultSettings, ...JSON.parse(savedSettings) } : defaultSettings;
   });
@@ -37,6 +39,7 @@ const App = () => {
           calendar: { enabled: false, transparent: false },
           photos: { enabled: false, transparent: false },
           weather: { enabled: false, transparent: false },
+          menu: { enabled: false, transparent: false }, // Add menu widget settings
         };
         return { ...defaultSettings, ...JSON.parse(savedSettings) };
       });
@@ -99,6 +102,11 @@ const App = () => {
         {widgetSettings.weather.enabled && (
           <Grid item xs={12} sm={6} md={3} className="grid-item">
             <WeatherWidget transparentBackground={widgetSettings.weather.transparent} />
+          </Grid>
+        )}
+        {widgetSettings.menu.enabled && ( // Conditionally render MenuWidget
+          <Grid item xs={12} sm={6} md={3} className="grid-item">
+            <MenuWidget transparentBackground={widgetSettings.menu.transparent} />
           </Grid>
         )}
         {showAdminPanel && (
