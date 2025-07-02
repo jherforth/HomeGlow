@@ -1,6 +1,5 @@
 const fastify = require('fastify')({ logger: true });
 const Database = require('better-sqlite3');
-const cors = require('cors');
 const ical = require('ical-generator');
 const path = require('path');
 const fs = require('fs').promises;
@@ -12,7 +11,7 @@ fastify.register(require('@fastify/cors'));
 // Serve static files for uploads
 fastify.register(require('@fastify/static'), {
   root: path.join(__dirname, 'Uploads'),
-  prefix: '/uploads/',
+  prefix: '/Uploads/',
 });
 
 // Initialize database
