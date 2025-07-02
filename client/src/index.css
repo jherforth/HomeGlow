@@ -164,3 +164,9 @@ input:checked + .toggle-slider:before {
 .MuiListItemText-secondary {
   color: var(--text-color) !important;
 }
+
+/* Add this to the end of your file */
+.transparent-card {
+  background-color: transparent !important;
+  box-shadow: none !important;
+}

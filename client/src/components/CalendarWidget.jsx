@@ -8,7 +8,7 @@ import '../index.css';
 
 const localizer = momentLocalizer(moment);
 
-const CalendarWidget = () => {
+const CalendarWidget = ({ transparentBackground }) => { // Added transparentBackground prop
   const [events, setEvents] = useState([]);
   const [error, setError] = useState(null);
 
@@ -16,11 +16,11 @@ const CalendarWidget = () => {
     const fetchEvents = async () => {
       try {
         const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/calendar`);
-        const formattedEvents = response.data.map(event => ({
+        const formattedEvents = Array.isArray(response.data) ? response.data.map(event => ({ // Defensive check
           ...event,
           start: new Date(event.start),
           end: new Date(event.end),
-        }));
+        })) : [];
         setEvents(formattedEvents);
         setError(null);
       } catch (error) {
@@ -51,7 +51,7 @@ const CalendarWidget = () => {
   };
 
   return (
-    <Card className="card">
+    <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`}> {/* Apply transparent-card class */}
       <Typography variant="h6">Calendar</Typography>
       {error && <Typography color="error">{error}</Typography>}
       <Box sx={{ height: 400, mt: 2 }}>

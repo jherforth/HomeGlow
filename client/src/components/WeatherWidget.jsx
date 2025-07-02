@@ -9,7 +9,7 @@ import '../index.css'; // Assuming global styles are here
 
 const API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY; // Accessing Vite env variable
 
-const WeatherWidget = () => {
+const WeatherWidget = ({ transparentBackground }) => { // Added transparentBackground prop
   const [zipCode, setZipCode] = useState('');
   const [weatherData, setWeatherData] = useState(null);
   const [forecastData, setForecastData] = useState(null);
@@ -43,22 +43,24 @@ const WeatherWidget = () => {
       const forecastResponse = await axios.get(
         `https://api.openweathermap.org/data/2.5/forecast?zip=${zipCode},us&appid=${API_KEY}&units=imperial`
       );
-
+      
       // Process forecast data to get daily forecast for 3 days
       const dailyForecasts = {};
-      forecastResponse.data.list.forEach(item => {
-        const date = new Date(item.dt * 1000).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-        if (!dailyForecasts[date]) {
-          dailyForecasts[date] = {
-            temp_max: -Infinity,
-            temp_min: Infinity,
-            description: item.weather[0].description,
-            icon: item.weather[0].icon,
-          };
-        }
-        dailyForecasts[date].temp_max = Math.max(dailyForecasts[date].temp_max, item.main.temp_max);
-        dailyForecasts[date].temp_min = Math.min(dailyForecasts[date].temp_min, item.main.temp_min);
-      });
+      if (Array.isArray(forecastResponse.data.list)) { // Defensive check
+        forecastResponse.data.list.forEach(item => {
+          const date = new Date(item.dt * 1000).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+          if (!dailyForecasts[date]) {
+            dailyForecasts[date] = {
+              temp_max: -Infinity,
+              temp_min: Infinity,
+              description: item.weather[0].description,
+              icon: item.weather[0].icon,
+            };
+          }
+          dailyForecasts[date].temp_max = Math.max(dailyForecasts[date].temp_max, item.main.temp_max);
+          dailyForecasts[date].temp_min = Math.min(dailyForecasts[date].temp_min, item.main.temp_min);
+        });
+      }
 
       const forecastArray = Object.entries(dailyForecasts)
         .slice(0, 3) // Get next 3 days
@@ -93,7 +95,7 @@ const WeatherWidget = () => {
   };
 
   return (
-    <Card className="card">
+    <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`}> {/* Apply transparent-card class */}
       <Typography variant="h6">Weather</Typography>
       <TextField
         label="Enter Zip Code"
@@ -138,7 +140,7 @@ const WeatherWidget = () => {
       {forecastData && (
         <Box sx={{ mt: 3 }}>
           <Typography variant="h6">3-Day Forecast</Typography>
-          {forecastData.map((day, index) => (
+          {Array.isArray(forecastData) && forecastData.map((day, index) => ( // Ensure forecastData is an array before mapping
             <Box key={index} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 1 }}>
               <Typography variant="body2">{day.date}</Typography>
               <Box sx={{ display: 'flex', alignItems: 'center' }}>

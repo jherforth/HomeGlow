@@ -4,7 +4,7 @@ import { Button, Card, Typography, TextField } from '@mui/material';
 import Hammer from 'hammerjs';
 import '../index.css';
 
-const ChoreWidget = () => {
+const ChoreWidget = ({ transparentBackground }) => {
   const [chores, setChores] = useState([]);
   const [newChore, setNewChore] = useState({ title: '', description: '' });
   const [error, setError] = useState(null);
@@ -14,7 +14,6 @@ const ChoreWidget = () => {
     const fetchChores = async () => {
       try {
         const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`);
-        // Ensure response.data is an array before setting state
         setChores(Array.isArray(response.data) ? response.data : []);
         setError(null);
       } catch (error) {
@@ -79,11 +78,10 @@ const ChoreWidget = () => {
   };
 
   return (
-    <Card className="card" ref={cardRef}>
+    <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`} ref={cardRef}>
       <Typography variant="h6">Chores</Typography>
       {error && <Typography color="error">{error}</Typography>}
       {chores.length === 0 && !error && <Typography>No chores available</Typography>}
-      {/* Ensure chores is an array before mapping */}
       {Array.isArray(chores) && chores.map((chore) => (
         <Typography
           key={chore.id}

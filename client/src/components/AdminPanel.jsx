@@ -13,16 +13,30 @@ const AdminPanel = ({ setWidgetSettings }) => {
   const [success, setSuccess] = useState(null);
   const [toggles, setToggles] = useState(() => {
     const saved = localStorage.getItem('widgetSettings');
-    // Ensure 'weather' is included in the default and parsed settings
-    return saved ? { ...{ chores: false, calendar: false, photos: false, weather: false }, ...JSON.parse(saved) } : { chores: false, calendar: false, photos: false, weather: false };
+    const defaultSettings = { // Define default structure for widget settings
+      chores: { enabled: false, transparent: false },
+      calendar: { enabled: false, transparent: false },
+      photos: { enabled: false, transparent: false },
+      weather: { enabled: false, transparent: false },
+    };
+    // Merge saved settings with defaults to ensure new properties are present
+    return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
   });
 
-  // Handle widget toggle changes
+  // Handle widget toggle changes (for both enabled and transparent)
   const handleToggleChange = (event) => {
-    const { name, checked } = event.target;
-    const newToggles = { ...toggles, [name]: checked };
+    const { name, checked } = event.target; // name will be like 'chores.enabled' or 'chores.transparent'
+    const [widgetName, settingType] = name.split('.'); // Split to get widget name and setting type
+
+    const newToggles = {
+      ...toggles,
+      [widgetName]: {
+        ...toggles[widgetName],
+        [settingType]: checked,
+      },
+    };
     setToggles(newToggles);
-    setWidgetSettings(newToggles);
+    setWidgetSettings(newToggles); // Update parent component's state
     localStorage.setItem('widgetSettings', JSON.stringify(newToggles));
   };
 
@@ -82,27 +96,64 @@ const AdminPanel = ({ setWidgetSettings }) => {
       {success && <Typography color="success.main">{success}</Typography>}
       <Box sx={{ mt: 2 }}>
         <Typography variant="subtitle1">Widget Toggles</Typography>
-        <FormControlLabel
-          control={<Switch checked={toggles.chores} onChange={handleToggleChange} name="chores" />}
-          label="Chores Widget"
-          className="toggle-label"
-        />
-        <FormControlLabel
-          control={<Switch checked={toggles.calendar} onChange={handleToggleChange} name="calendar" />}
-          label="Calendar Widget"
-          className="toggle-label"
-        />
-        <FormControlLabel
-          control={<Switch checked={toggles.photos} onChange={handleToggleChange} name="photos" />}
-          label="Photos Widget"
-          className="toggle-label"
-        />
-        <FormControlLabel // New Weather Widget Toggle
-          control={<Switch checked={toggles.weather} onChange={handleToggleChange} name="weather" />}
-          label="Weather Widget"
-          className="toggle-label"
-        />
+
+        {/* Chores Widget Toggles */}
+        <Box sx={{ mb: 1 }}>
+          <FormControlLabel
+            control={<Switch checked={toggles.chores.enabled} onChange={handleToggleChange} name="chores.enabled" />}
+            label="Enable Chores Widget"
+            className="toggle-label"
+          />
+          <FormControlLabel
+            control={<Switch checked={toggles.chores.transparent} onChange={handleToggleChange} name="chores.transparent" />}
+            label="Chores Transparent"
+            className="toggle-label"
+          />
+        </Box>
+
+        {/* Calendar Widget Toggles */}
+        <Box sx={{ mb: 1 }}>
+          <FormControlLabel
+            control={<Switch checked={toggles.calendar.enabled} onChange={handleToggleChange} name="calendar.enabled" />}
+            label="Enable Calendar Widget"
+            className="toggle-label"
+          />
+          <FormControlLabel
+            control={<Switch checked={toggles.calendar.transparent} onChange={handleToggleChange} name="calendar.transparent" />}
+            label="Calendar Transparent"
+            className="toggle-label"
+          />
+        </Box>
+
+        {/* Photos Widget Toggles */}
+        <Box sx={{ mb: 1 }}>
+          <FormControlLabel
+            control={<Switch checked={toggles.photos.enabled} onChange={handleToggleChange} name="photos.enabled" />}
+            label="Enable Photos Widget"
+            className="toggle-label"
+          />
+          <FormControlLabel
+            control={<Switch checked={toggles.photos.transparent} onChange={handleToggleChange} name="photos.transparent" />}
+            label="Photos Transparent"
+            className="toggle-label"
+          />
+        </Box>
+
+        {/* Weather Widget Toggles */}
+        <Box sx={{ mb: 1 }}>
+          <FormControlLabel
+            control={<Switch checked={toggles.weather.enabled} onChange={handleToggleChange} name="weather.enabled" />}
+            label="Enable Weather Widget"
+            className="toggle-label"
+          />
+          <FormControlLabel
+            control={<Switch checked={toggles.weather.transparent} onChange={handleToggleChange} name="weather.transparent" />}
+            label="Weather Transparent"
+            className="toggle-label"
+          />
+        </Box>
       </Box>
+
       <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
         <Typography variant="subtitle1">Add User</Typography>
         <TextField

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Grid, IconButton } from '@mui/material';
 import { Brightness4, Brightness7 } from '@mui/icons-material';
-import SettingsIcon from '@mui/icons-material/Settings'; // New import for the gear icon
+import SettingsIcon from '@mui/icons-material/Settings';
 import CalendarWidget from './components/CalendarWidget.jsx';
 import PhotoWidget from './components/PhotoWidget.jsx';
 import ChoreWidget from './components/ChoreWidget.jsx';
@@ -13,9 +13,15 @@ const App = () => {
   const [theme, setTheme] = useState('light');
   const [widgetSettings, setWidgetSettings] = useState(() => {
     const savedSettings = localStorage.getItem('widgetSettings');
-    return savedSettings ? JSON.parse(savedSettings) : { chores: false, calendar: false, photos: false, weather: false };
+    const defaultSettings = {
+      chores: { enabled: false, transparent: false },
+      calendar: { enabled: false, transparent: false },
+      photos: { enabled: false, transparent: false },
+      weather: { enabled: false, transparent: false },
+    };
+    return savedSettings ? { ...defaultSettings, ...JSON.parse(savedSettings) } : defaultSettings;
   });
-  const [showAdminPanel, setShowAdminPanel] = useState(false); // New state for Admin Panel visibility
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
 
   // Load theme and widget settings from localStorage
   useEffect(() => {
@@ -25,10 +31,15 @@ const App = () => {
 
     const savedSettings = localStorage.getItem('widgetSettings');
     if (savedSettings) {
-      setWidgetSettings(prevSettings => ({
-        ...{ chores: false, calendar: false, photos: false, weather: false },
-        ...JSON.parse(savedSettings)
-      }));
+      setWidgetSettings(prevSettings => {
+        const defaultSettings = {
+          chores: { enabled: false, transparent: false },
+          calendar: { enabled: false, transparent: false },
+          photos: { enabled: false, transparent: false },
+          weather: { enabled: false, transparent: false },
+        };
+        return { ...defaultSettings, ...JSON.parse(savedSettings) };
+      });
     } else {
       localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
     }
@@ -56,7 +67,7 @@ const App = () => {
         aria-label="Toggle theme"
         sx={{ position: 'absolute', top: 16, right: 16 }}
       >
-        {theme === 'light' ? <Brightness4 /> : <Brightness7 />} 
+        {theme === 'light' ? <Brightness4 /> : <Brightness7 />}
       </IconButton>
 
       {/* Admin Panel Toggle Button (Gear Icon) */}
@@ -70,24 +81,24 @@ const App = () => {
       </IconButton>
 
       <Grid container spacing={2}>
-        {widgetSettings.calendar && (
+        {widgetSettings.calendar.enabled && (
           <Grid item xs={12} sm={6} md={3} className="grid-item">
-            <CalendarWidget />
+            <CalendarWidget transparentBackground={widgetSettings.calendar.transparent} />
           </Grid>
         )}
-        {widgetSettings.photos && (
+        {widgetSettings.photos.enabled && (
           <Grid item xs={12} sm={6} md={3} className="grid-item">
-            <PhotoWidget />
+            <PhotoWidget transparentBackground={widgetSettings.photos.transparent} />
           </Grid>
         )}
-        {widgetSettings.chores && (
+        {widgetSettings.chores.enabled && (
           <Grid item xs={12} sm={6} md={3} className="grid-item">
-            <ChoreWidget />
+            <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />
           </Grid>
         )}
-        {widgetSettings.weather && (
+        {widgetSettings.weather.enabled && (
           <Grid item xs={12} sm={6} md={3} className="grid-item">
-            <WeatherWidget />
+            <WeatherWidget transparentBackground={widgetSettings.weather.transparent} />
           </Grid>
         )}
         {showAdminPanel && (
