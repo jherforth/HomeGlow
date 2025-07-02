@@ -69,6 +69,7 @@ const App = () => {
         onClick={toggleTheme}
         aria-label="Toggle theme"
         sx={{ position: 'absolute', top: 16, right: 16 }}
+        color="inherit" // ADDED: This will make the icon color inherit from the text color, which changes with the theme.
       >
         {theme === 'light' ? <Brightness4 /> : <Brightness7 />}
       </IconButton>

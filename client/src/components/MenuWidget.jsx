@@ -41,9 +41,7 @@ const MenuWidget = ({ transparentBackground }) => {
       <Box>
         {daysOfWeek.map((day) => (
           <Box key={day} sx={{ mb: 2 }}>
-            <Typography variant="subtitle1" sx={{ textTransform: 'capitalize', mb: 0.5 }}>
-              {day}
-            </Typography>
+            {/* Removed the static day title here */}
             <TextField
               label={`Menu for ${day}`}
               variant="outlined"
