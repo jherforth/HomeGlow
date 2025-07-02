@@ -5,7 +5,7 @@
   --card-border: rgba(255, 255, 255, 0.2);
   --text-color: #1a1a2e;
   --accent: #6e44ff;
-  --gradient: linear-gradient(45deg, #6e44ff, #00ddeb);
+  --gradient: linear-gradient(45deg, #00ddeb, #ff6b6b);
   --shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   --backdrop-blur: blur(10px);
 }
@@ -16,7 +16,7 @@
   --card-border: rgba(100, 100, 150, 0.3);
   --text-color: #1a1a2e;
   --accent: #00ddeb;
-  --gradient: linear-gradient(45deg, #00ddeb, #ff6b6b);
+  --gradient: linear-gradient(45deg, #2e2767, #620808);
   --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
