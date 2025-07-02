@@ -5,6 +5,7 @@ COPY package*.json ./
 RUN npm install -g npm@latest
 RUN npm install --production=false
 COPY . .
+RUN ls -F /app/src/ # <--- ADDED THIS LINE FOR DIAGNOSIS
 RUN npm run build
 
 FROM node:24-alpine AS production
