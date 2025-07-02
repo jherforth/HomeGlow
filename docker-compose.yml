@@ -21,7 +21,6 @@ services:
       - "3000:3000"
     depends_on:
       - homeglow-backend
-    env_file:
-      - ./.env
     environment:
       - REACT_APP_API_URL=http://homeglow-backend:5000
+      - VITE_OPENWEATHER_API_KEY=2c25fa672fa0d572e990082678684404
