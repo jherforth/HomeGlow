@@ -1,167 +1,169 @@
-const fastify = require('fastify')({ logger: false });
-const sqlite3 = require('sqlite3').verbose();
+const fastify = require('fastify')({ logger: true });
+const Database = require('better-sqlite3');
+const cors = require('cors');
 const ical = require('ical-generator');
 const path = require('path');
-const fs = require('fs');
+const fs = require('fs').promises;
 require('dotenv').config();
 
-// Register CORS and static file plugins
+// Initialize Fastify with CORS
 fastify.register(require('@fastify/cors'));
+
+// Serve static files for uploads
 fastify.register(require('@fastify/static'), {
   root: path.join(__dirname, 'Uploads'),
   prefix: '/uploads/',
 });
 
-// Initialize SQLite database
-const db = new sqlite3.Database('./tasks.db', (err) => {
-  if (err) {
-    console.error('Database connection error:', err);
-  } else {
-    console.log('Connected to SQLite database');
-    db.run(`CREATE TABLE IF NOT EXISTS chores (
+// Initialize database
+const dbPath = path.resolve(__dirname, 'tasks.db');
+async function initializeDatabase() {
+  try {
+    await fs.access(path.dirname(dbPath));
+  } catch (error) {
+    await fs.mkdir(path.dirname(dbPath), { recursive: true });
+  }
+  const db = new Database(dbPath, { verbose: console.log });
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS chores (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER,
       title TEXT,
       description TEXT,
       completed BOOLEAN
-    )`);
-    db.run(`CREATE TABLE IF NOT EXISTS users (
+    );
+    CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT,
       email TEXT,
       profile_picture TEXT
-    )`);
-    db.run(`CREATE TABLE IF NOT EXISTS events (
+    );
+    CREATE TABLE IF NOT EXISTS events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER,
       summary TEXT,
       start TEXT,
       end TEXT,
       description TEXT
-    )`);
-  }
-});
-
-// Parse JSON bodies
-fastify.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
-  try {
-    const json = JSON.parse(body);
-    done(null, json);
-  } catch (err) {
-    done(err);
-  }
-});
+    );
+  `);
+  return db;
+}
 
 // Chore routes
 fastify.get('/api/chores', async (request, reply) => {
-  db.all('SELECT * FROM chores', [], (err, rows) => {
-    if (err) {
-      reply.status(500).send({ error: 'Failed to fetch chores' });
-    } else {
-      reply.send(rows);
-    }
-  });
+  try {
+    const db = await initializeDatabase();
+    const rows = db.prepare('SELECT * FROM chores').all();
+    db.close();
+    return rows;
+  } catch (error) {
+    console.error('Error fetching chores:', error);
+    reply.status(500).send({ error: 'Failed to fetch chores' });
+  }
 });
 
 fastify.post('/api/chores', async (request, reply) => {
   const { user_id, title, description, completed } = request.body;
-  db.run(
-    'INSERT INTO chores (user_id, title, description, completed) VALUES (?, ?, ?, ?)',
-    [user_id, title, description, completed],
-    function (err) {
-      if (err) {
-        reply.status(500).send({ error: 'Failed to add chore' });
-      } else {
-        reply.send({ id: this.lastID });
-      }
-    }
-  );
+  try {
+    const db = await initializeDatabase();
+    const stmt = db.prepare('INSERT INTO chores (user_id, title, description, completed) VALUES (?, ?, ?, ?)');
+    const info = stmt.run(user_id, title, description, completed);
+    db.close();
+    return { id: info.lastInsertRowid };
+  } catch (error) {
+    console.error('Error adding chore:', error);
+    reply.status(500).send({ error: 'Failed to add chore' });
+  }
 });
 
 fastify.patch('/api/chores/:id', async (request, reply) => {
   const { id } = request.params;
   const { completed } = request.body;
-  db.run(
-    'UPDATE chores SET completed = ? WHERE id = ?',
-    [completed, id],
-    (err) => {
-      if (err) {
-        reply.status(500).send({ error: 'Failed to update chore' });
-      } else {
-        reply.send({ success: true });
-      }
-    }
-  );
+  try {
+    const db = await initializeDatabase();
+    const stmt = db.prepare('UPDATE chores SET completed = ? WHERE id = ?');
+    stmt.run(completed, id);
+    db.close();
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating chore:', error);
+    reply.status(500).send({ error: 'Failed to update chore' });
+  }
 });
 
 // User routes
 fastify.post('/api/users', async (request, reply) => {
   const { username, email, profile_picture } = request.body;
-  db.run(
-    'INSERT INTO users (username, email, profile_picture) VALUES (?, ?, ?)',
-    [username, email, profile_picture],
-    function (err) {
-      if (err) {
-        reply.status(500).send({ error: 'Failed to add user' });
-      } else {
-        reply.send({ id: this.lastID });
-      }
-    }
-  );
+  try {
+    const db = await initializeDatabase();
+    const stmt = db.prepare('INSERT INTO users (username, email, profile_picture) VALUES (?, ?, ?)');
+    const info = stmt.run(username, email, profile_picture);
+    db.close();
+    return { id: info.lastInsertRowid };
+  } catch (error) {
+    console.error('Error adding user:', error);
+    reply.status(500).send({ error: 'Failed to add user' });
+  }
 });
 
 // Calendar routes
 fastify.get('/api/calendar', async (request, reply) => {
-  db.all('SELECT * FROM events', [], (err, rows) => {
-    if (err) {
-      reply.status(500).send({ error: 'Failed to fetch events' });
-    } else {
-      reply.send(rows);
-    }
-  });
+  try {
+    const db = await initializeDatabase();
+    const rows = db.prepare('SELECT * FROM events').all();
+    db.close();
+    return rows;
+  } catch (error) {
+    console.error('Error fetching events:', error);
+    reply.status(500).send({ error: 'Failed to fetch events' });
+  }
 });
 
 fastify.post('/api/calendar', async (request, reply) => {
   const { user_id, summary, start, end, description } = request.body;
-  db.run(
-    'INSERT INTO events (user_id, summary, start, end, description) VALUES (?, ?, ?, ?, ?)',
-    [user_id, summary, start, end, description],
-    function (err) {
-      if (err) {
-        reply.status(500).send({ error: 'Failed to add event' });
-      } else {
-        reply.send({ id: this.lastID });
-      }
-    }
-  );
+  try {
+    const db = await initializeDatabase();
+    const stmt = db.prepare('INSERT INTO events (user_id, summary, start, end, description) VALUES (?, ?, ?, ?, ?)');
+    const info = stmt.run(user_id, summary, start, end, description);
+    db.close();
+    return { id: info.lastInsertRowid };
+  } catch (error) {
+    console.error('Error adding event:', error);
+    reply.status(500).send({ error: 'Failed to add event' });
+  }
 });
 
 fastify.get('/api/calendar/ics', async (request, reply) => {
-  const calendar = ical({ name: 'HomeGlow Calendar' });
-  db.all('SELECT * FROM events', [], (err, rows) => {
-    if (err) {
-      reply.status(500).send('Failed to generate iCalendar');
-    } else {
-      rows.forEach((event) => {
-        calendar.createEvent({
-          start: new Date(event.start),
-          end: new Date(event.end),
-          summary: event.summary,
-          description: event.description,
-        });
+  try {
+    const db = await initializeDatabase();
+    const rows = db.prepare('SELECT * FROM events').all();
+    db.close();
+    const calendar = ical({ name: 'HomeGlow Calendar' });
+    rows.forEach((event) => {
+      calendar.createEvent({
+        start: new Date(event.start),
+        end: new Date(event.end),
+        summary: event.summary,
+        description: event.description,
       });
-      reply.header('Content-Type', 'text/calendar');
-      reply.send(calendar.toString());
-    }
-  });
+    });
+    reply.header('Content-Type', 'text/calendar');
+    return calendar.toString();
+  } catch (error) {
+    console.error('Error generating iCalendar:', error);
+    reply.status(500).send('Failed to generate iCalendar');
+  }
 });
 
 // Start server
-const PORT = process.env.PORT || 5000;
-fastify.listen({ port: PORT, host: '0.0.0.0' }, (err) => {
-  if (err) {
-    console.error('Server error:', err);
+const start = async () => {
+  try {
+    await fastify.listen({ port: process.env.PORT || 5000, host: '0.0.0.0' });
+    console.log(`Server running on port ${process.env.PORT || 5000}`);
+  } catch (err) {
+    console.error(err);
     process.exit(1);
   }
-  console.log(`Server running on port ${PORT}`);
-});
+};
+start();
