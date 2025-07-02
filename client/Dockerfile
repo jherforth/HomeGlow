@@ -5,7 +5,10 @@ COPY package*.json ./
 RUN npm install -g npm@latest
 RUN npm install --production=false
 COPY . .
-# REMOVED: RUN ls -F /app/src/ # <--- ADDED THIS LINE FOR DIAGNOSIS
+# --- ADDED DIAGNOSTIC LINES BELOW ---
+RUN ls -F /app/ # List contents of /app to see if .env is there
+RUN cat /app/.env || echo ".env not found or empty" # Print .env content, or a message if not found
+# --- END DIAGNOSTIC LINES ---
 RUN npm run build
 
 FROM node:24-alpine AS production
