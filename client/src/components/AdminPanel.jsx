@@ -104,11 +104,15 @@ const AdminPanel = ({ setWidgetSettings }) => {
             label="Enable Chores Widget"
             className="toggle-label"
           />
-          <FormControlLabel
-            control={<Switch checked={toggles.chores.transparent} onChange={handleToggleChange} name="chores.transparent" />}
-            label="Chores Transparent"
-            className="toggle-label"
-          />
+          {toggles.chores.enabled && ( // Conditionally render transparency toggle
+            <Box sx={{ ml: 4 }}> {/* Indent */}
+              <FormControlLabel
+                control={<Switch checked={toggles.chores.transparent} onChange={handleToggleChange} name="chores.transparent" />}
+                label="Chores Transparent"
+                className="toggle-label"
+              />
+            </Box>
+          )}
         </Box>
 
         {/* Calendar Widget Toggles */}
@@ -118,11 +122,15 @@ const AdminPanel = ({ setWidgetSettings }) => {
             label="Enable Calendar Widget"
             className="toggle-label"
           />
-          <FormControlLabel
-            control={<Switch checked={toggles.calendar.transparent} onChange={handleToggleChange} name="calendar.transparent" />}
-            label="Calendar Transparent"
-            className="toggle-label"
-          />
+          {toggles.calendar.enabled && ( // Conditionally render transparency toggle
+            <Box sx={{ ml: 4 }}> {/* Indent */}
+              <FormControlLabel
+                control={<Switch checked={toggles.calendar.transparent} onChange={handleToggleChange} name="calendar.transparent" />}
+                label="Calendar Transparent"
+                className="toggle-label"
+              />
+            </Box>
+          )}
         </Box>
 
         {/* Photos Widget Toggles */}
@@ -132,11 +140,15 @@ const AdminPanel = ({ setWidgetSettings }) => {
             label="Enable Photos Widget"
             className="toggle-label"
           />
-          <FormControlLabel
-            control={<Switch checked={toggles.photos.transparent} onChange={handleToggleChange} name="photos.transparent" />}
-            label="Photos Transparent"
-            className="toggle-label"
-          />
+          {toggles.photos.enabled && ( // Conditionally render transparency toggle
+            <Box sx={{ ml: 4 }}> {/* Indent */}
+              <FormControlLabel
+                control={<Switch checked={toggles.photos.transparent} onChange={handleToggleChange} name="photos.transparent" />}
+                label="Photos Transparent"
+                className="toggle-label"
+              />
+            </Box>
+          )}
         </Box>
 
         {/* Weather Widget Toggles */}
@@ -146,11 +158,15 @@ const AdminPanel = ({ setWidgetSettings }) => {
             label="Enable Weather Widget"
             className="toggle-label"
           />
-          <FormControlLabel
-            control={<Switch checked={toggles.weather.transparent} onChange={handleToggleChange} name="weather.transparent" />}
-            label="Weather Transparent"
-            className="toggle-label"
-          />
+          {toggles.weather.enabled && ( // Conditionally render transparency toggle
+            <Box sx={{ ml: 4 }}> {/* Indent */}
+              <FormControlLabel
+                control={<Switch checked={toggles.weather.transparent} onChange={handleToggleChange} name="weather.transparent" />}
+                label="Weather Transparent"
+                className="toggle-label"
+              />
+            </Box>
+          )}
         </Box>
       </Box>
 
