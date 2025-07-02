@@ -13,7 +13,8 @@ const AdminPanel = ({ setWidgetSettings }) => {
   const [success, setSuccess] = useState(null);
   const [toggles, setToggles] = useState(() => {
     const saved = localStorage.getItem('widgetSettings');
-    return saved ? JSON.parse(saved) : { chores: false, calendar: false, photos: false };
+    // Ensure 'weather' is included in the default and parsed settings
+    return saved ? { ...{ chores: false, calendar: false, photos: false, weather: false }, ...JSON.parse(saved) } : { chores: false, calendar: false, photos: false, weather: false };
   });
 
   // Handle widget toggle changes
@@ -94,6 +95,11 @@ const AdminPanel = ({ setWidgetSettings }) => {
         <FormControlLabel
           control={<Switch checked={toggles.photos} onChange={handleToggleChange} name="photos" />}
           label="Photos Widget"
+          className="toggle-label"
+        />
+        <FormControlLabel // New Weather Widget Toggle
+          control={<Switch checked={toggles.weather} onChange={handleToggleChange} name="weather" />}
+          label="Weather Widget"
           className="toggle-label"
         />
       </Box>
