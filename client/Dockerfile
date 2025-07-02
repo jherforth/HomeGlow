@@ -4,9 +4,13 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install -g npm@latest
 RUN npm install --production=false
+
+# Add build argument for VITE_OPENWEATHER_API_KEY
+ARG VITE_OPENWEATHER_API_KEY
+# Make it available as an environment variable during the build
+ENV VITE_OPENWEATHER_API_KEY=$VITE_OPENWEATHER_API_KEY
+
 COPY . .
-# REMOVED: RUN ls -F /app/ # List contents of /app to see if .env is there
-# REMOVED: RUN cat /app/.env || echo ".env not found or empty" # Print .env content, or a message if not found
 RUN npm run build
 
 FROM node:24-alpine AS production
