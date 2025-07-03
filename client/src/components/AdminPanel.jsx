@@ -18,7 +18,8 @@ const AdminPanel = ({ setWidgetSettings }) => {
       calendar: { enabled: false, transparent: false },
       photos: { enabled: false, transparent: false },
       weather: { enabled: false, transparent: false },
-      menu: { enabled: false, transparent: false }, // Add menu widget settings
+      menu: { enabled: false, transparent: false },
+      enableOnscreenKeyboard: false, // Add new setting for onscreen keyboard
     };
     // Merge saved settings with defaults to ensure new properties are present
     return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
@@ -26,16 +27,25 @@ const AdminPanel = ({ setWidgetSettings }) => {
 
   // Handle widget toggle changes (for both enabled and transparent)
   const handleToggleChange = (event) => {
-    const { name, checked } = event.target; // name will be like 'chores.enabled' or 'chores.transparent'
-    const [widgetName, settingType] = name.split('.'); // Split to get widget name and setting type
+    const { name, checked } = event.target; // name will be like 'chores.enabled', 'chores.transparent', or 'enableOnscreenKeyboard'
 
-    const newToggles = {
-      ...toggles,
-      [widgetName]: {
-        ...toggles[widgetName],
-        [settingType]: checked,
-      },
-    };
+    let newToggles;
+    if (name.includes('.')) { // It's a widget-specific setting (e.g., chores.enabled)
+      const [widgetName, settingType] = name.split('.'); // Split to get widget name and setting type
+      newToggles = {
+        ...toggles,
+        [widgetName]: {
+          ...toggles[widgetName],
+          [settingType]: checked,
+        },
+      };
+    } else { // It's a global setting (e.g., enableOnscreenKeyboard)
+      newToggles = {
+        ...toggles,
+        [name]: checked,
+      };
+    }
+
     setToggles(newToggles);
     setWidgetSettings(newToggles); // Update parent component's state
     localStorage.setItem('widgetSettings', JSON.stringify(newToggles));
@@ -186,6 +196,16 @@ const AdminPanel = ({ setWidgetSettings }) => {
               />
             </Box>
           )}
+        </Box>
+
+        {/* Onscreen Keyboard Toggle */}
+        <Box sx={{ mb: 1, mt: 2 }}> {/* Added some top margin for separation */}
+          <Typography variant="subtitle1">Global Settings</Typography>
+          <FormControlLabel
+            control={<Switch checked={toggles.enableOnscreenKeyboard} onChange={handleToggleChange} name="enableOnscreenKeyboard" />}
+            label="Enable Onscreen Keyboard"
+            className="toggle-label"
+          />
         </Box>
       </Box>
 
