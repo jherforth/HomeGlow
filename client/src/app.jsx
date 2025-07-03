@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Container, Grid, IconButton, Box } from '@mui/material';
+import { Container, Grid, IconButton, Box, Dialog, DialogContent } from '@mui/material'; // Added Dialog, DialogContent
 import { Brightness4, Brightness7 } from '@mui/icons-material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RefreshIcon from '@mui/icons-material/Refresh'; // New import
@@ -27,10 +27,10 @@ const App = () => {
       weather: { enabled: false, transparent: false },
       menu: { enabled: false, transparent: false },
       enableOnscreenKeyboard: false,
-      enableScreenRotation: false, // Add new setting for screen rotation
       textSize: 16, // Default text size
       cardSize: 300, // Default card width
       cardPadding: 20, // Default card padding
+      cardHeight: 200, // Default card height
     };
     return savedSettings ? { ...defaultSettings, ...JSON.parse(savedSettings) } : defaultSettings;
   });
@@ -55,10 +55,10 @@ const App = () => {
           weather: { enabled: false, transparent: false },
           menu: { enabled: false, transparent: false },
           enableOnscreenKeyboard: false,
-          enableScreenRotation: false, // Add new setting for screen rotation
           textSize: 16, // Default text size
           cardSize: 300, // Default card width
           cardPadding: 20, // Default card padding
+          cardHeight: 200, // Default card height
         };
         return { ...defaultSettings, ...JSON.parse(savedSettings) };
       });
@@ -69,19 +69,21 @@ const App = () => {
 
   // Effect to add/remove 'rotated' class to body based on enableScreenRotation
   useEffect(() => {
-    if (widgetSettings.enableScreenRotation) {
-      document.body.classList.add('rotated');
-    } else {
-      document.body.classList.remove('rotated');
-    }
-  }, [widgetSettings.enableScreenRotation]);
+    // This effect is no longer needed if screen rotation is handled by OS
+    // if (widgetSettings.enableScreenRotation) {
+    //   document.body.classList.add('rotated');
+    // } else {
+    //   document.body.classList.remove('rotated');
+    // }
+  }, []); // Removed widgetSettings.enableScreenRotation from dependency array
 
   // Effect to apply dynamic CSS variables
   useEffect(() => {
     document.documentElement.style.setProperty('--dynamic-text-size', `${widgetSettings.textSize}px`);
     document.documentElement.style.setProperty('--dynamic-card-width', `${widgetSettings.cardSize}px`);
     document.documentElement.style.setProperty('--dynamic-card-padding', `${widgetSettings.cardPadding}px`);
-  }, [widgetSettings.textSize, widgetSettings.cardSize, widgetSettings.cardPadding]);
+    document.documentElement.style.setProperty('--dynamic-card-height', `${widgetSettings.cardHeight}px`);
+  }, [widgetSettings.textSize, widgetSettings.cardSize, widgetSettings.cardPadding, widgetSettings.cardHeight]);
 
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
@@ -156,7 +158,8 @@ const App = () => {
         <RefreshIcon />
       </IconButton>
 
-      <Container className={`container ${widgetSettings.enableScreenRotation ? 'rotate-90' : ''}`} >
+      {/* Removed rotation class from Container as OS will handle rotation */}
+      <Container className="container">
         <Grid container spacing={2} justifyContent="space-evenly">
           {widgetSettings.calendar.enabled && (
             <Grid item xs={12} sm={6} md={3} className="grid-item">
@@ -176,11 +179,6 @@ const App = () => {
           {widgetSettings.menu.enabled && (
             <Grid item xs={12} sm={6} md={3} className="grid-item">
               <MenuWidget transparentBackground={widgetSettings.menu.transparent} />
-            </Grid>
-          )}
-          {showAdminPanel && (
-            <Grid item xs={12} sm={6} md={3} className="grid-item">
-              <AdminPanel setWidgetSettings={setWidgetSettings} />
             </Grid>
           )}
 
@@ -204,6 +202,13 @@ const App = () => {
           </Box>
         )}
       </Container>
+
+      {/* Admin Panel as a Dialog (Popup) */}
+      <Dialog open={showAdminPanel} onClose={toggleAdminPanel} maxWidth="md" fullWidth>
+        <DialogContent>
+          <AdminPanel setWidgetSettings={setWidgetSettings} />
+        </DialogContent>
+      </Dialog>
     </>
   );
 };
