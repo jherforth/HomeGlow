@@ -4,9 +4,8 @@
   --card-bg: rgba(255, 255, 255, 0.8);
   --card-border: rgba(255, 255, 255, 0.2);
   --text-color: #1a1a2e;
-  --text-color-rgb: 26, 26, 46; /* RGB values for #1a1a2e */
   --accent: #6e44ff;
-  --gradient: linear-gradient(45deg, #00ddeb, #ff6b6b);
+  --gradient: linear-linear-gradient(45deg, #00ddeb, #ff6b6b);
   --shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   --backdrop-blur: blur(10px);
 }
@@ -16,7 +15,7 @@
   --card-bg: rgba(30, 30, 50, 0.7);
   --card-border: rgba(100, 100, 150, 0.3);
   --text-color: #a6a6d1;
-  --text-color-rgb: 166, 166, 209; /* RGB values for #a6a6d1 */
+  /* Changed to a light color for dark theme */
   --accent: #00ddeb;
   --gradient: linear-gradient(45deg, #2e2767, #620808);
   --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
@@ -45,14 +44,15 @@ body.rotated {
 
 .container {
   padding: 20px;
-  /* Removed min-height: 100vh; to allow dynamic height */
+  min-height: 100vh; /* Default height for non-rotated */
   background: var(--gradient);
   background-attachment: fixed;
   transition: transform 0.3s ease-in-out;
   /* Smooth transition for rotation */
   position: relative;
   /* Ensure proper positioning of children */
-  /* Removed overflow properties from here, body will manage */
+  overflow-y: auto; /* Allow vertical scrolling within the container itself */
+  overflow-x: hidden; /* Prevent horizontal scrolling within the container */
 }
 
 .rotate-90 {
@@ -67,7 +67,9 @@ body.rotated {
   position: absolute;
   top: 50%;
   left: 50%;
-  /* Removed overflow properties from here, body will manage */
+  /* Ensure content within rotated container can scroll */
+  overflow-y: auto; /* This will be the perceived vertical scroll for rotated content */
+  overflow-x: hidden; /* Hide horizontal scroll within rotated container */
 }
 
 .grid-item {
