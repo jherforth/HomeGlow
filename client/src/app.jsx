@@ -198,11 +198,11 @@ const App = () => {
             [widgetSettings.keyboardPosition]: 0,
             left: 0,
             width: '50%',
-            height: '300px', // Changed for debugging
+            // height: '300px', // Reverted
             zIndex: 1000,
             p: 2,
-            bgcolor: 'red', // Changed for debugging
-            display: widgetSettings.enableOnscreenKeyboard ? 'block' : 'none', // Control visibility with CSS
+            bgcolor: 'background.paper', // Reverted
+            visibility: widgetSettings.enableOnscreenKeyboard ? 'visible' : 'hidden', // Control visibility with CSS
           }}
         >
           <Keyboard
