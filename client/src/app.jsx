@@ -27,7 +27,6 @@ const App = () => {
       weather: { enabled: false, transparent: false },
       menu: { enabled: false, transparent: false },
       enableOnscreenKeyboard: false,
-      enableScreenRotation: false, // Add new setting for screen rotation
     };
     return savedSettings ? { ...defaultSettings, ...JSON.parse(savedSettings) } : defaultSettings;
   });
@@ -52,7 +51,6 @@ const App = () => {
           weather: { enabled: false, transparent: false },
           menu: { enabled: false, transparent: false },
           enableOnscreenKeyboard: false,
-          enableScreenRotation: false, // Add new setting for screen rotation
         };
         return { ...defaultSettings, ...JSON.parse(savedSettings) };
       });
@@ -87,7 +85,7 @@ const App = () => {
   };
 
   return (
-    <Container className={`container ${widgetSettings.enableScreenRotation ? 'rotate-90' : ''}`} >
+    <Container className="container">
       {/* Theme Toggle Button */}
       <IconButton
         className="theme-toggle"
