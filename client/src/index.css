@@ -13,7 +13,6 @@
   --dynamic-text-size: 16px;
   --dynamic-card-width: 300px;
   --dynamic-card-padding: 20px;
-  --dynamic-card-height: 600px; /* New dynamic card height */
 }
 
 [data-theme="dark"] {
@@ -104,7 +103,6 @@ body.rotated {
   width: 100%;
   /* Changed to 100% to fill grid item */
   max-width: var(--dynamic-card-width); /* Apply dynamic card width */
-  height: var(--dynamic-card-height); /* Apply dynamic card height */
   touch-action: manipulation;
 }
 
