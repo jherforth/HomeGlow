@@ -22,15 +22,16 @@ fastify.register(require('@fastify/static'), {
 });
 
 // Initialize database
-// CHANGE: Store tasks.db inside a 'data' subdirectory within /app
 const dbPath = path.resolve(__dirname, 'data', 'tasks.db');
+let db; // Declare db variable outside to hold the single instance
+
 async function initializeDatabase() {
   try {
     // Ensure the 'data' directory exists and is writable
     await fs.mkdir(path.dirname(dbPath), { recursive: true });
     await fs.chmod(path.dirname(dbPath), 0o777); // Ensure directory is writable
-    const db = new Database(dbPath, { verbose: console.log });
-    db.exec(`
+    const newDb = new Database(dbPath, { verbose: console.log });
+    newDb.exec(`
       CREATE TABLE IF NOT EXISTS chores (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER,
@@ -57,7 +58,7 @@ async function initializeDatabase() {
         description TEXT
       );
     `);
-    return db;
+    return newDb; // Return the new database instance
   } catch (error) {
     console.error('Failed to initialize database:', error);
     throw error;
@@ -67,9 +68,7 @@ async function initializeDatabase() {
 // Chore routes
 fastify.get('/api/chores', async (request, reply) => {
   try {
-    const db = await initializeDatabase();
-    const rows = db.prepare('SELECT * FROM chores').all();
-    db.close();
+    const rows = db.prepare('SELECT * FROM chores').all(); // Use the global db instance
     return rows;
   } catch (error) {
     console.error('Error fetching chores:', error);
@@ -80,13 +79,9 @@ fastify.get('/api/chores', async (request, reply) => {
 fastify.post('/api/chores', async (request, reply) => {
   const { user_id, title, description, time_period, assigned_day_of_week, repeats, completed } = request.body;
   try {
-    const db = await initializeDatabase();
-    // Explicitly convert boolean to integer for SQLite
-    const completedInt = completed ? 1 : 0; // Convert true/false to 1/0
-
+    const completedInt = completed ? 1 : 0;
     const stmt = db.prepare('INSERT INTO chores (user_id, title, description, time_period, assigned_day_of_week, repeats, completed) VALUES (?, ?, ?, ?, ?, ?, ?)');
-    const info = stmt.run(user_id, title, description, time_period, assigned_day_of_week, repeats, completedInt); // Use completedInt
-    db.close();
+    const info = stmt.run(user_id, title, description, time_period, assigned_day_of_week, repeats, completedInt);
     return { id: info.lastInsertRowid };
   } catch (error) {
     console.error('Error adding chore:', error);
@@ -98,12 +93,9 @@ fastify.patch('/api/chores/:id', async (request, reply) => {
   const { id } = request.params;
   const { completed } = request.body;
   try {
-    const db = await initializeDatabase();
-    // Explicitly convert boolean to integer for SQLite
-    const completedInt = completed ? 1 : 0; // Convert true/false to 1/0
+    const completedInt = completed ? 1 : 0;
     const stmt = db.prepare('UPDATE chores SET completed = ? WHERE id = ?');
-    stmt.run(completedInt, id); // Use completedInt
-    db.close();
+    stmt.run(completedInt, id);
     return { success: true };
   } catch (error) {
     console.error('Error updating chore:', error);
@@ -114,9 +106,7 @@ fastify.patch('/api/chores/:id', async (request, reply) => {
 // User routes
 fastify.get('/api/users', async (request, reply) => {
   try {
-    const db = await initializeDatabase();
     const rows = db.prepare('SELECT id, username, email, profile_picture, clam_total FROM users').all();
-    db.close();
     return rows;
   } catch (error) {
     console.error('Error fetching users:', error);
@@ -127,10 +117,8 @@ fastify.get('/api/users', async (request, reply) => {
 fastify.post('/api/users', async (request, reply) => {
   const { username, email, profile_picture } = request.body;
   try {
-    const db = await initializeDatabase();
     const stmt = db.prepare('INSERT INTO users (username, email, profile_picture) VALUES (?, ?, ?)');
     const info = stmt.run(username, email, profile_picture);
-    db.close();
     return { id: info.lastInsertRowid };
   } catch (error) {
     console.error('Error adding user:', error);
@@ -141,9 +129,7 @@ fastify.post('/api/users', async (request, reply) => {
 // Calendar routes
 fastify.get('/api/calendar', async (request, reply) => {
   try {
-    const db = await initializeDatabase();
     const rows = db.prepare('SELECT * FROM events').all();
-    db.close();
     return rows;
   } catch (error) {
     console.error('Error fetching events:', error);
@@ -154,10 +140,8 @@ fastify.get('/api/calendar', async (request, reply) => {
 fastify.post('/api/calendar', async (request, reply) => {
   const { user_id, summary, start, end, description } = request.body;
   try {
-    const db = await initializeDatabase();
     const stmt = db.prepare('INSERT INTO events (user_id, summary, start, end, description) VALUES (?, ?, ?, ?, ?)');
     const info = stmt.run(user_id, summary, start, end, description);
-    db.close();
     return { id: info.lastInsertRowid };
   } catch (error) {
     console.error('Error adding event:', error);
@@ -167,9 +151,7 @@ fastify.post('/api/calendar', async (request, reply) => {
 
 fastify.get('/api/calendar/ics', async (request, reply) => {
   try {
-    const db = await initializeDatabase();
     const rows = db.prepare('SELECT * FROM events').all();
-    db.close();
     const calendar = ical({ name: 'HomeGlow Calendar' });
     rows.forEach((event) => {
       calendar.createEvent({
@@ -190,6 +172,7 @@ fastify.get('/api/calendar/ics', async (request, reply) => {
 // Start server
 const start = async () => {
   try {
+    db = await initializeDatabase(); // Initialize db once here
     await fastify.listen({ port: process.env.PORT || 5000, host: '0.0.0.0' });
     console.log(`Server running on port ${process.env.PORT || 5000}`);
   } catch (err) {
