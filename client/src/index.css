@@ -34,6 +34,7 @@ body {
   min-height: 100vh;
   background: var(--gradient);
   background-attachment: fixed;
+  transition: transform 0.3s ease-in-out; /* Smooth transition for rotation */
 }
 
 .grid-item {
@@ -229,4 +230,14 @@ input:checked+.toggle-slider:before {
 
 [data-theme="dark"] .rbc-off-range-bg {
   background-color: rgba(255, 255, 255, 0.02) !important; /* Off-range days in dark mode */
+}
+
+.rotate-90 {
+  transform: translate(-50%, -50%) rotate(90deg); /* Center and rotate */
+  width: 100vh; /* When rotated 90deg, the width becomes the original height */
+  height: 100vw; /* When rotated 90deg, the height becomes the original width */
+  transform-origin: center center; /* Ensure rotation is around the center */
+  position: absolute;
+  top: 50%;
+  left: 50%;
 }
