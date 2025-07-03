@@ -14,10 +14,10 @@ import {
   RadioGroup,
   FormControlLabel,
   FormLabel,
-  Dialog, // Import Dialog
-  DialogTitle, // Import DialogTitle
-  DialogContent, // Import DialogContent
-  DialogActions, // Import DialogActions
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import Hammer from 'hammerjs';
 import '../index.css';
@@ -34,7 +34,7 @@ const ChoreWidget = ({ transparentBackground }) => {
     repeats: 'Doesn\'t repeat',
   });
   const [error, setError] = useState(null);
-  const [openAddTaskDialog, setOpenAddTaskDialog] = useState(false); // State for dialog visibility
+  const [openAddTaskDialog, setOpenAddTaskDialog] = useState(false);
   const cardRef = useRef(null);
 
   const getCurrentDayOfWeek = () => {
@@ -42,23 +42,27 @@ const ChoreWidget = ({ transparentBackground }) => {
     return days[new Date().getDay()];
   };
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const usersResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users`);
-        setUsers(Array.isArray(usersResponse.data) ? usersResponse.data : []);
+  // Function to fetch all necessary data
+  const fetchData = async () => {
+    try {
+      const usersResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users`);
+      setUsers(Array.isArray(usersResponse.data) ? usersResponse.data : []);
 
-        const choresResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`);
-        setChores(Array.isArray(choresResponse.data) ? choresResponse.data : []);
-        setError(null);
-      } catch (err) {
-        console.error('Error fetching data:', err);
-        setError('Cannot connect to service. Please try again later.');
-      }
-    };
+      const choresResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`);
+      setChores(Array.isArray(choresResponse.data) ? choresResponse.data : []);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching data:', err);
+      setError('Cannot connect to service. Please try again later.');
+    }
+  };
+
+  // Fetch data on component mount
+  useEffect(() => {
     fetchData();
   }, []);
 
+  // Hammer.js for swipe to complete (existing functionality)
   useEffect(() => {
     const hammer = new Hammer(cardRef.current);
     hammer.on('swiperight', (e) => {
@@ -75,12 +79,9 @@ const ChoreWidget = ({ transparentBackground }) => {
       await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores/${choreId}`, {
         completed: true,
       });
-      setChores(
-        chores.map((chore) =>
-          chore.id === parseInt(choreId) ? { ...chore, completed: true } : chore
-        )
-      );
       setError(null);
+      // Re-fetch data to update UI
+      fetchData();
       // TODO: Implement clam reward logic here after task completion
     } catch (err) {
       console.error('Error marking chore complete:', err);
@@ -99,7 +100,7 @@ const ChoreWidget = ({ transparentBackground }) => {
       return;
     }
     try {
-      const response = await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`, {
+      await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`, {
         user_id: newTask.assignedTo,
         title: newTask.title,
         description: newTask.description,
@@ -108,7 +109,6 @@ const ChoreWidget = ({ transparentBackground }) => {
         repeats: newTask.repeats,
         completed: false,
       });
-      setChores([...chores, { ...newTask, id: response.data.id, completed: false }]);
       setNewTask({
         title: '',
         description: '',
@@ -118,7 +118,9 @@ const ChoreWidget = ({ transparentBackground }) => {
         repeats: 'Doesn\'t repeat',
       });
       setError(null);
-      setOpenAddTaskDialog(false); // Close dialog on success
+      setOpenAddTaskDialog(false);
+      // Re-fetch data to update UI
+      fetchData();
     } catch (err) {
       console.error('Error adding chore:', err);
       setError('Failed to add chore. Please try again.');
@@ -129,13 +131,13 @@ const ChoreWidget = ({ transparentBackground }) => {
 
   const handleOpenAddTaskDialog = () => {
     setOpenAddTaskDialog(true);
-    setError(null); // Clear any previous errors when opening
+    setError(null);
   };
 
   const handleCloseAddTaskDialog = () => {
     setOpenAddTaskDialog(false);
-    setError(null); // Clear errors when closing
-    setNewTask({ // Reset form when closing
+    setError(null);
+    setNewTask({
       title: '',
       description: '',
       timePeriod: '',
@@ -161,11 +163,11 @@ const ChoreWidget = ({ transparentBackground }) => {
               height: 80,
               borderRadius: '50%',
               overflow: 'hidden',
-              border: '2px solid grey', // Placeholder for dynamic border
+              border: '2px solid grey',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              bgcolor: 'lightgray', // Fallback background
+              bgcolor: 'lightgray',
               mx: 'auto',
               mb: 1,
             }}>
@@ -199,7 +201,7 @@ const ChoreWidget = ({ transparentBackground }) => {
             <Typography variant="subtitle2" sx={{ textTransform: 'capitalize' }}>{user.username}</Typography>
             <Box sx={{ mt: 1, textAlign: 'left' }}>
               {chores
-                .filter(chore => chore.assigned_to_user_id === user.id && chore.assigned_day_of_week === currentDay)
+                .filter(chore => chore.user_id === user.id && chore.assigned_day_of_week === currentDay)
                 .map(chore => (
                   <Box key={chore.id} sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
                     <Radio
@@ -225,7 +227,7 @@ const ChoreWidget = ({ transparentBackground }) => {
                     </Typography>
                   </Box>
                 ))}
-              {chores.filter(chore => chore.assigned_to_user_id === user.id && chore.assigned_day_of_week === currentDay).length === 0 && (
+              {chores.filter(chore => chore.user_id === user.id && chore.assigned_day_of_week === currentDay).length === 0 && (
                 <Typography variant="body2" color="text.secondary">No tasks today</Typography>
               )}
             </Box>
