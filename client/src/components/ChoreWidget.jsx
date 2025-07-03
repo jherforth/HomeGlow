@@ -192,7 +192,7 @@ const ChoreWidget = ({ transparentBackground }) => {
                 variant="caption"
                 sx={{
                   position: 'absolute',
-                  top: '50%', // Center vertically
+                  top: '0%', // Center vertically
                   left: '50%', // Center horizontally
                   transform: 'translate(-50%, -50%)', // Adjust for its own size
                   width: 35, // Fixed width for circular shape
