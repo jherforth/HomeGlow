@@ -204,7 +204,7 @@ const App = () => {
       </Container>
 
       {/* Admin Panel as a Dialog (Popup) */}
-      <Dialog open={showAdminPanel} onClose={toggleAdminPanel} maxWidth="300" fullWidth>
+      <Dialog open={showAdminPanel} onClose={toggleAdminPanel} maxWidth="300">
         <DialogContent>
           <AdminPanel setWidgetSettings={setWidgetSettings} />
         </DialogContent>
