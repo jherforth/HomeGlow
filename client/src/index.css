@@ -88,7 +88,7 @@ body.rotated {
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   width: 100%;
   /* Changed to 100% to fill grid item */
-  max-width: 300px;
+  /* max-width: 300px; */
   /* Retain max-width for larger screens */
   touch-action: manipulation;
 }
