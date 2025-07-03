@@ -21,7 +21,8 @@
   --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
-html, body {
+html,
+body {
   margin: 0;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background: var(--background);
@@ -48,7 +49,8 @@ body.rotated {
   background-attachment: fixed;
   transition: transform 0.3s ease-in-out;
   /* Smooth transition for rotation */
-  position: relative; /* Ensure proper positioning of children */
+  position: relative;
+  /* Ensure proper positioning of children */
   /* Removed overflow from here, as body will manage it */
 }
 
@@ -65,8 +67,10 @@ body.rotated {
   backdrop-filter: var(--backdrop-blur);
   box-shadow: var(--shadow);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
-  width: 100%; /* Changed to 100% to fill grid item */
-  max-width: 300px; /* Retain max-width for larger screens */
+  width: 100%;
+  /* Changed to 100% to fill grid item */
+  max-width: 300px;
+  /* Retain max-width for larger screens */
   touch-action: manipulation;
 }
 
@@ -113,7 +117,8 @@ button:hover {
   cursor: pointer;
   backdrop-filter: var(--backdrop-blur);
   box-shadow: var(--shadow);
-  z-index: 1000; /* Ensure these are always on top */
+  z-index: 1000;
+  /* Ensure these are always on top */
 }
 
 /* Toggle switch for Web 3.0 */
