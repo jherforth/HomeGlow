@@ -207,7 +207,7 @@ const ChoreWidget = ({ transparentBackground }) => {
                   fontWeight: 'bold',
                 }}
               >
-                {user.clam_total || 0}🐚
+                {user.clam_total || 0}🦪
               </Typography>
               {/* Progress Bar */}
               <Box sx={{
