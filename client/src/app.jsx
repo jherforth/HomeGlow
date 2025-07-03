@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Container, Grid, IconButton } from '@mui/material';
+import { Container, Grid, IconButton, Box } from '@mui/material'; // <--- ADDED Box here
 import { Brightness4, Brightness7 } from '@mui/icons-material';
 import SettingsIcon from '@mui/icons-material/Settings';
 
