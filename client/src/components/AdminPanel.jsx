@@ -1,3 +1,4 @@
+// client/src/components/AdminPanel.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
@@ -11,11 +12,11 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  List, // New import for list of chores
-  ListItem, // New import for list items
-  ListItemText, // New import for list item text
-  IconButton, // New import for delete button
-  Slider, // New import for sliders
+  List,
+  ListItem,
+  ListItemText,
+  IconButton,
+  Slider,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -31,24 +32,23 @@ const AdminPanel = ({ setWidgetSettings }) => {
   const [success, setSuccess] = useState(null);
   const [toggles, setToggles] = useState(() => {
     const saved = localStorage.getItem('widgetSettings');
-    const defaultSettings = { // Define default structure for widget settings
+    const defaultSettings = {
       chores: { enabled: false, transparent: false },
       calendar: { enabled: false, transparent: false },
       photos: { enabled: false, transparent: false },
       weather: { enabled: false, transparent: false },
       menu: { enabled: false, transparent: false },
-      enableOnscreenKeyboard: false,
-      textSize: 16, // Default text size
-      cardSize: 300, // Default card width
-      cardPadding: 20, // Default card padding
+      enableOnscreenKeyboard: true, // Changed to true
+      textSize: 16,
+      cardSize: 300,
+      cardPadding: 20,
+      cardHeight: 200, // Added
     };
-    // Merge saved settings with defaults to ensure new properties are present
     return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
   });
-  const [users, setUsers] = useState([]); // State for users in Admin Panel
-  const [chores, setChores] = useState([]); // State for chores in Admin Panel
+  const [users, setUsers] = useState([]);
+  const [chores, setChores] = useState([]);
 
-  // Function to fetch users and chores for the Admin Panel
   const fetchData = async () => {
     try {
       const usersResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users`);
@@ -58,22 +58,19 @@ const AdminPanel = ({ setWidgetSettings }) => {
       setChores(Array.isArray(choresResponse.data) ? choresResponse.data : []);
     } catch (err) {
       console.error('Error fetching data for Admin Panel:', err);
-      // Optionally set an error state for the Admin Panel itself
     }
   };
 
-  // Fetch data on component mount and after user/chore-related actions
   useEffect(() => {
     fetchData();
   }, []);
 
-  // Handle widget toggle changes (for both enabled and transparent)
   const handleToggleChange = (event) => {
-    const { name, checked } = event.target; // name will be like 'chores.enabled', 'chores.transparent', or 'enableOnscreenKeyboard'
+    const { name, checked } = event.target;
 
     let newToggles;
-    if (name.includes('.')) { // It's a widget-specific setting (e.g., chores.enabled)
-      const [widgetName, settingType] = name.split('.'); // Split to get widget name and setting type
+    if (name.includes('.')) {
+      const [widgetName, settingType] = name.split('.');
       newToggles = {
         ...toggles,
         [widgetName]: {
@@ -81,7 +78,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
           [settingType]: checked,
         },
       };
-    } else { // It's a global setting (e.g., enableOnscreenKeyboard)
+    } else {
       newToggles = {
         ...toggles,
         [name]: checked,
@@ -89,18 +86,17 @@ const AdminPanel = ({ setWidgetSettings }) => {
     }
 
     setToggles(newToggles);
-    setWidgetSettings(newToggles); // Update parent component's state
+    setWidgetSettings(newToggles);
     localStorage.setItem('widgetSettings', JSON.stringify(newToggles));
   };
 
-  // Handle slider changes
   const handleSliderChange = (name) => (event, newValue) => {
     const newToggles = {
       ...toggles,
       [name]: newValue,
     };
     setToggles(newToggles);
-    setWidgetSettings(newToggles); // Update parent component's state
+    setWidgetSettings(newToggles);
     localStorage.setItem('widgetSettings', JSON.stringify(newToggles));
   };
 
@@ -146,7 +142,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
       setSuccess('User added successfully!');
       setFormData({ username: '', email: '', profilePicture: null });
       setError(null);
-      fetchData(); // Re-fetch all data after adding a new user
+      fetchData();
     } catch (error) {
       console.error('Error adding user:', error);
       setError(error.response?.data?.error || 'Failed to add user');
@@ -160,7 +156,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
         await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users/${userId}`);
         setSuccess('User deleted successfully!');
         setError(null);
-        fetchData(); // Re-fetch all data after deletion
+        fetchData();
       } catch (error) {
         console.error('Error deleting user:', error);
         setError(error.response?.data?.error || 'Failed to delete user');
@@ -170,12 +166,12 @@ const AdminPanel = ({ setWidgetSettings }) => {
   };
 
   const handleResetClams = async (userId) => {
-    if (window.confirm('Are you sure you want to reset this user\'s clam total to zero?')) {
+    if (window.confirm('Are you sure you want to reset this user\\'s clam total to zero?')) {
       try {
         await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users/${userId}/clams`, { clam_total: 0 });
         setSuccess('Clam total reset successfully!');
         setError(null);
-        fetchData(); // Re-fetch all data after resetting clams
+        fetchData();
       } catch (error) {
         console.error('Error resetting clams:', error);
         setError(error.response?.data?.error || 'Failed to reset clam total');
@@ -190,7 +186,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
         await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores/${choreId}`);
         setSuccess('Chore deleted successfully!');
         setError(null);
-        fetchData(); // Re-fetch all data after deleting a chore
+        fetchData();
       } catch (error) {
         console.error('Error deleting chore:', error);
         setError(error.response?.data?.error || 'Failed to delete chore');
@@ -214,8 +210,8 @@ const AdminPanel = ({ setWidgetSettings }) => {
             label="Enable Chores Widget"
             className="toggle-label"
           />
-          {toggles.chores.enabled && ( // Conditionally render transparency toggle
-            <Box sx={{ ml: 4 }}> {/* Indent */}
+          {toggles.chores.enabled && (
+            <Box sx={{ ml: 4 }}>
               <FormControlLabel
                 control={<Switch checked={toggles.chores.transparent} onChange={handleToggleChange} name="chores.transparent" />}
                 label="Chores Transparent"
@@ -232,8 +228,8 @@ const AdminPanel = ({ setWidgetSettings }) => {
             label="Enable Calendar Widget"
             className="toggle-label"
           />
-          {toggles.calendar.enabled && ( // Conditionally render transparency toggle
-            <Box sx={{ ml: 4 }}> {/* Indent */}
+          {toggles.calendar.enabled && (
+            <Box sx={{ ml: 4 }}>
               <FormControlLabel
                 control={<Switch checked={toggles.calendar.transparent} onChange={handleToggleChange} name="calendar.transparent" />}
                 label="Calendar Transparent"
@@ -250,8 +246,8 @@ const AdminPanel = ({ setWidgetSettings }) => {
             label="Enable Photos Widget"
             className="toggle-label"
           />
-          {toggles.photos.enabled && ( // Conditionally render transparency toggle
-            <Box sx={{ ml: 4 }}> {/* Indent */}
+          {toggles.photos.enabled && (
+            <Box sx={{ ml: 4 }}>
               <FormControlLabel
                 control={<Switch checked={toggles.photos.transparent} onChange={handleToggleChange} name="photos.transparent" />}
                 label="Photos Transparent"
@@ -268,8 +264,8 @@ const AdminPanel = ({ setWidgetSettings }) => {
             label="Enable Weather Widget"
             className="toggle-label"
           />
-          {toggles.weather.enabled && ( // Conditionally render transparency toggle
-            <Box sx={{ ml: 4 }}> {/* Indent */}
+          {toggles.weather.enabled && (
+            <Box sx={{ ml: 4 }}>
               <FormControlLabel
                 control={<Switch checked={toggles.weather.transparent} onChange={handleToggleChange} name="weather.transparent" />}
                 label="Weather Transparent"
@@ -286,8 +282,8 @@ const AdminPanel = ({ setWidgetSettings }) => {
             label="Enable Menu Widget"
             className="toggle-label"
           />
-          {toggles.menu.enabled && ( // Conditionally render transparency toggle
-            <Box sx={{ ml: 4 }}> {/* Indent */}
+          {toggles.menu.enabled && (
+            <Box sx={{ ml: 4 }}>
               <FormControlLabel
                 control={<Switch checked={toggles.menu.transparent} onChange={handleToggleChange} name="menu.transparent" />}
                 label="Menu Transparent"
@@ -298,7 +294,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
         </Box>
 
         {/* Onscreen Keyboard Toggle */}
-        <Box sx={{ mb: 1, mt: 2 }}> {/* Added some top margin for separation */}
+        <Box sx={{ mb: 1, mt: 2 }}>
           <Typography variant="subtitle1">Global Settings</Typography>
           <FormControlLabel
             control={<Switch checked={toggles.enableOnscreenKeyboard} onChange={handleToggleChange} name="enableOnscreenKeyboard" />}
@@ -350,6 +346,21 @@ const AdminPanel = ({ setWidgetSettings }) => {
           min={10}
           max={40}
           step={2}
+          valueLabelDisplay="auto"
+          sx={{ width: '90%', mb: 2 }}
+        />
+
+        {/* New Card Height Slider */}
+        <Typography id="card-height-slider" gutterBottom>
+          Card Height: {toggles.cardHeight}px
+        </Typography>
+        <Slider
+          aria-labelledby="card-height-slider"
+          value={toggles.cardHeight}
+          onChange={handleSliderChange('cardHeight')}
+          min={100}
+          max={400}
+          step={10}
           valueLabelDisplay="auto"
           sx={{ width: '90%', mb: 2 }}
         />
@@ -408,7 +419,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
       {/* Collapsible User List */}
       <Box sx={{ mt: 3, p: 2, borderTop: '1px solid var(--card-border)' }}>
         <Typography variant="subtitle1" gutterBottom>Manage Users</Typography>
-        {users.length === 0 && <Typography variant="body2" color="text.secondary">No users added yet.</Typography>}
+        {users.length === 0 && <Typography variant="body2" color="text.secondary}>No users added yet.</Typography>}
         {users.map((user) => (
           <Accordion key={user.id} sx={{ mb: 1 }}>
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
@@ -417,7 +428,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
               </Typography>
             </AccordionSummary>
             <AccordionDetails sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              <Typography variant="body2">Email: {user.email}</Typography>
+              <Typography variant="body2'>Email: {user.email}</Typography>
               {user.profile_picture && (
                 <Box sx={{ mt: 1, mb: 1 }}>
                   <img

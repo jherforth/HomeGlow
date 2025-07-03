@@ -1,8 +1,9 @@
+// client/src/app.jsx
 import React, { useState, useEffect, useRef } from 'react';
-import { Container, Grid, IconButton, Box, Dialog, DialogContent, Button, TextField } from '@mui/material'; // Added TextField
+import { Container, Grid, IconButton, Box, Dialog, DialogContent, Button } from '@mui/material'; // Removed TextField
 import { Brightness4, Brightness7 } from '@mui/icons-material';
 import SettingsIcon from '@mui/icons-material/Settings';
-import RefreshIcon from '@mui/icons-material/Refresh'; // New import
+import RefreshIcon from '@mui/icons-material/Refresh';
 
 // Keyboard imports
 import Keyboard from 'react-simple-keyboard';
@@ -26,11 +27,11 @@ const App = () => {
       photos: { enabled: false, transparent: false },
       weather: { enabled: false, transparent: false },
       menu: { enabled: false, transparent: false },
-      enableOnscreenKeyboard: false,
+      enableOnscreenKeyboard: true, // Changed to true
       textSize: 16, // Default text size
       cardSize: 300, // Default card width
       cardPadding: 20, // Default card padding
-      cardHeight: 200, // Default card height
+      cardHeight: 200, // Default card height - Added
       keyboardPosition: 'bottom', // Default keyboard position
     };
     return savedSettings ? { ...defaultSettings, ...JSON.parse(savedSettings) } : defaultSettings;
@@ -55,11 +56,11 @@ const App = () => {
           photos: { enabled: false, transparent: false },
           weather: { enabled: false, transparent: false },
           menu: { enabled: false, transparent: false },
-          enableOnscreenKeyboard: false,
+          enableOnscreenKeyboard: true, // Changed to true
           textSize: 16, // Default text size
           cardSize: 300, // Default card width
           cardPadding: 20, // Default card padding
-          cardHeight: 200, // Default card height
+          cardHeight: 200, // Default card height - Added
           keyboardPosition: 'bottom', // Default keyboard position
         };
         return { ...defaultSettings, ...JSON.parse(savedSettings) };
@@ -104,7 +105,7 @@ const App = () => {
     }
   };
 
-  const handlePageRefresh = () => { // New function for page refresh
+  const handlePageRefresh = () => {
     window.location.reload();
   };
 
@@ -114,23 +115,20 @@ const App = () => {
     localStorage.setItem('widgetSettings', JSON.stringify({ ...widgetSettings, keyboardPosition: newPosition }));
   };
 
-  const handleFocus = (e) => {
-    setActiveInputName(e.target.name);
-  };
+  // Removed handleFocus function as example text fields are removed
 
   return (
-    <> {/* Use a React Fragment to wrap multiple top-level elements */}
+    <>
       {/* Theme Toggle Button */}
       <IconButton
         className="theme-toggle"
         onClick={toggleTheme}
         aria-label="Toggle theme"
         sx={{
-          position: 'fixed', // Changed to fixed to ensure it stays in viewport
+          position: 'fixed',
           top: 16,
           right: 16,
-          // Explicitly set color based on theme for inversion effect
-          color: theme === 'light' ? 'action.active' : 'white', // Dark icon for light theme, white for dark theme
+          color: theme === 'light' ? 'action.active' : 'white',
         }}
       >
         {theme === 'light' ? <Brightness4 /> : <Brightness7 />}
@@ -142,10 +140,10 @@ const App = () => {
         onClick={toggleAdminPanel}
         aria-label="Toggle Admin Panel"
         sx={{
-          position: 'fixed', // Changed to fixed
+          position: 'fixed',
           top: 16,
           right: 64,
-          color: theme === 'light' ? 'action.active' : 'white', // Apply same color logic
+          color: theme === 'light' ? 'action.active' : 'white',
         }}
       >
         <SettingsIcon />
@@ -157,10 +155,10 @@ const App = () => {
         onClick={handlePageRefresh}
         aria-label="Refresh Page"
         sx={{
-          position: 'fixed', // Changed to fixed
+          position: 'fixed',
           top: 16,
-          right: 112, // Position next to others
-          color: theme === 'light' ? 'action.active' : 'white', // Apply same color logic
+          right: 112,
+          color: theme === 'light' ? 'action.active' : 'white',
         }}
       >
         <RefreshIcon />
@@ -179,7 +177,6 @@ const App = () => {
         Toggle Keyboard Position
       </Button>
 
-      {/* Removed rotation class from Container as OS will handle rotation */}
       <Container className="container">
         <Grid container spacing={2} justifyContent="space-evenly">
           {widgetSettings.calendar.enabled && (
@@ -211,23 +208,7 @@ const App = () => {
           )}
         </Grid>
 
-        {/* Example Text Fields */}
-        <TextField
-          name="example1"
-          label="Example 1"
-          variant="outlined"
-          onFocus={handleFocus}
-          fullWidth
-          margin="normal"
-        />
-        <TextField
-          name="example2"
-          label="Example 2"
-          variant="outlined"
-          onFocus={handleFocus}
-          fullWidth
-          margin="normal"
-        />
+        {/* Removed Example Text Fields */}
 
         {/* Onscreen Keyboard */}
         {widgetSettings.enableOnscreenKeyboard && (
