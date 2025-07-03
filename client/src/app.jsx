@@ -191,27 +191,29 @@ const App = () => {
         </Grid>
 
         {/* Onscreen Keyboard */}
-        {console.log('App.jsx widgetSettings.enableOnscreenKeyboard:', widgetSettings.enableOnscreenKeyboard)}
-        <Box
-          sx={{
-            position: 'fixed',
-            [widgetSettings.keyboardPosition]: 0,
-            left: 0,
-            width: '50%',
-            // height: '300px', // Reverted
-            zIndex: 1000,
-            p: 2,
-            bgcolor: 'background.paper', // Reverted
-            visibility: widgetSettings.enableOnscreenKeyboard ? 'visible' : 'hidden', // Control visibility with CSS
-          }}
-        >
-          <Keyboard
-            keyboardRef={r => (keyboardRef.current = r)}
-            inputName={activeInputName}
-            onChange={handleKeyboardChange}
-            onKeyPress={handleKeyPress}
-          />
-        </Box>
+        {widgetSettings.enableOnscreenKeyboard && (
+          <Box
+            sx={{
+              position: 'fixed',
+              [widgetSettings.keyboardPosition]: 0,
+              left: 0,
+              width: '50%',
+              // height: '300px', // Reverted
+              zIndex: 1000,
+              p: 2,
+              bgcolor: 'background.paper', // Reverted
+              // Removed visibility control here, as conditional rendering handles it
+            }}
+          >
+            <Keyboard
+              key={widgetSettings.enableOnscreenKeyboard} // Add key prop here
+              keyboardRef={r => (keyboardRef.current = r)}
+              inputName={activeInputName}
+              onChange={handleKeyboardChange}
+              onKeyPress={handleKeyPress}
+            />
+          </Box>
+        )}
       </Container>
 
       {/* Admin Panel as a Dialog (Popup) */}
