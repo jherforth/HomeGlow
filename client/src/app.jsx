@@ -191,6 +191,7 @@ const App = () => {
         </Grid>
 
         {/* Onscreen Keyboard */}
+        {console.log('App.jsx widgetSettings.enableOnscreenKeyboard:', widgetSettings.enableOnscreenKeyboard)}
         {widgetSettings.enableOnscreenKeyboard && (
           <Box
             sx={{

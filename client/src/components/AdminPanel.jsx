@@ -68,6 +68,8 @@ const AdminPanel = ({ setWidgetSettings, handleFocus }) => {
   const handleToggleChange = (event) => {
     const { name, checked } = event.target;
 
+    console.log('AdminPanel.jsx toggles.enableOnscreenKeyboard (before change):', toggles.enableOnscreenKeyboard);
+
     let newToggles;
     if (name.includes('.')) {
       const [widgetName, settingType] = name.split('.');
@@ -84,6 +86,8 @@ const AdminPanel = ({ setWidgetSettings, handleFocus }) => {
         [name]: checked,
       };
     }
+
+    console.log('AdminPanel.jsx newToggles.enableOnscreenKeyboard (after change):', newToggles.enableOnscreenKeyboard);
 
     setToggles(newToggles);
     setWidgetSettings(newToggles);
