@@ -47,11 +47,11 @@ const ChoreWidget = ({ transparentBackground }) => {
     try {
       const usersResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users`);
       setUsers(Array.isArray(usersResponse.data) ? usersResponse.data : []);
-      console.log('Fetched Users:', usersResponse.data); // Debugging
+      // console.log('Fetched Users:', usersResponse.data); // Debugging removed
 
       const choresResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`);
       setChores(Array.isArray(choresResponse.data) ? choresResponse.data : []);
-      console.log('Fetched Chores:', choresResponse.data); // Debugging
+      // console.log('Fetched Chores:', choresResponse.data); // Debugging removed
       setError(null);
     } catch (err) {
       console.error('Error fetching data:', err);
@@ -130,7 +130,7 @@ const ChoreWidget = ({ transparentBackground }) => {
   };
 
   const currentDay = getCurrentDayOfWeek();
-  console.log('Current Day:', currentDay); // Debugging
+  // console.log('Current Day:', currentDay); // Debugging removed
 
   const handleOpenAddTaskDialog = () => {
     setOpenAddTaskDialog(true);
@@ -207,7 +207,7 @@ const ChoreWidget = ({ transparentBackground }) => {
                 .filter(chore => {
                   const isAssignedToUser = parseInt(chore.user_id) === user.id;
                   const isAssignedToday = chore.assigned_day_of_week === currentDay;
-                  console.log(`Chore: ${chore.title}, User ID (chore): ${chore.user_id}, User ID (current): ${user.id}, Assigned Day: ${chore.assigned_day_of_week}, Current Day: ${currentDay}, Match User: ${isAssignedToUser}, Match Day: ${isAssignedToday}`);
+                  // console.log(`Chore: ${chore.title}, User ID (chore): ${chore.user_id}, User ID (current): ${user.id}, Assigned Day: ${chore.assigned_day_of_week}, Current Day: ${currentDay}, Match User: ${isAssignedToUser}, Match Day: ${isAssignedToday}`); // Debugging removed
                   return isAssignedToUser && isAssignedToday;
                 })
                 .map(chore => (

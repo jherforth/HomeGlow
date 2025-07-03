@@ -7,7 +7,12 @@ const fs = require('fs').promises;
 require('dotenv').config();
 
 // Initialize Fastify with CORS
-fastify.register(require('@fastify/cors'));
+// MODIFIED: Configure CORS to allow PATCH method
+fastify.register(require('@fastify/cors'), {
+  origin: '*', // Allow all origins for development. Consider restricting in production.
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], // Explicitly allow PATCH
+  allowedHeaders: ['Content-Type', 'Authorization'], // Add any other headers your client might send
+});
 
 // Add a preHandler hook to log all incoming requests
 fastify.addHook('preHandler', (request, reply, done) => {
@@ -117,6 +122,7 @@ fastify.get('/api/users', async (request, reply) => {
 fastify.post('/api/users', async (request, reply) => {
   const { username, email, profile_picture } = request.body;
   try {
+    const db = await initializeDatabase();
     const stmt = db.prepare('INSERT INTO users (username, email, profile_picture) VALUES (?, ?, ?)');
     const info = stmt.run(username, email, profile_picture);
     return { id: info.lastInsertRowid };
@@ -131,7 +137,7 @@ fastify.get('/api/calendar', async (request, reply) => {
   try {
     const rows = db.prepare('SELECT * FROM events').all();
     return rows;
-  } catch (error) {
+  }  catch (error) {
     console.error('Error fetching events:', error);
     reply.status(500).send({ error: 'Failed to fetch events' });
   }
