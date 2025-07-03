@@ -192,14 +192,15 @@ const ChoreWidget = ({ transparentBackground }) => {
                   variant="caption"
                   sx={{
                     position: 'absolute',
-                    top: 0,
-                    right: 0,
-                    bgcolor: 'rgba(0,0,0,0.6)',
-                    color: 'white', // <--- RE-ADDED THIS LINE
-                    borderRadius: '0 0 0 8px',
-                    px: 0.5,
-                    py: 0.2,
-                    fontSize: '0.7rem',
+                    top: -8, // Moved up
+                    right: -8, // Moved right
+                    bgcolor: 'rgba(0,0,0,0.7)', // Slightly more opaque background
+                    color: 'white',
+                    borderRadius: '16px', // More rounded/pill shape
+                    px: 1, // Increased horizontal padding
+                    py: 0.5, // Increased vertical padding
+                    fontSize: '0.9rem', // Increased font size
+                    fontWeight: 'bold', // Made bold
                   }}
                 >
                   {user.clam_total || 0} 🐚
