@@ -96,7 +96,7 @@ const App = () => {
           top: 16,
           right: 16,
           // Explicitly set color based on theme for inversion effect
-          color: theme === 'light' ? 'action.active' : 'inherit', // Dark icon for light theme, inherit for dark theme (which should be light)
+          color: theme === 'light' ? 'action.active' : 'white', // Dark icon for light theme, white for dark theme
         }}
       >
         {theme === 'light' ? <Brightness4 /> : <Brightness7 />}
