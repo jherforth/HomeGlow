@@ -152,7 +152,7 @@ const ChoreWidget = ({ transparentBackground }) => {
       {error && <Typography color="error">{error}</Typography>}
 
       {/* User Row with Profile Pictures and Tasks */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap', mb: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', mb: 3, gap: 2 }}> {/* Changed justifyContent and added gap */}
         {users.length === 0 && !error && <Typography>No users available.</Typography>}
         {users.map(user => {
           const userDailyChores = chores.filter(
@@ -163,7 +163,7 @@ const ChoreWidget = ({ transparentBackground }) => {
           const completionPercentage = totalDailyChores > 0 ? (completedDailyChores / totalDailyChores) * 100 : 0;
 
           return (
-            <Box key={user.id} sx={{ textAlign: 'center', mx: 1, mb: 2, position: 'relative' }}> {/* Parent Box is now relative */}
+            <Box key={user.id} sx={{ textAlign: 'center', mb: 2, position: 'relative' }}> {/* Removed mx: 1 */}
               <Box sx={{ // Profile picture Box (no longer relative, no clam total inside)
                 width: 80,
                 height: 80,
