@@ -209,28 +209,6 @@ const App = () => {
           )}
         </Grid>
 
-        {/* Example Text Fields for Keyboard Input */}
-        <Box sx={{ mt: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <TextField
-            label="Example Input 1"
-            name="input1"
-            value={activeInputName === 'input1' ? keyboardInput : ''}
-            onFocus={handleFocus}
-            onChange={(e) => setKeyboardInput(e.target.value)}
-            variant="outlined"
-            fullWidth
-          />
-          <TextField
-            label="Example Input 2"
-            name="input2"
-            value={activeInputName === 'input2' ? keyboardInput : ''}
-            onFocus={handleFocus}
-            onChange={(e) => setKeyboardInput(e.target.value)}
-            variant="outlined"
-            fullWidth
-          />
-        </Box>
-
         {/* Onscreen Keyboard */}
         {widgetSettings.enableOnscreenKeyboard && (
           <Box
