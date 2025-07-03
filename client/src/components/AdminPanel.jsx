@@ -15,6 +15,7 @@ import {
   ListItem, // New import for list items
   ListItemText, // New import for list item text
   IconButton, // New import for delete button
+  Slider, // New import for sliders
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -36,8 +37,10 @@ const AdminPanel = ({ setWidgetSettings }) => {
       photos: { enabled: false, transparent: false },
       weather: { enabled: false, transparent: false },
       menu: { enabled: false, transparent: false },
-      enableOnscreenKeyboard: false, // Add new setting for onscreen keyboard
-      // enableScreenRotation: false, // REMOVED: Screen rotation setting
+      enableOnscreenKeyboard: false,
+      textSize: 16, // Default text size
+      cardSize: 300, // Default card width
+      cardPadding: 20, // Default card padding
     };
     // Merge saved settings with defaults to ensure new properties are present
     return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
@@ -85,6 +88,17 @@ const AdminPanel = ({ setWidgetSettings }) => {
       };
     }
 
+    setToggles(newToggles);
+    setWidgetSettings(newToggles); // Update parent component's state
+    localStorage.setItem('widgetSettings', JSON.stringify(newToggles));
+  };
+
+  // Handle slider changes
+  const handleSliderChange = (name) => (event, newValue) => {
+    const newToggles = {
+      ...toggles,
+      [name]: newValue,
+    };
     setToggles(newToggles);
     setWidgetSettings(newToggles); // Update parent component's state
     localStorage.setItem('widgetSettings', JSON.stringify(newToggles));
@@ -292,15 +306,53 @@ const AdminPanel = ({ setWidgetSettings }) => {
             className="toggle-label"
           />
         </Box>
+      </Box>
 
-        {/* REMOVED: Screen Rotation Toggle */}
-        {/* <Box sx={{ mb: 1 }}>
-          <FormControlLabel
-            control={<Switch checked={toggles.enableScreenRotation} onChange={handleToggleChange} name="enableScreenRotation" />}
-            label="Enable 90° Screen Rotation"
-            className="toggle-label"
-          />
-        </Box> */}
+      {/* New Sliders for Customization */}
+      <Box sx={{ mt: 3, p: 2, borderTop: '1px solid var(--card-border)' }}>
+        <Typography variant="subtitle1" gutterBottom>Display Settings</Typography>
+
+        <Typography id="text-size-slider" gutterBottom>
+          Text Size: {toggles.textSize}px
+        </Typography>
+        <Slider
+          aria-labelledby="text-size-slider"
+          value={toggles.textSize}
+          onChange={handleSliderChange('textSize')}
+          min={10}
+          max={24}
+          step={1}
+          valueLabelDisplay="auto"
+          sx={{ width: '90%', mb: 2 }}
+        />
+
+        <Typography id="card-size-slider" gutterBottom>
+          Card Width: {toggles.cardSize}px
+        </Typography>
+        <Slider
+          aria-labelledby="card-size-slider"
+          value={toggles.cardSize}
+          onChange={handleSliderChange('cardSize')}
+          min={200}
+          max={500}
+          step={10}
+          valueLabelDisplay="auto"
+          sx={{ width: '90%', mb: 2 }}
+        />
+
+        <Typography id="card-padding-slider" gutterBottom>
+          Card Padding: {toggles.cardPadding}px
+        </Typography>
+        <Slider
+          aria-labelledby="card-padding-slider"
+          value={toggles.cardPadding}
+          onChange={handleSliderChange('cardPadding')}
+          min={10}
+          max={40}
+          step={2}
+          valueLabelDisplay="auto"
+          sx={{ width: '90%', mb: 2 }}
+        />
       </Box>
 
       <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
