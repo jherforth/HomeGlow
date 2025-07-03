@@ -152,7 +152,7 @@ const ChoreWidget = ({ transparentBackground }) => {
       {error && <Typography color="error">{error}</Typography>}
 
       {/* User Row with Profile Pictures and Tasks */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', mb: 3, gap: 2 }}> {/* Changed justifyContent and added gap */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-evenly', flexWrap: 'wrap', mb: 3, gap: 2 }}> {/* Changed justifyContent to 'space-evenly' */}
         {users.length === 0 && !error && <Typography>No users available.</Typography>}
         {users.map(user => {
           const userDailyChores = chores.filter(

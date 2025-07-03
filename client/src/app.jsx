@@ -9,11 +9,10 @@ import 'react-simple-keyboard/build/css/index.css'; // Default keyboard CSS
 
 import CalendarWidget from './components/CalendarWidget.jsx';
 import PhotoWidget from './components/PhotoWidget.jsx';
-// import ChoreWidget from './components/ChoreWidget.jsx'; // We'll move this import
 import AdminPanel from './components/AdminPanel.jsx';
 import WeatherWidget from './components/WeatherWidget.jsx';
 import MenuWidget from './components/MenuWidget.jsx';
-import ChoreWidget from './components/ChoreWidget.jsx'; // Moved import to ensure it's available for rendering
+import ChoreWidget from './components/ChoreWidget.jsx';
 import './index.css';
 
 const App = () => {
@@ -122,7 +121,7 @@ const App = () => {
         <SettingsIcon />
       </IconButton>
 
-      <Grid container spacing={2}>
+      <Grid container spacing={2} justifyContent="space-evenly"> {/* Added justifyContent here */}
         {/* Other widgets */}
         {widgetSettings.calendar.enabled && (
           <Grid item xs={12} sm={6} md={3} className="grid-item">
