@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Container, Grid, IconButton, Box } from '@mui/material';
+import { Container, Grid, IconButton, Box, Dialog, DialogContent } from '@mui/material'; // Added Dialog, DialogContent
 import { Brightness4, Brightness7 } from '@mui/icons-material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RefreshIcon from '@mui/icons-material/Refresh'; // New import
@@ -69,12 +69,13 @@ const App = () => {
 
   // Effect to add/remove 'rotated' class to body based on enableScreenRotation
   useEffect(() => {
-    if (widgetSettings.enableScreenRotation) {
-      document.body.classList.add('rotated');
-    } else {
-      document.body.classList.remove('rotated');
-    }
-  }, [widgetSettings.enableScreenRotation]);
+    // This effect is no longer needed if screen rotation is handled by OS
+    // if (widgetSettings.enableScreenRotation) {
+    //   document.body.classList.add('rotated');
+    // } else {
+    //   document.body.classList.remove('rotated');
+    // }
+  }, []); // Removed widgetSettings.enableScreenRotation from dependency array
 
   // Effect to apply dynamic CSS variables
   useEffect(() => {
@@ -157,7 +158,8 @@ const App = () => {
         <RefreshIcon />
       </IconButton>
 
-      <Container className={`container ${widgetSettings.enableScreenRotation ? 'rotate-90' : ''}`} >
+      {/* Removed rotation class from Container as OS will handle rotation */}
+      <Container className="container">
         <Grid container spacing={2} justifyContent="space-evenly">
           {widgetSettings.calendar.enabled && (
             <Grid item xs={12} sm={6} md={3} className="grid-item">
@@ -177,11 +179,6 @@ const App = () => {
           {widgetSettings.menu.enabled && (
             <Grid item xs={12} sm={6} md={3} className="grid-item">
               <MenuWidget transparentBackground={widgetSettings.menu.transparent} />
-            </Grid>
-          )}
-          {showAdminPanel && (
-            <Grid item xs={12} sm={6} md={3} className="grid-item">
-              <AdminPanel setWidgetSettings={setWidgetSettings} />
             </Grid>
           )}
 
@@ -205,6 +202,13 @@ const App = () => {
           </Box>
         )}
       </Container>
+
+      {/* Admin Panel as a Dialog (Popup) */}
+      <Dialog open={showAdminPanel} onClose={toggleAdminPanel} maxWidth="md" fullWidth>
+        <DialogContent>
+          <AdminPanel setWidgetSettings={setWidgetSettings} />
+        </DialogContent>
+      </Dialog>
     </>
   );
 };
