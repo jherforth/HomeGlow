@@ -163,9 +163,8 @@ const ChoreWidget = ({ transparentBackground }) => {
           const completionPercentage = totalDailyChores > 0 ? (completedDailyChores / totalDailyChores) * 100 : 0;
 
           return (
-            <Box key={user.id} sx={{ textAlign: 'center', mx: 1, mb: 2 }}>
-              <Box sx={{
-                position: 'relative',
+            <Box key={user.id} sx={{ textAlign: 'center', mx: 1, mb: 2, position: 'relative' }}> {/* Parent Box is now relative */}
+              <Box sx={{ // Profile picture Box (no longer relative, no clam total inside)
                 width: 80,
                 height: 80,
                 borderRadius: '50%',
@@ -187,28 +186,28 @@ const ChoreWidget = ({ transparentBackground }) => {
                 ) : (
                   <Typography variant="caption" sx={{ color: 'text.secondary' }}>No Pic</Typography>
                 )}
-                {/* Display Clam Total */}
-                <Typography
-                  variant="caption"
-                  sx={{
-                    position: 'absolute',
-                    top: -10, // Adjusted for circular overlap
-                    right: -10, // Adjusted for circular overlap
-                    width: 35, // Fixed width for circular shape
-                    height: 35, // Fixed height for circular shape
-                    borderRadius: '50%', // Circular shape
-                    bgcolor: 'rgba(0,0,0,0.7)',
-                    color: 'white',
-                    display: 'flex', // Use flexbox for centering content
-                    alignItems: 'center', // Center vertically
-                    justifyContent: 'center', // Center horizontally
-                    fontSize: '0.9rem',
-                    fontWeight: 'bold',
-                  }}
-                >
-                  {user.clam_total || 0} 🐚
-                </Typography>
               </Box>
+              {/* Display Clam Total - now a sibling of the profile picture Box */}
+              <Typography
+                variant="caption"
+                sx={{
+                  position: 'absolute',
+                  top: -10, // Adjusted for circular overlap
+                  right: -10, // Adjusted for circular overlap
+                  width: 35, // Fixed width for circular shape
+                  height: 35, // Fixed height for circular shape
+                  borderRadius: '50%', // Circular shape
+                  bgcolor: 'rgba(0,0,0,0.7)',
+                  color: 'white',
+                  display: 'flex', // Use flexbox for centering content
+                  alignItems: 'center', // Center vertically
+                  justifyContent: 'center', // Center horizontally
+                  fontSize: '0.9rem',
+                  fontWeight: 'bold',
+                }}
+              >
+                {user.clam_total || 0} 🐚
+              </Typography>
               {/* Progress Bar */}
               <Box sx={{
                 width: 80,
