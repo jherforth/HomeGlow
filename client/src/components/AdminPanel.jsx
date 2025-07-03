@@ -41,6 +41,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
       textSize: 16, // Default text size
       cardSize: 300, // Default card width
       cardPadding: 20, // Default card padding
+      cardHeight: 200, // Default card height
     };
     // Merge saved settings with defaults to ensure new properties are present
     return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
@@ -340,6 +341,20 @@ const AdminPanel = ({ setWidgetSettings }) => {
           sx={{ width: '90%', mb: 2 }}
         />
 
+        <Typography id="card-height-slider" gutterBottom>
+          Card Height: {toggles.cardHeight}px
+        </Typography>
+        <Slider
+          aria-labelledby="card-height-slider"
+          value={toggles.cardHeight}
+          onChange={handleSliderChange('cardHeight')}
+          min={100}
+          max={400}
+          step={10}
+          valueLabelDisplay="auto"
+          sx={{ width: '90%', mb: 2 }}
+        />
+
         <Typography id="card-padding-slider" gutterBottom>
           Card Padding: {toggles.cardPadding}px
         </Typography>
@@ -418,8 +433,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
             </AccordionSummary>
             <AccordionDetails sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
               <Typography variant="body2">Email: {user.email}</Typography>
-              {user.profile_picture && (
-                <Box sx={{ mt: 1, mb: 1 }}>
+              {user.profile_picture && (n                <Box sx={{ mt: 1, mb: 1 }}>
                   <img
                     src={user.profile_picture}
                     alt={user.username}

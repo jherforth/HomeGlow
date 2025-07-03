@@ -27,10 +27,10 @@ const App = () => {
       weather: { enabled: false, transparent: false },
       menu: { enabled: false, transparent: false },
       enableOnscreenKeyboard: false,
-      enableScreenRotation: false, // Add new setting for screen rotation
       textSize: 16, // Default text size
       cardSize: 300, // Default card width
       cardPadding: 20, // Default card padding
+      cardHeight: 200, // Default card height
     };
     return savedSettings ? { ...defaultSettings, ...JSON.parse(savedSettings) } : defaultSettings;
   });
@@ -55,10 +55,10 @@ const App = () => {
           weather: { enabled: false, transparent: false },
           menu: { enabled: false, transparent: false },
           enableOnscreenKeyboard: false,
-          enableScreenRotation: false, // Add new setting for screen rotation
           textSize: 16, // Default text size
           cardSize: 300, // Default card width
           cardPadding: 20, // Default card padding
+          cardHeight: 200, // Default card height
         };
         return { ...defaultSettings, ...JSON.parse(savedSettings) };
       });
@@ -81,7 +81,8 @@ const App = () => {
     document.documentElement.style.setProperty('--dynamic-text-size', `${widgetSettings.textSize}px`);
     document.documentElement.style.setProperty('--dynamic-card-width', `${widgetSettings.cardSize}px`);
     document.documentElement.style.setProperty('--dynamic-card-padding', `${widgetSettings.cardPadding}px`);
-  }, [widgetSettings.textSize, widgetSettings.cardSize, widgetSettings.cardPadding]);
+    document.documentElement.style.setProperty('--dynamic-card-height', `${widgetSettings.cardHeight}px`);
+  }, [widgetSettings.textSize, widgetSettings.cardSize, widgetSettings.cardPadding, widgetSettings.cardHeight]);
 
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
