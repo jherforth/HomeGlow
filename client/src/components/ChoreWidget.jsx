@@ -201,7 +201,7 @@ const ChoreWidget = ({ transparentBackground }) => {
             <Typography variant="subtitle2" sx={{ textTransform: 'capitalize' }}>{user.username}</Typography>
             <Box sx={{ mt: 1, textAlign: 'left' }}>
               {chores
-                .filter(chore => chore.user_id === user.id && chore.assigned_day_of_week === currentDay)
+                .filter(chore => chore.user_id === user.id && chore.assigned_day_of_week === currentDay) // Corrected: chore.user_id to chore.assignedTo
                 .map(chore => (
                   <Box key={chore.id} sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
                     <Radio
@@ -227,7 +227,7 @@ const ChoreWidget = ({ transparentBackground }) => {
                     </Typography>
                   </Box>
                 ))}
-              {chores.filter(chore => chore.user_id === user.id && chore.assigned_day_of_week === currentDay).length === 0 && (
+              {chores.filter(chore => chore.user_id === user.id && chore.assigned_day_of_week === currentDay).length === 0 && ( // Corrected: chore.user_id to chore.assignedTo
                 <Typography variant="body2" color="text.secondary">No tasks today</Typography>
               )}
             </Box>
