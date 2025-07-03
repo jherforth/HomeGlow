@@ -37,32 +37,7 @@ async function initializeDatabase() {
     await fs.chmod(path.dirname(dbPath), 0o777); // Ensure directory is writable
     const newDb = new Database(dbPath, { verbose: console.log });
     newDb.exec(`
-      CREATE TABLE IF NOT EXISTS chores (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        title TEXT,
-        description TEXT,
-        time_period TEXT,
-        assigned_day_of_week TEXT,
-        repeats TEXT,
-        completed BOOLEAN
-      );
-      CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,\
-        username TEXT,
-        email TEXT,\
-        profile_picture TEXT,\
-        clam_total INTEGER DEFAULT 0
-      );
-      CREATE TABLE IF NOT EXISTS events (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        summary TEXT,
-        start TEXT,
-        end TEXT,
-        description TEXT
-      );
-    `);
+      CREATE TABLE IF NOT EXISTS chores (\n        id INTEGER PRIMARY KEY AUTOINCREMENT,\n        user_id INTEGER,\n        title TEXT,\n        description TEXT,\n        time_period TEXT,\n        assigned_day_of_week TEXT,\n        repeats TEXT,\n        completed BOOLEAN\n      );\n      CREATE TABLE IF NOT EXISTS users (\n        id INTEGER PRIMARY KEY AUTOINCREMENT,\n        username TEXT,\n        email TEXT,\n        profile_picture TEXT,\n        clam_total INTEGER DEFAULT 0\n      );\n      CREATE TABLE IF NOT EXISTS events (\n        id INTEGER PRIMARY KEY AUTOINCREMENT,\n        user_id INTEGER,\n        summary TEXT,\n        start TEXT,\n        end TEXT,\n        description TEXT\n      );\n    `);
     return newDb; // Return the new database instance
   } catch (error) {
     console.error('Failed to initialize database:', error);
@@ -163,6 +138,24 @@ fastify.patch('/api/users/:id/clams', async (request, reply) => {
   } catch (error) {
     console.error('Error updating user clams:', error);
     reply.status(500).send({ error: 'Failed to update user clams' });
+  }
+});
+
+// NEW: Endpoint to delete a user
+fastify.delete('/api/users/:id', async (request, reply) => {
+  const { id } = request.params;
+  try {
+    // Optional: Delete associated chores first if desired, or set user_id to NULL
+    // db.prepare('DELETE FROM chores WHERE user_id = ?').run(id);
+    const stmt = db.prepare('DELETE FROM users WHERE id = ?');
+    const info = stmt.run(id);
+    if (info.changes === 0) {
+      return reply.status(404).send({ error: 'User not found' });
+    }
+    return { success: true, message: 'User deleted successfully' };
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    reply.status(500).send({ error: 'Failed to delete user' });
   }
 });
 

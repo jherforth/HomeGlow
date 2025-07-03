@@ -1,6 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Button, Card, Typography, TextField, Box, Switch, FormControlLabel } from '@mui/material';
+import {
+  Button,
+  Card,
+  Typography,
+  TextField,
+  Box,
+  Switch,
+  FormControlLabel,
+  Accordion, // New import
+  AccordionSummary, // New import
+  AccordionDetails, // New import
+} from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'; // New import
+import DeleteIcon from '@mui/icons-material/Delete'; // New import
 import '../index.css';
 
 const AdminPanel = ({ setWidgetSettings }) => {
@@ -24,6 +37,23 @@ const AdminPanel = ({ setWidgetSettings }) => {
     // Merge saved settings with defaults to ensure new properties are present
     return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
   });
+  const [users, setUsers] = useState([]); // State for users in Admin Panel
+
+  // Function to fetch users for the Admin Panel
+  const fetchUsers = async () => {
+    try {
+      const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users`);
+      setUsers(Array.isArray(response.data) ? response.data : []);
+    } catch (err) {
+      console.error('Error fetching users for Admin Panel:', err);
+      // Optionally set an error state for the Admin Panel itself
+    }
+  };
+
+  // Fetch users on component mount and after user-related actions
+  useEffect(() => {
+    fetchUsers();
+  }, []);
 
   // Handle widget toggle changes (for both enabled and transparent)
   const handleToggleChange = (event) => {
@@ -93,10 +123,41 @@ const AdminPanel = ({ setWidgetSettings }) => {
       setSuccess('User added successfully!');
       setFormData({ username: '', email: '', profilePicture: null });
       setError(null);
+      fetchUsers(); // Re-fetch users after adding a new one
     } catch (error) {
       console.error('Error adding user:', error);
       setError(error.response?.data?.error || 'Failed to add user');
       setSuccess(null);
+    }
+  };
+
+  const handleDeleteUser = async (userId) => {
+    if (window.confirm('Are you sure you want to delete this user?')) {
+      try {
+        await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users/${userId}`);
+        setSuccess('User deleted successfully!');
+        setError(null);
+        fetchUsers(); // Re-fetch users after deletion
+      } catch (error) {
+        console.error('Error deleting user:', error);
+        setError(error.response?.data?.error || 'Failed to delete user');
+        setSuccess(null);
+      }
+    }
+  };
+
+  const handleResetClams = async (userId) => {
+    if (window.confirm('Are you sure you want to reset this user\'s clam total to zero?')) {
+      try {
+        await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users/${userId}/clams`, { clam_total: 0 });
+        setSuccess('Clam total reset successfully!');
+        setError(null);
+        fetchUsers(); // Re-fetch users after resetting clams
+      } catch (error) {
+        console.error('Error resetting clams:', error);
+        setError(error.response?.data?.error || 'Failed to reset clam total');
+        setSuccess(null);
+      }
     }
   };
 
@@ -258,6 +319,52 @@ const AdminPanel = ({ setWidgetSettings }) => {
           </Box>
         )}
         <Button type="submit">Add User</Button>
+      </Box>
+
+      {/* Collapsible User List */}
+      <Box sx={{ mt: 3, p: 2, borderTop: '1px solid var(--card-border)' }}>
+        <Typography variant="subtitle1" gutterBottom>Manage Users</Typography>
+        {users.length === 0 && <Typography variant="body2" color="text.secondary">No users added yet.</Typography>}
+        {users.map((user) => (
+          <Accordion key={user.id} sx={{ mb: 1 }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography variant="body1" sx={{ textTransform: 'capitalize', flexGrow: 1 }}>
+                {user.username} (Clams: {user.clam_total || 0} 🐚)
+              </Typography>
+            </AccordionSummary>
+            <AccordionDetails sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <Typography variant="body2">Email: {user.email}</Typography>
+              {user.profile_picture && (
+                <Box sx={{ mt: 1, mb: 1 }}>
+                  <img
+                    src={user.profile_picture}
+                    alt={user.username}
+                    style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '50%' }}
+                  />
+                </Box>
+              )}
+              <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  startIcon={<DeleteIcon />}
+                  onClick={() => handleDeleteUser(user.id)}
+                  size="small"
+                >
+                  Delete User
+                </Button>
+                <Button
+                  variant="outlined"
+                  onClick={() => handleResetClams(user.id)}
+                  size="small"
+                >
+                  Reset Clams
+                </Button>
+              </Box>
+              {/* Master detailed list of tasks will go here in a later step */}
+            </AccordionDetails>
+          </Accordion>
+        ))}
       </Box>
     </Card>
   );
