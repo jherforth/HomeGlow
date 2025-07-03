@@ -42,12 +42,6 @@ body {
   font-size: var(--dynamic-text-size); /* Apply dynamic text size */
 }
 
-body.rotated {
-  /* When body is rotated, swap overflow directions */
-  overflow-x: auto; /* This will become the "vertical" scroll for rotated content */
-  overflow-y: hidden; /* Hide the original vertical scroll */
-}
-
 .container {
   padding: 20px;
   /* Removed min-height: 100vh; to allow dynamic height */
@@ -70,21 +64,6 @@ body.rotated {
 /* Override Material-UI Container's max-width to allow full dynamic width */
 .MuiContainer-root {
   max-width: none !important;
-}
-
-.rotate-90 {
-  transform: translate(-50%, -50%) rotate(90deg);
-  /* Center and rotate */
-  width: 100vh;
-  /* When rotated 90deg, the width becomes the original height */
-  height: 100vw;
-  /* When rotated 90deg, the height becomes the original width */
-  transform-origin: center center;
-  /* Ensure rotation is around the center */
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  /* Removed overflow properties from here, body will manage */
 }
 
 .grid-item {
@@ -145,7 +124,6 @@ button:hover {
   border: 1px solid var(--card-border);
   border-radius: 50%;
   padding: 10px;
-  width: 100%;
   font-size: 1.2rem;
   cursor: pointer;
   backdrop-filter: var(--backdrop-blur);
