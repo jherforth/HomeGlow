@@ -199,10 +199,10 @@ const App = () => {
               [widgetSettings.keyboardPosition]: 0,
               left: 0,
               width: '50%',
-              height: '50%',
+              height: '300px', // Changed for debugging
               zIndex: 1000,
               p: 2,
-              bgcolor: 'background.paper',
+              bgcolor: 'red', // Changed for debugging
             }}
           >
             <Keyboard
