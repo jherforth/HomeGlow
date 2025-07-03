@@ -7,31 +7,41 @@ import AcUnitIcon from '@mui/icons-material/AcUnit';
 import GrainIcon from '@mui/icons-material/Grain';
 import '../index.css'; // Assuming global styles are here
 
+// Recharts imports
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
+
 const API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY; // Accessing Vite env variable
 
-const WeatherWidget = ({ transparentBackground }) => { // Added transparentBackground prop
-  // Initialize zipCode from localStorage, or empty string if not found
+const WeatherWidget = ({ transparentBackground }) => {
   const [zipCode, setZipCode] = useState(() => {
     const savedZip = localStorage.getItem('weatherZipCode');
     return savedZip || '';
   });
   const [weatherData, setWeatherData] = useState(null);
-  const [forecastData, setForecastData] = useState(null);
+  const [forecastData, setForecastData] = useState(null); // For 3-day summary
+  const [chartData, setChartData] = useState([]); // For 3-hourly chart data
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedTab, setSelectedTab] = useState(0);
 
-  // Save zipCode to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem('weatherZipCode', zipCode);
   }, [zipCode]);
 
-  // Automatically fetch weather data if zipCode is present on mount
   useEffect(() => {
     if (zipCode) {
       fetchWeather();
     }
-  }, []); // Empty dependency array means this runs once on mount
+  }, []);
 
   const fetchWeather = async () => {
     if (!zipCode) {
@@ -47,6 +57,7 @@ const WeatherWidget = ({ transparentBackground }) => { // Added transparentBackg
     setError(null);
     setWeatherData(null);
     setForecastData(null);
+    setChartData([]);
 
     try {
       // Fetch current weather
@@ -55,26 +66,39 @@ const WeatherWidget = ({ transparentBackground }) => { // Added transparentBackg
       );
       setWeatherData(currentWeatherResponse.data);
 
-      // Fetch 5-day / 3-hour forecast (we'll process it for 3-day daily)
+      // Fetch 5-day / 3-hour forecast
       const forecastResponse = await axios.get(
         `https://api.openweathermap.org/data/2.5/forecast?zip=${zipCode},us&appid=${API_KEY}&units=imperial`
       );
       
-      // Process forecast data to get daily forecast for 3 days
+      // Process forecast data for 3-day summary
       const dailyForecasts = {};
-      if (Array.isArray(forecastResponse.data.list)) { // Defensive check
+      const hourlyChartData = []; // Data for charts
+
+      if (Array.isArray(forecastResponse.data.list)) {
         forecastResponse.data.list.forEach(item => {
-          const date = new Date(item.dt * 1000).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-          if (!dailyForecasts[date]) {
-            dailyForecasts[date] = {
+          const date = new Date(item.dt * 1000);
+          const dateString = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+          // For 3-day summary
+          if (!dailyForecasts[dateString]) {
+            dailyForecasts[dateString] = {
               temp_max: -Infinity,
               temp_min: Infinity,
               description: item.weather[0].description,
               icon: item.weather[0].icon,
             };
           }
-          dailyForecasts[date].temp_max = Math.max(dailyForecasts[date].temp_max, item.main.temp_max);
-          dailyForecasts[date].temp_min = Math.min(dailyForecasts[date].temp_min, item.main.temp_min);
+          dailyForecasts[dateString].temp_max = Math.max(dailyForecasts[dateString].temp_max, item.main.temp_max);
+          dailyForecasts[dateString].temp_min = Math.min(dailyForecasts[dateString].temp_min, item.main.temp_min);
+
+          // For chart data (using 3-hourly data)
+          hourlyChartData.push({
+            time: date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+            temp: item.main.temp,
+            humidity: item.main.humidity,
+            pop: item.pop * 100, // Probability of precipitation in percentage
+          });
         });
       }
 
@@ -88,6 +112,7 @@ const WeatherWidget = ({ transparentBackground }) => { // Added transparentBackg
           icon: data.icon,
         }));
       setForecastData(forecastArray);
+      setChartData(hourlyChartData);
 
     } catch (err) {
       console.error('Error fetching weather data:', err);
@@ -156,7 +181,7 @@ const WeatherWidget = ({ transparentBackground }) => { // Added transparentBackg
       {forecastData && (
         <Box sx={{ mt: 3 }}>
           <Typography variant="h6">3-Day Forecast</Typography>
-          {Array.isArray(forecastData) && forecastData.map((day, index) => ( // Ensure forecastData is an array before mapping
+          {Array.isArray(forecastData) && forecastData.map((day, index) => (
             <Box key={index} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 1 }}>
               <Typography variant="body2">{day.date}</Typography>
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -177,19 +202,55 @@ const WeatherWidget = ({ transparentBackground }) => { // Added transparentBackg
         </Box>
       )}
 
-      {weatherData && ( // Only show tabs if weather data is available
+      {chartData.length > 0 && ( // Only show tabs if chart data is available
         <Box sx={{ width: '100%', mt: 3 }}>
           <Tabs value={selectedTab} onChange={handleTabChange} aria-label="weather graphs tabs">
             <Tab label="Temperature" />
             <Tab label="Precipitation" />
           </Tabs>
-          <Box sx={{ p: 2 }}>
-            {selectedTab === 0 && (
-              <Typography>Temperature graph placeholder. Integrate a charting library here (e.g., Chart.js, Recharts).</Typography>
-            )}
-            {selectedTab === 1 && (
-              <Typography>Precipitation graph placeholder. Integrate a charting library here (e.g., Chart.js, Recharts).</Typography>
-            )}
+          <Box sx={{ p: 2, height: 250 }}> {/* Fixed height for chart container */}
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={chartData}
+                margin={{
+                  top: 5,
+                  right: 30,
+                  left: 20,
+                  bottom: 5,
+                }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke={transparentBackground ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.1)'} />
+                <XAxis dataKey="time" stroke={transparentBackground ? 'white' : 'black'} />
+                <YAxis stroke={transparentBackground ? 'white' : 'black'} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: transparentBackground ? 'rgba(0,0,0,0.8)' : 'white',
+                    border: transparentBackground ? '1px solid rgba(255,255,255,0.5)' : '1px solid #ccc',
+                    color: transparentBackground ? 'white' : 'black',
+                  }}
+                  itemStyle={{ color: transparentBackground ? 'white' : 'black' }}
+                />
+                <Legend />
+                {selectedTab === 0 && (
+                  <Line
+                    type="monotone"
+                    dataKey="temp"
+                    name="Temperature (°F)"
+                    stroke="#8884d8"
+                    activeDot={{ r: 8 }}
+                  />
+                )}
+                {selectedTab === 1 && (
+                  <Line
+                    type="monotone"
+                    dataKey="pop"
+                    name="Precipitation (%)"
+                    stroke="#82ca9d"
+                    activeDot={{ r: 8 }}
+                  />
+                )}
+              </LineChart>
+            </ResponsiveContainer>
           </Box>
         </Box>
       )}
