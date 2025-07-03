@@ -433,7 +433,8 @@ const AdminPanel = ({ setWidgetSettings }) => {
             </AccordionSummary>
             <AccordionDetails sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
               <Typography variant="body2">Email: {user.email}</Typography>
-              {user.profile_picture && (n                <Box sx={{ mt: 1, mb: 1 }}>
+              {user.profile_picture && (
+                <Box sx={{ mt: 1, mb: 1 }}>
                   <img
                     src={user.profile_picture}
                     alt={user.username}
