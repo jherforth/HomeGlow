@@ -47,9 +47,11 @@ const ChoreWidget = ({ transparentBackground }) => {
     try {
       const usersResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users`);
       setUsers(Array.isArray(usersResponse.data) ? usersResponse.data : []);
+      console.log('Fetched Users:', usersResponse.data); // Debugging
 
       const choresResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`);
       setChores(Array.isArray(choresResponse.data) ? choresResponse.data : []);
+      console.log('Fetched Chores:', choresResponse.data); // Debugging
       setError(null);
     } catch (err) {
       console.error('Error fetching data:', err);
@@ -128,6 +130,7 @@ const ChoreWidget = ({ transparentBackground }) => {
   };
 
   const currentDay = getCurrentDayOfWeek();
+  console.log('Current Day:', currentDay); // Debugging
 
   const handleOpenAddTaskDialog = () => {
     setOpenAddTaskDialog(true);
@@ -201,7 +204,12 @@ const ChoreWidget = ({ transparentBackground }) => {
             <Typography variant="subtitle2" sx={{ textTransform: 'capitalize' }}>{user.username}</Typography>
             <Box sx={{ mt: 1, textAlign: 'left' }}>
               {chores
-                .filter(chore => parseInt(chore.user_id) === user.id && chore.assigned_day_of_week === currentDay)
+                .filter(chore => {
+                  const isAssignedToUser = parseInt(chore.user_id) === user.id;
+                  const isAssignedToday = chore.assigned_day_of_week === currentDay;
+                  console.log(`Chore: ${chore.title}, User ID (chore): ${chore.user_id}, User ID (current): ${user.id}, Assigned Day: ${chore.assigned_day_of_week}, Current Day: ${currentDay}, Match User: ${isAssignedToUser}, Match Day: ${isAssignedToday}`);
+                  return isAssignedToUser && isAssignedToday;
+                })
                 .map(chore => (
                   <Box key={chore.id} sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
                     <Radio
