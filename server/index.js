@@ -8,6 +8,12 @@ require('dotenv').config();
 // Initialize Fastify with CORS
 fastify.register(require('@fastify/cors'));
 
+// Add a preHandler hook to log all incoming requests
+fastify.addHook('preHandler', (request, reply, done) => {
+  console.log(`Incoming request: ${request.method} ${request.url}`);
+  done();
+});
+
 // Serve static files for uploads
 fastify.register(require('@fastify/static'), {
   root: path.join(__dirname, 'uploads'),
@@ -27,13 +33,17 @@ async function initializeDatabase() {
         user_id INTEGER,
         title TEXT,
         description TEXT,
+        time_period TEXT,
+        assigned_day_of_week TEXT,
+        repeats TEXT,
         completed BOOLEAN
       );
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT,
         email TEXT,
-        profile_picture TEXT
+        profile_picture TEXT,
+        clam_total INTEGER DEFAULT 0
       );
       CREATE TABLE IF NOT EXISTS events (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,11 +75,11 @@ fastify.get('/api/chores', async (request, reply) => {
 });
 
 fastify.post('/api/chores', async (request, reply) => {
-  const { user_id, title, description, completed } = request.body;
+  const { user_id, title, description, time_period, assigned_day_of_week, repeats, completed } = request.body;
   try {
     const db = await initializeDatabase();
-    const stmt = db.prepare('INSERT INTO chores (user_id, title, description, completed) VALUES (?, ?, ?, ?)');
-    const info = stmt.run(user_id, title, description, completed);
+    const stmt = db.prepare('INSERT INTO chores (user_id, title, description, time_period, assigned_day_of_week, repeats, completed) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    const info = stmt.run(user_id, title, description, time_period, assigned_day_of_week, repeats, completed);
     db.close();
     return { id: info.lastInsertRowid };
   } catch (error) {
@@ -94,6 +104,18 @@ fastify.patch('/api/chores/:id', async (request, reply) => {
 });
 
 // User routes
+fastify.get('/api/users', async (request, reply) => {
+  try {
+    const db = await initializeDatabase();
+    const rows = db.prepare('SELECT id, username, email, profile_picture, clam_total FROM users').all();
+    db.close();
+    return rows;
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    reply.status(500).send({ error: 'Failed to fetch users' });
+  }
+});
+
 fastify.post('/api/users', async (request, reply) => {
   const { username, email, profile_picture } = request.body;
   try {

@@ -5,10 +5,12 @@ COPY package*.json ./
 RUN npm install -g npm@latest
 RUN npm install --production=false
 
-# Add build argument for VITE_OPENWEATHER_API_KEY
+# Add build arguments for environment variables
 ARG VITE_OPENWEATHER_API_KEY
-# Make it available as an environment variable during the build
 ENV VITE_OPENWEATHER_API_KEY=$VITE_OPENWEATHER_API_KEY
+
+ARG VITE_REACT_APP_API_URL # <--- ADD THIS LINE
+ENV VITE_REACT_APP_API_URL=$VITE_REACT_APP_API_URL # <--- ADD THIS LINE
 
 COPY . .
 RUN npm run build

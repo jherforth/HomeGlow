@@ -17,13 +17,13 @@ services:
     build:
       context: ./client
       dockerfile: Dockerfile
-      args: # <--- ADD THIS SECTION
-        - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY} # <--- ADD THIS LINE
+      args:
+        - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
+        - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL} # <--- ADD THIS LINE
     ports:
       - "3000:3000"
     depends_on:
       - homeglow-backend
     env_file:
       - ./.env
-    environment:
-      - REACT_APP_API_URL=http://homeglow-backend:5000
+    # REMOVE THIS LINE: - REACT_APP_API_URL=http://homeglow-backend:5000
