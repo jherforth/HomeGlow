@@ -192,8 +192,8 @@ const ChoreWidget = ({ transparentBackground }) => {
                 variant="caption"
                 sx={{
                   position: 'absolute',
-                  top: -10, // Adjusted for circular overlap
-                  right: -10, // Adjusted for circular overlap
+                  top: -5, // Adjusted to close gap
+                  right: -5, // Adjusted to close gap
                   width: 35, // Fixed width for circular shape
                   height: 35, // Fixed height for circular shape
                   borderRadius: '50%', // Circular shape
@@ -206,7 +206,7 @@ const ChoreWidget = ({ transparentBackground }) => {
                   fontWeight: 'bold',
                 }}
               >
-                {user.clam_total || 0} 🐚
+                {user.clam_total || 0}🐚 {/* Removed space here */}
               </Typography>
               {/* Progress Bar */}
               <Box sx={{
