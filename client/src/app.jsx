@@ -107,7 +107,12 @@ const App = () => {
         className="admin-toggle"
         onClick={toggleAdminPanel}
         aria-label="Toggle Admin Panel"
-        sx={{ position: 'absolute', top: 16, right: 64 }}
+        sx={{
+          position: 'absolute',
+          top: 16,
+          right: 64,
+          color: theme === 'light' ? 'action.active' : 'white', // Apply same color logic
+        }}
       >
         <SettingsIcon />
       </IconButton>
@@ -117,8 +122,12 @@ const App = () => {
         className="refresh-button"
         onClick={handlePageRefresh}
         aria-label="Refresh Page"
-        sx={{ position: 'absolute', top: 16, right: 112 }} // Position next to others
-        color="inherit" // Inherit color from theme
+        sx={{
+          position: 'absolute',
+          top: 16,
+          right: 112, // Position next to others
+          color: theme === 'light' ? 'action.active' : 'white', // Apply same color logic
+        }}
       >
         <RefreshIcon />
       </IconButton>
