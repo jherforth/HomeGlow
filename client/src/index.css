@@ -37,8 +37,8 @@ html, body {
 
 body.rotated {
   /* Scrolling for rotated state */
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .container {
