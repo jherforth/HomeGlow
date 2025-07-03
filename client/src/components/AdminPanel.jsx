@@ -37,7 +37,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
       weather: { enabled: false, transparent: false },
       menu: { enabled: false, transparent: false },
       enableOnscreenKeyboard: false, // Add new setting for onscreen keyboard
-      enableScreenRotation: false, // Add new setting for screen rotation
+      // enableScreenRotation: false, // REMOVED: Screen rotation setting
     };
     // Merge saved settings with defaults to ensure new properties are present
     return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
@@ -78,7 +78,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
           [settingType]: checked,
         },
       };
-    } else { // It's a global setting (e.g., enableOnscreenKeyboard or enableScreenRotation)
+    } else { // It's a global setting (e.g., enableOnscreenKeyboard)
       newToggles = {
         ...toggles,
         [name]: checked,
@@ -293,14 +293,14 @@ const AdminPanel = ({ setWidgetSettings }) => {
           />
         </Box>
 
-        {/* Screen Rotation Toggle */}
-        <Box sx={{ mb: 1 }}>
+        {/* REMOVED: Screen Rotation Toggle */}
+        {/* <Box sx={{ mb: 1 }}>
           <FormControlLabel
             control={<Switch checked={toggles.enableScreenRotation} onChange={handleToggleChange} name="enableScreenRotation" />}
             label="Enable 90° Screen Rotation"
             className="toggle-label"
           />
-        </Box>
+        </Box> */}
       </Box>
 
       <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
@@ -334,7 +334,6 @@ const AdminPanel = ({ setWidgetSettings }) => {
           size="small"
           fullWidth
           margin="normal"
-          label="Profile Picture"
           InputLabelProps={{ shrink: true }}
         />
         {formData.profilePicture && (
