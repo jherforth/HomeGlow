@@ -10,12 +10,28 @@ import '../index.css'; // Assuming global styles are here
 const API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY; // Accessing Vite env variable
 
 const WeatherWidget = ({ transparentBackground }) => { // Added transparentBackground prop
-  const [zipCode, setZipCode] = useState('');
+  // Initialize zipCode from localStorage, or empty string if not found
+  const [zipCode, setZipCode] = useState(() => {
+    const savedZip = localStorage.getItem('weatherZipCode');
+    return savedZip || '';
+  });
   const [weatherData, setWeatherData] = useState(null);
   const [forecastData, setForecastData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedTab, setSelectedTab] = useState(0);
+
+  // Save zipCode to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('weatherZipCode', zipCode);
+  }, [zipCode]);
+
+  // Automatically fetch weather data if zipCode is present on mount
+  useEffect(() => {
+    if (zipCode) {
+      fetchWeather();
+    }
+  }, []); // Empty dependency array means this runs once on mount
 
   const fetchWeather = async () => {
     if (!zipCode) {
