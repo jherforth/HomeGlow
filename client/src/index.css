@@ -145,6 +145,7 @@ button:hover {
   border: 1px solid var(--card-border);
   border-radius: 50%;
   padding: 10px;
+  width: 100%;
   font-size: 1.2rem;
   cursor: pointer;
   backdrop-filter: var(--backdrop-blur);
