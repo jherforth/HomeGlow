@@ -4,12 +4,15 @@
   --card-bg: rgba(255, 255, 255, 0.8);
   --card-border: rgba(255, 255, 255, 0.2);
   --text-color: #1a1a2e;
-  --text-color-rgb: 26, 26, 46;
-  /* RGB values for #1a1a2e */
+  --text-color-rgb: 26, 26, 46; /* RGB values for #1a1a2e */
   --accent: #6e44ff;
   --gradient: linear-gradient(45deg, #00ddeb, #ff6b6b);
   --shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   --backdrop-blur: blur(10px);
+  /* New CSS variables for customization */
+  --dynamic-text-size: 16px;
+  --dynamic-card-width: 300px;
+  --dynamic-card-padding: 20px;
 }
 
 [data-theme="dark"] {
@@ -17,8 +20,7 @@
   --card-bg: rgba(30, 30, 50, 0.7);
   --card-border: rgba(100, 100, 150, 0.3);
   --text-color: #a6a6d1;
-  --text-color-rgb: 166, 166, 209;
-  /* RGB values for #a6a6d1 */
+  --text-color-rgb: 166, 166, 209; /* RGB values for #a6a6d1 */
   --accent: #00ddeb;
   --gradient: linear-gradient(45deg, #2e2767, #620808);
   --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
@@ -37,14 +39,13 @@ body {
   /* Default scrolling for non-rotated state */
   overflow-x: hidden;
   overflow-y: auto;
+  font-size: var(--dynamic-text-size); /* Apply dynamic text size */
 }
 
 body.rotated {
   /* When body is rotated, swap overflow directions */
-  overflow-x: auto;
-  /* This will become the "vertical" scroll for rotated content */
-  overflow-y: hidden;
-  /* Hide the original vertical scroll */
+  overflow-x: auto; /* This will become the "vertical" scroll for rotated content */
+  overflow-y: hidden; /* Hide the original vertical scroll */
 }
 
 .container {
@@ -56,15 +57,13 @@ body.rotated {
   /* Smooth transition for rotation */
   position: relative;
   /* Ensure proper positioning of children */
-  width: 100%;
-  /* Ensure container fills its parent */
+  width: 100%; /* Ensure container fills its parent */
   /* Removed overflow properties from here, body will manage */
 }
 
 /* Material-UI Grid Container specific styles */
 .MuiGrid-container {
-  width: 100%;
-  /* Ensure the grid container takes full width */
+  width: 100%; /* Ensure the grid container takes full width */
   /* Add any other flex/grid properties if needed for stacking */
 }
 
@@ -97,14 +96,13 @@ body.rotated {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 12px;
-  padding: 20px;
+  padding: var(--dynamic-card-padding); /* Apply dynamic card padding */
   backdrop-filter: var(--backdrop-blur);
   box-shadow: var(--shadow);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   width: 100%;
   /* Changed to 100% to fill grid item */
-  max-width: 300px;
-  /* Retain max-width for larger screens */
+  max-width: var(--dynamic-card-width); /* Apply dynamic card width */
   touch-action: manipulation;
 }
 
@@ -226,13 +224,11 @@ input:checked+.toggle-slider:before {
 }
 
 .card.transparent-card {
-  background: rgba(255, 255, 255, 0.2) !important;
-  /* Light theme transparency */
+  background: rgba(255, 255, 255, 0.2) !important; /* Light theme transparency */
 }
 
 [data-theme="dark"] .card.transparent-card {
-  background: rgba(30, 30, 50, 0.3) !important;
-  /* Dark theme transparency */
+  background: rgba(30, 30, 50, 0.3) !important; /* Dark theme transparency */
 }
 
 /* Specific rule for text color within transparent cards in dark mode */
@@ -241,14 +237,12 @@ input:checked+.toggle-slider:before {
 [data-theme="dark"] .card.transparent-card .MuiTextField-root label,
 [data-theme="dark"] .card.transparent-card .MuiListItemText-primary,
 [data-theme="dark"] .card.transparent-card .MuiListItemText-secondary {
-  color: #a6a6d1 !important;
-  /* Ensure text color for transparent cards in dark mode */
+  color: #a6a6d1 !important; /* Ensure text color for transparent cards in dark mode */
 }
 
 /* React Big Calendar specific overrides */
 .rbc-calendar {
-  color: var(--text-color);
-  /* Ensure calendar text inherits theme color */
+  color: var(--text-color); /* Ensure calendar text inherits theme color */
 }
 
 .rbc-header,
@@ -257,8 +251,7 @@ input:checked+.toggle-slider:before {
 .rbc-event-content,
 .rbc-event-label,
 .rbc-event-title {
-  color: var(--text-color) !important;
-  /* Force text color for calendar elements */
+  color: var(--text-color) !important; /* Force text color for calendar elements */
 }
 
 /* More specific rule for date numbers */
@@ -268,38 +261,29 @@ input:checked+.toggle-slider:before {
 
 /* New rules for pagination and view toggles */
 .rbc-toolbar button {
-  color: var(--text-color) !important;
-  /* For the text/icons on buttons */
-  background-color: transparent !important;
-  /* Ensure button background is transparent */
-  border-color: var(--card-border) !important;
-  /* Match border to theme */
+  color: var(--text-color) !important; /* For the text/icons on buttons */
+  background-color: transparent !important; /* Ensure button background is transparent */
+  border-color: var(--card-border) !important; /* Match border to theme */
 }
 
 .rbc-toolbar button:hover {
-  background-color: rgba(var(--text-color-rgb), 0.1) !important;
-  /* Subtle hover effect */
+  background-color: rgba(var(--text-color-rgb), 0.1) !important; /* Subtle hover effect */
 }
 
 .rbc-toolbar button.rbc-active {
-  background-color: var(--accent) !important;
-  /* Active button background */
-  color: white !important;
-  /* Active button text color */
+  background-color: var(--accent) !important; /* Active button background */
+  color: white !important; /* Active button text color */
 }
 
 /* Adjust background for calendar cells in dark mode if needed */
 [data-theme="dark"] .rbc-day-bg {
-  background-color: rgba(255, 255, 255, 0.05);
-  /* Slightly visible background for days */
+  background-color: rgba(255, 255, 255, 0.05); /* Slightly visible background for days */
 }
 
 [data-theme="dark"] .rbc-today {
-  background-color: rgba(0, 128, 0, 0.2) !important;
-  /* Highlight today in dark mode */
+  background-color: rgba(0, 128, 0, 0.2) !important; /* Highlight today in dark mode */
 }
 
 [data-theme="dark"] .rbc-off-range-bg {
-  background-color: rgba(255, 255, 255, 0.02) !important;
-  /* Off-range days in dark mode */
+  background-color: rgba(255, 255, 255, 0.02) !important; /* Off-range days in dark mode */
 }

@@ -28,6 +28,9 @@ const App = () => {
       menu: { enabled: false, transparent: false },
       enableOnscreenKeyboard: false,
       enableScreenRotation: false, // Add new setting for screen rotation
+      textSize: 16, // Default text size
+      cardSize: 300, // Default card width
+      cardPadding: 20, // Default card padding
     };
     return savedSettings ? { ...defaultSettings, ...JSON.parse(savedSettings) } : defaultSettings;
   });
@@ -53,6 +56,9 @@ const App = () => {
           menu: { enabled: false, transparent: false },
           enableOnscreenKeyboard: false,
           enableScreenRotation: false, // Add new setting for screen rotation
+          textSize: 16, // Default text size
+          cardSize: 300, // Default card width
+          cardPadding: 20, // Default card padding
         };
         return { ...defaultSettings, ...JSON.parse(savedSettings) };
       });
@@ -69,6 +75,13 @@ const App = () => {
       document.body.classList.remove('rotated');
     }
   }, [widgetSettings.enableScreenRotation]);
+
+  // Effect to apply dynamic CSS variables
+  useEffect(() => {
+    document.documentElement.style.setProperty('--dynamic-text-size', `${widgetSettings.textSize}px`);
+    document.documentElement.style.setProperty('--dynamic-card-width', `${widgetSettings.cardSize}px`);
+    document.documentElement.style.setProperty('--dynamic-card-padding', `${widgetSettings.cardPadding}px`);
+  }, [widgetSettings.textSize, widgetSettings.cardSize, widgetSettings.cardPadding]);
 
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
