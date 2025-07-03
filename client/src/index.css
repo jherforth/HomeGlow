@@ -202,6 +202,22 @@ input:checked+.toggle-slider:before {
   color: var(--text-color) !important;
 }
 
+/* New rules for pagination and view toggles */
+.rbc-toolbar button {
+  color: var(--text-color) !important; /* For the text/icons on buttons */
+  background-color: transparent !important; /* Ensure button background is transparent */
+  border-color: var(--card-border) !important; /* Match border to theme */
+}
+
+.rbc-toolbar button:hover {
+  background-color: rgba(var(--text-color-rgb), 0.1) !important; /* Subtle hover effect */
+}
+
+.rbc-toolbar button.rbc-active {
+  background-color: var(--accent) !important; /* Active button background */
+  color: white !important; /* Active button text color */
+}
+
 /* Adjust background for calendar cells in dark mode if needed */
 [data-theme="dark"] .rbc-day-bg {
   background-color: rgba(255, 255, 255, 0.05); /* Slightly visible background for days */
