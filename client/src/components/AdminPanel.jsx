@@ -8,12 +8,16 @@ import {
   Box,
   Switch,
   FormControlLabel,
-  Accordion, // New import
-  AccordionSummary, // New import
-  AccordionDetails, // New import
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  List, // New import for list of chores
+  ListItem, // New import for list items
+  ListItemText, // New import for list item text
+  IconButton, // New import for delete button
 } from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore'; // New import
-import DeleteIcon from '@mui/icons-material/Delete'; // New import
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import DeleteIcon from '@mui/icons-material/Delete';
 import '../index.css';
 
 const AdminPanel = ({ setWidgetSettings }) => {
@@ -38,21 +42,25 @@ const AdminPanel = ({ setWidgetSettings }) => {
     return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
   });
   const [users, setUsers] = useState([]); // State for users in Admin Panel
+  const [chores, setChores] = useState([]); // State for chores in Admin Panel
 
-  // Function to fetch users for the Admin Panel
-  const fetchUsers = async () => {
+  // Function to fetch users and chores for the Admin Panel
+  const fetchData = async () => {
     try {
-      const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users`);
-      setUsers(Array.isArray(response.data) ? response.data : []);
+      const usersResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users`);
+      setUsers(Array.isArray(usersResponse.data) ? usersResponse.data : []);
+
+      const choresResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`);
+      setChores(Array.isArray(choresResponse.data) ? choresResponse.data : []);
     } catch (err) {
-      console.error('Error fetching users for Admin Panel:', err);
+      console.error('Error fetching data for Admin Panel:', err);
       // Optionally set an error state for the Admin Panel itself
     }
   };
 
-  // Fetch users on component mount and after user-related actions
+  // Fetch data on component mount and after user/chore-related actions
   useEffect(() => {
-    fetchUsers();
+    fetchData();
   }, []);
 
   // Handle widget toggle changes (for both enabled and transparent)
@@ -123,7 +131,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
       setSuccess('User added successfully!');
       setFormData({ username: '', email: '', profilePicture: null });
       setError(null);
-      fetchUsers(); // Re-fetch users after adding a new one
+      fetchData(); // Re-fetch all data after adding a new user
     } catch (error) {
       console.error('Error adding user:', error);
       setError(error.response?.data?.error || 'Failed to add user');
@@ -132,12 +140,12 @@ const AdminPanel = ({ setWidgetSettings }) => {
   };
 
   const handleDeleteUser = async (userId) => {
-    if (window.confirm('Are you sure you want to delete this user?')) {
+    if (window.confirm('Are you sure you want to delete this user? This will also delete any associated chores.')) {
       try {
         await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users/${userId}`);
         setSuccess('User deleted successfully!');
         setError(null);
-        fetchUsers(); // Re-fetch users after deletion
+        fetchData(); // Re-fetch all data after deletion
       } catch (error) {
         console.error('Error deleting user:', error);
         setError(error.response?.data?.error || 'Failed to delete user');
@@ -152,10 +160,25 @@ const AdminPanel = ({ setWidgetSettings }) => {
         await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users/${userId}/clams`, { clam_total: 0 });
         setSuccess('Clam total reset successfully!');
         setError(null);
-        fetchUsers(); // Re-fetch users after resetting clams
+        fetchData(); // Re-fetch all data after resetting clams
       } catch (error) {
         console.error('Error resetting clams:', error);
         setError(error.response?.data?.error || 'Failed to reset clam total');
+        setSuccess(null);
+      }
+    }
+  };
+
+  const handleDeleteChore = async (choreId) => {
+    if (window.confirm('Are you sure you want to delete this chore?')) {
+      try {
+        await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores/${choreId}`);
+        setSuccess('Chore deleted successfully!');
+        setError(null);
+        fetchData(); // Re-fetch all data after deleting a chore
+      } catch (error) {
+        console.error('Error deleting chore:', error);
+        setError(error.response?.data?.error || 'Failed to delete chore');
         setSuccess(null);
       }
     }
@@ -361,7 +384,31 @@ const AdminPanel = ({ setWidgetSettings }) => {
                   Reset Clams
                 </Button>
               </Box>
-              {/* Master detailed list of tasks will go here in a later step */}
+
+              {/* Master detailed list of tasks for this user */}
+              <Box sx={{ mt: 2, borderTop: '1px dashed rgba(0,0,0,0.1)', pt: 2 }}>
+                <Typography variant="subtitle2" gutterBottom>Assigned Tasks:</Typography>
+                {chores.filter(chore => parseInt(chore.user_id) === user.id).length === 0 && (
+                  <Typography variant="body2" color="text.secondary">No tasks assigned to this user.</Typography>
+                )}
+                <List dense>
+                  {chores.filter(chore => parseInt(chore.user_id) === user.id).map(chore => (
+                    <ListItem
+                      key={chore.id}
+                      secondaryAction={
+                        <IconButton edge="end" aria-label="delete" onClick={() => handleDeleteChore(chore.id)} size="small">
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      }
+                    >
+                      <ListItemText
+                        primary={`${chore.title} (${chore.assigned_day_of_week}, ${chore.time_period})`}
+                        secondary={`Repeats: ${chore.repeats} | Completed: ${chore.completed ? 'Yes' : 'No'}`}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Box>
             </AccordionDetails>
           </Accordion>
         ))}
