@@ -61,6 +61,15 @@ const App = () => {
     }
   }, []);
 
+  // Effect to add/remove 'rotated' class to body based on enableScreenRotation
+  useEffect(() => {
+    if (widgetSettings.enableScreenRotation) {
+      document.body.classList.add('rotated');
+    } else {
+      document.body.classList.remove('rotated');
+    }
+  }, [widgetSettings.enableScreenRotation]);
+
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
