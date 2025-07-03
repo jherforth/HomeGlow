@@ -30,7 +30,7 @@ const App = () => {
       textSize: 16, // Default text size
       cardSize: 300, // Default card width
       cardPadding: 20, // Default card padding
-      cardHeight: 200, // Default card height
+      cardHeight: 600, // Adjusted default card height
     };
     return savedSettings ? { ...defaultSettings, ...JSON.parse(savedSettings) } : defaultSettings;
   });
@@ -58,7 +58,7 @@ const App = () => {
           textSize: 16, // Default text size
           cardSize: 300, // Default card width
           cardPadding: 20, // Default card padding
-          cardHeight: 200, // Default card height
+          cardHeight: 600, // Adjusted default card height
         };
         return { ...defaultSettings, ...JSON.parse(savedSettings) };
       });
