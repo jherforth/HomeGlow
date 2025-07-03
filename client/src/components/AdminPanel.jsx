@@ -41,7 +41,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
       textSize: 16, // Default text size
       cardSize: 300, // Default card width
       cardPadding: 20, // Default card padding
-      cardHeight: 200, // Default card height
+      cardHeight: 200, // Adjusted default card height
     };
     // Merge saved settings with defaults to ensure new properties are present
     return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
