@@ -22,7 +22,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DeleteIcon from '@mui/icons-material/Delete';
 import '../index.css';
 
-const AdminPanel = ({ setWidgetSettings }) => {
+const AdminPanel = ({ setWidgetSettings, handleFocus }) => {
   const [formData, setFormData] = useState({
     username: '',
     email: '',
@@ -372,6 +372,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
           name="username"
           value={formData.username}
           onChange={handleInputChange}
+          onFocus={handleFocus} // Add this line
           label="Username"
           variant="outlined"
           size="small"
@@ -382,6 +383,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
           name="email"
           value={formData.email}
           onChange={handleInputChange}
+          onFocus={handleFocus} // Add this line
           label="Email"
           type="email"
           variant="outlined"
@@ -393,6 +395,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
           type="file"
           accept="image/jpeg,image/png"
           onChange={handleFileChange}
+          onFocus={handleFocus} // Add this line if you want keyboard for file input (though less common)
           variant="outlined"
           size="small"
           fullWidth

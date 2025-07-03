@@ -73,7 +73,8 @@ const App = () => {
     document.documentElement.style.setProperty('--dynamic-text-size', `${widgetSettings.textSize}px`);
     document.documentElement.style.setProperty('--dynamic-card-width', `${widgetSettings.cardSize}px`);
     document.documentElement.style.setProperty('--dynamic-card-padding', `${widgetSettings.cardPadding}px`);
-  }, [widgetSettings.textSize, widgetSettings.cardSize, widgetSettings.cardPadding]);
+    document.documentElement.style.setProperty('--dynamic-card-height', `${widgetSettings.cardHeight}px`); // Added
+  }, [widgetSettings.textSize, widgetSettings.cardSize, widgetSettings.cardPadding, widgetSettings.cardHeight]); // Added cardHeight
 
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
@@ -236,7 +237,7 @@ const App = () => {
       {/* Admin Panel as a Dialog (Popup) */}
       <Dialog open={showAdminPanel} onClose={toggleAdminPanel} maxWidth="300">
         <DialogContent>
-          <AdminPanel setWidgetSettings={setWidgetSettings} />
+          <AdminPanel setWidgetSettings={setWidgetSettings} handleFocus={handleFocus} />
         </DialogContent>
       </Dialog>
     </>
