@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Container, Grid, IconButton, Box } from '@mui/material'; // <--- ADDED Box here
+import { Container, Grid, IconButton, Box } from '@mui/material';
 import { Brightness4, Brightness7 } from '@mui/icons-material';
 import SettingsIcon from '@mui/icons-material/Settings';
 
@@ -9,10 +9,11 @@ import 'react-simple-keyboard/build/css/index.css'; // Default keyboard CSS
 
 import CalendarWidget from './components/CalendarWidget.jsx';
 import PhotoWidget from './components/PhotoWidget.jsx';
-import ChoreWidget from './components/ChoreWidget.jsx';
+// import ChoreWidget from './components/ChoreWidget.jsx'; // We'll move this import
 import AdminPanel from './components/AdminPanel.jsx';
 import WeatherWidget from './components/WeatherWidget.jsx';
 import MenuWidget from './components/MenuWidget.jsx';
+import ChoreWidget from './components/ChoreWidget.jsx'; // Moved import to ensure it's available for rendering
 import './index.css';
 
 const App = () => {
@@ -122,6 +123,7 @@ const App = () => {
       </IconButton>
 
       <Grid container spacing={2}>
+        {/* Other widgets */}
         {widgetSettings.calendar.enabled && (
           <Grid item xs={12} sm={6} md={3} className="grid-item">
             <CalendarWidget transparentBackground={widgetSettings.calendar.transparent} />
@@ -130,11 +132,6 @@ const App = () => {
         {widgetSettings.photos.enabled && (
           <Grid item xs={12} sm={6} md={3} className="grid-item">
             <PhotoWidget transparentBackground={widgetSettings.photos.transparent} />
-          </Grid>
-        )}
-        {widgetSettings.chores.enabled && (
-          <Grid item xs={12} sm={6} md={3} className="grid-item">
-            <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />
           </Grid>
         )}
         {widgetSettings.weather.enabled && (
@@ -150,6 +147,13 @@ const App = () => {
         {showAdminPanel && (
           <Grid item xs={12} sm={6} md={3} className="grid-item">
             <AdminPanel setWidgetSettings={setWidgetSettings} />
+          </Grid>
+        )}
+
+        {/* Chores Widget - Always in its own full-width row at the bottom */}
+        {widgetSettings.chores.enabled && (
+          <Grid item xs={12} className="grid-item"> {/* xs={12} makes it full width */}
+            <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />
           </Grid>
         )}
       </Grid>
