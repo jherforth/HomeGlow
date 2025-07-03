@@ -42,6 +42,9 @@ const App = () => {
   const [activeInputName, setActiveInputName] = useState('');
   const keyboardRef = useRef(null);
 
+  // New state for forcing keyboard re-mount
+  const [keyboardRenderKey, setKeyboardRenderKey] = useState(0);
+
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
     setTheme(savedTheme);
@@ -56,6 +59,12 @@ const App = () => {
     document.documentElement.style.setProperty('--dynamic-card-padding', `${widgetSettings.cardPadding}px`);
     document.documentElement.style.setProperty('--dynamic-card-height', `${widgetSettings.cardHeight}px`);
   }, [widgetSettings.textSize, widgetSettings.cardSize, widgetSettings.cardPadding, widgetSettings.cardHeight]);
+
+  // Effect to update keyboardRenderKey when enableOnscreenKeyboard changes
+  useEffect(() => {
+    setKeyboardRenderKey(prevKey => prevKey + 1);
+  }, [widgetSettings.enableOnscreenKeyboard]);
+
 
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
@@ -206,7 +215,7 @@ const App = () => {
             }}
           >
             <Keyboard
-              key={widgetSettings.enableOnscreenKeyboard} // Add key prop here
+              key={keyboardRenderKey} // Use the new key here
               keyboardRef={r => (keyboardRef.current = r)}
               inputName={activeInputName}
               onChange={handleKeyboardChange}
