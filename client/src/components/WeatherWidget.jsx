@@ -181,7 +181,7 @@ const WeatherWidget = ({ transparentBackground }) => {
       {forecastData && (
         <Box sx={{ mt: 3 }}>
           <Typography variant="h6">3-Day Forecast</Typography>
-          {Array.isArray(forecastData) && forecastData.map((day, index) => (
+          {Array.isArray(forecastData) && forecastData.map((day, index) => ( // Ensure forecastData is an array before mapping
             <Box key={index} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 1 }}>
               <Typography variant="body2">{day.date}</Typography>
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
