@@ -87,14 +87,14 @@ const App = () => {
   };
 
   return (
-    <Container className={`container ${widgetSettings.enableScreenRotation ? 'rotate-90' : ''}`} >
+    <> {/* Use a React Fragment to wrap multiple top-level elements */}
       {/* Theme Toggle Button */}
       <IconButton
         className="theme-toggle"
         onClick={toggleTheme}
         aria-label="Toggle theme"
         sx={{
-          position: 'absolute',
+          position: 'fixed', // Changed to fixed to ensure it stays in viewport
           top: 16,
           right: 16,
           // Explicitly set color based on theme for inversion effect
@@ -110,7 +110,7 @@ const App = () => {
         onClick={toggleAdminPanel}
         aria-label="Toggle Admin Panel"
         sx={{
-          position: 'absolute',
+          position: 'fixed', // Changed to fixed
           top: 16,
           right: 64,
           color: theme === 'light' ? 'action.active' : 'white', // Apply same color logic
@@ -125,7 +125,7 @@ const App = () => {
         onClick={handlePageRefresh}
         aria-label="Refresh Page"
         sx={{
-          position: 'absolute',
+          position: 'fixed', // Changed to fixed
           top: 16,
           right: 112, // Position next to others
           color: theme === 'light' ? 'action.active' : 'white', // Apply same color logic
@@ -134,53 +134,55 @@ const App = () => {
         <RefreshIcon />
       </IconButton>
 
-      <Grid container spacing={2} justifyContent="space-evenly">
-        {widgetSettings.calendar.enabled && (
-          <Grid item xs={12} sm={6} md={3} className="grid-item">
-            <CalendarWidget transparentBackground={widgetSettings.calendar.transparent} />
-          </Grid>
-        )}
-        {widgetSettings.photos.enabled && (
-          <Grid item xs={12} sm={6} md={3} className="grid-item">
-            <PhotoWidget transparentBackground={widgetSettings.photos.transparent} />
-          </Grid>
-        )}
-        {widgetSettings.weather.enabled && (
-          <Grid item xs={12} sm={6} md={3} className="grid-item">
-            <WeatherWidget transparentBackground={widgetSettings.weather.transparent} />
-          </Grid>
-        )}
-        {widgetSettings.menu.enabled && (
-          <Grid item xs={12} sm={6} md={3} className="grid-item">
-            <MenuWidget transparentBackground={widgetSettings.menu.transparent} />
-          </Grid>
-        )}
-        {showAdminPanel && (
-          <Grid item xs={12} sm={6} md={3} className="grid-item">
-            <AdminPanel setWidgetSettings={setWidgetSettings} />
-          </Grid>
-        )}
+      <Container className={`container ${widgetSettings.enableScreenRotation ? 'rotate-90' : ''}`} >
+        <Grid container spacing={2} justifyContent="space-evenly">
+          {widgetSettings.calendar.enabled && (
+            <Grid item xs={12} sm={6} md={3} className="grid-item">
+              <CalendarWidget transparentBackground={widgetSettings.calendar.transparent} />
+            </Grid>
+          )}
+          {widgetSettings.photos.enabled && (
+            <Grid item xs={12} sm={6} md={3} className="grid-item">
+              <PhotoWidget transparentBackground={widgetSettings.photos.transparent} />
+            </Grid>
+          )}
+          {widgetSettings.weather.enabled && (
+            <Grid item xs={12} sm={6} md={3} className="grid-item">
+              <WeatherWidget transparentBackground={widgetSettings.weather.transparent} />
+            </Grid>
+          )}
+          {widgetSettings.menu.enabled && (
+            <Grid item xs={12} sm={6} md={3} className="grid-item">
+              <MenuWidget transparentBackground={widgetSettings.menu.transparent} />
+            </Grid>
+          )}
+          {showAdminPanel && (
+            <Grid item xs={12} sm={6} md={3} className="grid-item">
+              <AdminPanel setWidgetSettings={setWidgetSettings} />
+            </Grid>
+          )}
 
-        {/* Chores Widget - Always in its own full-width row at the bottom */}
-        {widgetSettings.chores.enabled && (
-          <Grid item xs={12} className="grid-item">
-            <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />
-          </Grid>
-        )}
-      </Grid>
+          {/* Chores Widget - Always in its own full-width row at the bottom */}
+          {widgetSettings.chores.enabled && (
+            <Grid item xs={12} className="grid-item">
+              <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />
+            </Grid>
+          )}
+        </Grid>
 
-      {/* Onscreen Keyboard */}
-      {widgetSettings.enableOnscreenKeyboard && (
-        <Box sx={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 1000, p: 2, bgcolor: 'background.paper' }}>
-          <Keyboard
-            keyboardRef={r => (keyboardRef.current = r)}
-            inputName={activeInputName}
-            onChange={handleKeyboardChange}
-            onKeyPress={handleKeyPress}
-          />
-        </Box>
-      )}
-    </Container>
+        {/* Onscreen Keyboard */}
+        {widgetSettings.enableOnscreenKeyboard && (
+          <Box sx={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 1000, p: 2, bgcolor: 'background.paper' }}>
+            <Keyboard
+              keyboardRef={r => (keyboardRef.current = r)}
+              inputName={activeInputName}
+              onChange={handleKeyboardChange}
+              onKeyPress={handleKeyPress}
+            />
+          </Box>
+        )}
+      </Container>
+    </>
   );
 };
 
