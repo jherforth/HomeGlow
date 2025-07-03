@@ -38,11 +38,11 @@ const AdminPanel = ({ setWidgetSettings, handleFocus }) => {
       photos: { enabled: false, transparent: false },
       weather: { enabled: false, transparent: false },
       menu: { enabled: false, transparent: false },
-      enableOnscreenKeyboard: true, // Changed to true
+      enableOnscreenKeyboard: true,
       textSize: 16,
       cardSize: 300,
       cardPadding: 20,
-      cardHeight: 200, // Added
+      // cardHeight: 200, // Removed
     };
     return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
   });
@@ -350,20 +350,7 @@ const AdminPanel = ({ setWidgetSettings, handleFocus }) => {
           sx={{ width: '90%', mb: 2 }}
         />
 
-        {/* New Card Height Slider */}
-        <Typography id="card-height-slider" gutterBottom>
-          Card Height: {toggles.cardHeight}px
-        </Typography>
-        <Slider
-          aria-labelledby="card-height-slider"
-          value={toggles.cardHeight}
-          onChange={handleSliderChange('cardHeight')}
-          min={100}
-          max={400}
-          step={10}
-          valueLabelDisplay="auto"
-          sx={{ width: '90%', mb: 2 }}
-        />
+        {/* Removed Card Height Slider */}
       </Box>
 
       <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>

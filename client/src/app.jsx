@@ -1,6 +1,6 @@
 // client/src/app.jsx
 import React, { useState, useEffect, useRef } from 'react';
-import { Container, Grid, IconButton, Box, Dialog, DialogContent, Button, TextField } from '@mui/material'; // Added TextField back
+import { Container, Grid, IconButton, Box, Dialog, DialogContent, Button, TextField } from '@mui/material';
 import { Brightness4, Brightness7 } from '@mui/icons-material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -20,7 +20,6 @@ import './index.css';
 const App = () => {
   const [theme, setTheme] = useState('light');
   const [widgetSettings, setWidgetSettings] = useState(() => {
-    const savedSettings = localStorage.getItem('widgetSettings');
     const defaultSettings = {
       chores: { enabled: false, transparent: false },
       calendar: { enabled: false, transparent: false },
@@ -31,8 +30,10 @@ const App = () => {
       textSize: 16,
       cardSize: 300,
       cardPadding: 20,
+      cardHeight: 200, // Ensure cardHeight is part of default settings here
       keyboardPosition: 'bottom',
     };
+    const savedSettings = localStorage.getItem('widgetSettings');
     return savedSettings ? { ...defaultSettings, ...JSON.parse(savedSettings) } : defaultSettings;
   });
   const [showAdminPanel, setShowAdminPanel] = useState(false);
@@ -45,27 +46,7 @@ const App = () => {
     const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
     setTheme(savedTheme);
     document.documentElement.setAttribute('data-theme', savedTheme);
-
-    const savedSettings = localStorage.getItem('widgetSettings');
-    if (savedSettings) {
-      setWidgetSettings(prevSettings => {
-        const defaultSettings = {
-          chores: { enabled: false, transparent: false },
-          calendar: { enabled: false, transparent: false },
-          photos: { enabled: false, transparent: false },
-          weather: { enabled: false, transparent: false },
-          menu: { enabled: false, transparent: false },
-          enableOnscreenKeyboard: true,
-          textSize: 16,
-          cardSize: 300,
-          cardPadding: 20,
-          keyboardPosition: 'bottom',
-        };
-        return { ...defaultSettings, ...JSON.parse(savedSettings) };
-      });
-    } else {
-      localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
-    }
+    // Removed widgetSettings logic from here, as it's handled in useState initializer
   }, []);
 
   // Effect to apply dynamic CSS variables
@@ -73,8 +54,8 @@ const App = () => {
     document.documentElement.style.setProperty('--dynamic-text-size', `${widgetSettings.textSize}px`);
     document.documentElement.style.setProperty('--dynamic-card-width', `${widgetSettings.cardSize}px`);
     document.documentElement.style.setProperty('--dynamic-card-padding', `${widgetSettings.cardPadding}px`);
-    document.documentElement.style.setProperty('--dynamic-card-height', `${widgetSettings.cardHeight}px`); // Added
-  }, [widgetSettings.textSize, widgetSettings.cardSize, widgetSettings.cardPadding, widgetSettings.cardHeight]); // Added cardHeight
+    document.documentElement.style.setProperty('--dynamic-card-height', `${widgetSettings.cardHeight}px`);
+  }, [widgetSettings.textSize, widgetSettings.cardSize, widgetSettings.cardPadding, widgetSettings.cardHeight]);
 
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
@@ -113,7 +94,6 @@ const App = () => {
     localStorage.setItem('widgetSettings', JSON.stringify({ ...widgetSettings, keyboardPosition: newPosition }));
   };
 
-  // Re-added handleFocus function
   const handleFocus = (e) => {
     setActiveInputName(e.target.name);
     setKeyboardInput(e.target.value);
