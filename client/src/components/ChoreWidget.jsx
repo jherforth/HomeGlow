@@ -1,38 +1,53 @@
 import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
-import { Button, Card, Typography, TextField, Box, FormControl, InputLabel, Select, MenuItem, Radio, RadioGroup, FormControlLabel, FormLabel } from '@mui/material';
+import {
+  Button,
+  Card,
+  Typography,
+  TextField,
+  Box,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Radio,
+  RadioGroup,
+  FormControlLabel,
+  FormLabel,
+  Dialog, // Import Dialog
+  DialogTitle, // Import DialogTitle
+  DialogContent, // Import DialogContent
+  DialogActions, // Import DialogActions
+} from '@mui/material';
 import Hammer from 'hammerjs';
 import '../index.css';
 
 const ChoreWidget = ({ transparentBackground }) => {
   const [chores, setChores] = useState([]);
-  const [users, setUsers] = useState([]); // State to store users
+  const [users, setUsers] = useState([]);
   const [newTask, setNewTask] = useState({
     title: '',
-    description: '', // Keeping description for now, though not explicitly requested for new task form
+    description: '',
     timePeriod: '',
-    assignedTo: '', // User ID
+    assignedTo: '',
     assignedDayOfWeek: '',
     repeats: 'Doesn\'t repeat',
   });
   const [error, setError] = useState(null);
+  const [openAddTaskDialog, setOpenAddTaskDialog] = useState(false); // State for dialog visibility
   const cardRef = useRef(null);
 
-  // Helper to get current day of the week as a string (e.g., "monday")
   const getCurrentDayOfWeek = () => {
     const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     return days[new Date().getDay()];
   };
 
-  // Fetch Users and Chores
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch users
         const usersResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users`);
         setUsers(Array.isArray(usersResponse.data) ? usersResponse.data : []);
 
-        // Fetch chores
         const choresResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`);
         setChores(Array.isArray(choresResponse.data) ? choresResponse.data : []);
         setError(null);
@@ -44,7 +59,6 @@ const ChoreWidget = ({ transparentBackground }) => {
     fetchData();
   }, []);
 
-  // Hammer.js for swipe to complete (existing functionality)
   useEffect(() => {
     const hammer = new Hammer(cardRef.current);
     hammer.on('swiperight', (e) => {
@@ -95,7 +109,7 @@ const ChoreWidget = ({ transparentBackground }) => {
         completed: false,
       });
       setChores([...chores, { ...newTask, id: response.data.id, completed: false }]);
-      setNewTask({ // Reset form
+      setNewTask({
         title: '',
         description: '',
         timePeriod: '',
@@ -104,6 +118,7 @@ const ChoreWidget = ({ transparentBackground }) => {
         repeats: 'Doesn\'t repeat',
       });
       setError(null);
+      setOpenAddTaskDialog(false); // Close dialog on success
     } catch (err) {
       console.error('Error adding chore:', err);
       setError('Failed to add chore. Please try again.');
@@ -111,6 +126,24 @@ const ChoreWidget = ({ transparentBackground }) => {
   };
 
   const currentDay = getCurrentDayOfWeek();
+
+  const handleOpenAddTaskDialog = () => {
+    setOpenAddTaskDialog(true);
+    setError(null); // Clear any previous errors when opening
+  };
+
+  const handleCloseAddTaskDialog = () => {
+    setOpenAddTaskDialog(false);
+    setError(null); // Clear errors when closing
+    setNewTask({ // Reset form when closing
+      title: '',
+      description: '',
+      timePeriod: '',
+      assignedTo: '',
+      assignedDayOfWeek: '',
+      repeats: 'Doesn\'t repeat',
+    });
+  };
 
   return (
     <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`} ref={cardRef} sx={{ width: '100%', maxWidth: 'none' }}>
@@ -200,82 +233,93 @@ const ChoreWidget = ({ transparentBackground }) => {
         ))}
       </Box>
 
-      {/* Add New Task Form */}
+      {/* Button to open Add New Task Dialog */}
       <Box sx={{ mt: 3, p: 2, borderTop: '1px solid var(--card-border)' }}>
-        <Typography variant="h6" gutterBottom>Add New Task</Typography>
-        <TextField
-          name="title"
-          label="Task Name"
-          variant="outlined"
-          size="small"
-          fullWidth
-          value={newTask.title}
-          onChange={handleNewTaskInputChange}
-          sx={{ mb: 2 }}
-        />
-        <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-          <InputLabel>Task Time Period</InputLabel>
-          <Select
-            name="timePeriod"
-            value={newTask.timePeriod}
-            label="Task Time Period"
-            onChange={handleNewTaskInputChange}
-          >
-            <MenuItem value=""><em>None</em></MenuItem>
-            <MenuItem value="morning">Morning</MenuItem>
-            <MenuItem value="afternoon">Afternoon</MenuItem>
-            <MenuItem value="evening">Evening</MenuItem>
-          </Select>
-        </FormControl>
-        <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-          <InputLabel>Assign Member</InputLabel>
-          <Select
-            name="assignedTo"
-            value={newTask.assignedTo}
-            label="Assign Member"
-            onChange={handleNewTaskInputChange}
-          >
-            <MenuItem value=""><em>None</em></MenuItem>
-            {users.map(user => (
-              <MenuItem key={user.id} value={user.id}>{user.username}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-          <InputLabel>Assigned Day of the Week</InputLabel>
-          <Select
-            name="assignedDayOfWeek"
-            value={newTask.assignedDayOfWeek}
-            label="Assigned Day of the Week"
-            onChange={handleNewTaskInputChange}
-          >
-            <MenuItem value=""><em>None</em></MenuItem>
-            <MenuItem value="sunday">Sunday</MenuItem>
-            <MenuItem value="monday">Monday</MenuItem>
-            <MenuItem value="tuesday">Tuesday</MenuItem>
-            <MenuItem value="wednesday">Wednesday</MenuItem>
-            <MenuItem value="thursday">Thursday</MenuItem>
-            <MenuItem value="friday">Friday</MenuItem>
-            <MenuItem value="saturday">Saturday</MenuItem>
-          </Select>
-        </FormControl>
-        <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-          <InputLabel>Repeats</InputLabel>
-          <Select
-            name="repeats"
-            value={newTask.repeats}
-            label="Repeats"
-            onChange={handleNewTaskInputChange}
-          >
-            <MenuItem value="Doesn't repeat">Doesn't repeat</MenuItem>
-            <MenuItem value="Weekly on this day">Weekly on this day</MenuItem>
-            <MenuItem value="Daily">Daily</MenuItem>
-          </Select>
-        </FormControl>
-        <Button variant="contained" onClick={handleAddTask} fullWidth>
+        <Button variant="contained" onClick={handleOpenAddTaskDialog} fullWidth>
           Add New Task
         </Button>
       </Box>
+
+      {/* Add New Task Dialog */}
+      <Dialog open={openAddTaskDialog} onClose={handleCloseAddTaskDialog}>
+        <DialogTitle>Add New Task</DialogTitle>
+        <DialogContent>
+          {error && <Typography color="error" sx={{ mb: 2 }}>{error}</Typography>}
+          <TextField
+            name="title"
+            label="Task Name"
+            variant="outlined"
+            size="small"
+            fullWidth
+            value={newTask.title}
+            onChange={handleNewTaskInputChange}
+            sx={{ mb: 2 }}
+          />
+          <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+            <InputLabel>Task Time Period</InputLabel>
+            <Select
+              name="timePeriod"
+              value={newTask.timePeriod}
+              label="Task Time Period"
+              onChange={handleNewTaskInputChange}
+            >
+              <MenuItem value=""><em>None</em></MenuItem>
+              <MenuItem value="morning">Morning</MenuItem>
+              <MenuItem value="afternoon">Afternoon</MenuItem>
+              <MenuItem value="evening">Evening</MenuItem>
+            </Select>
+          </FormControl>
+          <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+            <InputLabel>Assign Member</InputLabel>
+            <Select
+              name="assignedTo"
+              value={newTask.assignedTo}
+              label="Assign Member"
+              onChange={handleNewTaskInputChange}
+            >
+              <MenuItem value=""><em>None</em></MenuItem>
+              {users.map(user => (
+                <MenuItem key={user.id} value={user.id}>{user.username}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+            <InputLabel>Assigned Day of the Week</InputLabel>
+            <Select
+              name="assignedDayOfWeek"
+              value={newTask.assignedDayOfWeek}
+              label="Assigned Day of the Week"
+              onChange={handleNewTaskInputChange}
+            >
+              <MenuItem value=""><em>None</em></MenuItem>
+              <MenuItem value="sunday">Sunday</MenuItem>
+              <MenuItem value="monday">Monday</MenuItem>
+              <MenuItem value="tuesday">Tuesday</MenuItem>
+              <MenuItem value="wednesday">Wednesday</MenuItem>
+              <MenuItem value="thursday">Thursday</MenuItem>
+              <MenuItem value="friday">Friday</MenuItem>
+              <MenuItem value="saturday">Saturday</MenuItem>
+            </Select>
+          </FormControl>
+          <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+            <InputLabel>Repeats</InputLabel>
+            <Select
+              name="repeats"
+              value={newTask.repeats}
+              label="Repeats"
+              onChange={handleNewTaskInputChange}
+            >
+              <MenuItem value="Doesn't repeat">Doesn't repeat</MenuItem>
+              <MenuItem value="Weekly on this day">Weekly on this day</MenuItem>
+              <MenuItem value="Daily">Daily</MenuItem>
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseAddTaskDialog}>Cancel</Button>
+          <Button onClick={handleAddTask} variant="contained">Add Task</Button>
+        </DialogActions>
+      </Dialog>
     </Card>
   );
 };
