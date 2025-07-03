@@ -7,7 +7,6 @@ const fs = require('fs').promises;
 require('dotenv').config();
 
 // Initialize Fastify with CORS
-// MODIFIED: Configure CORS to allow PATCH method
 fastify.register(require('@fastify/cors'), {
   origin: '*', // Allow all origins for development. Consider restricting in production.
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], // Explicitly allow PATCH
@@ -37,13 +36,65 @@ async function initializeDatabase() {
     await fs.chmod(path.dirname(dbPath), 0o777); // Ensure directory is writable
     const newDb = new Database(dbPath, { verbose: console.log });
     newDb.exec(`
-      CREATE TABLE IF NOT EXISTS chores (\n        id INTEGER PRIMARY KEY AUTOINCREMENT,\n        user_id INTEGER,\n        title TEXT,\n        description TEXT,\n        time_period TEXT,\n        assigned_day_of_week TEXT,\n        repeats TEXT,\n        completed BOOLEAN\n      );\n      CREATE TABLE IF NOT EXISTS users (\n        id INTEGER PRIMARY KEY AUTOINCREMENT,\n        username TEXT,\n        email TEXT,\n        profile_picture TEXT,\n        clam_total INTEGER DEFAULT 0\n      );\n      CREATE TABLE IF NOT EXISTS events (\n        id INTEGER PRIMARY KEY AUTOINCREMENT,\n        user_id INTEGER,\n        summary TEXT,\n        start TEXT,\n        end TEXT,\n        description TEXT\n      );\n    `);
+      CREATE TABLE IF NOT EXISTS chores (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        title TEXT,
+        description TEXT,
+        time_period TEXT,
+        assigned_day_of_week TEXT,
+        repeats TEXT,
+        completed BOOLEAN
+      );
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT,
+        email TEXT,
+        profile_picture TEXT,
+        clam_total INTEGER DEFAULT 0
+      );
+      CREATE TABLE IF NOT EXISTS events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        summary TEXT,
+        start TEXT,
+        end TEXT,
+        description TEXT
+      );
+    `);
     return newDb; // Return the new database instance
   } catch (error) {
     console.error('Failed to initialize database:', error);
     throw error;
   }
 }
+
+// Function to prune and reset chores based on the day
+async function pruneAndResetChores() {
+  try {
+    const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const currentDay = days[new Date().getDay()];
+
+    const completedChores = db.prepare('SELECT id, assigned_day_of_week, repeats FROM chores WHERE completed = 1').all();
+
+    for (const chore of completedChores) {
+      if (chore.assigned_day_of_week !== currentDay) {
+        if (chore.repeats === "Doesn't repeat") {
+          // Delete non-repeating completed chores from past days
+          db.prepare('DELETE FROM chores WHERE id = ?').run(chore.id);
+          console.log(`Deleted non-repeating chore ID ${chore.id} from a past day.`);
+        } else if (chore.repeats === "Weekly on this day" || chore.repeats === "Daily") {
+          // Reset repeating completed chores from past days
+          db.prepare('UPDATE chores SET completed = 0 WHERE id = ?').run(chore.id);
+          console.log(`Reset repeating chore ID ${chore.id} to uncompleted.`);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error during chore pruning and reset:', error);
+  }
+}
+
 
 // Chore routes
 fastify.get('/api/chores', async (request, reply) => {
@@ -224,6 +275,7 @@ fastify.get('/api/calendar/ics', async (request, reply) => {
 const start = async () => {
   try {
     db = await initializeDatabase(); // Initialize db once here
+    await pruneAndResetChores(); // Call the pruning/reset function on startup
     await fastify.listen({ port: process.env.PORT || 5000, host: '0.0.0.0' });
     console.log(`Server running on port ${process.env.PORT || 5000}`);
   } catch (err) {
