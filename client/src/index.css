@@ -14,7 +14,8 @@
   --background: #0a0a1a;
   --card-bg: rgba(30, 30, 50, 0.7);
   --card-border: rgba(100, 100, 150, 0.3);
-  --text-color: #a6a6d1; /* Changed to a light color for dark theme */
+  --text-color: #a6a6d1;
+  /* Changed to a light color for dark theme */
   --accent: #00ddeb;
   --gradient: linear-gradient(45deg, #2e2767, #620808);
   --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
@@ -34,7 +35,8 @@ body {
   min-height: 100vh;
   background: var(--gradient);
   background-attachment: fixed;
-  transition: transform 0.3s ease-in-out; /* Smooth transition for rotation */
+  transition: transform 0.3s ease-in-out;
+  /* Smooth transition for rotation */
 }
 
 .grid-item {
@@ -50,8 +52,7 @@ body {
   backdrop-filter: var(--backdrop-blur);
   box-shadow: var(--shadow);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
-  width: 100%; /* Changed to 100% to fill grid item */
-  max-width: 300px; /* Retain max-width for larger screens */
+  width: 300px;
   touch-action: manipulation;
 }
 
@@ -169,11 +170,13 @@ input:checked+.toggle-slider:before {
 }
 
 .card.transparent-card {
-  background: rgba(255, 255, 255, 0.2) !important; /* Light theme transparency */
+  background: rgba(255, 255, 255, 0.2) !important;
+  /* Light theme transparency */
 }
 
 [data-theme="dark"] .card.transparent-card {
-  background: rgba(30, 30, 50, 0.3) !important; /* Dark theme transparency */
+  background: rgba(30, 30, 50, 0.3) !important;
+  /* Dark theme transparency */
 }
 
 /* Specific rule for text color within transparent cards in dark mode */
@@ -182,12 +185,14 @@ input:checked+.toggle-slider:before {
 [data-theme="dark"] .card.transparent-card .MuiTextField-root label,
 [data-theme="dark"] .card.transparent-card .MuiListItemText-primary,
 [data-theme="dark"] .card.transparent-card .MuiListItemText-secondary {
-  color: #a6a6d1 !important; /* Ensure text color for transparent cards in dark mode */
+  color: #a6a6d1 !important;
+  /* Ensure text color for transparent cards in dark mode */
 }
 
 /* React Big Calendar specific overrides */
 .rbc-calendar {
-  color: var(--text-color); /* Ensure calendar text inherits theme color */
+  color: var(--text-color);
+  /* Ensure calendar text inherits theme color */
 }
 
 .rbc-header,
@@ -196,7 +201,8 @@ input:checked+.toggle-slider:before {
 .rbc-event-content,
 .rbc-event-label,
 .rbc-event-title {
-  color: var(--text-color) !important; /* Force text color for calendar elements */
+  color: var(--text-color) !important;
+  /* Force text color for calendar elements */
 }
 
 /* More specific rule for date numbers */
@@ -206,38 +212,51 @@ input:checked+.toggle-slider:before {
 
 /* New rules for pagination and view toggles */
 .rbc-toolbar button {
-  color: var(--text-color) !important; /* For the text/icons on buttons */
-  background-color: transparent !important; /* Ensure button background is transparent */
-  border-color: var(--card-border) !important; /* Match border to theme */
+  color: var(--text-color) !important;
+  /* For the text/icons on buttons */
+  background-color: transparent !important;
+  /* Ensure button background is transparent */
+  border-color: var(--card-border) !important;
+  /* Match border to theme */
 }
 
 .rbc-toolbar button:hover {
-  background-color: rgba(var(--text-color-rgb), 0.1) !important; /* Subtle hover effect */
+  background-color: rgba(var(--text-color-rgb), 0.1) !important;
+  /* Subtle hover effect */
 }
 
 .rbc-toolbar button.rbc-active {
-  background-color: var(--accent) !important; /* Active button background */
-  color: white !important; /* Active button text color */
+  background-color: var(--accent) !important;
+  /* Active button background */
+  color: white !important;
+  /* Active button text color */
 }
 
 /* Adjust background for calendar cells in dark mode if needed */
 [data-theme="dark"] .rbc-day-bg {
-  background-color: rgba(255, 255, 255, 0.05); /* Slightly visible background for days */
+  background-color: rgba(255, 255, 255, 0.05);
+  /* Slightly visible background for days */
 }
 
 [data-theme="dark"] .rbc-today {
-  background-color: rgba(0, 128, 0, 0.2) !important; /* Highlight today in dark mode */
+  background-color: rgba(0, 128, 0, 0.2) !important;
+  /* Highlight today in dark mode */
 }
 
 [data-theme="dark"] .rbc-off-range-bg {
-  background-color: rgba(255, 255, 255, 0.02) !important; /* Off-range days in dark mode */
+  background-color: rgba(255, 255, 255, 0.02) !important;
+  /* Off-range days in dark mode */
 }
 
 .rotate-90 {
-  transform: translate(-50%, -50%) rotate(90deg); /* Center and rotate */
-  width: 100vh; /* When rotated 90deg, the width becomes the original height */
-  height: 100vw; /* When rotated 90deg, the height becomes the original width */
-  transform-origin: center center; /* Ensure rotation is around the center */
+  transform: translate(-50%, -50%) rotate(90deg);
+  /* Center and rotate */
+  width: 100vh;
+  /* When rotated 90deg, the width becomes the original height */
+  height: 100vw;
+  /* When rotated 90deg, the height becomes the original width */
+  transform-origin: center center;
+  /* Ensure rotation is around the center */
   position: absolute;
   top: 50%;
   left: 50%;
