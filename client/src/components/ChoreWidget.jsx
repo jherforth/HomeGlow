@@ -47,11 +47,9 @@ const ChoreWidget = ({ transparentBackground }) => {
     try {
       const usersResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users`);
       setUsers(Array.isArray(usersResponse.data) ? usersResponse.data : []);
-      // console.log('Fetched Users:', usersResponse.data); // Debugging removed
 
       const choresResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`);
       setChores(Array.isArray(choresResponse.data) ? choresResponse.data : []);
-      // console.log('Fetched Chores:', choresResponse.data); // Debugging removed
       setError(null);
     } catch (err) {
       console.error('Error fetching data:', err);
@@ -83,8 +81,7 @@ const ChoreWidget = ({ transparentBackground }) => {
       });
       setError(null);
       // Re-fetch data to update UI
-      fetchData();
-      // TODO: Implement clam reward logic here after task completion
+      fetchData(); // Re-fetch data to update chores and user clam totals
     } catch (err) {
       console.error('Error marking chore complete:', err);
       setError('Failed to update chore. Please try again.');
@@ -130,7 +127,6 @@ const ChoreWidget = ({ transparentBackground }) => {
   };
 
   const currentDay = getCurrentDayOfWeek();
-  // console.log('Current Day:', currentDay); // Debugging removed
 
   const handleOpenAddTaskDialog = () => {
     setOpenAddTaskDialog(true);
@@ -158,59 +154,68 @@ const ChoreWidget = ({ transparentBackground }) => {
       {/* User Row with Profile Pictures and Tasks */}
       <Box sx={{ display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap', mb: 3 }}>
         {users.length === 0 && !error && <Typography>No users available.</Typography>}
-        {users.map(user => (
-          <Box key={user.id} sx={{ textAlign: 'center', mx: 1, mb: 2 }}>
-            <Box sx={{
-              position: 'relative',
-              width: 80,
-              height: 80,
-              borderRadius: '50%',
-              overflow: 'hidden',
-              border: '2px solid grey',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              bgcolor: 'lightgray',
-              mx: 'auto',
-              mb: 1,
-            }}>
-              {user.profile_picture ? (
-                <img
-                  src={user.profile_picture}
-                  alt={user.username}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
-                />
-              ) : (
-                <Typography variant="caption" sx={{ color: 'text.secondary' }}>No Pic</Typography>
-              )}
-              {/* Placeholder for Clam Total */}
-              <Typography
-                variant="caption"
-                sx={{
-                  position: 'absolute',
-                  top: 0,
-                  right: 0,
-                  bgcolor: 'rgba(0,0,0,0.6)',
-                  color: 'white',
-                  borderRadius: '0 0 0 8px',
-                  px: 0.5,
-                  py: 0.2,
-                  fontSize: '0.7rem',
-                }}
-              >
-                {user.clam_total || 0} 🐚
-              </Typography>
-            </Box>
-            <Typography variant="subtitle2" sx={{ textTransform: 'capitalize' }}>{user.username}</Typography>
-            <Box sx={{ mt: 1, textAlign: 'left' }}>
-              {chores
-                .filter(chore => {
-                  const isAssignedToUser = parseInt(chore.user_id) === user.id;
-                  const isAssignedToday = chore.assigned_day_of_week === currentDay;
-                  // console.log(`Chore: ${chore.title}, User ID (chore): ${chore.user_id}, User ID (current): ${user.id}, Assigned Day: ${chore.assigned_day_of_week}, Current Day: ${currentDay}, Match User: ${isAssignedToUser}, Match Day: ${isAssignedToday}`); // Debugging removed
-                  return isAssignedToUser && isAssignedToday;
-                })
-                .map(chore => (
+        {users.map(user => {
+          const userDailyChores = chores.filter(
+            chore => parseInt(chore.user_id) === user.id && chore.assigned_day_of_week === currentDay
+          );
+          const completedDailyChores = userDailyChores.filter(chore => chore.completed).length;
+          const totalDailyChores = userDailyChores.length;
+          const completionPercentage = totalDailyChores > 0 ? (completedDailyChores / totalDailyChores) * 100 : 0;
+
+          // Dynamic border style based on completion percentage
+          const borderStyle = totalDailyChores > 0
+            ? {
+                border: '2px solid transparent',
+                borderImage: `conic-gradient(green ${completionPercentage}%, grey ${completionPercentage}%) 1`,
+              }
+            : { border: '2px solid grey' }; // Default grey border if no chores
+
+          return (
+            <Box key={user.id} sx={{ textAlign: 'center', mx: 1, mb: 2 }}>
+              <Box sx={{
+                position: 'relative',
+                width: 80,
+                height: 80,
+                borderRadius: '50%',
+                overflow: 'hidden',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                bgcolor: 'lightgray',
+                mx: 'auto',
+                mb: 1,
+                ...borderStyle, // Apply dynamic border
+              }}>
+                {user.profile_picture ? (
+                  <img
+                    src={user.profile_picture}
+                    alt={user.username}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+                  />
+                ) : (
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>No Pic</Typography>
+                )}
+                {/* Display Clam Total */}
+                <Typography
+                  variant="caption"
+                  sx={{
+                    position: 'absolute',
+                    top: 0,
+                    right: 0,
+                    bgcolor: 'rgba(0,0,0,0.6)',
+                    color: 'white',
+                    borderRadius: '0 0 0 8px',
+                    px: 0.5,
+                    py: 0.2,
+                    fontSize: '0.7rem',
+                  }}
+                >
+                  {user.clam_total || 0} 🐚
+                </Typography>
+              </Box>
+              <Typography variant="subtitle2" sx={{ textTransform: 'capitalize' }}>{user.username}</Typography>
+              <Box sx={{ mt: 1, textAlign: 'left' }}>
+                {userDailyChores.map(chore => (
                   <Box key={chore.id} sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
                     <Radio
                       checked={chore.completed}
@@ -235,12 +240,13 @@ const ChoreWidget = ({ transparentBackground }) => {
                     </Typography>
                   </Box>
                 ))}
-              {chores.filter(chore => parseInt(chore.user_id) === user.id && chore.assigned_day_of_week === currentDay).length === 0 && (
-                <Typography variant="body2" color="text.secondary">No tasks today</Typography>
-              )}
+                {userDailyChores.length === 0 && (
+                  <Typography variant="body2" color="text.secondary">No tasks today</Typography>
+                )}
+              </Box>
             </Box>
-          </Box>
-        ))}
+          );
+        })}
       </Box>
 
       {/* Button to open Add New Task Dialog */}
