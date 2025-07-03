@@ -1,203 +1,232 @@
+/* Web 3.0-inspired global styles with light and dark themes */
 :root {
-  --background-color-light: #f0f2f5;
-  --text-color-light: #333;
-  --card-background-light: #ffffff;
-  --card-border-light: #e0e0e0;
-  --button-background-light: #1976d2;
-  --button-text-light: #ffffff;
-  --link-color-light: #1976d2;
-
-  --background-color-dark: #282c34;
-  --text-color-dark: #e0e0e0;
-  --card-background-dark: #3a3f47;
-  --card-border-dark: #555;
-  --button-background-dark: #90caf9;
-  --button-text-dark: #282c34;
-  --link-color-dark: #90caf9;
+  --background: #f4f4f9;
+  --card-bg: rgba(255, 255, 255, 0.8);
+  --card-border: rgba(255, 255, 255, 0.2);
+  --text-color: #1a1a2e;
+  --accent: #6e44ff;
+  --gradient: linear-gradient(45deg, #00ddeb, #ff6b6b);
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  --backdrop-blur: blur(10px);
 }
 
-[data-theme='light'] {
-  --background-color: var(--background-color-light);
-  --text-color: var(--text-color-light);
-  --card-background: var(--card-background-light);
-  --card-border: var(--card-border-light);
-  --button-background: var(--button-background-light);
-  --button-text: var(--button-text-light);
-  --link-color: var(--link-color-light);
-}
-
-[data-theme='dark'] {
-  --background-color: var(--background-color-dark);
-  --text-color: var(--text-color-dark);
-  --card-background: var(--card-background-dark);
-  --card-border: var(--card-border-dark);
-  --button-background: var(--button-background-dark);
-  --button-text: var(--button-text-dark);
-  --link-color: var(--link-color-dark);
+[data-theme="dark"] {
+  --background: #0a0a1a;
+  --card-bg: rgba(30, 30, 50, 0.7);
+  --card-border: rgba(100, 100, 150, 0.3);
+  --text-color: #a6a6d1; /* Changed to a light color for dark theme */
+  --accent: #00ddeb;
+  --gradient: linear-gradient(45deg, #2e2767, #620808);
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background-color: var(--background-color);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--background);
   color: var(--text-color);
-  transition: background-color 0.3s ease, color 0.3s ease;
-}
-
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+  transition: background 0.3s ease, color 0.3s ease;
+  touch-action: manipulation;
 }
 
 .container {
   padding: 20px;
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.3s ease-in-out;
-  /* Smooth transition for rotation */
+  background: var(--gradient);
+  background-attachment: fixed;
 }
 
-.rotate-90 {
-  transform: rotate(90deg);
-  /* Adjust transform-origin if needed, default is center */
-  /* You might need to adjust width/height or positioning of the container/body
-     when rotated to prevent scrollbars or maintain layout, depending on your design. */
-  width: 100vh;
-  /* When rotated 90deg, the width becomes the original height */
-  height: 100vw;
-  /* When rotated 90deg, the height becomes the original width */
-  transform-origin: center center;
-  /* Ensure rotation is around the center */
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%) rotate(90deg);
-  /* Center and rotate */
+.grid-item {
+  display: flex;
+  justify-content: center;
 }
 
 .card {
-  background-color: var(--card-background);
-  color: var(--text-color);
+  background: var(--card-bg);
   border: 1px solid var(--card-border);
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 20px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  transition: background-color 0.3s ease, border-color 0.3s ease;
-  width: 100%;
-  max-width: 600px;
-  /* Adjust as needed */
-  margin-bottom: 20px;
+  backdrop-filter: var(--backdrop-blur);
+  box-shadow: var(--shadow);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  width: 300px;
+  touch-action: manipulation;
 }
 
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+}
+
+h6,
+h1 {
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--text-color);
+}
+
+button {
+  background: var(--gradient);
+  color: var(--text-color);
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: background 0.3s ease;
+  touch-action: manipulation;
+}
+
+button:hover {
+  filter: brightness(1.1);
+}
+
+.theme-toggle {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 50%;
+  padding: 10px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  backdrop-filter: var(--backdrop-blur);
+  box-shadow: var(--shadow);
+}
+
+/* Toggle switch for Web 3.0 */
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+  color: var(--text-color);
+}
+
+.toggle-switch {
+  position: relative;
+  width: 48px;
+  height: 24px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 24px;
+  transition: 0.3s;
+  backdrop-filter: var(--backdrop-blur);
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 2.5px;
+  background: var(--accent);
+  border-radius: 50%;
+  transition: 0.3s;
+}
+
+input:checked+.toggle-slider {
+  background: var(--gradient);
+}
+
+input:checked+.toggle-slider:before {
+  transform: translateX(24px);
+}
+
+/* Ensure Material-UI components adapt to themes */
+.MuiTextField-root input,
+.MuiTextField-root label,
 .MuiTypography-root {
-  color: var(--text-color);
-}
-
-.MuiTextField-root .MuiInputLabel-root {
-  color: var(--text-color);
+  color: var(--text-color) !important;
 }
 
 .MuiTextField-root .MuiOutlinedInput-notchedOutline {
-  border-color: var(--card-border);
-}
-
-.MuiTextField-root .MuiOutlinedInput-input {
-  color: var(--text-color);
-}
-
-.MuiButton-root {
-  background-color: var(--button-background);
-  color: var(--button-text);
-}
-
-.MuiButton-root:hover {
-  opacity: 0.9;
-}
-
-.MuiSwitch-root .MuiSwitch-thumb {
-  background-color: var(--button-text);
-}
-
-.MuiSwitch-root .MuiSwitch-track {
-  background-color: var(--card-border);
-}
-
-.MuiSwitch-root.Mui-checked .MuiSwitch-thumb {
-  background-color: var(--button-text);
-}
-
-.MuiSwitch-root.Mui-checked .MuiSwitch-track {
-  background-color: var(--button-background);
-}
-
-.MuiAccordion-root {
-  background-color: var(--card-background);
-  color: var(--text-color);
-  border: 1px solid var(--card-border);
-}
-
-.MuiAccordionSummary-root {
-  background-color: var(--card-background);
-}
-
-.MuiAccordionDetails-root {
-  background-color: var(--background-color);
-}
-
-.MuiList-root {
-  background-color: var(--background-color);
-}
-
-.MuiListItem-root {
-  border-bottom: 1px solid var(--card-border);
-}
-
-.MuiListItem-root:last-child {
-  border-bottom: none;
+  border-color: var(--card-border) !important;
 }
 
 .MuiListItemText-primary,
 .MuiListItemText-secondary {
-  color: var(--text-color);
+  color: var(--text-color) !important;
 }
 
-.theme-toggle,
-.admin-toggle,
-.refresh-button {
-  z-index: 1000;
+.card.transparent-card {
+  background: rgba(255, 255, 255, 0.2) !important; /* Light theme transparency */
 }
 
-/* Simple Keyboard adjustments */
-.simple-keyboard {
-  background-color: var(--card-background);
-  border-top: 1px solid var(--card-border);
-  padding: 10px;
-  border-radius: 8px 8px 0 0;
+[data-theme="dark"] .card.transparent-card {
+  background: rgba(30, 30, 50, 0.3) !important; /* Dark theme transparency */
 }
 
-.simple-keyboard .hg-button {
-  background-color: var(--button-background);
-  color: var(--button-text);
-  border: 1px solid var(--card-border);
+/* Specific rule for text color within transparent cards in dark mode */
+[data-theme="dark"] .card.transparent-card .MuiTypography-root,
+[data-theme="dark"] .card.transparent-card .MuiTextField-root input,
+[data-theme="dark"] .card.transparent-card .MuiTextField-root label,
+[data-theme="dark"] .card.transparent-card .MuiListItemText-primary,
+[data-theme="dark"] .card.transparent-card .MuiListItemText-secondary {
+  color: #a6a6d1 !important; /* Ensure text color for transparent cards in dark mode */
 }
 
-.simple-keyboard .hg-button:active {
-  background-color: var(--link-color);
+/* React Big Calendar specific overrides */
+.rbc-calendar {
+  color: var(--text-color); /* Ensure calendar text inherits theme color */
 }
 
-.toggle-label .MuiSwitch-root {
-  margin-right: 8px;
-  /* Space between switch and label */
+.rbc-header,
+.rbc-day-bg,
+.rbc-date-cell,
+.rbc-event-content,
+.rbc-event-label,
+.rbc-event-title {
+  color: var(--text-color) !important; /* Force text color for calendar elements */
 }
 
-.toggle-label .MuiTypography-root {
-  font-size: 0.875rem;
-  /* Smaller font for toggle labels */
+/* More specific rule for date numbers */
+.rbc-date-cell span.rbc-date-number {
+  color: var(--text-color) !important;
+}
+
+/* New rules for pagination and view toggles */
+.rbc-toolbar button {
+  color: var(--text-color) !important; /* For the text/icons on buttons */
+  background-color: transparent !important; /* Ensure button background is transparent */
+  border-color: var(--card-border) !important; /* Match border to theme */
+}
+
+.rbc-toolbar button:hover {
+  background-color: rgba(var(--text-color-rgb), 0.1) !important; /* Subtle hover effect */
+}
+
+.rbc-toolbar button.rbc-active {
+  background-color: var(--accent) !important; /* Active button background */
+  color: white !important; /* Active button text color */
+}
+
+/* Adjust background for calendar cells in dark mode if needed */
+[data-theme="dark"] .rbc-day-bg {
+  background-color: rgba(255, 255, 255, 0.05); /* Slightly visible background for days */
+}
+
+[data-theme="dark"] .rbc-today {
+  background-color: rgba(0, 128, 0, 0.2) !important; /* Highlight today in dark mode */
+}
+
+[data-theme="dark"] .rbc-off-range-bg {
+  background-color: rgba(255, 255, 255, 0.02) !important; /* Off-range days in dark mode */
 }
