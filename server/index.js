@@ -50,8 +50,8 @@ async function initializeDatabase() {
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,\
         username TEXT,
-        email TEXT,
-        profile_picture TEXT,
+        email TEXT,\
+        profile_picture TEXT,\
         clam_total INTEGER DEFAULT 0
       );
       CREATE TABLE IF NOT EXISTS events (
@@ -101,6 +101,27 @@ fastify.patch('/api/chores/:id', async (request, reply) => {
     const completedInt = completed ? 1 : 0;
     const stmt = db.prepare('UPDATE chores SET completed = ? WHERE id = ?');
     stmt.run(completedInt, id);
+
+    // --- Clam Reward Logic ---
+    // Get the chore details to find the user_id and assigned_day_of_week
+    const chore = db.prepare('SELECT user_id, assigned_day_of_week FROM chores WHERE id = ?').get(id);
+
+    if (chore) {
+      // Get all chores for this user and day
+      const usersChoresForDay = db.prepare('SELECT completed FROM chores WHERE user_id = ? AND assigned_day_of_week = ?').all(chore.user_id, chore.assigned_day_of_week);
+
+      // Check if all chores for this user and day are completed
+      const allCompleted = usersChoresForDay.every(c => c.completed === 1);
+
+      if (allCompleted) {
+        // Reward user with 2 clams
+        const userUpdateStmt = db.prepare('UPDATE users SET clam_total = clam_total + 2 WHERE id = ?');
+        userUpdateStmt.run(chore.user_id);
+        console.log(`User ${chore.user_id} rewarded 2 clams for completing all chores on ${chore.assigned_day_of_week}.`);
+      }
+    }
+    // --- End Clam Reward Logic ---
+
     return { success: true };
   } catch (error) {
     console.error('Error updating chore:', error);
@@ -122,7 +143,6 @@ fastify.get('/api/users', async (request, reply) => {
 fastify.post('/api/users', async (request, reply) => {
   const { username, email, profile_picture } = request.body;
   try {
-    const db = await initializeDatabase();
     const stmt = db.prepare('INSERT INTO users (username, email, profile_picture) VALUES (?, ?, ?)');
     const info = stmt.run(username, email, profile_picture);
     return { id: info.lastInsertRowid };
@@ -131,6 +151,21 @@ fastify.post('/api/users', async (request, reply) => {
     reply.status(500).send({ error: 'Failed to add user' });
   }
 });
+
+// NEW: Endpoint to update user clam total (for manual adjustments or future use)
+fastify.patch('/api/users/:id/clams', async (request, reply) => {
+  const { id } = request.params;
+  const { clam_total } = request.body; // Expecting the new total or a delta
+  try {
+    const stmt = db.prepare('UPDATE users SET clam_total = ? WHERE id = ?');
+    stmt.run(clam_total, id);
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating user clams:', error);
+    reply.status(500).send({ error: 'Failed to update user clams' });
+  }
+});
+
 
 // Calendar routes
 fastify.get('/api/calendar', async (request, reply) => {
