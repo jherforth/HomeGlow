@@ -1,6 +1,6 @@
 // client/src/app.jsx
 import React, { useState, useEffect, useRef } from 'react';
-import { Container, Grid, IconButton, Box, Dialog, DialogContent, Button } from '@mui/material'; // Removed TextField
+import { Container, Grid, IconButton, Box, Dialog, DialogContent, Button, TextField } from '@mui/material'; // Added TextField back
 import { Brightness4, Brightness7 } from '@mui/icons-material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -27,12 +27,11 @@ const App = () => {
       photos: { enabled: false, transparent: false },
       weather: { enabled: false, transparent: false },
       menu: { enabled: false, transparent: false },
-      enableOnscreenKeyboard: true, // Changed to true
-      textSize: 16, // Default text size
-      cardSize: 300, // Default card width
-      cardPadding: 20, // Default card padding
-      cardHeight: 200, // Default card height - Added
-      keyboardPosition: 'bottom', // Default keyboard position
+      enableOnscreenKeyboard: true,
+      textSize: 16,
+      cardSize: 300,
+      cardPadding: 20,
+      keyboardPosition: 'bottom',
     };
     return savedSettings ? { ...defaultSettings, ...JSON.parse(savedSettings) } : defaultSettings;
   });
@@ -56,12 +55,11 @@ const App = () => {
           photos: { enabled: false, transparent: false },
           weather: { enabled: false, transparent: false },
           menu: { enabled: false, transparent: false },
-          enableOnscreenKeyboard: true, // Changed to true
-          textSize: 16, // Default text size
-          cardSize: 300, // Default card width
-          cardPadding: 20, // Default card padding
-          cardHeight: 200, // Default card height - Added
-          keyboardPosition: 'bottom', // Default keyboard position
+          enableOnscreenKeyboard: true,
+          textSize: 16,
+          cardSize: 300,
+          cardPadding: 20,
+          keyboardPosition: 'bottom',
         };
         return { ...defaultSettings, ...JSON.parse(savedSettings) };
       });
@@ -75,8 +73,7 @@ const App = () => {
     document.documentElement.style.setProperty('--dynamic-text-size', `${widgetSettings.textSize}px`);
     document.documentElement.style.setProperty('--dynamic-card-width', `${widgetSettings.cardSize}px`);
     document.documentElement.style.setProperty('--dynamic-card-padding', `${widgetSettings.cardPadding}px`);
-    document.documentElement.style.setProperty('--dynamic-card-height', `${widgetSettings.cardHeight}px`);
-  }, [widgetSettings.textSize, widgetSettings.cardSize, widgetSettings.cardPadding, widgetSettings.cardHeight]);
+  }, [widgetSettings.textSize, widgetSettings.cardSize, widgetSettings.cardPadding]);
 
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
@@ -115,7 +112,11 @@ const App = () => {
     localStorage.setItem('widgetSettings', JSON.stringify({ ...widgetSettings, keyboardPosition: newPosition }));
   };
 
-  // Removed handleFocus function as example text fields are removed
+  // Re-added handleFocus function
+  const handleFocus = (e) => {
+    setActiveInputName(e.target.name);
+    setKeyboardInput(e.target.value);
+  };
 
   return (
     <>
@@ -208,7 +209,27 @@ const App = () => {
           )}
         </Grid>
 
-        {/* Removed Example Text Fields */}
+        {/* Example Text Fields for Keyboard Input */}
+        <Box sx={{ mt: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <TextField
+            label="Example Input 1"
+            name="input1"
+            value={activeInputName === 'input1' ? keyboardInput : ''}
+            onFocus={handleFocus}
+            onChange={(e) => setKeyboardInput(e.target.value)}
+            variant="outlined"
+            fullWidth
+          />
+          <TextField
+            label="Example Input 2"
+            name="input2"
+            value={activeInputName === 'input2' ? keyboardInput : ''}
+            onFocus={handleFocus}
+            onChange={(e) => setKeyboardInput(e.target.value)}
+            variant="outlined"
+            fullWidth
+          />
+        </Box>
 
         {/* Onscreen Keyboard */}
         {widgetSettings.enableOnscreenKeyboard && (
