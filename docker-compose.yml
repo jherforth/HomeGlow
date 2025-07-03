@@ -26,4 +26,3 @@ services:
       - homeglow-backend
     env_file:
       - ./.env
-    # REMOVE THIS LINE: - REACT_APP_API_URL=http://homeglow-backend:5000
