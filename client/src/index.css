@@ -38,8 +38,10 @@ body {
 
 body.rotated {
   /* Scrolling for rotated state */
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow-x: auto; /* Allow horizontal scrolling */
+  overflow-y: hidden; /* Hide vertical scrolling */
+  width: 100vh; /* When rotated, width becomes original height */
+  height: 100vw; /* When rotated, height becomes original width */
 }
 
 .container {
