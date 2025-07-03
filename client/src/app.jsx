@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Container, Grid, IconButton, Box, Dialog, DialogContent } from '@mui/material'; // Added Dialog, DialogContent
+import { Container, Grid, IconButton, Box, Dialog, DialogContent, Button, TextField } from '@mui/material'; // Added TextField
 import { Brightness4, Brightness7 } from '@mui/icons-material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RefreshIcon from '@mui/icons-material/Refresh'; // New import
@@ -31,6 +31,7 @@ const App = () => {
       cardSize: 300, // Default card width
       cardPadding: 20, // Default card padding
       cardHeight: 200, // Default card height
+      keyboardPosition: 'bottom', // Default keyboard position
     };
     return savedSettings ? { ...defaultSettings, ...JSON.parse(savedSettings) } : defaultSettings;
   });
@@ -59,6 +60,7 @@ const App = () => {
           cardSize: 300, // Default card width
           cardPadding: 20, // Default card padding
           cardHeight: 200, // Default card height
+          keyboardPosition: 'bottom', // Default keyboard position
         };
         return { ...defaultSettings, ...JSON.parse(savedSettings) };
       });
@@ -66,16 +68,6 @@ const App = () => {
       localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
     }
   }, []);
-
-  // Effect to add/remove 'rotated' class to body based on enableScreenRotation
-  useEffect(() => {
-    // This effect is no longer needed if screen rotation is handled by OS
-    // if (widgetSettings.enableScreenRotation) {
-    //   document.body.classList.add('rotated');
-    // } else {
-    //   document.body.classList.remove('rotated');
-    // }
-  }, []); // Removed widgetSettings.enableScreenRotation from dependency array
 
   // Effect to apply dynamic CSS variables
   useEffect(() => {
@@ -98,6 +90,12 @@ const App = () => {
 
   const handleKeyboardChange = (input) => {
     setKeyboardInput(input);
+    if (activeInputName) {
+      const activeInput = document.querySelector(`input[name="${activeInputName}"]`);
+      if (activeInput) {
+        activeInput.value = input;
+      }
+    }
   };
 
   const handleKeyPress = (button) => {
@@ -108,6 +106,16 @@ const App = () => {
 
   const handlePageRefresh = () => { // New function for page refresh
     window.location.reload();
+  };
+
+  const toggleKeyboardPosition = () => {
+    const newPosition = widgetSettings.keyboardPosition === 'bottom' ? 'top' : 'bottom';
+    setWidgetSettings(prevSettings => ({ ...prevSettings, keyboardPosition: newPosition }));
+    localStorage.setItem('widgetSettings', JSON.stringify({ ...widgetSettings, keyboardPosition: newPosition }));
+  };
+
+  const handleFocus = (e) => {
+    setActiveInputName(e.target.name);
   };
 
   return (
@@ -158,6 +166,19 @@ const App = () => {
         <RefreshIcon />
       </IconButton>
 
+      {/* Keyboard Position Toggle Button */}
+      <Button
+        onClick={toggleKeyboardPosition}
+        sx={{
+          position: 'fixed',
+          top: 16,
+          right: 160,
+          color: theme === 'light' ? 'action.active' : 'white',
+        }}
+      >
+        Toggle Keyboard Position
+      </Button>
+
       {/* Removed rotation class from Container as OS will handle rotation */}
       <Container className="container">
         <Grid container spacing={2} justifyContent="space-evenly">
@@ -190,9 +211,38 @@ const App = () => {
           )}
         </Grid>
 
+        {/* Example Text Fields */}
+        <TextField
+          name="example1"
+          label="Example 1"
+          variant="outlined"
+          onFocus={handleFocus}
+          fullWidth
+          margin="normal"
+        />
+        <TextField
+          name="example2"
+          label="Example 2"
+          variant="outlined"
+          onFocus={handleFocus}
+          fullWidth
+          margin="normal"
+        />
+
         {/* Onscreen Keyboard */}
         {widgetSettings.enableOnscreenKeyboard && (
-          <Box sx={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 1000, p: 2, bgcolor: 'background.paper' }}>
+          <Box
+            sx={{
+              position: 'fixed',
+              [widgetSettings.keyboardPosition]: 0,
+              left: 0,
+              width: '50%',
+              height: '50%',
+              zIndex: 1000,
+              p: 2,
+              bgcolor: 'background.paper',
+            }}
+          >
             <Keyboard
               keyboardRef={r => (keyboardRef.current = r)}
               inputName={activeInputName}
