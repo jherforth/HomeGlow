@@ -198,7 +198,7 @@ const ChoreWidget = ({ transparentBackground }) => {
                   width: 35, // Fixed width for circular shape
                   height: 35, // Fixed height for circular shape
                   borderRadius: '50%', // Circular shape
-                  bgcolor: 'rgba(137, 152, 218, 0.53)',
+                  bgcolor: 'rgba(137, 152, 218, 0.53)', // Changed color for better visibility
                   color: 'white',
                   display: 'flex', // Use flexbox for centering content
                   alignItems: 'center', // Center vertically
