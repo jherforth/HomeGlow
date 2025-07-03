@@ -14,7 +14,7 @@
   --background: #0a0a1a;
   --card-bg: rgba(30, 30, 50, 0.7);
   --card-border: rgba(100, 100, 150, 0.3);
-  --text-color: #1a1a2e; /* Dark theme text color for non-transparent cards */
+  --text-color: #f4f4f9; /* Changed to a light color for dark theme */
   --accent: #00ddeb;
   --gradient: linear-gradient(45deg, #2e2767, #620808);
   --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
@@ -195,6 +195,11 @@ input:checked+.toggle-slider:before {
 .rbc-event-label,
 .rbc-event-title {
   color: var(--text-color) !important; /* Force text color for calendar elements */
+}
+
+/* More specific rule for date numbers */
+.rbc-date-cell span.rbc-date-number {
+  color: var(--text-color) !important;
 }
 
 /* Adjust background for calendar cells in dark mode if needed */
