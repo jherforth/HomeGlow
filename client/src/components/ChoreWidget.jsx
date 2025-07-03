@@ -195,7 +195,7 @@ const ChoreWidget = ({ transparentBackground }) => {
                     top: 0,
                     right: 0,
                     bgcolor: 'rgba(0,0,0,0.6)',
-                    // color: 'white', // <--- REMOVED THIS LINE
+                    color: 'white', // <--- RE-ADDED THIS LINE
                     borderRadius: '0 0 0 8px',
                     px: 0.5,
                     py: 0.2,
