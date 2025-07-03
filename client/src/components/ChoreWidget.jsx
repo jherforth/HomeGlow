@@ -162,14 +162,6 @@ const ChoreWidget = ({ transparentBackground }) => {
           const totalDailyChores = userDailyChores.length;
           const completionPercentage = totalDailyChores > 0 ? (completedDailyChores / totalDailyChores) * 100 : 0;
 
-          // Dynamic border style based on completion percentage
-          const borderStyle = totalDailyChores > 0
-            ? {
-                border: '2px solid transparent',
-                borderImage: `conic-gradient(green ${completionPercentage}%, grey ${completionPercentage}%) 1`,
-              }
-            : { border: '2px solid grey' }; // Default grey border if no chores
-
           return (
             <Box key={user.id} sx={{ textAlign: 'center', mx: 1, mb: 2 }}>
               <Box sx={{
@@ -184,7 +176,7 @@ const ChoreWidget = ({ transparentBackground }) => {
                 bgcolor: 'lightgray',
                 mx: 'auto',
                 mb: 1,
-                ...borderStyle, // Apply dynamic border
+                border: '2px solid grey', // Default border for profile pic
               }}>
                 {user.profile_picture ? (
                   <img
@@ -213,7 +205,25 @@ const ChoreWidget = ({ transparentBackground }) => {
                   {user.clam_total || 0} 🐚
                 </Typography>
               </Box>
-              <Typography variant="subtitle2" sx={{ textTransform: 'capitalize' }}>{user.username}</Typography>
+              {/* Progress Bar */}
+              <Box sx={{
+                width: 80,
+                height: 8,
+                bgcolor: 'grey.300', // Background for empty part
+                borderRadius: 4,
+                mx: 'auto',
+                mt: 0.5,
+                overflow: 'hidden', // Ensure inner bar is clipped
+              }}>
+                <Box sx={{
+                  width: `${completionPercentage}%`,
+                  height: '100%',
+                  bgcolor: 'green', // Color for filled part
+                  borderRadius: 4,
+                  transition: 'width 0.5s ease-in-out', // Smooth transition
+                }} />
+              </Box>
+              <Typography variant="subtitle2" sx={{ textTransform: 'capitalize', mt: 0.5 }}>{user.username}</Typography>
               <Box sx={{ mt: 1, textAlign: 'left' }}>
                 {userDailyChores.map(chore => (
                   <Box key={chore.id} sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
