@@ -104,6 +104,23 @@ fastify.patch('/api/chores/:id', async (request, reply) => {
   }
 });
 
+// NEW: Endpoint to delete a chore
+fastify.delete('/api/chores/:id', async (request, reply) => {
+  const { id } = request.params;
+  try {
+    const stmt = db.prepare('DELETE FROM chores WHERE id = ?');
+    const info = stmt.run(id);
+    if (info.changes === 0) {
+      return reply.status(404).send({ error: 'Chore not found' });
+    }
+    return { success: true, message: 'Chore deleted successfully' };
+  } catch (error) {
+    console.error('Error deleting chore:', error);
+    reply.status(500).send({ error: 'Failed to delete chore' });
+  }
+});
+
+
 // User routes
 fastify.get('/api/users', async (request, reply) => {
   try {
