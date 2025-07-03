@@ -23,7 +23,7 @@ fastify.register(require('@fastify/static'), {
 
 // Initialize database
 // CHANGE: Store tasks.db inside a 'data' subdirectory within /app
-const dbPath = path.resolve(__dirname, 'data', 'tasks.db'); // <--- MODIFIED LINE
+const dbPath = path.resolve(__dirname, 'data', 'tasks.db');
 async function initializeDatabase() {
   try {
     // Ensure the 'data' directory exists and is writable
@@ -81,8 +81,11 @@ fastify.post('/api/chores', async (request, reply) => {
   const { user_id, title, description, time_period, assigned_day_of_week, repeats, completed } = request.body;
   try {
     const db = await initializeDatabase();
+    // Explicitly convert boolean to integer for SQLite
+    const completedInt = completed ? 1 : 0; // Convert true/false to 1/0
+
     const stmt = db.prepare('INSERT INTO chores (user_id, title, description, time_period, assigned_day_of_week, repeats, completed) VALUES (?, ?, ?, ?, ?, ?, ?)');
-    const info = stmt.run(user_id, title, description, time_period, assigned_day_of_week, repeats, completed);
+    const info = stmt.run(user_id, title, description, time_period, assigned_day_of_week, repeats, completedInt); // Use completedInt
     db.close();
     return { id: info.lastInsertRowid };
   } catch (error) {
@@ -96,8 +99,10 @@ fastify.patch('/api/chores/:id', async (request, reply) => {
   const { completed } = request.body;
   try {
     const db = await initializeDatabase();
+    // Explicitly convert boolean to integer for SQLite
+    const completedInt = completed ? 1 : 0; // Convert true/false to 1/0
     const stmt = db.prepare('UPDATE chores SET completed = ? WHERE id = ?');
-    stmt.run(completed, id);
+    stmt.run(completedInt, id); // Use completedInt
     db.close();
     return { success: true };
   } catch (error) {
