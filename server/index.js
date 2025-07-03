@@ -1,3 +1,4 @@
+// File: server/index.js
 const fastify = require('fastify')({ logger: true });
 const Database = require('better-sqlite3');
 const ical = require('ical-generator');
@@ -21,9 +22,11 @@ fastify.register(require('@fastify/static'), {
 });
 
 // Initialize database
-const dbPath = path.resolve(__dirname, 'tasks.db');
+// CHANGE: Store tasks.db inside a 'data' subdirectory within /app
+const dbPath = path.resolve(__dirname, 'data', 'tasks.db'); // <--- MODIFIED LINE
 async function initializeDatabase() {
   try {
+    // Ensure the 'data' directory exists and is writable
     await fs.mkdir(path.dirname(dbPath), { recursive: true });
     await fs.chmod(path.dirname(dbPath), 0o777); // Ensure directory is writable
     const db = new Database(dbPath, { verbose: console.log });
@@ -39,7 +42,7 @@ async function initializeDatabase() {
         completed BOOLEAN
       );
       CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,\
         username TEXT,
         email TEXT,
         profile_picture TEXT,

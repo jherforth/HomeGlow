@@ -7,7 +7,7 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - ./tasks.db:/app/tasks.db
+      - ./data:/app/data
       - ./uploads:/app/uploads
     environment:
       - NODE_ENV=production
@@ -26,3 +26,5 @@ services:
       - homeglow-backend
     env_file:
       - ./.env
+    environment:
+      - REACT_APP_API_URL=http://homeglow-backend:5000
