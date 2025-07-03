@@ -45,15 +45,21 @@ body.rotated {
 
 .container {
   padding: 20px;
-  min-height: 100vh; /* Default height for non-rotated */
+  /* Removed min-height: 100vh; to allow dynamic height */
   background: var(--gradient);
   background-attachment: fixed;
   transition: transform 0.3s ease-in-out;
   /* Smooth transition for rotation */
   position: relative;
   /* Ensure proper positioning of children */
-  overflow-y: auto; /* Allow vertical scrolling within the container itself */
-  overflow-x: hidden; /* Prevent horizontal scrolling within the container */
+  width: 100%; /* Ensure container fills its parent */
+  /* Removed overflow properties from here, body will manage */
+}
+
+/* Material-UI Grid Container specific styles */
+.MuiGrid-container {
+  width: 100%; /* Ensure the grid container takes full width */
+  /* Add any other flex/grid properties if needed for stacking */
 }
 
 .rotate-90 {
@@ -68,9 +74,7 @@ body.rotated {
   position: absolute;
   top: 50%;
   left: 50%;
-  /* Ensure content within rotated container can scroll */
-  overflow-y: auto; /* This will be the perceived vertical scroll for rotated content */
-  overflow-x: hidden; /* Hide horizontal scroll within rotated container */
+  /* Removed overflow properties from here, body will manage */
 }
 
 .grid-item {
@@ -88,7 +92,7 @@ body.rotated {
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   width: 100%;
   /* Changed to 100% to fill grid item */
-  /* max-width: 300px; */
+  max-width: 300px;
   /* Retain max-width for larger screens */
   touch-action: manipulation;
 }
