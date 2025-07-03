@@ -62,6 +62,11 @@ body.rotated {
   /* Add any other flex/grid properties if needed for stacking */
 }
 
+/* Override Material-UI Container's max-width to allow full dynamic width */
+.MuiContainer-root {
+  max-width: none !important;
+}
+
 .rotate-90 {
   transform: translate(-50%, -50%) rotate(90deg);
   /* Center and rotate */
