@@ -21,16 +21,15 @@
   --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
-html,
-body {
+html, body {
   margin: 0;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background: var(--background);
   color: var(--text-color);
   transition: background 0.3s ease, color 0.3s ease;
   touch-action: manipulation;
-  overflow: hidden;
-  /* Prevent scrolling when rotated */
+  overflow-x: hidden; /* Prevent horizontal scrolling by default */
+  overflow-y: auto; /* Allow vertical scrolling by default */
   width: 100%;
   height: 100%;
 }
@@ -42,8 +41,8 @@ body {
   background-attachment: fixed;
   transition: transform 0.3s ease-in-out;
   /* Smooth transition for rotation */
-  position: relative;
-  /* Ensure proper positioning of children */
+  position: relative; /* Ensure proper positioning of children */
+  overflow: auto; /* Allow scrolling within the container */
 }
 
 .grid-item {
@@ -59,10 +58,8 @@ body {
   backdrop-filter: var(--backdrop-blur);
   box-shadow: var(--shadow);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
-  width: 100%;
-  /* Changed to 100% to fill grid item */
-  max-width: 300px;
-  /* Retain max-width for larger screens */
+  width: 100%; /* Changed to 100% to fill grid item */
+  max-width: 300px; /* Retain max-width for larger screens */
   touch-action: manipulation;
 }
 
@@ -98,8 +95,18 @@ button:hover {
 .theme-toggle,
 .admin-toggle,
 .refresh-button {
-  z-index: 1000;
-  /* Ensure these are always on top */
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 50%;
+  padding: 10px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  backdrop-filter: var(--backdrop-blur);
+  box-shadow: var(--shadow);
+  z-index: 1000; /* Ensure these are always on top */
 }
 
 /* Toggle switch for Web 3.0 */
