@@ -172,4 +172,5 @@ input:checked+.toggle-slider:before {
 
 [data-theme="dark"] .card.transparent-card {
   background: rgba(30, 30, 50, 0.3) !important; /* Dark theme transparency */
+  color: #a6a6d1 !important; /* Ensure text color for transparent cards in dark mode */
 }
