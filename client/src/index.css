@@ -14,7 +14,7 @@
   --background: #0a0a1a;
   --card-bg: rgba(30, 30, 50, 0.7);
   --card-border: rgba(100, 100, 150, 0.3);
-  --text-color: #1a1a2e;
+  --text-color: #1a1a2e; /* Dark theme text color for non-transparent cards */
   --accent: #00ddeb;
   --gradient: linear-gradient(45deg, #2e2767, #620808);
   --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
@@ -167,13 +167,18 @@ input:checked+.toggle-slider:before {
 }
 
 .card.transparent-card {
-  background: rgba(255, 255, 255, 0.2) !important;
-  /* Light theme transparency */
+  background: rgba(255, 255, 255, 0.2) !important; /* Light theme transparency */
 }
 
 [data-theme="dark"] .card.transparent-card {
-  background: rgba(30, 30, 50, 0.3) !important;
-  /* Dark theme transparency */
-  color: #a6a6d1 !important;
-  /* Ensure text color for transparent cards in dark mode */
+  background: rgba(30, 30, 50, 0.3) !important; /* Dark theme transparency */
+}
+
+/* Specific rule for text color within transparent cards in dark mode */
+[data-theme="dark"] .card.transparent-card .MuiTypography-root,
+[data-theme="dark"] .card.transparent-card .MuiTextField-root input,
+[data-theme="dark"] .card.transparent-card .MuiTextField-root label,
+[data-theme="dark"] .card.transparent-card .MuiListItemText-primary,
+[data-theme="dark"] .card.transparent-card .MuiListItemText-secondary {
+  color: #a6a6d1 !important; /* Ensure text color for transparent cards in dark mode */
 }
