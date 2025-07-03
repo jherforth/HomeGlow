@@ -166,7 +166,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
   };
 
   const handleResetClams = async (userId) => {
-    if (window.confirm('Are you sure you want to reset this user\\'s clam total to zero?')) {
+    if (window.confirm("Are you sure you want to reset this user's clam total to zero?")) {
       try {
         await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users/${userId}/clams`, { clam_total: 0 });
         setSuccess('Clam total reset successfully!');
@@ -419,7 +419,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
       {/* Collapsible User List */}
       <Box sx={{ mt: 3, p: 2, borderTop: '1px solid var(--card-border)' }}>
         <Typography variant="subtitle1" gutterBottom>Manage Users</Typography>
-        {users.length === 0 && <Typography variant="body2" color="text.secondary}>No users added yet.</Typography>}
+        {users.length === 0 && <Typography variant="body2" color="text.secondary">No users added yet.</Typography>}
         {users.map((user) => (
           <Accordion key={user.id} sx={{ mb: 1 }}>
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
@@ -428,7 +428,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
               </Typography>
             </AccordionSummary>
             <AccordionDetails sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              <Typography variant="body2'>Email: {user.email}</Typography>
+              <Typography variant="body2">Email: {user.email}</Typography>
               {user.profile_picture && (
                 <Box sx={{ mt: 1, mb: 1 }}>
                   <img
