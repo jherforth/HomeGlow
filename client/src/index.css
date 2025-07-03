@@ -182,3 +182,30 @@ input:checked+.toggle-slider:before {
 [data-theme="dark"] .card.transparent-card .MuiListItemText-secondary {
   color: #a6a6d1 !important; /* Ensure text color for transparent cards in dark mode */
 }
+
+/* React Big Calendar specific overrides */
+.rbc-calendar {
+  color: var(--text-color); /* Ensure calendar text inherits theme color */
+}
+
+.rbc-header,
+.rbc-day-bg,
+.rbc-date-cell,
+.rbc-event-content,
+.rbc-event-label,
+.rbc-event-title {
+  color: var(--text-color) !important; /* Force text color for calendar elements */
+}
+
+/* Adjust background for calendar cells in dark mode if needed */
+[data-theme="dark"] .rbc-day-bg {
+  background-color: rgba(255, 255, 255, 0.05); /* Slightly visible background for days */
+}
+
+[data-theme="dark"] .rbc-today {
+  background-color: rgba(0, 128, 0, 0.2) !important; /* Highlight today in dark mode */
+}
+
+[data-theme="dark"] .rbc-off-range-bg {
+  background-color: rgba(255, 255, 255, 0.02) !important; /* Off-range days in dark mode */
+}
