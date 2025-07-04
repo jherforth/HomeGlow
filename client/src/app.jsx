@@ -42,8 +42,7 @@ const App = () => {
   const [activeInputName, setActiveInputName] = useState('');
   const keyboardRef = useRef(null);
 
-  // New state for forcing keyboard re-mount
-  const [keyboardRenderKey, setKeyboardRenderKey] = useState(0);
+  // Removed keyboardRenderKey state and its useEffect
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
@@ -60,12 +59,7 @@ const App = () => {
     document.documentElement.style.setProperty('--dynamic-card-height', `${widgetSettings.cardHeight}px`);
   }, [widgetSettings.textSize, widgetSettings.cardSize, widgetSettings.cardPadding, widgetSettings.cardHeight]);
 
-  // Effect to update keyboardRenderKey when enableOnscreenKeyboard changes
-  useEffect(() => {
-    setKeyboardRenderKey(prevKey => prevKey + 1);
-  }, [widgetSettings.enableOnscreenKeyboard]);
-
-  // NEW: Effect to force keyboard re-render when it becomes visible
+  // Effect to force keyboard re-render when it becomes visible or keyboardRef is ready
   useEffect(() => {
     if (widgetSettings.enableOnscreenKeyboard && keyboardRef.current) {
       // A small delay might be necessary to ensure the DOM element is fully visible
@@ -83,7 +77,7 @@ const App = () => {
         }
       }, 100); // 100ms delay
     }
-  }, [widgetSettings.enableOnscreenKeyboard]);
+  }, [widgetSettings.enableOnscreenKeyboard, keyboardRef.current]); // Added keyboardRef.current to dependencies
 
 
   const toggleTheme = () => {
@@ -235,7 +229,7 @@ const App = () => {
             }}
           >
             <Keyboard
-              key={keyboardRenderKey} // Use the new key here
+              // Removed key={keyboardRenderKey}
               keyboardRef={r => (keyboardRef.current = r)}
               inputName={activeInputName}
               onChange={handleKeyboardChange}
