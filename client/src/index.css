@@ -6,6 +6,7 @@
   --text-color: #1a1a2e;
   --text-color-rgb: 26, 26, 46; /* RGB values for #1a1a2e */
   --accent: #6e44ff;
+  --accent-rgb: 110, 68, 255; /* RGB values for #6e44ff - ADDED THIS LINE */
   --gradient: linear-gradient(45deg, #00ddeb, #ff6b6b);
   --shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   --backdrop-blur: blur(10px);
@@ -22,6 +23,7 @@
   --text-color: #a6a6d1;
   --text-color-rgb: 166, 166, 209; /* RGB values for #a6a6d1 */
   --accent: #00ddeb;
+  --accent-rgb: 0, 221, 235; /* RGB values for #00ddeb - ADDED THIS LINE */
   --gradient: linear-gradient(45deg, #2e2767, #620808);
   --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
@@ -385,5 +387,6 @@ input:checked+.toggle-slider:before {
 .custom-calendar .rbc-current-day-header {
   background-color: rgba(var(--accent-rgb), 0.2); /* A subtle background highlight */
   color: var(--accent); /* Change text color to accent */
-  font-weight: bold;
+  font-weight:
+ bold; /* Make the text bold */
 }
