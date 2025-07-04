@@ -13,6 +13,7 @@ const CalendarWidget = ({ transparentBackground }) => {
   const [events, setEvents] = useState([]);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [currentView, setCurrentView] = useState('month'); // State to track current view
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -42,6 +43,9 @@ const CalendarWidget = ({ transparentBackground }) => {
     fetchEvents();
   }, []); // Empty dependency array means this effect runs once on mount
 
+  // Determine height based on current view
+  const calendarHeight = currentView === 'agenda' ? 600 : 400; // Taller for agenda view
+
   return (
     <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`}>
       <Typography variant="h6" gutterBottom>
@@ -50,7 +54,7 @@ const CalendarWidget = ({ transparentBackground }) => {
       {loading && <Typography>Loading events...</Typography>}
       {error && <Typography color="error">{error}</Typography>}
       {!loading && !error && (
-        <Box sx={{ height: 400 }}> {/* Adjust height as needed */}
+        <Box sx={{ height: calendarHeight }}> {/* Dynamic height */}
           <Calendar
             localizer={localizer}
             events={events}
@@ -59,6 +63,8 @@ const CalendarWidget = ({ transparentBackground }) => {
             style={{ height: '100%' }}
             views={['month', 'week', 'day', 'agenda']}
             defaultView="month"
+            onView={setCurrentView} // Update currentView state
+            className="custom-calendar" // Add a class for custom CSS
             // You can add more props here for customization
             // e.g., eventPropGetter, dayPropGetter, components
           />

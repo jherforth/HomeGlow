@@ -266,3 +266,37 @@ input:checked+.toggle-slider:before {
 [data-theme="dark"] .rbc-off-range-bg {
   background-color: rgba(255, 255, 255, 0.02) !important; /* Off-range days in dark mode */
 }
+
+/* Customizations for react-big-calendar agenda view */
+.custom-calendar .rbc-agenda-view .rbc-agenda-table {
+  border: none; /* Remove outer border of the table */
+}
+
+.custom-calendar .rbc-agenda-view .rbc-agenda-table th,
+.custom-calendar .rbc-agenda-view .rbc-agenda-table td {
+  border: none; /* Remove borders from table headers and cells */
+  border-bottom: 1px solid var(--card-border); /* Keep a subtle separator between rows */
+  padding: 8px 0; /* Adjust padding as needed */
+}
+
+.custom-calendar .rbc-agenda-view .rbc-agenda-table tbody tr:last-child td {
+  border-bottom: none; /* Remove bottom border from the last row */
+}
+
+/* Optional: Adjust spacing or background if needed */
+.custom-calendar .rbc-agenda-view {
+  padding: 10px; /* Add some padding around the agenda view */
+}
+
+.custom-calendar .rbc-agenda-date-cell {
+  font-weight: bold;
+  color: var(--text-color);
+}
+
+.custom-calendar .rbc-agenda-time-cell {
+  color: var(--text-color-secondary);
+}
+
+.custom-calendar .rbc-agenda-event-cell {
+  color: var(--text-color);
+}
