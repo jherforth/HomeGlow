@@ -1,3 +1,4 @@
+// client/src/components/WeatherWidget.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Card, Typography, TextField, Button, Box, Tabs, Tab } from '@mui/material';
@@ -198,13 +199,13 @@ const WeatherWidget = ({ transparentBackground }) => {
                 </Typography>
               </Box>
             </Box>
-          ))}
+          ))}\
         </Box>
       )}
 
       {chartData.length > 0 && ( // Only show tabs if chart data is available
         <Box sx={{ width: '100%', mt: 3}}>
-          <Tabs value={selectedTab} onChange={handleTabChange} aria-label="weather graphs tabs">
+          <Tabs value={selectedTab} onChange={handleTabChange} aria-label="weather graphs tabs" centered> {/* Added 'centered' prop here */}
             <Tab label="Temperature" />
             <Tab label="Precipitation" />
           </Tabs>
