@@ -6,6 +6,10 @@ const path = require('path');
 const fs = require('fs').promises;
 require('dotenv').config();
 
+// NEW: Import axios for HTTP requests and ical.js for parsing
+const axios = require('axios');
+const ICAL = require('ical.js');
+
 // Initialize Fastify with CORS
 fastify.register(require('@fastify/cors'), {
   origin: '*', // Allow all origins for development. Consider restricting in production.
@@ -39,28 +43,28 @@ async function initializeDatabase() {
       CREATE TABLE IF NOT EXISTS chores (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER,
-        title TEXT,
-        description TEXT,
-        time_period TEXT,
-        assigned_day_of_week TEXT,
-        repeats TEXT,
+        title TEXT,\
+        description TEXT,\
+        time_period TEXT,\
+        assigned_day_of_week TEXT,\
+        repeats TEXT,\
         completed BOOLEAN
-      );
+      );\
       CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT,
-        email TEXT,
-        profile_picture TEXT,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,\
+        username TEXT,\
+        email TEXT,\
+        profile_picture TEXT,\
         clam_total INTEGER DEFAULT 0
-      );
+      );\
       CREATE TABLE IF NOT EXISTS events (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        summary TEXT,
-        start TEXT,
-        end TEXT,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,\
+        user_id INTEGER,\
+        summary TEXT,\
+        start TEXT,\
+        end TEXT,\
         description TEXT
-      );
+      );\
     `);
     return newDb; // Return the new database instance
   } catch (error) {
@@ -128,7 +132,7 @@ fastify.patch('/api/chores/:id', async (request, reply) => {
     const stmt = db.prepare('UPDATE chores SET completed = ? WHERE id = ?');
     stmt.run(completedInt, id);
 
-    // --- Clam Reward Logic ---
+    // --- Clam Reward Logic ---\
     // Get the chore details to find the user_id and assigned_day_of_week
     const chore = db.prepare('SELECT user_id, assigned_day_of_week FROM chores WHERE id = ?').get(id);
 
@@ -146,7 +150,7 @@ fastify.patch('/api/chores/:id', async (request, reply) => {
         console.log(`User ${chore.user_id} rewarded 2 clams for completing all chores on ${chore.assigned_day_of_week}.`);
       }
     }
-    // --- End Clam Reward Logic ---
+    // --- End Clam Reward Logic ---\
 
     return { success: true };
   } catch (error) {
@@ -214,7 +218,7 @@ fastify.delete('/api/users/:id', async (request, reply) => {
   const { id } = request.params;
   try {
     // Optional: Delete associated chores first if desired, or set user_id to NULL
-    // db.prepare('DELETE FROM chores WHERE user_id = ?').run(id);
+    // db.prepare('DELETE FROM chores WHERE user_id = ?').run(id);\
     const stmt = db.prepare('DELETE FROM users WHERE id = ?');
     const info = stmt.run(id);
     if (info.changes === 0) {
@@ -228,7 +232,7 @@ fastify.delete('/api/users/:id', async (request, reply) => {
 });
 
 
-// Calendar routes
+// Calendar routes (existing)
 fastify.get('/api/calendar', async (request, reply) => {
   try {
     const rows = db.prepare('SELECT * FROM events').all();
@@ -270,6 +274,43 @@ fastify.get('/api/calendar/ics', async (request, reply) => {
     reply.status(500).send('Failed to generate iCalendar');
   }
 });
+
+// NEW: Endpoint to fetch and parse ICS calendar events
+fastify.get('/api/calendar-events', async (request, reply) => {
+  const icsUrl = process.env.ICS_CALENDAR_URL;
+
+  if (!icsUrl) {
+    reply.status(400).send({ error: 'ICS_CALENDAR_URL environment variable is not set.' });
+    return;
+  }
+
+  try {
+    const response = await axios.get(icsUrl);
+    const icsData = response.data;
+
+    const jcalData = ICAL.parse(icsData);
+    const comp = new ICAL.Component(jcalData);
+    const vevents = comp.getAllSubcomponents('vevent');
+
+    const events = vevents.map(vevent => {
+      const event = new ICAL.Event(vevent);
+      return {
+        title: event.summary,
+        start: event.startDate.toJSDate(),
+        end: event.endDate.toJSDate(),
+        description: event.description,
+        location: event.location,
+        // Add other properties as needed
+      };
+    });
+
+    return events;
+  } catch (error) {
+    console.error('Error fetching or parsing ICS calendar:', error);
+    reply.status(500).send({ error: 'Failed to fetch or parse ICS calendar events.' });
+  }
+});
+
 
 // Start server
 const start = async () => {
