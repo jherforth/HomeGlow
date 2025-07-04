@@ -1,4 +1,4 @@
-// client/src/app.jsx test
+// client/src/app.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { Container, Grid, IconButton, Box, Dialog, DialogContent, Button, TextField } from '@mui/material';
 import { Brightness4, Brightness7 } from '@mui/icons-material';
