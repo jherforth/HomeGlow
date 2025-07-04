@@ -103,12 +103,12 @@ const CalendarWidget = ({ transparentBackground }) => {
                     <React.Fragment key={dateKey}>
                       <ListItem>
                         <ListItemText
-                          primary={moment(dateKey).format('dddd, MMMM Do')} {/* e.g., "Friday, October 27th" */}
+                          primary={moment(dateKey).format('dddd, MMMM Do') /* e.g., "Friday, October 27th" */}
                           primaryTypographyProps={{ fontWeight: 'bold', color: 'var(--text-color)' }}
                         />
                       </ListItem>
                       {groupedUpcomingEvents[dateKey].map((event, index) => (
-                        <ListItem key={event.title + index} sx={{ pl: 4 }}> {/* Indent event items */}
+                        <ListItem key={event.title + index} sx={{ pl: 4 /* Indent event items */ }}>
                           <ListItemText
                             primary={`${moment(event.start).format('h:mm A')} - ${event.title}`}
                             secondary={event.description || event.location}
