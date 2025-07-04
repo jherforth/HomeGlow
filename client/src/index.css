@@ -370,44 +370,7 @@ input:checked+.toggle-slider:before {
   white-space: normal; /* Allow event text to wrap */
 }
 
-/* Agenda View Specifics (re-confirming previous changes and adding more) */
-.custom-calendar .rbc-agenda-view {
-  background-color: var(--card-background);
-  padding: 15px; /* More padding for a cleaner look */
-}
-
-.custom-calendar .rbc-agenda-view .rbc-agenda-table {
-  border: none; /* Remove outer border of the table */
-  width: 100%;
-  border-collapse: collapse; /* Ensure borders are collapsed */
-}
-
-.custom-calendar .rbc-agenda-view .rbc-agenda-table th,
-.custom-calendar .rbc-agenda-view .rbc-agenda-table td {
-  border: none; /* Remove borders from table headers and cells */
-  border-bottom: 1px solid var(--card-border); /* Keep a subtle separator between rows */
-  padding: 4px 0; /* Adjust padding as needed */
-  text-align: left;
-}
-
-.custom-calendar .rbc-agenda-view .rbc-agenda-table tbody tr:last-child td {
-  border-bottom: none; /* Remove bottom border from the last row */
-}
-
-.custom-calendar .rbc-agenda-date-cell {
-  font-weight: bold;
-  color: var(--text-color);
-  padding-right: 15px; /* Space between date and time */
-}
-
-.custom-calendar .rbc-agenda-time-cell {
-  color: var(--text-color-secondary);
-  padding-right: 15px; /* Space between time and event */
-}
-
-.custom-calendar .rbc-agenda-event-cell {
-  color: var(--text-color);
-}
+/* Removed specific rbc-agenda-view styles as we are using a custom list now */
 
 /* Hide the default scrollbar if overflow: hidden is set on parent Box */
 .custom-calendar::-webkit-scrollbar {

@@ -1,9 +1,9 @@
 // client/src/components/CalendarWidget.jsx
 import React, { useState, useEffect } from 'react';
-import { Card, Typography, Box } from '@mui/material';
+import { Card, Typography, Box, List, ListItem, ListItemText } from '@mui/material'; // Added List, ListItem, ListItemText
 import { Calendar, momentLocalizer } from 'react-big-calendar';
 import moment from 'moment';
-import axios from 'axios'; // Import axios
+import axios from 'axios';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import '../index.css'; // Assuming global styles are here
 
@@ -13,20 +13,18 @@ const CalendarWidget = ({ transparentBackground }) => {
   const [events, setEvents] = useState([]);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [currentView, setCurrentView] = useState('month'); // State to track current view
+  // Removed currentView state as we're no longer toggling views
 
   useEffect(() => {
     const fetchEvents = async () => {
       try {
         setLoading(true);
-        // Fetch events from your new backend endpoint
         const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/calendar-events`);
         
-        // Transform events to react-big-calendar format
         const formattedEvents = response.data.map(event => ({
           title: event.title,
-          start: new Date(event.start), // Convert string to Date object
-          end: new Date(event.end),     // Convert string to Date object
+          start: new Date(event.start),
+          end: new Date(event.end),
           allDay: false, // Adjust if your events can be all-day
           resource: event, // Keep original event data if needed
         }));
@@ -43,8 +41,28 @@ const CalendarWidget = ({ transparentBackground }) => {
     fetchEvents();
   }, []); // Empty dependency array means this effect runs once on mount
 
-  // Determine height based on current view
-  const calendarHeight = currentView === 'agenda' ? 600 : 400; // Taller for agenda view
+  // Filter events for the next 7 days
+  const today = moment().startOf('day');
+  const sevenDaysLater = moment().add(7, 'days').endOf('day');
+
+  const upcomingEvents = events.filter(event => {
+    const eventStart = moment(event.start);
+    // Check if event starts within the next 7 days (inclusive of today and the 7th day)
+    return eventStart.isBetween(today, sevenDaysLater, null, '[]');
+  }).sort((a, b) => moment(a.start).diff(moment(b.start))); // Sort by start time
+
+  // Group upcoming events by day for display
+  const groupedUpcomingEvents = upcomingEvents.reduce((acc, event) => {
+    const dateKey = moment(event.start).format('YYYY-MM-DD'); // e.g., "2023-10-27"
+    if (!acc[dateKey]) {
+      acc[dateKey] = [];
+    }
+    acc[dateKey].push(event);
+    return acc;
+  }, {});
+
+  // Fixed height for the main calendar (month view)
+  const mainCalendarHeight = 400;
 
   return (
     <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`}>
@@ -54,21 +72,58 @@ const CalendarWidget = ({ transparentBackground }) => {
       {loading && <Typography>Loading events...</Typography>}
       {error && <Typography color="error">{error}</Typography>}
       {!loading && !error && (
-        <Box sx={{ height: calendarHeight, overflow: 'hidden' }}> {/* Added overflow: 'hidden' */}
-          <Calendar
-            localizer={localizer}
-            events={events}
-            startAccessor="start"
-            endAccessor="end"
-            style={{ height: '100%' }}
-            views={['month', 'week', 'day', 'agenda']}
-            defaultView="month"
-            onView={setCurrentView} // Update currentView state
-            className="custom-calendar" // Add a class for custom CSS
-            // You can add more props here for customization
-            // e.g., eventPropGetter, dayPropGetter, components
-          />
-        </Box>
+        <>
+          {/* Main Calendar (Month View) */}
+          <Box sx={{ height: mainCalendarHeight }}>
+            <Calendar
+              localizer={localizer}
+              events={events}
+              startAccessor="start"
+              endAccessor="end"
+              style={{ height: '100%' }}
+              views={['month']} // Only show month view
+              defaultView="month"
+              className="custom-calendar" // Add a class for custom CSS
+            />
+          </Box>
+
+          {/* Upcoming Events List (Next 7 Days) */}
+          <Box sx={{ mt: 3, p: 2, borderTop: '1px solid var(--card-border)' }}>
+            <Typography variant="h6" gutterBottom>
+              Upcoming Events (Next 7 Days)
+            </Typography>
+            {Object.keys(groupedUpcomingEvents).length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                No upcoming events in the next 7 days.
+              </Typography>
+            ) : (
+              <Box sx={{ maxHeight: 300, overflowY: 'hidden' }}> {/* Set max height and hide overflow */}
+                <List dense>
+                  {Object.keys(groupedUpcomingEvents).map(dateKey => (
+                    <React.Fragment key={dateKey}>
+                      <ListItem>
+                        <ListItemText
+                          primary={moment(dateKey).format('dddd, MMMM Do')} {/* e.g., "Friday, October 27th" */}
+                          primaryTypographyProps={{ fontWeight: 'bold', color: 'var(--text-color)' }}
+                        />
+                      </ListItem>
+                      {groupedUpcomingEvents[dateKey].map((event, index) => (
+                        <ListItem key={event.title + index} sx={{ pl: 4 }}> {/* Indent event items */}
+                          <ListItemText
+                            primary={`${moment(event.start).format('h:mm A')} - ${event.title}`}
+                            secondary={event.description || event.location}
+                            primaryTypographyProps={{ color: 'var(--text-color)' }}
+                            secondaryTypographyProps={{ color: 'var(--text-color-secondary)' }}
+                          />
+                        </ListItem>
+                      ))}
+                    </React.Fragment>
+                  ))}
+                </List>
+              </Box>
+            )}
+          </Box>
+        </>
       )}
     </Card>
   );
