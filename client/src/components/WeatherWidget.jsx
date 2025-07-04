@@ -199,7 +199,7 @@ const WeatherWidget = ({ transparentBackground }) => {
                 </Typography>
               </Box>
             </Box>
-          ))}\
+          ))}
         </Box>
       )}
 
