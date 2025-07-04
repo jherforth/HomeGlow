@@ -65,6 +65,26 @@ const App = () => {
     setKeyboardRenderKey(prevKey => prevKey + 1);
   }, [widgetSettings.enableOnscreenKeyboard]);
 
+  // NEW: Effect to force keyboard re-render when it becomes visible
+  useEffect(() => {
+    if (widgetSettings.enableOnscreenKeyboard && keyboardRef.current) {
+      // A small delay might be necessary to ensure the DOM element is fully visible
+      // before the keyboard attempts to re-render itself.
+      setTimeout(() => {
+        if (keyboardRef.current && typeof keyboardRef.current.reRender === 'function') {
+          keyboardRef.current.reRender();
+          console.log('Keyboard reRender called.');
+        } else if (keyboardRef.current && typeof keyboardRef.current.reLayout === 'function') {
+          // Some versions/forks might use reLayout
+          keyboardRef.current.reLayout();
+          console.log('Keyboard reLayout called.');
+        } else {
+          console.log('Keyboard re-render method not found or keyboardRef not ready.');
+        }
+      }, 100); // 100ms delay
+    }
+  }, [widgetSettings.enableOnscreenKeyboard]);
+
 
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
