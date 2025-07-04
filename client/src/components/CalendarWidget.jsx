@@ -54,7 +54,7 @@ const CalendarWidget = ({ transparentBackground }) => {
       {loading && <Typography>Loading events...</Typography>}
       {error && <Typography color="error">{error}</Typography>}
       {!loading && !error && (
-        <Box sx={{ height: calendarHeight }}> {/* Dynamic height */}
+        <Box sx={{ height: calendarHeight, overflow: 'hidden' }}> {/* Added overflow: 'hidden' */}
           <Calendar
             localizer={localizer}
             events={events}

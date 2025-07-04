@@ -276,7 +276,7 @@ input:checked+.toggle-slider:before {
 .custom-calendar .rbc-agenda-view .rbc-agenda-table td {
   border: none; /* Remove borders from table headers and cells */
   border-bottom: 1px solid var(--card-border); /* Keep a subtle separator between rows */
-  padding: 8px 0; /* Adjust padding as needed */
+  padding: 4px 0; /* Adjust padding as needed */
 }
 
 .custom-calendar .rbc-agenda-view .rbc-agenda-table tbody tr:last-child td {
