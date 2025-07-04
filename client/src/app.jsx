@@ -5,8 +5,8 @@ import { Brightness4, Brightness7 } from '@mui/icons-material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RefreshIcon from '@mui/icons-material/Refresh';
 
-// GeoPattern import
-import GeoPattern from 'react-geopattern'; // Import GeoPattern
+// GeoPattern import - CORRECTED LINE
+import { GeoPattern } from 'react-geopattern'; // Import GeoPattern as a named export
 
 import CalendarWidget from './components/CalendarWidget.jsx';
 import PhotoWidget from './components/PhotoWidget.jsx';
