@@ -6,7 +6,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import RefreshIcon from '@mui/icons-material/Refresh';
 
 // GeoPattern import - CORRECTED LINE
-import { GeoPattern } from 'react-geopattern'; // Import GeoPattern as a named export
+import GeoPattern from 'react-geopattern'; // Import GeoPattern as a default export
 
 import CalendarWidget from './components/CalendarWidget.jsx';
 import PhotoWidget from './components/PhotoWidget.jsx';
