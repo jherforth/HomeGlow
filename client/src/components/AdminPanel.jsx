@@ -1,5 +1,5 @@
 // client/src/components/AdminPanel.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } => {
 import axios from 'axios';
 import {
   Button,
@@ -17,6 +17,10 @@ import {
   ListItemText,
   IconButton,
   Slider,
+  Select, // Added Select
+  MenuItem, // Added MenuItem
+  InputLabel, // Added InputLabel
+  FormControl, // Added FormControl
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -43,6 +47,7 @@ const AdminPanel = ({ setWidgetSettings /* Removed handleFocus */ }) => {
       cardSize: 300,
       cardPadding: 20,
       // cardHeight: 200, // Removed
+      refreshInterval: 'manual', // NEW: Default refresh interval
     };
     return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
   });
@@ -68,8 +73,6 @@ const AdminPanel = ({ setWidgetSettings /* Removed handleFocus */ }) => {
   const handleToggleChange = (event) => {
     const { name, checked } = event.target;
 
-    // console.log('AdminPanel.jsx toggles.enableOnscreenKeyboard (before change):', toggles.enableOnscreenKeyboard); // Removed log
-
     let newToggles;
     if (name.includes('.')) {
       const [widgetName, settingType] = name.split('.');
@@ -87,8 +90,18 @@ const AdminPanel = ({ setWidgetSettings /* Removed handleFocus */ }) => {
       };
     }
 
-    // console.log('AdminPanel.jsx newToggles.enableOnscreenKeyboard (after change):', newToggles.enableOnscreenKeyboard); // Removed log
+    setToggles(newToggles);
+    setWidgetSettings(newToggles);
+    localStorage.setItem('widgetSettings', JSON.stringify(newToggles));
+  };
 
+  // NEW: Handle change for Select (dropdown)
+  const handleSelectChange = (event) => {
+    const { name, value } = event.target;
+    const newToggles = {
+      ...toggles,
+      [name]: value,
+    };
     setToggles(newToggles);
     setWidgetSettings(newToggles);
     localStorage.setItem('widgetSettings', JSON.stringify(newToggles));
@@ -297,10 +310,50 @@ const AdminPanel = ({ setWidgetSettings /* Removed handleFocus */ }) => {
           )}
         </Box>
 
-        {/* Removed Onscreen Keyboard Toggle */}
+        {/* NEW: Screen Refresh Options */}
+        <Box sx={{ mb: 2, mt: 3 }}>
+          <Typography variant="subtitle1" gutterBottom>Screen Refresh Options</Typography>
+          <FormControl fullWidth size="small">
+            <InputLabel id="refresh-interval-label">Refresh Interval</InputLabel>
+            <Select
+              labelId="refresh-interval-label"
+              id="refresh-interval-select"
+              value={toggles.refreshInterval}
+              label="Refresh Interval"
+              onChange={handleSelectChange}
+              name="refreshInterval"
+            >
+              <MenuItem value="manual">Manual Only</MenuItem>
+              <MenuItem value="1">1 Hour</MenuItem>
+              <MenuItem value="3">3 Hours</MenuItem>
+              <MenuItem value="6">6 Hours</MenuItem>
+              <MenuItem value="9">9 Hours</MenuItem>
+              <MenuItem value="12">12 Hours</MenuItem>
+            </Select>
+          </FormControl>
+        </Box>
+
+        {/* NEW: GeoPattern Background Toggle */}
+        <Box sx={{ mb: 1 }}>
+          <FormControlLabel
+            control={<Switch checked={toggles.enableGeoPatternBackground} onChange={handleToggleChange} name="enableGeoPatternBackground" />}
+            label="Enable Geometric Background"
+            className="toggle-label"
+          />
+        </Box>
+
+        {/* NEW: Card Shuffle Toggle */}
+        <Box sx={{ mb: 1 }}>
+          <FormControlLabel
+            control={<Switch checked={toggles.enableCardShuffle} onChange={handleToggleChange} name="enableCardShuffle" />}
+            label="Enable Card Shuffle"
+            className="toggle-label"
+          />
+        </Box>
+
       </Box>
 
-      {/* New Sliders for Customization */}
+      {/* Sliders for Customization */}
       <Box sx={{ mt: 3, p: 2, borderTop: '1px solid var(--card-border)' }}>
         <Typography variant="subtitle1" gutterBottom>Display Settings</Typography>
 
@@ -345,8 +398,6 @@ const AdminPanel = ({ setWidgetSettings /* Removed handleFocus */ }) => {
           valueLabelDisplay="auto"
           sx={{ width: '90%', mb: 2 }}
         />
-
-        {/* Removed Card Height Slider */}
       </Box>
 
       <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
@@ -355,7 +406,6 @@ const AdminPanel = ({ setWidgetSettings /* Removed handleFocus */ }) => {
           name="username"
           value={formData.username}
           onChange={handleInputChange}
-          // Removed onFocus={handleFocus}
           label="Username"
           variant="outlined"
           size="small"
@@ -366,7 +416,6 @@ const AdminPanel = ({ setWidgetSettings /* Removed handleFocus */ }) => {
           name="email"
           value={formData.email}
           onChange={handleInputChange}
-          // Removed onFocus={handleFocus}
           label="Email"
           type="email"
           variant="outlined"
@@ -378,7 +427,6 @@ const AdminPanel = ({ setWidgetSettings /* Removed handleFocus */ }) => {
           type="file"
           accept="image/jpeg,image/png"
           onChange={handleFileChange}
-          // Removed onFocus={handleFocus}
           variant="outlined"
           size="small"
           fullWidth
