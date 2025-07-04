@@ -1,13 +1,11 @@
 // client/src/app.jsx
 import React, { useState, useEffect, useRef } from 'react';
-import { Container, Grid, IconButton, Box, Dialog, DialogContent, Button, TextField } from '@mui/material';
+import { Container, Grid, IconButton, Box, Dialog, DialogContent, Button } from '@mui/material';
 import { Brightness4, Brightness7 } from '@mui/icons-material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RefreshIcon from '@mui/icons-material/Refresh';
 
-// Keyboard imports
-import Keyboard from 'react-simple-keyboard';
-import 'react-simple-keyboard/build/css/index.css'; // Default keyboard CSS
+// Removed Keyboard imports
 
 import CalendarWidget from './components/CalendarWidget.jsx';
 import PhotoWidget from './components/PhotoWidget.jsx';
@@ -26,29 +24,25 @@ const App = () => {
       photos: { enabled: false, transparent: false },
       weather: { enabled: false, transparent: false },
       menu: { enabled: false, transparent: false },
-      enableOnscreenKeyboard: true,
+      // Removed enableOnscreenKeyboard
       textSize: 16,
       cardSize: 300,
       cardPadding: 20,
-      cardHeight: 200, // Ensure cardHeight is part of default settings here
-      keyboardPosition: 'bottom',
+      cardHeight: 200,
+      // Removed keyboardPosition
     };
     const savedSettings = localStorage.getItem('widgetSettings');
     return savedSettings ? { ...defaultSettings, ...JSON.parse(savedSettings) } : defaultSettings;
   });
   const [showAdminPanel, setShowAdminPanel] = useState(false);
 
-  const [keyboardInput, setKeyboardInput] = useState('');
-  const [activeInputName, setActiveInputName] = useState('');
-  const keyboardRef = useRef(null);
-
+  // Removed keyboardInput, activeInputName, keyboardRef
   // Removed keyboardRenderKey state and its useEffect
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
     setTheme(savedTheme);
     document.documentElement.setAttribute('data-theme', savedTheme);
-    // Removed widgetSettings logic from here, as it's handled in useState initializer
   }, []);
 
   // Effect to apply dynamic CSS variables
@@ -59,26 +53,7 @@ const App = () => {
     document.documentElement.style.setProperty('--dynamic-card-height', `${widgetSettings.cardHeight}px`);
   }, [widgetSettings.textSize, widgetSettings.cardSize, widgetSettings.cardPadding, widgetSettings.cardHeight]);
 
-  // Effect to force keyboard re-render when it becomes visible or keyboardRef is ready
-  useEffect(() => {
-    if (widgetSettings.enableOnscreenKeyboard && keyboardRef.current) {
-      // A small delay might be necessary to ensure the DOM element is fully visible
-      // before the keyboard attempts to re-render itself.
-      setTimeout(() => {
-        if (keyboardRef.current && typeof keyboardRef.current.reRender === 'function') {
-          keyboardRef.current.reRender();
-          console.log('Keyboard reRender called.');
-        } else if (keyboardRef.current && typeof keyboardRef.current.reLayout === 'function') {
-          // Some versions/forks might use reLayout
-          keyboardRef.current.reLayout();
-          console.log('Keyboard reLayout called.');
-        } else {
-          console.log('Keyboard re-render method not found or keyboardRef not ready.');
-        }
-      }, 100); // 100ms delay
-    }
-  }, [widgetSettings.enableOnscreenKeyboard, keyboardRef.current]); // Added keyboardRef.current to dependencies
-
+  // Removed keyboard re-render useEffect
 
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
@@ -91,36 +66,15 @@ const App = () => {
     setShowAdminPanel(!showAdminPanel);
   };
 
-  const handleKeyboardChange = (input) => {
-    setKeyboardInput(input);
-    if (activeInputName) {
-      const activeInput = document.querySelector(`input[name="${activeInputName}"]`);
-      if (activeInput) {
-        activeInput.value = input;
-      }
-    }
-  };
-
-  const handleKeyPress = (button) => {
-    if (button === "{enter}") {
-      console.log("Enter pressed!");
-    }
-  };
+  // Removed handleKeyboardChange
+  // Removed handleKeyPress
 
   const handlePageRefresh = () => {
     window.location.reload();
   };
 
-  const toggleKeyboardPosition = () => {
-    const newPosition = widgetSettings.keyboardPosition === 'bottom' ? 'top' : 'bottom';
-    setWidgetSettings(prevSettings => ({ ...prevSettings, keyboardPosition: newPosition }));
-    localStorage.setItem('widgetSettings', JSON.stringify({ ...widgetSettings, keyboardPosition: newPosition }));
-  };
-
-  const handleFocus = (e) => {
-    setActiveInputName(e.target.name);
-    setKeyboardInput(e.target.value);
-  };
+  // Removed toggleKeyboardPosition
+  // Removed handleFocus
 
   return (
     <>
@@ -169,18 +123,7 @@ const App = () => {
         <RefreshIcon />
       </IconButton>
 
-      {/* Keyboard Position Toggle Button */}
-      <Button
-        onClick={toggleKeyboardPosition}
-        sx={{
-          position: 'fixed',
-          top: 16,
-          right: 160,
-          color: theme === 'light' ? 'action.active' : 'white',
-        }}
-      >
-        Toggle Keyboard Position
-      </Button>
+      {/* Removed Keyboard Position Toggle Button */}
 
       <Container className="container">
         <Grid container spacing={2} justifyContent="space-evenly">
@@ -213,36 +156,13 @@ const App = () => {
           )}
         </Grid>
 
-        {/* Onscreen Keyboard */}
-        {widgetSettings.enableOnscreenKeyboard && (
-          <Box
-            sx={{
-              position: 'fixed',
-              [widgetSettings.keyboardPosition]: 0,
-              left: 0,
-              width: '50%',
-              // height: '300px', // Reverted
-              zIndex: 1000,
-              p: 2,
-              bgcolor: 'background.paper', // Reverted
-              // Removed visibility control here, as conditional rendering handles it
-            }}
-          >
-            <Keyboard
-              // Removed key={keyboardRenderKey}
-              keyboardRef={r => (keyboardRef.current = r)}
-              inputName={activeInputName}
-              onChange={handleKeyboardChange}
-              onKeyPress={handleKeyPress}
-            />
-          </Box>
-        )}
+        {/* Removed Onscreen Keyboard */}
       </Container>
 
       {/* Admin Panel as a Dialog (Popup) */}
       <Dialog open={showAdminPanel} onClose={toggleAdminPanel} maxWidth="300">
         <DialogContent>
-          <AdminPanel setWidgetSettings={setWidgetSettings} handleFocus={handleFocus} />
+          <AdminPanel setWidgetSettings={setWidgetSettings} /* Removed handleFocus */ />
         </DialogContent>
       </Dialog>
     </>

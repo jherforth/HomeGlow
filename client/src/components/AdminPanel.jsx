@@ -22,7 +22,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DeleteIcon from '@mui/icons-material/Delete';
 import '../index.css';
 
-const AdminPanel = ({ setWidgetSettings, handleFocus }) => {
+const AdminPanel = ({ setWidgetSettings /* Removed handleFocus */ }) => {
   const [formData, setFormData] = useState({
     username: '',
     email: '',
@@ -38,7 +38,7 @@ const AdminPanel = ({ setWidgetSettings, handleFocus }) => {
       photos: { enabled: false, transparent: false },
       weather: { enabled: false, transparent: false },
       menu: { enabled: false, transparent: false },
-      enableOnscreenKeyboard: true,
+      // Removed enableOnscreenKeyboard
       textSize: 16,
       cardSize: 300,
       cardPadding: 20,
@@ -68,7 +68,7 @@ const AdminPanel = ({ setWidgetSettings, handleFocus }) => {
   const handleToggleChange = (event) => {
     const { name, checked } = event.target;
 
-    console.log('AdminPanel.jsx toggles.enableOnscreenKeyboard (before change):', toggles.enableOnscreenKeyboard);
+    // console.log('AdminPanel.jsx toggles.enableOnscreenKeyboard (before change):', toggles.enableOnscreenKeyboard); // Removed log
 
     let newToggles;
     if (name.includes('.')) {
@@ -87,7 +87,7 @@ const AdminPanel = ({ setWidgetSettings, handleFocus }) => {
       };
     }
 
-    console.log('AdminPanel.jsx newToggles.enableOnscreenKeyboard (after change):', newToggles.enableOnscreenKeyboard);
+    // console.log('AdminPanel.jsx newToggles.enableOnscreenKeyboard (after change):', newToggles.enableOnscreenKeyboard); // Removed log
 
     setToggles(newToggles);
     setWidgetSettings(newToggles);
@@ -297,15 +297,7 @@ const AdminPanel = ({ setWidgetSettings, handleFocus }) => {
           )}
         </Box>
 
-        {/* Onscreen Keyboard Toggle */}
-        <Box sx={{ mb: 1, mt: 2 }}>
-          <Typography variant="subtitle1">Global Settings</Typography>
-          <FormControlLabel
-            control={<Switch checked={toggles.enableOnscreenKeyboard} onChange={handleToggleChange} name="enableOnscreenKeyboard" />}
-            label="Enable Onscreen Keyboard"
-            className="toggle-label"
-          />
-        </Box>
+        {/* Removed Onscreen Keyboard Toggle */}
       </Box>
 
       {/* New Sliders for Customization */}
@@ -363,7 +355,7 @@ const AdminPanel = ({ setWidgetSettings, handleFocus }) => {
           name="username"
           value={formData.username}
           onChange={handleInputChange}
-          onFocus={handleFocus} // Add this line
+          // Removed onFocus={handleFocus}
           label="Username"
           variant="outlined"
           size="small"
@@ -374,7 +366,7 @@ const AdminPanel = ({ setWidgetSettings, handleFocus }) => {
           name="email"
           value={formData.email}
           onChange={handleInputChange}
-          onFocus={handleFocus} // Add this line
+          // Removed onFocus={handleFocus}
           label="Email"
           type="email"
           variant="outlined"
@@ -386,7 +378,7 @@ const AdminPanel = ({ setWidgetSettings, handleFocus }) => {
           type="file"
           accept="image/jpeg,image/png"
           onChange={handleFileChange}
-          onFocus={handleFocus} // Add this line if you want keyboard for file input (though less common)
+          // Removed onFocus={handleFocus}
           variant="outlined"
           size="small"
           fullWidth
