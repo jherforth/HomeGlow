@@ -1,6 +1,6 @@
 // client/src/components/CalendarWidget.jsx
 import React, { useState, useEffect } from 'react';
-import { Card, Typography, Box, List, ListItem, ListItemText } from '@mui/material'; // Added List, ListItem, ListItemText
+import { Card, Typography, Box, List, ListItem, ListItemText } from '@mui/material';
 import { Calendar, momentLocalizer } from 'react-big-calendar';
 import moment from 'moment';
 import axios from 'axios';
@@ -9,11 +9,26 @@ import '../index.css'; // Assuming global styles are here
 
 const localizer = momentLocalizer(moment);
 
+// Custom Header Component for react-big-calendar
+const CustomDayHeader = ({ label, date }) => {
+  // Check if the day of the week for this header matches the current day of the week
+  const todayDayOfWeek = moment().format('ddd'); // e.g., "Mon", "Tue"
+  const headerDayOfWeek = moment(date).format('ddd'); // e.g., "Mon", "Tue" for the header's date
+
+  const highlightHeader = todayDayOfWeek === headerDayOfWeek;
+
+  return (
+    <div className={`rbc-header ${highlightHeader ? 'rbc-current-day-header' : ''}`}>
+      {label}
+    </div>
+  );
+};
+
+
 const CalendarWidget = ({ transparentBackground }) => {
   const [events, setEvents] = useState([]);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
-  // Removed currentView state as we're no longer toggling views
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -25,8 +40,8 @@ const CalendarWidget = ({ transparentBackground }) => {
           title: event.title,
           start: new Date(event.start),
           end: new Date(event.end),
-          allDay: false, // Adjust if your events can be all-day
-          resource: event, // Keep original event data if needed
+          allDay: false,
+          resource: event,
         }));
         setEvents(formattedEvents);
         setError(null);
@@ -39,7 +54,7 @@ const CalendarWidget = ({ transparentBackground }) => {
     };
 
     fetchEvents();
-  }, []); // Empty dependency array means this effect runs once on mount
+  }, []);
 
   // Filter events for the next 7 days
   const today = moment().startOf('day');
@@ -84,6 +99,9 @@ const CalendarWidget = ({ transparentBackground }) => {
               views={['month']} // Only show month view
               defaultView="month"
               className="custom-calendar" // Add a class for custom CSS
+              components={{
+                header: CustomDayHeader, // Use the custom header component
+              }}
             />
           </Box>
 
