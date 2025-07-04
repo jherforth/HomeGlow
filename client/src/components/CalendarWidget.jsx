@@ -1,71 +1,69 @@
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-import { Card, Typography, Button, Box } from '@mui/material';
+// client/src/components/CalendarWidget.jsx
+import React, { useState, useEffect } from 'react';
+import { Card, Typography, Box } from '@mui/material';
 import { Calendar, momentLocalizer } from 'react-big-calendar';
 import moment from 'moment';
+import axios from 'axios'; // Import axios
 import 'react-big-calendar/lib/css/react-big-calendar.css';
-import '../index.css';
+import '../index.css'; // Assuming global styles are here
 
 const localizer = momentLocalizer(moment);
 
-const CalendarWidget = ({ transparentBackground }) => { // Added transparentBackground prop
+const CalendarWidget = ({ transparentBackground }) => {
   const [events, setEvents] = useState([]);
   const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchEvents = async () => {
       try {
-        const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/calendar`);
-        const formattedEvents = Array.isArray(response.data) ? response.data.map(event => ({ // Defensive check
-          ...event,
-          start: new Date(event.start),
-          end: new Date(event.end),
-        })) : [];
+        setLoading(true);
+        // Fetch events from your new backend endpoint
+        const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/calendar-events`);
+        
+        // Transform events to react-big-calendar format
+        const formattedEvents = response.data.map(event => ({
+          title: event.title,
+          start: new Date(event.start), // Convert string to Date object
+          end: new Date(event.end),     // Convert string to Date object
+          allDay: false, // Adjust if your events can be all-day
+          resource: event, // Keep original event data if needed
+        }));
         setEvents(formattedEvents);
         setError(null);
-      } catch (error) {
-        console.error('Error fetching events:', error);
-        setError('Cannot connect to calendar service. Please try again later.');
+      } catch (err) {
+        console.error('Error fetching calendar events:', err);
+        setError('Failed to load calendar events. Please check the ICS URL and server.');
+      } finally {
+        setLoading(false);
       }
     };
-    fetchEvents();
-  }, []);
 
-  const handleDownloadIcs = async () => {
-    try {
-      const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/calendar/ics`, {
-        responseType: 'blob', // Important for downloading files
-      });
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', 'calendar.ics');
-      document.body.appendChild(link);
-      link.click();
-      link.parentNode.removeChild(link);
-      setError(null);
-    } catch (error) {
-      console.error('Error downloading ICS:', error);
-      setError('Failed to download calendar. Please try again.');
-    }
-  };
+    fetchEvents();
+  }, []); // Empty dependency array means this effect runs once on mount
 
   return (
-    <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`}> {/* Apply transparent-card class */}
-      <Typography variant="h6">Calendar</Typography>
+    <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`}>
+      <Typography variant="h6" gutterBottom>
+        Calendar
+      </Typography>
+      {loading && <Typography>Loading events...</Typography>}
       {error && <Typography color="error">{error}</Typography>}
-      <Box sx={{ height: 400, mt: 2 }}>
-        <Calendar
-          localizer={localizer}
-          events={events}
-          startAccessor="start"
-          endAccessor="end"
-          style={{ height: '100%' }}
-        />
-      </Box>
-      <Button variant="contained" onClick={handleDownloadIcs} sx={{ mt: 2 }}>
-        Download ICS
-      </Button>
+      {!loading && !error && (
+        <Box sx={{ height: 400 }}> {/* Adjust height as needed */}
+          <Calendar
+            localizer={localizer}
+            events={events}
+            startAccessor="start"
+            endAccessor="end"
+            style={{ height: '100%' }}
+            views={['month', 'week', 'day', 'agenda']}
+            defaultView="month"
+            // You can add more props here for customization
+            // e.g., eventPropGetter, dayPropGetter, components
+          />
+        </Box>
+      )}
     </Card>
   );
 };
