@@ -267,36 +267,153 @@ input:checked+.toggle-slider:before {
   background-color: rgba(255, 255, 255, 0.02) !important; /* Off-range days in dark mode */
 }
 
-/* Customizations for react-big-calendar agenda view */
+/* General Calendar Styling */
+.custom-calendar {
+  font-family: 'Roboto', sans-serif; /* Use a clean font */
+  border: none; /* Remove main calendar border */
+  border-radius: 8px; /* Slightly rounded corners for the whole calendar */
+  overflow: hidden; /* Ensure content respects border-radius */
+  background-color: var(--card-background); /* Match card background */
+}
+
+/* Toolbar (Navigation and View Buttons) */
+.custom-calendar .rbc-toolbar {
+  background-color: var(--card-background);
+  border-bottom: 1px solid var(--card-border); /* Subtle separator */
+  padding: 10px 15px;
+  border-radius: 8px 8px 0 0; /* Rounded top corners */
+  margin-bottom: 0; /* Remove default margin */
+}
+
+.custom-calendar .rbc-toolbar button {
+  color: var(--text-color-secondary);
+  border: 1px solid var(--card-border);
+  border-radius: 4px;
+  padding: 5px 10px;
+  transition: all 0.2s ease-in-out;
+}
+
+.custom-calendar .rbc-toolbar button:hover {
+  background-color: rgba(var(--text-color-rgb), 0.05);
+  color: var(--text-color);
+  border-color: var(--accent);
+}
+
+.custom-calendar .rbc-toolbar button.rbc-active {
+  background-color: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.custom-calendar .rbc-toolbar button.rbc-active:hover {
+  background-color: var(--accent-dark);
+  border-color: var(--accent-dark);
+}
+
+.custom-calendar .rbc-toolbar-label {
+  color: var(--text-color);
+  font-weight: 500;
+}
+
+/* Month View Specifics */
+.custom-calendar .rbc-month-view {
+  border: none; /* Remove month view border */
+  background-color: var(--card-background);
+}
+
+.custom-calendar .rbc-header {
+  background-color: var(--card-background);
+  border-bottom: 1px solid var(--card-border);
+  padding: 8px 0;
+  color: var(--text-color-secondary);
+  font-weight: 500;
+}
+
+.custom-calendar .rbc-day-bg {
+  border: none; /* Remove day cell borders */
+  border-right: 1px solid var(--card-border); /* Subtle vertical separators */
+  border-bottom: 1px solid var(--card-border); /* Subtle horizontal separators */
+}
+
+.custom-calendar .rbc-day-bg:last-child {
+  border-right: none; /* Remove right border from last day column */
+}
+
+.custom-calendar .rbc-row-content .rbc-row-segment:last-child .rbc-day-bg {
+  border-bottom: none; /* Remove bottom border from last row of days */
+}
+
+.custom-calendar .rbc-date-cell {
+  padding: 5px;
+  color: var(--text-color);
+}
+
+.custom-calendar .rbc-now {
+  background-color: rgba(var(--accent-rgb), 0.1); /* Subtle highlight for today */
+}
+
+.custom-calendar .rbc-today {
+  background-color: rgba(var(--accent-rgb), 0.15); /* Stronger highlight for today */
+}
+
+.custom-calendar .rbc-event {
+  background-color: var(--accent); /* Event background */
+  border-radius: 4px;
+  padding: 2px 5px;
+  color: white;
+  font-size: 0.85em;
+  border: none;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1); /* Subtle shadow for events */
+}
+
+.custom-calendar .rbc-event-content {
+  white-space: normal; /* Allow event text to wrap */
+}
+
+/* Agenda View Specifics (re-confirming previous changes and adding more) */
+.custom-calendar .rbc-agenda-view {
+  background-color: var(--card-background);
+  padding: 15px; /* More padding for a cleaner look */
+}
+
 .custom-calendar .rbc-agenda-view .rbc-agenda-table {
   border: none; /* Remove outer border of the table */
+  width: 100%;
+  border-collapse: collapse; /* Ensure borders are collapsed */
 }
 
 .custom-calendar .rbc-agenda-view .rbc-agenda-table th,
 .custom-calendar .rbc-agenda-view .rbc-agenda-table td {
   border: none; /* Remove borders from table headers and cells */
   border-bottom: 1px solid var(--card-border); /* Keep a subtle separator between rows */
-  padding: 4px 0; /* Adjust padding as needed */
+  padding: 10px 0; /* Adjust padding as needed */
+  text-align: left;
 }
 
 .custom-calendar .rbc-agenda-view .rbc-agenda-table tbody tr:last-child td {
   border-bottom: none; /* Remove bottom border from the last row */
 }
 
-/* Optional: Adjust spacing or background if needed */
-.custom-calendar .rbc-agenda-view {
-  padding: 10px; /* Add some padding around the agenda view */
-}
-
 .custom-calendar .rbc-agenda-date-cell {
   font-weight: bold;
   color: var(--text-color);
+  padding-right: 15px; /* Space between date and time */
 }
 
 .custom-calendar .rbc-agenda-time-cell {
   color: var(--text-color-secondary);
+  padding-right: 15px; /* Space between time and event */
 }
 
 .custom-calendar .rbc-agenda-event-cell {
   color: var(--text-color);
+}
+
+/* Hide the default scrollbar if overflow: hidden is set on parent Box */
+.custom-calendar::-webkit-scrollbar {
+  display: none;
+}
+.custom-calendar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
 }
