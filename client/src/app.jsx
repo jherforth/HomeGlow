@@ -5,8 +5,8 @@ import { Brightness4, Brightness7 } from '@mui/icons-material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RefreshIcon from '@mui/icons-material/Refresh';
 
-// GeoPattern import - CORRECTED LINE
-import GeoPattern from 'react-geopattern'; // Import GeoPattern as a default export
+// GeoPattern import - CORRECTED LINE (using wildcard import)
+import * as GeoPatternModule from 'react-geopattern'; // Import all exports as GeoPatternModule
 
 import CalendarWidget from './components/CalendarWidget.jsx';
 import PhotoWidget from './components/PhotoWidget.jsx';
@@ -81,7 +81,8 @@ const App = () => {
   // NEW: Effect for GeoPattern background
   useEffect(() => {
     if (widgetSettings.enableGeoPatternBackground) {
-      const pattern = GeoPattern.generate(geoPatternSeed);
+      // Access the default export from the wildcard import
+      const pattern = GeoPatternModule.default.generate(geoPatternSeed);
       document.body.style.backgroundImage = pattern.toDataUrl();
       document.body.style.backgroundAttachment = 'fixed'; // Ensure it stays fixed
       document.body.style.backgroundSize = 'cover'; // Ensure it covers the whole body
