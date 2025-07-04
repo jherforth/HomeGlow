@@ -20,6 +20,7 @@
     "moment": "^2.30.1",
     "react-simple-keyboard": "^3.8.88",
     "simple-keyboard-layouts": "^3.4.101",
+    "react-geopattern": "^3.0.0",
     "recharts": "^2.12.7"
   },
   "devDependencies": {
