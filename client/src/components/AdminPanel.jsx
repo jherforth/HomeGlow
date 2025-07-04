@@ -1,5 +1,5 @@
 // client/src/components/AdminPanel.jsx
-import React, { useState, useEffect } => {
+import React, { useState, useEffect } from 'react'; // Corrected this line
 import axios from 'axios';
 import {
   Button,
@@ -48,6 +48,8 @@ const AdminPanel = ({ setWidgetSettings /* Removed handleFocus */ }) => {
       cardPadding: 20,
       // cardHeight: 200, // Removed
       refreshInterval: 'manual', // NEW: Default refresh interval
+      enableGeoPatternBackground: false, // NEW: Default for geometric background
+      enableCardShuffle: false, // NEW: Default for card shuffle
     };
     return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
   });
