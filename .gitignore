@@ -2,7 +2,7 @@
 .env
 
 # Optionally, ignore .env files in subdirectories too
-# **/.env
+**/.env
 
 # You might also want to ignore node_modules and build outputs
 node_modules/
