@@ -44,6 +44,9 @@ const App = () => {
   // GeoPattern seed (consistent across light/dark mode)
   const geoPatternSeed = 'HomeGlowDashboard'; // Use a fixed string for consistent pattern
 
+  // NEW: Log GeoPatternModule to inspect its contents
+  console.log('GeoPatternModule:', GeoPatternModule);
+
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
     setTheme(savedTheme);
@@ -82,6 +85,7 @@ const App = () => {
   useEffect(() => {
     if (widgetSettings.enableGeoPatternBackground) {
       // Access the default export from the wildcard import
+      // This line is still problematic, but we're logging GeoPatternModule to debug
       const pattern = GeoPatternModule.default.generate(geoPatternSeed);
       document.body.style.backgroundImage = pattern.toDataUrl();
       document.body.style.backgroundAttachment = 'fixed'; // Ensure it stays fixed
