@@ -5,8 +5,8 @@ import { Brightness4, Brightness7 } from '@mui/icons-material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RefreshIcon from '@mui/icons-material/Refresh';
 
-// GeoPattern import - CORRECTED LINE (using wildcard import)
-import * as GeoPatternModule from 'react-geopattern'; // Import all exports as GeoPatternModule
+// GeoPattern import - CORRECTED LINE (using the direct geopattern library)
+import GeoPattern from 'geopattern'; // Import GeoPattern from the 'geopattern' package
 
 import CalendarWidget from './components/CalendarWidget.jsx';
 import PhotoWidget from './components/PhotoWidget.jsx';
@@ -44,8 +44,7 @@ const App = () => {
   // GeoPattern seed (consistent across light/dark mode)
   const geoPatternSeed = 'HomeGlowDashboard'; // Use a fixed string for consistent pattern
 
-  // NEW: Log GeoPatternModule to inspect its contents
-  console.log('GeoPatternModule:', GeoPatternModule);
+  // Removed console.log for GeoPatternModule
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
@@ -84,9 +83,8 @@ const App = () => {
   // NEW: Effect for GeoPattern background
   useEffect(() => {
     if (widgetSettings.enableGeoPatternBackground) {
-      // Access the default export from the wildcard import
-      // This line is still problematic, but we're logging GeoPatternModule to debug
-      const pattern = GeoPatternModule.default.generate(geoPatternSeed);
+      // Call generate directly from the imported GeoPattern
+      const pattern = GeoPattern.generate(geoPatternSeed);
       document.body.style.backgroundImage = pattern.toDataUrl();
       document.body.style.backgroundAttachment = 'fixed'; // Ensure it stays fixed
       document.body.style.backgroundSize = 'cover'; // Ensure it covers the whole body
