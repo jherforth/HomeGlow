@@ -79,7 +79,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
       refreshInterval: 'manual',
       enableGeoPatternBackground: false,
       enableCardShuffle: false,
-      // NEW: Default values for custom color variables
+      // NEW: Color settings
       lightGradientStart: '#00ddeb',
       lightGradientEnd: '#ff6b6b',
       darkGradientStart: '#2e2767',
@@ -323,7 +323,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
   };
 
   return (
-    <Card className="card">
+    <Card className="card" sx={{ maxWidth: 'none', width: '100%' }}> {/* ADDED THIS SX PROP */}
       <Typography variant="h6">Admin Panel</Typography>
       {error && <Typography color="error">{error}</Typography>}
       {success && <Typography color="success.main">{success}</Typography>}
