@@ -1,3 +1,4 @@
+/* client/src/index.css */
 /* Web 3.0-inspired global styles with light and dark themes */
 :root {
   --background: #f4f4f9;
@@ -14,6 +15,7 @@
   --dynamic-text-size: 16px;
   --dynamic-card-width: 300px;
   --dynamic-card-padding: 20px;
+  --container-background-override: var(--gradient); /* NEW: Default container background */
 }
 
 [data-theme="dark"] {
@@ -26,6 +28,7 @@
   --accent-rgb: 0, 221, 235; /* RGB values for #00ddeb - ADDED THIS LINE */
   --gradient: linear-gradient(45deg, #2e2767, #620808);
   --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  --container-background-override: var(--gradient); /* NEW: Default container background for dark theme */
 }
 
 html,
@@ -47,7 +50,7 @@ body {
 .container {
   padding: 20px;
   /* Removed min-height: 100vh; to allow dynamic height */
-  background: var(--gradient);
+  background: var(--container-background-override); /* CHANGED: Use override variable */
   background-attachment: fixed;
   transition: transform 0.3s ease-in-out;
   /* Smooth transition for rotation */
@@ -303,8 +306,7 @@ input:checked+.toggle-slider:before {
 
 .custom-calendar .rbc-toolbar button.rbc-active {
   background-color: var(--accent);
-  color: white;
-  border-color: var(--accent);
+  color: white !important; /* Active button text color */
 }
 
 .custom-calendar .rbc-toolbar button.rbc-active:hover {
@@ -387,6 +389,5 @@ input:checked+.toggle-slider:before {
 .custom-calendar .rbc-current-day-header {
   background-color: rgba(var(--accent-rgb), 0.2); /* A subtle background highlight */
   color: var(--accent); /* Change text color to accent */
-  font-weight:
- bold; /* Make the text bold */
+  font-weight: bold; /* Make the text bold */
 }

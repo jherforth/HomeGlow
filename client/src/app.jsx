@@ -41,8 +41,8 @@ const App = () => {
   // State for shuffled widget order
   const [shuffledWidgetOrder, setShuffledWidgetOrder] = useState([]);
 
-  // GeoPattern seed (consistent across light/dark mode)
-  const geoPatternSeed = 'HomeGlowDashboard'; // Use a fixed string for consistent pattern
+  // NEW: State for dynamic GeoPattern seed
+  const [currentGeoPatternSeed, setCurrentGeoPatternSeed] = useState('');
 
   // Removed console.log for GeoPatternModule
 
@@ -50,6 +50,10 @@ const App = () => {
     const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
     setTheme(savedTheme);
     document.documentElement.setAttribute('data-theme', savedTheme);
+
+    // NEW: Generate a random seed once on component mount
+    // This ensures a new pattern on each full page refresh
+    setCurrentGeoPatternSeed(Math.random().toString());
   }, []);
 
   // Effect to apply dynamic CSS variables
@@ -80,21 +84,27 @@ const App = () => {
     };
   }, [widgetSettings.refreshInterval]);
 
-  // NEW: Effect for GeoPattern background
+  // NEW: Effect for GeoPattern background and container transparency
   useEffect(() => {
     if (widgetSettings.enableGeoPatternBackground) {
-      // Call generate directly from the imported GeoPattern
-      const pattern = GeoPattern.generate(geoPatternSeed);
+      // Call generate directly from the imported GeoPattern using the dynamic seed
+      const pattern = GeoPattern.generate(currentGeoPatternSeed);
       document.body.style.backgroundImage = pattern.toDataUrl();
       document.body.style.backgroundAttachment = 'fixed'; // Ensure it stays fixed
       document.body.style.backgroundSize = 'cover'; // Ensure it covers the whole body
+
+      // Make the main container transparent to reveal the body background
+      document.documentElement.style.setProperty('--container-background-override', 'transparent');
     } else {
       // Revert to original background (from index.css)
       document.body.style.backgroundImage = 'var(--gradient)';
       document.body.style.backgroundAttachment = 'fixed';
       document.body.style.backgroundSize = 'auto'; // Or whatever your default is
+
+      // Revert container background
+      document.documentElement.style.setProperty('--container-background-override', 'var(--gradient)');
     }
-  }, [widgetSettings.enableGeoPatternBackground, theme]); // Re-apply if theme changes
+  }, [widgetSettings.enableGeoPatternBackground, theme, currentGeoPatternSeed]); // Re-apply if theme or seed changes
 
   // NEW: Effect for card shuffle
   useEffect(() => {
