@@ -29,9 +29,18 @@ const App = () => {
       cardSize: 300,
       cardPadding: 20,
       cardHeight: 200,
-      refreshInterval: 'manual', // NEW: Default refresh interval
-      enableGeoPatternBackground: false, // NEW: Default for geometric background
-      enableCardShuffle: false, // NEW: Default for card shuffle
+      refreshInterval: 'manual',
+      enableGeoPatternBackground: false,
+      enableCardShuffle: false,
+      // NEW: Color settings
+      lightGradientStart: '#00ddeb',
+      lightGradientEnd: '#ff6b6b',
+      darkGradientStart: '#2e2767',
+      darkGradientEnd: '#620808',
+      lightButtonGradientStart: '#00ddeb',
+      lightButtonGradientEnd: '#ff6b6b',
+      darkButtonGradientStart: '#2e2767',
+      darkButtonGradientEnd: '#620808',
     };
     const savedSettings = localStorage.getItem('widgetSettings');
     return savedSettings ? { ...defaultSettings, ...JSON.parse(savedSettings) } : defaultSettings;
@@ -43,8 +52,6 @@ const App = () => {
 
   // NEW: State for dynamic GeoPattern seed
   const [currentGeoPatternSeed, setCurrentGeoPatternSeed] = useState('');
-
-  // Removed console.log for GeoPatternModule
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
@@ -62,7 +69,18 @@ const App = () => {
     document.documentElement.style.setProperty('--dynamic-card-width', `${widgetSettings.cardSize}px`);
     document.documentElement.style.setProperty('--dynamic-card-padding', `${widgetSettings.cardPadding}px`);
     document.documentElement.style.setProperty('--dynamic-card-height', `${widgetSettings.cardHeight}px`);
-  }, [widgetSettings.textSize, widgetSettings.cardSize, widgetSettings.cardPadding, widgetSettings.cardHeight]);
+
+    // NEW: Apply custom color variables
+    document.documentElement.style.setProperty('--light-gradient-start', widgetSettings.lightGradientStart);
+    document.documentElement.style.setProperty('--light-gradient-end', widgetSettings.lightGradientEnd);
+    document.documentElement.style.setProperty('--dark-gradient-start', widgetSettings.darkGradientStart);
+    document.documentElement.style.setProperty('--dark-gradient-end', widgetSettings.darkGradientEnd);
+    document.documentElement.style.setProperty('--light-button-gradient-start', widgetSettings.lightButtonGradientStart);
+    document.documentElement.style.setProperty('--light-button-gradient-end', widgetSettings.lightButtonGradientEnd);
+    document.documentElement.style.setProperty('--dark-button-gradient-start', widgetSettings.darkButtonGradientStart);
+    document.documentElement.style.setProperty('--dark-button-gradient-end', widgetSettings.darkButtonGradientEnd);
+
+  }, [widgetSettings]); // Depend on all widgetSettings to re-apply colors when they change
 
   // NEW: Effect for automatic page refresh
   useEffect(() => {

@@ -1,5 +1,5 @@
 // client/src/components/AdminPanel.jsx
-import React, { useState, useEffect } from 'react'; // Corrected this line
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
   Button,
@@ -17,16 +17,46 @@ import {
   ListItemText,
   IconButton,
   Slider,
-  Select, // Added Select
-  MenuItem, // Added MenuItem
-  InputLabel, // Added InputLabel
-  FormControl, // Added FormControl
+  Select,
+  MenuItem,
+  InputLabel,
+  FormControl,
+  Tabs, // Added Tabs
+  Tab, // Added Tab
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DeleteIcon from '@mui/icons-material/Delete';
 import '../index.css';
 
-const AdminPanel = ({ setWidgetSettings /* Removed handleFocus */ }) => {
+// Helper component for Tab Panels
+function TabPanel(props) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`simple-tabpanel-${index}`}
+      aria-labelledby={`simple-tab-${index}`}
+      {...other}
+    >
+      {value === index && (
+        <Box sx={{ p: 3 }}>
+          {children}
+        </Box>
+      )}
+    </div>
+  );
+}
+
+function a11yProps(index) {
+  return {
+    id: `simple-tab-${index}`,
+    'aria-controls': `simple-tabpanel-${index}`,
+  };
+}
+
+const AdminPanel = ({ setWidgetSettings }) => {
   const [formData, setFormData] = useState({
     username: '',
     email: '',
@@ -42,19 +72,28 @@ const AdminPanel = ({ setWidgetSettings /* Removed handleFocus */ }) => {
       photos: { enabled: false, transparent: false },
       weather: { enabled: false, transparent: false },
       menu: { enabled: false, transparent: false },
-      // Removed enableOnscreenKeyboard
       textSize: 16,
       cardSize: 300,
       cardPadding: 20,
-      // cardHeight: 200, // Removed
-      refreshInterval: 'manual', // NEW: Default refresh interval
-      enableGeoPatternBackground: false, // NEW: Default for geometric background
-      enableCardShuffle: false, // NEW: Default for card shuffle
+      cardHeight: 200,
+      refreshInterval: 'manual',
+      enableGeoPatternBackground: false,
+      enableCardShuffle: false,
+      // NEW: Color settings
+      lightGradientStart: '#00ddeb',
+      lightGradientEnd: '#ff6b6b',
+      darkGradientStart: '#2e2767',
+      darkGradientEnd: '#620808',
+      lightButtonGradientStart: '#00ddeb',
+      lightButtonGradientEnd: '#ff6b6b',
+      darkButtonGradientStart: '#2e2767',
+      darkButtonGradientEnd: '#620808',
     };
     return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
   });
   const [users, setUsers] = useState([]);
   const [chores, setChores] = useState([]);
+  const [selectedTab, setSelectedTab] = useState(0); // State for selected tab
 
   const fetchData = async () => {
     try {
@@ -71,6 +110,10 @@ const AdminPanel = ({ setWidgetSettings /* Removed handleFocus */ }) => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  const handleTabChange = (event, newValue) => {
+    setSelectedTab(newValue);
+  };
 
   const handleToggleChange = (event) => {
     const { name, checked } = event.target;
@@ -97,7 +140,6 @@ const AdminPanel = ({ setWidgetSettings /* Removed handleFocus */ }) => {
     localStorage.setItem('widgetSettings', JSON.stringify(newToggles));
   };
 
-  // NEW: Handle change for Select (dropdown)
   const handleSelectChange = (event) => {
     const { name, value } = event.target;
     const newToggles = {
@@ -113,6 +155,18 @@ const AdminPanel = ({ setWidgetSettings /* Removed handleFocus */ }) => {
     const newToggles = {
       ...toggles,
       [name]: newValue,
+    };
+    setToggles(newToggles);
+    setWidgetSettings(newToggles);
+    localStorage.setItem('widgetSettings', JSON.stringify(newToggles));
+  };
+
+  // NEW: Handle color input changes
+  const handleColorChange = (event) => {
+    const { name, value } = event.target;
+    const newToggles = {
+      ...toggles,
+      [name]: value,
     };
     setToggles(newToggles);
     setWidgetSettings(newToggles);
@@ -219,7 +273,17 @@ const AdminPanel = ({ setWidgetSettings /* Removed handleFocus */ }) => {
       <Typography variant="h6">Admin Panel</Typography>
       {error && <Typography color="error">{error}</Typography>}
       {success && <Typography color="success.main">{success}</Typography>}
-      <Box sx={{ mt: 2 }}>
+
+      <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+        <Tabs value={selectedTab} onChange={handleTabChange} aria-label="admin panel tabs">
+          <Tab label="Widgets" {...a11yProps(0)} />
+          <Tab label="Interface" {...a11yProps(1)} />
+          <Tab label="Users" {...a11yProps(2)} />
+        </Tabs>
+      </Box>
+
+      {/* Widgets Tab */}
+      <TabPanel value={selectedTab} index={0}>
         <Typography variant="subtitle1">Widget Toggles</Typography>
 
         {/* Chores Widget Toggles */}
@@ -311,31 +375,30 @@ const AdminPanel = ({ setWidgetSettings /* Removed handleFocus */ }) => {
             </Box>
           )}
         </Box>
+      </TabPanel>
 
-        {/* NEW: Screen Refresh Options */}
-        <Box sx={{ mb: 2, mt: 3 }}>
-          <Typography variant="subtitle1" gutterBottom>Screen Refresh Options</Typography>
-          <FormControl fullWidth size="small">
-            <InputLabel id="refresh-interval-label">Refresh Interval</InputLabel>
-            <Select
-              labelId="refresh-interval-label"
-              id="refresh-interval-select"
-              value={toggles.refreshInterval}
-              label="Refresh Interval"
-              onChange={handleSelectChange}
-              name="refreshInterval"
-            >
-              <MenuItem value="manual">Manual Only</MenuItem>
-              <MenuItem value="1">1 Hour</MenuItem>
-              <MenuItem value="3">3 Hours</MenuItem>
-              <MenuItem value="6">6 Hours</MenuItem>
-              <MenuItem value="9">9 Hours</MenuItem>
-              <MenuItem value="12">12 Hours</MenuItem>
-            </Select>
-          </FormControl>
-        </Box>
+      {/* Interface Tab */}
+      <TabPanel value={selectedTab} index={1}>
+        <Typography variant="subtitle1" gutterBottom>Screen Refresh Options</Typography>
+        <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+          <InputLabel id="refresh-interval-label">Refresh Interval</InputLabel>
+          <Select
+            labelId="refresh-interval-label"
+            id="refresh-interval-select"
+            value={toggles.refreshInterval}
+            label="Refresh Interval"
+            onChange={handleSelectChange}
+            name="refreshInterval"
+          >
+            <MenuItem value="manual">Manual Only</MenuItem>
+            <MenuItem value="1">1 Hour</MenuItem>
+            <MenuItem value="3">3 Hours</MenuItem>
+            <MenuItem value="6">6 Hours</MenuItem>
+            <MenuItem value="9">9 Hours</MenuItem>
+            <MenuItem value="12">12 Hours</MenuItem>
+          </Select>
+        </FormControl>
 
-        {/* NEW: GeoPattern Background Toggle */}
         <Box sx={{ mb: 1 }}>
           <FormControlLabel
             control={<Switch checked={toggles.enableGeoPatternBackground} onChange={handleToggleChange} name="enableGeoPatternBackground" />}
@@ -344,7 +407,6 @@ const AdminPanel = ({ setWidgetSettings /* Removed handleFocus */ }) => {
           />
         </Box>
 
-        {/* NEW: Card Shuffle Toggle */}
         <Box sx={{ mb: 1 }}>
           <FormControlLabel
             control={<Switch checked={toggles.enableCardShuffle} onChange={handleToggleChange} name="enableCardShuffle" />}
@@ -353,174 +415,260 @@ const AdminPanel = ({ setWidgetSettings /* Removed handleFocus */ }) => {
           />
         </Box>
 
-      </Box>
+        <Box sx={{ mt: 3, p: 2, borderTop: '1px solid var(--card-border)' }}>
+          <Typography variant="subtitle1" gutterBottom>Display Settings</Typography>
 
-      {/* Sliders for Customization */}
-      <Box sx={{ mt: 3, p: 2, borderTop: '1px solid var(--card-border)' }}>
-        <Typography variant="subtitle1" gutterBottom>Display Settings</Typography>
+          <Typography id="text-size-slider" gutterBottom>
+            Text Size: {toggles.textSize}px
+          </Typography>
+          <Slider
+            aria-labelledby="text-size-slider"
+            value={toggles.textSize}
+            onChange={handleSliderChange('textSize')}
+            min={10}
+            max={24}
+            step={1}
+            valueLabelDisplay="auto"
+            sx={{ width: '90%', mb: 2 }}
+          />
 
-        <Typography id="text-size-slider" gutterBottom>
-          Text Size: {toggles.textSize}px
-        </Typography>
-        <Slider
-          aria-labelledby="text-size-slider"
-          value={toggles.textSize}
-          onChange={handleSliderChange('textSize')}
-          min={10}
-          max={24}
-          step={1}
-          valueLabelDisplay="auto"
-          sx={{ width: '90%', mb: 2 }}
-        />
+          <Typography id="card-size-slider" gutterBottom>
+            Card Width: {toggles.cardSize}px
+          </Typography>
+          <Slider
+            aria-labelledby="card-size-slider"
+            value={toggles.cardSize}
+            onChange={handleSliderChange('cardSize')}
+            min={200}
+            max={500}
+            step={10}
+            valueLabelDisplay="auto"
+            sx={{ width: '90%', mb: 2 }}
+          />
 
-        <Typography id="card-size-slider" gutterBottom>
-          Card Width: {toggles.cardSize}px
-        </Typography>
-        <Slider
-          aria-labelledby="card-size-slider"
-          value={toggles.cardSize}
-          onChange={handleSliderChange('cardSize')}
-          min={200}
-          max={500}
-          step={10}
-          valueLabelDisplay="auto"
-          sx={{ width: '90%', mb: 2 }}
-        />
+          <Typography id="card-padding-slider" gutterBottom>
+            Card Padding: {toggles.cardPadding}px
+          </Typography>
+          <Slider
+            aria-labelledby="card-padding-slider"
+            value={toggles.cardPadding}
+            onChange={handleSliderChange('cardPadding')}
+            min={10}
+            max={40}
+            step={2}
+            valueLabelDisplay="auto"
+            sx={{ width: '90%', mb: 2 }}
+          />
+        </Box>
 
-        <Typography id="card-padding-slider" gutterBottom>
-          Card Padding: {toggles.cardPadding}px
-        </Typography>
-        <Slider
-          aria-labelledby="card-padding-slider"
-          value={toggles.cardPadding}
-          onChange={handleSliderChange('cardPadding')}
-          min={10}
-          max={40}
-          step={2}
-          valueLabelDisplay="auto"
-          sx={{ width: '90%', mb: 2 }}
-        />
-      </Box>
+        {/* NEW: Color Pickers */}
+        <Box sx={{ mt: 3, p: 2, borderTop: '1px solid var(--card-border)' }}>
+          <Typography variant="subtitle1" gutterBottom>Custom Colors</Typography>
 
-      <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
-        <Typography variant="subtitle1">Add User</Typography>
-        <TextField
-          name="username"
-          value={formData.username}
-          onChange={handleInputChange}
-          label="Username"
-          variant="outlined"
-          size="small"
-          fullWidth
-          margin="normal"
-        />
-        <TextField
-          name="email"
-          value={formData.email}
-          onChange={handleInputChange}
-          label="Email"
-          type="email"
-          variant="outlined"
-          size="small"
-          fullWidth
-          margin="normal"
-        />
-        <TextField
-          type="file"
-          accept="image/jpeg,image/png"
-          onChange={handleFileChange}
-          variant="outlined"
-          size="small"
-          fullWidth
-          margin="normal"
-          InputLabelProps={{ shrink: true }}
-        />
-        {formData.profilePicture && (
-          <Box sx={{ mt: 2, mb: 2 }}>
-            <img
-              src={formData.profilePicture}
-              alt="Profile Preview"
-              style={{
-                maxWidth: '100px',
-                maxHeight: '100px',
-                borderRadius: '8px',
-                border: '1px solid var(--card-border)',
-              }}
-            />
-          </Box>
-        )}
-        <Button type="submit">Add User</Button>
-      </Box>
+          <Typography variant="subtitle2" sx={{ mt: 2 }}>Light Theme Gradients</Typography>
+          <TextField
+            label="Background Gradient Start (Light)"
+            name="lightGradientStart"
+            value={toggles.lightGradientStart}
+            onChange={handleColorChange}
+            fullWidth
+            size="small"
+            sx={{ mb: 1 }}
+          />
+          <TextField
+            label="Background Gradient End (Light)"
+            name="lightGradientEnd"
+            value={toggles.lightGradientEnd}
+            onChange={handleColorChange}
+            fullWidth
+            size="small"
+            sx={{ mb: 2 }}
+          />
 
-      {/* Collapsible User List */}
-      <Box sx={{ mt: 3, p: 2, borderTop: '1px solid var(--card-border)' }}>
-        <Typography variant="subtitle1" gutterBottom>Manage Users</Typography>
-        {users.length === 0 && <Typography variant="body2" color="text.secondary">No users added yet.</Typography>}
-        {users.map((user) => (
-          <Accordion key={user.id} sx={{ mb: 1 }}>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Typography variant="body1" sx={{ textTransform: 'capitalize', flexGrow: 1 }}>
-                {user.username} (Clams: {user.clam_total || 0} 🐚)
-              </Typography>
-            </AccordionSummary>
-            <AccordionDetails sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              <Typography variant="body2">Email: {user.email}</Typography>
-              {user.profile_picture && (
-                <Box sx={{ mt: 1, mb: 1 }}>
-                  <img
-                    src={user.profile_picture}
-                    alt={user.username}
-                    style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '50%' }}
-                  />
-                </Box>
-              )}
-              <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                <Button
-                  variant="outlined"
-                  color="error"
-                  startIcon={<DeleteIcon />}
-                  onClick={() => handleDeleteUser(user.id)}
-                  size="small"
-                >
-                  Delete User
-                </Button>
-                <Button
-                  variant="outlined"
-                  onClick={() => handleResetClams(user.id)}
-                  size="small"
-                >
-                  Reset Clams
-                </Button>
-              </Box>
+          <Typography variant="subtitle2">Dark Theme Gradients</Typography>
+          <TextField
+            label="Background Gradient Start (Dark)"
+            name="darkGradientStart"
+            value={toggles.darkGradientStart}
+            onChange={handleColorChange}
+            fullWidth
+            size="small"
+            sx={{ mb: 1 }}
+          />
+          <TextField
+            label="Background Gradient End (Dark)"
+            name="darkGradientEnd"
+            value={toggles.darkGradientEnd}
+            onChange={handleColorChange}
+            fullWidth
+            size="small"
+            sx={{ mb: 2 }}
+          />
 
-              {/* Master detailed list of tasks for this user */}
-              <Box sx={{ mt: 2, borderTop: '1px dashed rgba(0,0,0,0.1)', pt: 2 }}>
-                <Typography variant="subtitle2" gutterBottom>Assigned Tasks:</Typography>
-                {chores.filter(chore => parseInt(chore.user_id) === user.id).length === 0 && (
-                  <Typography variant="body2" color="text.secondary">No tasks assigned to this user.</Typography>
+          <Typography variant="subtitle2">Light Theme Button Gradients</Typography>
+          <TextField
+            label="Button Gradient Start (Light)"
+            name="lightButtonGradientStart"
+            value={toggles.lightButtonGradientStart}
+            onChange={handleColorChange}
+            fullWidth
+            size="small"
+            sx={{ mb: 1 }}
+          />
+          <TextField
+            label="Button Gradient End (Light)"
+            name="lightButtonGradientEnd"
+            value={toggles.lightButtonGradientEnd}
+            onChange={handleColorChange}
+            fullWidth
+            size="small"
+            sx={{ mb: 2 }}
+          />
+
+          <Typography variant="subtitle2">Dark Theme Button Gradients</Typography>
+          <TextField
+            label="Button Gradient Start (Dark)"
+            name="darkButtonGradientStart"
+            value={toggles.darkButtonGradientStart}
+            onChange={handleColorChange}
+            fullWidth
+            size="small"
+            sx={{ mb: 1 }}
+          />
+          <TextField
+            label="Button Gradient End (Dark)"
+            name="darkButtonGradientEnd"
+            value={toggles.darkButtonGradientEnd}
+            onChange={handleColorChange}
+            fullWidth
+            size="small"
+            sx={{ mb: 2 }}
+          />
+        </Box>
+      </TabPanel>
+
+      {/* Users Tab */}
+      <TabPanel value={selectedTab} index={2}>
+        <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
+          <Typography variant="subtitle1">Add User</Typography>
+          <TextField
+            name="username"
+            value={formData.username}
+            onChange={handleInputChange}
+            label="Username"
+            variant="outlined"
+            size="small"
+            fullWidth
+            margin="normal"
+          />
+          <TextField
+            name="email"
+            value={formData.email}
+            onChange={handleInputChange}
+            label="Email"
+            type="email"
+            variant="outlined"
+            size="small"
+            fullWidth
+            margin="normal"
+          />
+          <TextField
+            type="file"
+            accept="image/jpeg,image/png"
+            onChange={handleFileChange}
+            variant="outlined"
+            size="small"
+            fullWidth
+            margin="normal"
+            InputLabelProps={{ shrink: true }}
+          />
+          {formData.profilePicture && (
+            <Box sx={{ mt: 2, mb: 2 }}>
+              <img
+                src={formData.profilePicture}
+                alt="Profile Preview"
+                style={{
+                  maxWidth: '100px',
+                  maxHeight: '100px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--card-border)',
+                }}
+              />
+            </Box>
+          )}
+          <Button type="submit">Add User</Button>
+        </Box>
+
+        {/* Collapsible User List */}
+        <Box sx={{ mt: 3, p: 2, borderTop: '1px solid var(--card-border)' }}>
+          <Typography variant="subtitle1" gutterBottom>Manage Users</Typography>
+          {users.length === 0 && <Typography variant="body2" color="text.secondary">No users added yet.</Typography>}
+          {users.map((user) => (
+            <Accordion key={user.id} sx={{ mb: 1 }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="body1" sx={{ textTransform: 'capitalize', flexGrow: 1 }}>
+                  {user.username} (Clams: {user.clam_total || 0} 🐚)
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Typography variant="body2">Email: {user.email}</Typography>
+                {user.profile_picture && (
+                  <Box sx={{ mt: 1, mb: 1 }}>
+                    <img
+                      src={user.profile_picture}
+                      alt={user.username}
+                      style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '50%' }}
+                    />
+                  </Box>
                 )}
-                <List dense>
-                  {chores.filter(chore => parseInt(chore.user_id) === user.id).map(chore => (
-                    <ListItem
-                      key={chore.id}
-                      secondaryAction={
-                        <IconButton edge="end" aria-label="delete" onClick={() => handleDeleteChore(chore.id)} size="small">
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      }
-                    >
-                      <ListItemText
-                        primary={`${chore.title} (${chore.assigned_day_of_week}, ${chore.time_period})`}
-                        secondary={`Repeats: ${chore.repeats} | Completed: ${chore.completed ? 'Yes' : 'No'}`}
-                      />
-                    </ListItem>
-                  ))}
-                </List>
-              </Box>
-            </AccordionDetails>
-          </Accordion>
-        ))}
-      </Box>
+                <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    startIcon={<DeleteIcon />}
+                    onClick={() => handleDeleteUser(user.id)}
+                    size="small"
+                  >
+                    Delete User
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    onClick={() => handleResetClams(user.id)}
+                    size="small"
+                  >
+                    Reset Clams
+                  </Button>
+                </Box>
+
+                {/* Master detailed list of tasks for this user */}
+                <Box sx={{ mt: 2, borderTop: '1px dashed rgba(0,0,0,0.1)', pt: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>Assigned Tasks:</Typography>
+                  {chores.filter(chore => parseInt(chore.user_id) === user.id).length === 0 && (
+                    <Typography variant="body2" color="text.secondary">No tasks assigned to this user.</Typography>
+                  )}
+                  <List dense>
+                    {chores.filter(chore => parseInt(chore.user_id) === user.id).map(chore => (
+                      <ListItem
+                        key={chore.id}
+                        secondaryAction={
+                          <IconButton edge="end" aria-label="delete" onClick={() => handleDeleteChore(chore.id)} size="small">
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        }
+                      >
+                        <ListItemText
+                          primary={`${chore.title} (${chore.assigned_day_of_week}, ${chore.time_period})`}
+                          secondary={`Repeats: ${chore.repeats} | Completed: ${chore.completed ? 'Yes' : 'No'}`}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
+              </AccordionDetails>
+            </Accordion>
+          ))}
+        </Box>
+      </TabPanel>
     </Card>
   );
 };

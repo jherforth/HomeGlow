@@ -7,8 +7,9 @@
   --text-color: #1a1a2e;
   --text-color-rgb: 26, 26, 46; /* RGB values for #1a1a2e */
   --accent: #6e44ff;
-  --accent-rgb: 110, 68, 255; /* RGB values for #6e44ff - ADDED THIS LINE */
-  --gradient: linear-gradient(45deg, #00ddeb, #ff6b6b);
+  --accent-rgb: 110, 68, 255; /* RGB values for #6e44ff */
+  /* CHANGED: Use dynamic color variables for gradient */
+  --gradient: linear-gradient(45deg, var(--light-gradient-start), var(--light-gradient-end));
   --shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   --backdrop-blur: blur(10px);
   /* New CSS variables for customization */
@@ -16,6 +17,16 @@
   --dynamic-card-width: 300px;
   --dynamic-card-padding: 20px;
   --container-background-override: var(--gradient); /* NEW: Default container background */
+
+  /* NEW: Default values for custom color variables (will be overridden by JS) */
+  --light-gradient-start: #00ddeb;
+  --light-gradient-end: #ff6b6b;
+  --dark-gradient-start: #2e2767;
+  --dark-gradient-end: #620808;
+  --light-button-gradient-start: #00ddeb;
+  --light-button-gradient-end: #ff6b6b;
+  --dark-button-gradient-start: #2e2767;
+  --dark-button-gradient-end: #620808;
 }
 
 [data-theme="dark"] {
@@ -25,8 +36,9 @@
   --text-color: #a6a6d1;
   --text-color-rgb: 166, 166, 209; /* RGB values for #a6a6d1 */
   --accent: #00ddeb;
-  --accent-rgb: 0, 221, 235; /* RGB values for #00ddeb - ADDED THIS LINE */
-  --gradient: linear-gradient(45deg, #2e2767, #620808);
+  --accent-rgb: 0, 221, 235; /* RGB values for #00ddeb */
+  /* CHANGED: Use dynamic color variables for gradient */
+  --gradient: linear-gradient(45deg, var(--dark-gradient-start), var(--dark-gradient-end));
   --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   --container-background-override: var(--gradient); /* NEW: Default container background for dark theme */
 }
@@ -103,7 +115,8 @@ h1 {
 }
 
 button {
-  background: var(--gradient);
+  /* CHANGED: Use dynamic color variables for button gradient */
+  background: linear-gradient(45deg, var(--light-button-gradient-start), var(--light-button-gradient-end));
   color: var(--text-color);
   border: none;
   border-radius: 8px;
@@ -113,6 +126,11 @@ button {
   font-weight: 600;
   transition: background 0.3s ease;
   touch-action: manipulation;
+}
+
+[data-theme="dark"] button {
+  /* CHANGED: Use dynamic color variables for dark theme button gradient */
+  background: linear-gradient(45deg, var(--dark-button-gradient-start), var(--dark-button-gradient-end));
 }
 
 button:hover {
@@ -305,7 +323,7 @@ input:checked+.toggle-slider:before {
 }
 
 .custom-calendar .rbc-toolbar button.rbc-active {
-  background-color: var(--accent);
+  background-color: var(--accent) !important; /* Active button background */
   color: white !important; /* Active button text color */
 }
 
