@@ -79,7 +79,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
       refreshInterval: 'manual',
       enableGeoPatternBackground: false,
       enableCardShuffle: false,
-      // NEW: Color settings
+      // NEW: Default values for custom color variables
       lightGradientStart: '#00ddeb',
       lightGradientEnd: '#ff6b6b',
       darkGradientStart: '#2e2767',
@@ -172,6 +172,60 @@ const AdminPanel = ({ setWidgetSettings }) => {
     setWidgetSettings(newToggles);
     localStorage.setItem('widgetSettings', JSON.stringify(newToggles));
   };
+
+  // NEW: Save current colors as default
+  const handleSaveColorsAsDefault = () => {
+    const currentSettings = JSON.parse(localStorage.getItem('widgetSettings')) || {};
+    const updatedSettings = {
+      ...currentSettings,
+      lightGradientStart: toggles.lightGradientStart,
+      lightGradientEnd: toggles.lightGradientEnd,
+      darkGradientStart: toggles.darkGradientStart,
+      darkGradientEnd: toggles.darkGradientEnd,
+      lightButtonGradientStart: toggles.lightButtonGradientStart,
+      lightButtonGradientEnd: toggles.lightButtonGradientEnd,
+      darkButtonGradientStart: toggles.darkButtonGradientStart,
+      darkButtonGradientEnd: toggles.darkButtonGradientEnd,
+    };
+    localStorage.setItem('widgetSettings', JSON.stringify(updatedSettings));
+    setSuccess('Current colors saved as new defaults!');
+  };
+
+  // NEW: Reset colors to default
+  const handleResetColorsToDefault = () => {
+    const defaultSettings = {
+      chores: { enabled: false, transparent: false },
+      calendar: { enabled: false, transparent: false },
+      photos: { enabled: false, transparent: false },
+      weather: { enabled: false, transparent: false },
+      menu: { enabled: false, transparent: false },
+      textSize: 16,
+      cardSize: 300,
+      cardPadding: 20,
+      cardHeight: 200,
+      refreshInterval: 'manual',
+      enableGeoPatternBackground: false,
+      enableCardShuffle: false,
+      // Original hardcoded defaults for reset
+      lightGradientStart: '#00ddeb',
+      lightGradientEnd: '#ff6b6b',
+      darkGradientStart: '#2e2767',
+      darkGradientEnd: '#620808',
+      lightButtonGradientStart: '#00ddeb',
+      lightButtonGradientEnd: '#ff6b6b',
+      darkButtonGradientStart: '#2e2767',
+      darkButtonGradientEnd: '#620808',
+    };
+    // Load from localStorage first, then apply hardcoded defaults if not present
+    const savedSettings = JSON.parse(localStorage.getItem('widgetSettings')) || {};
+    const settingsToApply = { ...defaultSettings, ...savedSettings };
+
+    setToggles(settingsToApply);
+    setWidgetSettings(settingsToApply);
+    localStorage.setItem('widgetSettings', JSON.stringify(settingsToApply));
+    setSuccess('Colors reset to default values!');
+  };
+
 
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -466,84 +520,107 @@ const AdminPanel = ({ setWidgetSettings }) => {
           <Typography variant="subtitle1" gutterBottom>Custom Colors</Typography>
 
           <Typography variant="subtitle2" sx={{ mt: 2 }}>Light Theme Gradients</Typography>
-          <TextField
-            label="Background Gradient Start (Light)"
-            name="lightGradientStart"
-            value={toggles.lightGradientStart}
-            onChange={handleColorChange}
-            fullWidth
-            size="small"
-            sx={{ mb: 1 }}
-          />
-          <TextField
-            label="Background Gradient End (Light)"
-            name="lightGradientEnd"
-            value={toggles.lightGradientEnd}
-            onChange={handleColorChange}
-            fullWidth
-            size="small"
-            sx={{ mb: 2 }}
-          />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <TextField
+              label="Background Gradient Start (Light)"
+              name="lightGradientStart"
+              value={toggles.lightGradientStart}
+              onChange={handleColorChange}
+              fullWidth
+              size="small"
+            />
+            <Box sx={{ width: 24, height: 24, borderRadius: '4px', border: '1px solid #ccc', backgroundColor: toggles.lightGradientStart }} />
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+            <TextField
+              label="Background Gradient End (Light)"
+              name="lightGradientEnd"
+              value={toggles.lightGradientEnd}
+              onChange={handleColorChange}
+              fullWidth
+              size="small"
+            />
+            <Box sx={{ width: 24, height: 24, borderRadius: '4px', border: '1px solid #ccc', backgroundColor: toggles.lightGradientEnd }} />
+          </Box>
 
           <Typography variant="subtitle2">Dark Theme Gradients</Typography>
-          <TextField
-            label="Background Gradient Start (Dark)"
-            name="darkGradientStart"
-            value={toggles.darkGradientStart}
-            onChange={handleColorChange}
-            fullWidth
-            size="small"
-            sx={{ mb: 1 }}
-          />
-          <TextField
-            label="Background Gradient End (Dark)"
-            name="darkGradientEnd"
-            value={toggles.darkGradientEnd}
-            onChange={handleColorChange}
-            fullWidth
-            size="small"
-            sx={{ mb: 2 }}
-          />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <TextField
+              label="Background Gradient Start (Dark)"
+              name="darkGradientStart"
+              value={toggles.darkGradientStart}
+              onChange={handleColorChange}
+              fullWidth
+              size="small"
+            />
+            <Box sx={{ width: 24, height: 24, borderRadius: '4px', border: '1px solid #ccc', backgroundColor: toggles.darkGradientStart }} />
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+            <TextField
+              label="Background Gradient End (Dark)"
+              name="darkGradientEnd"
+              value={toggles.darkGradientEnd}
+              onChange={handleColorChange}
+              fullWidth
+              size="small"
+            />
+            <Box sx={{ width: 24, height: 24, borderRadius: '4px', border: '1px solid #ccc', backgroundColor: toggles.darkGradientEnd }} />
+          </Box>
 
           <Typography variant="subtitle2">Light Theme Button Gradients</Typography>
-          <TextField
-            label="Button Gradient Start (Light)"
-            name="lightButtonGradientStart"
-            value={toggles.lightButtonGradientStart}
-            onChange={handleColorChange}
-            fullWidth
-            size="small"
-            sx={{ mb: 1 }}
-          />
-          <TextField
-            label="Button Gradient End (Light)"
-            name="lightButtonGradientEnd"
-            value={toggles.lightButtonGradientEnd}
-            onChange={handleColorChange}
-            fullWidth
-            size="small"
-            sx={{ mb: 2 }}
-          />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <TextField
+              label="Button Gradient Start (Light)"
+              name="lightButtonGradientStart"
+              value={toggles.lightButtonGradientStart}
+              onChange={handleColorChange}
+              fullWidth
+              size="small"
+            />
+            <Box sx={{ width: 24, height: 24, borderRadius: '4px', border: '1px solid #ccc', backgroundColor: toggles.lightButtonGradientStart }} />
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+            <TextField
+              label="Button Gradient End (Light)"
+              name="lightButtonGradientEnd"
+              value={toggles.lightButtonGradientEnd}
+              onChange={handleColorChange}
+              fullWidth
+              size="small"
+            />
+            <Box sx={{ width: 24, height: 24, borderRadius: '4px', border: '1px solid #ccc', backgroundColor: toggles.lightButtonGradientEnd }} />
+          </Box>
 
           <Typography variant="subtitle2">Dark Theme Button Gradients</Typography>
-          <TextField
-            label="Button Gradient Start (Dark)"
-            name="darkButtonGradientStart"
-            value={toggles.darkButtonGradientStart}
-            onChange={handleColorChange}
-            fullWidth
-            size="small"
-            sx={{ mb: 1 }}
-          />
-          <TextField
-            label="Button Gradient End (Dark)"
-            name="darkButtonGradientEnd"
-            value={toggles.darkButtonGradientEnd}
-            onChange={handleColorChange}
-            fullWidth
-            size="small"
-            sx={{ mb: 2 }}
-          />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <TextField
+              label="Button Gradient Start (Dark)"
+              name="darkButtonGradientStart"
+              value={toggles.darkButtonGradientStart}
+              onChange={handleColorChange}
+              fullWidth
+              size="small"
+            />
+            <Box sx={{ width: 24, height: 24, borderRadius: '4px', border: '1px solid #ccc', backgroundColor: toggles.darkButtonGradientStart }} />
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+            <TextField
+              label="Button Gradient End (Dark)"
+              name="darkButtonGradientEnd"
+              value={toggles.darkButtonGradientEnd}
+              onChange={handleColorChange}
+              fullWidth
+              size="small"
+            />
+            <Box sx={{ width: 24, height: 24, borderRadius: '4px', border: '1px solid #ccc', backgroundColor: toggles.darkButtonGradientEnd }} />
+          </Box>
+
+          <Button variant="contained" onClick={handleSaveColorsAsDefault} sx={{ mt: 2, mr: 1 }}>
+            Save Colors as Default
+          </Button>
+          <Button variant="outlined" onClick={handleResetColorsToDefault} sx={{ mt: 2 }}>
+            Reset Colors
+          </Button>
         </Box>
       </TabPanel>
 
