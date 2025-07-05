@@ -21,12 +21,15 @@ import {
   MenuItem,
   InputLabel,
   FormControl,
-  Tabs, // Added Tabs
-  Tab, // Added Tab
+  Tabs,
+  Tab,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DeleteIcon from '@mui/icons-material/Delete';
 import '../index.css';
+
+// Import react-color SketchPicker
+import { SketchPicker } from 'react-color';
 
 // Helper component for Tab Panels
 function TabPanel(props) {
@@ -95,6 +98,18 @@ const AdminPanel = ({ setWidgetSettings }) => {
   const [chores, setChores] = useState([]);
   const [selectedTab, setSelectedTab] = useState(0); // State for selected tab
 
+  // State for managing color picker visibility
+  const [displayColorPicker, setDisplayColorPicker] = useState({
+    lightGradientStart: false,
+    lightGradientEnd: false,
+    darkGradientStart: false,
+    darkGradientEnd: false,
+    lightButtonGradientStart: false,
+    lightButtonGradientEnd: false,
+    darkButtonGradientStart: false,
+    darkButtonGradientEnd: false,
+  });
+
   const fetchData = async () => {
     try {
       const usersResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users`);
@@ -161,16 +176,31 @@ const AdminPanel = ({ setWidgetSettings }) => {
     localStorage.setItem('widgetSettings', JSON.stringify(newToggles));
   };
 
-  // NEW: Handle color input changes
-  const handleColorChange = (event) => {
-    const { name, value } = event.target;
+  // Handle color input changes from TextField (if still used) or SketchPicker
+  const handleColorChange = (name, color) => {
     const newToggles = {
       ...toggles,
-      [name]: value,
+      [name]: color.hex, // react-color provides a color object, we need the hex value
     };
     setToggles(newToggles);
     setWidgetSettings(newToggles);
     localStorage.setItem('widgetSettings', JSON.stringify(newToggles));
+  };
+
+  // Toggle color picker visibility
+  const handleClickColorSwatch = (name) => {
+    setDisplayColorPicker(prevState => ({
+      ...prevState,
+      [name]: !prevState[name],
+    }));
+  };
+
+  // Close color picker when clicking outside
+  const handleCloseColorPicker = (name) => {
+    setDisplayColorPicker(prevState => ({
+      ...prevState,
+      [name]: false,
+    }));
   };
 
   // NEW: Save current colors as default
@@ -520,99 +550,251 @@ const AdminPanel = ({ setWidgetSettings }) => {
           <Typography variant="subtitle1" gutterBottom>Custom Colors</Typography>
 
           <Typography variant="subtitle2" sx={{ mt: 2 }}>Light Theme Gradients</Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, position: 'relative' }}>
             <TextField
               label="Background Gradient Start (Light)"
               name="lightGradientStart"
               value={toggles.lightGradientStart}
-              onChange={handleColorChange}
+              onChange={(e) => handleColorChange(e.target.name, { hex: e.target.value })} // Allow direct hex input
               fullWidth
               size="small"
             />
-            <Box sx={{ width: 24, height: 24, borderRadius: '4px', border: '1px solid #ccc', backgroundColor: toggles.lightGradientStart }} />
+            <Box
+              sx={{
+                width: 24,
+                height: 24,
+                borderRadius: '4px',
+                border: '1px solid #ccc',
+                backgroundColor: toggles.lightGradientStart,
+                cursor: 'pointer',
+              }}
+              onClick={() => handleClickColorSwatch('lightGradientStart')}
+            />
+            {displayColorPicker.lightGradientStart && (
+              <Box sx={{ position: 'absolute', zIndex: '2', top: '100%', left: 0 }}>
+                <Box sx={{ position: 'fixed', top: '0px', right: '0px', bottom: '0px', left: '0px' }} onClick={() => handleCloseColorPicker('lightGradientStart')} />
+                <SketchPicker
+                  color={toggles.lightGradientStart}
+                  onChange={(color) => handleColorChange('lightGradientStart', color)}
+                />
+              </Box>
+            )}
           </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, position: 'relative' }}>
             <TextField
               label="Background Gradient End (Light)"
               name="lightGradientEnd"
               value={toggles.lightGradientEnd}
-              onChange={handleColorChange}
+              onChange={(e) => handleColorChange(e.target.name, { hex: e.target.value })}
               fullWidth
               size="small"
             />
-            <Box sx={{ width: 24, height: 24, borderRadius: '4px', border: '1px solid #ccc', backgroundColor: toggles.lightGradientEnd }} />
+            <Box
+              sx={{
+                width: 24,
+                height: 24,
+                borderRadius: '4px',
+                border: '1px solid #ccc',
+                backgroundColor: toggles.lightGradientEnd,
+                cursor: 'pointer',
+              }}
+              onClick={() => handleClickColorSwatch('lightGradientEnd')}
+            />
+            {displayColorPicker.lightGradientEnd && (
+              <Box sx={{ position: 'absolute', zIndex: '2', top: '100%', left: 0 }}>
+                <Box sx={{ position: 'fixed', top: '0px', right: '0px', bottom: '0px', left: '0px' }} onClick={() => handleCloseColorPicker('lightGradientEnd')} />
+                <SketchPicker
+                  color={toggles.lightGradientEnd}
+                  onChange={(color) => handleColorChange('lightGradientEnd', color)}
+                />
+              </Box>
+            )}
           </Box>
 
           <Typography variant="subtitle2">Dark Theme Gradients</Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, position: 'relative' }}>
             <TextField
               label="Background Gradient Start (Dark)"
               name="darkGradientStart"
               value={toggles.darkGradientStart}
-              onChange={handleColorChange}
+              onChange={(e) => handleColorChange(e.target.name, { hex: e.target.value })}
               fullWidth
               size="small"
             />
-            <Box sx={{ width: 24, height: 24, borderRadius: '4px', border: '1px solid #ccc', backgroundColor: toggles.darkGradientStart }} />
+            <Box
+              sx={{
+                width: 24,
+                height: 24,
+                borderRadius: '4px',
+                border: '1px solid #ccc',
+                backgroundColor: toggles.darkGradientStart,
+                cursor: 'pointer',
+              }}
+              onClick={() => handleClickColorSwatch('darkGradientStart')}
+            />
+            {displayColorPicker.darkGradientStart && (
+              <Box sx={{ position: 'absolute', zIndex: '2', top: '100%', left: 0 }}>
+                <Box sx={{ position: 'fixed', top: '0px', right: '0px', bottom: '0px', left: '0px' }} onClick={() => handleCloseColorPicker('darkGradientStart')} />
+                <SketchPicker
+                  color={toggles.darkGradientStart}
+                  onChange={(color) => handleColorChange('darkGradientStart', color)}
+                />
+              </Box>
+            )}
           </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, position: 'relative' }}>
             <TextField
               label="Background Gradient End (Dark)"
               name="darkGradientEnd"
               value={toggles.darkGradientEnd}
-              onChange={handleColorChange}
+              onChange={(e) => handleColorChange(e.target.name, { hex: e.target.value })}
               fullWidth
               size="small"
             />
-            <Box sx={{ width: 24, height: 24, borderRadius: '4px', border: '1px solid #ccc', backgroundColor: toggles.darkGradientEnd }} />
+            <Box
+              sx={{
+                width: 24,
+                height: 24,
+                borderRadius: '4px',
+                border: '1px solid #ccc',
+                backgroundColor: toggles.darkGradientEnd,
+                cursor: 'pointer',
+              }}
+              onClick={() => handleClickColorSwatch('darkGradientEnd')}
+            />
+            {displayColorPicker.darkGradientEnd && (
+              <Box sx={{ position: 'absolute', zIndex: '2', top: '100%', left: 0 }}>
+                <Box sx={{ position: 'fixed', top: '0px', right: '0px', bottom: '0px', left: '0px' }} onClick={() => handleCloseColorPicker('darkGradientEnd')} />
+                <SketchPicker
+                  color={toggles.darkGradientEnd}
+                  onChange={(color) => handleColorChange('darkGradientEnd', color)}
+                />
+              </Box>
+            )}
           </Box>
 
           <Typography variant="subtitle2">Light Theme Button Gradients</Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, position: 'relative' }}>
             <TextField
               label="Button Gradient Start (Light)"
               name="lightButtonGradientStart"
               value={toggles.lightButtonGradientStart}
-              onChange={handleColorChange}
+              onChange={(e) => handleColorChange(e.target.name, { hex: e.target.value })}
               fullWidth
               size="small"
             />
-            <Box sx={{ width: 24, height: 24, borderRadius: '4px', border: '1px solid #ccc', backgroundColor: toggles.lightButtonGradientStart }} />
+            <Box
+              sx={{
+                width: 24,
+                height: 24,
+                borderRadius: '4px',
+                border: '1px solid #ccc',
+                backgroundColor: toggles.lightButtonGradientStart,
+                cursor: 'pointer',
+              }}
+              onClick={() => handleClickColorSwatch('lightButtonGradientStart')}
+            />
+            {displayColorPicker.lightButtonGradientStart && (
+              <Box sx={{ position: 'absolute', zIndex: '2', top: '100%', left: 0 }}>
+                <Box sx={{ position: 'fixed', top: '0px', right: '0px', bottom: '0px', left: '0px' }} onClick={() => handleCloseColorPicker('lightButtonGradientStart')} />
+                <SketchPicker
+                  color={toggles.lightButtonGradientStart}
+                  onChange={(color) => handleColorChange('lightButtonGradientStart', color)}
+                />
+              </Box>
+            )}
           </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, position: 'relative' }}>
             <TextField
               label="Button Gradient End (Light)"
               name="lightButtonGradientEnd"
               value={toggles.lightButtonGradientEnd}
-              onChange={handleColorChange}
+              onChange={(e) => handleColorChange(e.target.name, { hex: e.target.value })}
               fullWidth
               size="small"
             />
-            <Box sx={{ width: 24, height: 24, borderRadius: '4px', border: '1px solid #ccc', backgroundColor: toggles.lightButtonGradientEnd }} />
+            <Box
+              sx={{
+                width: 24,
+                height: 24,
+                borderRadius: '4px',
+                border: '1px solid #ccc',
+                backgroundColor: toggles.lightButtonGradientEnd,
+                cursor: 'pointer',
+              }}
+              onClick={() => handleClickColorSwatch('lightButtonGradientEnd')}
+            />
+            {displayColorPicker.lightButtonGradientEnd && (
+              <Box sx={{ position: 'absolute', zIndex: '2', top: '100%', left: 0 }}>
+                <Box sx={{ position: 'fixed', top: '0px', right: '0px', bottom: '0px', left: '0px' }} onClick={() => handleCloseColorPicker('lightButtonGradientEnd')} />
+                <SketchPicker
+                  color={toggles.lightButtonGradientEnd}
+                  onChange={(color) => handleColorChange('lightButtonGradientEnd', color)}
+                />
+              </Box>
+            )}
           </Box>
 
           <Typography variant="subtitle2">Dark Theme Button Gradients</Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, position: 'relative' }}>
             <TextField
               label="Button Gradient Start (Dark)"
               name="darkButtonGradientStart"
               value={toggles.darkButtonGradientStart}
-              onChange={handleColorChange}
+              onChange={(e) => handleColorChange(e.target.name, { hex: e.target.value })}
               fullWidth
               size="small"
             />
-            <Box sx={{ width: 24, height: 24, borderRadius: '4px', border: '1px solid #ccc', backgroundColor: toggles.darkButtonGradientStart }} />
+            <Box
+              sx={{
+                width: 24,
+                height: 24,
+                borderRadius: '4px',
+                border: '1px solid #ccc',
+                backgroundColor: toggles.darkButtonGradientStart,
+                cursor: 'pointer',
+              }}
+              onClick={() => handleClickColorSwatch('darkButtonGradientStart')}
+            />
+            {displayColorPicker.darkButtonGradientStart && (
+              <Box sx={{ position: 'absolute', zIndex: '2', top: '100%', left: 0 }}>
+                <Box sx={{ position: 'fixed', top: '0px', right: '0px', bottom: '0px', left: '0px' }} onClick={() => handleCloseColorPicker('darkButtonGradientStart')} />
+                <SketchPicker
+                  color={toggles.darkButtonGradientStart}
+                  onChange={(color) => handleColorChange('darkButtonGradientStart', color)}
+                />
+              </Box>
+            )}
           </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, position: 'relative' }}>
             <TextField
               label="Button Gradient End (Dark)"
               name="darkButtonGradientEnd"
               value={toggles.darkButtonGradientEnd}
-              onChange={handleColorChange}
+              onChange={(e) => handleColorChange(e.target.name, { hex: e.target.value })}
               fullWidth
               size="small"
             />
-            <Box sx={{ width: 24, height: 24, borderRadius: '4px', border: '1px solid #ccc', backgroundColor: toggles.darkButtonGradientEnd }} />
+            <Box
+              sx={{
+                width: 24,
+                height: 24,
+                borderRadius: '4px',
+                border: '1px solid #ccc',
+                backgroundColor: toggles.darkButtonGradientEnd,
+                cursor: 'pointer',
+              }}
+              onClick={() => handleClickColorSwatch('darkButtonGradientEnd')}
+            />
+            {displayColorPicker.darkButtonGradientEnd && (
+              <Box sx={{ position: 'absolute', zIndex: '2', top: '100%', left: 0 }}>
+                <Box sx={{ position: 'fixed', top: '0px', right: '0px', bottom: '0px', left: '0px' }} onClick={() => handleCloseColorPicker('darkButtonGradientEnd')} />
+                <SketchPicker
+                  color={toggles.darkButtonGradientEnd}
+                  onChange={(color) => handleColorChange('darkButtonGradientEnd', color)}
+                />
+              </Box>
+            )}
           </Box>
 
           <Button variant="contained" onClick={handleSaveColorsAsDefault} sx={{ mt: 2, mr: 1 }}>
@@ -660,7 +842,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
             InputLabelProps={{ shrink: true }}
           />
           {formData.profilePicture && (
-            <Box sx={{ mt: 2, mb: 2 }}>
+                        <Box sx={{ mt: 2, mb: 2 }}>
               <img
                 src={formData.profilePicture}
                 alt="Profile Preview"
@@ -751,3 +933,4 @@ const AdminPanel = ({ setWidgetSettings }) => {
 };
 
 export default AdminPanel;
+

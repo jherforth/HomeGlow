@@ -22,6 +22,7 @@
     "simple-keyboard-layouts": "^3.4.101",
     "geopattern": "^1.2.3",
     "extend": "3.0.2",
+    "react-color": "2.19.3",
     "recharts": "^2.12.7"
   },
   "devDependencies": {
