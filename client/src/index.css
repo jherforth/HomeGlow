@@ -137,23 +137,7 @@ button:hover {
   filter: brightness(1.1);
 }
 
-.theme-toggle,
-.admin-toggle,
-.refresh-button {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-radius: 50%;
-  padding: 10px;
-  font-size: 1.2rem;
-  cursor: pointer;
-  backdrop-filter: var(--backdrop-blur);
-  box-shadow: var(--shadow);
-  z-index: 1000;
-  /* Ensure these are always on top */
-}
+
 
 /* Toggle switch for Web 3.0 */
 .toggle-label {

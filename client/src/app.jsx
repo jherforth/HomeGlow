@@ -198,51 +198,6 @@ const App = () => {
 
   return (
     <>
-      {/* Theme Toggle Button */}
-      <IconButton
-        className="theme-toggle"
-        onClick={toggleTheme}
-        aria-label="Toggle theme"
-        sx={{
-          position: 'fixed',
-          top: 16,
-          right: 16,
-          color: theme === 'light' ? 'action.active' : 'white',
-        }}
-      >
-        {theme === 'light' ? <Brightness4 /> : <Brightness7 />}
-      </IconButton>
-
-      {/* Admin Panel Toggle Button (Gear Icon) */}
-      <IconButton
-        className="admin-toggle"
-        onClick={toggleAdminPanel}
-        aria-label="Toggle Admin Panel"
-        sx={{
-          position: 'fixed',
-          top: 16,
-          right: 64,
-          color: theme === 'light' ? 'action.active' : 'white',
-        }}
-      >
-        <SettingsIcon />
-      </IconButton>
-
-      {/* Page Refresh Button */}
-      <IconButton
-        className="refresh-button"
-        onClick={handlePageRefresh}
-        aria-label="Refresh Page"
-        sx={{
-          position: 'fixed',
-          top: 16,
-          right: 112,
-          color: theme === 'light' ? 'action.active' : 'white',
-        }}
-      >
-        <RefreshIcon />
-      </IconButton>
-
       <Container className="container">
         <Grid container spacing={2} justifyContent="space-evenly">
           {/* Render shuffled widgets */}
@@ -267,6 +222,65 @@ const App = () => {
           <AdminPanel setWidgetSettings={setWidgetSettings} />
         </DialogContent>
       </Dialog>
+
+      {/* Bottom Bar for Logo and Buttons */}
+      <Box
+        sx={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          width: '100%',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: '10px 0',
+          backgroundColor: 'var(--card-bg)', // Use card background for consistency
+          borderTop: '1px solid var(--card-border)',
+          backdropFilter: 'var(--backdrop-blur)',
+          boxShadow: 'var(--shadow)',
+          zIndex: 1000,
+        }}
+      >
+        {/* App Logo Placeholder */}
+        <img src="/HomeGlowLogo.png" alt="App Logo" style={{ height: '40px', marginRight: '20px' }} />
+
+        {/* Theme Toggle Button */}
+        <IconButton
+          onClick={toggleTheme}
+          aria-label="Toggle theme"
+          sx={{
+            color: theme === 'light' ? 'action.active' : 'white',
+            margin: '0 5px',
+          }}
+        >
+          {theme === 'light' ? <Brightness4 /> : <Brightness7 />}
+        </IconButton>
+
+        {/* Admin Panel Toggle Button (Gear Icon) */}
+        <IconButton
+          onClick={toggleAdminPanel}
+          aria-label="Toggle Admin Panel"
+          sx={{
+            color: theme === 'light' ? 'action.active' : 'white',
+            margin: '0 5px',
+          }}
+        >
+          <SettingsIcon />
+        </IconButton>
+
+        {/* Page Refresh Button */}
+        <IconButton
+          onClick={handlePageRefresh}
+          aria-label="Refresh Page"
+          sx={{
+            color: theme === 'light' ? 'action.active' : 'white',
+            margin: '0 5px',
+          }}
+        >
+          <RefreshIcon />
+        </IconButton>
+      </Box>
     </>
   );
 };
