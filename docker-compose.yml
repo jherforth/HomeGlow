@@ -27,4 +27,4 @@ services:
     env_file:
       - ./.env
     environment:
-      - REACT_APP_API_URL=http://homeglow-backend:5000
+      - VITE_REACT_APP_API_URL=http://homeglow-backend:5000
