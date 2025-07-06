@@ -167,7 +167,7 @@ If you prefer to run the client and server separately for development:
     Ensure your `client/.env` is configured.
     ```bash
     cd client
-    npm start
+    npm run dev
     ```
 
 ## 🤝 Contributing
