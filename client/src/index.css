@@ -64,6 +64,7 @@ body {
   overflow-y: auto;
   font-size: var(--dynamic-text-size);
   /* Apply dynamic text size */
+  padding-bottom: 80px; /* Add padding to account for fixed bottom bar */
 }
 
 .container {
