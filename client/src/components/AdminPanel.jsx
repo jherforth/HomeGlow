@@ -246,9 +246,15 @@ const AdminPanel = ({ setWidgetSettings }) => {
       darkButtonGradientStart: '#2e2767',
       darkButtonGradientEnd: '#620808',
     };
-    // Load from localStorage first, then apply hardcoded defaults if not present
-    const savedSettings = JSON.parse(localStorage.getItem('widgetSettings')) || {};
-    const settingsToApply = { ...defaultSettings, ...savedSettings };
+    const savedSettingsString = localStorage.getItem('widgetSettings');
+    let settingsToApply;
+    if (savedSettingsString) {
+      // If there are saved settings, use them as the reset target
+      settingsToApply = JSON.parse(savedSettingsString);
+    } else {
+      // If no saved settings, fall back to hardcoded defaults
+      settingsToApply = defaultSettings;
+    }
 
     setToggles(settingsToApply);
     setWidgetSettings(settingsToApply);
