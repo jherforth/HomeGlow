@@ -71,7 +71,7 @@ const WeatherWidget = ({ transparentBackground }) => {
       const forecastResponse = await axios.get(
         `https://api.openweathermap.org/data/2.5/forecast?zip=${zipCode},us&appid=${API_KEY}&units=imperial`
       );
-      
+
       // Process forecast data for 3-day summary
       const dailyForecasts = {};
       const hourlyChartData = []; // Data for charts
@@ -204,7 +204,7 @@ const WeatherWidget = ({ transparentBackground }) => {
       )}
 
       {chartData.length > 0 && ( // Only show tabs if chart data is available
-        <Box sx={{ width: '100%', mt: 3}}>
+        <Box sx={{ width: '100%', mt: 3 }}>
           <Tabs value={selectedTab} onChange={handleTabChange} aria-label="weather graphs tabs" centered> {/* Added 'centered' prop here */}
             <Tab label="Temperature" />
             <Tab label="Precipitation" />
