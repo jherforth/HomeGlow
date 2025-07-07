@@ -279,6 +279,33 @@ const AdminPanel = ({ setWidgetSettings }) => {
     setSuccess(null);
   };
 
+  // NEW: Handle API settings input change
+  const handleApiSettingChange = (e) => {
+    setApiSettings({ ...apiSettings, [e.target.name]: e.target.value });
+  };
+
+  // NEW: Handle saving API settings
+  const handleSaveApiSettings = async () => {
+    try {
+      // Send each setting individually or as a batch if backend supports
+      // For now, send individually as per backend POST /api/settings
+      await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, {
+        key: 'WEATHER_API_KEY',
+        value: apiSettings.WEATHER_API_KEY,
+      });
+      await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, {
+        key: 'ICS_CALENDAR_URL',
+        value: apiSettings.ICS_CALENDAR_URL,
+      });
+      setSuccess('API settings saved successfully!');
+      setError(null);
+    } catch (error) {
+      console.error('Error saving API settings:', error);
+      setError(error.response?.data?.error || 'Failed to save API settings');
+      setSuccess(null);
+    }
+  };
+
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
