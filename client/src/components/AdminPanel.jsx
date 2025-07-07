@@ -98,6 +98,12 @@ const AdminPanel = ({ setWidgetSettings }) => {
   const [chores, setChores] = useState([]);
   const [selectedTab, setSelectedTab] = useState(0); // State for selected tab
 
+  // NEW: State for API settings
+  const [apiSettings, setApiSettings] = useState({
+    WEATHER_API_KEY: '',
+    ICS_CALENDAR_URL: '',
+  });
+
   // State for managing color picker visibility
   const [displayColorPicker, setDisplayColorPicker] = useState({
     lightGradientStart: false,
@@ -117,6 +123,10 @@ const AdminPanel = ({ setWidgetSettings }) => {
 
       const choresResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`);
       setChores(Array.isArray(choresResponse.data) ? choresResponse.data : []);
+
+      // NEW: Fetch API settings
+      const settingsResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`);
+      setApiSettings(settingsResponse.data); // Assuming data is { KEY: VALUE }
     } catch (err) {
       console.error('Error fetching data for Admin Panel:', err);
     }
@@ -369,6 +379,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
           <Tab label="Widgets" {...a11yProps(0)} />
           <Tab label="Interface" {...a11yProps(1)} />
           <Tab label="Users" {...a11yProps(2)} />
+          <Tab label="APIs" {...a11yProps(3)} /> {/* NEW TAB */}
         </Tabs>
       </Box>
 
@@ -933,6 +944,34 @@ const AdminPanel = ({ setWidgetSettings }) => {
             </Accordion>
           ))}
         </Box>
+      </TabPanel>
+
+      {/* NEW: APIs Tab */}
+      <TabPanel value={selectedTab} index={3}>
+        <Typography variant="subtitle1" gutterBottom>API Integrations</Typography>
+        <TextField
+          name="WEATHER_API_KEY"
+          label="OpenWeatherMap API Key"
+          variant="outlined"
+          size="small"
+          fullWidth
+          margin="normal"
+          value={apiSettings.WEATHER_API_KEY}
+          onChange={handleApiSettingChange}
+        />
+        <TextField
+          name="ICS_CALENDAR_URL"
+          label="ICS Calendar URL"
+          variant="outlined"
+          size="small"
+          fullWidth
+          margin="normal"
+          value={apiSettings.ICS_CALENDAR_URL}
+          onChange={handleApiSettingChange}
+        />
+        <Button variant="contained" onClick={handleSaveApiSettings} sx={{ mt: 2 }}>
+          Save API Settings
+        </Button>
       </TabPanel>
     </Card>
   );

@@ -65,6 +65,10 @@ async function initializeDatabase() {
         end TEXT,\
         description TEXT
       );\
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+      );
     `);
     return newDb; // Return the new database instance
   } catch (error) {
@@ -275,12 +279,53 @@ fastify.get('/api/calendar/ics', async (request, reply) => {
   }
 });
 
+// NEW: API Endpoints for Settings (including API keys)
+fastify.get('/api/settings', async (request, reply) => {
+  try {
+    const rows = db.prepare('SELECT key, value FROM settings').all();
+    // Convert array of {key, value} objects to a single object {key: value}
+    const settings = rows.reduce((acc, row) => {
+      acc[row.key] = row.value;
+      return acc;
+    }, {});
+    return settings;
+  } catch (error) {
+    console.error('Error fetching settings:', error);
+    reply.status(500).send({ error: 'Failed to fetch settings' });
+  }
+});
+
+fastify.post('/api/settings', async (request, reply) => {
+  const { key, value } = request.body;
+  if (!key || value === undefined) {
+    return reply.status(400).send({ error: 'Key and value are required.' });
+  }
+  try {
+    // Use INSERT OR REPLACE to either insert a new setting or update an existing one
+    const stmt = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
+    stmt.run(key, value);
+    return { success: true, message: `Setting '${key}' saved successfully.` };
+  } catch (error) {
+    console.error(`Error saving setting '${key}':`, error);
+    reply.status(500).send({ error: `Failed to save setting '${key}'` });
+  }
+});
+
+
 // NEW: Endpoint to fetch and parse ICS calendar events
 fastify.get('/api/calendar-events', async (request, reply) => {
-  const icsUrl = process.env.ICS_CALENDAR_URL;
+  let icsUrl;
+  try {
+    const icsUrlSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('ICS_CALENDAR_URL');
+    icsUrl = icsUrlSetting ? icsUrlSetting.value : null;
+  } catch (error) {
+    console.error('Error fetching ICS_CALENDAR_URL from settings:', error);
+    reply.status(500).send({ error: 'Failed to retrieve ICS Calendar URL from settings.' });
+    return;
+  }
 
   if (!icsUrl) {
-    reply.status(400).send({ error: 'ICS_CALENDAR_URL environment variable is not set.' });
+    reply.status(400).send({ error: 'ICS_CALENDAR_URL is not set in database settings.' });
     return;
   }
 

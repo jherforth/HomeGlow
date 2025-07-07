@@ -8,6 +8,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 // GeoPattern import - CORRECTED LINE (using the direct geopattern library)
 import GeoPattern from 'geopattern'; // Import GeoPattern from the 'geopattern' package
 
+import axios from 'axios';
 import CalendarWidget from './components/CalendarWidget.jsx';
 import PhotoWidget from './components/PhotoWidget.jsx';
 import AdminPanel from './components/AdminPanel.jsx';
@@ -170,7 +171,7 @@ const App = () => {
       case 'calendar':
         return widgetSettings.calendar.enabled && (
           <Grid item xs={12} sm={6} md={3} className="grid-item">
-            <CalendarWidget transparentBackground={widgetSettings.calendar.transparent} />
+            <CalendarWidget transparentBackground={widgetSettings.calendar.transparent} icsCalendarUrl={apiKeys.ICS_CALENDAR_URL} />
           </Grid>
         );
       case 'photos':
@@ -182,7 +183,7 @@ const App = () => {
       case 'weather':
         return widgetSettings.weather.enabled && (
           <Grid item xs={12} sm={6} md={3} className="grid-item">
-            <WeatherWidget transparentBackground={widgetSettings.weather.transparent} />
+            <WeatherWidget transparentBackground={widgetSettings.weather.transparent} weatherApiKey={apiKeys.WEATHER_API_KEY} />
           </Grid>
         );
       case 'menu':
