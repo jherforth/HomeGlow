@@ -194,6 +194,9 @@ const App = () => {
     window.location.reload();
   };
 
+  const toggleBottomBar = () => {
+    setIsBottomBarCollapsed(!isBottomBarCollapsed);
+  };
   // Helper function to render a widget based on its name
   const renderWidget = (widgetName) => {
     switch (widgetName) {
