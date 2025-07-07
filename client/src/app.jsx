@@ -268,7 +268,7 @@ const App = () => {
           justifyContent: 'center',
           alignItems: 'center',
           padding: isBottomBarCollapsed ? '5px 0' : '10px 0',
-          backgroundColor: 'var(--card-bg)',
+          backgroundColor: 'var(--bottom-bar-bg)',
           borderTop: '1px solid var(--card-border)',
           backdropFilter: 'var(--backdrop-blur)',
           boxShadow: 'var(--shadow)',
