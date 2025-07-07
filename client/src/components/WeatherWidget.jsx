@@ -20,9 +20,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 
-const API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY; // Accessing Vite env variable
-
-const WeatherWidget = ({ transparentBackground }) => {
+const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
   const [zipCode, setZipCode] = useState(() => {
     const savedZip = localStorage.getItem('weatherZipCode');
     return savedZip || '';
@@ -42,17 +40,20 @@ const WeatherWidget = ({ transparentBackground }) => {
     if (zipCode) {
       fetchWeather();
     }
-  }, []);
+  }, [zipCode, weatherApiKey]);
 
   const fetchWeather = async () => {
     if (!zipCode) {
       setError('Please enter a zip code.');
       return;
     }
-    if (!API_KEY) {
-      setError('OpenWeatherMap API key is not configured. Please add VITE_OPENWEATHER_API_KEY to your .env file.');
+    if (!weatherApiKey) {
+      setError('OpenWeatherMap API key is not configured. Please add it in the Admin Panel.');
       return;
     }
+
+    // ADD THIS LINE TO LOG THE API KEY
+    console.log('Using OpenWeatherMap API Key:', weatherApiKey);
 
     setLoading(true);
     setError(null);
@@ -63,13 +64,13 @@ const WeatherWidget = ({ transparentBackground }) => {
     try {
       // Fetch current weather
       const currentWeatherResponse = await axios.get(
-        `https://api.openweathermap.org/data/2.5/weather?zip=${zipCode},us&appid=${API_KEY}&units=imperial`
+        `https://api.openweathermap.org/data/2.5/weather?zip=${zipCode},us&appid=${weatherApiKey}&units=imperial`
       );
       setWeatherData(currentWeatherResponse.data);
 
       // Fetch 5-day / 3-hour forecast
       const forecastResponse = await axios.get(
-        `https://api.openweathermap.org/data/2.5/forecast?zip=${zipCode},us&appid=${API_KEY}&units=imperial`
+        `https://api.openweathermap.org/data/2.5/forecast?zip=${zipCode},us&appid=${weatherApiKey}&units=imperial`
       );
 
       // Process forecast data for 3-day summary
@@ -204,7 +205,7 @@ const WeatherWidget = ({ transparentBackground }) => {
       )}
 
       {chartData.length > 0 && ( // Only show tabs if chart data is available
-        <Box sx={{ width: '100%', mt: 3 }}>
+        <Box sx={{ width: '100%', mt: 3}}>
           <Tabs value={selectedTab} onChange={handleTabChange} aria-label="weather graphs tabs" centered> {/* Added 'centered' prop here */}
             <Tab label="Temperature" />
             <Tab label="Precipitation" />
