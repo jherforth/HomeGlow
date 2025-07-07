@@ -4,6 +4,8 @@ import { Container, Grid, IconButton, Box, Dialog, DialogContent, Button } from 
 import { Brightness4, Brightness7 } from '@mui/icons-material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 
 // GeoPattern import - CORRECTED LINE (using the direct geopattern library)
 import GeoPattern from 'geopattern'; // Import GeoPattern from the 'geopattern' package
@@ -59,6 +61,9 @@ const App = () => {
     WEATHER_API_KEY: '',
     ICS_CALENDAR_URL: '',
   });
+
+  // NEW: State for bottom bar collapse
+  const [isBottomBarCollapsed, setIsBottomBarCollapsed] = useState(false);
 
   useEffect(() => {
     const fetchApiKeys = async () => {
@@ -120,6 +125,12 @@ const App = () => {
       }
     };
   }, [widgetSettings.refreshInterval]);
+
+  // NEW: Effect to update body padding based on bottom bar height
+  useEffect(() => {
+    const barHeight = isBottomBarCollapsed ? 40 : 100; // Approximate height of collapsed/expanded bar
+    document.documentElement.style.setProperty('--bottom-bar-height', `${barHeight}px`);
+  }, [isBottomBarCollapsed]);
 
   // NEW: Effect for GeoPattern background and container transparency
   useEffect(() => {
@@ -253,52 +264,73 @@ const App = () => {
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
-          padding: '10px 0',
-          backgroundColor: 'var(--card-bg)', // Use card background for consistency
+          padding: isBottomBarCollapsed ? '5px 0' : '10px 0',
+          backgroundColor: 'var(--card-bg)',
           borderTop: '1px solid var(--card-border)',
           backdropFilter: 'var(--backdrop-blur)',
           boxShadow: 'var(--shadow)',
           zIndex: 1000,
+          transition: 'height 0.3s ease-in-out, padding 0.3s ease-in-out',
+          height: isBottomBarCollapsed ? '40px' : '100px', // Fixed height for collapsed, 100px for expanded
+          overflow: 'hidden', // Hide overflowing content when collapsed
         }}
       >
-        {/* App Logo Placeholder */}
-        <img src="/HomeGlowLogo.png" alt="App Logo" style={{ height: '80px', marginRight: '20px' }} />
-
-        {/* Theme Toggle Button */}
+        {/* Toggle Button for the bar */}
         <IconButton
-          onClick={toggleTheme}
-          aria-label="Toggle theme"
+          onClick={toggleBottomBar}
+          aria-label={isBottomBarCollapsed ? 'Expand bottom bar' : 'Collapse bottom bar'}
           sx={{
             color: theme === 'light' ? 'action.active' : 'white',
-            margin: '0 5px',
+            alignSelf: 'flex-end', // Position to the right
+            marginRight: '10px',
+            padding: '5px',
           }}
         >
-          {theme === 'light' ? <Brightness4 /> : <Brightness7 />}
+          {isBottomBarCollapsed ? <ExpandLessIcon /> : <ExpandMoreIcon />}
         </IconButton>
 
-        {/* Admin Panel Toggle Button (Gear Icon) */}
-        <IconButton
-          onClick={toggleAdminPanel}
-          aria-label="Toggle Admin Panel"
-          sx={{
-            color: theme === 'light' ? 'action.active' : 'white',
-            margin: '0 5px',
-          }}
-        >
-          <SettingsIcon />
-        </IconButton>
+        {!isBottomBarCollapsed && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%' }}>
+            {/* App Logo Placeholder */}
+            <img src="/HomeGlowLogo.png" alt="App Logo" style={{ height: '80px', marginRight: '20px' }} />
 
-        {/* Page Refresh Button */}
-        <IconButton
-          onClick={handlePageRefresh}
-          aria-label="Refresh Page"
-          sx={{
-            color: theme === 'light' ? 'action.active' : 'white',
-            margin: '0 5px',
-          }}
-        >
-          <RefreshIcon />
-        </IconButton>
+            {/* Theme Toggle Button */}
+            <IconButton
+              onClick={toggleTheme}
+              aria-label="Toggle theme"
+              sx={{
+                color: theme === 'light' ? 'action.active' : 'white',
+                margin: '0 5px',
+              }}
+            >
+              {theme === 'light' ? <Brightness4 /> : <Brightness7 />}
+            </IconButton>
+
+            {/* Admin Panel Toggle Button (Gear Icon) */}
+            <IconButton
+              onClick={toggleAdminPanel}
+              aria-label="Toggle Admin Panel"
+              sx={{
+                color: theme === 'light' ? 'action.active' : 'white',
+                margin: '0 5px',
+              }}
+            >
+              <SettingsIcon />
+            </IconButton>
+
+            {/* Page Refresh Button */}
+            <IconButton
+              onClick={handlePageRefresh}
+              aria-label="Refresh Page"
+              sx={{
+                color: theme === 'light' ? 'action.active' : 'white',
+                margin: '0 5px',
+              }}
+            >
+              <RefreshIcon />
+            </IconButton>
+          </Box>
+        )}
       </Box>
     </>
   );
