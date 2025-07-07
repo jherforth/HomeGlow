@@ -205,7 +205,7 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
       )}
 
       {chartData.length > 0 && ( // Only show tabs if chart data is available
-        <Box sx={{ width: '100%', mt: 3}}>
+        <Box sx={{ width: '100%', mt: 3 }}>
           <Tabs value={selectedTab} onChange={handleTabChange} aria-label="weather graphs tabs" centered> {/* Added 'centered' prop here */}
             <Tab label="Temperature" />
             <Tab label="Precipitation" />

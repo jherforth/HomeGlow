@@ -262,7 +262,7 @@ const App = () => {
         }}
       >
         {/* App Logo Placeholder */}
-        <img src="/HomeGlowLogo.png" alt="App Logo" style={{ height: '40px', marginRight: '20px' }} />
+        <img src="/HomeGlowLogo.png" alt="App Logo" style={{ height: '80px', marginRight: '20px' }} />
 
         {/* Theme Toggle Button */}
         <IconButton
