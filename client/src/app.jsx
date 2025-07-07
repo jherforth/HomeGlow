@@ -54,6 +54,24 @@ const App = () => {
   // NEW: State for dynamic GeoPattern seed
   const [currentGeoPatternSeed, setCurrentGeoPatternSeed] = useState('');
 
+  // NEW: State for API keys fetched from backend
+  const [apiKeys, setApiKeys] = useState({
+    WEATHER_API_KEY: '',
+    ICS_CALENDAR_URL: '',
+  });
+
+  useEffect(() => {
+    const fetchApiKeys = async () => {
+      try {
+        const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`);
+        setApiKeys(response.data);
+      } catch (error) {
+        console.error('Error fetching API keys:', error);
+      }
+    };
+    fetchApiKeys();
+  }, []); // Run once on mount
+
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
     setTheme(savedTheme);
