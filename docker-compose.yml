@@ -2,7 +2,7 @@ services:
   homeglow-backend:
     container_name: homeglow-backend
     build:
-      context: /apps/homeglow/server
+      context: ./server
       dockerfile: Dockerfile
     ports:
       - "5000:5000"
@@ -15,7 +15,7 @@ services:
   homeglow-frontend:
     container_name: homeglow-frontend
     build:
-      context: /apps/homeglow/client
+      context: ./client
       dockerfile: Dockerfile
       args:
         - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
