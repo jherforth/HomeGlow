@@ -2,20 +2,20 @@ services:
   homeglow-backend:
     container_name: homeglow-backend
     build:
-      context: ./server
+      context: /homeglow/server
       dockerfile: Dockerfile
     ports:
       - "5000:5000"
     volumes:
-      - ./data:/app/data
-      - ./uploads:/app/uploads
+      - /homeglow/data:/app/data
+      - /homeglow/uploads:/app/uploads # Ensure /homeglow/uploads exists
     environment:
       - NODE_ENV=production
       - PORT=5000
   homeglow-frontend:
     container_name: homeglow-frontend
     build:
-      context: ./client
+      context: /homeglow/client
       dockerfile: Dockerfile
       args:
         - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
@@ -25,7 +25,7 @@ services:
     depends_on:
       - homeglow-backend
     env_file:
-      - ./.env
+      - /homeglow/.env # Ensure .env exists in /homeglow
     environment:
       - VITE_REACT_APP_API_URL=http://homeglow-backend:5000
   tailscale:
@@ -33,12 +33,12 @@ services:
     image: tailscale/tailscale:latest
     hostname: homeglow-tailscale
     volumes:
-      - ./tailscale-state:/var/lib/tailscale # Persistent state for Tailscale
+      - /homeglow/tailscale-state:/var/lib/tailscale # Ensure /homeglow/tailscale-state exists
     cap_add:
       - NET_ADMIN
     devices:
       - /dev/net/tun
     environment:
-      - TS_AUTHKEY=${TS_AUTHKEY} # IMPORTANT: Replace with your actual Tailscale auth key or set in a .env file
-      - TS_ADVERTISE_ROUTES=172.17.0.0/16 # IMPORTANT: Adjust this to your Docker network subnet if different. Run 'docker network inspect <your_network_name>' to find it.
+      - TS_AUTHKEY=${TS_AUTHKEY}
+      - TS_ADVERTISE_ROUTES=172.17.0.0/16
     restart: unless-stopped
