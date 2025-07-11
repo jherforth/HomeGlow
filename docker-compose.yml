@@ -40,6 +40,5 @@ services:
       - /dev/net/tun
     environment:
       - TS_AUTHKEY=${TS_AUTHKEY} # IMPORTANT: Replace with your actual Tailscale auth key or set in a .env file
-      - TS_ADVERTISE_ROUTES=172.18.0.0/16 # IMPORTANT: Adjust this to your Docker network subnet if different. Run 'docker network inspect <your_network_name>' to find it.
-      - TS_EXTRA_ARGS=--advertise-exit-node # Optional: Uncomment if you want this to be an exit node
+      - TS_ADVERTISE_ROUTES=172.17.0.0/16 # IMPORTANT: Adjust this to your Docker network subnet if different. Run 'docker network inspect <your_network_name>' to find it.
     restart: unless-stopped
