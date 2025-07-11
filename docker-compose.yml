@@ -28,3 +28,18 @@ services:
       - ./.env
     environment:
       - VITE_REACT_APP_API_URL=http://homeglow-backend:5000
+  tailscale:
+    container_name: homeglow-tailscale
+    image: tailscale/tailscale:latest
+    hostname: homeglow-tailscale
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale # Persistent state for Tailscale
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    environment:
+      - TS_AUTHKEY=${TS_AUTHKEY} # IMPORTANT: Replace with your actual Tailscale auth key or set in a .env file
+      - TS_ADVERTISE_ROUTES=172.18.0.0/16 # IMPORTANT: Adjust this to your Docker network subnet if different. Run 'docker network inspect <your_network_name>' to find it.
+      - TS_EXTRA_ARGS=--advertise-exit-node # Optional: Uncomment if you want this to be an exit node
+    restart: unless-stopped
