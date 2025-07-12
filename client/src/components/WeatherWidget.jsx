@@ -1,11 +1,12 @@
 // client/src/components/WeatherWidget.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Card, Typography, TextField, Button, Box, Tabs, Tab } from '@mui/material';
+import { Card, Typography, TextField, Button, Box, Tabs, Tab, Dialog, DialogTitle, DialogContent, DialogActions, IconButton } from '@mui/material';
 import WbSunnyIcon from '@mui/icons-material/WbSunny';
 import CloudIcon from '@mui/icons-material/Cloud';
 import AcUnitIcon from '@mui/icons-material/AcUnit';
 import GrainIcon from '@mui/icons-material/Grain';
+import SettingsIcon from '@mui/icons-material/Settings'; // Import SettingsIcon
 import '../index.css'; // Assuming global styles are here
 
 // Recharts imports
@@ -31,10 +32,42 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedTab, setSelectedTab] = useState(0);
+  const [currentTime, setCurrentTime] = useState(new Date()); // New state for current time
+  const [showSettingsModal, setShowSettingsModal] = useState(false); // New state for settings modal
 
   useEffect(() => {
     localStorage.setItem('weatherZipCode', zipCode);
   }, [zipCode]);
+
+  // Effect to update current time every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (zipCode) {
+      fetchWeather();
+    }
+  }, [zipCode, weatherApiKey]);
+
+  const handleOpenSettings = () => {
+    setShowSettingsModal(true);
+  };
+
+  const handleCloseSettings = () => {
+    setShowSettingsModal(false);
+  };
+
+  // Effect to update current time every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (zipCode) {
@@ -140,6 +173,9 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
   return (
     <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`}> {/* Apply transparent-card class */}
       <Typography variant="h6">Weather</Typography>
+      <Typography variant="subtitle1" sx={{ mb: 2 }}>
+        {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+      </Typography>
       <TextField
         label="Enter Zip Code"
         variant="outlined"
