@@ -61,20 +61,6 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
     setShowSettingsModal(false);
   };
 
-  // Effect to update current time every second
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    if (zipCode) {
-      fetchWeather();
-    }
-  }, [zipCode, weatherApiKey]);
-
   const fetchWeather = async () => {
     if (!zipCode) {
       setError('Please enter a zip code.');
@@ -172,22 +158,32 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
 
   return (
     <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`}> {/* Apply transparent-card class */}
-      <Typography variant="h6">Weather</Typography>
-      <Typography variant="subtitle1" sx={{ mb: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Typography variant="h6">Weather</Typography>
+        <IconButton onClick={handleOpenSettings} size="small">
+          <SettingsIcon fontSize="small" />
+        </IconButton>
+      </Box>
+      <Typography variant="h5" sx={{ mb: 2, fontWeight: 'bold' }}>
         {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
       </Typography>
-      <TextField
-        label="Enter Zip Code"
-        variant="outlined"
-        size="small"
-        value={zipCode}
-        onChange={(e) => setZipCode(e.target.value)}
-        fullWidth
-        sx={{ mb: 1 }}
-      />
-      <Button variant="contained" onClick={fetchWeather} disabled={loading} fullWidth>
-        {loading ? 'Loading...' : 'Get Weather'}
-      </Button>
+
+      {(!weatherData && !loading) && (
+        <Box sx={{ mt: 2 }}>
+          <TextField
+            label="Enter Zip Code"
+            variant="outlined"
+            size="small"
+            value={zipCode}
+            onChange={(e) => setZipCode(e.target.value)}
+            fullWidth
+            sx={{ mb: 1 }}
+          />
+          <Button variant="contained" onClick={fetchWeather} disabled={loading} fullWidth>
+            {loading ? 'Loading...' : 'Get Weather'}
+          </Button>
+        </Box>
+      )}
 
       {error && <Typography color="error" sx={{ mt: 2 }}>{error}</Typography>}
 
@@ -292,6 +288,28 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
           </Box>
         </Box>
       )}
+
+      <Dialog open={showSettingsModal} onClose={handleCloseSettings}>
+        <DialogTitle>Weather Settings</DialogTitle>
+        <DialogContent>
+          <TextField
+            label="Enter Zip Code"
+            variant="outlined"
+            size="small"
+            value={zipCode}
+            onChange={(e) => setZipCode(e.target.value)}
+            fullWidth
+            sx={{ mb: 1, mt: 2 }}
+          />
+          {error && <Typography color="error" sx={{ mt: 1 }}>{error}</Typography>}\
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseSettings}>Cancel</Button>
+          <Button onClick={() => { fetchWeather(); handleCloseSettings(); }} disabled={loading}>
+            {loading ? 'Loading...' : 'Get Weather'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Card>
   );
 };
