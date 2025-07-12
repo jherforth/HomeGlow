@@ -36,8 +36,9 @@ services:
       - /apps/homeglow/tailscale-state:/var/lib/tailscale # Updated to correct path
     cap_add:
       - NET_ADMIN
+    network_mode: service:homeglow-frontend
     environment:
       - TS_AUTHKEY=${TS_AUTHKEY}
-      - TS_ADVERTISE_ROUTES=172.17.0.0/16
       - TS_USERSPACE=true
+      - TS_SERVE_HTTP=:3000
     restart: unless-stopped
