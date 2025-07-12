@@ -31,7 +31,6 @@ services:
   tailscale:
     container_name: homeglow-tailscale
     image: tailscale/tailscale:latest
-    hostname: homeglow-tailscale
     volumes:
       - /apps/homeglow/tailscale-state:/var/lib/tailscale # Updated to correct path
     cap_add:
