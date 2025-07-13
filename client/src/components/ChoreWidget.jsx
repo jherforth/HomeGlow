@@ -73,14 +73,16 @@ const ChoreWidget = ({ transparentBackground }) => {
 
   // Hammer.js for swipe to complete (existing functionality)
   useEffect(() => {
-    const hammer = new Hammer(cardRef.current);
-    hammer.on('swiperight', (e) => {
-      const choreId = e.target.dataset.choreId;
-      if (choreId) {
-        markChoreComplete(choreId);
-      }
-    });
-    return () => hammer.destroy();
+    if (cardRef.current) { // Add this check
+      const hammer = new Hammer(cardRef.current);
+      hammer.on('swiperight', (e) => {
+        const choreId = e.target.dataset.choreId;
+        if (choreId) {
+          markChoreComplete(choreId);
+        }
+      });
+      return () => hammer.destroy();
+    }
   }, [chores]);
 
   const markChoreComplete = async (choreId) => {
@@ -175,6 +177,24 @@ const ChoreWidget = ({ transparentBackground }) => {
 
   const handleOpenAddTaskDialog = () => {
     setOpenAddTaskDialog(true);
+    setError(null);
+  };
+
+  const handleCloseAddTaskDialog = () => {
+    setOpenAddTaskDialog(false);
+    setError(null);
+    setNewTask({
+      title: '',
+      description: '',
+      timePeriod: '',
+      assignedTo: '',
+      assignedDayOfWeek: '',
+      repeats: 'Doesn\'t repeat',
+    });
+  };
+
+  const handleOpenBonusChoresDialog = () => {
+    setOpenBonusChoresDialog(true);
     setError(null);
   };
 
