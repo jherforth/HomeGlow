@@ -58,7 +58,6 @@ const ChoreWidget = ({ transparentBackground }) => {
       // Filter for bonus chores (user_id 0, clam_value > 0)
       const fetchedBonusChores = choresResponse.data.filter(chore => chore.user_id === 0 && chore.clam_value > 0);
       setBonusChores(fetchedBonusChores);
-      console.log('Fetched bonus chores:', fetchedBonusChores);
       setError(null);
     } catch (err) {
       console.error('Error fetching data:', err);
@@ -200,7 +199,6 @@ const ChoreWidget = ({ transparentBackground }) => {
 
   const handleCloseBonusChoresDialog = () => {
     setOpenBonusChoresDialog(false);
-    console.log('openBonusChoresDialog set to false');
     setError(null);
     setSelectedBonusChore(null);
     setClaimingUser(null);
@@ -484,6 +482,20 @@ const ChoreWidget = ({ transparentBackground }) => {
         <DialogActions>
           <Button onClick={handleCloseAddTaskDialog}>Cancel</Button>
           <Button onClick={handleAddTask} variant="contained">Add Task</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Bonus Chores Dialog */}
+      <Dialog open={openBonusChoresDialog} onClose={handleCloseBonusChoresDialog} key="bonus-chores-dialog">
+        <DialogTitle>Grab a Bonus Chore</DialogTitle>
+        <DialogContent>
+          <Typography>Test Dialog</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseBonusChoresDialog}>Cancel</Button>
+          <Button onClick={handleConfirmGrabBonus} variant="contained" disabled={!selectedBonusChore || bonusChores.length === 0}>
+            Confirm
+          </Button>
         </DialogActions>
       </Dialog>
     </Card>
