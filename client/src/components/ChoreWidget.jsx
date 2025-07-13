@@ -148,6 +148,7 @@ const ChoreWidget = ({ transparentBackground }) => {
         repeats: newTask.repeats,
         completed: false,
         clam_value: newTask.assignedTo === 0 ? parseInt(newTask.clamValue) : 0, // Only send clamValue if assigned to bonus user
+        expiration_date: null, // Explicitly send null for new chores
       });
       setNewTask({
         title: '',
