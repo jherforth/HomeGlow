@@ -178,25 +178,6 @@ const ChoreWidget = ({ transparentBackground }) => {
     setError(null);
   };
 
-  const handleCloseAddTaskDialog = () => {
-    setOpenAddTaskDialog(false);
-    setError(null);
-    setNewTask({
-      title: '',
-      description: '',
-      timePeriod: '',
-      assignedTo: '',
-      assignedDayOfWeek: '',
-      repeats: 'Doesn\'t repeat',
-    });
-  };
-
-  const handleOpenBonusChoresDialog = () => {
-    setOpenBonusChoresDialog(true);
-    console.log('openBonusChoresDialog set to true');
-    setError(null);
-  };
-
   const handleCloseBonusChoresDialog = () => {
     setOpenBonusChoresDialog(false);
     console.log('openBonusChoresDialog set to false');
@@ -206,10 +187,8 @@ const ChoreWidget = ({ transparentBackground }) => {
   };
 
   const handleGrabBonusClick = (userId) => {
-    console.log('Grab Bonus button clicked for user:', userId);
     setClaimingUser(userId);
     setOpenBonusChoresDialog(true);
-    console.log('openBonusChoresDialog set to true from Grab Bonus');
     setError(null);
   };
 
