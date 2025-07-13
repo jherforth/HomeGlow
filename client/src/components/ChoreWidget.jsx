@@ -237,7 +237,7 @@ const ChoreWidget = ({ transparentBackground }) => {
       {/* User Row with Profile Pictures and Tasks */}
       <Box sx={{ display: 'flex', justifyContent: 'space-evenly', flexWrap: 'wrap', mb: 3, gap: 2 }}> {/* Changed justifyContent to 'space-evenly' */}
         {users.length === 0 && !error && <Typography>No users available.</Typography>}
-        {users.map(user => {
+        {users.filter(user => user.id !== 0).map(user => {
           const userDailyChores = chores.filter(
             chore => parseInt(chore.user_id) === user.id && chore.assigned_day_of_week === currentDay
           );
