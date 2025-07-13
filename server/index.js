@@ -31,6 +31,7 @@ fastify.register(require('@fastify/static'), {
 
 // Initialize database
 const dbPath = path.resolve(__dirname, 'data', 'tasks.db');
+console.log('Database path:', dbPath);
 let db; // Declare db variable outside to hold the single instance
 
 async function initializeDatabase() {
