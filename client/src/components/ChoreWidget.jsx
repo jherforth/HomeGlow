@@ -97,13 +97,39 @@ const ChoreWidget = ({ transparentBackground }) => {
 
   const handleNewTaskInputChange = (e) => {
     const { name, value } = e.target;
-    setNewTask({ ...newTask, [name]: value });
+    setNewTask((prevTask) => {
+      const updatedTask = { ...prevTask, [name]: value };
+
+      // If assignedTo changes to bonus user (ID 0), set defaults for timePeriod, assignedDayOfWeek, and repeats
+      if (name === 'assignedTo' && parseInt(value) === 0) {
+        updatedTask.timePeriod = 'evening';
+        updatedTask.assignedDayOfWeek = getCurrentDayOfWeek();
+        updatedTask.repeats = 'Doesn\'t repeat'; // Bonus chores don't repeat in the traditional sense
+      } else if (name === 'assignedTo' && parseInt(value) !== 0) {
+        // If assignedTo changes to a regular user, reset these fields if they were previously set by bonus logic
+        if (prevTask.assignedTo === 0) {
+          updatedTask.timePeriod = '';
+          updatedTask.assignedDayOfWeek = '';
+          updatedTask.repeats = 'Doesn\'t repeat';
+        }
+      }
+      return updatedTask;
+    });
   };
 
   const handleAddTask = async () => {
-    if (!newTask.title.trim() || !newTask.assignedTo || !newTask.timePeriod || !newTask.assignedDayOfWeek) {
+    // General validation for all tasks
+    if (!newTask.title.trim()) {
       setError('Please fill all required fields for the new task.');
       return;
+    }
+
+    // Specific validation for non-bonus tasks
+    if (newTask.assignedTo !== 0) {
+      if (!newTask.assignedTo || !newTask.timePeriod || !newTask.assignedDayOfWeek) {
+        setError('Please fill all required fields for the new task.');
+        return;
+      }
     }
 
     // Validation for clamValue if bonus user is selected
@@ -379,6 +405,7 @@ const ChoreWidget = ({ transparentBackground }) => {
               value={newTask.timePeriod}
               label="Task Time Period"
               onChange={handleNewTaskInputChange}
+              required={newTask.assignedTo !== 0} // Required only for non-bonus tasks
             >
               <MenuItem value=""><em>None</em></MenuItem>
               <MenuItem value="morning">Morning</MenuItem>
@@ -421,6 +448,7 @@ const ChoreWidget = ({ transparentBackground }) => {
               value={newTask.assignedDayOfWeek}
               label="Assigned Day of the Week"
               onChange={handleNewTaskInputChange}
+              required={newTask.assignedTo !== 0} // Required only for non-bonus tasks
             >
               <MenuItem value=""><em>None</em></MenuItem>
               <MenuItem value="sunday">Sunday</MenuItem>
@@ -439,6 +467,7 @@ const ChoreWidget = ({ transparentBackground }) => {
               value={newTask.repeats}
               label="Repeats"
               onChange={handleNewTaskInputChange}
+              required={newTask.assignedTo !== 0} // Required only for non-bonus tasks
             >
               <MenuItem value="Doesn't repeat">Doesn't repeat</MenuItem>
               <MenuItem value="Weekly on this day">Weekly on this day</MenuItem>
