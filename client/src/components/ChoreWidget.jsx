@@ -56,7 +56,9 @@ const ChoreWidget = ({ transparentBackground }) => {
       const choresResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`);
       setChores(Array.isArray(choresResponse.data) ? choresResponse.data : []);
       // Filter for bonus chores (user_id 0, clam_value > 0)
-      setBonusChores(choresResponse.data.filter(chore => chore.user_id === 0 && chore.clam_value > 0));
+      const fetchedBonusChores = choresResponse.data.filter(chore => chore.user_id === 0 && chore.clam_value > 0);
+      setBonusChores(fetchedBonusChores);
+      console.log('Fetched bonus chores:', fetchedBonusChores);
       setError(null);
     } catch (err) {
       console.error('Error fetching data:', err);
@@ -191,11 +193,13 @@ const ChoreWidget = ({ transparentBackground }) => {
 
   const handleOpenBonusChoresDialog = () => {
     setOpenBonusChoresDialog(true);
+    console.log('openBonusChoresDialog set to true');
     setError(null);
   };
 
   const handleCloseBonusChoresDialog = () => {
     setOpenBonusChoresDialog(false);
+    console.log('openBonusChoresDialog set to false');
     setError(null);
     setSelectedBonusChore(null);
     setClaimingUser(null);
