@@ -48,7 +48,9 @@ async function initializeDatabase() {
         time_period TEXT,\
         assigned_day_of_week TEXT,\
         repeats TEXT,\
-        completed BOOLEAN
+        completed BOOLEAN,
+        clam_value INTEGER DEFAULT 0,
+        expiration_date TEXT
       );\
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,\
@@ -56,7 +58,8 @@ async function initializeDatabase() {
         email TEXT,\
         profile_picture TEXT,\
         clam_total INTEGER DEFAULT 0
-      );\
+      );
+      INSERT OR IGNORE INTO users (id, username, email, profile_picture, clam_total) VALUES (0, 'bonus', 'bonus@example.com', '', 0);\
       CREATE TABLE IF NOT EXISTS events (
         id INTEGER PRIMARY KEY AUTOINCREMENT,\
         user_id INTEGER,\
@@ -82,19 +85,37 @@ async function pruneAndResetChores() {
   try {
     const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     const currentDay = days[new Date().getDay()];
+    const now = new Date();
 
-    const completedChores = db.prepare('SELECT id, assigned_day_of_week, repeats FROM chores WHERE completed = 1').all();
+    // Select all chores to process
+    const allChores = db.prepare('SELECT id, user_id, assigned_day_of_week, repeats, completed, clam_value, expiration_date FROM chores').all();
 
-    for (const chore of completedChores) {
-      if (chore.assigned_day_of_week !== currentDay) {
-        if (chore.repeats === "Doesn't repeat") {
-          // Delete non-repeating completed chores from past days
+    for (const chore of allChores) {
+      // Handle bonus chores
+      if (chore.clam_value > 0) {
+        // If bonus chore is completed, delete it
+        if (chore.completed) {
           db.prepare('DELETE FROM chores WHERE id = ?').run(chore.id);
-          console.log(`Deleted non-repeating chore ID ${chore.id} from a past day.`);
-        } else if (chore.repeats === "Weekly on this day" || chore.repeats === "Daily") {
-          // Reset repeating completed chores from past days
-          db.prepare('UPDATE chores SET completed = 0 WHERE id = ?').run(chore.id);
-          console.log(`Reset repeating chore ID ${chore.id} to uncompleted.`);
+          console.log(`Deleted completed bonus chore ID ${chore.id}.`);
+        } else if (chore.expiration_date) {
+          // If bonus chore is not completed and has an expiration date
+          const expirationDate = new Date(chore.expiration_date);
+          if (now > expirationDate) {
+            // Reassign to bonus user (ID 0) and reset completed status
+            db.prepare('UPDATE chores SET user_id = 0, completed = 0, expiration_date = NULL WHERE id = ?').run(chore.id);
+            console.log(`Reassigned expired bonus chore ID ${chore.id} back to bonus user.`);
+          }
+        }
+      } else {
+        // Handle regular chores (existing logic)
+        if (chore.completed && chore.assigned_day_of_week !== currentDay) {
+          if (chore.repeats === "Doesn't repeat") {
+            db.prepare('DELETE FROM chores WHERE id = ?').run(chore.id);
+            console.log(`Deleted non-repeating chore ID ${chore.id} from a past day.`);
+          } else if (chore.repeats === "Weekly on this day" || chore.repeats === "Daily") {
+            db.prepare('UPDATE chores SET completed = 0 WHERE id = ?').run(chore.id);
+            console.log(`Reset repeating chore ID ${chore.id} to uncompleted.`);
+          }
         }
       }
     }
@@ -116,11 +137,11 @@ fastify.get('/api/chores', async (request, reply) => {
 });
 
 fastify.post('/api/chores', async (request, reply) => {
-  const { user_id, title, description, time_period, assigned_day_of_week, repeats, completed } = request.body;
+  const { user_id, title, description, time_period, assigned_day_of_week, repeats, completed, clam_value, expiration_date } = request.body;
   try {
     const completedInt = completed ? 1 : 0;
-    const stmt = db.prepare('INSERT INTO chores (user_id, title, description, time_period, assigned_day_of_week, repeats, completed) VALUES (?, ?, ?, ?, ?, ?, ?)');
-    const info = stmt.run(user_id, title, description, time_period, assigned_day_of_week, repeats, completedInt);
+    const stmt = db.prepare('INSERT INTO chores (user_id, title, description, time_period, assigned_day_of_week, repeats, completed, clam_value, expiration_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const info = stmt.run(user_id, title, description, time_period, assigned_day_of_week, repeats, completedInt, clam_value, expiration_date);
     return { id: info.lastInsertRowid };
   } catch (error) {
     console.error('Error adding chore:', error);
@@ -138,20 +159,31 @@ fastify.patch('/api/chores/:id', async (request, reply) => {
 
     // --- Clam Reward Logic ---\
     // Get the chore details to find the user_id and assigned_day_of_week
-    const chore = db.prepare('SELECT user_id, assigned_day_of_week FROM chores WHERE id = ?').get(id);
+    const chore = db.prepare('SELECT user_id, clam_value, assigned_day_of_week FROM chores WHERE id = ?').get(id);
 
     if (chore) {
-      // Get all chores for this user and day
-      const usersChoresForDay = db.prepare('SELECT completed FROM chores WHERE user_id = ? AND assigned_day_of_week = ?').all(chore.user_id, chore.assigned_day_of_week);
+      // 1. Reward for bonus chores
+      if (completed && chore.clam_value > 0) { // Only reward if marked completed and it's a bonus chore
+        const userUpdateStmt = db.prepare('UPDATE users SET clam_total = clam_total + ? WHERE id = ?');
+        userUpdateStmt.run(chore.clam_value, chore.user_id);
+        console.log(`User ${chore.user_id} rewarded ${chore.clam_value} clams for completing bonus chore ID ${id}.`);
+      }
 
-      // Check if all chores for this user and day are completed
-      const allCompleted = usersChoresForDay.every(c => c.completed === 1);
+      // 2. Reward for completing all *regular* daily chores
+      // Only apply this if the current chore is NOT a bonus chore (clam_value === 0)
+      if (completed && chore.clam_value === 0) {
+        // Get all *regular* chores for this user and day
+        const usersRegularChoresForDay = db.prepare('SELECT completed FROM chores WHERE user_id = ? AND assigned_day_of_week = ? AND clam_value = 0').all(chore.user_id, chore.assigned_day_of_week);
 
-      if (allCompleted) {
-        // Reward user with 2 clams
-        const userUpdateStmt = db.prepare('UPDATE users SET clam_total = clam_total + 2 WHERE id = ?');
-        userUpdateStmt.run(chore.user_id);
-        console.log(`User ${chore.user_id} rewarded 2 clams for completing all chores on ${chore.assigned_day_of_week}.`);
+        // Check if all *regular* chores for this user and day are completed
+        const allRegularChoresCompleted = usersRegularChoresForDay.every(c => c.completed === 1);
+
+        if (allRegularChoresCompleted) {
+          // Reward user with 2 clams
+          const userUpdateStmt = db.prepare('UPDATE users SET clam_total = clam_total + 2 WHERE id = ?');
+          userUpdateStmt.run(chore.user_id);
+          console.log(`User ${chore.user_id} rewarded 2 clams for completing all regular chores on ${chore.assigned_day_of_week}.`);
+        }
       }
     }
     // --- End Clam Reward Logic ---\
@@ -176,6 +208,42 @@ fastify.delete('/api/chores/:id', async (request, reply) => {
   } catch (error) {
     console.error('Error deleting chore:', error);
     reply.status(500).send({ error: 'Failed to delete chore' });
+  }
+});
+
+
+// NEW: Endpoint to assign a bonus chore to a user
+fastify.patch('/api/chores/:id/assign', async (request, reply) => {
+  const { id } = request.params;
+  const { user_id } = request.body;
+
+  try {
+    // 1. Check if the chore exists and is a bonus chore (assigned to user_id 0)
+    const chore = db.prepare('SELECT id, user_id, completed, clam_value FROM chores WHERE id = ?').get(id);
+    if (!chore) {
+      return reply.status(404).send({ error: 'Chore not found.' });
+    }
+    if (chore.user_id !== 0 || chore.clam_value === 0) {
+      return reply.status(400).send({ error: 'This is not an unassigned bonus chore.' });
+    }
+
+    // 2. Check if the target user already has an uncompleted bonus chore
+    const existingBonusChore = db.prepare('SELECT id FROM chores WHERE user_id = ? AND clam_value > 0 AND completed = 0').get(user_id);
+    if (existingBonusChore) {
+      return reply.status(409).send({ error: 'User already has an uncompleted bonus chore. Complete it first!' });
+    }
+
+    // 3. Assign the chore to the user and set expiration date (24 hours from now)
+    const expirationDate = new Date();
+    expirationDate.setHours(expirationDate.getHours() + 24);
+
+    const stmt = db.prepare('UPDATE chores SET user_id = ?, completed = 0, expiration_date = ? WHERE id = ?');
+    stmt.run(user_id, expirationDate.toISOString(), id);
+
+    return { success: true, message: 'Bonus chore assigned successfully.' };
+  } catch (error) {
+    console.error('Error assigning bonus chore:', error);
+    reply.status(500).send({ error: 'Failed to assign bonus chore.' });
   }
 });
 

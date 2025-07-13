@@ -32,9 +32,14 @@ const ChoreWidget = ({ transparentBackground }) => {
     assignedTo: '',
     assignedDayOfWeek: '',
     repeats: 'Doesn\'t repeat',
+    clamValue: '', // New field for bonus chores
   });
   const [error, setError] = useState(null);
   const [openAddTaskDialog, setOpenAddTaskDialog] = useState(false);
+  const [openBonusChoresDialog, setOpenBonusChoresDialog] = useState(false);
+  const [bonusChores, setBonusChores] = useState([]);
+  const [selectedBonusChore, setSelectedBonusChore] = useState(null);
+  const [claimingUser, setClaimingUser] = useState(null);
   const cardRef = useRef(null);
 
   const getCurrentDayOfWeek = () => {
@@ -50,6 +55,8 @@ const ChoreWidget = ({ transparentBackground }) => {
 
       const choresResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`);
       setChores(Array.isArray(choresResponse.data) ? choresResponse.data : []);
+      // Filter for bonus chores (user_id 0, clam_value > 0)
+      setBonusChores(choresResponse.data.filter(chore => chore.user_id === 0 && chore.clam_value > 0));
       setError(null);
     } catch (err) {
       console.error('Error fetching data:', err);
@@ -98,6 +105,13 @@ const ChoreWidget = ({ transparentBackground }) => {
       setError('Please fill all required fields for the new task.');
       return;
     }
+
+    // Validation for clamValue if bonus user is selected
+    if (newTask.assignedTo === 0 && (!newTask.clamValue || parseInt(newTask.clamValue) <= 0)) {
+      setError('Clam Value is required and must be a positive integer for bonus chores.');
+      return;
+    }
+
     try {
       await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`, {
         user_id: newTask.assignedTo,
@@ -107,6 +121,7 @@ const ChoreWidget = ({ transparentBackground }) => {
         assigned_day_of_week: newTask.assignedDayOfWeek,
         repeats: newTask.repeats,
         completed: false,
+        clam_value: newTask.assignedTo === 0 ? parseInt(newTask.clamValue) : 0, // Only send clamValue if assigned to bonus user
       });
       setNewTask({
         title: '',
@@ -115,6 +130,7 @@ const ChoreWidget = ({ transparentBackground }) => {
         assignedTo: '',
         assignedDayOfWeek: '',
         repeats: 'Doesn\'t repeat',
+        clamValue: '',
       });
       setError(null);
       setOpenAddTaskDialog(false);
@@ -144,6 +160,47 @@ const ChoreWidget = ({ transparentBackground }) => {
       assignedDayOfWeek: '',
       repeats: 'Doesn\'t repeat',
     });
+  };
+
+  const handleOpenBonusChoresDialog = () => {
+    setOpenBonusChoresDialog(true);
+    setError(null);
+  };
+
+  const handleCloseBonusChoresDialog = () => {
+    setOpenBonusChoresDialog(false);
+    setError(null);
+    setSelectedBonusChore(null);
+    setClaimingUser(null);
+  };
+
+  const handleGrabBonusClick = (userId) => {
+    setClaimingUser(userId);
+    setOpenBonusChoresDialog(true);
+    setError(null);
+  };
+
+  const handleSelectBonusChore = (event) => {
+    setSelectedBonusChore(parseInt(event.target.value));
+  };
+
+  const handleConfirmGrabBonus = async () => {
+    if (!selectedBonusChore || !claimingUser) {
+      setError('Please select a bonus chore and ensure a user is claiming it.');
+      return;
+    }
+
+    try {
+      await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores/${selectedBonusChore}/assign`, {
+        user_id: claimingUser,
+      });
+      setError(null);
+      handleCloseBonusChoresDialog();
+      fetchData(); // Re-fetch data to update UI
+    } catch (err) {
+      console.error('Error assigning bonus chore:', err);
+      setError(err.response?.data?.error || 'Failed to assign bonus chore. Please try again.');
+    }
   };
 
   return (
@@ -258,15 +315,45 @@ const ChoreWidget = ({ transparentBackground }) => {
                   <Typography variant="body2" color="text.secondary">No tasks today</Typography>
                 )}
               </Box>
+              {user.id !== 0 && ( // Only show "Grab Bonus" for actual users, not the bonus user itself
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => handleGrabBonusClick(user.id)}
+                  sx={{ mt: 1 }}
+                >
+                  Grab Bonus
+                </Button>
+              )}
             </Box>
           );
         })}
       </Box>
 
-      {/* Button to open Add New Task Dialog */}
-      <Box sx={{ mt: 3, p: 2, borderTop: '1px solid var(--card-border)' }}>
-        <Button variant="contained" onClick={handleOpenAddTaskDialog} fullWidth>
-          Add New Task
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mb: 2 }}>
+        <Button
+          variant="contained"
+          onClick={handleOpenBonusChoresDialog}
+          sx={{
+            minWidth: 'auto',
+            padding: '8px 12px',
+            fontSize: '1.2rem',
+            lineHeight: 1,
+          }}
+        >
+          🦪
+        </Button>
+        <Button
+          variant="contained"
+          onClick={handleOpenAddTaskDialog}
+          sx={{
+            minWidth: 'auto',
+            padding: '8px 12px',
+            fontSize: '1.2rem',
+            lineHeight: 1,
+          }}
+        >
+          +
         </Button>
       </Box>
 
@@ -313,6 +400,20 @@ const ChoreWidget = ({ transparentBackground }) => {
               ))}
             </Select>
           </FormControl>
+          {newTask.assignedTo === 0 && (
+            <TextField
+              name="clamValue"
+              label="Clam Value"
+              variant="outlined"
+              size="small"
+              fullWidth
+              type="number"
+              value={newTask.clamValue}
+              onChange={handleNewTaskInputChange}
+              sx={{ mb: 2 }}
+              inputProps={{ min: 1 }}
+            />
+          )}
           <FormControl fullWidth size="small" sx={{ mb: 2 }}>
             <InputLabel>Assigned Day of the Week</InputLabel>
             <Select
