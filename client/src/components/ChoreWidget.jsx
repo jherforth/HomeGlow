@@ -489,7 +489,29 @@ const ChoreWidget = ({ transparentBackground }) => {
       <Dialog open={openBonusChoresDialog} onClose={handleCloseBonusChoresDialog} key="bonus-chores-dialog">
         <DialogTitle>Grab a Bonus Chore</DialogTitle>
         <DialogContent>
-          <Typography>Test Dialog</Typography>
+          {error && <Typography color="error" sx={{ mb: 2 }}>{error}</Typography>}
+          {bonusChores.length === 0 ? (
+            <Typography>No bonus chores available at the moment.</Typography>
+          ) : (
+            <FormControl component="fieldset">
+              <FormLabel component="legend">Available Bonus Chores</FormLabel>
+              <RadioGroup
+                aria-label="bonus-chores"
+                name="bonus-chores-group"
+                value={selectedBonusChore}
+                onChange={handleSelectBonusChore}
+              >
+                {bonusChores.map((chore) => (
+                  <FormControlLabel
+                    key={chore.id}
+                    value={chore.id}
+                    control={<Radio />}
+                    label={`${chore.title} (${chore.clam_value} Clams)`}
+                  />
+                ))}
+              </RadioGroup>
+            </FormControl>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseBonusChoresDialog}>Cancel</Button>
