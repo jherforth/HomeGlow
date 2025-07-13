@@ -201,6 +201,7 @@ const ChoreWidget = ({ transparentBackground }) => {
   };
 
   const handleGrabBonusClick = (userId) => {
+    console.log('Grab Bonus button clicked for user:', userId);
     setClaimingUser(userId);
     setOpenBonusChoresDialog(true);
     setError(null);
