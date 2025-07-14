@@ -294,7 +294,7 @@ const ChoreWidget = ({ transparentBackground }) => {
                   fontWeight: 'bold',
                 }}
               >
-                {user.clam_total || 0}🦪
+                {user.clam_total || 0}🥟
               </Typography>
               {/* Progress Bar */}
               <Box sx={{
@@ -371,7 +371,7 @@ const ChoreWidget = ({ transparentBackground }) => {
             lineHeight: 1,
           }}
         >
-          🦪
+          🥟
         </Button>
         <Button
           variant="contained"
@@ -506,7 +506,7 @@ const ChoreWidget = ({ transparentBackground }) => {
                     key={chore.id}
                     value={chore.id}
                     control={<Radio />}
-                    label={`${chore.title} (${chore.clam_value} Clams)`}
+                    label={`${chore.title} (${chore.clam_value} 🥟)`}
                   />
                 ))}
               </RadioGroup>

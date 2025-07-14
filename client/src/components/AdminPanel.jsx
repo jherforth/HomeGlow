@@ -910,7 +910,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
             <Accordion key={user.id} sx={{ mb: 1 }}>
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                 <Typography variant="body1" sx={{ textTransform: 'capitalize', flexGrow: 1 }}>
-                  {user.username} (Clams: {user.clam_total || 0} 🐚)
+                  {user.username} (Clams: {user.clam_total || 0} 🥟)
                 </Typography>
               </AccordionSummary>
               <AccordionDetails sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
