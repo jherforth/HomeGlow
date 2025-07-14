@@ -26,6 +26,7 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit'; // NEW: Import EditIcon
 import '../index.css';
 
 // Import react-color SketchPicker
@@ -98,6 +99,12 @@ const AdminPanel = ({ setWidgetSettings }) => {
   const [chores, setChores] = useState([]);
   const [selectedTab, setSelectedTab] = useState(0); // State for selected tab
 
+  // NEW: State for managing prizes
+  const [prizes, setPrizes] = useState([]);
+  const [openAddEditPrizeDialog, setOpenAddEditPrizeDialog] = useState(false);
+  const [currentPrize, setCurrentPrize] = useState(null); // For editing
+  const [selectedPrizeId, setSelectedPrizeId] = useState(null); // For deletion
+
   // NEW: State for API settings
   const [apiSettings, setApiSettings] = useState({
     WEATHER_API_KEY: '',
@@ -123,6 +130,10 @@ const AdminPanel = ({ setWidgetSettings }) => {
 
       const choresResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`);
       setChores(Array.isArray(choresResponse.data) ? choresResponse.data : []);
+
+      // NEW: Fetch prizes
+      const prizesResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/prizes`);
+      setPrizes(Array.isArray(prizesResponse.data) ? prizesResponse.data : []);
 
       // NEW: Fetch API settings
       const settingsResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`);
@@ -406,7 +417,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
           <Tab label="Widgets" {...a11yProps(0)} />
           <Tab label="Interface" {...a11yProps(1)} />
           <Tab label="Users" {...a11yProps(2)} />
-          <Tab label="APIs" {...a11yProps(3)} /> {/* NEW TAB */}
+          <Tab label="APIs" {...a11yProps(4)} /> {/* NEW TAB */}
         </Tabs>
       </Box>
 
@@ -973,8 +984,113 @@ const AdminPanel = ({ setWidgetSettings }) => {
         </Box>
       </TabPanel>
 
-      {/* NEW: APIs Tab */}
+      {/* NEW: Prizes Tab */}
       <TabPanel value={selectedTab} index={3}>
+        <Typography variant="subtitle1" gutterBottom>Manage Prizes</Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'flex-start', gap: 1, mb: 2 }}>
+          <Button
+            variant="contained"
+            onClick={handleOpenAddPrizeDialog}
+            sx={{
+              minWidth: 'auto',
+              padding: '8px 12px',
+              fontSize: '1.2rem',
+              lineHeight: 1,
+            }}
+          >
+            +
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleDeleteSelectedPrize}
+            disabled={!selectedPrizeId}
+            sx={{
+              minWidth: 'auto',
+              padding: '8px 12px',
+              fontSize: '1.2rem',
+              lineHeight: 1,
+            }}
+          >
+            -
+          </Button>
+        </Box>
+
+        {prizes.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">No prizes available. Click '+' to add a prize.</Typography>
+        ) : (
+          <FormControl component="fieldset" fullWidth>
+            <RadioGroup
+              aria-label="prize-selection"
+              name="prize-selection-group"
+              value={selectedPrizeId}
+              onChange={handleSelectPrizeForDeletion}
+            >
+              <List dense>
+                {prizes.map((prize) => (
+                  <ListItem
+                    key={prize.id}
+                    secondaryAction={
+                      <IconButton edge="end" aria-label="edit" onClick={() => handleOpenEditPrizeDialog(prize)} size="small">
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                    }
+                  >
+                    <FormControlLabel
+                      value={prize.id}
+                      control={<Radio />}
+                      label={`${prize.name} (${prize.clam_cost} 🥟)`}
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            </RadioGroup>
+          </FormControl>
+        )}
+
+        {/* Add/Edit Prize Dialog */}
+        <Dialog open={openAddEditPrizeDialog} onClose={handleCloseAddEditPrizeDialog}>
+          <DialogTitle>{currentPrize ? 'Edit Prize' : 'Add New Prize'}</DialogTitle>
+          <DialogContent>
+            {error && <Typography color="error" sx={{ mb: 2 }}>{error}</Typography>}
+            <TextField
+              autoFocus
+              margin="dense"
+              name="name"
+              label="Prize Name"
+              type="text"
+              fullWidth
+              variant="outlined"
+              value={currentPrize ? currentPrize.name : ''}
+              onChange={(e) => setCurrentPrize({ ...currentPrize, name: e.target.value })}
+              inputProps={{ maxLength: 100 }}
+              required
+              sx={{ mb: 2 }}
+            />
+            <TextField
+              margin="dense"
+              name="clam_cost"
+              label="Clam Value 🥟"
+              type="number"
+              fullWidth
+              variant="outlined"
+              value={currentPrize ? currentPrize.clam_cost : ''}
+              onChange={(e) => setCurrentPrize({ ...currentPrize, clam_cost: parseInt(e.target.value) || '' })}
+              inputProps={{ min: 1 }}
+              required
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseAddEditPrizeDialog}>Cancel</Button>
+            <Button onClick={() => handleSavePrize(currentPrize)} variant="contained">
+              {currentPrize ? 'Save Changes' : 'Add Prize'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </TabPanel>
+
+      {/* NEW: APIs Tab */}
+      <TabPanel value={selectedTab} index={4}>
         <Typography variant="subtitle1" gutterBottom>API Integrations</Typography>
         <TextField
           name="WEATHER_API_KEY"

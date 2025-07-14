@@ -18,6 +18,9 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  List,
+  ListItem,
+  ListItemText,
 } from '@mui/material';
 import Hammer from 'hammerjs';
 import '../index.css';
@@ -40,6 +43,8 @@ const ChoreWidget = ({ transparentBackground }) => {
   const [bonusChores, setBonusChores] = useState([]);
   const [selectedBonusChore, setSelectedBonusChore] = useState(null);
   const [claimingUser, setClaimingUser] = useState(null);
+  const [openPrizeListDialog, setOpenPrizeListDialog] = useState(false);
+  const [prizes, setPrizes] = useState([]);
   const cardRef = useRef(null);
 
   const getCurrentDayOfWeek = () => {
@@ -204,6 +209,23 @@ const ChoreWidget = ({ transparentBackground }) => {
     setClaimingUser(null);
   };
 
+  const handleOpenPrizeListDialog = async () => {
+    try {
+      const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/prizes`);
+      setPrizes(Array.isArray(response.data) ? response.data : []);
+      setOpenPrizeListDialog(true);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching prizes:', err);
+      setError('Failed to fetch prizes. Please try again.');
+    }
+  };
+
+  const handleClosePrizeListDialog = () => {
+    setOpenPrizeListDialog(false);
+    setError(null);
+  };
+
   const handleGrabBonusClick = (userId) => {
     setClaimingUser(userId);
     setOpenBonusChoresDialog(true);
@@ -363,6 +385,18 @@ const ChoreWidget = ({ transparentBackground }) => {
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mb: 2 }}>
         <Button
           variant="contained"
+          onClick={handleOpenPrizeListDialog}
+          sx={{
+            minWidth: 'auto',
+            padding: '8px 12px',
+            fontSize: '1.2rem',
+            lineHeight: 1,
+          }}
+        >
+          🛍️
+        </Button>
+        <Button
+          variant="contained"
           onClick={handleOpenBonusChoresDialog}
           sx={{
             minWidth: 'auto',
@@ -518,6 +552,31 @@ const ChoreWidget = ({ transparentBackground }) => {
           <Button onClick={handleConfirmGrabBonus} variant="contained" disabled={!selectedBonusChore || bonusChores.length === 0}>
             Confirm
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Prize List Dialog */}
+      <Dialog open={openPrizeListDialog} onClose={handleClosePrizeListDialog} key="prize-list-dialog">
+        <DialogTitle>Available Prizes</DialogTitle>
+        <DialogContent>
+          {error && <Typography color="error" sx={{ mb: 2 }}>{error}</Typography>}
+          {prizes.length === 0 ? (
+            <Typography>No prizes available at the moment.</Typography>
+          ) : (
+            <List>
+              {prizes.map((prize) => (
+                <ListItem key={prize.id}>
+                  <ListItemText
+                    primary={prize.name}
+                    secondary={`${prize.clam_cost} 🥟`}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleClosePrizeListDialog}>Close</Button>
         </DialogActions>
       </Dialog>
     </Card>

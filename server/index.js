@@ -73,6 +73,11 @@ async function initializeDatabase() {
         key TEXT PRIMARY KEY,
         value TEXT
       );
+      CREATE TABLE IF NOT EXISTS prizes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        clam_cost INTEGER NOT NULL
+      );
     `);
     return newDb; // Return the new database instance
   } catch (error) {
@@ -377,6 +382,66 @@ fastify.post('/api/settings', async (request, reply) => {
   } catch (error) {
     console.error(`Error saving setting '${key}':`, error);
     reply.status(500).send({ error: `Failed to save setting '${key}'` });
+  }
+});
+
+// Prize routes
+fastify.get('/api/prizes', async (request, reply) => {
+  try {
+    const rows = db.prepare('SELECT * FROM prizes').all();
+    return rows;
+  } catch (error) {
+    console.error('Error fetching prizes:', error);
+    reply.status(500).send({ error: 'Failed to fetch prizes' });
+  }
+});
+
+fastify.post('/api/prizes', async (request, reply) => {
+  const { name, clam_cost } = request.body;
+  if (!name || !clam_cost || clam_cost <= 0) {
+    return reply.status(400).send({ error: 'Prize name and a positive clam cost are required.' });
+  }
+  try {
+    const stmt = db.prepare('INSERT INTO prizes (name, clam_cost) VALUES (?, ?)');
+    const info = stmt.run(name, clam_cost);
+    return { id: info.lastInsertRowid };
+  } catch (error) {
+    console.error('Error adding prize:', error);
+    reply.status(500).send({ error: 'Failed to add prize' });
+  }
+});
+
+fastify.patch('/api/prizes/:id', async (request, reply) => {
+  const { id } = request.params;
+  const { name, clam_cost } = request.body;
+  if (!name || !clam_cost || clam_cost <= 0) {
+    return reply.status(400).send({ error: 'Prize name and a positive clam cost are required.' });
+  }
+  try {
+    const stmt = db.prepare('UPDATE prizes SET name = ?, clam_cost = ? WHERE id = ?');
+    const info = stmt.run(name, clam_cost, id);
+    if (info.changes === 0) {
+      return reply.status(404).send({ error: 'Prize not found' });
+    }
+    return { success: true, message: 'Prize updated successfully' };
+  } catch (error) {
+    console.error('Error updating prize:', error);
+    reply.status(500).send({ error: 'Failed to update prize' });
+  }
+});
+
+fastify.delete('/api/prizes/:id', async (request, reply) => {
+  const { id } = request.params;
+  try {
+    const stmt = db.prepare('DELETE FROM prizes WHERE id = ?');
+    const info = stmt.run(id);
+    if (info.changes === 0) {
+      return reply.status(404).send({ error: 'Prize not found' });
+    }
+    return { success: true, message: 'Prize deleted successfully' };
+  } catch (error) {
+    console.error('Error deleting prize:', error);
+    reply.status(500).send({ error: 'Failed to delete prize' });
   }
 });
 
