@@ -283,6 +283,67 @@ const AdminPanel = ({ setWidgetSettings }) => {
     setSuccess('Colors reset to default values!');
   };
 
+  // NEW: Prize Management Functions
+  const handleOpenAddPrizeDialog = () => {
+    setCurrentPrize(null);
+    setOpenAddEditPrizeDialog(true);
+    setError(null);
+  };
+
+  const handleOpenEditPrizeDialog = (prize) => {
+    setCurrentPrize(prize);
+    setOpenAddEditPrizeDialog(true);
+    setError(null);
+  };
+
+  const handleCloseAddEditPrizeDialog = () => {
+    setOpenAddEditPrizeDialog(false);
+    setCurrentPrize(null);
+    setError(null);
+  };
+
+  const handleSavePrize = async (prizeData) => {
+    try {
+      if (prizeData.id) {
+        // Edit existing prize
+        await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/prizes/${prizeData.id}`, prizeData);
+        setSuccess('Prize updated successfully!');
+      } else {
+        // Add new prize
+        await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/prizes`, prizeData);
+        setSuccess('Prize added successfully!');
+      }
+      setError(null);
+      handleCloseAddEditPrizeDialog();
+      fetchData(); // Re-fetch prizes to update the list
+    } catch (err) {
+      console.error('Error saving prize:', err);
+      setError(err.response?.data?.error || 'Failed to save prize.');
+    }
+  };
+
+  const handleDeleteSelectedPrize = async () => {
+    if (!selectedPrizeId) {
+      setError('Please select a prize to delete.');
+      return;
+    }
+    if (window.confirm('Are you sure you want to delete this prize?')) {
+      try {
+        await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/prizes/${selectedPrizeId}`);
+        setSuccess('Prize deleted successfully!');
+        setError(null);
+        setSelectedPrizeId(null);
+        fetchData(); // Re-fetch prizes to update the list
+      } catch (err) {
+        console.error('Error deleting prize:', err);
+        setError(err.response?.data?.error || 'Failed to delete prize.');
+      }
+    }
+  };
+
+  const handleSelectPrizeForDeletion = (event) => {
+    setSelectedPrizeId(parseInt(event.target.value));
+  };
 
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
