@@ -110,6 +110,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
   const [openAddEditPrizeDialog, setOpenAddEditPrizeDialog] = useState(false);
   const [currentPrize, setCurrentPrize] = useState(null); // For editing
   const [selectedPrizeId, setSelectedPrizeId] = useState(null); // For deletion
+  const [clamInput, setClamInput] = useState(''); // NEW: State for clam input
 
   // NEW: State for API settings
   const [apiSettings, setApiSettings] = useState({
@@ -443,16 +444,25 @@ const AdminPanel = ({ setWidgetSettings }) => {
     }
   };
 
-  const handleResetClams = async (userId) => {
-    if (window.confirm("Are you sure you want to reset this user's clam total to zero?")) {
+  const handleClamInputChange = (e) => {
+    setClamInput(e.target.value);
+  };
+
+  const handleSetClams = async (userId) => {
+    if (!clamInput || parseInt(clamInput) < 0) {
+      setError('Please enter a valid non-negative clam value.');
+      return;
+    }
+    if (window.confirm(`Are you sure you want to set this user's clam total to ${clamInput}?`)) {
       try {
-        await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users/${userId}/clams`, { clam_total: 0 });
-        setSuccess('Clam total reset successfully!');
+        await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users/${userId}/clams`, { clam_total: parseInt(clamInput) });
+        setSuccess('Clam total updated successfully!');
         setError(null);
+        setClamInput(''); // Clear input after successful update
         fetchData();
       } catch (error) {
-        console.error('Error resetting clams:', error);
-        setError(error.response?.data?.error || 'Failed to reset clam total');
+        console.error('Error setting clams:', error);
+        setError(error.response?.data?.error || 'Failed to set clam total');
         setSuccess(null);
       }
     }
@@ -1003,22 +1013,22 @@ const AdminPanel = ({ setWidgetSettings }) => {
                     />
                   </Box>
                 )}
-                <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                <Box sx={{ display: 'flex', gap: 1, mt: 1, alignItems: 'center' }}>
+                  <TextField
+                    label="Set Clam Total"
+                    type="number"
+                    size="small"
+                    value={clamInput}
+                    onChange={handleClamInputChange}
+                    inputProps={{ min: 0 }}
+                    sx={{ width: '120px' }}
+                  />
                   <Button
                     variant="outlined"
-                    color="error"
-                    startIcon={<DeleteIcon />}
-                    onClick={() => handleDeleteUser(user.id)}
+                    onClick={() => handleSetClams(user.id)}
                     size="small"
                   >
-                    Delete User
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    onClick={() => handleResetClams(user.id)}
-                    size="small"
-                  >
-                    Reset Clams
+                    Set Clams
                   </Button>
                 </Box>
 
