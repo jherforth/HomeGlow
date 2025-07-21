@@ -1214,7 +1214,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
       </TabPanel>
 
       {/* Plugins Tab */}
-      <TabPanel value={selectedTab} index={4}>
+      <TabPanel value={selectedTab} index={5}>
         <Typography variant="subtitle1" gutterBottom>Widget Plugins</Typography>
         <Box sx={{ mb: 2 }}>
           <form
@@ -1283,7 +1283,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
       </TabPanel>
 
       {/* APIs Tab */}
-      <TabPanel value={selectedTab} index={5}>
+      <TabPanel value={selectedTab} index={6}>
         <Typography variant="subtitle1" gutterBottom>API Integrations</Typography>
         <TextField
           name="WEATHER_API_KEY"
