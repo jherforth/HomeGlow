@@ -1273,34 +1273,6 @@ const AdminPanel = ({ setWidgetSettings }) => {
           </List>
         )}
       </TabPanel>
-
-      {/* APIs Tab */}
-      <TabPanel value={selectedTab} index={6}>
-        <Typography variant="subtitle1" gutterBottom>API Integrations</Typography>
-        <TextField
-          name="WEATHER_API_KEY"
-          label="OpenWeatherMap API Key"
-          variant="outlined"
-          size="small"
-          fullWidth
-          margin="normal"
-          value={apiSettings.WEATHER_API_KEY}
-          onChange={handleApiSettingChange}
-        />
-        <TextField
-          name="ICS_CALENDAR_URL"
-          label="ICS Calendar URL"
-          variant="outlined"
-          size="small"
-          fullWidth
-          margin="normal"
-          value={apiSettings.ICS_CALENDAR_URL}
-          onChange={handleApiSettingChange}
-        />
-        <Button variant="contained" onClick={handleSaveApiSettings} sx={{ mt: 2 }}>
-          Save API Settings
-        </Button>
-      </TabPanel>
     </Card>
   );
 };
