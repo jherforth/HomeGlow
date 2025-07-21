@@ -158,7 +158,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
     }
   };
 
-  useEffect(() => {
+    useEffect(() => {
     fetchData();
     fetchPlugins();
   }, []);
@@ -1074,17 +1074,13 @@ const AdminPanel = ({ setWidgetSettings }) => {
 
       {/* Prizes Tab */}
       <TabPanel value={selectedTab} index={3}>
+        {/* Keep all your existing code for the Prizes tab here */}
         <Typography variant="subtitle1" gutterBottom>Manage Prizes</Typography>
         <Box sx={{ display: 'flex', justifyContent: 'flex-start', gap: 1, mb: 2 }}>
           <Button
             variant="contained"
             onClick={handleOpenAddPrizeDialog}
-            sx={{
-              minWidth: 'auto',
-              padding: '8px 12px',
-              fontSize: '1.2rem',
-              lineHeight: 1,
-            }}
+            sx={{ minWidth: 'auto', padding: '8px 12px', fontSize: '1.2rem', lineHeight: 1 }}
           >
             +
           </Button>
@@ -1093,17 +1089,11 @@ const AdminPanel = ({ setWidgetSettings }) => {
             color="error"
             onClick={handleDeleteSelectedPrize}
             disabled={!selectedPrizeId}
-            sx={{
-              minWidth: 'auto',
-              padding: '8px 12px',
-              fontSize: '1.2rem',
-              lineHeight: 1,
-            }}
+            sx={{ minWidth: 'auto', padding: '8px 12px', fontSize: '1.2rem', lineHeight: 1 }}
           >
             -
           </Button>
         </Box>
-
         {prizes.length === 0 ? (
           <Typography variant="body2" color="text.secondary">No prizes available. Click '+' to add a prize.</Typography>
         ) : (
@@ -1135,8 +1125,6 @@ const AdminPanel = ({ setWidgetSettings }) => {
             </RadioGroup>
           </FormControl>
         )}
-
-        {/* Add/Edit Prize Dialog */}
         <Dialog open={openAddEditPrizeDialog} onClose={handleCloseAddEditPrizeDialog}>
           <DialogTitle>{currentPrize ? 'Edit Prize' : 'Add New Prize'}</DialogTitle>
           <DialogContent>
@@ -1149,9 +1137,8 @@ const AdminPanel = ({ setWidgetSettings }) => {
               type="text"
               fullWidth
               variant="outlined"
-              value={currentPrize ? currentPrize.name : ''}
+              defaultValue={currentPrize?.name}
               onChange={(e) => setCurrentPrize({ ...currentPrize, name: e.target.value })}
-              inputProps={{ maxLength: 100 }}
               required
               sx={{ mb: 2 }}
             />
@@ -1162,16 +1149,15 @@ const AdminPanel = ({ setWidgetSettings }) => {
               type="number"
               fullWidth
               variant="outlined"
-              value={currentPrize ? currentPrize.clam_cost : ''}
+              defaultValue={currentPrize?.clam_cost}
               onChange={(e) => setCurrentPrize({ ...currentPrize, clam_cost: parseInt(e.target.value) || '' })}
-              inputProps={{ min: 1 }}
               required
             />
           </DialogContent>
           <DialogActions>
             <Button onClick={handleCloseAddEditPrizeDialog}>Cancel</Button>
             <Button onClick={() => handleSavePrize(currentPrize)} variant="contained">
-              {currentPrize ? 'Save Changes' : 'Add Prize'}
+              {currentPrize?.id ? 'Save Changes' : 'Add Prize'}
             </Button>
           </DialogActions>
         </Dialog>
@@ -1256,7 +1242,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
           size="small"
           fullWidth
           margin="normal"
-          value={apiSettings.WEATHER_API_KEY}
+          value={apiSettings.WEATHER_API_KEY || ''}
           onChange={handleApiSettingChange}
         />
         <TextField
@@ -1266,7 +1252,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
           size="small"
           fullWidth
           margin="normal"
-          value={apiSettings.ICS_CALENDAR_URL}
+          value={apiSettings.ICS_CALENDAR_URL || ''}
           onChange={handleApiSettingChange}
         />
         <Button variant="contained" onClick={handleSaveApiSettings} sx={{ mt: 2 }}>
@@ -1278,4 +1264,3 @@ const AdminPanel = ({ setWidgetSettings }) => {
 };
 
 export default AdminPanel;
-
