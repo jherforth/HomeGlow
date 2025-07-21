@@ -17,6 +17,7 @@ import AdminPanel from './components/AdminPanel.jsx';
 import WeatherWidget from './components/WeatherWidget.jsx';
 import MenuWidget from './components/MenuWidget.jsx';
 import ChoreWidget from './components/ChoreWidget.jsx';
+import WidgetGallery from './components/WidgetGallery.jsx';
 import './index.css';
 
 const App = () => {
@@ -248,6 +249,8 @@ const App = () => {
           )}
         </Grid>
       </Container>
+
+      <WidgetGallery />
 
       {/* Admin Panel as a Dialog (Popup) */}
       <Dialog open={showAdminPanel} onClose={toggleAdminPanel} maxWidth="lg"> {/* CHANGED maxWidth to "lg" */}

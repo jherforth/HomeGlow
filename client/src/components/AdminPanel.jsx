@@ -27,21 +27,18 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Radio, // Added Radio
-  RadioGroup, // Added RadioGroup
+  Radio,
+  RadioGroup,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DeleteIcon from '@mui/icons-material/Delete';
-import EditIcon from '@mui/icons-material/Edit'; // NEW: Import EditIcon
+import EditIcon from '@mui/icons-material/Edit';
 import '../index.css';
-
-// Import react-color SketchPicker
 import { SketchPicker } from 'react-color';
 
 // Helper component for Tab Panels
 function TabPanel(props) {
   const { children, value, index, ...other } = props;
-
   return (
     <div
       role="tabpanel"
@@ -89,7 +86,6 @@ const AdminPanel = ({ setWidgetSettings }) => {
       refreshInterval: 'manual',
       enableGeoPatternBackground: false,
       enableCardShuffle: false,
-      // NEW: Color settings
       lightGradientStart: '#00ddeb',
       lightGradientEnd: '#ff6b6b',
       darkGradientStart: '#2e2767',
@@ -103,22 +99,22 @@ const AdminPanel = ({ setWidgetSettings }) => {
   });
   const [users, setUsers] = useState([]);
   const [chores, setChores] = useState([]);
-  const [selectedTab, setSelectedTab] = useState(0); // State for selected tab
+  const [selectedTab, setSelectedTab] = useState(0);
 
-  // NEW: State for managing prizes
+  // Prizes
   const [prizes, setPrizes] = useState([]);
   const [openAddEditPrizeDialog, setOpenAddEditPrizeDialog] = useState(false);
-  const [currentPrize, setCurrentPrize] = useState(null); // For editing
-  const [selectedPrizeId, setSelectedPrizeId] = useState(null); // For deletion
-  const [clamInput, setClamInput] = useState(''); // NEW: State for clam input
+  const [currentPrize, setCurrentPrize] = useState(null);
+  const [selectedPrizeId, setSelectedPrizeId] = useState(null);
+  const [clamInput, setClamInput] = useState('');
 
-  // NEW: State for API settings
+  // API settings
   const [apiSettings, setApiSettings] = useState({
     WEATHER_API_KEY: '',
     ICS_CALENDAR_URL: '',
   });
 
-  // State for managing color picker visibility
+  // Color picker
   const [displayColorPicker, setDisplayColorPicker] = useState({
     lightGradientStart: false,
     lightGradientEnd: false,
@@ -130,24 +126,45 @@ const AdminPanel = ({ setWidgetSettings }) => {
     darkButtonGradientEnd: false,
   });
 
+  // Plugins state
+  const [plugins, setPlugins] = useState([]);
+  const [pluginUploadError, setPluginUploadError] = useState(null);
+  const [pluginUploadSuccess, setPluginUploadSuccess] = useState(null);
+  const [pluginUploading, setPluginUploading] = useState(false);
+
+  // Fetch all data
   const fetchData = async () => {
     try {
       const usersResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users`);
       setUsers(Array.isArray(usersResponse.data) ? usersResponse.data : []);
-
       const choresResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`);
       setChores(Array.isArray(choresResponse.data) ? choresResponse.data : []);
-
-      // NEW: Fetch prizes
       const prizesResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/prizes`);
       setPrizes(Array.isArray(prizesResponse.data) ? prizesResponse.data : []);
-
-      // NEW: Fetch API settings
       const settingsResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`);
-      setApiSettings(settingsResponse.data); // Assuming data is { KEY: VALUE }
+      setApiSettings(settingsResponse.data);
     } catch (err) {
       console.error('Error fetching data for Admin Panel:', err);
     }
+  };
+
+  // Fetch plugins
+  const fetchPlugins = async () => {
+    try {
+      const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/widgets`);
+      setPlugins(Array.isArray(response.data) ? response.data : []);
+    } catch (err) {
+      setPlugins([]);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+    fetchPlugins();
+  }, []);
+
+  const handleTabChange = (event, newValue) => {
+    setSelectedTab(newValue);
   };
 
   useEffect(() => {
@@ -484,7 +501,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
   };
 
   return (
-    <Card className="card" sx={{ maxWidth: 'none', width: '100%' }}> {/* ADDED THIS SX PROP */}
+    <Card className="card" sx={{ maxWidth: 'none', width: '100%' }}>
       <Typography variant="h6">Admin Panel</Typography>
       {error && <Typography color="error">{error}</Typography>}
       {success && <Typography color="success.main">{success}</Typography>}
@@ -494,8 +511,9 @@ const AdminPanel = ({ setWidgetSettings }) => {
           <Tab label="Widgets" {...a11yProps(0)} />
           <Tab label="Interface" {...a11yProps(1)} />
           <Tab label="Users" {...a11yProps(2)} />
-          <Tab label="Prizes" {...a11yProps(3)} /> {/* NEW TAB */}
-          <Tab label="APIs" {...a11yProps(4)} /> {/* NEW TAB */}
+          <Tab label="Prizes" {...a11yProps(3)} />
+          <Tab label="Plugins" {...a11yProps(4)} />
+          <Tab label="APIs" {...a11yProps(5)} />
         </Tabs>
       </Box>
 
@@ -1062,7 +1080,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
         </Box>
       </TabPanel>
 
-      {/* NEW: Prizes Tab */}
+      {/* Prizes Tab */}
       <TabPanel value={selectedTab} index={3}>
         <Typography variant="subtitle1" gutterBottom>Manage Prizes</Typography>
         <Box sx={{ display: 'flex', justifyContent: 'flex-start', gap: 1, mb: 2 }}>
@@ -1169,6 +1187,103 @@ const AdminPanel = ({ setWidgetSettings }) => {
 
       {/* NEW: APIs Tab */}
       <TabPanel value={selectedTab} index={4}>
+        <Typography variant="subtitle1" gutterBottom>API Integrations</Typography>
+        <TextField
+          name="WEATHER_API_KEY"
+          label="OpenWeatherMap API Key"
+          variant="outlined"
+          size="small"
+          fullWidth
+          margin="normal"
+          value={apiSettings.WEATHER_API_KEY}
+          onChange={handleApiSettingChange}
+        />
+        <TextField
+          name="ICS_CALENDAR_URL"
+          label="ICS Calendar URL"
+          variant="outlined"
+          size="small"
+          fullWidth
+          margin="normal"
+          value={apiSettings.ICS_CALENDAR_URL}
+          onChange={handleApiSettingChange}
+        />
+        <Button variant="contained" onClick={handleSaveApiSettings} sx={{ mt: 2 }}>
+          Save API Settings
+        </Button>
+      </TabPanel>
+
+      {/* Plugins Tab */}
+      <TabPanel value={selectedTab} index={4}>
+        <Typography variant="subtitle1" gutterBottom>Widget Plugins</Typography>
+        <Box sx={{ mb: 2 }}>
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setPluginUploadError(null);
+              setPluginUploadSuccess(null);
+              setPluginUploading(true);
+              const fileInput = e.target.elements.pluginFile;
+              if (!fileInput.files[0]) {
+                setPluginUploadError('Please select an HTML file to upload.');
+                setPluginUploading(false);
+                return;
+              }
+              const formData = new FormData();
+              formData.append('file', fileInput.files[0]);
+              try {
+                await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/widgets/upload`, formData, {
+                  headers: { 'Content-Type': 'multipart/form-data' },
+                });
+                setPluginUploadSuccess('Widget uploaded successfully!');
+                fetchPlugins();
+                fileInput.value = '';
+              } catch (err) {
+                setPluginUploadError(err.response?.data?.error || 'Failed to upload widget.');
+              }
+              setPluginUploading(false);
+            }}
+          >
+            <input type="file" name="pluginFile" accept=".html" style={{ marginRight: 8 }} />
+            <Button type="submit" variant="contained" disabled={pluginUploading}>
+              {pluginUploading ? 'Uploading...' : 'Upload Widget'}
+            </Button>
+          </form>
+          {pluginUploadError && <Typography color="error">{pluginUploadError}</Typography>}
+          {pluginUploadSuccess && <Typography color="success.main">{pluginUploadSuccess}</Typography>}
+        </Box>
+        <Typography variant="subtitle2" gutterBottom>Uploaded Plugins</Typography>
+        {plugins.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">No plugins uploaded yet.</Typography>
+        ) : (
+          <List dense>
+            {plugins.map((plugin) => (
+              <ListItem key={plugin.filename} secondaryAction={
+                <IconButton edge="end" aria-label="delete" onClick={async () => {
+                  if (window.confirm('Delete this plugin?')) {
+                    try {
+                      await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/widgets/${plugin.filename}`);
+                      fetchPlugins();
+                    } catch (err) {
+                      setPluginUploadError('Failed to delete plugin.');
+                    }
+                  }
+                }}>
+                  <DeleteIcon />
+                </IconButton>
+              }>
+                <ListItemText
+                  primary={plugin.name}
+                  secondary={`File: ${plugin.filename}`}
+                />
+              </ListItem>
+            ))}
+          </List>
+        )}
+      </TabPanel>
+
+      {/* APIs Tab */}
+      <TabPanel value={selectedTab} index={5}>
         <Typography variant="subtitle1" gutterBottom>API Integrations</Typography>
         <TextField
           name="WEATHER_API_KEY"

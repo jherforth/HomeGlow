@@ -9,6 +9,9 @@ require('dotenv').config();
 // NEW: Import axios for HTTP requests and ical.js for parsing
 const axios = require('axios');
 const ICAL = require('ical.js');
+// For widget upload and registry
+const widgetRegistryPath = path.join(__dirname, 'widgets_registry.json');
+
 
 // Initialize Fastify with CORS
 fastify.register(require('@fastify/cors'), {
@@ -28,6 +31,90 @@ fastify.register(require('@fastify/static'), {
   root: path.join(__dirname, 'uploads'),
   prefix: '/Uploads/',
 });
+
+// Serve static files for widgets
+fastify.register(require('@fastify/static'), {
+  root: path.join(__dirname, 'widgets'),
+  prefix: '/widgets/',
+});
+
+// --- Widget Upload Endpoint and Registry ---
+
+// Helper: Load widget registry
+async function loadWidgetRegistry() {
+  try {
+    const data = await fs.readFile(widgetRegistryPath, 'utf-8');
+    return JSON.parse(data);
+  } catch (err) {
+    return [];
+  }
+}
+
+// Helper: Save widget registry
+async function saveWidgetRegistry(registry) {
+  await fs.writeFile(widgetRegistryPath, JSON.stringify(registry, null, 2), 'utf-8');
+}
+
+// Endpoint: Upload a widget (HTML file)
+fastify.post('/api/widgets/upload', async (request, reply) => {
+  try {
+    const data = await request.file();
+    if (!data || !data.filename.endsWith('.html')) {
+      return reply.status(400).send({ error: 'Only HTML widget files are allowed.' });
+    }
+
+    const widgetName = data.filename.replace(/[^a-zA-Z0-9-_]/g, '_');
+    const savePath = path.join(__dirname, 'widgets', widgetName);
+
+    // Save the file
+    await fs.writeFile(savePath, await data.toBuffer());
+
+    // Update registry
+    const registry = await loadWidgetRegistry();
+    if (!registry.find(w => w.filename === widgetName)) {
+      registry.push({
+        name: widgetName.replace('.html', ''),
+        filename: widgetName,
+        uploadedAt: new Date().toISOString()
+      });
+      await saveWidgetRegistry(registry);
+    }
+
+    return { success: true, message: 'Widget uploaded!', widget: widgetName };
+  } catch (err) {
+    console.error('Widget upload error:', err);
+    reply.status(500).send({ error: 'Failed to upload widget.' });
+  }
+});
+
+// Endpoint: List widgets
+fastify.get('/api/widgets', async (request, reply) => {
+  try {
+    const registry = await loadWidgetRegistry();
+    return registry;
+  } catch (err) {
+    reply.status(500).send({ error: 'Failed to load widget registry.' });
+  }
+});
+
+// Endpoint: Delete a widget
+fastify.delete('/api/widgets/:filename', async (request, reply) => {
+  const { filename } = request.params;
+  try {
+    const filePath = path.join(__dirname, 'widgets', filename);
+    await fs.unlink(filePath);
+
+    // Update registry
+    let registry = await loadWidgetRegistry();
+    registry = registry.filter(w => w.filename !== filename);
+    await saveWidgetRegistry(registry);
+
+    return { success: true, message: 'Widget deleted.' };
+  } catch (err) {
+    reply.status(500).send({ error: 'Failed to delete widget.' });
+  }
+});
+
 
 // Initialize database
 const dbPath = path.resolve(__dirname, 'data', 'tasks.db');
