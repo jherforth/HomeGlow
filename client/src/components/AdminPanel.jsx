@@ -431,11 +431,11 @@ const AdminPanel = ({ setWidgetSettings }) => {
       setFormData({ username: '', email: '', profilePicture: null });
       setError(null);
       fetchData();
-    } catch (error) {
-      console.error('Error adding user:', error);
-      setError(error.response?.data?.error || 'Failed to add user');
-      setSuccess(null);
-    }
+      } catch (error) { // <--- CORRECTED BRACE
+        console.error('Error deleting user:', error);
+        setError(error.response?.data?.error || 'Failed to delete user');
+        setSuccess(null);
+      }
   };
 
   const handleDeleteUser = async (userId) => {
