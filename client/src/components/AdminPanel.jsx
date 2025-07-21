@@ -167,14 +167,6 @@ const AdminPanel = ({ setWidgetSettings }) => {
     setSelectedTab(newValue);
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const handleTabChange = (event, newValue) => {
-    setSelectedTab(newValue);
-  };
-
   const handleToggleChange = (event) => {
     const { name, checked } = event.target;
 
