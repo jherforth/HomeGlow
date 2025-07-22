@@ -67,7 +67,7 @@ const WidgetGallery = () => {
           </Box>
           {enabled[plugin.filename] && (
             <iframe
-              src={`/widgets/${plugin.filename}`}
+              src={`${import.meta.env.VITE_REACT_APP_API_URL}/widgets/${plugin.filename}`}
               title={plugin.name}
               style={{
                 width: '100%',
