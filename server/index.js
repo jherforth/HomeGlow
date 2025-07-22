@@ -67,7 +67,7 @@ fastify.post('/api/widgets/upload', async (request, reply) => {
       return reply.status(400).send({ error: 'Only HTML widget files are allowed.' });
     }
 
-    const widgetName = data.filename.replace(/[^a-zA-Z0-9-_]/g, '_');
+    const widgetName = data.filename.replace(/[^a-zA-Z0-9-._]/g, '_');
     const savePath = path.join(__dirname, 'widgets', widgetName);
 
     // Save the file
