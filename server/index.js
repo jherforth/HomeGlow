@@ -4,6 +4,7 @@ const Database = require('better-sqlite3');
 const ical = require('ical-generator');
 const path = require('path');
 const fs = require('fs').promises;
+const multipart = require('@fastify/multipart');
 require('dotenv').config();
 
 // NEW: Import axios for HTTP requests and ical.js for parsing
@@ -15,6 +16,8 @@ const widgetRegistryPath = path.join(__dirname, 'widgets_registry.json');
 
 // Initialize Fastify with CORS
 fastify.register(require('@fastify/cors'), {
+  // Register the multipart plugin
+fastify.register(multipart);
   origin: '*', // Allow all origins for development. Consider restricting in production.
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], // Explicitly allow PATCH
   allowedHeaders: ['Content-Type', 'Authorization'], // Add any other headers your client might send
