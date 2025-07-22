@@ -4,7 +4,7 @@ import { Card, Typography, Switch, FormControlLabel, Box } from '@mui/material';
 
 const LOCAL_STORAGE_KEY = 'enabledWidgets';
 
-const WidgetGallery = () => {
+const WidgetGallery = ({ theme }) => {
   const [plugins, setPlugins] = useState([]);
   const [enabled, setEnabled] = useState({});
 
@@ -67,7 +67,7 @@ const WidgetGallery = () => {
           </Box>
           {enabled[plugin.filename] && (
             <iframe
-              src={`${import.meta.env.VITE_REACT_APP_API_URL}/widgets/${plugin.filename}`}
+              src={`${import.meta.env.VITE_REACT_APP_API_URL}/widgets/${plugin.filename}?theme=${theme}`}
               title={plugin.name}
               style={{
                 width: '100%',

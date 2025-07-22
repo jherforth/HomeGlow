@@ -250,7 +250,7 @@ const App = () => {
         </Grid>
       </Container>
 
-      <WidgetGallery />
+      <WidgetGallery theme={theme} />
 
       {/* Admin Panel as a Dialog (Popup) */}
       <Dialog open={showAdminPanel} onClose={toggleAdminPanel} maxWidth="lg"> {/* CHANGED maxWidth to "lg" */}
