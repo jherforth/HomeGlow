@@ -76,7 +76,7 @@ const WidgetGallery = () => {
                 display: 'block', // Ensures the iframe is a block element
                 background: 'transparent',
               }}
-              sandbox="allow-scripts allow-same-origin"
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             />
           )}
         </Card>
