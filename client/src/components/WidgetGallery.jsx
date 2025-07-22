@@ -39,17 +39,20 @@ const WidgetGallery = () => {
     }));
   };
 
+  // If there are no plugins to display, render nothing.
+  if (plugins.length === 0) {
+    return null;
+  }
+
+  // Otherwise, render the gallery.
   return (
-    <Box sx={{ mt: 4 }}>
-      <Typography variant="h5" gutterBottom>
+    <Box sx={{ mt: 4, padding: '0 20px' }}>
+      <Typography variant="h5" gutterBottom align="center">
         Widget Gallery
       </Typography>
-      {plugins.length === 0 && (
-        <Typography color="text.secondary">No plugins uploaded yet.</Typography>
-      )}
       {plugins.map((plugin) => (
         <Card key={plugin.filename} className="card" sx={{ maxWidth: 600, margin: '24px auto', mb: 2 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 2, borderBottom: '1px solid var(--card-border)' }}>
             <Typography variant="h6">{plugin.name}</Typography>
             <FormControlLabel
               control={
@@ -70,7 +73,7 @@ const WidgetGallery = () => {
                 width: '100%',
                 height: '400px',
                 border: 'none',
-                borderRadius: '12px',
+                display: 'block', // Ensures the iframe is a block element
                 background: 'transparent',
               }}
               sandbox="allow-scripts"

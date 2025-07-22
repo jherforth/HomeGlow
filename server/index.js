@@ -36,6 +36,7 @@ fastify.register(require('@fastify/static'), {
 fastify.register(require('@fastify/static'), {
   root: path.join(__dirname, 'widgets'),
   prefix: '/widgets/',
+  decorateReply: false
 });
 
 // --- Widget Upload Endpoint and Registry ---
