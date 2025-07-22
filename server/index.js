@@ -16,12 +16,12 @@ const widgetRegistryPath = path.join(__dirname, 'widgets_registry.json');
 
 // Initialize Fastify with CORS
 fastify.register(require('@fastify/cors'), {
-  // Register the multipart plugin
-fastify.register(multipart);
   origin: '*', // Allow all origins for development. Consider restricting in production.
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], // Explicitly allow PATCH
   allowedHeaders: ['Content-Type', 'Authorization'], // Add any other headers your client might send
 });
+
+fastify.register(multipart);
 
 // Add a preHandler hook to log all incoming requests
 fastify.addHook('preHandler', (request, reply, done) => {
