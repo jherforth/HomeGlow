@@ -112,6 +112,7 @@ const AdminPanel = ({ setWidgetSettings }) => {
   const [apiSettings, setApiSettings] = useState({
     WEATHER_API_KEY: '',
     ICS_CALENDAR_URL: '',
+    PROXY_WHITELIST: '',
   });
 
   // Color picker
@@ -378,12 +379,12 @@ const AdminPanel = ({ setWidgetSettings }) => {
       // Send each setting individually or as a batch if backend supports
       // For now, send individually as per backend POST /api/settings
       await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, {
-        key: 'WEATHER_API_KEY',
-        value: apiSettings.WEATHER_API_KEY,
-      });
-      await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, {
         key: 'ICS_CALENDAR_URL',
         value: apiSettings.ICS_CALENDAR_URL,
+      });
+      await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, {
+        key: 'PROXY_WHITELIST',
+        value: apiSettings.PROXY_WHITELIST,
       });
       setSuccess('API settings saved successfully!');
       setError(null);
@@ -1254,6 +1255,17 @@ const AdminPanel = ({ setWidgetSettings }) => {
           margin="normal"
           value={apiSettings.ICS_CALENDAR_URL || ''}
           onChange={handleApiSettingChange}
+        />
+        <TextField
+          name="PROXY_WHITELIST"
+          label="Proxy Whitelist"
+          variant="outlined"
+          size="small"
+          fullWidth
+          margin="normal"
+          value={apiSettings.PROXY_WHITELIST || ''}
+          onChange={handleApiSettingChange}
+          helperText="Comma-separated list of allowed domains (e.g., calapi.inadiutorium.cz,api.example.com)"
         />
         <Button variant="contained" onClick={handleSaveApiSettings} sx={{ mt: 2 }}>
           Save API Settings

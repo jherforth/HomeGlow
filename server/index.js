@@ -476,6 +476,61 @@ fastify.post('/api/settings', async (request, reply) => {
   }
 });
 
+// NEW: Generic CORS Proxy Endpoint
+fastify.get('/api/proxy', async (request, reply) => {
+  const { targetUrl } = request.query;
+
+  if (!targetUrl) {
+    return reply.status(400).send({ error: 'targetUrl query parameter is required.' });
+  }
+
+  let whitelist = [];
+  try {
+    // Fetch whitelist from DB. It should be a comma-separated string of hostnames.
+    const whitelistSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('PROXY_WHITELIST');
+    if (whitelistSetting && whitelistSetting.value) {
+      whitelist = whitelistSetting.value.split(',').map(domain => domain.trim());
+    }
+  } catch (dbError) {
+    console.error('Error fetching proxy whitelist from settings:', dbError);
+    whitelist = []; // Default to empty for security
+  }
+
+  // For immediate use, we'll ensure the calendar API is always allowed.
+  // A more robust solution might involve seeding this in the database on startup.
+  if (!whitelist.includes('calapi.inadiutorium.cz')) {
+    whitelist.push('calapi.inadiutorium.cz');
+  }
+
+  try {
+    const target = new URL(targetUrl);
+    const targetHostname = target.hostname;
+
+    if (!whitelist.includes(targetHostname)) {
+      console.warn(`Proxy request blocked for non-whitelisted domain: ${targetHostname}`);
+      return reply.status(403).send({ error: 'Access to this domain is not allowed through the proxy.' });
+    }
+
+    console.log(`Proxying request to whitelisted domain: ${targetUrl}`);
+    const response = await axios.get(targetUrl, {
+      // We can pass through headers if needed in the future
+    });
+
+    // Forward the content type and the data from the external API
+    reply.header('Content-Type', response.headers['content-type']);
+    return reply.send(response.data);
+
+  } catch (error) {
+    console.error('Error in proxy request:', error.message);
+    if (error.response) {
+      // Forward the error from the target server
+      return reply.status(error.response.status).send(error.response.data);
+    }
+    // Handle other errors (e.g., network, invalid URL)
+    return reply.status(500).send({ error: 'Failed to proxy request.' });
+  }
+});
+
 // Prize routes
 fastify.get('/api/prizes', async (request, reply) => {
   try {
