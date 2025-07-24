@@ -42,6 +42,29 @@ fastify.register(require('@fastify/static'), {
   decorateReply: false
 });
 
+// Add debugging for widget file requests
+fastify.get('/widgets/:filename', async (request, reply) => {
+  const { filename } = request.params;
+  const filePath = path.join(__dirname, 'widgets', filename);
+  
+  console.log(`Widget request for: ${filename}`);
+  console.log(`Looking for file at: ${filePath}`);
+  
+  try {
+    const stats = await fs.stat(filePath);
+    console.log(`File exists, size: ${stats.size} bytes`);
+    
+    const content = await fs.readFile(filePath, 'utf-8');
+    console.log(`File content preview: ${content.substring(0, 100)}...`);
+    
+    reply.header('Content-Type', 'text/html');
+    return content;
+  } catch (error) {
+    console.error(`Error serving widget ${filename}:`, error);
+    reply.status(404).send(`Widget file not found: ${filename}`);
+  }
+});
+
 // Serve the main CSS file for widgets
 fastify.get('/index.css', async (request, reply) => {
   try {
