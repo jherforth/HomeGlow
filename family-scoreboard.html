@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Family Scoreboard</title>
+  <link rel="stylesheet" href="/index.css">
+  <style>
+    * {
+      background: transparent !important;
+      background-color: transparent !important;
+      background-image: none !important;
+    }
+
+    body {
+      background: transparent !important;
+      font-family: 'Inter', sans-serif;
+      margin: 0;
+      padding: 0.75rem;
+      box-sizing: border-box;
+      font-size: 0.85rem;
+      color: #333;
+    }
+
+    [data-theme="dark"] body {
+      color: #a6a6d1;
+      background: transparent !important;
+    }
+
+    .widget-container {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      backdrop-filter: none !important;
+      border-radius: 12px;
+      padding: 0.5rem;
+      text-align: center;
+      width: 100%;
+      max-height: calc(100vh - 1.5rem);
+      overflow-y: auto;
+    }
+
+    .widget-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin: 0 0 1rem 0;
+      color: inherit;
+    }
+
+    .period-selector {
+      display: flex;
+      justify-content: center;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .period-btn {
+      background: rgba(255, 255, 255, 0.1) !important;
+      color: inherit !important;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      padding: 0.4rem 0.8rem;
+      cursor: pointer;
+      font-size: 0.75rem;
+      font-weight: 600;
+      transition: all 0.3s ease;
+    }
+
+    [data-theme="dark"] .period-btn {
+      background: rgba(30, 30, 50, 0.3) !important;
+      border-color: rgba(100, 100, 150, 0.3);
+    }
+
+    .period-btn.active {
+      background: rgba(0, 221, 235, 0.2) !important;
+      border-color: #00ddeb;
+      color: #00ddeb !important;
+    }
+
+    .period-btn:hover {
+      background: rgba(255, 255, 255, 0.2) !important;
+      transform: translateY(-1px);
+    }
+
+    [data-theme="dark"] .period-btn:hover {
+      background: rgba(30, 30, 50, 0.5) !important;
+    }
+
+    .leaderboard {
+      margin-bottom: 1rem;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .leaderboard-item {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      padding: 0.75rem;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: relative;
+    }
+
+    [data-theme="dark"] .leaderboard-item {
+      background: rgba(30, 30, 50, 0.3);
+      border-color: rgba(100, 100, 150, 0.3);
+    }
+
+    .leaderboard-item.rank-1 {
+      border-left: 4px solid #ffd700;
+      background: rgba(255, 215, 0, 0.1);
+    }
+
+    .leaderboard-item.rank-2 {
+      border-left: 4px solid #c0c0c0;
+      background: rgba(192, 192, 192, 0.1);
+    }
+
+    .leaderboard-item.rank-3 {
+      border-left: 4px solid #cd7f32;
+      background: rgba(205, 127, 50, 0.1);
+    }
+
+    .rank-info {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .rank-number {
+      font-size: 1.2rem;
+      font-weight: 700;
+      min-width: 30px;
+      text-align: center;
+    }
+
+    .rank-1 .rank-number { color: #ffd700; }
+    .rank-2 .rank-number { color: #c0c0c0; }
+    .rank-3 .rank-number { color: #cd7f32; }
+
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .user-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .user-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 50%;
+    }
+
+    .user-name {
+      font-weight: 600;
+      font-size: 0.9rem;
+      text-transform: capitalize;
+      color: inherit;
+    }
+
+    .score-info {
+      text-align: right;
+    }
+
+    .total-score {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #00ddeb;
+      margin: 0;
+    }
+
+    [data-theme="dark"] .total-score {
+      color: #00ddeb;
+    }
+
+    .score-breakdown {
+      font-size: 0.7rem;
+      opacity: 0.8;
+      margin: 0;
+    }
+
+    .add-points-section {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    [data-theme="dark"] .add-points-section {
+      background: rgba(30, 30, 50, 0.2);
+      border-color: rgba(100, 100, 150, 0.2);
+    }
+
+    .form-row {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .form-input {
+      background: rgba(255, 255, 255, 0.1) !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
+      border-radius: 4px;
+      padding: 0.5rem;
+      color: inherit !important;
+      font-size: 0.8rem;
+      flex: 1;
+      min-width: 120px;
+    }
+
+    [data-theme="dark"] .form-input {
+      background: rgba(30, 30, 50, 0.3) !important;
+      border-color: rgba(100, 100, 150, 0.3) !important;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: #00ddeb !important;
+      box-shadow: 0 0 0 2px rgba(0, 221, 235, 0.2);
+    }
+
+    .form-select {
+      background: rgba(255, 255, 255, 0.1) !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
+      border-radius: 4px;
+      padding: 0.5rem;
+      color: inherit !important;
+      font-size: 0.8rem;
+      min-width: 100px;
+    }
+
+    [data-theme="dark"] .form-select {
+      background: rgba(30, 30, 50, 0.3) !important;
+      border-color: rgba(100, 100, 150, 0.3) !important;
+    }
+
+    .custom-button {
+      background: linear-gradient(45deg, #00ddeb, #ff6b6b) !important;
+      color: #333 !important;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      margin: 0.25rem;
+    }
+
+    [data-theme="dark"] .custom-button {
+      background: linear-gradient(45deg, #2e2767, #620808) !important;
+      color: #a6a6d1 !important;
+    }
+
+    .custom-button:hover {
+      filter: brightness(1.1);
+      transform: translateY(-1px);
+    }
+
+    .custom-button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .toggle-form-btn {
+      background: rgba(255, 255, 255, 0.1) !important;
+      color: inherit !important;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      margin-bottom: 1rem;
+    }
+
+    [data-theme="dark"] .toggle-form-btn {
+      background: rgba(30, 30, 50, 0.3) !important;
+      border-color: rgba(100, 100, 150, 0.3);
+    }
+
+    .toggle-form-btn:hover {
+      background: rgba(255, 255, 255, 0.2) !important;
+      transform: translateY(-1px);
+    }
+
+    [data-theme="dark"] .toggle-form-btn:hover {
+      background: rgba(30, 30, 50, 0.5) !important;
+    }
+
+    .categories-section {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 0.75rem;
+      margin-top: 1rem;
+    }
+
+    [data-theme="dark"] .categories-section {
+      background: rgba(30, 30, 50, 0.2);
+      border-color: rgba(100, 100, 150, 0.2);
+    }
+
+    .categories-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+
+    .category-item {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      padding: 0.5rem;
+      text-align: center;
+    }
+
+    [data-theme="dark"] .category-item {
+      background: rgba(30, 30, 50, 0.2);
+      border-color: rgba(100, 100, 150, 0.2);
+    }
+
+    .category-emoji {
+      font-size: 1.5rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .category-name {
+      font-weight: 600;
+      font-size: 0.8rem;
+      margin: 0;
+    }
+
+    .error-message {
+      color: #ff6b6b;
+      font-size: 0.75rem;
+      margin: 0.5rem 0;
+      text-align: center;
+    }
+
+    .success-message {
+      color: #28a745;
+      font-size: 0.75rem;
+      margin: 0.5rem 0;
+      text-align: center;
+    }
+
+    .no-scores {
+      color: inherit;
+      opacity: 0.7;
+      font-style: italic;
+      margin: 2rem 0;
+      text-align: center;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 1rem;
+      opacity: 0.7;
+    }
+
+    .recent-activities {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 0.75rem;
+      margin-top: 1rem;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    [data-theme="dark"] .recent-activities {
+      background: rgba(30, 30, 50, 0.2);
+      border-color: rgba(100, 100, 150, 0.2);
+    }
+
+    .activity-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      font-size: 0.8rem;
+    }
+
+    [data-theme="dark"] .activity-item {
+      border-bottom-color: rgba(100, 100, 150, 0.2);
+    }
+
+    .activity-item:last-child {
+      border-bottom: none;
+    }
+
+    .activity-description {
+      flex: 1;
+      text-align: left;
+    }
+
+    .activity-points {
+      font-weight: 600;
+      color: #00ddeb;
+    }
+
+    .activity-time {
+      font-size: 0.7rem;
+      opacity: 0.7;
+      margin-left: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="widget-container">
+    <h1 class="widget-title">🏆 Family Scoreboard</h1>
+    
+    <!-- Period Selector -->
+    <div class="period-selector">
+      <button class="period-btn active" data-period="week">This Week</button>
+      <button class="period-btn" data-period="month">This Month</button>
+      <button class="period-btn" data-period="all">All Time</button>
+    </div>
+
+    <!-- Leaderboard -->
+    <div id="leaderboard" class="leaderboard">
+      <div class="loading" id="leaderboardLoading">Loading family scoreboard...</div>
+    </div>
+
+    <!-- Add Points Section -->
+    <button id="toggleAddPointsBtn" class="toggle-form-btn">+ Award Points</button>
+    
+    <div id="addPointsSection" class="add-points-section" style="display: none;">
+      <div class="form-row">
+        <select id="pointsUser" class="form-select">
+          <option value="">Select User</option>
+        </select>
+        <select id="pointsCategory" class="form-select">
+          <option value="chores">🧹 Chores</option>
+          <option value="homework">📚 Homework</option>
+          <option value="kindness">💝 Kindness</option>
+          <option value="exercise">🏃 Exercise</option>
+          <option value="creativity">🎨 Creativity</option>
+          <option value="helping">🤝 Helping</option>
+          <option value="achievement">🎯 Achievement</option>
+          <option value="bonus">⭐ Bonus</option>
+        </select>
+        <input type="number" id="pointsAmount" class="form-input" placeholder="Points" min="1" max="100" value="5">
+      </div>
+      <div class="form-row">
+        <input type="text" id="pointsReason" class="form-input" placeholder="Reason (e.g., 'Cleaned room without being asked')" maxlength="100">
+        <button id="awardPointsBtn" class="custom-button">Award Points</button>
+        <button id="cancelPointsBtn" class="custom-button" style="background: #6c757d !important;">Cancel</button>
+      </div>
+      <div id="errorMessage" class="error-message"></div>
+      <div id="successMessage" class="success-message"></div>
+    </div>
+
+    <!-- Categories Info -->
+    <div class="categories-section">
+      <div style="font-weight: 600; margin-bottom: 0.5rem;">Point Categories</div>
+      <div class="categories-grid">
+        <div class="category-item">
+          <div class="category-emoji">🧹</div>
+          <div class="category-name">Chores</div>
+        </div>
+        <div class="category-item">
+          <div class="category-emoji">📚</div>
+          <div class="category-name">Homework</div>
+        </div>
+        <div class="category-item">
+          <div class="category-emoji">💝</div>
+          <div class="category-name">Kindness</div>
+        </div>
+        <div class="category-item">
+          <div class="category-emoji">🏃</div>
+          <div class="category-name">Exercise</div>
+        </div>
+        <div class="category-item">
+          <div class="category-emoji">🎨</div>
+          <div class="category-name">Creativity</div>
+        </div>
+        <div class="category-item">
+          <div class="category-emoji">🤝</div>
+          <div class="category-name">Helping</div>
+        </div>
+        <div class="category-item">
+          <div class="category-emoji">🎯</div>
+          <div class="category-name">Achievement</div>
+        </div>
+        <div class="category-item">
+          <div class="category-emoji">⭐</div>
+          <div class="category-name">Bonus</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Activities -->
+    <div class="recent-activities">
+      <div style="font-weight: 600; margin-bottom: 0.5rem;">Recent Activities</div>
+      <div id="recentActivities"></div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // Handle theme
+      const params = new URLSearchParams(window.location.search);
+      const theme = params.get('theme');
+      if (theme === 'dark' || theme === 'light') {
+        document.documentElement.setAttribute('data-theme', theme);
+      }
+
+      // Widget state
+      let users = [];
+      let scores = [];
+      let activities = [];
+      let currentPeriod = 'week';
+      let showAddForm = false;
+
+      // DOM elements
+      const leaderboardLoading = document.getElementById('leaderboardLoading');
+      const leaderboard = document.getElementById('leaderboard');
+      const toggleAddPointsBtn = document.getElementById('toggleAddPointsBtn');
+      const addPointsSection = document.getElementById('addPointsSection');
+      const pointsUser = document.getElementById('pointsUser');
+      const pointsCategory = document.getElementById('pointsCategory');
+      const pointsAmount = document.getElementById('pointsAmount');
+      const pointsReason = document.getElementById('pointsReason');
+      const awardPointsBtn = document.getElementById('awardPointsBtn');
+      const cancelPointsBtn = document.getElementById('cancelPointsBtn');
+      const errorMessage = document.getElementById('errorMessage');
+      const successMessage = document.getElementById('successMessage');
+      const recentActivities = document.getElementById('recentActivities');
+
+      // Load data from localStorage
+      function loadData() {
+        try {
+          const savedScores = localStorage.getItem('homeglowScores');
+          scores = savedScores ? JSON.parse(savedScores) : [];
+
+          const savedActivities = localStorage.getItem('homeglowActivities');
+          activities = savedActivities ? JSON.parse(savedActivities) : [];
+        } catch (error) {
+          console.error('Error loading scoreboard data:', error);
+          scores = [];
+          activities = [];
+        }
+      }
+
+      function saveData() {
+        try {
+          localStorage.setItem('homeglowScores', JSON.stringify(scores));
+          localStorage.setItem('homeglowActivities', JSON.stringify(activities));
+        } catch (error) {
+          console.error('Error saving scoreboard data:', error);
+          showError('Failed to save scoreboard data');
+        }
+      }
+
+      function showError(message) {
+        errorMessage.textContent = message;
+        successMessage.textContent = '';
+        setTimeout(() => {
+          errorMessage.textContent = '';
+        }, 3000);
+      }
+
+      function showSuccess(message) {
+        successMessage.textContent = message;
+        errorMessage.textContent = '';
+        setTimeout(() => {
+          successMessage.textContent = '';
+        }, 3000);
+      }
+
+      function clearMessages() {
+        errorMessage.textContent = '';
+        successMessage.textContent = '';
+      }
+
+      // Fetch users from HomeGlow API
+      async function fetchUsers() {
+        try {
+          const response = await fetch(`${window.location.protocol}//${window.location.hostname}:5000/api/users`);
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          const data = await response.json();
+          users = Array.isArray(data) ? data.filter(user => user.id !== 0) : [];
+          
+          leaderboardLoading.style.display = 'none';
+          
+          if (users.length === 0) {
+            leaderboard.innerHTML = '<div class="no-scores">No family members found. Please add users in the Admin Panel first.</div>';
+            return;
+          }
+
+          populateUserSelect();
+          renderLeaderboard();
+        } catch (error) {
+          console.error('Error fetching users:', error);
+          leaderboardLoading.textContent = 'Failed to load family members. Please check your connection.';
+        }
+      }
+
+      function populateUserSelect() {
+        pointsUser.innerHTML = '<option value="">Select User</option>' + 
+          users.map(user => `<option value="${user.id}">${user.username}</option>`).join('');
+      }
+
+      function getDateRange(period) {
+        const now = new Date();
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - now.getDay());
+        startOfWeek.setHours(0, 0, 0, 0);
+
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+        switch (period) {
+          case 'week':
+            return startOfWeek;
+          case 'month':
+            return startOfMonth;
+          case 'all':
+          default:
+            return new Date(0); // Beginning of time
+        }
+      }
+
+      function calculateScores() {
+        const cutoffDate = getDateRange(currentPeriod);
+        const userScores = {};
+
+        // Initialize user scores
+        users.forEach(user => {
+          userScores[user.id] = {
+            user,
+            total: 0,
+            categories: {}
+          };
+        });
+
+        // Calculate scores from activities
+        activities.forEach(activity => {
+          const activityDate = new Date(activity.timestamp);
+          if (activityDate >= cutoffDate && userScores[activity.userId]) {
+            userScores[activity.userId].total += activity.points;
+            
+            if (!userScores[activity.userId].categories[activity.category]) {
+              userScores[activity.userId].categories[activity.category] = 0;
+            }
+            userScores[activity.userId].categories[activity.category] += activity.points;
+          }
+        });
+
+        // Convert to array and sort by total score
+        return Object.values(userScores).sort((a, b) => b.total - a.total);
+      }
+
+      function getCategoryEmoji(category) {
+        const emojis = {
+          chores: '🧹',
+          homework: '📚',
+          kindness: '💝',
+          exercise: '🏃',
+          creativity: '🎨',
+          helping: '🤝',
+          achievement: '🎯',
+          bonus: '⭐'
+        };
+        return emojis[category] || '⭐';
+      }
+
+      function renderLeaderboard() {
+        const sortedScores = calculateScores();
+
+        if (sortedScores.every(score => score.total === 0)) {
+          leaderboard.innerHTML = '<div class="no-scores">No points awarded yet. Start recognizing great family behavior!</div>';
+          return;
+        }
+
+        leaderboard.innerHTML = sortedScores.map((scoreData, index) => {
+          const rank = index + 1;
+          const topCategories = Object.entries(scoreData.categories)
+            .sort(([,a], [,b]) => b - a)
+            .slice(0, 2)
+            .map(([cat, points]) => `${getCategoryEmoji(cat)} ${points}`)
+            .join(', ');
+
+          return `
+            <div class="leaderboard-item rank-${rank <= 3 ? rank : 'other'}">
+              <div class="rank-info">
+                <div class="rank-number">${rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank}</div>
+                <div class="user-info">
+                  <div class="user-avatar">
+                    ${scoreData.user.profile_picture ? 
+                      `<img src="${scoreData.user.profile_picture}" alt="${scoreData.user.username}">` : 
+                      '👤'
+                    }
+                  </div>
+                  <div class="user-name">${scoreData.user.username}</div>
+                </div>
+              </div>
+              <div class="score-info">
+                <div class="total-score">${scoreData.total} pts</div>
+                ${topCategories ? `<div class="score-breakdown">${topCategories}</div>` : ''}
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      function renderRecentActivities() {
+        const recentActivitiesList = activities
+          .slice(-10) // Last 10 activities
+          .reverse() // Most recent first
+          .map(activity => {
+            const user = users.find(u => u.id === activity.userId);
+            const timeAgo = formatTimeAgo(activity.timestamp);
+            
+            return `
+              <div class="activity-item">
+                <div class="activity-description">
+                  <strong>${user ? user.username : 'Unknown'}</strong> - ${activity.reason}
+                </div>
+                <div>
+                  <span class="activity-points">+${activity.points}</span>
+                  <span class="activity-time">${timeAgo}</span>
+                </div>
+              </div>
+            `;
+          }).join('');
+
+        recentActivities.innerHTML = recentActivitiesList || '<div style="text-align: center; opacity: 0.7;">No recent activities</div>';
+      }
+
+      function formatTimeAgo(timestamp) {
+        const now = new Date();
+        const activityTime = new Date(timestamp);
+        const diffMs = now - activityTime;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        return `${diffDays}d ago`;
+      }
+
+      function setPeriod(period) {
+        currentPeriod = period;
+        
+        // Update period button states
+        document.querySelectorAll('.period-btn').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.period === period);
+        });
+        
+        renderLeaderboard();
+      }
+
+      function toggleAddForm() {
+        showAddForm = !showAddForm;
+        addPointsSection.style.display = showAddForm ? 'block' : 'none';
+        toggleAddPointsBtn.textContent = showAddForm ? '✕ Cancel' : '+ Award Points';
+        
+        if (showAddForm) {
+          pointsUser.focus();
+        } else {
+          clearForm();
+        }
+      }
+
+      function clearForm() {
+        pointsUser.value = '';
+        pointsCategory.value = 'chores';
+        pointsAmount.value = '5';
+        pointsReason.value = '';
+        clearMessages();
+      }
+
+      function awardPoints() {
+        const userId = parseInt(pointsUser.value);
+        const category = pointsCategory.value;
+        const points = parseInt(pointsAmount.value);
+        const reason = pointsReason.value.trim();
+
+        // Validation
+        if (!userId) {
+          showError('Please select a user');
+          return;
+        }
+
+        if (!points || points < 1 || points > 100) {
+          showError('Please enter points between 1 and 100');
+          return;
+        }
+
+        if (!reason) {
+          showError('Please enter a reason');
+          return;
+        }
+
+        const user = users.find(u => u.id === userId);
+        if (!user) {
+          showError('Selected user not found');
+          return;
+        }
+
+        // Add activity
+        const newActivity = {
+          id: Date.now(),
+          userId,
+          category,
+          points,
+          reason,
+          timestamp: new Date().toISOString()
+        };
+
+        activities.push(newActivity);
+        saveData();
+        renderLeaderboard();
+        renderRecentActivities();
+        
+        showSuccess(`Awarded ${points} points to ${user.username}!`);
+        toggleAddForm();
+      }
+
+      // Event listeners
+      toggleAddPointsBtn.addEventListener('click', toggleAddForm);
+      awardPointsBtn.addEventListener('click', awardPoints);
+      cancelPointsBtn.addEventListener('click', toggleAddForm);
+
+      // Period button handlers
+      document.querySelector('.period-selector').addEventListener('click', (e) => {
+        if (e.target.classList.contains('period-btn')) {
+          setPeriod(e.target.dataset.period);
+        }
+      });
+
+      // Enter key support
+      pointsReason.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') awardPoints();
+      });
+
+      // Initialize
+      loadData();
+      fetchUsers();
+      renderRecentActivities();
+    });
+  </script>
+</body>
+</html>

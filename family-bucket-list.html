@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Family Bucket List</title>
+  <link rel="stylesheet" href="/index.css">
+  <style>
+    * {
+      background: transparent !important;
+      background-color: transparent !important;
+      background-image: none !important;
+    }
+
+    body {
+      background: transparent !important;
+      font-family: 'Inter', sans-serif;
+      margin: 0;
+      padding: 0.75rem;
+      box-sizing: border-box;
+      font-size: 0.85rem;
+      color: #333;
+    }
+
+    [data-theme="dark"] body {
+      color: #a6a6d1;
+      background: transparent !important;
+    }
+
+    .widget-container {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      backdrop-filter: none !important;
+      border-radius: 12px;
+      padding: 0.5rem;
+      text-align: center;
+      width: 100%;
+      max-height: calc(100vh - 1.5rem);
+      overflow-y: auto;
+    }
+
+    .widget-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin: 0 0 1rem 0;
+      color: inherit;
+    }
+
+    .filter-controls {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .filter-btn {
+      background: rgba(255, 255, 255, 0.1) !important;
+      color: inherit !important;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      padding: 0.4rem 0.8rem;
+      cursor: pointer;
+      font-size: 0.75rem;
+      font-weight: 600;
+      transition: all 0.3s ease;
+    }
+
+    [data-theme="dark"] .filter-btn {
+      background: rgba(30, 30, 50, 0.3) !important;
+      border-color: rgba(100, 100, 150, 0.3);
+    }
+
+    .filter-btn.active {
+      background: rgba(0, 221, 235, 0.2) !important;
+      border-color: #00ddeb;
+      color: #00ddeb !important;
+    }
+
+    .filter-btn:hover {
+      background: rgba(255, 255, 255, 0.2) !important;
+      transform: translateY(-1px);
+    }
+
+    [data-theme="dark"] .filter-btn:hover {
+      background: rgba(30, 30, 50, 0.5) !important;
+    }
+
+    .progress-summary {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 0.75rem;
+      margin-bottom: 1rem;
+      display: flex;
+      justify-content: space-around;
+      text-align: center;
+    }
+
+    [data-theme="dark"] .progress-summary {
+      background: rgba(30, 30, 50, 0.2);
+      border-color: rgba(100, 100, 150, 0.2);
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .stat-number {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #00ddeb;
+      margin: 0;
+    }
+
+    .stat-label {
+      font-size: 0.7rem;
+      opacity: 0.8;
+      margin: 0;
+    }
+
+    .bucket-list {
+      margin-bottom: 1rem;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .bucket-item {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      padding: 0.75rem;
+      margin-bottom: 0.5rem;
+      text-align: left;
+      position: relative;
+      transition: all 0.3s ease;
+    }
+
+    [data-theme="dark"] .bucket-item {
+      background: rgba(30, 30, 50, 0.3);
+      border-color: rgba(100, 100, 150, 0.3);
+    }
+
+    .bucket-item.completed {
+      background: rgba(40, 167, 69, 0.2);
+      border-color: rgba(40, 167, 69, 0.4);
+      opacity: 0.8;
+    }
+
+    .bucket-item.in-progress {
+      background: rgba(255, 167, 38, 0.2);
+      border-color: rgba(255, 167, 38, 0.4);
+    }
+
+    .bucket-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 0.5rem;
+    }
+
+    .bucket-title-section {
+      flex: 1;
+    }
+
+    .bucket-title {
+      font-weight: 600;
+      font-size: 0.9rem;
+      margin: 0 0 0.25rem 0;
+      color: inherit;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .bucket-title.completed {
+      text-decoration: line-through;
+      opacity: 0.8;
+    }
+
+    .bucket-category {
+      font-size: 0.7rem;
+      opacity: 0.8;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .bucket-description {
+      margin: 0.5rem 0;
+      font-size: 0.8rem;
+      line-height: 1.4;
+      color: inherit;
+    }
+
+    .bucket-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 0.5rem;
+      font-size: 0.7rem;
+      opacity: 0.8;
+    }
+
+    .bucket-date {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .bucket-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+
+    .action-btn {
+      background: rgba(255, 255, 255, 0.1) !important;
+      color: inherit !important;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+      padding: 0.25rem 0.5rem;
+      cursor: pointer;
+      font-size: 0.7rem;
+      font-weight: 600;
+      transition: all 0.3s ease;
+    }
+
+    [data-theme="dark"] .action-btn {
+      background: rgba(30, 30, 50, 0.3) !important;
+      border-color: rgba(100, 100, 150, 0.3);
+    }
+
+    .action-btn:hover {
+      background: rgba(255, 255, 255, 0.2) !important;
+      transform: translateY(-1px);
+    }
+
+    [data-theme="dark"] .action-btn:hover {
+      background: rgba(30, 30, 50, 0.5) !important;
+    }
+
+    .complete-btn {
+      background: #28a745 !important;
+      color: white !important;
+      border-color: #28a745;
+    }
+
+    .complete-btn:hover {
+      background: #218838 !important;
+    }
+
+    .progress-btn {
+      background: #ffa726 !important;
+      color: white !important;
+      border-color: #ffa726;
+    }
+
+    .progress-btn:hover {
+      background: #ff9800 !important;
+    }
+
+    .delete-btn {
+      background: #ff6b6b !important;
+      color: white !important;
+      border-color: #ff6b6b;
+    }
+
+    .delete-btn:hover {
+      background: #ff5252 !important;
+    }
+
+    .add-item-section {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 0.75rem;
+      margin-top: 1rem;
+    }
+
+    [data-theme="dark"] .add-item-section {
+      background: rgba(30, 30, 50, 0.2);
+      border-color: rgba(100, 100, 150, 0.2);
+    }
+
+    .form-row {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .form-input {
+      background: rgba(255, 255, 255, 0.1) !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
+      border-radius: 4px;
+      padding: 0.5rem;
+      color: inherit !important;
+      font-size: 0.8rem;
+      flex: 1;
+      min-width: 120px;
+    }
+
+    [data-theme="dark"] .form-input {
+      background: rgba(30, 30, 50, 0.3) !important;
+      border-color: rgba(100, 100, 150, 0.3) !important;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: #00ddeb !important;
+      box-shadow: 0 0 0 2px rgba(0, 221, 235, 0.2);
+    }
+
+    .form-textarea {
+      background: rgba(255, 255, 255, 0.1) !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
+      border-radius: 4px;
+      padding: 0.5rem;
+      color: inherit !important;
+      font-size: 0.8rem;
+      width: 100%;
+      min-height: 60px;
+      resize: vertical;
+    }
+
+    [data-theme="dark"] .form-textarea {
+      background: rgba(30, 30, 50, 0.3) !important;
+      border-color: rgba(100, 100, 150, 0.3) !important;
+    }
+
+    .form-textarea:focus {
+      outline: none;
+      border-color: #00ddeb !important;
+      box-shadow: 0 0 0 2px rgba(0, 221, 235, 0.2);
+    }
+
+    .form-select {
+      background: rgba(255, 255, 255, 0.1) !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
+      border-radius: 4px;
+      padding: 0.5rem;
+      color: inherit !important;
+      font-size: 0.8rem;
+      min-width: 120px;
+    }
+
+    [data-theme="dark"] .form-select {
+      background: rgba(30, 30, 50, 0.3) !important;
+      border-color: rgba(100, 100, 150, 0.3) !important;
+    }
+
+    .custom-button {
+      background: linear-gradient(45deg, #00ddeb, #ff6b6b) !important;
+      color: #333 !important;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      margin: 0.25rem;
+    }
+
+    [data-theme="dark"] .custom-button {
+      background: linear-gradient(45deg, #2e2767, #620808) !important;
+      color: #a6a6d1 !important;
+    }
+
+    .custom-button:hover {
+      filter: brightness(1.1);
+      transform: translateY(-1px);
+    }
+
+    .custom-button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .toggle-form-btn {
+      background: rgba(255, 255, 255, 0.1) !important;
+      color: inherit !important;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      margin-bottom: 1rem;
+    }
+
+    [data-theme="dark"] .toggle-form-btn {
+      background: rgba(30, 30, 50, 0.3) !important;
+      border-color: rgba(100, 100, 150, 0.3);
+    }
+
+    .toggle-form-btn:hover {
+      background: rgba(255, 255, 255, 0.2) !important;
+      transform: translateY(-1px);
+    }
+
+    [data-theme="dark"] .toggle-form-btn:hover {
+      background: rgba(30, 30, 50, 0.5) !important;
+    }
+
+    .error-message {
+      color: #ff6b6b;
+      font-size: 0.75rem;
+      margin: 0.5rem 0;
+      text-align: center;
+    }
+
+    .success-message {
+      color: #28a745;
+      font-size: 0.75rem;
+      margin: 0.5rem 0;
+      text-align: center;
+    }
+
+    .no-items {
+      color: inherit;
+      opacity: 0.7;
+      font-style: italic;
+      margin: 2rem 0;
+      text-align: center;
+    }
+
+    .status-badge {
+      padding: 0.2rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.6rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .status-planned {
+      background: rgba(108, 117, 125, 0.2);
+      color: #6c757d;
+      border: 1px solid rgba(108, 117, 125, 0.3);
+    }
+
+    .status-in-progress {
+      background: rgba(255, 167, 38, 0.2);
+      color: #ffa726;
+      border: 1px solid rgba(255, 167, 38, 0.3);
+    }
+
+    .status-completed {
+      background: rgba(40, 167, 69, 0.2);
+      color: #28a745;
+      border: 1px solid rgba(40, 167, 69, 0.3);
+    }
+
+    .photo-upload {
+      margin-top: 0.5rem;
+    }
+
+    .photo-preview {
+      max-width: 100%;
+      max-height: 150px;
+      border-radius: 6px;
+      margin-top: 0.5rem;
+    }
+
+    .completion-photo {
+      max-width: 100%;
+      max-height: 100px;
+      border-radius: 6px;
+      margin-top: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="widget-container">
+    <h1 class="widget-title">🪣 Family Bucket List</h1>
+    
+    <!-- Filter Controls -->
+    <div class="filter-controls">
+      <button class="filter-btn active" data-filter="all">All Items</button>
+      <button class="filter-btn" data-filter="planned">Planned</button>
+      <button class="filter-btn" data-filter="in-progress">In Progress</button>
+      <button class="filter-btn" data-filter="completed">Completed</button>
+    </div>
+
+    <!-- Progress Summary -->
+    <div class="progress-summary">
+      <div class="stat-item">
+        <div id="totalItems" class="stat-number">0</div>
+        <div class="stat-label">Total Items</div>
+      </div>
+      <div class="stat-item">
+        <div id="completedItems" class="stat-number">0</div>
+        <div class="stat-label">Completed</div>
+      </div>
+      <div class="stat-item">
+        <div id="completionRate" class="stat-number">0%</div>
+        <div class="stat-label">Progress</div>
+      </div>
+    </div>
+
+    <!-- Bucket List Items -->
+    <div id="bucketList" class="bucket-list"></div>
+
+    <!-- Add Item Section -->
+    <button id="toggleAddItemBtn" class="toggle-form-btn">+ Add Bucket List Item</button>
+    
+    <div id="addItemSection" class="add-item-section" style="display: none;">
+      <div class="form-row">
+        <input type="text" id="itemTitle" class="form-input" placeholder="What do you want to do? (e.g., Visit the Grand Canyon)" maxlength="100">
+        <select id="itemCategory" class="form-select">
+          <option value="travel">✈️ Travel</option>
+          <option value="adventure">🏔️ Adventure</option>
+          <option value="learning">📚 Learning</option>
+          <option value="creative">🎨 Creative</option>
+          <option value="food">🍽️ Food</option>
+          <option value="sports">⚽ Sports</option>
+          <option value="family">👨‍👩‍👧‍👦 Family</option>
+          <option value="seasonal">🌸 Seasonal</option>
+          <option value="local">🏠 Local</option>
+          <option value="milestone">🎯 Milestone</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <textarea id="itemDescription" class="form-textarea" placeholder="Describe this bucket list item... Why is it special? What makes it exciting?" maxlength="300"></textarea>
+      </div>
+      <div class="form-row">
+        <input type="date" id="itemTargetDate" class="form-input">
+        <select id="itemPriority" class="form-select">
+          <option value="low">🟢 Someday</option>
+          <option value="medium">🟡 This Year</option>
+          <option value="high">🔴 High Priority</option>
+        </select>
+        <button id="addItemBtn" class="custom-button">Add to List</button>
+        <button id="cancelItemBtn" class="custom-button" style="background: #6c757d !important;">Cancel</button>
+      </div>
+      <div id="errorMessage" class="error-message"></div>
+      <div id="successMessage" class="success-message"></div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // Handle theme
+      const params = new URLSearchParams(window.location.search);
+      const theme = params.get('theme');
+      if (theme === 'dark' || theme === 'light') {
+        document.documentElement.setAttribute('data-theme', theme);
+      }
+
+      // Widget state
+      let bucketItems = [];
+      let currentFilter = 'all';
+      let showAddForm = false;
+
+      // DOM elements
+      const bucketList = document.getElementById('bucketList');
+      const toggleAddItemBtn = document.getElementById('toggleAddItemBtn');
+      const addItemSection = document.getElementById('addItemSection');
+      const itemTitle = document.getElementById('itemTitle');
+      const itemCategory = document.getElementById('itemCategory');
+      const itemDescription = document.getElementById('itemDescription');
+      const itemTargetDate = document.getElementById('itemTargetDate');
+      const itemPriority = document.getElementById('itemPriority');
+      const addItemBtn = document.getElementById('addItemBtn');
+      const cancelItemBtn = document.getElementById('cancelItemBtn');
+      const errorMessage = document.getElementById('errorMessage');
+      const successMessage = document.getElementById('successMessage');
+      const totalItems = document.getElementById('totalItems');
+      const completedItems = document.getElementById('completedItems');
+      const completionRate = document.getElementById('completionRate');
+
+      // Load data from localStorage
+      function loadData() {
+        try {
+          const saved = localStorage.getItem('homeglowBucketList');
+          bucketItems = saved ? JSON.parse(saved) : [];
+        } catch (error) {
+          console.error('Error loading bucket list data:', error);
+          bucketItems = [];
+        }
+      }
+
+      function saveData() {
+        try {
+          localStorage.setItem('homeglowBucketList', JSON.stringify(bucketItems));
+        } catch (error) {
+          console.error('Error saving bucket list data:', error);
+          showError('Failed to save bucket list data');
+        }
+      }
+
+      function showError(message) {
+        errorMessage.textContent = message;
+        successMessage.textContent = '';
+        setTimeout(() => {
+          errorMessage.textContent = '';
+        }, 3000);
+      }
+
+      function showSuccess(message) {
+        successMessage.textContent = message;
+        errorMessage.textContent = '';
+        setTimeout(() => {
+          successMessage.textContent = '';
+        }, 3000);
+      }
+
+      function clearMessages() {
+        errorMessage.textContent = '';
+        successMessage.textContent = '';
+      }
+
+      function getCategoryEmoji(category) {
+        const emojis = {
+          travel: '✈️',
+          adventure: '🏔️',
+          learning: '📚',
+          creative: '🎨',
+          food: '🍽️',
+          sports: '⚽',
+          family: '👨‍👩‍👧‍👦',
+          seasonal: '🌸',
+          local: '🏠',
+          milestone: '🎯'
+        };
+        return emojis[category] || '🎯';
+      }
+
+      function getPriorityColor(priority) {
+        const colors = {
+          low: '#6c757d',
+          medium: '#ffa726',
+          high: '#ff6b6b'
+        };
+        return colors[priority] || '#6c757d';
+      }
+
+      function formatDate(dateString) {
+        if (!dateString) return '';
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric',
+          year: 'numeric'
+        });
+      }
+
+      function updateStats() {
+        const total = bucketItems.length;
+        const completed = bucketItems.filter(item => item.status === 'completed').length;
+        const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+        totalItems.textContent = total;
+        completedItems.textContent = completed;
+        completionRate.textContent = `${percentage}%`;
+      }
+
+      function filterItems() {
+        if (currentFilter === 'all') {
+          return bucketItems;
+        }
+        return bucketItems.filter(item => item.status === currentFilter);
+      }
+
+      function renderBucketList() {
+        const filteredItems = filterItems();
+
+        if (filteredItems.length === 0) {
+          const message = currentFilter === 'all' 
+            ? 'No bucket list items yet. Add some exciting goals to get started!'
+            : `No ${currentFilter.replace('-', ' ')} items found.`;
+          bucketList.innerHTML = `<div class="no-items">${message}</div>`;
+          return;
+        }
+
+        // Sort by priority (high first), then by creation date
+        const sortedItems = filteredItems.sort((a, b) => {
+          const priorityOrder = { high: 3, medium: 2, low: 1 };
+          const priorityDiff = priorityOrder[b.priority] - priorityOrder[a.priority];
+          if (priorityDiff !== 0) return priorityDiff;
+          return new Date(b.createdAt) - new Date(a.createdAt);
+        });
+
+        bucketList.innerHTML = sortedItems.map(item => {
+          const statusClass = item.status === 'completed' ? 'completed' : 
+                             item.status === 'in-progress' ? 'in-progress' : '';
+          
+          return `
+            <div class="bucket-item ${statusClass}">
+              <div class="bucket-header">
+                <div class="bucket-title-section">
+                  <h3 class="bucket-title ${item.status === 'completed' ? 'completed' : ''}">
+                    ${getCategoryEmoji(item.category)} ${item.title}
+                  </h3>
+                  <div class="bucket-category">
+                    <span class="status-badge status-${item.status}">${item.status.replace('-', ' ')}</span>
+                    ${item.priority !== 'low' ? `<span style="color: ${getPriorityColor(item.priority)};">● ${item.priority === 'high' ? 'High Priority' : 'This Year'}</span>` : ''}
+                  </div>
+                </div>
+              </div>
+              
+              ${item.description ? `<div class="bucket-description">${item.description}</div>` : ''}
+              
+              <div class="bucket-meta">
+                <div class="bucket-date">
+                  📅 Added: ${formatDate(item.createdAt)}
+                  ${item.targetDate ? ` | Target: ${formatDate(item.targetDate)}` : ''}
+                </div>
+                ${item.completedAt ? `<div>✅ Completed: ${formatDate(item.completedAt)}</div>` : ''}
+              </div>
+
+              ${item.completionPhoto ? `<img src="${item.completionPhoto}" alt="Completion photo" class="completion-photo">` : ''}
+              
+              <div class="bucket-actions">
+                ${item.status !== 'completed' ? `
+                  <button class="action-btn complete-btn" onclick="markAsCompleted(${item.id})">
+                    ✅ Mark Complete
+                  </button>
+                ` : ''}
+                ${item.status === 'planned' ? `
+                  <button class="action-btn progress-btn" onclick="markInProgress(${item.id})">
+                    🚀 Start Progress
+                  </button>
+                ` : ''}
+                ${item.status === 'in-progress' ? `
+                  <button class="action-btn" onclick="markAsPlanned(${item.id})">
+                    ⏸️ Pause
+                  </button>
+                ` : ''}
+                <button class="action-btn delete-btn" onclick="deleteItem(${item.id})">
+                  🗑️ Delete
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        updateStats();
+      }
+
+      function setFilter(filter) {
+        currentFilter = filter;
+        
+        // Update filter button states
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.filter === filter);
+        });
+        
+        renderBucketList();
+      }
+
+      function toggleAddForm() {
+        showAddForm = !showAddForm;
+        addItemSection.style.display = showAddForm ? 'block' : 'none';
+        toggleAddItemBtn.textContent = showAddForm ? '✕ Cancel' : '+ Add Bucket List Item';
+        
+        if (showAddForm) {
+          itemTitle.focus();
+        } else {
+          clearForm();
+        }
+      }
+
+      function clearForm() {
+        itemTitle.value = '';
+        itemCategory.value = 'travel';
+        itemDescription.value = '';
+        itemTargetDate.value = '';
+        itemPriority.value = 'low';
+        clearMessages();
+      }
+
+      function addItem() {
+        const title = itemTitle.value.trim();
+        const category = itemCategory.value;
+        const description = itemDescription.value.trim();
+        const targetDate = itemTargetDate.value;
+        const priority = itemPriority.value;
+
+        // Validation
+        if (!title) {
+          showError('Please enter a title for your bucket list item');
+          return;
+        }
+
+        // Check for duplicate titles
+        if (bucketItems.some(item => item.title.toLowerCase() === title.toLowerCase())) {
+          showError('An item with this title already exists');
+          return;
+        }
+
+        // Add item
+        const newItem = {
+          id: Date.now(),
+          title,
+          category,
+          description,
+          targetDate,
+          priority,
+          status: 'planned',
+          createdAt: new Date().toISOString(),
+          completedAt: null,
+          completionPhoto: null
+        };
+
+        bucketItems.push(newItem);
+        saveData();
+        renderBucketList();
+        showSuccess(`"${title}" added to your family bucket list!`);
+        toggleAddForm();
+      }
+
+      function markAsCompleted(itemId) {
+        const item = bucketItems.find(i => i.id === itemId);
+        if (item) {
+          item.status = 'completed';
+          item.completedAt = new Date().toISOString();
+          saveData();
+          renderBucketList();
+          showSuccess(`Congratulations! "${item.title}" completed! 🎉`);
+        }
+      }
+
+      function markInProgress(itemId) {
+        const item = bucketItems.find(i => i.id === itemId);
+        if (item) {
+          item.status = 'in-progress';
+          saveData();
+          renderBucketList();
+          showSuccess(`"${item.title}" is now in progress! 🚀`);
+        }
+      }
+
+      function markAsPlanned(itemId) {
+        const item = bucketItems.find(i => i.id === itemId);
+        if (item) {
+          item.status = 'planned';
+          saveData();
+          renderBucketList();
+          showSuccess(`"${item.title}" moved back to planned.`);
+        }
+      }
+
+      function deleteItem(itemId) {
+        const item = bucketItems.find(i => i.id === itemId);
+        if (item && confirm(`Are you sure you want to delete "${item.title}" from your bucket list?`)) {
+          bucketItems = bucketItems.filter(i => i.id !== itemId);
+          saveData();
+          renderBucketList();
+          showSuccess('Item removed from bucket list.');
+        }
+      }
+
+      // Global functions for onclick handlers
+      window.markAsCompleted = markAsCompleted;
+      window.markInProgress = markInProgress;
+      window.markAsPlanned = markAsPlanned;
+      window.deleteItem = deleteItem;
+
+      // Event listeners
+      toggleAddItemBtn.addEventListener('click', toggleAddForm);
+      addItemBtn.addEventListener('click', addItem);
+      cancelItemBtn.addEventListener('click', toggleAddForm);
+
+      // Filter button handlers
+      document.querySelector('.filter-controls').addEventListener('click', (e) => {
+        if (e.target.classList.contains('filter-btn')) {
+          setFilter(e.target.dataset.filter);
+        }
+      });
+
+      // Enter key support
+      itemTitle.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') addItem();
+      });
+
+      // Initialize
+      loadData();
+      renderBucketList();
+    });
+  </script>
+</body>
+</html>
