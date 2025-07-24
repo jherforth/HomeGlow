@@ -623,11 +623,18 @@ fastify.post('/api/settings', async (request, reply) => {
 
 // NEW: Generic CORS Proxy Endpoint
 fastify.get('/api/proxy', async (request, reply) => {
+  console.log('=== PROXY REQUEST RECEIVED ===');
+  console.log('Query params:', request.query);
+  console.log('Headers:', request.headers);
+  
   const { targetUrl } = request.query;
 
   if (!targetUrl) {
+    console.log('ERROR: No targetUrl provided');
     return reply.status(400).send({ error: 'targetUrl query parameter is required.' });
   }
+
+  console.log('Target URL requested:', targetUrl);
 
   let whitelist = [];
   try {
@@ -636,6 +643,7 @@ fastify.get('/api/proxy', async (request, reply) => {
     if (whitelistSetting && whitelistSetting.value) {
       whitelist = whitelistSetting.value.split(',').map(domain => domain.trim());
     }
+    console.log('Current whitelist:', whitelist);
   } catch (dbError) {
     console.error('Error fetching proxy whitelist from settings:', dbError);
     whitelist = []; // Default to empty for security
@@ -645,11 +653,13 @@ fastify.get('/api/proxy', async (request, reply) => {
   // A more robust solution might involve seeding this in the database on startup.
   if (!whitelist.includes('calapi.inadiutorium.cz')) {
     whitelist.push('calapi.inadiutorium.cz');
+    console.log('Added calapi.inadiutorium.cz to whitelist');
   }
 
   try {
     const target = new URL(targetUrl);
     const targetHostname = target.hostname;
+    console.log('Target hostname:', targetHostname);
 
     if (!whitelist.includes(targetHostname)) {
       console.warn(`Proxy request blocked for non-whitelisted domain: ${targetHostname}`);
@@ -682,7 +692,11 @@ fastify.get('/api/proxy', async (request, reply) => {
       process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; // Only for development
     }
 
+    console.log('Making axios request with config:', axiosConfig);
     const response = await axios.get(targetUrl, axiosConfig);
+    console.log('Axios response received:', response.status, response.statusText);
+    console.log('Response data type:', typeof response.data);
+    console.log('Response data preview:', JSON.stringify(response.data).substring(0, 200) + '...');
 
     // Forward the content type and the data from the external API
     if (response.headers['content-type']) {
@@ -694,6 +708,7 @@ fastify.get('/api/proxy', async (request, reply) => {
     reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     
+    console.log('Sending successful response');
     return reply.status(response.status).send(response.data);
 
   } catch (error) {
