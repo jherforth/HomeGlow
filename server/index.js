@@ -65,6 +65,15 @@ fastify.get('/widgets/:filename', async (request, reply) => {
   }
 });
 
+// Add a simple test endpoint
+fastify.get('/api/test', async (request, reply) => {
+  return { 
+    message: 'Server is working!', 
+    timestamp: new Date().toISOString(),
+    widgetsDir: path.join(__dirname, 'widgets')
+  };
+});
+
 // Serve the main CSS file for widgets
 fastify.get('/index.css', async (request, reply) => {
   try {
