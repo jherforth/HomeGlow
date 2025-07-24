@@ -21,7 +21,7 @@
       box-shadow: var(--shadow, 0 8px 32px rgba(0, 0, 0, 0.1));
       backdrop-filter: var(--backdrop-blur, blur(10px));
       border-radius: 12px;
-      padding: 1rem;
+      padding: 0.5rem;
       text-align: center;
       width: 100%;
       max-height: calc(100vh - 1.5rem);
@@ -44,8 +44,8 @@
 
     .widget-header {
       text-align: center;
-      margin-bottom: 1rem;
-      padding-bottom: 0.75rem;
+      margin-bottom: 0.5rem;
+      padding-bottom: 0.5rem;
       border-bottom: 1px solid rgba(var(--text-color-rgb, 51, 51, 51), 0.1);
     }
 
@@ -63,8 +63,8 @@
     .season-info {
       font-size: 0.8rem;
       color: var(--text-color, #333);
-      margin-bottom: 1rem;
-      padding: 0.5rem 0.75rem;
+      margin-bottom: 0.5rem;
+      padding: 0.4rem 0.6rem;
       background: linear-gradient(135deg, rgba(var(--accent-rgb, 110, 68, 255), 0.1), rgba(var(--accent-rgb, 110, 68, 255), 0.05));
       border-radius: 8px;
       text-align: center;
@@ -87,12 +87,12 @@
     }
 
     .celebrations {
-      margin-top: 0.75rem;
+      margin-top: 0.5rem;
     }
 
     .celebration {
-      margin-bottom: 0.75rem;
-      padding: 0.75rem;
+      margin-bottom: 0.5rem;
+      padding: 0.5rem;
       border-radius: 8px;
       background: rgba(var(--text-color-rgb, 51, 51, 51), 0.03);
       border: 1px solid rgba(var(--text-color-rgb, 51, 51, 51), 0.08);
@@ -259,7 +259,7 @@
     /* Responsive design */
     @media (max-width: 480px) {
       .widget-container {
-        padding: 0.75rem;
+        padding: 0.4rem;
       }
       
       .widget-title {
@@ -327,14 +327,6 @@
           const data = await response.json();
           
           let html = '';
-
-          // Season information (no date)
-          if (data.season) {
-            html += `<div class="season-info">
-              <strong>Season:</strong> ${data.season}
-              ${data.season_week ? ` - Week ${data.season_week}` : ''}
-            </div>`;
-          }
 
           // Celebrations
           if (data.celebrations && Array.isArray(data.celebrations) && data.celebrations.length > 0) {
