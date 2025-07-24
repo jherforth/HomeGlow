@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Liturgical Day Widget - Minimal</title>
+  <link rel="stylesheet" href="/index.css">
+  <style>
+    body {
+      background: transparent;
+      color: var(--text-color, #333);
+      font-family: 'Inter', sans-serif;
+      margin: 0;
+      padding: 1rem;
+      box-sizing: border-box;
+    }
+    .widget-container {
+      background: var(--card-bg, rgba(255, 255, 255, 0.8));
+      border: 1px solid var(--card-border, rgba(255, 255, 255, 0.2));
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      width: 100%;
+    }
+    .test-message {
+      color: var(--text-color, #333);
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="widget-container">
+    <h2>Liturgical Day Widget</h2>
+    <div id="content">
+      <div class="test-message">JavaScript is loading...</div>
+    </div>
+  </div>
+
+  <script>
+    console.log('Liturgical widget script starting...');
+    
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('Liturgical widget DOM loaded');
+      
+      const contentDiv = document.getElementById('content');
+      contentDiv.innerHTML = '<div class="test-message">JavaScript is working! Loading liturgical data...</div>';
+      
+      // Handle theme and transparency
+      const params = new URLSearchParams(window.location.search);
+      const theme = params.get('theme');
+      if (theme === 'dark' || theme === 'light') {
+        document.documentElement.setAttribute('data-theme', theme);
+      }
+      const isTransparent = params.get('transparent') === 'true';
+      if (isTransparent) {
+        document.body.style.background = 'transparent';
+        const mainContainer = document.querySelector('.widget-container');
+        if (mainContainer) {
+          mainContainer.style.background = 'transparent';
+          mainContainer.style.boxShadow = 'none';
+          mainContainer.style.backdropFilter = 'none';
+          mainContainer.style.border = 'none';
+        }
+      }
+
+      // Simple test of the API
+      setTimeout(async function() {
+        try {
+          const liturgicalUrl = 'http://calapi.inadiutorium.cz/api/v0/en/calendars/default/today';
+          const proxyUrl = `/api/proxy?targetUrl=${encodeURIComponent(liturgicalUrl)}`;
+          
+          console.log('Making request to:', proxyUrl);
+          
+          const response = await fetch(proxyUrl);
+          console.log('Response received:', response.status);
+          
+          if (response.ok) {
+            const data = await response.json();
+            console.log('Data received:', data);
+            
+            let html = '<h3>Today\'s Liturgical Information</h3>';
+            
+            if (data.date) {
+              html += `<p><strong>Date:</strong> ${new Date(data.date).toDateString()}</p>`;
+            }
+            
+            if (data.season) {
+              html += `<p><strong>Season:</strong> ${data.season}</p>`;
+            }
+            
+            if (data.celebrations && data.celebrations.length > 0) {
+              html += '<p><strong>Celebrations:</strong></p><ul>';
+              data.celebrations.forEach(celebration => {
+                html += `<li>${celebration.title || 'Untitled'} (${celebration.rank || 'No rank'})</li>`;
+              });
+              html += '</ul>';
+            }
+            
+            contentDiv.innerHTML = html;
+          } else {
+            contentDiv.innerHTML = `<div class="test-message">API Error: ${response.status}</div>`;
+          }
+        } catch (error) {
+          console.error('Error:', error);
+          contentDiv.innerHTML = `<div class="test-message">Error: ${error.message}</div>`;
+        }
+      }, 1000);
+    });
+    
+    console.log('Liturgical widget script loaded');
+  </script>
+</body>
+</html>
