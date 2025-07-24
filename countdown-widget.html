@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Family Countdown</title>
+  <link rel="stylesheet" href="/index.css">
+  <style>
+    * {
+      background: transparent !important;
+      background-color: transparent !important;
+      background-image: none !important;
+    }
+
+    body {
+      background: transparent !important;
+      font-family: 'Inter', sans-serif;
+      margin: 0;
+      padding: 0.75rem;
+      box-sizing: border-box;
+      font-size: 0.85rem;
+      color: #333;
+    }
+
+    [data-theme="dark"] body {
+      color: #a6a6d1;
+      background: transparent !important;
+    }
+
+    .widget-container {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      backdrop-filter: none !important;
+      border-radius: 12px;
+      padding: 0.5rem;
+      text-align: center;
+      width: 100%;
+      max-height: calc(100vh - 1.5rem);
+      overflow-y: auto;
+    }
+
+    .widget-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin: 0 0 1rem 0;
+      color: inherit;
+    }
+
+    .countdown-list {
+      margin-bottom: 1rem;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .countdown-item {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      padding: 0.75rem;
+      margin-bottom: 0.5rem;
+      position: relative;
+    }
+
+    [data-theme="dark"] .countdown-item {
+      background: rgba(30, 30, 50, 0.3);
+      border-color: rgba(100, 100, 150, 0.3);
+    }
+
+    .countdown-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+
+    .countdown-title {
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: inherit;
+      margin: 0;
+    }
+
+    .countdown-emoji {
+      font-size: 1.2rem;
+    }
+
+    .countdown-display {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #00ddeb;
+      margin: 0.25rem 0;
+    }
+
+    [data-theme="dark"] .countdown-display {
+      color: #00ddeb;
+    }
+
+    .countdown-date {
+      font-size: 0.75rem;
+      opacity: 0.8;
+      margin: 0;
+    }
+
+    .countdown-expired {
+      color: #ff6b6b !important;
+      font-weight: 600;
+    }
+
+    .countdown-today {
+      color: #28a745 !important;
+      font-weight: 700;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.7; }
+      100% { opacity: 1; }
+    }
+
+    .delete-btn {
+      background: #ff6b6b !important;
+      color: white !important;
+      border: none;
+      border-radius: 4px;
+      padding: 0.25rem 0.5rem;
+      cursor: pointer;
+      font-size: 0.7rem;
+      font-weight: 600;
+      transition: all 0.3s ease;
+    }
+
+    .delete-btn:hover {
+      background: #ff5252 !important;
+      transform: translateY(-1px);
+    }
+
+    .add-form {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 0.75rem;
+      margin-top: 1rem;
+    }
+
+    [data-theme="dark"] .add-form {
+      background: rgba(30, 30, 50, 0.2);
+      border-color: rgba(100, 100, 150, 0.2);
+    }
+
+    .form-row {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+      align-items: center;
+    }
+
+    .form-input {
+      background: rgba(255, 255, 255, 0.1) !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
+      border-radius: 4px;
+      padding: 0.5rem;
+      color: inherit !important;
+      font-size: 0.8rem;
+      flex: 1;
+    }
+
+    [data-theme="dark"] .form-input {
+      background: rgba(30, 30, 50, 0.3) !important;
+      border-color: rgba(100, 100, 150, 0.3) !important;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: #00ddeb !important;
+      box-shadow: 0 0 0 2px rgba(0, 221, 235, 0.2);
+    }
+
+    .emoji-select {
+      background: rgba(255, 255, 255, 0.1) !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
+      border-radius: 4px;
+      padding: 0.5rem;
+      color: inherit !important;
+      font-size: 0.8rem;
+      width: 60px;
+    }
+
+    [data-theme="dark"] .emoji-select {
+      background: rgba(30, 30, 50, 0.3) !important;
+      border-color: rgba(100, 100, 150, 0.3) !important;
+    }
+
+    .custom-button {
+      background: linear-gradient(45deg, #00ddeb, #ff6b6b) !important;
+      color: #333 !important;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      margin: 0.25rem;
+    }
+
+    [data-theme="dark"] .custom-button {
+      background: linear-gradient(45deg, #2e2767, #620808) !important;
+      color: #a6a6d1 !important;
+    }
+
+    .custom-button:hover {
+      filter: brightness(1.1);
+      transform: translateY(-1px);
+    }
+
+    .custom-button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .error-message {
+      color: #ff6b6b;
+      font-size: 0.75rem;
+      margin: 0.5rem 0;
+      text-align: center;
+    }
+
+    .success-message {
+      color: #28a745;
+      font-size: 0.75rem;
+      margin: 0.5rem 0;
+      text-align: center;
+    }
+
+    .no-countdowns {
+      color: inherit;
+      opacity: 0.7;
+      font-style: italic;
+      margin: 2rem 0;
+    }
+
+    .toggle-form-btn {
+      background: rgba(255, 255, 255, 0.1) !important;
+      color: inherit !important;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      margin-bottom: 1rem;
+    }
+
+    [data-theme="dark"] .toggle-form-btn {
+      background: rgba(30, 30, 50, 0.3) !important;
+      border-color: rgba(100, 100, 150, 0.3);
+    }
+
+    .toggle-form-btn:hover {
+      background: rgba(255, 255, 255, 0.2) !important;
+      transform: translateY(-1px);
+    }
+
+    [data-theme="dark"] .toggle-form-btn:hover {
+      background: rgba(30, 30, 50, 0.5) !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="widget-container">
+    <h1 class="widget-title">⏰ Family Countdown</h1>
+    
+    <div id="countdownList" class="countdown-list"></div>
+    
+    <button id="toggleFormBtn" class="toggle-form-btn">+ Add New Countdown</button>
+    
+    <div id="addForm" class="add-form" style="display: none;">
+      <div class="form-row">
+        <input type="text" id="eventTitle" class="form-input" placeholder="Event name (e.g., Christmas)" maxlength="50">
+        <select id="eventEmoji" class="emoji-select">
+          <option value="🎉">🎉</option>
+          <option value="🎂">🎂</option>
+          <option value="🎄">🎄</option>
+          <option value="🎃">🎃</option>
+          <option value="💝">💝</option>
+          <option value="🏖️">🏖️</option>
+          <option value="✈️">✈️</option>
+          <option value="🎓">🎓</option>
+          <option value="💍">💍</option>
+          <option value="🏠">🏠</option>
+          <option value="⭐">⭐</option>
+          <option value="🎊">🎊</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <input type="date" id="eventDate" class="form-input">
+        <input type="time" id="eventTime" class="form-input" value="00:00">
+      </div>
+      <div class="form-row">
+        <button id="addCountdownBtn" class="custom-button">Add Countdown</button>
+        <button id="cancelBtn" class="custom-button" style="background: #6c757d !important;">Cancel</button>
+      </div>
+      <div id="errorMessage" class="error-message"></div>
+      <div id="successMessage" class="success-message"></div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // Handle theme
+      const params = new URLSearchParams(window.location.search);
+      const theme = params.get('theme');
+      if (theme === 'dark' || theme === 'light') {
+        document.documentElement.setAttribute('data-theme', theme);
+      }
+
+      // Widget state
+      let countdowns = [];
+      let updateInterval;
+      let showForm = false;
+
+      // DOM elements
+      const countdownList = document.getElementById('countdownList');
+      const toggleFormBtn = document.getElementById('toggleFormBtn');
+      const addForm = document.getElementById('addForm');
+      const eventTitle = document.getElementById('eventTitle');
+      const eventEmoji = document.getElementById('eventEmoji');
+      const eventDate = document.getElementById('eventDate');
+      const eventTime = document.getElementById('eventTime');
+      const addCountdownBtn = document.getElementById('addCountdownBtn');
+      const cancelBtn = document.getElementById('cancelBtn');
+      const errorMessage = document.getElementById('errorMessage');
+      const successMessage = document.getElementById('successMessage');
+
+      // Load countdowns from localStorage
+      function loadCountdowns() {
+        try {
+          const saved = localStorage.getItem('homeglowCountdowns');
+          countdowns = saved ? JSON.parse(saved) : [];
+        } catch (error) {
+          console.error('Error loading countdowns:', error);
+          countdowns = [];
+        }
+      }
+
+      // Save countdowns to localStorage
+      function saveCountdowns() {
+        try {
+          localStorage.setItem('homeglowCountdowns', JSON.stringify(countdowns));
+        } catch (error) {
+          console.error('Error saving countdowns:', error);
+          showError('Failed to save countdown');
+        }
+      }
+
+      // Show error message
+      function showError(message) {
+        errorMessage.textContent = message;
+        successMessage.textContent = '';
+        setTimeout(() => {
+          errorMessage.textContent = '';
+        }, 3000);
+      }
+
+      // Show success message
+      function showSuccess(message) {
+        successMessage.textContent = message;
+        errorMessage.textContent = '';
+        setTimeout(() => {
+          successMessage.textContent = '';
+        }, 3000);
+      }
+
+      // Calculate time remaining
+      function calculateTimeRemaining(targetDate) {
+        const now = new Date().getTime();
+        const target = new Date(targetDate).getTime();
+        const difference = target - now;
+
+        if (difference <= 0) {
+          return { expired: true, text: 'Event has passed!' };
+        }
+
+        const days = Math.floor(difference / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+
+        // Check if it's today
+        const today = new Date();
+        const targetDateObj = new Date(targetDate);
+        const isToday = today.toDateString() === targetDateObj.toDateString();
+
+        if (isToday && days === 0) {
+          if (hours === 0 && minutes === 0) {
+            return { 
+              isToday: true, 
+              text: `${seconds} second${seconds !== 1 ? 's' : ''} left!` 
+            };
+          } else if (hours === 0) {
+            return { 
+              isToday: true, 
+              text: `${minutes}m ${seconds}s left!` 
+            };
+          } else {
+            return { 
+              isToday: true, 
+              text: `${hours}h ${minutes}m left!` 
+            };
+          }
+        }
+
+        if (days === 0) {
+          return { text: `${hours}h ${minutes}m ${seconds}s` };
+        } else if (days === 1) {
+          return { text: `1 day, ${hours}h ${minutes}m` };
+        } else {
+          return { text: `${days} days, ${hours}h ${minutes}m` };
+        }
+      }
+
+      // Format date for display
+      function formatDate(dateString) {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      }
+
+      // Render countdowns
+      function renderCountdowns() {
+        if (countdowns.length === 0) {
+          countdownList.innerHTML = '<div class="no-countdowns">No countdowns yet. Add one to get started!</div>';
+          return;
+        }
+
+        // Sort countdowns by date (soonest first)
+        const sortedCountdowns = [...countdowns].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        countdownList.innerHTML = sortedCountdowns.map((countdown, index) => {
+          const timeRemaining = calculateTimeRemaining(countdown.date);
+          const originalIndex = countdowns.findIndex(c => c.id === countdown.id);
+          
+          let displayClass = 'countdown-display';
+          if (timeRemaining.expired) {
+            displayClass += ' countdown-expired';
+          } else if (timeRemaining.isToday) {
+            displayClass += ' countdown-today';
+          }
+
+          return `
+            <div class="countdown-item">
+              <div class="countdown-header">
+                <div class="countdown-emoji">${countdown.emoji}</div>
+                <button class="delete-btn" onclick="deleteCountdown(${originalIndex})">Delete</button>
+              </div>
+              <h3 class="countdown-title">${countdown.title}</h3>
+              <div class="${displayClass}">${timeRemaining.text}</div>
+              <p class="countdown-date">${formatDate(countdown.date)}</p>
+            </div>
+          `;
+        }).join('');
+      }
+
+      // Delete countdown
+      window.deleteCountdown = function(index) {
+        if (confirm('Are you sure you want to delete this countdown?')) {
+          countdowns.splice(index, 1);
+          saveCountdowns();
+          renderCountdowns();
+          showSuccess('Countdown deleted successfully!');
+        }
+      };
+
+      // Toggle form visibility
+      function toggleForm() {
+        showForm = !showForm;
+        addForm.style.display = showForm ? 'block' : 'none';
+        toggleFormBtn.textContent = showForm ? '✕ Cancel' : '+ Add New Countdown';
+        
+        if (showForm) {
+          eventTitle.focus();
+          // Set default date to tomorrow
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          eventDate.value = tomorrow.toISOString().split('T')[0];
+        } else {
+          clearForm();
+        }
+      }
+
+      // Clear form
+      function clearForm() {
+        eventTitle.value = '';
+        eventEmoji.value = '🎉';
+        eventDate.value = '';
+        eventTime.value = '00:00';
+        errorMessage.textContent = '';
+        successMessage.textContent = '';
+      }
+
+      // Add countdown
+      function addCountdown() {
+        const title = eventTitle.value.trim();
+        const emoji = eventEmoji.value;
+        const date = eventDate.value;
+        const time = eventTime.value;
+
+        // Validation
+        if (!title) {
+          showError('Please enter an event name');
+          return;
+        }
+
+        if (!date) {
+          showError('Please select a date');
+          return;
+        }
+
+        // Create full date string
+        const fullDate = `${date}T${time}`;
+        const targetDate = new Date(fullDate);
+        const now = new Date();
+
+        if (targetDate <= now) {
+          showError('Please select a future date and time');
+          return;
+        }
+
+        // Check for duplicate titles
+        if (countdowns.some(c => c.title.toLowerCase() === title.toLowerCase())) {
+          showError('A countdown with this name already exists');
+          return;
+        }
+
+        // Add countdown
+        const newCountdown = {
+          id: Date.now(),
+          title,
+          emoji,
+          date: fullDate,
+          created: new Date().toISOString()
+        };
+
+        countdowns.push(newCountdown);
+        saveCountdowns();
+        renderCountdowns();
+        showSuccess(`Countdown "${title}" added successfully!`);
+        toggleForm();
+      }
+
+      // Start update interval
+      function startUpdateInterval() {
+        if (updateInterval) {
+          clearInterval(updateInterval);
+        }
+        updateInterval = setInterval(renderCountdowns, 1000);
+      }
+
+      // Event listeners
+      toggleFormBtn.addEventListener('click', toggleForm);
+      addCountdownBtn.addEventListener('click', addCountdown);
+      cancelBtn.addEventListener('click', toggleForm);
+
+      // Enter key support
+      eventTitle.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') addCountdown();
+      });
+
+      // Initialize
+      loadCountdowns();
+      renderCountdowns();
+      startUpdateInterval();
+
+      // Cleanup on page unload
+      window.addEventListener('beforeunload', () => {
+        if (updateInterval) {
+          clearInterval(updateInterval);
+        }
+      });
+    });
+  </script>
+</body>
+</html>
