@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Family Countdown Widget</title>
+  <link rel="stylesheet" href="/index.css">
+  <style>
+    body {
+      background: transparent !important;
+      font-family: 'Inter', sans-serif;
+      margin: 0;
+      padding: 0.75rem;
+      box-sizing: border-box;
+      font-size: 0.85rem;
+      /* Text color based on theme */
+      color: #333; /* Default light theme text */
+    }
+
+    [data-theme="dark"] body {
+      color: #a6a6d1; /* Dark theme text color */
+      background: transparent !important;
+    }
+
+    /* Force all elements to have transparent backgrounds */
+    * {
+      background: transparent !important;
+      background-color: transparent !important;
+      background-image: none !important;
+    }
+
+    .widget-container {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      backdrop-filter: none !important;
+      border-radius: 12px;
+      padding: 0.5rem;
+      text-align: center;
+      width: 100%;
+      max-height: calc(100vh - 1.5rem);
+      overflow-y: auto;
+      position: relative;
+      transition: all 0.3s ease;
+    }
+
+    .widget-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin: 0 0 0.5rem 0;
+      color: inherit;
+      letter-spacing: 1px;
+    }
+
+    .event-label {
+      font-size: 0.9rem;
+      margin-bottom: 0.75rem;
+      opacity: 0.9;
+      color: inherit;
+    }
+
+    .countdown {
+      font-size: 1.5rem;
+      font-weight: bold;
+      margin-bottom: 0.5rem;
+      letter-spacing: 2px;
+      color: inherit;
+    }
+
+    .countdown-button {
+      background: linear-gradient(45deg, #00ddeb, #ff6b6b) !important;
+      color: #333 !important;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      touch-action: manipulation;
+      margin: 0.25rem;
+    }
+
+    [data-theme="dark"] .countdown-button {
+      background: linear-gradient(45deg, #2e2767, #620808) !important;
+      color: #a6a6d1 !important;
+    }
+
+    .countdown-button:hover {
+      filter: brightness(1.1);
+      transform: translateY(-1px);
+    }
+
+    .edit-form {
+      margin-top: 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .edit-form input[type="text"], 
+    .edit-form input[type="date"] {
+      padding: 6px 10px;
+      border-radius: 5px;
+      border: 1px solid rgba(51, 51, 51, 0.2);
+      background: rgba(255, 255, 255, 0.1) !important;
+      color: inherit;
+      font-size: 0.8rem;
+      width: 160px;
+      transition: all 0.3s ease;
+    }
+
+    [data-theme="dark"] .edit-form input[type="text"], 
+    [data-theme="dark"] .edit-form input[type="date"] {
+      border: 1px solid rgba(166, 166, 209, 0.2);
+      background: rgba(30, 30, 50, 0.1) !important;
+    }
+
+    .edit-form input:focus {
+      outline: none;
+      border-color: #00ddeb;
+      box-shadow: 0 0 0 2px rgba(0, 221, 235, 0.2);
+    }
+
+    [data-theme="dark"] .edit-form input:focus {
+      border-color: #00ddeb;
+    }
+
+    .celebrate {
+      font-size: 1.5rem;
+      color: #00ddeb;
+      margin-top: 0.5rem;
+      animation: pop 0.7s;
+    }
+
+    [data-theme="dark"] .celebrate {
+      color: #00ddeb;
+    }
+
+    @keyframes pop {
+      0% { transform: scale(0.7); }
+      70% { transform: scale(1.2); }
+      100% { transform: scale(1); }
+    }
+
+    /* Animations */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(15px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .widget-container > * {
+      animation: fadeInUp 0.6s ease-out;
+    }
+
+    /* Responsive design */
+    @media (max-width: 480px) {
+      .widget-container {
+        padding: 0.4rem;
+      }
+      
+      .widget-title {
+        font-size: 1rem;
+      }
+      
+      .countdown {
+        font-size: 1.2rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="widget-container">
+    <h1 class="widget-title">🎉 Family Countdown</h1>
+    <div class="event-label" id="eventLabel"></div>
+    <div class="countdown" id="countdown"></div>
+    <button class="countdown-button" id="editBtn">Edit Event</button>
+    <form class="edit-form" id="editForm" style="display:none;">
+      <input type="text" id="eventInput" placeholder="Event name" required />
+      <input type="date" id="dateInput" required />
+      <button type="submit" class="countdown-button">Save</button>
+    </form>
+    <div class="celebrate" id="celebrate" style="display:none;">🎊 It's here! 🎊</div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // Handle theme
+      const params = new URLSearchParams(window.location.search);
+      const theme = params.get('theme');
+      if (theme === 'dark' || theme === 'light') {
+        document.documentElement.setAttribute('data-theme', theme);
+      }
+
+      // --- WIDGET LOGIC ---
+      const EVENT_KEY = 'familyCountdownEvent';
+      const DATE_KEY = 'familyCountdownDate';
+
+      const eventLabel = document.getElementById('eventLabel');
+      const countdown = document.getElementById('countdown');
+      const editBtn = document.getElementById('editBtn');
+      const editForm = document.getElementById('editForm');
+      const eventInput = document.getElementById('eventInput');
+      const dateInput = document.getElementById('dateInput');
+      const celebrate = document.getElementById('celebrate');
+
+      let eventName = localStorage.getItem(EVENT_KEY) || "Next Family Event";
+      let eventDate = localStorage.getItem(DATE_KEY) || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+      let intervalId;
+
+      function updateDisplay() {
+        eventLabel.textContent = `Countdown to: ${eventName}`;
+        const now = new Date();
+        const target = new Date(eventDate + "T00:00:00");
+        const diff = target - now;
+
+        if (diff > 0) {
+          celebrate.style.display = 'none';
+          countdown.style.display = '';
+          const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+          const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+          const mins = Math.floor((diff / (1000 * 60)) % 60);
+          const secs = Math.floor((diff / 1000) % 60);
+          countdown.textContent = `${days}d ${hours}h ${mins}m ${secs}s`;
+        } else {
+          countdown.style.display = 'none';
+          celebrate.style.display = '';
+        }
+      }
+
+      function startCountdown() {
+        if (intervalId) clearInterval(intervalId);
+        updateDisplay();
+        intervalId = setInterval(updateDisplay, 1000);
+      }
+      
+      startCountdown();
+
+      editBtn.onclick = () => {
+        editForm.style.display = 'flex';
+        editBtn.style.display = 'none';
+        eventInput.value = eventName;
+        dateInput.value = eventDate;
+      };
+
+      editForm.onsubmit = (e) => {
+        e.preventDefault();
+        eventName = eventInput.value.trim() || "Next Family Event";
+        eventDate = dateInput.value;
+        localStorage.setItem(EVENT_KEY, eventName);
+        localStorage.setItem(DATE_KEY, eventDate);
+        editForm.style.display = 'none';
+        editBtn.style.display = '';
+        startCountdown();
+      };
+
+      window.addEventListener('beforeunload', () => {
+        if(intervalId) clearInterval(intervalId);
+      });
+    });
+  </script>
+</body>
+</html>
