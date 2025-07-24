@@ -127,6 +127,11 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const [pluginUploadSuccess, setPluginUploadSuccess] = useState(null);
   const [pluginUploading, setPluginUploading] = useState(false);
 
+  // GitHub widgets state
+  const [githubWidgets, setGithubWidgets] = useState([]);
+  const [githubLoading, setGithubLoading] = useState(false);
+  const [githubError, setGithubError] = useState(null);
+  const [installingWidget, setInstallingWidget] = useState(null);
   // Fetch all data
   const fetchData = async () => {
     try {
@@ -153,6 +158,49 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     }
   };
 
+  // Fetch GitHub widgets
+  const fetchGithubWidgets = async () => {
+    try {
+      setGithubLoading(true);
+      setGithubError(null);
+      const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/widgets/github`);
+      setGithubWidgets(Array.isArray(response.data) ? response.data : []);
+    } catch (err) {
+      console.error('Error fetching GitHub widgets:', err);
+      setGithubError(err.response?.data?.error || 'Failed to fetch widgets from GitHub repository');
+      setGithubWidgets([]);
+    } finally {
+      setGithubLoading(false);
+    }
+  };
+
+  // Install widget from GitHub
+  const installGithubWidget = async (widget) => {
+    try {
+      setInstallingWidget(widget.filename);
+      setGithubError(null);
+      
+      const response = await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/widgets/github/install`, {
+        download_url: widget.download_url,
+        filename: widget.filename,
+        name: widget.name
+      });
+      
+      setPluginUploadSuccess(`Widget "${widget.name}" installed successfully!`);
+      fetchPlugins(); // Refresh local plugins list
+      
+      // NEW: Trigger widget gallery refresh
+      if (onWidgetUploaded) {
+        onWidgetUploaded();
+      }
+      
+    } catch (err) {
+      console.error('Error installing GitHub widget:', err);
+      setGithubError(err.response?.data?.error || 'Failed to install widget');
+    } finally {
+      setInstallingWidget(null);
+    }
+  };
     useEffect(() => {
     fetchData();
     fetchPlugins();
@@ -1173,6 +1221,9 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       {/* Plugins Tab */}
       <TabPanel value={selectedTab} index={4}>
         <Typography variant="subtitle1" gutterBottom>Widget Plugins</Typography>
+        
+        {/* Upload Section */}
+        <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>Upload Custom Widget</Typography>
         <Box sx={{ mb: 2 }}>
           <form
             onSubmit={async (e) => {
@@ -1213,6 +1264,67 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
           {pluginUploadError && <Typography color="error">{pluginUploadError}</Typography>}
           {pluginUploadSuccess && <Typography color="success.main">{pluginUploadSuccess}</Typography>}
         </Box>
+        
+        {/* GitHub Repository Section */}
+        <Typography variant="subtitle2" gutterBottom sx={{ mt: 3 }}>Install from GitHub Repository</Typography>
+        <Box sx={{ mb: 2 }}>
+          <Button 
+            variant="outlined" 
+            onClick={fetchGithubWidgets} 
+            disabled={githubLoading}
+            sx={{ mb: 2 }}
+          >
+            {githubLoading ? 'Loading...' : 'Browse GitHub Widgets'}
+          </Button>
+          {githubError && <Typography color="error" sx={{ mb: 2 }}>{githubError}</Typography>}
+          
+          {githubWidgets.length > 0 && (
+            <Box sx={{ maxHeight: 300, overflowY: 'auto', border: '1px solid var(--card-border)', borderRadius: 1, p: 1 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                Available widgets from HomeGlowPlugins repository:
+              </Typography>
+              <List dense>
+                {githubWidgets.map((widget) => (
+                  <ListItem 
+                    key={widget.path}
+                    sx={{ 
+                      border: '1px solid var(--card-border)', 
+                      borderRadius: 1, 
+                      mb: 1,
+                      backgroundColor: 'var(--card-bg)'
+                    }}
+                  >
+                    <ListItemText
+                      primary={widget.name}
+                      secondary={
+                        <Box>
+                          <Typography variant="caption" display="block">
+                            {widget.description}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Size: {(widget.size / 1024).toFixed(1)} KB
+                            {widget.folder && ` • Folder: ${widget.folder}`}
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                    <Button
+                      variant="contained"
+                      size="small"
+                      onClick={() => installGithubWidget(widget)}
+                      disabled={installingWidget === widget.filename}
+                      sx={{ ml: 1 }}
+                    >
+                      {installingWidget === widget.filename ? 'Installing...' : 'Install'}
+                    </Button>
+                  </ListItem>
+                ))}
+              </List>
+            </Box>
+          )}
+        </Box>
+        
+        {/* Local Plugins Section */}
         <Typography variant="subtitle2" gutterBottom>Uploaded Plugins</Typography>
         {plugins.length === 0 ? (
           <Typography variant="body2" color="text.secondary">No plugins uploaded yet.</Typography>
@@ -1239,7 +1351,18 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
               }>
                 <ListItemText
                   primary={plugin.name}
-                  secondary={`File: ${plugin.filename}`}
+                  secondary={
+                    <Box>
+                      <Typography variant="caption" display="block">
+                        File: {plugin.filename}
+                      </Typography>
+                      {plugin.source === 'github' && (
+                        <Typography variant="caption" color="primary">
+                          Installed from GitHub
+                        </Typography>
+                      )}
+                    </Box>
+                  }
                 />
               </ListItem>
             ))}

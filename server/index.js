@@ -13,6 +13,10 @@ const ICAL = require('ical.js');
 // For widget upload and registry
 const widgetRegistryPath = path.join(__dirname, 'widgets_registry.json');
 
+// GitHub API configuration
+const GITHUB_REPO_OWNER = 'jherforth';
+const GITHUB_REPO_NAME = 'HomeGlowPlugins';
+const GITHUB_API_BASE = 'https://api.github.com';
 
 // Initialize Fastify with CORS
 fastify.register(require('@fastify/cors'), {
@@ -335,6 +339,156 @@ fastify.get('/api/widgets/debug', async (request, reply) => {
   }
 });
 
+// Endpoint: List available widgets from GitHub repository
+fastify.get('/api/widgets/github', async (request, reply) => {
+  try {
+    console.log('Fetching widgets from GitHub repository...');
+    
+    // Get repository contents
+    const repoUrl = `${GITHUB_API_BASE}/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/contents`;
+    const response = await axios.get(repoUrl, {
+      headers: {
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'HomeGlow-Server/1.0'
+      },
+      timeout: 10000
+    });
+
+    // Filter for HTML files and directories
+    const items = response.data.filter(item => 
+      item.type === 'file' && item.name.endsWith('.html') ||
+      item.type === 'dir'
+    );
+
+    const widgets = [];
+    
+    for (const item of items) {
+      if (item.type === 'file' && item.name.endsWith('.html')) {
+        // Direct HTML file in root
+        widgets.push({
+          name: item.name.replace('.html', ''),
+          filename: item.name,
+          description: `Widget: ${item.name.replace('.html', '')}`,
+          download_url: item.download_url,
+          path: item.path,
+          size: item.size,
+          type: 'file'
+        });
+      } else if (item.type === 'dir') {
+        // Check if directory contains HTML files
+        try {
+          const dirUrl = `${GITHUB_API_BASE}/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/contents/${item.path}`;
+          const dirResponse = await axios.get(dirUrl, {
+            headers: {
+              'Accept': 'application/vnd.github.v3+json',
+              'User-Agent': 'HomeGlow-Server/1.0'
+            },
+            timeout: 5000
+          });
+          
+          const htmlFiles = dirResponse.data.filter(file => 
+            file.type === 'file' && file.name.endsWith('.html')
+          );
+          
+          for (const htmlFile of htmlFiles) {
+            widgets.push({
+              name: `${item.name}/${htmlFile.name.replace('.html', '')}`,
+              filename: htmlFile.name,
+              description: `Widget from ${item.name} folder`,
+              download_url: htmlFile.download_url,
+              path: htmlFile.path,
+              size: htmlFile.size,
+              type: 'file',
+              folder: item.name
+            });
+          }
+        } catch (dirError) {
+          console.warn(`Could not read directory ${item.name}:`, dirError.message);
+        }
+      }
+    }
+
+    console.log(`Found ${widgets.length} widgets in GitHub repository`);
+    return widgets;
+    
+  } catch (error) {
+    console.error('Error fetching GitHub widgets:', error);
+    if (error.response) {
+      return reply.status(error.response.status).send({ 
+        error: `GitHub API error: ${error.response.status} ${error.response.statusText}`,
+        details: error.response.data 
+      });
+    }
+    return reply.status(500).send({ 
+      error: 'Failed to fetch widgets from GitHub repository',
+      details: error.message 
+    });
+  }
+});
+
+// Endpoint: Install a widget from GitHub repository
+fastify.post('/api/widgets/github/install', async (request, reply) => {
+  try {
+    const { download_url, filename, name } = request.body;
+    
+    if (!download_url || !filename) {
+      return reply.status(400).send({ error: 'download_url and filename are required' });
+    }
+
+    console.log(`Installing widget ${filename} from GitHub...`);
+    
+    // Download the widget file
+    const response = await axios.get(download_url, {
+      headers: {
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'User-Agent': 'HomeGlow-Server/1.0'
+      },
+      timeout: 15000
+    });
+    
+    // Sanitize filename
+    const sanitizedFilename = filename.replace(/[^a-zA-Z0-9-._]/g, '_');
+    const savePath = path.join(__dirname, 'widgets', sanitizedFilename);
+    
+    // Save the widget file
+    await fs.writeFile(savePath, response.data, 'utf-8');
+    
+    // Update registry
+    const registry = await loadWidgetRegistry();
+    const existingWidget = registry.find(w => w.filename === sanitizedFilename);
+    
+    if (!existingWidget) {
+      registry.push({
+        name: name || sanitizedFilename.replace('.html', ''),
+        filename: sanitizedFilename,
+        uploadedAt: new Date().toISOString(),
+        source: 'github',
+        originalUrl: download_url
+      });
+      await saveWidgetRegistry(registry);
+    }
+    
+    console.log(`Successfully installed widget: ${sanitizedFilename}`);
+    return { 
+      success: true, 
+      message: 'Widget installed successfully!', 
+      widget: sanitizedFilename 
+    };
+    
+  } catch (error) {
+    console.error('Error installing GitHub widget:', error);
+    if (error.response) {
+      return reply.status(error.response.status).send({ 
+        error: `Failed to download widget: ${error.response.status} ${error.response.statusText}`,
+        details: error.response.data 
+      });
+    }
+    return reply.status(500).send({ 
+      error: 'Failed to install widget from GitHub',
+      details: error.message 
+    });
+  }
+});
 
 // Initialize database
 const dbPath = path.resolve(__dirname, 'data', 'tasks.db');
