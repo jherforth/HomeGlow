@@ -45,14 +45,75 @@ fastify.register(require('@fastify/static'), {
 // Serve the main CSS file for widgets
 fastify.get('/index.css', async (request, reply) => {
   try {
-    const cssPath = path.join(__dirname, '../client/src/index.css');
-    const cssContent = await fs.readFile(cssPath, 'utf-8');
-    reply.header('Content-Type', 'text/css');
-    reply.header('Access-Control-Allow-Origin', '*');
-    return cssContent;
+    // Try multiple possible paths
+    const possiblePaths = [
+      path.join(__dirname, '..', 'client', 'src', 'index.css'),
+      path.join(__dirname, 'client', 'src', 'index.css'),
+      '/app/client/src/index.css',
+      path.join(process.cwd(), 'client', 'src', 'index.css')
+    ];
+    
+    console.log('Looking for CSS file in paths:', possiblePaths);
+    console.log('Current working directory:', process.cwd());
+    console.log('__dirname:', __dirname);
+    
+    let cssContent = null;
+    let successPath = null;
+    
+    for (const cssPath of possiblePaths) {
+      try {
+        cssContent = await fs.readFile(cssPath, 'utf-8');
+        successPath = cssPath;
+        console.log('Successfully found CSS at:', cssPath);
+        break;
+      } catch (pathError) {
+        console.log('Failed to read CSS from:', cssPath, pathError.message);
+      }
+    }
+    
+    if (cssContent) {
+      reply.header('Content-Type', 'text/css');
+      reply.header('Access-Control-Allow-Origin', '*');
+      return cssContent;
+    }
+    
+    throw new Error('CSS file not found in any expected location');
   } catch (error) {
     console.error('Error serving index.css:', error);
-    reply.status(404).send('CSS file not found');
+    
+    // Fallback: serve minimal CSS for widgets
+    const fallbackCSS = `
+      :root {
+        --background: #f4f4f9;
+        --card-bg: rgba(255, 255, 255, 0.8);
+        --card-border: rgba(255, 255, 255, 0.2);
+        --text-color: #1a1a2e;
+        --text-color-rgb: 26, 26, 46;
+        --accent: #6e44ff;
+        --accent-rgb: 110, 68, 255;
+        --shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        --backdrop-blur: blur(10px);
+        --dynamic-text-size: 16px;
+        --dynamic-card-width: 300px;
+        --dynamic-card-padding: 20px;
+      }
+      
+      [data-theme="dark"] {
+        --background: #0a0a1a;
+        --card-bg: rgba(30, 30, 50, 0.7);
+        --card-border: rgba(100, 100, 150, 0.3);
+        --text-color: #a6a6d1;
+        --text-color-rgb: 166, 166, 209;
+        --accent: #00ddeb;
+        --accent-rgb: 0, 221, 235;
+        --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      }
+    `;
+    
+    console.log('Serving fallback CSS');
+    reply.header('Content-Type', 'text/css');
+    reply.header('Access-Control-Allow-Origin', '*');
+    return fallbackCSS;
   }
 });
 
