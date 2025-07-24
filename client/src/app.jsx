@@ -66,6 +66,13 @@ const App = () => {
   // NEW: State for bottom bar collapse
   const [isBottomBarCollapsed, setIsBottomBarCollapsed] = useState(false);
 
+  // NEW: State to trigger widget gallery refresh
+  const [widgetGalleryKey, setWidgetGalleryKey] = useState(0);
+
+  // NEW: Function to refresh widget gallery
+  const refreshWidgetGallery = () => {
+    setWidgetGalleryKey(prev => prev + 1);
+  };
   useEffect(() => {
     const fetchApiKeys = async () => {
       try {
@@ -250,12 +257,12 @@ const App = () => {
         </Grid>
       </Container>
 
-      <WidgetGallery theme={theme} />
+      <WidgetGallery key={widgetGalleryKey} theme={theme} />
 
       {/* Admin Panel as a Dialog (Popup) */}
       <Dialog open={showAdminPanel} onClose={toggleAdminPanel} maxWidth="lg"> {/* CHANGED maxWidth to "lg" */}
         <DialogContent>
-          <AdminPanel setWidgetSettings={setWidgetSettings} />
+          <AdminPanel setWidgetSettings={setWidgetSettings} onWidgetUploaded={refreshWidgetGallery} />
         </DialogContent>
       </Dialog>
 

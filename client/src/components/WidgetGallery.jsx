@@ -10,15 +10,19 @@ const WidgetGallery = ({ theme }) => {
   const [plugins, setPlugins] = useState([]);
   const [enabled, setEnabled] = useState({});
   const [isTransparent, setIsTransparent] = useState({}); // New state for transparency
+  const [loading, setLoading] = useState(true);
 
   // Fetch plugins from server (no changes here)
   useEffect(() => {
     const fetchPlugins = async () => {
       try {
+        setLoading(true);
         const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/widgets`);
         setPlugins(Array.isArray(response.data) ? response.data : []);
       } catch {
         setPlugins([]);
+      } finally {
+        setLoading(false);
       }
     };
     fetchPlugins();
@@ -59,7 +63,11 @@ const WidgetGallery = ({ theme }) => {
   };
 
   if (plugins.length === 0) {
-    return null;
+    return loading ? (
+      <Box sx={{ mt: 4, padding: '0 20px', textAlign: 'center' }}>
+        <Typography variant="h6">Loading widgets...</Typography>
+      </Box>
+    ) : null;
   }
 
   return (

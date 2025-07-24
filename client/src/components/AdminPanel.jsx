@@ -40,13 +40,7 @@ import { SketchPicker } from 'react-color';
 function TabPanel(props) {
   const { children, value, index, ...other } = props;
   return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`simple-tabpanel-${index}`}
-      aria-labelledby={`simple-tab-${index}`}
-      {...other}
-    >
+    <div role="tabpanel" hidden={value !== index} id={`simple-tabpanel-${index}`} aria-labelledby={`simple-tab-${index}`} {...other}>
       {value === index && (
         <Box sx={{ p: 3 }}>
           {children}
@@ -63,7 +57,7 @@ function a11yProps(index) {
   };
 }
 
-const AdminPanel = ({ setWidgetSettings }) => {
+const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const [formData, setFormData] = useState({
     username: '',
     email: '',
@@ -1188,6 +1182,10 @@ const AdminPanel = ({ setWidgetSettings }) => {
                 });
                 setPluginUploadSuccess('Widget uploaded successfully!');
                 fetchPlugins();
+                // NEW: Trigger widget gallery refresh
+                if (onWidgetUploaded) {
+                  onWidgetUploaded();
+                }
                 fileInput.value = '';
               } catch (err) {
                 setPluginUploadError(err.response?.data?.error || 'Failed to upload widget.');
@@ -1215,6 +1213,10 @@ const AdminPanel = ({ setWidgetSettings }) => {
                     try {
                       await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/widgets/${plugin.filename}`);
                       fetchPlugins();
+                      // NEW: Trigger widget gallery refresh
+                      if (onWidgetUploaded) {
+                        onWidgetUploaded();
+                      }
                     } catch (err) {
                       setPluginUploadError('Failed to delete plugin.');
                     }
