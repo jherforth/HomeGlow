@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Liturgical Day Widget - Minimal</title>
+  <title>Liturgical Day Widget</title>
   <link rel="stylesheet" href="/index.css">
   <style>
     body {
@@ -13,37 +13,105 @@
       padding: 1rem;
       box-sizing: border-box;
     }
+
     .widget-container {
       background: var(--card-bg, rgba(255, 255, 255, 0.8));
       border: 1px solid var(--card-border, rgba(255, 255, 255, 0.2));
+      box-shadow: var(--shadow, 0 8px 32px rgba(0, 0, 0, 0.1));
+      backdrop-filter: var(--backdrop-blur, blur(10px));
       border-radius: 12px;
-      padding: 20px;
-      text-align: center;
+      padding: var(--dynamic-card-padding, 20px);
+      text-align: left;
       width: 100%;
+      max-height: calc(100vh - 2rem);
+      overflow-y: auto;
     }
-    .test-message {
+
+    h2 {
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
       color: var(--text-color, #333);
-      margin: 10px 0;
+      text-align: center;
+    }
+
+    .date-info {
+      font-size: 1.1rem;
+      font-weight: bold;
+      color: var(--accent, #6e44ff);
+      margin-bottom: 0.5rem;
+      text-align: center;
+    }
+
+    .season-info {
+      font-size: 1rem;
+      color: var(--text-color, #333);
+      margin-bottom: 1rem;
+      padding: 0.5rem;
+      background: rgba(110, 68, 255, 0.1);
+      border-radius: 8px;
+      text-align: center;
+      text-transform: capitalize;
+    }
+
+    .celebrations {
+      margin-top: 1rem;
+    }
+
+    .celebration {
+      margin-bottom: 1rem;
+      padding: 0.75rem;
+      border-left: 3px solid var(--accent, #6e44ff);
+      background: rgba(0, 0, 0, 0.05);
+      border-radius: 0 8px 8px 0;
+    }
+
+    .celebration-title {
+      font-size: 1.1rem;
+      font-weight: bold;
+      color: var(--text-color, #333);
+      margin-bottom: 0.25rem;
+    }
+
+    .celebration-rank {
+      font-size: 0.9rem;
+      color: var(--text-color, #333);
+      opacity: 0.8;
+      font-style: italic;
+    }
+
+    .celebration-colour {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      margin-left: 0.5rem;
+      vertical-align: middle;
+      border: 2px solid var(--card-border, rgba(255, 255, 255, 0.2));
+    }
+
+    .error-message {
+      color: var(--error-color, red);
+      font-weight: bold;
+      text-align: center;
+      padding: 1rem;
+    }
+
+    .loading {
+      text-align: center;
+      color: var(--text-color, #333);
+      opacity: 0.7;
+      padding: 1rem;
     }
   </style>
 </head>
 <body>
   <div class="widget-container">
-    <h2>Liturgical Day Widget</h2>
-    <div id="content">
-      <div class="test-message">JavaScript is loading...</div>
-    </div>
+    <h2>Liturgical Day</h2>
+    <div id="liturgical-content" class="loading">Loading liturgical information...</div>
   </div>
 
   <script>
-    console.log('Liturgical widget script starting...');
-    
-    document.addEventListener('DOMContentLoaded', function() {
-      console.log('Liturgical widget DOM loaded');
-      
-      const contentDiv = document.getElementById('content');
-      contentDiv.innerHTML = '<div class="test-message">JavaScript is working! Loading liturgical data...</div>';
-      
+    document.addEventListener('DOMContentLoaded', () => {
       // Handle theme and transparency
       const params = new URLSearchParams(window.location.search);
       const theme = params.get('theme');
@@ -62,51 +130,97 @@
         }
       }
 
-      // Simple test of the API
-      setTimeout(async function() {
+      // Color mapping for liturgical colors
+      const colorMap = {
+        'green': '#228B22',
+        'red': '#DC143C',
+        'white': '#FFFFFF',
+        'violet': '#8A2BE2',
+        'purple': '#800080',
+        'rose': '#FF69B4',
+        'gold': '#FFD700'
+      };
+
+      // Load liturgical data
+      loadLiturgicalData();
+
+      async function loadLiturgicalData() {
+        const contentElement = document.getElementById('liturgical-content');
+        
         try {
           const liturgicalUrl = 'http://calapi.inadiutorium.cz/api/v0/en/calendars/default/today';
           const proxyUrl = `/api/proxy?targetUrl=${encodeURIComponent(liturgicalUrl)}`;
           
-          console.log('Making request to:', proxyUrl);
-          
           const response = await fetch(proxyUrl);
-          console.log('Response received:', response.status);
           
-          if (response.ok) {
-            const data = await response.json();
-            console.log('Data received:', data);
-            
-            let html = '<h3>Today\'s Liturgical Information</h3>';
-            
-            if (data.date) {
-              html += `<p><strong>Date:</strong> ${new Date(data.date).toDateString()}</p>`;
-            }
-            
-            if (data.season) {
-              html += `<p><strong>Season:</strong> ${data.season}</p>`;
-            }
-            
-            if (data.celebrations && data.celebrations.length > 0) {
-              html += '<p><strong>Celebrations:</strong></p><ul>';
-              data.celebrations.forEach(celebration => {
-                html += `<li>${celebration.title || 'Untitled'} (${celebration.rank || 'No rank'})</li>`;
-              });
-              html += '</ul>';
-            }
-            
-            contentDiv.innerHTML = html;
-          } else {
-            contentDiv.innerHTML = `<div class="test-message">API Error: ${response.status}</div>`;
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
           }
+
+          const data = await response.json();
+          
+          let html = '';
+
+          // Date information
+          if (data.date) {
+            const date = new Date(data.date);
+            html += `<div class="date-info">${date.toLocaleDateString('en-US', { 
+              weekday: 'long', 
+              year: 'numeric', 
+              month: 'long', 
+              day: 'numeric' 
+            })}</div>`;
+          }
+
+          // Season information
+          if (data.season) {
+            html += `<div class="season-info">
+              <strong>Season:</strong> ${data.season}
+              ${data.season_week ? ` - Week ${data.season_week}` : ''}
+            </div>`;
+          }
+
+          // Celebrations
+          if (data.celebrations && Array.isArray(data.celebrations) && data.celebrations.length > 0) {
+            html += '<div class="celebrations">';
+            
+            data.celebrations.forEach(celebration => {
+              html += '<div class="celebration">';
+              
+              if (celebration.title) {
+                html += `<div class="celebration-title">${celebration.title}`;
+                
+                // Add color indicator if available
+                if (celebration.colour) {
+                  const colorValue = colorMap[celebration.colour.toLowerCase()] || celebration.colour;
+                  html += `<span class="celebration-colour" style="background-color: ${colorValue};" title="Liturgical color: ${celebration.colour}"></span>`;
+                }
+                
+                html += '</div>';
+              }
+              
+              if (celebration.rank) {
+                html += `<div class="celebration-rank">${celebration.rank}</div>`;
+              }
+              
+              html += '</div>';
+            });
+            
+            html += '</div>';
+          }
+
+          contentElement.innerHTML = html || '<div class="error-message">No liturgical information available for today.</div>';
+
         } catch (error) {
-          console.error('Error:', error);
-          contentDiv.innerHTML = `<div class="test-message">Error: ${error.message}</div>`;
+          contentElement.innerHTML = `
+            <div class="error-message">
+              Failed to load liturgical information.<br>
+              <small>Error: ${error.message}</small>
+            </div>
+          `;
         }
-      }, 1000);
+      }
     });
-    
-    console.log('Liturgical widget script loaded');
   </script>
 </body>
 </html>

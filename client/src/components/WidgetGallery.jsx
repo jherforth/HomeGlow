@@ -124,9 +124,6 @@ const WidgetGallery = ({ theme }) => {
             </Box>
             {enabled[plugin.filename] && (
               <>
-                <div style={{ padding: '10px', fontSize: '14px', color: 'red', fontWeight: 'bold', backgroundColor: 'yellow' }}>
-                  DEBUG URL: {`${import.meta.env.VITE_REACT_APP_API_URL}/widgets/${plugin.filename}?theme=${theme}&transparent=${!!isTransparent[plugin.filename]}`}
-                </div>
               <iframe
                 // The iframe src now includes both theme and transparency state
                 src={`${import.meta.env.VITE_REACT_APP_API_URL}/widgets/${plugin.filename}?theme=${theme}&transparent=${!!isTransparent[plugin.filename]}`}
