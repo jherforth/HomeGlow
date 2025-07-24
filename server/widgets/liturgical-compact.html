@@ -22,7 +22,7 @@
       backdrop-filter: var(--backdrop-blur, blur(10px));
       border-radius: 12px;
       padding: 1rem;
-      text-align: left;
+      text-align: center;
       width: 100%;
       max-height: calc(100vh - 1.5rem);
       overflow-y: auto;
@@ -100,6 +100,7 @@
       animation: fadeInUp 0.6s ease-out calc(0.4s + var(--delay, 0s)) both;
       position: relative;
       overflow: hidden;
+      text-align: center;
     }
 
     .celebration:hover {
@@ -120,9 +121,8 @@
     }
 
     .celebration-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+      display: block;
+      text-align: center;
       margin-bottom: 0.25rem;
     }
 
@@ -131,8 +131,10 @@
       font-weight: 600;
       color: var(--text-color, #333);
       margin: 0;
-      flex: 1;
       line-height: 1.3;
+      margin-bottom: 0.5rem;
+      word-wrap: break-word;
+      hyphens: auto;
     }
 
     .celebration-rank {
@@ -145,6 +147,7 @@
       background: rgba(var(--text-color-rgb, 51, 51, 51), 0.05);
       border-radius: 4px;
       display: inline-block;
+      margin-bottom: 0.5rem;
     }
 
     .celebration-colour {
@@ -152,11 +155,10 @@
       width: 18px;
       height: 18px;
       border-radius: 50%;
-      margin-left: 0.5rem;
+      margin: 0.25rem auto;
       border: 2px solid rgba(var(--text-color-rgb, 51, 51, 51), 0.2);
       box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
       transition: all 0.3s ease;
-      flex-shrink: 0;
     }
 
     .celebration-colour:hover {
@@ -268,16 +270,6 @@
       .widget-title {
         font-size: 1rem;
       }
-      
-      .celebration-header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.25rem;
-      }
-      
-      .celebration-colour {
-        margin-left: 0;
-      }
     }
   </style>
 </head>
@@ -365,15 +357,32 @@
                   const colorValue = colorMap[celebration.colour.toLowerCase()] || celebration.colour;
                   html += `<span class="celebration-colour" style="background-color: ${colorValue};" title="Liturgical color: ${celebration.colour}"></span>`;
                 }
-                
+              
+              // Parse and wrap the title for better formatting
+              let formattedTitle = celebration.title;
+              
+              // Split long titles at common break points
+              formattedTitle = formattedTitle
+                .replace(/,\s+/g, '<br>')  // Break at commas
+                .replace(/\s+in\s+Ordinary\s+Time/g, '<br>in Ordinary Time')  // Break before "in Ordinary Time"
+                .replace(/\s+(ferial|memorial|feast|solemnity)$/g, '<br>$1')  // Break before rank words at end
+                .replace(/\s+(optional\s+memorial|obligatory\s+memorial)$/g, '<br>$1')  // Break before memorial types
+                .replace(/,\s*(priest|bishop|martyr|virgin|doctor|hermit|religious|widow)/g, '<br>$1')  // Break before titles
+                .replace(/^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s*/g, '$1<br>');  // Break after day names
+              
+              html += `<div class="celebration-title">${formattedTitle}</div>`;
                 html += '</div>';
               }
               
               if (celebration.rank) {
-                html += `<div class="celebration-rank">${celebration.rank}</div>`;
+                html += `<div class="celebration-colour" style="background-color: ${colorValue};" title="Liturgical color: ${celebration.colour}"></div>`;
               }
               
-              html += '</div>';
+              // Format rank to wrap at common points
+              let formattedRank = celebration.rank
+                .replace(/\s+(memorial|feast|solemnity)$/g, '<br>$1')
+                .replace(/^(optional|obligatory)\s+/g, '$1<br>');
+              html += `<div class="celebration-rank">${formattedRank}</div>`;
             });
             
             html += '</div>';
