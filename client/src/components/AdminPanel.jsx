@@ -494,7 +494,19 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       {success && <Typography color="success.main">{success}</Typography>}
 
       <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-        <Tabs value={selectedTab} onChange={handleTabChange} aria-label="admin panel tabs">
+        <Tabs 
+          value={selectedTab} 
+          onChange={handleTabChange} 
+          aria-label="admin panel tabs"
+          sx={{
+            '& .MuiTab-root': {
+              color: 'var(--text-color) !important',
+            },
+            '& .MuiTabs-indicator': {
+              backgroundColor: 'var(--accent) !important',
+            }
+          }}
+        >
           <Tab label="Widgets" {...a11yProps(0)} />
           <Tab label="Interface" {...a11yProps(1)} />
           <Tab label="Users" {...a11yProps(2)} />
