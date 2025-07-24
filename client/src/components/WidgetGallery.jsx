@@ -135,6 +135,17 @@ const WidgetGallery = ({ theme }) => {
                   background: 'transparent', // Iframe itself is always transparent
                 }}
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                onLoad={(e) => {
+                  // Add error handling for iframe content
+                  try {
+                    const iframe = e.target;
+                    iframe.contentWindow.addEventListener('error', (error) => {
+                      console.error('Widget error:', error);
+                    });
+                  } catch (err) {
+                    // Cross-origin restrictions might prevent this, which is fine
+                  }
+                }}
               />
             )}
           </Card>
