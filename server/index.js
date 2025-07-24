@@ -96,6 +96,16 @@ fastify.get('/index.css', async (request, reply) => {
         --dynamic-text-size: 16px;
         --dynamic-card-width: 300px;
         --dynamic-card-padding: 20px;
+        --error-color: #ff4444;
+        --light-gradient-start: #00ddeb;
+        --light-gradient-end: #ff6b6b;
+        --dark-gradient-start: #2e2767;
+        --dark-gradient-end: #620808;
+        --light-button-gradient-start: #00ddeb;
+        --light-button-gradient-end: #ff6b6b;
+        --dark-button-gradient-start: #2e2767;
+        --dark-button-gradient-end: #620808;
+        --gradient: linear-gradient(45deg, var(--light-gradient-start), var(--light-gradient-end));
       }
       
       [data-theme="dark"] {
@@ -107,6 +117,66 @@ fastify.get('/index.css', async (request, reply) => {
         --accent: #00ddeb;
         --accent-rgb: 0, 221, 235;
         --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        --gradient: linear-gradient(45deg, var(--dark-gradient-start), var(--dark-gradient-end));
+      }
+      
+      html, body {
+        margin: 0;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: var(--background);
+        color: var(--text-color);
+        transition: background 0.3s ease, color 0.3s ease;
+        touch-action: manipulation;
+        width: 100%;
+        height: 100%;
+        overflow-x: hidden;
+        overflow-y: auto;
+        font-size: var(--dynamic-text-size);
+      }
+      
+      .card {
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+        padding: var(--dynamic-card-padding);
+        backdrop-filter: var(--backdrop-blur);
+        box-shadow: var(--shadow);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        width: 100%;
+        max-width: var(--dynamic-card-width);
+        touch-action: manipulation;
+      }
+      
+      .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+      }
+      
+      h1, h2, h3, h4, h5, h6 {
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        color: var(--text-color);
+      }
+      
+      button {
+        background: linear-gradient(45deg, var(--light-button-gradient-start), var(--light-button-gradient-end));
+        color: var(--text-color);
+        border: none;
+        border-radius: 8px;
+        padding: 10px 20px;
+        cursor: pointer;
+        font-size: 1rem;
+        font-weight: 600;
+        transition: background 0.3s ease;
+        touch-action: manipulation;
+      }
+      
+      [data-theme="dark"] button {
+        background: linear-gradient(45deg, var(--dark-button-gradient-start), var(--dark-button-gradient-end));
+      }
+      
+      button:hover {
+        filter: brightness(1.1);
       }
     `;
     
