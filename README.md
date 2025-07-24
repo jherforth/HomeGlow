@@ -1,3 +1,5 @@
+<img width="252" height="199" alt="Image" src="https://github.com/user-attachments/assets/b75dbb9d-8abc-4c86-b5a3-c0083395e413" />
+
 # HomeGlow
 
 **A Smart, Self-Hosted Dashboard for Your Home**
