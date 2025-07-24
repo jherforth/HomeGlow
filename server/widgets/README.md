@@ -1,203 +1,252 @@
-# HomeGlow Widget Plugins Directory
-
-This directory stores all uploaded widget HTML files for the HomeGlow app.
-
-## How it works
-- When you upload a widget via the Admin Panel, the HTML file is saved here.
-- Each widget is a self-contained HTML file (with optional CSS/JS) that will be rendered in a sandboxed iframe in the app.
-- The widget registry (`../widgets_registry.json`) keeps track of all uploaded widgets.
-
-## Security
-- Only HTML files are allowed.
-- Widgets are rendered in sandboxed iframes for isolation and security.
-
-## Manual Management
-- You can manually add or remove HTML files here, but it is recommended to use the Admin Panel for consistency.
-- If you manually remove a file, also update `widgets_registry.json` to avoid broken entries.
-
-## Example
-To test, upload a file like `hello-widget.html` via the Admin Panel, and it will appear here.
-
-
-// WIDGET_DEVELOPMENT_GUIDE.md
 # HomeGlow Widget Development Guide
 
-Welcome, widget developer! This guide will help you create custom widgets that integrate seamlessly with the HomeGlow dashboard, including support for dynamic themes (light/dark) and transparency.
+Welcome to HomeGlow widget development! This guide will help you create custom widgets that integrate seamlessly with the HomeGlow dashboard.
 
-## Overview
+## 📋 Overview
 
-Your widget will be loaded into the main application via an `<iframe>`. To ensure a consistent user experience, the main app passes two important pieces of information to your widget's URL as query parameters:
+HomeGlow widgets are self-contained HTML files that run in sandboxed iframes. They automatically receive theme information and can be made transparent to blend with the main application's background.
 
-1.  `theme`: Can be `'light'` or `'dark'`.
-2.  `transparent`: Can be `'true'` or `'false'`.
+## 🎯 Core Requirements
 
-Your widget must read these parameters from the URL and adjust its styling accordingly.
-
-## Core Requirements
-
-### 1. Link to the Main Stylesheet
-
-To use the application's core styles and CSS variables, you **must** link to the main stylesheet in the `<head>` of your HTML file. This gives you access to all the color, size, and layout variables.
+### 1. Link to Main Stylesheet
+Your widget **must** include this link in the `<head>` section to access the app's CSS variables:
 
 ```html
-<head>
-  <!-- ... other head elements ... -->
-  <link rel="stylesheet" href="/index.css">
-</head>
+<link rel="stylesheet" href="/index.css">
+```
 
+### 2. Theme Handling Script
+Include this essential JavaScript code to handle theme and transparency:
 
-### 2. Theme Handling
+```javascript
+document.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(window.location.search);
 
-The following JavaScript snippet is essential. It reads the theme and transparent parameters from the URL and applies the necessary attributes and styles to your widget.
+  // Handle Theme
+  const theme = params.get('theme');
+  if (theme === 'dark' || theme === 'light') {
+    document.documentElement.setAttribute('data-theme', theme);
+  }
 
-Place this script inside a <script> tag at the end of your <body> or within a DOMContentLoaded event listener in your <head>.
-
-<script>
-  document.addEventListener('DOMContentLoaded', () => {
-    const params = new URLSearchParams(window.location.search);
-
-    // 1. Handle Theme
-    const theme = params.get('theme');
-    if (theme === 'dark' || theme === 'light') {
-      // Apply the theme to the root HTML element
-      document.documentElement.setAttribute('data-theme', theme);
+  // Handle Transparency (if needed)
+  const isTransparent = params.get('transparent') === 'true';
+  if (isTransparent) {
+    document.body.style.background = 'transparent';
+    const mainContainer = document.querySelector('.widget-container');
+    if (mainContainer) {
+      mainContainer.style.background = 'transparent';
+      mainContainer.style.boxShadow = 'none';
+      mainContainer.style.backdropFilter = 'none';
+      mainContainer.style.border = 'none';
     }
+  }
+});
+```
 
-    // 2. Handle Transparency
-    const isTransparent = params.get('transparent') === 'true';
-    if (isTransparent) {
-      // Make the widget's body background transparent
-      document.body.style.background = 'transparent';
-      
-      // Optional: If you have a main container, make it transparent too.
-      // This is an example targeting a div with the class 'widget-container'.
-      const mainContainer = document.querySelector('.widget-container');
-      if (mainContainer) {
-        mainContainer.style.background = 'transparent';
-        mainContainer.style.boxShadow = 'none';
-        mainContainer.style.backdropFilter = 'none';
-        mainContainer.style.border = 'none';
-      }
-    }
-  });
-</script>
+## 🎨 Recommended Styling Approach
 
-### 3. Example Widget CSS
-By using the CSS variables provided by index.css, your widget will automatically adapt its colors.
+For maximum compatibility with HomeGlow's theming system, use this CSS structure:
 
-/* Example CSS for your widget */
+```css
+/* Force all backgrounds transparent */
+* {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
 body {
-  /* 
-    Set the body to transparent by default. 
-    The theme script will handle the rest.
-  */
-  background: transparent; 
-  color: var(--text-color); /* Use the app's text color */
-  font-family: 'Inter', sans-serif; /* Use the app's font */
+  background: transparent !important;
+  font-family: 'Inter', sans-serif;
   margin: 0;
-  padding: 1rem;
+  padding: 0.75rem;
+  box-sizing: border-box;
+  font-size: 0.85rem;
+  color: #333; /* Light theme text */
+}
+
+[data-theme="dark"] body {
+  color: #a6a6d1; /* Dark theme text */
+  background: transparent !important;
 }
 
 .widget-container {
-  /* Use the app's card styling */
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  box-shadow: var(--shadow);
-  backdrop-filter: var(--backdrop-blur);
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
   border-radius: 12px;
-  padding: var(--dynamic-card-padding, 20px);
+  padding: 0.5rem;
+  text-align: center;
+  width: 100%;
+  max-height: calc(100vh - 1.5rem);
+  overflow-y: auto;
 }
 
-h1 {
-  color: var(--text-color);
+/* Buttons should match app styling */
+.custom-button {
+  background: linear-gradient(45deg, #00ddeb, #ff6b6b) !important;
+  color: #333 !important;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
 }
 
-button {
-  /* The button styles from index.css will apply automatically */
+[data-theme="dark"] .custom-button {
+  background: linear-gradient(45deg, #2e2767, #620808) !important;
+  color: #a6a6d1 !important;
 }
+```
 
-### 4. Testing Your Widget
-- Upload your widget HTML file via the Admin Panel.
-- Check the widget in the HomeGlow dashboard to ensure it looks and behaves as expected in both light and dark themes.
+## 🔧 Theme Colors
 
+### Text Colors:
+- **Light theme:** `#333` (dark gray)
+- **Dark theme:** `#a6a6d1` (light purple-gray)
+
+### Button Gradients:
+- **Light theme:** `linear-gradient(45deg, #00ddeb, #ff6b6b)`
+- **Dark theme:** `linear-gradient(45deg, #2e2767, #620808)`
+
+### Error Colors:
+- **Light theme:** `#dc3545`
+- **Dark theme:** `#ff6b6b`
+
+## 📝 Complete Widget Template
+
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>My Awesome Widget</title>
-  
-  <!-- 1. Link to the main app's stylesheet -->
+  <title>My Widget</title>
   <link rel="stylesheet" href="/index.css">
-
   <style>
-    /* Keep widget-specific styles here */
+    * {
+      background: transparent !important;
+      background-color: transparent !important;
+      background-image: none !important;
+    }
+
     body {
-      background: transparent;
-      color: var(--text-color);
+      background: transparent !important;
       font-family: 'Inter', sans-serif;
       margin: 0;
-      padding: 1rem; /* Add some padding so content isn't against the edge */
+      padding: 0.75rem;
       box-sizing: border-box;
+      font-size: 0.85rem;
+      color: #333;
+    }
+
+    [data-theme="dark"] body {
+      color: #a6a6d1;
+      background: transparent !important;
     }
 
     .widget-container {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      box-shadow: var(--shadow);
-      backdrop-filter: var(--backdrop-blur);
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      backdrop-filter: none !important;
       border-radius: 12px;
-      padding: var(--dynamic-card-padding, 20px);
+      padding: 0.5rem;
       text-align: center;
-      height: calc(400px - 2rem); /* Adjust height to account for body padding */
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
+      width: 100%;
+      max-height: calc(100vh - 1.5rem);
+      overflow-y: auto;
     }
 
-    h1 {
-      color: var(--text-color);
-      margin-bottom: 1rem;
+    .widget-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin: 0 0 0.5rem 0;
+      color: inherit;
+    }
+
+    .custom-button {
+      background: linear-gradient(45deg, #00ddeb, #ff6b6b) !important;
+      color: #333 !important;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      margin: 0.25rem;
+    }
+
+    [data-theme="dark"] .custom-button {
+      background: linear-gradient(45deg, #2e2767, #620808) !important;
+      color: #a6a6d1 !important;
+    }
+
+    .custom-button:hover {
+      filter: brightness(1.1);
+      transform: translateY(-1px);
     }
   </style>
 </head>
 <body>
-
   <div class="widget-container">
-    <h1>My Awesome Widget</h1>
-    <p>This widget respects the app's theme!</p>
-    <button>Styled Button</button>
+    <h1 class="widget-title">🎯 My Widget</h1>
+    <p>Widget content goes here!</p>
+    <button class="custom-button">Action Button</button>
   </div>
 
-  <!-- 2. Add the essential theme-handling script -->
   <script>
     document.addEventListener('DOMContentLoaded', () => {
+      // Handle theme
       const params = new URLSearchParams(window.location.search);
-
-      // Handle Theme
       const theme = params.get('theme');
       if (theme === 'dark' || theme === 'light') {
         document.documentElement.setAttribute('data-theme', theme);
       }
 
-      // Handle Transparency
-      const isTransparent = params.get('transparent') === 'true';
-      if (isTransparent) {
-        document.body.style.background = 'transparent';
-        const mainContainer = document.querySelector('.widget-container');
-        if (mainContainer) {
-          mainContainer.style.background = 'transparent';
-          mainContainer.style.boxShadow = 'none';
-          mainContainer.style.backdropFilter = 'none';
-          mainContainer.style.border = 'none';
-        }
-      }
+      // Your widget logic here
+      console.log('Widget loaded with theme:', theme);
     });
   </script>
-
 </body>
 </html>
+```
 
----
+## 🚀 Development Workflow
 
-**Do not delete this README.**
+1. **Create your HTML file** using the template above
+2. **Test locally** by opening in a browser with `?theme=dark` or `?theme=light` parameters
+3. **Upload via Admin Panel** → Plugins tab → Upload Widget
+4. **Enable in Widget Gallery** using the toggle switches
+5. **Test transparency** using the master transparency toggle
+
+## 💡 Best Practices
+
+- **Keep it lightweight** - widgets load in iframes
+- **Use semantic HTML** for accessibility
+- **Test both themes** thoroughly
+- **Handle errors gracefully** with try/catch blocks
+- **Use localStorage** for persistent settings (scoped to your widget)
+- **Avoid external dependencies** when possible
+- **Make it responsive** for different screen sizes
+
+## 🔍 Debugging
+
+- **Check browser console** for JavaScript errors
+- **Use Admin Panel → Plugins → Debug** to see uploaded files
+- **Test theme switching** by changing the URL parameter
+- **Verify transparency** works with the master toggle
+
+## 📚 Examples
+
+Check the HomeGlow repository for example widgets that demonstrate:
+- API integration with CORS proxy
+- Local storage usage
+- Form handling
+- Real-time updates
+- Theme-aware styling
+
+Happy widget development! 🎉
