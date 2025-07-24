@@ -42,6 +42,20 @@ fastify.register(require('@fastify/static'), {
   decorateReply: false
 });
 
+// Serve the main CSS file for widgets
+fastify.get('/index.css', async (request, reply) => {
+  try {
+    const cssPath = path.join(__dirname, '../client/src/index.css');
+    const cssContent = await fs.readFile(cssPath, 'utf-8');
+    reply.header('Content-Type', 'text/css');
+    reply.header('Access-Control-Allow-Origin', '*');
+    return cssContent;
+  } catch (error) {
+    console.error('Error serving index.css:', error);
+    reply.status(404).send('CSS file not found');
+  }
+});
+
 // --- Widget Upload Endpoint and Registry ---
 
 // Helper: Load widget registry
@@ -518,6 +532,13 @@ fastify.get('/api/proxy', async (request, reply) => {
         'User-Agent': 'HomeGlow-Proxy/1.0',
         'Accept': 'application/json, text/plain, */*'
       },
+      // Add these options to handle network issues better
+      maxRedirects: 5,
+      validateStatus: function (status) {
+        return status < 500; // Resolve only if the status code is less than 500
+      },
+      // Handle SSL/TLS issues
+      httpsAgent: false, // Use default agent
       validateStatus: function (status) {
         return status < 500; // Resolve only if the status code is less than 500
       }
@@ -540,6 +561,10 @@ fastify.get('/api/proxy', async (request, reply) => {
     console.error('Full error details:', {
       message: error.message,
       code: error.code,
+      errno: error.errno,
+      syscall: error.syscall,
+      address: error.address,
+      port: error.port,
       response: error.response ? {
         status: error.response.status,
         statusText: error.response.statusText,
@@ -554,10 +579,18 @@ fastify.get('/api/proxy', async (request, reply) => {
         error: `Target server error: ${error.response.status} ${error.response.statusText}`,
         details: error.response.data
       });
+    } else if (error.code === 'ECONNREFUSED') {
+      console.log(`Connection refused to ${error.address}:${error.port}`);
+      return reply.status(503).send({ 
+        error: 'Unable to connect to the target server. The server may be down or unreachable.',
+        details: `Connection refused to ${error.address}:${error.port}`
+      });
     } else if (error.code === 'ENOTFOUND') {
       return reply.status(404).send({ error: 'Target URL not found or unreachable.' });
     } else if (error.code === 'ETIMEDOUT') {
       return reply.status(408).send({ error: 'Request to target URL timed out.' });
+    } else if (error.code === 'ECONNRESET') {
+      return reply.status(503).send({ error: 'Connection was reset by the target server.' });
     }
     
     // Handle other errors (e.g., network, invalid URL)
