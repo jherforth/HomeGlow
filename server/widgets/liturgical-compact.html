@@ -6,7 +6,7 @@
   <link rel="stylesheet" href="/index.css">
   <style>
     body {
-      background: transparent;
+      background: transparent !important;
       font-family: 'Inter', sans-serif;
       margin: 0;
       padding: 0.75rem;
@@ -18,13 +18,14 @@
 
     [data-theme="dark"] body {
       color: #a6a6d1; /* Dark theme text color */
+      background: transparent !important;
     }
 
     .widget-container {
-      background: transparent;
-      border: none;
-      box-shadow: none;
-      backdrop-filter: none;
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      backdrop-filter: none !important;
       border-radius: 12px;
       padding: 0.5rem;
       text-align: center;
@@ -33,6 +34,23 @@
       overflow-y: auto;
       position: relative;
       transition: all 0.3s ease;
+    }
+
+    /* Force all elements to have transparent backgrounds */
+    * {
+      background: transparent !important;
+      background-color: transparent !important;
+      background-image: none !important;
+    }
+
+    /* Only allow text colors to change */
+    .widget-title,
+    .celebration-title,
+    .celebration-rank,
+    .loading,
+    .error-message {
+      background: transparent !important;
+      background-color: transparent !important;
     }
 
     .widget-container::before {
