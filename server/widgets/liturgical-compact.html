@@ -120,12 +120,6 @@
       border-radius: 0 2px 2px 0;
     }
 
-    .celebration-header {
-      display: block;
-      text-align: center;
-      margin-bottom: 0.25rem;
-    }
-
     .celebration-title {
       font-size: 0.9rem;
       font-weight: 600;
@@ -135,6 +129,7 @@
       margin-bottom: 0.5rem;
       word-wrap: break-word;
       hyphens: auto;
+      text-align: center;
     }
 
     .celebration-rank {
@@ -361,28 +356,24 @@
                   .replace(/,\s*(priest|bishop|martyr|virgin|doctor|hermit|religious|widow)/g, '<br>$1')  // Break before titles
                   .replace(/^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s*/g, '$1<br>');  // Break after day names
                 
-                html += '<div class="celebration-header">';
-                html += `<div class="celebration-title">${celebration.title}</div>`;
+                html += `<div class="celebration-title">${formattedTitle}</div>`;
                 
                 // Add color indicator if available
                 if (celebration.colour) {
                   const colorValue = colorMap[celebration.colour.toLowerCase()] || celebration.colour;
                   html += `<span class="celebration-colour" style="background-color: ${colorValue};" title="Liturgical color: ${celebration.colour}"></span>`;
                 }
-                html += '</div>';
               }
               
               if (celebration.rank) {
-                // Format rank to wrap at common points
-                let formattedRank = celebration.rank
-                  .replace(/\s+(memorial|feast|solemnity)$/g, '<br>$1')
-                  .replace(/^(optional|obligatory)\s+/g, '$1<br>');
-                html += `<div class="celebration-rank">${formattedRank}</div>`;
+                html += `<div class="celebration-rank">${celebration.rank}</div>`;
               }
+              
+              html += '</div>';
             });
-            
-            html += '</div>';
           }
+          
+          html += '</div>';
 
           contentElement.innerHTML = html || '<div class="error-message">No liturgical information available for today.</div>';
 
