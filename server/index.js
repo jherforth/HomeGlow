@@ -287,6 +287,45 @@ fastify.delete('/api/widgets/:filename', async (request, reply) => {
   }
 });
 
+// Debug endpoint to list widget files
+fastify.get('/api/widgets/debug', async (request, reply) => {
+  try {
+    const widgetsDir = path.join(__dirname, 'widgets');
+    console.log(`Checking widgets directory: ${widgetsDir}`);
+    
+    const files = await fs.readdir(widgetsDir);
+    console.log(`Files in widgets directory:`, files);
+    
+    const fileDetails = [];
+    for (const file of files) {
+      const filePath = path.join(widgetsDir, file);
+      try {
+        const stats = await fs.stat(filePath);
+        fileDetails.push({
+          name: file,
+          size: stats.size,
+          isFile: stats.isFile(),
+          modified: stats.mtime
+        });
+      } catch (err) {
+        fileDetails.push({
+          name: file,
+          error: err.message
+        });
+      }
+    }
+    
+    return {
+      directory: widgetsDir,
+      files: fileDetails,
+      registry: await loadWidgetRegistry()
+    };
+  } catch (error) {
+    console.error('Error reading widgets directory:', error);
+    return { error: error.message };
+  }
+});
+
 
 // Initialize database
 const dbPath = path.resolve(__dirname, 'data', 'tasks.db');
