@@ -513,21 +513,58 @@ fastify.get('/api/proxy', async (request, reply) => {
 
     console.log(`Proxying request to whitelisted domain: ${targetUrl}`);
     const response = await axios.get(targetUrl, {
-      // We can pass through headers if needed in the future
+      timeout: 10000, // 10 second timeout
+      headers: {
+        'User-Agent': 'HomeGlow-Proxy/1.0',
+        'Accept': 'application/json, text/plain, */*'
+      },
+      validateStatus: function (status) {
+        return status < 500; // Resolve only if the status code is less than 500
+      }
     });
 
     // Forward the content type and the data from the external API
-    reply.header('Content-Type', response.headers['content-type']);
-    return reply.send(response.data);
+    if (response.headers['content-type']) {
+      reply.header('Content-Type', response.headers['content-type']);
+    }
+    
+    // Add CORS headers
+    reply.header('Access-Control-Allow-Origin', '*');
+    reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    
+    return reply.status(response.status).send(response.data);
 
   } catch (error) {
     console.error('Error in proxy request:', error.message);
+    console.error('Full error details:', {
+      message: error.message,
+      code: error.code,
+      response: error.response ? {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        data: error.response.data
+      } : 'No response'
+    });
+    
     if (error.response) {
       // Forward the error from the target server
-      return reply.status(error.response.status).send(error.response.data);
+      console.log(`Target server responded with ${error.response.status}: ${error.response.statusText}`);
+      return reply.status(error.response.status).send({
+        error: `Target server error: ${error.response.status} ${error.response.statusText}`,
+        details: error.response.data
+      });
+    } else if (error.code === 'ENOTFOUND') {
+      return reply.status(404).send({ error: 'Target URL not found or unreachable.' });
+    } else if (error.code === 'ETIMEDOUT') {
+      return reply.status(408).send({ error: 'Request to target URL timed out.' });
     }
+    
     // Handle other errors (e.g., network, invalid URL)
-    return reply.status(500).send({ error: 'Failed to proxy request.' });
+    return reply.status(500).send({ 
+      error: 'Failed to proxy request.',
+      details: error.message 
+    });
   }
 });
 
