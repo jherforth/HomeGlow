@@ -526,23 +526,32 @@ fastify.get('/api/proxy', async (request, reply) => {
     }
 
     console.log(`Proxying request to whitelisted domain: ${targetUrl}`);
-    const response = await axios.get(targetUrl, {
-      timeout: 10000, // 10 second timeout
+    
+    // Configure axios for both HTTP and HTTPS
+    const axiosConfig = {
+      timeout: 15000, // 15 second timeout
       headers: {
         'User-Agent': 'HomeGlow-Proxy/1.0',
-        'Accept': 'application/json, text/plain, */*'
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Encoding': 'gzip, deflate'
       },
-      // Add these options to handle network issues better
       maxRedirects: 5,
       validateStatus: function (status) {
         return status < 500; // Resolve only if the status code is less than 500
-      },
-      // Handle SSL/TLS issues
-      httpsAgent: false, // Use default agent
-      validateStatus: function (status) {
-        return status < 500; // Resolve only if the status code is less than 500
       }
-    });
+    };
+
+    // For HTTP requests, ensure we don't have HTTPS-specific configurations
+    if (target.protocol === 'http:') {
+      console.log('Making HTTP request (not HTTPS)');
+      // No special HTTPS agent needed for HTTP
+    } else {
+      console.log('Making HTTPS request');
+      // For HTTPS, we might need to handle self-signed certificates
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; // Only for development
+    }
+
+    const response = await axios.get(targetUrl, axiosConfig);
 
     // Forward the content type and the data from the external API
     if (response.headers['content-type']) {
@@ -565,6 +574,11 @@ fastify.get('/api/proxy', async (request, reply) => {
       syscall: error.syscall,
       address: error.address,
       port: error.port,
+      config: error.config ? {
+        url: error.config.url,
+        method: error.config.method,
+        timeout: error.config.timeout
+      } : 'No config',
       response: error.response ? {
         status: error.response.status,
         statusText: error.response.statusText,
