@@ -71,7 +71,7 @@ const WidgetGallery = ({ theme }) => {
         display: 'flex', 
         flexWrap: 'wrap', 
         gap: 3, 
-        justifyContent: 'flex-start',
+        justifyContent: 'center',
         alignItems: 'flex-start'
       }}>
         {plugins.map((plugin) => (
