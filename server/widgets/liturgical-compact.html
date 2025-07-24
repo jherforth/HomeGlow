@@ -43,6 +43,12 @@
       background-image: none !important;
     }
 
+    /* Exception: Allow liturgical color circles to show their actual colors */
+    .celebration-colour {
+      background: var(--liturgical-color) !important;
+      background-color: var(--liturgical-color) !important;
+    }
+
     /* Only allow text colors to change */
     .widget-title,
     .celebration-title,
@@ -321,7 +327,7 @@
                 // Add color indicator if available
                 if (celebration.colour) {
                   const colorValue = colorMap[celebration.colour.toLowerCase()] || celebration.colour;
-                  html += `<span class="celebration-colour" style="background-color: ${colorValue};" title="Liturgical color: ${celebration.colour}"></span>`;
+                  html += `<span class="celebration-colour" style="--liturgical-color: ${colorValue};" title="Liturgical color: ${colorValue}"></span>`;
                 }
               }
               
