@@ -266,6 +266,24 @@
         font-size: 1rem;
       }
     }
+
+    /* Transparency mode */
+    .transparent-mode .widget-container {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      backdrop-filter: none !important;
+    }
+
+    .transparent-mode .celebration {
+      background: transparent !important;
+      border: none !important;
+    }
+
+    .transparent-mode .season-info {
+      background: transparent !important;
+      border: none !important;
+    }
   </style>
 </head>
 <body>
@@ -287,13 +305,7 @@
       const isTransparent = params.get('transparent') === 'true';
       if (isTransparent) {
         document.body.style.background = 'transparent';
-        const mainContainer = document.querySelector('.widget-container');
-        if (mainContainer) {
-          mainContainer.style.background = 'transparent';
-          mainContainer.style.boxShadow = 'none';
-          mainContainer.style.backdropFilter = 'none';
-          mainContainer.style.border = 'none';
-        }
+        document.body.classList.add('transparent-mode');
       }
 
       // Color mapping for liturgical colors
