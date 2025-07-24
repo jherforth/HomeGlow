@@ -31,149 +31,334 @@ HomeGlow is built with a focus on modern aesthetics, user experience, and practi
     -   **User-Centric Task Management**: Assign and track chores for multiple users, with visual progress indicators.
     -   **Clam Reward System**: Users earn "clams" (a customizable reward currency) upon completing all their daily chores.
     -   **Swipe-to-Complete**: Mark chores as complete with a simple swipe gesture (on touch-enabled devices).
+    -   **Bonus Chore System**: Create special bonus chores with custom clam rewards that users can claim and complete for extra rewards.
 -   **Photo Widget**: Integrates with self-hosted Immich instances to display your personal photo library.
 -   **Weather Widget**: Provides current weather conditions and a 3-day forecast for a specified zip code, including interactive temperature and precipitation graphs.
+-   **Custom Widget System**: Upload and manage custom HTML widgets through the Admin Panel, with full theme integration and transparency support.
 
 ### Backend & Data Management
 -   **SQLite Database**: Lightweight and efficient database for managing users, chores, and other application data.
 -   **Fastify Backend**: A high-performance Node.js framework ensuring a fast and responsive API.
+-   **Widget Gallery**: Dynamic loading and management of custom widgets with theme and transparency support.
 
 ### Deployment
 -   **Dockerized**: Easily deployable using Docker and Docker Compose, simplifying setup and management.
+-   **Portainer Compatible**: Full support for deployment via Portainer stacks with Git integration.
 -   **Linux Optimized**: Ideal for deployment on Linux servers, including low-power devices like Raspberry Pi.
 
 ## 🚀 Getting Started
 
 ### Prerequisites
--   **Node.js** (v18 or higher)
--   **Docker** and **Docker Compose** (recommended for production deployment)
--   **Git** for cloning the repository
+-   **Docker** and **Docker Compose** (required for all deployment methods)
+-   **Git** for cloning the repository (if not using Portainer Git integration)
 -   **Google Calendar ICS Link**: A shareable, public ICS link from your Google Calendar (or any other calendar service).
+-   **OpenWeatherMap API Key**: For weather functionality (free tier available)
 -   **Immich Instance** (Optional, for Photo Widget): A running Immich server with API access.
 
-### Installation
+## 📦 Deployment Options
 
-1.  **Clone the Repository**:
-    ```bash
-    git clone https://github.com/jherforth/homeglow.git
-    cd homeglow
-    ```
+### Option 1: Portainer Stack Deployment (Recommended)
 
-2.  **Configure Environment Variables**:
-    Create a `.env` file inside the `server/` directory (`homeglow/server/.env`) and populate it with your configurations.
-    **Important Security Note**: Keep this file secure and **NEVER commit it to Git**. Add `server/.env` to your `.gitignore` file.
+This is the easiest method for deploying HomeGlow using Portainer's Git integration.
 
-    ```dotenv
-    # server/.env
-    PORT=5000
+#### Step 1: Create Environment Variables
+In Portainer, go to **Stacks** → **Add Stack** → **Environment Variables** and add:
 
-    # Google Calendar ICS Integration
-    # Obtain this from your Google Calendar settings: "Integrate calendar" -> "Secret address in iCal format"
-    ICS_CALENDAR_URL=YOUR_GOOGLE_CALENDAR_ICS_LINK
+```env
+# OpenWeatherMap API Key (get from https://openweathermap.org/api)
+VITE_OPENWEATHER_API_KEY=your_openweather_api_key_here
 
-    # Immich Integration (Optional, for Photo Widget)
-    # If you use Immich, replace with your Immich instance URL and API Key
-    IMMICH_URL=https://your-immich-instance.com
-    IMMICH_API_KEY=your-immich-api-key
+# Backend API URL (use your server's IP or domain)
+VITE_REACT_APP_API_URL=http://your-server-ip:5000
 
-    # Nextcloud CalDAV (Deprecated in favor of ICS for simplicity, but variables remain if needed for other uses)
-    # NEXTCLOUD_URL=https://your-nextcloud-instance.com
-    # NEXTCLOUD_USERNAME=your-username
-    # NEXTCLOUD_PASSWORD=your-password
-    ```
+# Optional: Tailscale Auth Key for secure remote access
+TS_AUTHKEY=your_tailscale_auth_key_here
+```
 
-    Create a `.env` file inside the `client/` directory (`homeglow/client/.env`) for client-side specific variables.
+#### Step 2: Deploy Stack from Git
+1. **Stack Name**: `homeglow`
+2. **Repository URL**: `https://github.com/jherforth/homeglow`
+3. **Repository Reference**: `main`
+4. **Compose Path**: `docker-compose.yml`
+5. **Environment Variables**: Add the variables from Step 1
+6. Click **Deploy the Stack**
 
-    ```dotenv
-    # client/.env
-    # This URL points to your backend API. If running in Docker, 'backend' is the service name.
-    VITE_REACT_APP_API_URL=http://backend:5000
+#### Step 3: Access Your Application
+- **HomeGlow Dashboard**: `http://your-server-ip:3000`
+- **Backend API**: `http://your-server-ip:5000`
 
-    # OpenWeatherMap API Key (for Weather Widget)
-    # Obtain from OpenWeatherMap: https://openweathermap.org/api
-    VITE_OPENWEATHER_API_KEY=YOUR_OPENWEATHER_API_KEY
-    ```
+### Option 2: Manual Docker Compose Deployment
 
-3.  **Build and Run with Docker Compose** (Recommended for production):
-    Ensure you are in the root `homeglow` directory.
-    ```bash
-    docker-compose up --build -d
-    ```
-    This command will build the Docker images for both your client and server, and then run them in detached mode.
+#### Step 1: Clone the Repository
+```bash
+git clone https://github.com/jherforth/homeglow.git
+cd homeglow
+```
 
-4.  **Access Your Application**:
-    Open your web browser and navigate to `http://your-server-ip:3000`.
+#### Step 2: Create Environment File
+Create a `.env` file in the root directory:
 
-5.  **Secure with Nginx and Certbot** (Optional, for production with SSL):
-    ```bash
-    sudo apt update
-    sudo apt install nginx certbot python3-certbot-nginx
-    ```
-    Configure Nginx (e.g., `/etc/nginx/sites-available/homeglow`):
-    ```nginx
-    server {
-        listen 80;
-        server_name your-domain.com;
-        location / {
-            proxy_pass http://localhost:3000;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-        }
-        location /api {
-            proxy_pass http://localhost:5000;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-        }
+```env
+# OpenWeatherMap API Key
+VITE_OPENWEATHER_API_KEY=your_openweather_api_key_here
+
+# Backend API URL
+VITE_REACT_APP_API_URL=http://your-server-ip:5000
+
+# Optional: Tailscale Auth Key
+TS_AUTHKEY=your_tailscale_auth_key_here
+```
+
+#### Step 3: Deploy with Docker Compose
+```bash
+# Create required directories
+sudo mkdir -p /apps/homeglow/{data,uploads,tailscale-state}
+sudo chmod -R 777 /apps/homeglow
+
+# Deploy the stack
+docker-compose up -d
+```
+
+### Option 3: Development Setup
+
+For local development with hot reloading:
+
+#### Step 1: Install Dependencies
+```bash
+# Backend
+cd server
+npm install
+
+# Frontend
+cd ../client
+npm install
+```
+
+#### Step 2: Configure Environment
+Create `server/.env`:
+```env
+PORT=5000
+```
+
+Create `client/.env`:
+```env
+VITE_REACT_APP_API_URL=http://localhost:5000
+VITE_OPENWEATHER_API_KEY=your_openweather_api_key_here
+```
+
+#### Step 3: Run Development Servers
+```bash
+# Terminal 1 - Backend
+cd server
+npm start
+
+# Terminal 2 - Frontend
+cd client
+npm run dev
+```
+
+## ⚙️ Configuration
+
+### Initial Setup via Admin Panel
+
+Access the Admin Panel by clicking the gear icon (⚙️) on the main dashboard:
+
+#### APIs Tab
+1. **OpenWeatherMap API Key**: Enter your API key for weather functionality
+2. **ICS Calendar URL**: Add your Google Calendar's public ICS link
+3. **Proxy Whitelist**: Configure allowed domains for external API calls
+
+#### Widgets Tab
+Enable/disable and configure transparency for:
+- **Chores Widget**: Task management with reward system
+- **Calendar Widget**: Google Calendar integration
+- **Photos Widget**: Immich photo display
+- **Weather Widget**: Weather forecasts and graphs
+- **Menu Widget**: Weekly meal planning
+
+#### Interface Tab
+- **Screen Refresh Options**: Automatic page refresh intervals (1-12 hours)
+- **Geometric Background**: Dynamic pattern backgrounds
+- **Card Shuffle**: Randomize widget positions
+- **Display Settings**: Text size, card width, padding adjustments
+- **Custom Colors**: Personalize gradients for light/dark themes
+
+#### Users Tab
+- **Add Users**: Create family member profiles with photos
+- **Manage Clam Totals**: Adjust reward currency
+- **View User Tasks**: See all assigned chores per user
+
+#### Prizes Tab
+- **Create Rewards**: Set up prizes users can "purchase" with clams
+- **Manage Prize Costs**: Adjust clam values for different rewards
+
+#### Plugins Tab
+- **Upload Custom Widgets**: Add your own HTML widgets
+- **Manage Widget Library**: Enable/disable custom widgets
+
+### Getting API Keys
+
+#### OpenWeatherMap API Key
+1. Visit [OpenWeatherMap](https://openweathermap.org/api)
+2. Sign up for a free account
+3. Navigate to API Keys section
+4. Copy your API key to the Admin Panel → APIs tab
+
+#### Google Calendar ICS Link
+1. Open Google Calendar
+2. Click the three dots next to your calendar name
+3. Select "Settings and sharing"
+4. Scroll to "Integrate calendar"
+5. Copy the "Secret address in iCal format"
+6. Paste into Admin Panel → APIs tab
+
+## 🔧 Custom Widget Development
+
+HomeGlow supports custom HTML widgets that integrate seamlessly with the app's theming system.
+
+### Quick Start
+1. **Read the Guide**: Check `server/widgets/README.md` for complete development instructions
+2. **Use the Template**: Start with the provided widget template
+3. **Test Locally**: Develop with theme parameters (`?theme=dark&transparent=true`)
+4. **Upload**: Use Admin Panel → Plugins tab to upload your widget
+5. **Enable**: Toggle your widget in the Widget Gallery
+
+### Widget Features
+- **Theme Integration**: Automatic light/dark mode support
+- **Transparency Support**: Widgets can be made transparent
+- **Responsive Design**: Works on all screen sizes
+- **Local Storage**: Persistent settings per widget
+- **Sandboxed**: Secure iframe execution
+
+## 🔒 Security & Access
+
+### Tailscale Integration (Optional)
+HomeGlow includes optional Tailscale integration for secure remote access:
+
+1. **Get Tailscale Auth Key**: Visit [Tailscale Admin Console](https://login.tailscale.com/admin/settings/keys)
+2. **Add to Environment**: Set `TS_AUTHKEY` in your environment variables
+3. **Access Remotely**: Use your Tailscale network to access HomeGlow securely
+
+### Reverse Proxy Setup (Optional)
+For HTTPS and custom domains:
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+    
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
-    ```
-    Enable and secure:
-    ```bash
-    sudo ln -s /etc/nginx/sites-available/homeglow /etc/nginx/sites-enabled/
-    sudo systemctl restart nginx
-    sudo certbot --nginx -d your-domain.com
-    ```
+    
+    location /api {
+        proxy_pass http://localhost:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
 
-### ⚙️ Configuration via Admin Panel
+## 🗂️ Data Management
 
-Access the Admin Panel by clicking the gear icon (⚙️) on the main dashboard. Here you can:
--   **Enable/Disable Widgets**: Turn individual widgets (Chores, Calendar, Photos, Weather, Menu) on or off.
--   **Widget Transparency**: Make individual widgets transparent to reveal the background.
--   **Screen Refresh Options**: Select an interval (1, 3, 6, 9, 12 hours, or Manual Only) for automatic page refreshes.
--   **Enable Geometric Background**: Toggle the dynamic geometric pattern background.
--   **Enable Card Shuffle**: Toggle the randomization of widget positions to prevent burn-in.
--   **Display Settings**: Adjust global text size, card width, and card padding.
--   **Manage Users**: Add new users, delete existing users, and reset clam totals.
+### Backup Your Data
+Important data is stored in `/apps/homeglow/data/`:
+```bash
+# Backup database
+sudo cp /apps/homeglow/data/tasks.db /path/to/backup/
 
-## 👨‍💻 Local Development (Optional)
+# Backup uploaded photos
+sudo cp -r /apps/homeglow/uploads /path/to/backup/
+```
 
-If you prefer to run the client and server separately for development:
+### Database Schema
+HomeGlow uses SQLite with tables for:
+- **users**: Family member profiles and clam totals
+- **chores**: Task assignments and completion status
+- **events**: Calendar events (if using local storage)
+- **settings**: API keys and configuration
+- **prizes**: Reward system items
 
-1.  **Install Dependencies**:
-    ```bash
-    cd server
-    npm install
-    cd ../client
-    npm install
-    ```
+## 🛠️ Troubleshooting
 
-2.  **Run Backend**:
-    Ensure your `server/.env` is configured.
-    ```bash
-    cd server
-    npm start
-    ```
+### Common Issues
 
-3.  **Run Frontend**:
-    Ensure your `client/.env` is configured.
-    ```bash
-    cd client
-    npm run dev
-    ```
+#### Widgets Not Loading
+- Check Admin Panel → Plugins → Debug for file status
+- Verify widget HTML syntax and theme handling
+- Check browser console for JavaScript errors
+
+#### Calendar Not Showing Events
+- Verify ICS URL is public and accessible
+- Test the ICS URL in a browser
+- Check Admin Panel → APIs for correct URL format
+
+#### Weather Widget Not Working
+- Confirm OpenWeatherMap API key is valid
+- Check API key hasn't exceeded rate limits
+- Verify zip code format in widget settings
+
+#### Docker Container Issues
+```bash
+# Check container logs
+docker logs homeglow-backend
+docker logs homeglow-frontend
+
+# Restart containers
+docker-compose restart
+
+# Rebuild containers
+docker-compose up --build -d
+```
+
+#### Permission Issues
+```bash
+# Fix data directory permissions
+sudo chmod -R 777 /apps/homeglow/data
+sudo chmod -R 777 /apps/homeglow/uploads
+```
+
+### Getting Help
+- **GitHub Issues**: Report bugs and request features
+- **Documentation**: Check `server/widgets/README.md` for widget development
+- **Logs**: Always check container logs for error details
 
 ## 🤝 Contributing
 
-Contributions are welcome! Feel free to open issues or submit pull requests.
+We welcome contributions! Here's how to get started:
+
+1. **Fork the Repository**
+2. **Create a Feature Branch**: `git checkout -b feature/amazing-feature`
+3. **Make Your Changes**: Follow the existing code style
+4. **Test Thoroughly**: Ensure both light/dark themes work
+5. **Submit a Pull Request**: Describe your changes clearly
+
+### Development Guidelines
+- **Follow existing patterns** for consistency
+- **Test on multiple screen sizes** (mobile, tablet, desktop)
+- **Verify theme compatibility** (light/dark modes)
+- **Update documentation** for new features
+- **Add error handling** for robust operation
 
 ## 📄 License
 
 This project is open-source and available under the [MIT License](LICENSE).
+
+## 🙏 Acknowledgments
+
+- **Magic Mirror**: Inspiration for the dashboard concept
+- **React Big Calendar**: Calendar widget functionality
+- **Material-UI**: Component library and theming
+- **Fastify**: High-performance backend framework
+- **Docker**: Containerization and deployment
+- **Tailscale**: Secure networking solution
+
+---
+
+**HomeGlow** - Transform your home with a beautiful, intelligent dashboard that grows with your family's needs.
