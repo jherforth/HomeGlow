@@ -349,6 +349,18 @@
               html += `<div class="celebration" style="--delay: ${index * 0.1}s;">`;
               
               if (celebration.title) {
+                // Parse and wrap the title for better formatting
+                let formattedTitle = celebration.title;
+                
+                // Split long titles at common break points
+                formattedTitle = formattedTitle
+                  .replace(/,\s+/g, '<br>')  // Break at commas
+                  .replace(/\s+in\s+Ordinary\s+Time/g, '<br>in Ordinary Time')  // Break before "in Ordinary Time"
+                  .replace(/\s+(ferial|memorial|feast|solemnity)$/g, '<br>$1')  // Break before rank words at end
+                  .replace(/\s+(optional\s+memorial|obligatory\s+memorial)$/g, '<br>$1')  // Break before memorial types
+                  .replace(/,\s*(priest|bishop|martyr|virgin|doctor|hermit|religious|widow)/g, '<br>$1')  // Break before titles
+                  .replace(/^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s*/g, '$1<br>');  // Break after day names
+                
                 html += '<div class="celebration-header">';
                 html += `<div class="celebration-title">${celebration.title}</div>`;
                 
@@ -357,32 +369,16 @@
                   const colorValue = colorMap[celebration.colour.toLowerCase()] || celebration.colour;
                   html += `<span class="celebration-colour" style="background-color: ${colorValue};" title="Liturgical color: ${celebration.colour}"></span>`;
                 }
-              
-              // Parse and wrap the title for better formatting
-              let formattedTitle = celebration.title;
-              
-              // Split long titles at common break points
-              formattedTitle = formattedTitle
-                .replace(/,\s+/g, '<br>')  // Break at commas
-                .replace(/\s+in\s+Ordinary\s+Time/g, '<br>in Ordinary Time')  // Break before "in Ordinary Time"
-                .replace(/\s+(ferial|memorial|feast|solemnity)$/g, '<br>$1')  // Break before rank words at end
-                .replace(/\s+(optional\s+memorial|obligatory\s+memorial)$/g, '<br>$1')  // Break before memorial types
-                .replace(/,\s*(priest|bishop|martyr|virgin|doctor|hermit|religious|widow)/g, '<br>$1')  // Break before titles
-                .replace(/^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s*/g, '$1<br>');  // Break after day names
-              
-              html += `<div class="celebration-title">${formattedTitle}</div>`;
                 html += '</div>';
               }
               
               if (celebration.rank) {
-                html += `<div class="celebration-colour" style="background-color: ${colorValue};" title="Liturgical color: ${celebration.colour}"></div>`;
+                // Format rank to wrap at common points
+                let formattedRank = celebration.rank
+                  .replace(/\s+(memorial|feast|solemnity)$/g, '<br>$1')
+                  .replace(/^(optional|obligatory)\s+/g, '$1<br>');
+                html += `<div class="celebration-rank">${formattedRank}</div>`;
               }
-              
-              // Format rank to wrap at common points
-              let formattedRank = celebration.rank
-                .replace(/\s+(memorial|feast|solemnity)$/g, '<br>$1')
-                .replace(/^(optional|obligatory)\s+/g, '$1<br>');
-              html += `<div class="celebration-rank">${formattedRank}</div>`;
             });
             
             html += '</div>';
