@@ -24,8 +24,6 @@ services:
       - "3000:3000"
     depends_on:
       - homeglow-backend
-    env_file:
-      - ./.env # Updated to correct path
     environment:
       - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}
   tailscale:
