@@ -67,54 +67,71 @@ const WidgetGallery = ({ theme }) => {
       <Typography variant="h5" gutterBottom align="center">
         Widget Gallery
       </Typography>
-      {plugins.map((plugin) => (
-        <Card key={plugin.filename} className="card" sx={{ maxWidth: 600, margin: '24px auto', mb: 2 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 2, borderBottom: '1px solid var(--card-border)' }}>
-            {/* The widget name title is removed as requested */}
-            <Typography variant="h6">{plugin.name}</Typography>
-            
-            <Box>
-              {/* New Transparency Toggle */}
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={!!isTransparent[plugin.filename]}
-                    onChange={() => handleTransparencyToggle(plugin.filename)}
-                    color="secondary"
-                  />
-                }
-                label="Transparent"
-              />
-              {/* Existing Enabled/Disabled Toggle */}
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={!!enabled[plugin.filename]}
-                    onChange={() => handleToggle(plugin.filename)}
-                    color="primary"
-                  />
-                }
-                label={enabled[plugin.filename] ? 'Enabled' : 'Disabled'}
-              />
+      <Box sx={{ 
+        display: 'flex', 
+        flexWrap: 'wrap', 
+        gap: 3, 
+        justifyContent: 'flex-start',
+        alignItems: 'flex-start'
+      }}>
+        {plugins.map((plugin) => (
+          <Card 
+            key={plugin.filename} 
+            className="card" 
+            sx={{ 
+              flex: '1 1 300px', // Flexible width with minimum of 300px
+              maxWidth: '500px', // Maximum width to prevent cards from getting too wide
+              minWidth: '300px', // Minimum width to maintain readability
+              mb: 0 // Remove bottom margin since we're using gap
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 2, borderBottom: '1px solid var(--card-border)' }}>
+              {/* The widget name title is removed as requested */}
+              <Typography variant="h6">{plugin.name}</Typography>
+              
+              <Box>
+                {/* New Transparency Toggle */}
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={!!isTransparent[plugin.filename]}
+                      onChange={() => handleTransparencyToggle(plugin.filename)}
+                      color="secondary"
+                    />
+                  }
+                  label="Transparent"
+                />
+                {/* Existing Enabled/Disabled Toggle */}
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={!!enabled[plugin.filename]}
+                      onChange={() => handleToggle(plugin.filename)}
+                      color="primary"
+                    />
+                  }
+                  label={enabled[plugin.filename] ? 'Enabled' : 'Disabled'}
+                />
+              </Box>
             </Box>
-          </Box>
-          {enabled[plugin.filename] && (
-            <iframe
-              // The iframe src now includes both theme and transparency state
-              src={`${import.meta.env.VITE_REACT_APP_API_URL}/widgets/${plugin.filename}?theme=${theme}&transparent=${!!isTransparent[plugin.filename]}`}
-              title={plugin.name}
-              style={{
-                width: '100%',
-                height: '400px',
-                border: 'none',
-                display: 'block',
-                background: 'transparent', // Iframe itself is always transparent
-              }}
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-            />
-          )}
-        </Card>
-      ))}
+            {enabled[plugin.filename] && (
+              <iframe
+                // The iframe src now includes both theme and transparency state
+                src={`${import.meta.env.VITE_REACT_APP_API_URL}/widgets/${plugin.filename}?theme=${theme}&transparent=${!!isTransparent[plugin.filename]}`}
+                title={plugin.name}
+                style={{
+                  width: '100%',
+                  height: '400px',
+                  border: 'none',
+                  display: 'block',
+                  background: 'transparent', // Iframe itself is always transparent
+                }}
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+              />
+            )}
+          </Card>
+        ))}
+      </Box>
     </Box>
   );
 };
