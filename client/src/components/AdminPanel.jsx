@@ -421,6 +421,10 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       // Send each setting individually or as a batch if backend supports
       // For now, send individually as per backend POST /api/settings
       await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, {
+        key: 'WEATHER_API_KEY',
+        value: apiSettings.WEATHER_API_KEY,
+      });
+      await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, {
         key: 'ICS_CALENDAR_URL',
         value: apiSettings.ICS_CALENDAR_URL,
       });

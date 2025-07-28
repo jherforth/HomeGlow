@@ -841,6 +841,15 @@ fastify.post('/api/settings', async (request, reply) => {
   console.log('Value type:', typeof value);
   console.log('Value length:', value ? value.length : 'null/undefined');
   
+  // Special logging for weather API key
+  if (key === 'WEATHER_API_KEY') {
+    console.log('=== WEATHER API KEY SPECIFIC LOGGING ===');
+    console.log('Weather API Key received:', value);
+    console.log('Is empty string?', value === '');
+    console.log('Is null?', value === null);
+    console.log('Is undefined?', value === undefined);
+  }
+  
   if (!key || value === undefined) {
     console.log('ERROR: Missing key or value');
     return reply.status(400).send({ error: 'Key and value are required.' });
@@ -854,6 +863,13 @@ fastify.post('/api/settings', async (request, reply) => {
     // Verify the setting was saved
     const verification = db.prepare('SELECT key, value FROM settings WHERE key = ?').get(key);
     console.log('Verification query result:', verification);
+    
+    // Special verification for weather API key
+    if (key === 'WEATHER_API_KEY') {
+      console.log('=== WEATHER API KEY VERIFICATION ===');
+      console.log('Saved value in DB:', verification ? verification.value : 'NOT FOUND');
+      console.log('Value matches input?', verification && verification.value === value);
+    }
     
     return { success: true, message: `Setting '${key}' saved successfully.` };
   } catch (error) {
