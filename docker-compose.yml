@@ -25,7 +25,7 @@ services:
     depends_on:
       - homeglow-backend
     environment:
-      - VITE_REACT_APP_API_URL=http://homeglow:5000
+      - VITE_REACT_APP_API_URL=http://homeglow-backend:5000
   tailscale:
     container_name: homeglow-tailscale
     image: tailscale/tailscale:latest
