@@ -817,12 +817,15 @@ fastify.get('/api/calendar/ics', async (request, reply) => {
 // NEW: API Endpoints for Settings (including API keys)
 fastify.get('/api/settings', async (request, reply) => {
   try {
+    console.log('=== FETCHING SETTINGS ===');
     const rows = db.prepare('SELECT key, value FROM settings').all();
+    console.log('Raw settings from database:', rows);
     // Convert array of {key, value} objects to a single object {key: value}
     const settings = rows.reduce((acc, row) => {
       acc[row.key] = row.value;
       return acc;
     }, {});
+    console.log('Processed settings object:', settings);
     return settings;
   } catch (error) {
     console.error('Error fetching settings:', error);
@@ -832,17 +835,59 @@ fastify.get('/api/settings', async (request, reply) => {
 
 fastify.post('/api/settings', async (request, reply) => {
   const { key, value } = request.body;
+  console.log('=== SAVING SETTING ===');
+  console.log('Key:', key);
+  console.log('Value:', value);
+  console.log('Value type:', typeof value);
+  console.log('Value length:', value ? value.length : 'null/undefined');
+  
   if (!key || value === undefined) {
+    console.log('ERROR: Missing key or value');
     return reply.status(400).send({ error: 'Key and value are required.' });
   }
   try {
     // Use INSERT OR REPLACE to either insert a new setting or update an existing one
     const stmt = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
-    stmt.run(key, value);
+    const result = stmt.run(key, value);
+    console.log('Database insert result:', result);
+    
+    // Verify the setting was saved
+    const verification = db.prepare('SELECT key, value FROM settings WHERE key = ?').get(key);
+    console.log('Verification query result:', verification);
+    
     return { success: true, message: `Setting '${key}' saved successfully.` };
   } catch (error) {
     console.error(`Error saving setting '${key}':`, error);
     reply.status(500).send({ error: `Failed to save setting '${key}'` });
+  }
+});
+
+// DEBUG: Specific endpoint to test API key saving
+fastify.post('/api/test-api-key', async (request, reply) => {
+  const { apiKey } = request.body;
+  console.log('=== TESTING API KEY SAVE ===');
+  console.log('Received API key:', apiKey);
+  console.log('API key type:', typeof apiKey);
+  console.log('API key length:', apiKey ? apiKey.length : 'null/undefined');
+  
+  try {
+    // Test direct database insertion
+    const stmt = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
+    const result = stmt.run('WEATHER_API_KEY', apiKey);
+    console.log('Direct insert result:', result);
+    
+    // Verify it was saved
+    const verification = db.prepare('SELECT key, value FROM settings WHERE key = ?').get('WEATHER_API_KEY');
+    console.log('Verification result:', verification);
+    
+    return { 
+      success: true, 
+      message: 'API key test completed',
+      saved: verification 
+    };
+  } catch (error) {
+    console.error('Test API key save error:', error);
+    return reply.status(500).send({ error: error.message });
   }
 });
 
