@@ -90,53 +90,21 @@ body {
 }
 
 /* Material-UI Grid Container specific styles */
-/* Masonry Layout Styles */
-.masonry-container {
-  column-count: 1;
-  column-gap: 8px;
+/* JavaScript-based Masonry Layout Styles */
+.js-masonry-container {
+  position: relative;
   width: 100%;
-  padding: 4px;
+  min-height: 100vh;
 }
 
-.masonry-item {
-  break-inside: avoid;
-  margin-bottom: 8px;
-  width: 100%;
-  display: inline-block;
+.masonry-widget {
+  position: absolute;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
 }
 
-.masonry-item.chores-full-width {
-  column-span: all;
-  width: 100%;
-}
-
-/* Responsive masonry columns */
-@media (min-width: 600px) {
-  .masonry-container {
-    column-count: 2;
-    column-gap: 12px;
-  }
-}
-
-@media (min-width: 900px) {
-  .masonry-container {
-    column-count: 3;
-    column-gap: 16px;
-  }
-}
-
-@media (min-width: 1200px) {
-  .masonry-container {
-    column-count: 4;
-    column-gap: 20px;
-  }
-}
-
-@media (min-width: 1600px) {
-  .masonry-container {
-    column-count: 5;
-    column-gap: 24px;
-  }
+.masonry-widget.chores-widget {
+  /* Special handling for chores widget if needed */
 }
 
 /* Override Material-UI Container's max-width to allow full dynamic width */
@@ -155,10 +123,10 @@ body {
   box-shadow: var(--shadow);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   width: 100%;
-  max-width: var(--dynamic-card-width);
+  max-width: none;
   touch-action: manipulation;
   height: fit-content;
-  min-height: var(--dynamic-card-height);
+  min-height: 200px;
   box-sizing: border-box;
   overflow: hidden;
 }

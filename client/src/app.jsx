@@ -67,11 +67,73 @@ const App = () => {
   // NEW: State to trigger widget gallery refresh
   const [widgetGalleryKey, setWidgetGalleryKey] = useState(0);
 
+  // NEW: Refs and state for JavaScript masonry layout
+  const masonryContainerRef = useRef(null);
+  const [masonryLayout, setMasonryLayout] = useState([]);
+  const [containerWidth, setContainerWidth] = useState(0);
   // NEW: Function to refresh widget gallery
   const refreshWidgetGallery = () => {
     setWidgetGalleryKey(prev => prev + 1);
   };
   useEffect(() => {
+  // NEW: Calculate masonry layout
+  const calculateMasonryLayout = () => {
+    if (!masonryContainerRef.current) return;
+
+    const container = masonryContainerRef.current;
+    const containerRect = container.getBoundingClientRect();
+    const containerWidth = containerRect.width;
+    
+    // Calculate number of columns based on screen width
+    let columns = 1;
+    if (containerWidth >= 1600) columns = 5;
+    else if (containerWidth >= 1200) columns = 4;
+    else if (containerWidth >= 900) columns = 3;
+    else if (containerWidth >= 600) columns = 2;
+    else columns = 1;
+
+    const gap = 16;
+    const columnWidth = (containerWidth - (gap * (columns - 1))) / columns;
+    
+    // Get all widget elements
+    const widgets = container.querySelectorAll('.masonry-widget');
+    const columnHeights = new Array(columns).fill(0);
+    const layout = [];
+
+    widgets.forEach((widget, index) => {
+      // Find the shortest column
+      const shortestColumnIndex = columnHeights.indexOf(Math.min(...columnHeights));
+      
+      // Calculate position
+      const x = shortestColumnIndex * (columnWidth + gap);
+      const y = columnHeights[shortestColumnIndex];
+      
+      // Get widget height (force a reflow to get accurate height)
+      widget.style.width = `${columnWidth}px`;
+      widget.style.position = 'absolute';
+      widget.style.left = `${x}px`;
+      widget.style.top = `${y}px`;
+      
+      const widgetHeight = widget.offsetHeight;
+      
+      // Update column height
+      columnHeights[shortestColumnIndex] += widgetHeight + gap;
+      
+      layout.push({
+        x,
+        y,
+        width: columnWidth,
+        height: widgetHeight
+      });
+    });
+
+    // Set container height to the tallest column
+    const maxHeight = Math.max(...columnHeights);
+    container.style.height = `${maxHeight}px`;
+    
+    setMasonryLayout(layout);
+    setContainerWidth(containerWidth);
+  };
     const fetchApiKeys = async () => {
       try {
         const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`);
@@ -183,7 +245,24 @@ const App = () => {
     }
   }, [widgetSettings.enableCardShuffle, widgetSettings.calendar.enabled, widgetSettings.photos.enabled, widgetSettings.weather.enabled]);
 
+  // NEW: Effect to recalculate layout when widgets change or window resizes
+  useEffect(() => {
+    const handleResize = () => {
+      setTimeout(calculateMasonryLayout, 100); // Small delay to ensure DOM is updated
+    };
 
+    window.addEventListener('resize', handleResize);
+    
+    // Initial calculation
+    setTimeout(calculateMasonryLayout, 100);
+    
+    return () => window.removeEventListener('resize', handleResize);
+  }, [shuffledWidgetOrder, widgetSettings]);
+
+  // NEW: Effect to recalculate when widgets are enabled/disabled
+  useEffect(() => {
+    setTimeout(calculateMasonryLayout, 200);
+  }, [widgetSettings.chores.enabled, widgetSettings.calendar.enabled, widgetSettings.photos.enabled, widgetSettings.weather.enabled]);
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
@@ -222,21 +301,30 @@ const App = () => {
   return (
     <>
       <Container className="container">
-        {/* Masonry-style layout container */}
-        <Box className="masonry-container">
+        {/* JavaScript-based masonry layout container */}
+        <Box 
+          ref={masonryContainerRef}
+          className="js-masonry-container"
+          sx={{
+            position: 'relative',
+            width: '100%',
+            minHeight: '100vh',
+            padding: '8px'
+          }}
+        >
           {/* Render shuffled widgets in masonry layout */}
           {shuffledWidgetOrder.map((widgetName, index) => {
             const widget = renderWidget(widgetName, index);
             return widget ? (
-              <Box key={`${widgetName}-${index}`} className="masonry-item">
+              <Box key={`${widgetName}-${index}`} className="masonry-widget">
                 {widget}
               </Box>
             ) : null;
           })}
 
-          {/* Chores Widget - Full width */}
+          {/* Chores Widget - Special positioning */}
           {widgetSettings.chores.enabled && (
-            <Box className="masonry-item chores-full-width">
+            <Box className="masonry-widget chores-widget">
               <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />
             </Box>
           )}
