@@ -269,6 +269,7 @@ const App = () => {
             </Grid>
           )}
         </Grid>
+        </Grid>
       </Container>
 
       <WidgetGallery key={widgetGalleryKey} theme={theme} />
