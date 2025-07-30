@@ -399,6 +399,24 @@ const App = () => {
     }
   }, [widgetSettings.enableCardShuffle, widgetSettings.calendar.enabled, widgetSettings.photos.enabled, widgetSettings.weather.enabled]);
 
+  // NEW: Effect to recalculate layout when widgets change or window resizes
+  useEffect(() => {
+    const handleResize = () => {
+      setTimeout(() => calculateMasonryLayout(), 300);
+    };
+
+    window.addEventListener('resize', handleResize);
+    
+    // Initial calculation
+    setTimeout(() => calculateMasonryLayout(), 500);
+    
+    return () => window.removeEventListener('resize', handleResize);
+  }, [shuffledWidgetOrder, widgetSettings]);
+
+  // NEW: Effect to recalculate when widgets are enabled/disabled
+  useEffect(() => {
+    setTimeout(() => calculateMasonryLayout(), 600);
+  }, [widgetSettings.chores.enabled, widgetSettings.calendar.enabled, widgetSettings.photos.enabled, widgetSettings.weather.enabled]);
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
@@ -416,22 +434,6 @@ const App = () => {
 
   const toggleBottomBar = () => {
     setIsBottomBarCollapsed(!isBottomBarCollapsed);
-  };
-  // Helper function to render a widget based on its name
-  const renderWidget = (widgetName, index) => {
-    switch (widgetName) {
-      case 'calendar':
-        return widgetSettings.calendar.enabled && 
-          <CalendarWidget key={`calendar-${index}`} transparentBackground={widgetSettings.calendar.transparent} icsCalendarUrl={apiKeys.ICS_CALENDAR_URL} />;
-      case 'photos':
-        return widgetSettings.photos.enabled && 
-          <PhotoWidget key={`photos-${index}`} transparentBackground={widgetSettings.photos.transparent} />;
-      case 'weather':
-        return widgetSettings.weather.enabled && 
-          <WeatherWidget key={`weather-${index}`} transparentBackground={widgetSettings.weather.transparent} weatherApiKey={apiKeys.WEATHER_API_KEY} />;
-      default:
-        return null;
-    }
   };
 
   return (
