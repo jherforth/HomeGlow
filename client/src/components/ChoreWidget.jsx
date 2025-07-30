@@ -411,7 +411,7 @@ const ChoreWidget = ({ transparentBackground }) => {
   return (
     <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h6">🥟 Daily Chores - {currentDay.charAt(0).toUpperCase() + currentDay.slice(1)}</Typography>
+        <Typography variant="h6">🥟 Daily Chores</Typography>
         <Button
           startIcon={<Add />}
           onClick={() => setShowAddDialog(true)}
@@ -442,18 +442,18 @@ const ChoreWidget = ({ transparentBackground }) => {
             <Box
               key={user.id}
               sx={{
-                width: { xs: '100%', sm: 'calc(50% - 8px)', md: 'calc(33.333% - 11px)', lg: 'calc(25% - 12px)', xl: 'calc(20% - 13px)' },
-                minWidth: '220px', // Reduced minimum width
+                width: { xs: '100%', sm: 'calc(50% - 8px)', md: 'calc(33.333% - 11px)', lg: 'calc(25% - 12px)', xl: 'calc(16.666% - 13px)' },
+                minWidth: '180px', // Further reduced minimum width
                 flex: '0 0 auto',
                 border: '2px solid var(--card-border)',
                 borderRadius: 2,
-                p: 1.5, // Reduced padding
+                p: 1, // Further reduced padding
                 bgcolor: allRegularChoresCompleted ? 'rgba(0, 255, 0, 0.05)' : 'transparent'
               }}
             >
               <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 2 }}>
                 {renderUserAvatar(user)}
-                <Typography variant="h6" sx={{ mt: 1 }}>
+                <Typography variant="subtitle1" sx={{ mt: 1, fontSize: '0.9rem', fontWeight: 'bold' }}>
                   {user.username}
                 </Typography>
                 {allRegularChoresCompleted && (
@@ -466,7 +466,7 @@ const ChoreWidget = ({ transparentBackground }) => {
                 )}
               </Box>
 
-              <Box sx={{ maxHeight: 350, overflowY: 'auto' }}>
+              <Box sx={{ maxHeight: 300, overflowY: 'auto' }}>
                 {userChores.length === 0 ? (
                   <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
                     No chores for today
@@ -482,16 +482,16 @@ const ChoreWidget = ({ transparentBackground }) => {
         {/* Bonus Chores Column */}
         <Box
           sx={{
-            width: { xs: '100%', sm: 'calc(50% - 8px)', md: 'calc(33.333% - 11px)', lg: 'calc(25% - 12px)', xl: 'calc(20% - 13px)' },
-            minWidth: '220px', // Reduced minimum width
+            width: { xs: '100%', sm: 'calc(50% - 8px)', md: 'calc(33.333% - 11px)', lg: 'calc(25% - 12px)', xl: 'calc(16.666% - 13px)' },
+            minWidth: '180px', // Further reduced minimum width
             flex: '0 0 auto',
             border: '2px solid var(--accent)',
             borderRadius: 2,
-            p: 1.5, // Reduced padding
+            p: 1, // Further reduced padding
             bgcolor: 'rgba(var(--accent-rgb), 0.05)'
           }}
         >
-          <Typography variant="h6" sx={{ textAlign: 'center', mb: 2, color: 'var(--accent)' }}>
+          <Typography variant="subtitle1" sx={{ textAlign: 'center', mb: 2, color: 'var(--accent)', fontSize: '0.9rem', fontWeight: 'bold' }}>
             🥟 Bonus Chores
           </Typography>
 
@@ -499,7 +499,7 @@ const ChoreWidget = ({ transparentBackground }) => {
           <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
             Available:
           </Typography>
-          <Box sx={{ maxHeight: 200, overflowY: 'auto', mb: 2 }}>
+          <Box sx={{ maxHeight: 150, overflowY: 'auto', mb: 2 }}>
             {availableBonusChores.length === 0 ? (
               <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
                 No bonus chores available
@@ -551,7 +551,7 @@ const ChoreWidget = ({ transparentBackground }) => {
           <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
             Assigned:
           </Typography>
-          <Box sx={{ maxHeight: 200, overflowY: 'auto' }}>
+          <Box sx={{ maxHeight: 150, overflowY: 'auto' }}>
             {assignedBonusChores.length === 0 ? (
               <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
                 No assigned bonus chores
