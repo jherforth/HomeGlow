@@ -17,7 +17,7 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
 
   useEffect(() => {
     // Load saved zip code from localStorage
-    const savedZipCode = localStorage.getItem('weatherZipCode') || '14924';
+    const savedZipCode = localStorage.getItem('weatherZipCode') || '14818';
     setZipCode(savedZipCode);
     setTempZipCode(savedZipCode);
   }, []);
