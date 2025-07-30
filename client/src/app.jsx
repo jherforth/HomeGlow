@@ -71,12 +71,8 @@ const App = () => {
   const masonryContainerRef = useRef(null);
   const [masonryLayout, setMasonryLayout] = useState([]);
   const [containerWidth, setContainerWidth] = useState(0);
-  // NEW: Function to refresh widget gallery
-  const refreshWidgetGallery = () => {
-    setWidgetGalleryKey(prev => prev + 1);
-  };
-  useEffect(() => {
-  // NEW: Calculate masonry layout
+
+  // NEW: Calculate masonry layout function
   const calculateMasonryLayout = () => {
     if (!masonryContainerRef.current) return;
 
@@ -134,6 +130,13 @@ const App = () => {
     setMasonryLayout(layout);
     setContainerWidth(containerWidth);
   };
+
+  // NEW: Function to refresh widget gallery
+  const refreshWidgetGallery = () => {
+    setWidgetGalleryKey(prev => prev + 1);
+  };
+
+  useEffect(() => {
     const fetchApiKeys = async () => {
       try {
         const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`);
