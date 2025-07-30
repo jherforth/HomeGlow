@@ -328,6 +328,7 @@ const App = () => {
   useEffect(() => {
     setTimeout(() => calculateMasonryLayout(), 600);
   }, [widgetSettings.chores.enabled, widgetSettings.calendar.enabled, widgetSettings.photos.enabled, widgetSettings.weather.enabled]);
+  
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
@@ -346,6 +347,7 @@ const App = () => {
   const toggleBottomBar = () => {
     setIsBottomBarCollapsed(!isBottomBarCollapsed);
   };
+  
   // Helper function to render a widget based on its name
   const renderWidget = (widgetName, index) => {
     switch (widgetName) {
