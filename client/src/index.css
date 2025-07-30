@@ -90,10 +90,53 @@ body {
 }
 
 /* Material-UI Grid Container specific styles */
-.MuiGrid-container {
+/* Masonry Layout Styles */
+.masonry-container {
+  column-count: 1;
+  column-gap: 8px;
   width: 100%;
-  /* Ensure the grid container takes full width */
-  /* Add any other flex/grid properties if needed for stacking */
+  padding: 4px;
+}
+
+.masonry-item {
+  break-inside: avoid;
+  margin-bottom: 8px;
+  width: 100%;
+  display: inline-block;
+}
+
+.masonry-item.chores-full-width {
+  column-span: all;
+  width: 100%;
+}
+
+/* Responsive masonry columns */
+@media (min-width: 600px) {
+  .masonry-container {
+    column-count: 2;
+    column-gap: 12px;
+  }
+}
+
+@media (min-width: 900px) {
+  .masonry-container {
+    column-count: 3;
+    column-gap: 16px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .masonry-container {
+    column-count: 4;
+    column-gap: 20px;
+  }
+}
+
+@media (min-width: 1600px) {
+  .masonry-container {
+    column-count: 5;
+    column-gap: 24px;
+  }
 }
 
 /* Override Material-UI Container's max-width to allow full dynamic width */
@@ -101,56 +144,6 @@ body {
   max-width: none !important;
   padding-left: 4px !important;
   padding-right: 4px !important;
-}
-
-/* Responsive grid adjustments */
-@media (max-width: 600px) {
-  .MuiGrid-container {
-    margin: 0 !important;
-    width: 100% !important;
-  }
-  
-  .grid-item {
-    padding: 2px !important;
-  }
-  
-  .card {
-    margin: 0 auto;
-    width: 100%;
-    max-width: none;
-  }
-}
-
-@media (min-width: 601px) and (max-width: 900px) {
-  .card {
-    width: 100%;
-    max-width: none;
-  }
-}
-
-@media (min-width: 901px) and (max-width: 1200px) {
-  .card {
-    width: 100%;
-    max-width: none;
-  }
-}
-
-@media (min-width: 1201px) {
-  .card {
-    width: 100%;
-    max-width: none;
-  }
-}
-
-.grid-item {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  width: 100%;
-}
-
-.grid-item.chores-widget {
-  margin-top: 8px;
 }
 .card {
   background: var(--card-bg);

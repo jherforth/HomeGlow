@@ -1,6 +1,6 @@
 // client/src/app.jsx
 import React, { useState, useEffect, useRef } from 'react';
-import { Container, Grid, IconButton, Box, Dialog, DialogContent, Button } from '@mui/material';
+import { Container, IconButton, Box, Dialog, DialogContent, Button } from '@mui/material';
 import { Brightness4, Brightness7 } from '@mui/icons-material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -203,41 +203,17 @@ const App = () => {
     setIsBottomBarCollapsed(!isBottomBarCollapsed);
   };
   // Helper function to render a widget based on its name
-  const renderWidget = (widgetName) => {
-    // Calculate responsive breakpoints based on enabled widgets count
-    const enabledWidgetsCount = shuffledWidgetOrder.length;
-    let breakpoints = { xs: 12, sm: 6, md: 4, lg: 3, xl: 3 }; // Default
-    
-    // Dynamic breakpoints based on widget count for optimal space usage
-    if (enabledWidgetsCount === 1) {
-      breakpoints = { xs: 12, sm: 12, md: 12, lg: 12, xl: 12 };
-    } else if (enabledWidgetsCount === 2) {
-      breakpoints = { xs: 12, sm: 6, md: 6, lg: 6, xl: 6 };
-    } else if (enabledWidgetsCount === 3) {
-      breakpoints = { xs: 12, sm: 6, md: 4, lg: 4, xl: 4 };
-    } else if (enabledWidgetsCount >= 4) {
-      breakpoints = { xs: 12, sm: 6, md: 4, lg: 3, xl: 3 };
-    }
-
+  const renderWidget = (widgetName, index) => {
     switch (widgetName) {
       case 'calendar':
-        return widgetSettings.calendar.enabled && (
-          <Grid item {...breakpoints} className="grid-item">
-            <CalendarWidget transparentBackground={widgetSettings.calendar.transparent} icsCalendarUrl={apiKeys.ICS_CALENDAR_URL} />
-          </Grid>
-        );
+        return widgetSettings.calendar.enabled && 
+          <CalendarWidget key={`calendar-${index}`} transparentBackground={widgetSettings.calendar.transparent} icsCalendarUrl={apiKeys.ICS_CALENDAR_URL} />;
       case 'photos':
-        return widgetSettings.photos.enabled && (
-          <Grid item {...breakpoints} className="grid-item">
-            <PhotoWidget transparentBackground={widgetSettings.photos.transparent} />
-          </Grid>
-        );
+        return widgetSettings.photos.enabled && 
+          <PhotoWidget key={`photos-${index}`} transparentBackground={widgetSettings.photos.transparent} />;
       case 'weather':
-        return widgetSettings.weather.enabled && (
-          <Grid item {...breakpoints} className="grid-item">
-            <WeatherWidget transparentBackground={widgetSettings.weather.transparent} weatherApiKey={apiKeys.WEATHER_API_KEY} />
-          </Grid>
-        );
+        return widgetSettings.weather.enabled && 
+          <WeatherWidget key={`weather-${index}`} transparentBackground={widgetSettings.weather.transparent} weatherApiKey={apiKeys.WEATHER_API_KEY} />;
       default:
         return null;
     }
@@ -246,30 +222,25 @@ const App = () => {
   return (
     <>
       <Container className="container">
-        <Grid container spacing={2} justifyContent="center" alignItems="flex-start">
-        <Grid container spacing={1} sx={{ 
-          width: '100%',
-          margin: 0,
-          '& .MuiGrid-item': {
-            paddingLeft: '4px !important',
-            paddingTop: '4px !important'
-          }
-        }}>
-          {/* Render shuffled widgets */}
-          {shuffledWidgetOrder.map(widgetName => (
-            <React.Fragment key={widgetName}>
-              {renderWidget(widgetName)}
-            </React.Fragment>
-          ))}
+        {/* Masonry-style layout container */}
+        <Box className="masonry-container">
+          {/* Render shuffled widgets in masonry layout */}
+          {shuffledWidgetOrder.map((widgetName, index) => {
+            const widget = renderWidget(widgetName, index);
+            return widget ? (
+              <Box key={`${widgetName}-${index}`} className="masonry-item">
+                {widget}
+              </Box>
+            ) : null;
+          })}
 
-          {/* Chores Widget - Always in its own full-width row at the bottom, or top if shuffled */}
+          {/* Chores Widget - Full width */}
           {widgetSettings.chores.enabled && (
-            <Grid item xs={12} className="grid-item chores-widget" sx={{ width: '100%' }}>
+            <Box className="masonry-item chores-full-width">
               <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />
-            </Grid>
+            </Box>
           )}
-        </Grid>
-        </Grid>
+        </Box>
       </Container>
 
       <WidgetGallery key={widgetGalleryKey} theme={theme} />
