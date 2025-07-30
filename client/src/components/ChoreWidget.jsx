@@ -442,12 +442,12 @@ const ChoreWidget = ({ transparentBackground }) => {
             <Box
               key={user.id}
               sx={{
-                width: { xs: '100%', sm: 'calc(50% - 8px)', md: 'calc(33.333% - 11px)', lg: 'calc(25% - 12px)', xl: 'calc(16.666% - 13px)' },
-                minWidth: '180px', // Further reduced minimum width
+                width: { xs: '100%', sm: 'calc(33.333% - 11px)', md: 'calc(25% - 12px)', lg: 'calc(20% - 13px)', xl: 'calc(16.666% - 13px)' },
+                minWidth: '150px', // Even more reduced minimum width
                 flex: '0 0 auto',
                 border: '2px solid var(--card-border)',
                 borderRadius: 2,
-                p: 1, // Further reduced padding
+                p: 0.75, // Even more reduced padding
                 bgcolor: allRegularChoresCompleted ? 'rgba(0, 255, 0, 0.05)' : 'transparent'
               }}
             >
@@ -466,7 +466,7 @@ const ChoreWidget = ({ transparentBackground }) => {
                 )}
               </Box>
 
-              <Box sx={{ maxHeight: 300, overflowY: 'auto' }}>
+              <Box sx={{ maxHeight: 250, overflowY: 'auto' }}>
                 {userChores.length === 0 ? (
                   <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
                     No chores for today
@@ -482,12 +482,12 @@ const ChoreWidget = ({ transparentBackground }) => {
         {/* Bonus Chores Column */}
         <Box
           sx={{
-            width: { xs: '100%', sm: 'calc(50% - 8px)', md: 'calc(33.333% - 11px)', lg: 'calc(25% - 12px)', xl: 'calc(16.666% - 13px)' },
-            minWidth: '180px', // Further reduced minimum width
+            width: { xs: '100%', sm: 'calc(33.333% - 11px)', md: 'calc(25% - 12px)', lg: 'calc(20% - 13px)', xl: 'calc(16.666% - 13px)' },
+            minWidth: '150px', // Even more reduced minimum width
             flex: '0 0 auto',
             border: '2px solid var(--accent)',
             borderRadius: 2,
-            p: 1, // Further reduced padding
+            p: 0.75, // Even more reduced padding
             bgcolor: 'rgba(var(--accent-rgb), 0.05)'
           }}
         >
