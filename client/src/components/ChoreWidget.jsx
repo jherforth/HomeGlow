@@ -582,14 +582,24 @@ const ChoreWidget = ({ transparentBackground }) => {
                       Assigned to: {assignedUser?.username}
                     </Typography>
                     <Box sx={{ mt: 1 }}>
-                      <Button
+                      <IconButton
                         size="small"
-                        variant={chore.completed ? "outlined" : "contained"}
                         color={chore.completed ? "secondary" : "primary"}
                         onClick={() => toggleChoreCompletion(chore.id, chore.completed)}
+                        sx={{ 
+                          minWidth: 'auto',
+                          width: 32,
+                          height: 32,
+                          bgcolor: chore.completed ? 'transparent' : 'var(--accent)',
+                          color: chore.completed ? 'var(--accent)' : 'white',
+                          '&:hover': {
+                            bgcolor: chore.completed ? 'rgba(var(--accent-rgb), 0.1)' : 'var(--accent)',
+                            filter: 'brightness(1.1)'
+                          }
+                        }}
                       >
-                        {chore.completed ? 'Undo' : 'Complete'}
-                      </Button>
+                        {chore.completed ? <Undo fontSize="small" /> : <Check fontSize="small" />}
+                      </IconButton>
                     </Box>
                   </Box>
                 );
