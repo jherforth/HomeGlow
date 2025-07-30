@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Typography, Box, List, ListItem, ListItemText } from '@mui/material';
+import { Card, Typography, Box, List, ListItem, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, Button } from '@mui/material';
 import { Calendar, momentLocalizer } from 'react-big-calendar';
 import moment from 'moment';
 import axios from 'axios';
@@ -12,6 +12,9 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   const [upcomingEvents, setUpcomingEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [selectedDateEvents, setSelectedDateEvents] = useState([]);
+  const [showDayModal, setShowDayModal] = useState(false);
 
   useEffect(() => {
     if (!icsCalendarUrl) {
@@ -72,6 +75,28 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
     return moment(date).format('MMM D, h:mm A');
   };
 
+  const handleSelectSlot = ({ start }) => {
+    const selectedDay = moment(start).startOf('day');
+    const dayEvents = events.filter(event => 
+      moment(event.start).isSame(selectedDay, 'day')
+    );
+    
+    setSelectedDate(selectedDay.toDate());
+    setSelectedDateEvents(dayEvents);
+    setShowDayModal(true);
+  };
+
+  const handleSelectEvent = (event) => {
+    const selectedDay = moment(event.start).startOf('day');
+    const dayEvents = events.filter(e => 
+      moment(e.start).isSame(selectedDay, 'day')
+    );
+    
+    setSelectedDate(selectedDay.toDate());
+    setSelectedDateEvents(dayEvents);
+    setShowDayModal(true);
+  };
+
   const getCurrentDayOfWeek = () => {
     return new Date().getDay(); // 0 = Sunday, 1 = Monday, etc.
   };
@@ -124,6 +149,9 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
             views={['month']}
             defaultView="month"
             className="custom-calendar"
+            selectable={true}
+            onSelectSlot={handleSelectSlot}
+            onSelectEvent={handleSelectEvent}
             components={{
               month: {
                 header: CustomHeader
@@ -135,7 +163,8 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                 borderRadius: '4px',
                 border: 'none',
                 color: 'white',
-                fontSize: '0.8rem'
+                fontSize: '0.8rem',
+                cursor: 'pointer'
               }
             })}
           />
@@ -190,6 +219,73 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
           )}
         </Box>
       </Box>
+
+      {/* Day Details Modal */}
+      <Dialog 
+        open={showDayModal} 
+        onClose={() => setShowDayModal(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          {selectedDate && (
+            <Typography variant="h6">
+              📅 {moment(selectedDate).format('dddd, MMMM D, YYYY')}
+            </Typography>
+          )}
+        </DialogTitle>
+        <DialogContent>
+          {selectedDateEvents.length === 0 ? (
+            <Typography variant="body1" color="text.secondary" sx={{ py: 2 }}>
+              No events scheduled for this day.
+            </Typography>
+          ) : (
+            <List>
+              {selectedDateEvents.map((event, index) => (
+                <ListItem
+                  key={event.id || index}
+                  sx={{
+                    border: '1px solid var(--card-border)',
+                    borderRadius: 1,
+                    mb: 1,
+                    bgcolor: 'rgba(var(--accent-rgb), 0.05)'
+                  }}
+                >
+                  <ListItemText
+                    primary={
+                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                        {event.title}
+                      </Typography>
+                    }
+                    secondary={
+                      <Box>
+                        <Typography variant="body1" sx={{ mb: 1 }}>
+                          🕐 {moment(event.start).format('h:mm A')} - {moment(event.end).format('h:mm A')}
+                        </Typography>
+                        {event.location && (
+                          <Typography variant="body2" sx={{ mb: 1 }}>
+                            📍 {event.location}
+                          </Typography>
+                        )}
+                        {event.description && (
+                          <Typography variant="body2" color="text.secondary">
+                            {event.description}
+                          </Typography>
+                        )}
+                      </Box>
+                    }
+                  />
+                </ListItem>
+              ))}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowDayModal(false)} variant="contained">
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Card>
   );
 };

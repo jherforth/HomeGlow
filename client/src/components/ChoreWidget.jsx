@@ -171,10 +171,11 @@ const ChoreWidget = ({ transparentBackground }) => {
       e.target.nextSibling.style.display = 'flex';
     };
 
-    // Simplified image URL without extra headers
+    // Direct image URL without cache busting to avoid header issues
     const imageUrl = user.profile_picture 
-      ? `${import.meta.env.VITE_REACT_APP_API_URL}/Uploads/users/${user.profile_picture}?t=${Date.now()}`
+      ? `${import.meta.env.VITE_REACT_APP_API_URL}/Uploads/users/${user.profile_picture}`
       : null;
+
     return (
       <Box sx={{ position: 'relative', display: 'inline-block' }}>
         {imageUrl ? (
@@ -191,7 +192,6 @@ const ChoreWidget = ({ transparentBackground }) => {
                 display: 'block'
               }}
               onError={handleImageError}
-              crossOrigin="anonymous"
             />
             <Avatar
               sx={{

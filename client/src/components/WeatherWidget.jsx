@@ -76,13 +76,21 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
           if (!forecastByDay[dayKey]) {
             forecastByDay[dayKey] = {
               date: date,
-              temps: [],
+              temps: {
+                min: item.main.temp_min,
+                max: item.main.temp_max,
+                all: []
+              },
               weather: item.weather[0],
               precipitation: item.rain ? item.rain['3h'] || 0 : 0
             };
+          } else {
+            // Update min/max temperatures for the day
+            forecastByDay[dayKey].temps.min = Math.min(forecastByDay[dayKey].temps.min, item.main.temp_min);
+            forecastByDay[dayKey].temps.max = Math.max(forecastByDay[dayKey].temps.max, item.main.temp_max);
           }
           
-          forecastByDay[dayKey].temps.push(item.main.temp);
+          forecastByDay[dayKey].temps.all.push(item.main.temp);
           
           // Add to chart data (first 8 points for hourly chart)
           if (index < 8) {
@@ -98,7 +106,9 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
         const dailyForecastArray = Object.values(forecastByDay).slice(0, 3).map(day => ({
           date: day.date,
           dayName: day.date.toLocaleDateString('en-US', { weekday: 'short' }),
-          temp: Math.round(day.temps.reduce((a, b) => a + b, 0) / day.temps.length),
+          tempHigh: Math.round(day.temps.max),
+          tempLow: Math.round(day.temps.min),
+          tempAvg: Math.round(day.temps.all.reduce((a, b) => a + b, 0) / day.temps.all.length),
           weather: day.weather,
           precipitation: day.precipitation
         }));
@@ -273,9 +283,14 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
                     </Typography>
                     <Box>
                       <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                        {day.dayName}
-                      </Typography>
-                      <Typography variant="caption" sx={{ textTransform: 'capitalize' }}>
+                <Box sx={{ textAlign: 'right' }}>
+                  <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#ff6b6b' }}>
+                    {day.tempHigh}°F
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#00ddeb' }}>
+                    {day.tempLow}°F
+                  </Typography>
+                </Box>
                         {day.weather.description}
                       </Typography>
                     </Box>
