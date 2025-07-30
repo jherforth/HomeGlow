@@ -81,10 +81,225 @@ const App = () => {
       console.log('Skipping calculation - already calculating or no container');
       return;
     }
+      console.log('Skipping calculation - already calculating or no container');
+      return;
+    }
+      console.log('Skipping calculation - already calculating or no container');
+      return;
+    }
     
     setIsCalculating(true);
     console.log('=== Starting masonry calculation ===');
+    console.log('=== Starting masonry calculation ===');
+    console.log('=== Starting masonry calculation ===');
     
+    try {
+      // Small delay to ensure DOM is ready
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      if (!masonryContainerRef.current) {
+        setIsCalculating(false);
+        return;
+      }
+
+      const container = masonryContainerRef.current;
+      const containerRect = container.getBoundingClientRect();
+      const containerWidth = containerRect.width;
+      
+      console.log('Container width:', containerWidth);
+      
+      // Calculate number of columns based on screen width
+      let columns = 1;
+      if (containerWidth >= 1600) columns = 5;
+      else if (containerWidth >= 1200) columns = 4;
+      else if (containerWidth >= 900) columns = 3;
+      else if (containerWidth >= 600) columns = 2;
+      else columns = 1;
+
+      console.log('Using', columns, 'columns');
+
+      const gap = 16;
+      const columnWidth = (containerWidth - (gap * (columns - 1))) / columns;
+      console.log('Column width:', columnWidth, 'Gap:', gap);
+      
+      // Get all widget elements
+      const widgets = container.querySelectorAll('.masonry-widget');
+      console.log('Found', widgets.length, 'widgets');
+      
+      if (widgets.length === 0) {
+        setIsCalculating(false);
+        return;
+      }
+      
+      const columnHeights = new Array(columns).fill(0);
+
+      // Reset all widgets to get accurate measurements
+      widgets.forEach((widget) => {
+        widget.style.position = 'static';
+        widget.style.width = 'auto';
+        widget.style.left = 'auto';
+        widget.style.top = 'auto';
+        widget.style.transform = 'none';
+      });
+
+      // Force a reflow to ensure measurements are accurate
+      container.offsetHeight;
+
+      widgets.forEach((widget, index) => {
+        // Find the shortest column
+        const shortestColumnIndex = columnHeights.indexOf(Math.min(...columnHeights));
+        const currentColumnHeight = columnHeights[shortestColumnIndex];
+        
+        // Calculate position
+        const x = shortestColumnIndex * (columnWidth + gap);
+        const y = currentColumnHeight; // THIS WAS THE BUG - y should be currentColumnHeight, not 0
+        
+        // Set width first, then measure height
+        widget.style.width = `${columnWidth}px`;
+        
+        // Force reflow and get accurate height
+        container.offsetHeight;
+        const widgetHeight = widget.offsetHeight;
+        
+        // Now position absolutely
+        widget.style.position = 'absolute';
+        widget.style.left = `${x}px`;
+        widget.style.top = `${y}px`; // Use the calculated y position
+        widget.style.zIndex = '1';
+        
+        console.log(`Widget ${index}:`);
+        console.log(`  Position: x=${x}, y=${y}`);
+        console.log(`  Size: width=${columnWidth}, height=${widgetHeight}`);
+        console.log(`  Placed in column ${shortestColumnIndex} (was ${currentColumnHeight}px tall)`);
+        
+        // Update column height - THIS IS THE KEY FIX
+        columnHeights[shortestColumnIndex] = currentColumnHeight + widgetHeight + gap;
+        console.log(`  Column ${shortestColumnIndex} now ${columnHeights[shortestColumnIndex]}px tall`);
+      });
+
+      // Set container height to the tallest column
+      const maxHeight = Math.max(...columnHeights);
+      container.style.height = `${maxHeight}px`;
+      container.style.position = 'relative';
+      
+      console.log('Final column heights:', columnHeights);
+      console.log('Container height set to:', maxHeight);
+      console.log('=== Masonry calculation complete ===');
+      
+    } catch (error) {
+      console.error('Error in masonry calculation:', error);
+    } finally {
+      setIsCalculating(false);
+    }
+  };
+
+  // Debounced version to prevent excessive calls
+  const debouncedCalculateMasonryLayout = React.useCallback(() => {
+    clearTimeout(window.masonryTimeout);
+    window.masonryTimeout = setTimeout(() => {
+      calculateMasonryLayout();
+    }, 300);
+  }, []);
+
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      if (!masonryContainerRef.current) {
+        setIsCalculating(false);
+        return;
+      }
+
+      const container = masonryContainerRef.current;
+      const containerRect = container.getBoundingClientRect();
+      const containerWidth = containerRect.width;
+      
+      console.log('Container width:', containerWidth);
+      
+      // Calculate number of columns based on screen width
+      let columns = 1;
+      if (containerWidth >= 1600) columns = 5;
+      else if (containerWidth >= 1200) columns = 4;
+      else if (containerWidth >= 900) columns = 3;
+      else if (containerWidth >= 600) columns = 2;
+      else columns = 1;
+
+      console.log('Using', columns, 'columns');
+
+      const gap = 16;
+      const columnWidth = (containerWidth - (gap * (columns - 1))) / columns;
+      console.log('Column width:', columnWidth, 'Gap:', gap);
+      
+      // Get all widget elements
+      const widgets = container.querySelectorAll('.masonry-widget');
+      console.log('Found', widgets.length, 'widgets');
+      
+      if (widgets.length === 0) {
+        setIsCalculating(false);
+        return;
+      }
+      
+      const columnHeights = new Array(columns).fill(0);
+
+      // Reset all widgets to get accurate measurements
+      widgets.forEach((widget) => {
+        widget.style.position = 'static';
+        widget.style.width = 'auto';
+        widget.style.left = 'auto';
+        widget.style.top = 'auto';
+        widget.style.transform = 'none';
+      });
+
+      // Force a reflow to ensure measurements are accurate
+      container.offsetHeight;
+
+      widgets.forEach((widget, index) => {
+        // Find the shortest column
+        const shortestColumnIndex = columnHeights.indexOf(Math.min(...columnHeights));
+        const currentColumnHeight = columnHeights[shortestColumnIndex];
+        
+        // Calculate position
+        const x = shortestColumnIndex * (columnWidth + gap);
+        const y = currentColumnHeight; // THIS WAS THE BUG - y should be currentColumnHeight, not 0
+        
+        // Set width first, then measure height
+        widget.style.width = `${columnWidth}px`;
+        
+        // Force reflow and get accurate height
+        container.offsetHeight;
+        const widgetHeight = widget.offsetHeight;
+        
+        // Now position absolutely
+        widget.style.position = 'absolute';
+        widget.style.left = `${x}px`;
+        widget.style.top = `${y}px`; // Use the calculated y position
+        widget.style.zIndex = '1';
+        
+        console.log(`Widget ${index}:`);
+        console.log(`  Position: x=${x}, y=${y}`);
+        console.log(`  Size: width=${columnWidth}, height=${widgetHeight}`);
+        console.log(`  Placed in column ${shortestColumnIndex} (was ${currentColumnHeight}px tall)`);
+        
+        // Update column height - THIS IS THE KEY FIX
+        columnHeights[shortestColumnIndex] = currentColumnHeight + widgetHeight + gap;
+        console.log(`  Column ${shortestColumnIndex} now ${columnHeights[shortestColumnIndex]}px tall`);
+      });
+
+      // Set container height to the tallest column
+      const maxHeight = Math.max(...columnHeights);
+      container.style.height = `${maxHeight}px`;
+      container.style.position = 'relative';
+      
+      console.log('Final column heights:', columnHeights);
+      console.log('Container height set to:', maxHeight);
+      console.log('=== Masonry calculation complete ===');
+      
+    } catch (error) {
+      console.error('Error in masonry calculation:', error);
+    } finally {
+      setIsCalculating(false);
+    }
+  };
+
+  // Debounced version to prevent excessive calls
     try {
       // Small delay to ensure DOM is ready
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -310,25 +525,6 @@ const App = () => {
     }
   }, [widgetSettings.enableCardShuffle, widgetSettings.calendar.enabled, widgetSettings.photos.enabled, widgetSettings.weather.enabled]);
 
-  // NEW: Effect to recalculate layout when widgets change or window resizes
-  useEffect(() => {
-    const handleResize = () => {
-      setTimeout(() => calculateMasonryLayout(), 300);
-    };
-
-    window.addEventListener('resize', handleResize);
-    
-    // Initial calculation
-    setTimeout(() => calculateMasonryLayout(), 500);
-    
-    return () => window.removeEventListener('resize', handleResize);
-  }, [shuffledWidgetOrder, widgetSettings]);
-
-  // NEW: Effect to recalculate when widgets are enabled/disabled
-  useEffect(() => {
-    setTimeout(() => calculateMasonryLayout(), 600);
-  }, [widgetSettings.chores.enabled, widgetSettings.calendar.enabled, widgetSettings.photos.enabled, widgetSettings.weather.enabled]);
-  
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
