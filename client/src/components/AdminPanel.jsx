@@ -72,7 +72,6 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       calendar: { enabled: false, transparent: false },
       photos: { enabled: false, transparent: false },
       weather: { enabled: false, transparent: false },
-      menu: { enabled: false, transparent: false },
       textSize: 16,
       cardSize: 300,
       cardPadding: 20,
@@ -308,7 +307,6 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       calendar: { enabled: false, transparent: false },
       photos: { enabled: false, transparent: false },
       weather: { enabled: false, transparent: false },
-      menu: { enabled: false, transparent: false },
       textSize: 16,
       cardSize: 300,
       cardPadding: 20,
@@ -478,11 +476,11 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       setFormData({ username: '', email: '', profilePicture: null });
       setError(null);
       fetchData();
-      } catch (error) { // <--- CORRECTED BRACE
-        console.error('Error deleting user:', error);
-        setError(error.response?.data?.error || 'Failed to delete user');
-        setSuccess(null);
-      }
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      setError(error.response?.data?.error || 'Failed to delete user');
+      setSuccess(null);
+    }
   };
 
   const handleDeleteUser = async (userId) => {
@@ -638,24 +636,6 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
               <FormControlLabel
                 control={<Switch checked={toggles.weather.transparent} onChange={handleToggleChange} name="weather.transparent" />}
                 label="Weather Transparent"
-                className="toggle-label"
-              />
-            </Box>
-          )}
-        </Box>
-
-        {/* Menu Widget Toggles */}
-        <Box sx={{ mb: 1 }}>
-          <FormControlLabel
-            control={<Switch checked={toggles.menu.enabled} onChange={handleToggleChange} name="menu.enabled" />}
-            label="Enable Menu Widget"
-            className="toggle-label"
-          />
-          {toggles.menu.enabled && (
-            <Box sx={{ ml: 4 }}>
-              <FormControlLabel
-                control={<Switch checked={toggles.menu.transparent} onChange={handleToggleChange} name="menu.transparent" />}
-                label="Menu Transparent"
                 className="toggle-label"
               />
             </Box>
