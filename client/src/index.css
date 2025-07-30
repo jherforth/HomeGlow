@@ -99,11 +99,50 @@ body {
 /* Override Material-UI Container's max-width to allow full dynamic width */
 .MuiContainer-root {
   max-width: none !important;
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+}
+
+/* Responsive grid adjustments */
+@media (max-width: 600px) {
+  .MuiGrid-container {
+    margin: 0 !important;
+    width: 100% !important;
+  }
+  
+  .grid-item {
+    padding: 8px !important;
+  }
+  
+  .card {
+    margin: 0 auto;
+    max-width: 100%;
+  }
+}
+
+@media (min-width: 601px) and (max-width: 960px) {
+  .card {
+    max-width: 450px;
+  }
+}
+
+@media (min-width: 961px) and (max-width: 1280px) {
+  .card {
+    max-width: 400px;
+  }
+}
+
+@media (min-width: 1281px) {
+  .card {
+    max-width: var(--dynamic-card-width);
+  }
 }
 
 .grid-item {
   display: flex;
   justify-content: center;
+  align-items: flex-start;
+  width: 100%;
 }
 
 .card {

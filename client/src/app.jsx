@@ -207,19 +207,19 @@ const App = () => {
     switch (widgetName) {
       case 'calendar':
         return widgetSettings.calendar.enabled && (
-          <Grid item xs={12} sm={6} md={3} className="grid-item">
+          <Grid item xs={12} sm={6} lg={4} xl={3} className="grid-item">
             <CalendarWidget transparentBackground={widgetSettings.calendar.transparent} icsCalendarUrl={apiKeys.ICS_CALENDAR_URL} />
           </Grid>
         );
       case 'photos':
         return widgetSettings.photos.enabled && (
-          <Grid item xs={12} sm={6} md={3} className="grid-item">
+          <Grid item xs={12} sm={6} lg={4} xl={3} className="grid-item">
             <PhotoWidget transparentBackground={widgetSettings.photos.transparent} />
           </Grid>
         );
       case 'weather':
         return widgetSettings.weather.enabled && (
-          <Grid item xs={12} sm={6} md={3} className="grid-item">
+          <Grid item xs={12} sm={6} lg={4} xl={3} className="grid-item">
             <WeatherWidget transparentBackground={widgetSettings.weather.transparent} weatherApiKey={apiKeys.WEATHER_API_KEY} />
           </Grid>
         );
@@ -231,7 +231,7 @@ const App = () => {
   return (
     <>
       <Container className="container">
-        <Grid container spacing={2} justifyContent="space-evenly">
+        <Grid container spacing={2} justifyContent="center" alignItems="flex-start">
           {/* Render shuffled widgets */}
           {shuffledWidgetOrder.map(widgetName => (
             <React.Fragment key={widgetName}>
@@ -241,7 +241,7 @@ const App = () => {
 
           {/* Chores Widget - Always in its own full-width row at the bottom, or top if shuffled */}
           {widgetSettings.chores.enabled && (
-            <Grid item xs={12} className="grid-item">
+            <Grid item xs={12} className="grid-item" sx={{ width: '100%' }}>
               <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />
             </Grid>
           )}
