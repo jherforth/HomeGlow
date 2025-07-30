@@ -15,7 +15,6 @@ import CalendarWidget from './components/CalendarWidget.jsx';
 import PhotoWidget from './components/PhotoWidget.jsx';
 import AdminPanel from './components/AdminPanel.jsx';
 import WeatherWidget from './components/WeatherWidget.jsx';
-import MenuWidget from './components/MenuWidget.jsx';
 import ChoreWidget from './components/ChoreWidget.jsx';
 import WidgetGallery from './components/WidgetGallery.jsx';
 import './index.css';
@@ -28,7 +27,6 @@ const App = () => {
       calendar: { enabled: false, transparent: false },
       photos: { enabled: false, transparent: false },
       weather: { enabled: false, transparent: false },
-      menu: { enabled: false, transparent: false },
       textSize: 16,
       cardSize: 300,
       cardPadding: 20,
@@ -168,7 +166,6 @@ const App = () => {
     if (widgetSettings.calendar.enabled) widgetsToShuffle.push('calendar');
     if (widgetSettings.photos.enabled) widgetsToShuffle.push('photos');
     if (widgetSettings.weather.enabled) widgetsToShuffle.push('weather');
-    if (widgetSettings.menu.enabled) widgetsToShuffle.push('menu');
 
     if (widgetSettings.enableCardShuffle && widgetsToShuffle.length > 0) {
       // Simple shuffle function (Fisher-Yates)
@@ -182,9 +179,9 @@ const App = () => {
       setShuffledWidgetOrder(shuffleArray([...widgetsToShuffle]));
     } else {
       // If shuffle is disabled or no widgets to shuffle, revert to default order
-      setShuffledWidgetOrder(['calendar', 'photos', 'weather', 'menu'].filter(w => widgetSettings[w].enabled));
+      setShuffledWidgetOrder(['calendar', 'photos', 'weather'].filter(w => widgetSettings[w].enabled));
     }
-  }, [widgetSettings.enableCardShuffle, widgetSettings.calendar.enabled, widgetSettings.photos.enabled, widgetSettings.weather.enabled, widgetSettings.menu.enabled]);
+  }, [widgetSettings.enableCardShuffle, widgetSettings.calendar.enabled, widgetSettings.photos.enabled, widgetSettings.weather.enabled]);
 
 
   const toggleTheme = () => {
@@ -224,12 +221,6 @@ const App = () => {
         return widgetSettings.weather.enabled && (
           <Grid item xs={12} sm={6} md={3} className="grid-item">
             <WeatherWidget transparentBackground={widgetSettings.weather.transparent} weatherApiKey={apiKeys.WEATHER_API_KEY} />
-          </Grid>
-        );
-      case 'menu':
-        return widgetSettings.menu.enabled && (
-          <Grid item xs={12} sm={6} md={3} className="grid-item">
-            <MenuWidget transparentBackground={widgetSettings.menu.transparent} />
           </Grid>
         );
       default:
