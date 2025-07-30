@@ -474,7 +474,6 @@ const App = () => {
               <Box 
                 key={`${widgetName}-${index}`} 
                 className="masonry-widget"
-                onLoad={calculateMasonryLayout} // Recalculate when widget content loads
               >
                 {widget}
               </Box>
@@ -485,7 +484,6 @@ const App = () => {
           {widgetSettings.chores.enabled && (
             <Box 
               className="masonry-widget chores-widget"
-              onLoad={calculateMasonryLayout} // Recalculate when chores widget loads
             >
               <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />
             </Box>
