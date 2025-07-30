@@ -1,495 +1,572 @@
-// client/src/app.jsx
-import React, { useState, useEffect, useRef } from 'react';
-import { Container, IconButton, Box, Dialog, DialogContent, Button } from '@mui/material';
-import { Brightness4, Brightness7 } from '@mui/icons-material';
-import SettingsIcon from '@mui/icons-material/Settings';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import ExpandLessIcon from '@mui/icons-material/ExpandLess';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-
-// GeoPattern import - CORRECTED LINE (using the direct geopattern library)
-import GeoPattern from 'geopattern'; // Import GeoPattern from the 'geopattern' package
-
+import React, { useState, useEffect } from 'react';
+import { Card, Typography, Box, Avatar, Chip, List, ListItem, ListItemText, IconButton, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel } from '@mui/material';
+import { Add, Edit, Delete, CheckCircle } from '@mui/icons-material';
 import axios from 'axios';
-import CalendarWidget from './components/CalendarWidget.jsx';
-import PhotoWidget from './components/PhotoWidget.jsx';
-import AdminPanel from './components/AdminPanel.jsx';
-import WeatherWidget from './components/WeatherWidget.jsx';
-import ChoreWidget from './components/ChoreWidget.jsx';
-import WidgetGallery from './components/WidgetGallery.jsx';
-import './index.css';
 
-const App = () => {
-  const [theme, setTheme] = useState('light');
-  const [widgetSettings, setWidgetSettings] = useState(() => {
-    const defaultSettings = {
-      chores: { enabled: false, transparent: false },
-      calendar: { enabled: false, transparent: false },
-      photos: { enabled: false, transparent: false },
-      weather: { enabled: false, transparent: false },
-      textSize: 16,
-      cardSize: 300,
-      cardPadding: 20,
-      cardHeight: 200,
-      refreshInterval: 'manual',
-      enableGeoPatternBackground: false,
-      enableCardShuffle: false,
-      // NEW: Color settings
-      lightGradientStart: '#00ddeb',
-      lightGradientEnd: '#ff6b6b',
-      darkGradientStart: '#2e2767',
-      darkGradientEnd: '#620808',
-      lightButtonGradientStart: '#00ddeb',
-      lightButtonGradientEnd: '#ff6b6b',
-      darkButtonGradientStart: '#2e2767',
-      darkButtonGradientEnd: '#620808',
-    };
-    const savedSettings = localStorage.getItem('widgetSettings');
-    return savedSettings ? { ...defaultSettings, ...JSON.parse(savedSettings) } : defaultSettings;
+const ChoreWidget = ({ transparentBackground }) => {
+  const [users, setUsers] = useState([]);
+  const [chores, setChores] = useState([]);
+  const [prizes, setPrizes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [openAddChore, setOpenAddChore] = useState(false);
+  const [openAddUser, setOpenAddUser] = useState(false);
+  const [newChore, setNewChore] = useState({
+    title: '',
+    description: '',
+    user_id: '',
+    time_period: 'any-time',
+    assigned_day_of_week: 'monday',
+    repeat_type: 'weekly',
+    clam_value: 0
   });
-  const [showAdminPanel, setShowAdminPanel] = useState(false);
-
-  // State for shuffled widget order
-  const [shuffledWidgetOrder, setShuffledWidgetOrder] = useState([]);
-
-  // NEW: State for dynamic GeoPattern seed
-  const [currentGeoPatternSeed, setCurrentGeoPatternSeed] = useState('');
-
-  // NEW: State for API keys fetched from backend
-  const [apiKeys, setApiKeys] = useState({
-    WEATHER_API_KEY: '',
-    ICS_CALENDAR_URL: '',
+  const [newUser, setNewUser] = useState({
+    username: '',
+    email: '',
+    profile_picture: ''
   });
 
-  // NEW: State for bottom bar collapse
-  const [isBottomBarCollapsed, setIsBottomBarCollapsed] = useState(true);
+  const daysOfWeek = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+  const timePeriods = ['morning', 'afternoon', 'evening', 'any-time'];
+  const repeatTypes = [
+    { value: 'weekly', label: 'Weekly' },
+    { value: 'daily', label: 'Daily' },
+    { value: 'until-completed', label: 'Until Completed' },
+    { value: 'no-repeat', label: 'No Repeat' }
+  ];
 
-  // NEW: State to trigger widget gallery refresh
-  const [widgetGalleryKey, setWidgetGalleryKey] = useState(0);
+  useEffect(() => {
+    fetchData();
+  }, []);
 
-  // NEW: Refs and state for JavaScript masonry layout
-  const masonryContainerRef = useRef(null);
-  const [masonryLayout, setMasonryLayout] = useState([]);
-  const [containerWidth, setContainerWidth] = useState(0);
-
-  // Add a flag to prevent multiple simultaneous calculations
-  const [isCalculating, setIsCalculating] = useState(false);
-
-  // NEW: Calculate masonry layout function
-  const calculateMasonryLayout = async () => {
-    if (isCalculating || !masonryContainerRef.current) {
-      console.log('Skipping calculation - already calculating or no container');
-      return;
-    }
-    
-    setIsCalculating(true);
-    console.log('=== Starting masonry calculation ===');
-    
+  const fetchData = async () => {
     try {
-      // Small delay to ensure DOM is ready
-      await new Promise(resolve => setTimeout(resolve, 100));
+      setLoading(true);
+      const [usersRes, choresRes, prizesRes] = await Promise.all([
+        axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users`),
+        axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`),
+        axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/prizes`)
+      ]);
       
-      if (!masonryContainerRef.current) {
-        setIsCalculating(false);
-        return;
-      }
-
-      const container = masonryContainerRef.current;
-      const containerRect = container.getBoundingClientRect();
-      const containerWidth = containerRect.width;
-      
-      console.log('Container width:', containerWidth);
-      
-      // Calculate number of columns based on screen width
-      let columns = 1;
-      if (containerWidth >= 1600) columns = 5;
-      else if (containerWidth >= 1200) columns = 4;
-      else if (containerWidth >= 900) columns = 3;
-      else if (containerWidth >= 600) columns = 2;
-      else columns = 1;
-
-      console.log('Using', columns, 'columns');
-
-      const gap = 16;
-      const columnWidth = (containerWidth - (gap * (columns - 1))) / columns;
-      console.log('Column width:', columnWidth, 'Gap:', gap);
-      
-      // Get all widget elements
-      const widgets = container.querySelectorAll('.masonry-widget');
-      console.log('Found', widgets.length, 'widgets');
-      
-      if (widgets.length === 0) {
-        setIsCalculating(false);
-        return;
-      }
-      
-      const columnHeights = new Array(columns).fill(0);
-
-      // Reset all widgets to get accurate measurements
-      widgets.forEach((widget) => {
-        widget.style.position = 'static';
-        widget.style.width = 'auto';
-        widget.style.left = 'auto';
-        widget.style.top = 'auto';
-        widget.style.transform = 'none';
-      });
-
-      // Force a reflow to ensure measurements are accurate
-      container.offsetHeight;
-
-      widgets.forEach((widget, index) => {
-        // Find the shortest column
-        const shortestColumnIndex = columnHeights.indexOf(Math.min(...columnHeights));
-        const currentColumnHeight = columnHeights[shortestColumnIndex];
-        
-        // Calculate position
-        const x = shortestColumnIndex * (columnWidth + gap);
-        const y = currentColumnHeight; // THIS WAS THE BUG - y should be currentColumnHeight, not 0
-        
-        // Set width first, then measure height
-        widget.style.width = `${columnWidth}px`;
-        
-        // Force reflow and get accurate height
-        container.offsetHeight;
-        const widgetHeight = widget.offsetHeight;
-        
-        // Now position absolutely
-        widget.style.position = 'absolute';
-        widget.style.left = `${x}px`;
-        widget.style.top = `${y}px`; // Use the calculated y position
-        widget.style.zIndex = '1';
-        
-        console.log(`Widget ${index}:`);
-        console.log(`  Position: x=${x}, y=${y}`);
-        console.log(`  Size: width=${columnWidth}, height=${widgetHeight}`);
-        console.log(`  Placed in column ${shortestColumnIndex} (was ${currentColumnHeight}px tall)`);
-        
-        // Update column height - THIS IS THE KEY FIX
-        columnHeights[shortestColumnIndex] = currentColumnHeight + widgetHeight + gap;
-        console.log(`  Column ${shortestColumnIndex} now ${columnHeights[shortestColumnIndex]}px tall`);
-      });
-
-      // Set container height to the tallest column
-      const maxHeight = Math.max(...columnHeights);
-      container.style.height = `${maxHeight}px`;
-      container.style.position = 'relative';
-      
-      console.log('Final column heights:', columnHeights);
-      console.log('Container height set to:', maxHeight);
-      console.log('=== Masonry calculation complete ===');
-      
+      setUsers(usersRes.data);
+      setChores(choresRes.data);
+      setPrizes(prizesRes.data);
+      setError(null);
     } catch (error) {
-      console.error('Error in masonry calculation:', error);
+      console.error('Error fetching data:', error);
+      setError('Failed to load chores data');
     } finally {
-      setIsCalculating(false);
+      setLoading(false);
     }
   };
 
-  // Debounced version to prevent excessive calls
-  const debouncedCalculateMasonryLayout = React.useCallback(() => {
-    clearTimeout(window.masonryTimeout);
-    window.masonryTimeout = setTimeout(() => {
-      calculateMasonryLayout();
-    }, 300);
-  }, []);
-
-  // NEW: Function to refresh widget gallery
-  const refreshWidgetGallery = () => {
-    setWidgetGalleryKey(prev => prev + 1);
-  };
-
-  useEffect(() => {
-    const fetchApiKeys = async () => {
-      try {
-        const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`);
-        setApiKeys(response.data);
-      } catch (error) {
-        console.error('Error fetching API keys:', error);
-      }
-    };
-    fetchApiKeys();
-  }, []); // Run once on mount
-
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-    setTheme(savedTheme);
-    document.documentElement.setAttribute('data-theme', savedTheme);
-
-    // NEW: Generate a random seed once on component mount
-    // This ensures a new pattern on each full page refresh
-    setCurrentGeoPatternSeed(Math.random().toString());
-  }, []);
-
-  // Effect to apply dynamic CSS variables
-  useEffect(() => {
-    document.documentElement.style.setProperty('--dynamic-text-size', `${widgetSettings.textSize}px`);
-    document.documentElement.style.setProperty('--dynamic-card-width', `${widgetSettings.cardSize}px`);
-    document.documentElement.style.setProperty('--dynamic-card-padding', `${widgetSettings.cardPadding}px`);
-    document.documentElement.style.setProperty('--dynamic-card-height', `${widgetSettings.cardHeight}px`);
-
-    // NEW: Apply custom color variables
-    document.documentElement.style.setProperty('--light-gradient-start', widgetSettings.lightGradientStart);
-    document.documentElement.style.setProperty('--light-gradient-end', widgetSettings.lightGradientEnd);
-    document.documentElement.style.setProperty('--dark-gradient-start', widgetSettings.darkGradientStart);
-    document.documentElement.style.setProperty('--dark-gradient-end', widgetSettings.darkGradientEnd);
-    document.documentElement.style.setProperty('--light-button-gradient-start', widgetSettings.lightButtonGradientStart);
-    document.documentElement.style.setProperty('--light-button-gradient-end', widgetSettings.lightButtonGradientEnd);
-    document.documentElement.style.setProperty('--dark-button-gradient-start', widgetSettings.darkButtonGradientStart);
-    document.documentElement.style.setProperty('--dark-button-gradient-end', widgetSettings.darkButtonGradientEnd);
-
-  }, [widgetSettings]); // Depend on all widgetSettings to re-apply colors when they change
-
-  // NEW: Effect for automatic page refresh
-  useEffect(() => {
-    let intervalId;
-    const intervalHours = parseInt(widgetSettings.refreshInterval);
-
-    if (!isNaN(intervalHours) && intervalHours > 0) {
-      const intervalMilliseconds = intervalHours * 60 * 60 * 1000; // Convert hours to milliseconds
-      intervalId = setInterval(() => {
-        console.log(`Auto-refreshing page after ${intervalHours} hours.`);
-        window.location.reload();
-      }, intervalMilliseconds);
-    }
-
-    return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
-    };
-  }, [widgetSettings.refreshInterval]);
-
-  // NEW: Effect to update body padding based on bottom bar height
-  useEffect(() => {
-    const barHeight = isBottomBarCollapsed ? 40 : 100; // Approximate height of collapsed/expanded bar
-    document.documentElement.style.setProperty('--bottom-bar-height', `${barHeight}px`);
-  }, [isBottomBarCollapsed]);
-
-  // NEW: Effect for GeoPattern background and container transparency
-  useEffect(() => {
-    if (widgetSettings.enableGeoPatternBackground) {
-      // Call generate directly from the imported GeoPattern using the dynamic seed
-      const pattern = GeoPattern.generate(currentGeoPatternSeed);
-      document.body.style.backgroundImage = pattern.toDataUrl();
-      document.body.style.backgroundAttachment = 'fixed'; // Ensure it stays fixed
-      document.body.style.backgroundSize = 'cover'; // Ensure it covers the whole body
-
-      // Make the main container transparent to reveal the body background
-      document.documentElement.style.setProperty('--container-background-override', 'transparent');
-    } else {
-      // Revert to original background (from index.css)
-      document.body.style.backgroundImage = 'var(--gradient)';
-      document.body.style.backgroundAttachment = 'fixed';
-      document.body.style.backgroundSize = 'auto'; // Or whatever your default is
-
-      // Revert container background
-      document.documentElement.style.setProperty('--container-background-override', 'var(--gradient)');
-    }
-  }, [widgetSettings.enableGeoPatternBackground, theme, currentGeoPatternSeed]); // Re-apply if theme or seed changes
-
-  // NEW: Effect for card shuffle
-  useEffect(() => {
-    const widgetsToShuffle = [];
-    if (widgetSettings.calendar.enabled) widgetsToShuffle.push('calendar');
-    if (widgetSettings.photos.enabled) widgetsToShuffle.push('photos');
-    if (widgetSettings.weather.enabled) widgetsToShuffle.push('weather');
-
-    if (widgetSettings.enableCardShuffle && widgetsToShuffle.length > 0) {
-      // Simple shuffle function (Fisher-Yates)
-      const shuffleArray = (array) => {
-        for (let i = array.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [array[i], array[j]] = [array[j], array[i]];
-        }
-        return array;
-      };
-      setShuffledWidgetOrder(shuffleArray([...widgetsToShuffle]));
-    } else {
-      // If shuffle is disabled or no widgets to shuffle, revert to default order
-      setShuffledWidgetOrder(['calendar', 'photos', 'weather'].filter(w => widgetSettings[w].enabled));
-    }
-  }, [widgetSettings.enableCardShuffle, widgetSettings.calendar.enabled, widgetSettings.photos.enabled, widgetSettings.weather.enabled]);
-
-  // NEW: Effect to recalculate layout when widgets change or window resizes
-  useEffect(() => {
-    const handleResize = () => {
-      setTimeout(() => calculateMasonryLayout(), 300);
-    };
-
-    window.addEventListener('resize', handleResize);
-    
-    // Initial calculation
-    setTimeout(() => calculateMasonryLayout(), 500);
-    
-    return () => window.removeEventListener('resize', handleResize);
-  }, [shuffledWidgetOrder, widgetSettings]);
-
-  // NEW: Effect to recalculate when widgets are enabled/disabled
-  useEffect(() => {
-    setTimeout(() => calculateMasonryLayout(), 600);
-  }, [widgetSettings.chores.enabled, widgetSettings.calendar.enabled, widgetSettings.photos.enabled, widgetSettings.weather.enabled]);
-  
-  const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(newTheme);
-    document.documentElement.setAttribute('data-theme', newTheme);
-    localStorage.setItem('theme', newTheme);
-  };
-
-  const toggleAdminPanel = () => {
-    setShowAdminPanel(!showAdminPanel);
-  };
-
-  const handlePageRefresh = () => {
-    window.location.reload();
-  };
-
-  const toggleBottomBar = () => {
-    setIsBottomBarCollapsed(!isBottomBarCollapsed);
-  };
-  
-  // Helper function to render a widget based on its name
-  const renderWidget = (widgetName, index) => {
-    switch (widgetName) {
-      case 'calendar':
-        return widgetSettings.calendar.enabled && 
-          <CalendarWidget key={`calendar-${index}`} transparentBackground={widgetSettings.calendar.transparent} icsCalendarUrl={apiKeys.ICS_CALENDAR_URL} />;
-      case 'photos':
-        return widgetSettings.photos.enabled && 
-          <PhotoWidget key={`photos-${index}`} transparentBackground={widgetSettings.photos.transparent} />;
-      case 'weather':
-        return widgetSettings.weather.enabled && 
-          <WeatherWidget key={`weather-${index}`} transparentBackground={widgetSettings.weather.transparent} weatherApiKey={apiKeys.WEATHER_API_KEY} />;
-      default:
-        return null;
+  const handleCompleteChore = async (choreId) => {
+    try {
+      await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores/${choreId}`, {
+        completed: true
+      });
+      fetchData(); // Refresh data to show updated clam totals
+    } catch (error) {
+      console.error('Error completing chore:', error);
     }
   };
+
+  const handleAddChore = async () => {
+    try {
+      await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`, {
+        ...newChore,
+        completed: false
+      });
+      setOpenAddChore(false);
+      setNewChore({
+        title: '',
+        description: '',
+        user_id: '',
+        time_period: 'any-time',
+        assigned_day_of_week: 'monday',
+        repeat_type: 'weekly',
+        clam_value: 0
+      });
+      fetchData();
+    } catch (error) {
+      console.error('Error adding chore:', error);
+    }
+  };
+
+  const handleAddUser = async () => {
+    try {
+      await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users`, newUser);
+      setOpenAddUser(false);
+      setNewUser({
+        username: '',
+        email: '',
+        profile_picture: ''
+      });
+      fetchData();
+    } catch (error) {
+      console.error('Error adding user:', error);
+    }
+  };
+
+  const handleAssignBonusChore = async (choreId, userId) => {
+    try {
+      await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores/${choreId}/assign`, {
+        user_id: userId
+      });
+      fetchData();
+    } catch (error) {
+      console.error('Error assigning bonus chore:', error);
+      alert(error.response?.data?.error || 'Failed to assign bonus chore');
+    }
+  };
+
+  const getCurrentDay = () => {
+    const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    return days[new Date().getDay()];
+  };
+
+  const getUserChores = (userId) => {
+    const currentDay = getCurrentDay();
+    return chores.filter(chore => 
+      chore.user_id === userId && 
+      (chore.assigned_day_of_week === currentDay || chore.repeat_type === 'until-completed')
+    );
+  };
+
+  const getBonusChores = () => {
+    return chores.filter(chore => chore.user_id === 0 && chore.clam_value > 0);
+  };
+
+  const getAssignedBonusChores = () => {
+    return chores.filter(chore => chore.user_id !== 0 && chore.clam_value > 0 && !chore.completed);
+  };
+
+  if (loading) {
+    return (
+      <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`} sx={{ height: '500px' }}>
+        <Typography variant="h6">Loading chores...</Typography>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`} sx={{ height: '500px' }}>
+        <Typography variant="h6" color="error">{error}</Typography>
+      </Card>
+    );
+  }
+
+  const regularUsers = users.filter(user => user.id !== 0);
+  const bonusChores = getBonusChores();
+  const assignedBonusChores = getAssignedBonusChores();
 
   return (
     <>
-      <Container className="container">
-        {/* Horizontal widget layout */}
-        <Box sx={{ width: '100%', padding: '8px' }}>
-          {/* Calendar Widget - Full width horizontal */}
-          {widgetSettings.calendar.enabled && (
-            <Box sx={{ mb: 2 }}>
-              <CalendarWidget transparentBackground={widgetSettings.calendar.transparent} icsCalendarUrl={apiKeys.ICS_CALENDAR_URL} />
-            </Box>
-          )}
+      <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`} sx={{ height: '500px', display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+            ✅ Daily Chores - {getCurrentDay().charAt(0).toUpperCase() + getCurrentDay().slice(1)}
+          </Typography>
+          <Box>
+            <IconButton onClick={() => setOpenAddUser(true)} size="small">
+              <Add />
+            </IconButton>
+            <IconButton onClick={() => setOpenAddChore(true)} size="small">
+              <Edit />
+            </IconButton>
+          </Box>
+        </Box>
 
-          {/* Weather Widget - Full width horizontal */}
-          {widgetSettings.weather.enabled && (
-            <Box sx={{ mb: 2 }}>
-              <WeatherWidget transparentBackground={widgetSettings.weather.transparent} weatherApiKey={apiKeys.WEATHER_API_KEY} />
-            </Box>
-          )}
+        <Box sx={{ display: 'flex', height: '100%', gap: 2, overflow: 'hidden' }}>
+          {/* User Columns */}
+          {regularUsers.map((user) => {
+            const userChores = getUserChores(user.id);
+            const completedChores = userChores.filter(chore => chore.completed).length;
+            const totalChores = userChores.length;
+            
+            return (
+              <Box key={user.id} sx={{ flex: 1, minWidth: '200px', display: 'flex', flexDirection: 'column' }}>
+                {/* User Header */}
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 2, position: 'relative' }}>
+                  <Box sx={{ position: 'relative' }}>
+                    {user.profile_picture ? (
+                      <Avatar
+                        src={`${import.meta.env.VITE_REACT_APP_API_URL}/Uploads/users/${user.profile_picture}`}
+                        sx={{ 
+                          width: 60, 
+                          height: 60, 
+                          border: '3px solid var(--accent)',
+                          mb: 1
+                        }}
+                      />
+                    ) : (
+                      <Avatar
+                        sx={{ 
+                          width: 60, 
+                          height: 60, 
+                          bgcolor: 'var(--accent)',
+                          border: '3px solid var(--accent)',
+                          mb: 1,
+                          fontSize: '1.5rem',
+                          fontWeight: 'bold'
+                        }}
+                      >
+                        {user.username.charAt(0).toUpperCase()}
+                      </Avatar>
+                    )}
+                    
+                    {/* Clam Badge */}
+                    <Chip
+                      label={`🐚 ${user.clam_total || 0}`}
+                      size="small"
+                      sx={{
+                        position: 'absolute',
+                        top: -5,
+                        right: -10,
+                        bgcolor: 'var(--accent)',
+                        color: 'white',
+                        fontSize: '0.7rem',
+                        height: '20px'
+                      }}
+                    />
+                  </Box>
+                  
+                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', textAlign: 'center' }}>
+                    {user.username}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: 'var(--accent)' }}>
+                    {completedChores}/{totalChores} completed
+                  </Typography>
+                </Box>
 
-          {/* Chores Widget - Full width horizontal */}
-          {widgetSettings.chores.enabled && (
-            <Box sx={{ mb: 2 }}>
-              <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />
-            </Box>
-          )}
+                {/* User's Chores */}
+                <Box sx={{ flex: 1, overflow: 'auto' }}>
+                  {userChores.length === 0 ? (
+                    <Typography variant="body2" sx={{ textAlign: 'center', color: 'text.secondary', fontStyle: 'italic' }}>
+                      No chores today
+                    </Typography>
+                  ) : (
+                    <List sx={{ p: 0 }}>
+                      {userChores.map((chore) => (
+                        <ListItem 
+                          key={chore.id} 
+                          sx={{ 
+                            px: 1, 
+                            py: 0.5,
+                            bgcolor: chore.completed ? 'rgba(76, 175, 80, 0.1)' : 'transparent',
+                            borderRadius: 1,
+                            mb: 0.5,
+                            border: chore.clam_value > 0 ? '2px solid gold' : 'none'
+                          }}
+                        >
+                          <ListItemText
+                            primary={
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography 
+                                  variant="body2" 
+                                  sx={{ 
+                                    textDecoration: chore.completed ? 'line-through' : 'none',
+                                    fontSize: '0.85rem'
+                                  }}
+                                >
+                                  {chore.title}
+                                </Typography>
+                                {chore.clam_value > 0 && (
+                                  <Chip 
+                                    label={`🐚 ${chore.clam_value}`} 
+                                    size="small" 
+                                    sx={{ 
+                                      bgcolor: 'gold', 
+                                      color: 'black',
+                                      fontSize: '0.6rem',
+                                      height: '16px'
+                                    }} 
+                                  />
+                                )}
+                              </Box>
+                            }
+                            secondary={
+                              <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
+                                {chore.time_period} • {chore.repeat_type}
+                              </Typography>
+                            }
+                          />
+                          {!chore.completed && (
+                            <IconButton 
+                              size="small" 
+                              onClick={() => handleCompleteChore(chore.id)}
+                              sx={{ color: 'var(--accent)' }}
+                            >
+                              <CheckCircle fontSize="small" />
+                            </IconButton>
+                          )}
+                        </ListItem>
+                      ))}
+                    </List>
+                  )}
+                </Box>
 
-          {/* Photos Widget - Full width horizontal */}
-          {widgetSettings.photos.enabled && (
-            <Box sx={{ mb: 2 }}>
-              <PhotoWidget transparentBackground={widgetSettings.photos.transparent} />
+                {/* Bonus Chore Assignment */}
+                {bonusChores.length > 0 && (
+                  <Box sx={{ mt: 1, pt: 1, borderTop: '1px solid var(--card-border)' }}>
+                    <Typography variant="caption" sx={{ display: 'block', mb: 1, textAlign: 'center' }}>
+                      Available Bonus Chores:
+                    </Typography>
+                    {bonusChores.slice(0, 2).map((chore) => (
+                      <Button
+                        key={chore.id}
+                        size="small"
+                        variant="outlined"
+                        onClick={() => handleAssignBonusChore(chore.id, user.id)}
+                        sx={{ 
+                          width: '100%', 
+                          mb: 0.5,
+                          fontSize: '0.7rem',
+                          py: 0.5,
+                          borderColor: 'gold',
+                          color: 'gold'
+                        }}
+                      >
+                        {chore.title} (🐚 {chore.clam_value})
+                      </Button>
+                    ))}
+                  </Box>
+                )}
+              </Box>
+            );
+          })}
+
+          {/* Bonus Chores Column */}
+          {(bonusChores.length > 0 || assignedBonusChores.length > 0) && (
+            <Box sx={{ flex: 1, minWidth: '200px', display: 'flex', flexDirection: 'column' }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 2 }}>
+                <Avatar
+                  sx={{ 
+                    width: 60, 
+                    height: 60, 
+                    bgcolor: 'gold',
+                    mb: 1,
+                    fontSize: '1.5rem'
+                  }}
+                >
+                  🎁
+                </Avatar>
+                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', textAlign: 'center' }}>
+                  Bonus Chores
+                </Typography>
+              </Box>
+
+              <Box sx={{ flex: 1, overflow: 'auto' }}>
+                {bonusChores.length === 0 && assignedBonusChores.length === 0 ? (
+                  <Typography variant="body2" sx={{ textAlign: 'center', color: 'text.secondary', fontStyle: 'italic' }}>
+                    No bonus chores available
+                  </Typography>
+                ) : (
+                  <List sx={{ p: 0 }}>
+                    {bonusChores.map((chore) => (
+                      <ListItem 
+                        key={chore.id} 
+                        sx={{ 
+                          px: 1, 
+                          py: 0.5,
+                          bgcolor: 'rgba(255, 215, 0, 0.1)',
+                          borderRadius: 1,
+                          mb: 0.5,
+                          border: '2px solid gold'
+                        }}
+                      >
+                        <ListItemText
+                          primary={
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Typography variant="body2" sx={{ fontSize: '0.85rem' }}>
+                                {chore.title}
+                              </Typography>
+                              <Chip 
+                                label={`🐚 ${chore.clam_value}`} 
+                                size="small" 
+                                sx={{ 
+                                  bgcolor: 'gold', 
+                                  color: 'black',
+                                  fontSize: '0.6rem',
+                                  height: '16px'
+                                }} 
+                              />
+                            </Box>
+                          }
+                          secondary={
+                            <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
+                              Available for assignment
+                            </Typography>
+                          }
+                        />
+                      </ListItem>
+                    ))}
+                    
+                    {assignedBonusChores.map((chore) => {
+                      const assignedUser = users.find(u => u.id === chore.user_id);
+                      return (
+                        <ListItem 
+                          key={chore.id} 
+                          sx={{ 
+                            px: 1, 
+                            py: 0.5,
+                            bgcolor: 'rgba(255, 165, 0, 0.1)',
+                            borderRadius: 1,
+                            mb: 0.5,
+                            border: '2px solid orange'
+                          }}
+                        >
+                          <ListItemText
+                            primary={
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="body2" sx={{ fontSize: '0.85rem' }}>
+                                  {chore.title}
+                                </Typography>
+                                <Chip 
+                                  label={`🐚 ${chore.clam_value}`} 
+                                  size="small" 
+                                  sx={{ 
+                                    bgcolor: 'orange', 
+                                    color: 'white',
+                                    fontSize: '0.6rem',
+                                    height: '16px'
+                                  }} 
+                                />
+                              </Box>
+                            }
+                            secondary={
+                              <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
+                                Assigned to {assignedUser?.username}
+                              </Typography>
+                            }
+                          />
+                        </ListItem>
+                      );
+                    })}
+                  </List>
+                )}
+              </Box>
             </Box>
           )}
         </Box>
-      </Container>
+      </Card>
 
-      <WidgetGallery key={widgetGalleryKey} theme={theme} />
-
-      {/* Admin Panel as a Dialog (Popup) */}
-      <Dialog open={showAdminPanel} onClose={toggleAdminPanel} maxWidth="lg"> {/* CHANGED maxWidth to "lg" */}
+      {/* Add Chore Dialog */}
+      <Dialog open={openAddChore} onClose={() => setOpenAddChore(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Add New Chore</DialogTitle>
         <DialogContent>
-          <AdminPanel setWidgetSettings={setWidgetSettings} onWidgetUploaded={refreshWidgetGallery} />
+          <TextField
+            fullWidth
+            label="Chore Title"
+            value={newChore.title}
+            onChange={(e) => setNewChore({...newChore, title: e.target.value})}
+            margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Description"
+            value={newChore.description}
+            onChange={(e) => setNewChore({...newChore, description: e.target.value})}
+            margin="normal"
+            multiline
+            rows={2}
+          />
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Assign to User</InputLabel>
+            <Select
+              value={newChore.user_id}
+              onChange={(e) => setNewChore({...newChore, user_id: e.target.value})}
+            >
+              <MenuItem value={0}>Bonus Chores (Unassigned)</MenuItem>
+              {regularUsers.map((user) => (
+                <MenuItem key={user.id} value={user.id}>{user.username}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Day of Week</InputLabel>
+            <Select
+              value={newChore.assigned_day_of_week}
+              onChange={(e) => setNewChore({...newChore, assigned_day_of_week: e.target.value})}
+            >
+              {daysOfWeek.map((day) => (
+                <MenuItem key={day} value={day}>{day.charAt(0).toUpperCase() + day.slice(1)}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Time Period</InputLabel>
+            <Select
+              value={newChore.time_period}
+              onChange={(e) => setNewChore({...newChore, time_period: e.target.value})}
+            >
+              {timePeriods.map((period) => (
+                <MenuItem key={period} value={period}>{period.charAt(0).toUpperCase() + period.slice(1)}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Repeat Type</InputLabel>
+            <Select
+              value={newChore.repeat_type}
+              onChange={(e) => setNewChore({...newChore, repeat_type: e.target.value})}
+            >
+              {repeatTypes.map((type) => (
+                <MenuItem key={type.value} value={type.value}>{type.label}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <TextField
+            fullWidth
+            label="Clam Value (0 for regular chores)"
+            type="number"
+            value={newChore.clam_value}
+            onChange={(e) => setNewChore({...newChore, clam_value: parseInt(e.target.value) || 0})}
+            margin="normal"
+          />
         </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenAddChore(false)}>Cancel</Button>
+          <Button onClick={handleAddChore} variant="contained">Add Chore</Button>
+        </DialogActions>
       </Dialog>
 
-      {/* Bottom Bar for Logo and Buttons */}
-      <Box
-        sx={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          width: '100%',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          padding: isBottomBarCollapsed ? '5px 0' : '10px 0',
-          backgroundColor: 'var(--bottom-bar-bg)',
-          borderTop: '1px solid var(--card-border)',
-          backdropFilter: 'var(--backdrop-blur)',
-          boxShadow: 'var(--shadow)',
-          zIndex: 1000,
-          transition: 'height 0.3s ease-in-out, padding 0.3s ease-in-out',
-          height: isBottomBarCollapsed ? '40px' : '100px', // Fixed height for collapsed, 100px for expanded
-          overflow: 'hidden', // Hide overflowing content when collapsed
-        }}
-      >
-        {/* Toggle Button for the bar */}
-        <IconButton
-          onClick={toggleBottomBar}
-          aria-label={isBottomBarCollapsed ? 'Expand bottom bar' : 'Collapse bottom bar'}
-          sx={{
-            color: theme === 'light' ? 'action.active' : 'white',
-            alignSelf: 'flex-end', // Position to the right
-            marginRight: '10px',
-            padding: '5px',
-          }}
-        >
-          {isBottomBarCollapsed ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-        </IconButton>
-
-        {!isBottomBarCollapsed && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%' }}>
-            {/* App Logo Placeholder */}
-            <img src="/HomeGlowLogo.png" alt="App Logo" style={{ height: '80px', marginRight: '20px' }} />
-
-            {/* Theme Toggle Button */}
-            <IconButton
-              onClick={toggleTheme}
-              aria-label="Toggle theme"
-              sx={{
-                color: theme === 'light' ? 'action.active' : 'white',
-                margin: '0 5px',
-              }}
-            >
-              {theme === 'light' ? <Brightness4 /> : <Brightness7 />}
-            </IconButton>
-
-            {/* Admin Panel Toggle Button (Gear Icon) */}
-            <IconButton
-              onClick={toggleAdminPanel}
-              aria-label="Toggle Admin Panel"
-              sx={{
-                color: theme === 'light' ? 'action.active' : 'white',
-                margin: '0 5px',
-              }}
-            >
-              <SettingsIcon />
-            </IconButton>
-
-            {/* Page Refresh Button */}
-            <IconButton
-              onClick={handlePageRefresh}
-              aria-label="Refresh Page"
-              sx={{
-                color: theme === 'light' ? 'action.active' : 'white',
-                margin: '0 5px',
-              }}
-            >
-              <RefreshIcon />
-            </IconButton>
-          </Box>
-        )}
-      </Box>
+      {/* Add User Dialog */}
+      <Dialog open={openAddUser} onClose={() => setOpenAddUser(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Add New User</DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            label="Username"
+            value={newUser.username}
+            onChange={(e) => setNewUser({...newUser, username: e.target.value})}
+            margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Email"
+            type="email"
+            value={newUser.email}
+            onChange={(e) => setNewUser({...newUser, email: e.target.value})}
+            margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Profile Picture Filename (optional)"
+            value={newUser.profile_picture}
+            onChange={(e) => setNewUser({...newUser, profile_picture: e.target.value})}
+            margin="normal"
+            helperText="Enter the filename of an uploaded profile picture"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenAddUser(false)}>Cancel</Button>
+          <Button onClick={handleAddUser} variant="contained">Add User</Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 };
 
-export default App;
+export default ChoreWidget;
