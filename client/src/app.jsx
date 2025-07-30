@@ -62,7 +62,7 @@ const App = () => {
   });
 
   // NEW: State for bottom bar collapse
-  const [isBottomBarCollapsed, setIsBottomBarCollapsed] = useState(false);
+  const [isBottomBarCollapsed, setIsBottomBarCollapsed] = useState(true);
 
   // NEW: State to trigger widget gallery refresh
   const [widgetGalleryKey, setWidgetGalleryKey] = useState(0);
