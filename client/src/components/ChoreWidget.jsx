@@ -447,7 +447,7 @@ const ChoreWidget = ({ transparentBackground }) => {
                 flex: '0 0 auto',
                 border: '2px solid var(--card-border)',
                 borderRadius: 2,
-                p: 1.25, // Even more reduced padding
+                p: 2.25, // Even more reduced padding
                 bgcolor: allRegularChoresCompleted ? 'rgba(0, 255, 0, 0.05)' : 'transparent'
               }}
             >
@@ -487,7 +487,7 @@ const ChoreWidget = ({ transparentBackground }) => {
             flex: '0 0 auto',
             border: '2px solid var(--accent)',
             borderRadius: 2,
-            p: 1.25, // Even more reduced padding
+            p: 2.25, // Even more reduced padding
             bgcolor: 'rgba(var(--accent-rgb), 0.05)'
           }}
         >
