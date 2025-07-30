@@ -443,7 +443,7 @@ const ChoreWidget = ({ transparentBackground }) => {
               key={user.id}
               sx={{
                 width: { xs: '100%', sm: 'calc(33.333% - 11px)', md: 'calc(25% - 12px)', lg: 'calc(20% - 13px)', xl: 'calc(16.666% - 13px)' },
-                minWidth: '165px', // Even more reduced minimum width
+                minWidth: '180px', // Even more reduced minimum width
                 flex: '0 0 auto',
                 border: '2px solid var(--card-border)',
                 borderRadius: 2,
@@ -466,7 +466,7 @@ const ChoreWidget = ({ transparentBackground }) => {
                 )}
               </Box>
 
-              <Box sx={{ maxHeight: 250, overflowY: 'auto' }}>
+              <Box sx={{ maxHeight: 300, overflowY: 'auto' }}>
                 {userChores.length === 0 ? (
                   <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
                     No chores for today
