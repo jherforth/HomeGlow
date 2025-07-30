@@ -75,7 +75,7 @@ body {
 }
 
 .container {
-  padding: 20px;
+  padding: 8px;
   /* Removed min-height: 100vh; to allow dynamic height */
   background: var(--container-background-override);
   /* CHANGED: Use override variable */
@@ -99,8 +99,8 @@ body {
 /* Override Material-UI Container's max-width to allow full dynamic width */
 .MuiContainer-root {
   max-width: none !important;
-  padding-left: 16px !important;
-  padding-right: 16px !important;
+  padding-left: 4px !important;
+  padding-right: 4px !important;
 }
 
 /* Responsive grid adjustments */
@@ -111,30 +111,34 @@ body {
   }
   
   .grid-item {
-    padding: 8px !important;
+    padding: 2px !important;
   }
   
   .card {
     margin: 0 auto;
-    max-width: 100%;
+    width: 100%;
+    max-width: none;
   }
 }
 
-@media (min-width: 601px) and (max-width: 960px) {
+@media (min-width: 601px) and (max-width: 900px) {
   .card {
-    max-width: 450px;
+    width: 100%;
+    max-width: none;
   }
 }
 
-@media (min-width: 961px) and (max-width: 1280px) {
+@media (min-width: 901px) and (max-width: 1200px) {
   .card {
-    max-width: 400px;
+    width: 100%;
+    max-width: none;
   }
 }
 
-@media (min-width: 1281px) {
+@media (min-width: 1201px) {
   .card {
-    max-width: var(--dynamic-card-width);
+    width: 100%;
+    max-width: none;
   }
 }
 
@@ -145,20 +149,25 @@ body {
   width: 100%;
 }
 
+.grid-item.chores-widget {
+  margin-top: 8px;
+}
 .card {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 12px;
-  padding: var(--dynamic-card-padding);
+  padding: 12px;
   /* Apply dynamic card padding */
   backdrop-filter: var(--backdrop-blur);
   box-shadow: var(--shadow);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   width: 100%;
   /* Changed to 100% to fill grid item */
-  max-width: var(--dynamic-card-width);
+  max-width: none;
   /* Apply dynamic card width */
   touch-action: manipulation;
+  height: fit-content;
+  min-height: 200px;
 }
 
 .card:hover {

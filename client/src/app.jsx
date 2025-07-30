@@ -204,22 +204,37 @@ const App = () => {
   };
   // Helper function to render a widget based on its name
   const renderWidget = (widgetName) => {
+    // Calculate responsive breakpoints based on enabled widgets count
+    const enabledWidgetsCount = shuffledWidgetOrder.length;
+    let breakpoints = { xs: 12, sm: 6, md: 4, lg: 3, xl: 3 }; // Default
+    
+    // Dynamic breakpoints based on widget count for optimal space usage
+    if (enabledWidgetsCount === 1) {
+      breakpoints = { xs: 12, sm: 12, md: 12, lg: 12, xl: 12 };
+    } else if (enabledWidgetsCount === 2) {
+      breakpoints = { xs: 12, sm: 6, md: 6, lg: 6, xl: 6 };
+    } else if (enabledWidgetsCount === 3) {
+      breakpoints = { xs: 12, sm: 6, md: 4, lg: 4, xl: 4 };
+    } else if (enabledWidgetsCount >= 4) {
+      breakpoints = { xs: 12, sm: 6, md: 4, lg: 3, xl: 3 };
+    }
+
     switch (widgetName) {
       case 'calendar':
         return widgetSettings.calendar.enabled && (
-          <Grid item xs={12} sm={6} lg={4} xl={3} className="grid-item">
+          <Grid item {...breakpoints} className="grid-item">
             <CalendarWidget transparentBackground={widgetSettings.calendar.transparent} icsCalendarUrl={apiKeys.ICS_CALENDAR_URL} />
           </Grid>
         );
       case 'photos':
         return widgetSettings.photos.enabled && (
-          <Grid item xs={12} sm={6} lg={4} xl={3} className="grid-item">
+          <Grid item {...breakpoints} className="grid-item">
             <PhotoWidget transparentBackground={widgetSettings.photos.transparent} />
           </Grid>
         );
       case 'weather':
         return widgetSettings.weather.enabled && (
-          <Grid item xs={12} sm={6} lg={4} xl={3} className="grid-item">
+          <Grid item {...breakpoints} className="grid-item">
             <WeatherWidget transparentBackground={widgetSettings.weather.transparent} weatherApiKey={apiKeys.WEATHER_API_KEY} />
           </Grid>
         );
@@ -232,6 +247,14 @@ const App = () => {
     <>
       <Container className="container">
         <Grid container spacing={2} justifyContent="center" alignItems="flex-start">
+        <Grid container spacing={1} sx={{ 
+          width: '100%',
+          margin: 0,
+          '& .MuiGrid-item': {
+            paddingLeft: '4px !important',
+            paddingTop: '4px !important'
+          }
+        }}>
           {/* Render shuffled widgets */}
           {shuffledWidgetOrder.map(widgetName => (
             <React.Fragment key={widgetName}>
@@ -241,7 +264,7 @@ const App = () => {
 
           {/* Chores Widget - Always in its own full-width row at the bottom, or top if shuffled */}
           {widgetSettings.chores.enabled && (
-            <Grid item xs={12} className="grid-item" sx={{ width: '100%' }}>
+            <Grid item xs={12} className="grid-item chores-widget" sx={{ width: '100%' }}>
               <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />
             </Grid>
           )}
