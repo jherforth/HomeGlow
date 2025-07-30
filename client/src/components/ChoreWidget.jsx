@@ -12,6 +12,10 @@ import {
   MenuItem, 
   FormControl, 
   InputLabel,
+  FormControlLabel,
+  Checkbox,
+  FormGroup,
+  FormLabel,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -29,7 +33,7 @@ const ChoreWidget = ({ transparentBackground }) => {
     title: '',
     description: '',
     time_period: 'any-time',
-    assigned_day_of_week: 'monday',
+    assigned_days_of_week: ['monday'], // Changed to array
     repeat_type: 'weekly',
     clam_value: 0
   });
@@ -100,14 +104,20 @@ const ChoreWidget = ({ transparentBackground }) => {
         // Update existing chore
         await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores/${editingChore.id}`, editingChore);
       } else {
-        // Add new chore
-        await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`, newChore);
+        // Add new chores (one for each selected day)
+        for (const day of newChore.assigned_days_of_week) {
+          const choreForDay = {
+            ...newChore,
+            assigned_day_of_week: day
+          };
+          await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`, choreForDay);
+        }
         setNewChore({
           user_id: '',
           title: '',
           description: '',
           time_period: 'any-time',
-          assigned_day_of_week: 'monday',
+          assigned_days_of_week: ['monday'],
           repeat_type: 'weekly',
           clam_value: 0
         });
@@ -161,12 +171,16 @@ const ChoreWidget = ({ transparentBackground }) => {
       e.target.nextSibling.style.display = 'flex';
     };
 
+    // Simplified image URL without extra headers
+    const imageUrl = user.profile_picture 
+      ? `${import.meta.env.VITE_REACT_APP_API_URL}/Uploads/users/${user.profile_picture}?t=${Date.now()}`
+      : null;
     return (
       <Box sx={{ position: 'relative', display: 'inline-block' }}>
-        {user.profile_picture ? (
+        {imageUrl ? (
           <>
             <img
-              src={`${import.meta.env.VITE_REACT_APP_API_URL}/Uploads/users/${user.profile_picture}`}
+              src={imageUrl}
               alt={user.username}
               style={{
                 width: 60,
@@ -177,6 +191,7 @@ const ChoreWidget = ({ transparentBackground }) => {
                 display: 'block'
               }}
               onError={handleImageError}
+              crossOrigin="anonymous"
             />
             <Avatar
               sx={{
@@ -353,6 +368,15 @@ const ChoreWidget = ({ transparentBackground }) => {
         </Box>
       </Box>
     );
+  };
+
+  const handleDayToggle = (day) => {
+    setNewChore(prev => ({
+      ...prev,
+      assigned_days_of_week: prev.assigned_days_of_week.includes(day)
+        ? prev.assigned_days_of_week.filter(d => d !== day)
+        : [...prev.assigned_days_of_week, day]
+    }));
   };
 
   if (loading) {
@@ -594,20 +618,30 @@ const ChoreWidget = ({ transparentBackground }) => {
                 ))}
               </Select>
             </FormControl>
-            <FormControl sx={{ flex: 1 }}>
-              <InputLabel>Day</InputLabel>
-              <Select
-                value={newChore.assigned_day_of_week}
-                onChange={(e) => setNewChore({...newChore, assigned_day_of_week: e.target.value})}
-              >
-                {daysOfWeek.map(day => (
-                  <MenuItem key={day} value={day}>
-                    {day.charAt(0).toUpperCase() + day.slice(1)}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
           </Box>
+          
+          {/* Multiple Day Selection */}
+          <Box sx={{ mb: 2 }}>
+            <FormLabel component="legend" sx={{ mb: 1, display: 'block' }}>
+              Select Days (choose one or more):
+            </FormLabel>
+            <FormGroup row>
+              {daysOfWeek.map(day => (
+                <FormControlLabel
+                  key={day}
+                  control={
+                    <Checkbox
+                      checked={newChore.assigned_days_of_week.includes(day)}
+                      onChange={() => handleDayToggle(day)}
+                      color="primary"
+                    />
+                  }
+                  label={day.charAt(0).toUpperCase() + day.slice(1)}
+                />
+              ))}
+            </FormGroup>
+          </Box>
+          
           <FormControl fullWidth sx={{ mb: 2 }}>
             <InputLabel>Repeat Type</InputLabel>
             <Select
@@ -631,7 +665,13 @@ const ChoreWidget = ({ transparentBackground }) => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setShowAddDialog(false)}>Cancel</Button>
-          <Button onClick={saveChore} variant="contained">Add Chore</Button>
+          <Button 
+            onClick={saveChore} 
+            variant="contained"
+            disabled={newChore.assigned_days_of_week.length === 0}
+          >
+            Add Chore{newChore.assigned_days_of_week.length > 1 ? 's' : ''}
+          </Button>
         </DialogActions>
       </Dialog>
     </Card>

@@ -37,14 +37,24 @@ fastify.addHook('preHandler', (request, reply, done) => {
 fastify.register(require('@fastify/static'), {
   root: path.join(__dirname, 'uploads'),
   prefix: '/Uploads/',
-  decorateReply: false
+  decorateReply: false,
+  maxAge: 86400000, // 1 day cache
+  setHeaders: (res, path) => {
+    // Minimize headers to avoid "Request Header Fields Too Large" error
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+  }
 });
 
 // Additional static route specifically for user uploads
 fastify.register(require('@fastify/static'), {
   root: path.join(__dirname, 'uploads', 'users'),
   prefix: '/Uploads/users/',
-  decorateReply: false
+  decorateReply: false,
+  maxAge: 86400000, // 1 day cache
+  setHeaders: (res, path) => {
+    // Minimize headers to avoid "Request Header Fields Too Large" error
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+  }
 });
 
 // Serve static files for widgets
