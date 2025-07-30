@@ -149,18 +149,18 @@ body {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 12px;
-  padding: 12px;
+  padding: var(--dynamic-card-padding);
   /* Apply dynamic card padding */
   backdrop-filter: var(--backdrop-blur);
   box-shadow: var(--shadow);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   width: 100%;
-  /* Changed to 100% to fill grid item */
-  max-width: none;
-  /* Apply dynamic card width */
+  max-width: var(--dynamic-card-width);
   touch-action: manipulation;
   height: fit-content;
-  min-height: 200px;
+  min-height: var(--dynamic-card-height);
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .card:hover {
