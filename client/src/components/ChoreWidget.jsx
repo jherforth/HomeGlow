@@ -406,8 +406,9 @@ const ChoreWidget = ({ transparentBackground }) => {
       </Box>
 
       <Box sx={{ display: 'flex', gap: 2, overflowX: 'auto', pb: 2 }}>
-        {/* User Columns */}
-        {users.map(user => {
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, pb: 2 }}>
+        {/* User Columns - Regular users first */}
+        {users.filter(user => user.id !== 0).map(user => {
           const userChores = getUserChores(user.id, currentDay);
           const completedChores = userChores.filter(c => c.completed && c.clam_value === 0).length;
           const totalRegularChores = userChores.filter(c => c.clam_value === 0).length;
@@ -417,8 +418,9 @@ const ChoreWidget = ({ transparentBackground }) => {
             <Box
               key={user.id}
               sx={{
-                minWidth: 280,
-                maxWidth: 320,
+                width: { xs: '100%', sm: '280px', md: '300px', lg: '320px' },
+                minWidth: '280px',
+                flex: '0 0 auto',
                 border: '2px solid var(--card-border)',
                 borderRadius: 2,
                 p: 2,
@@ -456,8 +458,9 @@ const ChoreWidget = ({ transparentBackground }) => {
         {/* Bonus Chores Column */}
         <Box
           sx={{
-            minWidth: 280,
-            maxWidth: 320,
+            width: { xs: '100%', sm: '280px', md: '300px', lg: '320px' },
+            minWidth: '280px',
+            flex: '0 0 auto',
             border: '2px solid var(--accent)',
             borderRadius: 2,
             p: 2,
