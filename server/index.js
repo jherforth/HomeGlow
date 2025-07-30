@@ -820,6 +820,72 @@ fastify.post('/api/users', async (request, reply) => {
   }
 });
 
+// NEW: Endpoint to update user profile
+fastify.patch('/api/users/:id', async (request, reply) => {
+  const { id } = request.params;
+  const { username, email, profile_picture } = request.body;
+  try {
+    const stmt = db.prepare('UPDATE users SET username = ?, email = ?, profile_picture = ? WHERE id = ?');
+    const info = stmt.run(username, email, profile_picture, id);
+    if (info.changes === 0) {
+      return reply.status(404).send({ error: 'User not found' });
+    }
+    return { success: true, message: 'User updated successfully' };
+  } catch (error) {
+    console.error('Error updating user:', error);
+    reply.status(500).send({ error: 'Failed to update user' });
+  }
+});
+
+// NEW: Endpoint to upload user profile picture
+fastify.post('/api/users/:id/upload-picture', async (request, reply) => {
+  try {
+    const { id } = request.params;
+    const data = await request.file();
+    
+    if (!data) {
+      return reply.status(400).send({ error: 'No file uploaded' });
+    }
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+    if (!allowedTypes.includes(data.mimetype)) {
+      return reply.status(400).send({ error: 'Only image files (JPEG, PNG, GIF) are allowed' });
+    }
+
+    // Create users directory if it doesn't exist
+    const usersDir = path.join(__dirname, 'uploads', 'users');
+    await fs.mkdir(usersDir, { recursive: true });
+
+    // Generate unique filename
+    const fileExtension = data.filename.split('.').pop();
+    const filename = `user_${id}_${Date.now()}.${fileExtension}`;
+    const filepath = path.join(usersDir, filename);
+
+    // Save file
+    await fs.writeFile(filepath, await data.toBuffer());
+
+    // Update user record
+    const stmt = db.prepare('UPDATE users SET profile_picture = ? WHERE id = ?');
+    const info = stmt.run(filename, id);
+    
+    if (info.changes === 0) {
+      // Clean up uploaded file if user doesn't exist
+      await fs.unlink(filepath);
+      return reply.status(404).send({ error: 'User not found' });
+    }
+
+    return { 
+      success: true, 
+      message: 'Profile picture uploaded successfully',
+      filename: filename 
+    };
+  } catch (error) {
+    console.error('Error uploading profile picture:', error);
+    reply.status(500).send({ error: 'Failed to upload profile picture' });
+  }
+});
+
 // NEW: Endpoint to update user clam total (for manual adjustments or future use)
 fastify.patch('/api/users/:id/clams', async (request, reply) => {
   const { id } = request.params;
