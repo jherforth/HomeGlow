@@ -1,495 +1,319 @@
-// client/src/app.jsx
-import React, { useState, useEffect, useRef } from 'react';
-import { Container, IconButton, Box, Dialog, DialogContent, Button } from '@mui/material';
-import { Brightness4, Brightness7 } from '@mui/icons-material';
-import SettingsIcon from '@mui/icons-material/Settings';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import ExpandLessIcon from '@mui/icons-material/ExpandLess';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-
-// GeoPattern import - CORRECTED LINE (using the direct geopattern library)
-import GeoPattern from 'geopattern'; // Import GeoPattern from the 'geopattern' package
-
+import React, { useState, useEffect } from 'react';
+import { Card, Typography, Box, Avatar, Chip, List, ListItem, ListItemText, IconButton, Button } from '@mui/material';
+import { CheckCircle, RadioButtonUnchecked, Add } from '@mui/icons-material';
 import axios from 'axios';
-import CalendarWidget from './components/CalendarWidget.jsx';
-import PhotoWidget from './components/PhotoWidget.jsx';
-import AdminPanel from './components/AdminPanel.jsx';
-import WeatherWidget from './components/WeatherWidget.jsx';
-import ChoreWidget from './components/ChoreWidget.jsx';
-import WidgetGallery from './components/WidgetGallery.jsx';
-import './index.css';
 
-const App = () => {
-  const [theme, setTheme] = useState('light');
-  const [widgetSettings, setWidgetSettings] = useState(() => {
-    const defaultSettings = {
-      chores: { enabled: false, transparent: false },
-      calendar: { enabled: false, transparent: false },
-      photos: { enabled: false, transparent: false },
-      weather: { enabled: false, transparent: false },
-      textSize: 16,
-      cardSize: 300,
-      cardPadding: 20,
-      cardHeight: 200,
-      refreshInterval: 'manual',
-      enableGeoPatternBackground: false,
-      enableCardShuffle: false,
-      // NEW: Color settings
-      lightGradientStart: '#00ddeb',
-      lightGradientEnd: '#ff6b6b',
-      darkGradientStart: '#2e2767',
-      darkGradientEnd: '#620808',
-      lightButtonGradientStart: '#00ddeb',
-      lightButtonGradientEnd: '#ff6b6b',
-      darkButtonGradientStart: '#2e2767',
-      darkButtonGradientEnd: '#620808',
-    };
-    const savedSettings = localStorage.getItem('widgetSettings');
-    return savedSettings ? { ...defaultSettings, ...JSON.parse(savedSettings) } : defaultSettings;
-  });
-  const [showAdminPanel, setShowAdminPanel] = useState(false);
+const ChoreWidget = ({ transparentBackground }) => {
+  const [users, setUsers] = useState([]);
+  const [chores, setChores] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // State for shuffled widget order
-  const [shuffledWidgetOrder, setShuffledWidgetOrder] = useState([]);
+  useEffect(() => {
+    fetchData();
+  }, []);
 
-  // NEW: State for dynamic GeoPattern seed
-  const [currentGeoPatternSeed, setCurrentGeoPatternSeed] = useState('');
-
-  // NEW: State for API keys fetched from backend
-  const [apiKeys, setApiKeys] = useState({
-    WEATHER_API_KEY: '',
-    ICS_CALENDAR_URL: '',
-  });
-
-  // NEW: State for bottom bar collapse
-  const [isBottomBarCollapsed, setIsBottomBarCollapsed] = useState(true);
-
-  // NEW: State to trigger widget gallery refresh
-  const [widgetGalleryKey, setWidgetGalleryKey] = useState(0);
-
-  // NEW: Refs and state for JavaScript masonry layout
-  const masonryContainerRef = useRef(null);
-  const [masonryLayout, setMasonryLayout] = useState([]);
-  const [containerWidth, setContainerWidth] = useState(0);
-
-  // Add a flag to prevent multiple simultaneous calculations
-  const [isCalculating, setIsCalculating] = useState(false);
-
-  // NEW: Calculate masonry layout function
-  const calculateMasonryLayout = async () => {
-    if (isCalculating || !masonryContainerRef.current) {
-      console.log('Skipping calculation - already calculating or no container');
-      return;
-    }
-    
-    setIsCalculating(true);
-    console.log('=== Starting masonry calculation ===');
-    
+  const fetchData = async () => {
     try {
-      // Small delay to ensure DOM is ready
-      await new Promise(resolve => setTimeout(resolve, 100));
+      setLoading(true);
+      const [usersResponse, choresResponse] = await Promise.all([
+        axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users`),
+        axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`)
+      ]);
       
-      if (!masonryContainerRef.current) {
-        setIsCalculating(false);
-        return;
-      }
-
-      const container = masonryContainerRef.current;
-      const containerRect = container.getBoundingClientRect();
-      const containerWidth = containerRect.width;
-      
-      console.log('Container width:', containerWidth);
-      
-      // Calculate number of columns based on screen width
-      let columns = 1;
-      if (containerWidth >= 1600) columns = 5;
-      else if (containerWidth >= 1200) columns = 4;
-      else if (containerWidth >= 900) columns = 3;
-      else if (containerWidth >= 600) columns = 2;
-      else columns = 1;
-
-      console.log('Using', columns, 'columns');
-
-      const gap = 16;
-      const columnWidth = (containerWidth - (gap * (columns - 1))) / columns;
-      console.log('Column width:', columnWidth, 'Gap:', gap);
-      
-      // Get all widget elements
-      const widgets = container.querySelectorAll('.masonry-widget');
-      console.log('Found', widgets.length, 'widgets');
-      
-      if (widgets.length === 0) {
-        setIsCalculating(false);
-        return;
-      }
-      
-      const columnHeights = new Array(columns).fill(0);
-
-      // Reset all widgets to get accurate measurements
-      widgets.forEach((widget) => {
-        widget.style.position = 'static';
-        widget.style.width = 'auto';
-        widget.style.left = 'auto';
-        widget.style.top = 'auto';
-        widget.style.transform = 'none';
-      });
-
-      // Force a reflow to ensure measurements are accurate
-      container.offsetHeight;
-
-      widgets.forEach((widget, index) => {
-        // Find the shortest column
-        const shortestColumnIndex = columnHeights.indexOf(Math.min(...columnHeights));
-        const currentColumnHeight = columnHeights[shortestColumnIndex];
-        
-        // Calculate position
-        const x = shortestColumnIndex * (columnWidth + gap);
-        const y = currentColumnHeight; // THIS WAS THE BUG - y should be currentColumnHeight, not 0
-        
-        // Set width first, then measure height
-        widget.style.width = `${columnWidth}px`;
-        
-        // Force reflow and get accurate height
-        container.offsetHeight;
-        const widgetHeight = widget.offsetHeight;
-        
-        // Now position absolutely
-        widget.style.position = 'absolute';
-        widget.style.left = `${x}px`;
-        widget.style.top = `${y}px`; // Use the calculated y position
-        widget.style.zIndex = '1';
-        
-        console.log(`Widget ${index}:`);
-        console.log(`  Position: x=${x}, y=${y}`);
-        console.log(`  Size: width=${columnWidth}, height=${widgetHeight}`);
-        console.log(`  Placed in column ${shortestColumnIndex} (was ${currentColumnHeight}px tall)`);
-        
-        // Update column height - THIS IS THE KEY FIX
-        columnHeights[shortestColumnIndex] = currentColumnHeight + widgetHeight + gap;
-        console.log(`  Column ${shortestColumnIndex} now ${columnHeights[shortestColumnIndex]}px tall`);
-      });
-
-      // Set container height to the tallest column
-      const maxHeight = Math.max(...columnHeights);
-      container.style.height = `${maxHeight}px`;
-      container.style.position = 'relative';
-      
-      console.log('Final column heights:', columnHeights);
-      console.log('Container height set to:', maxHeight);
-      console.log('=== Masonry calculation complete ===');
-      
+      setUsers(usersResponse.data);
+      setChores(choresResponse.data);
+      setError(null);
     } catch (error) {
-      console.error('Error in masonry calculation:', error);
+      console.error('Error fetching data:', error);
+      setError('Failed to load chores data');
     } finally {
-      setIsCalculating(false);
+      setLoading(false);
     }
   };
 
-  // Debounced version to prevent excessive calls
-  const debouncedCalculateMasonryLayout = React.useCallback(() => {
-    clearTimeout(window.masonryTimeout);
-    window.masonryTimeout = setTimeout(() => {
-      calculateMasonryLayout();
-    }, 300);
-  }, []);
-
-  // NEW: Function to refresh widget gallery
-  const refreshWidgetGallery = () => {
-    setWidgetGalleryKey(prev => prev + 1);
-  };
-
-  useEffect(() => {
-    const fetchApiKeys = async () => {
-      try {
-        const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`);
-        setApiKeys(response.data);
-      } catch (error) {
-        console.error('Error fetching API keys:', error);
-      }
-    };
-    fetchApiKeys();
-  }, []); // Run once on mount
-
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-    setTheme(savedTheme);
-    document.documentElement.setAttribute('data-theme', savedTheme);
-
-    // NEW: Generate a random seed once on component mount
-    // This ensures a new pattern on each full page refresh
-    setCurrentGeoPatternSeed(Math.random().toString());
-  }, []);
-
-  // Effect to apply dynamic CSS variables
-  useEffect(() => {
-    document.documentElement.style.setProperty('--dynamic-text-size', `${widgetSettings.textSize}px`);
-    document.documentElement.style.setProperty('--dynamic-card-width', `${widgetSettings.cardSize}px`);
-    document.documentElement.style.setProperty('--dynamic-card-padding', `${widgetSettings.cardPadding}px`);
-    document.documentElement.style.setProperty('--dynamic-card-height', `${widgetSettings.cardHeight}px`);
-
-    // NEW: Apply custom color variables
-    document.documentElement.style.setProperty('--light-gradient-start', widgetSettings.lightGradientStart);
-    document.documentElement.style.setProperty('--light-gradient-end', widgetSettings.lightGradientEnd);
-    document.documentElement.style.setProperty('--dark-gradient-start', widgetSettings.darkGradientStart);
-    document.documentElement.style.setProperty('--dark-gradient-end', widgetSettings.darkGradientEnd);
-    document.documentElement.style.setProperty('--light-button-gradient-start', widgetSettings.lightButtonGradientStart);
-    document.documentElement.style.setProperty('--light-button-gradient-end', widgetSettings.lightButtonGradientEnd);
-    document.documentElement.style.setProperty('--dark-button-gradient-start', widgetSettings.darkButtonGradientStart);
-    document.documentElement.style.setProperty('--dark-button-gradient-end', widgetSettings.darkButtonGradientEnd);
-
-  }, [widgetSettings]); // Depend on all widgetSettings to re-apply colors when they change
-
-  // NEW: Effect for automatic page refresh
-  useEffect(() => {
-    let intervalId;
-    const intervalHours = parseInt(widgetSettings.refreshInterval);
-
-    if (!isNaN(intervalHours) && intervalHours > 0) {
-      const intervalMilliseconds = intervalHours * 60 * 60 * 1000; // Convert hours to milliseconds
-      intervalId = setInterval(() => {
-        console.log(`Auto-refreshing page after ${intervalHours} hours.`);
-        window.location.reload();
-      }, intervalMilliseconds);
-    }
-
-    return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
-    };
-  }, [widgetSettings.refreshInterval]);
-
-  // NEW: Effect to update body padding based on bottom bar height
-  useEffect(() => {
-    const barHeight = isBottomBarCollapsed ? 40 : 100; // Approximate height of collapsed/expanded bar
-    document.documentElement.style.setProperty('--bottom-bar-height', `${barHeight}px`);
-  }, [isBottomBarCollapsed]);
-
-  // NEW: Effect for GeoPattern background and container transparency
-  useEffect(() => {
-    if (widgetSettings.enableGeoPatternBackground) {
-      // Call generate directly from the imported GeoPattern using the dynamic seed
-      const pattern = GeoPattern.generate(currentGeoPatternSeed);
-      document.body.style.backgroundImage = pattern.toDataUrl();
-      document.body.style.backgroundAttachment = 'fixed'; // Ensure it stays fixed
-      document.body.style.backgroundSize = 'cover'; // Ensure it covers the whole body
-
-      // Make the main container transparent to reveal the body background
-      document.documentElement.style.setProperty('--container-background-override', 'transparent');
-    } else {
-      // Revert to original background (from index.css)
-      document.body.style.backgroundImage = 'var(--gradient)';
-      document.body.style.backgroundAttachment = 'fixed';
-      document.body.style.backgroundSize = 'auto'; // Or whatever your default is
-
-      // Revert container background
-      document.documentElement.style.setProperty('--container-background-override', 'var(--gradient)');
-    }
-  }, [widgetSettings.enableGeoPatternBackground, theme, currentGeoPatternSeed]); // Re-apply if theme or seed changes
-
-  // NEW: Effect for card shuffle
-  useEffect(() => {
-    const widgetsToShuffle = [];
-    if (widgetSettings.calendar.enabled) widgetsToShuffle.push('calendar');
-    if (widgetSettings.photos.enabled) widgetsToShuffle.push('photos');
-    if (widgetSettings.weather.enabled) widgetsToShuffle.push('weather');
-
-    if (widgetSettings.enableCardShuffle && widgetsToShuffle.length > 0) {
-      // Simple shuffle function (Fisher-Yates)
-      const shuffleArray = (array) => {
-        for (let i = array.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [array[i], array[j]] = [array[j], array[i]];
-        }
-        return array;
-      };
-      setShuffledWidgetOrder(shuffleArray([...widgetsToShuffle]));
-    } else {
-      // If shuffle is disabled or no widgets to shuffle, revert to default order
-      setShuffledWidgetOrder(['calendar', 'photos', 'weather'].filter(w => widgetSettings[w].enabled));
-    }
-  }, [widgetSettings.enableCardShuffle, widgetSettings.calendar.enabled, widgetSettings.photos.enabled, widgetSettings.weather.enabled]);
-
-  // NEW: Effect to recalculate layout when widgets change or window resizes
-  useEffect(() => {
-    const handleResize = () => {
-      setTimeout(() => calculateMasonryLayout(), 300);
-    };
-
-    window.addEventListener('resize', handleResize);
-    
-    // Initial calculation
-    setTimeout(() => calculateMasonryLayout(), 500);
-    
-    return () => window.removeEventListener('resize', handleResize);
-  }, [shuffledWidgetOrder, widgetSettings]);
-
-  // NEW: Effect to recalculate when widgets are enabled/disabled
-  useEffect(() => {
-    setTimeout(() => calculateMasonryLayout(), 600);
-  }, [widgetSettings.chores.enabled, widgetSettings.calendar.enabled, widgetSettings.photos.enabled, widgetSettings.weather.enabled]);
-  
-  const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(newTheme);
-    document.documentElement.setAttribute('data-theme', newTheme);
-    localStorage.setItem('theme', newTheme);
-  };
-
-  const toggleAdminPanel = () => {
-    setShowAdminPanel(!showAdminPanel);
-  };
-
-  const handlePageRefresh = () => {
-    window.location.reload();
-  };
-
-  const toggleBottomBar = () => {
-    setIsBottomBarCollapsed(!isBottomBarCollapsed);
-  };
-  
-  // Helper function to render a widget based on its name
-  const renderWidget = (widgetName, index) => {
-    switch (widgetName) {
-      case 'calendar':
-        return widgetSettings.calendar.enabled && 
-          <CalendarWidget key={`calendar-${index}`} transparentBackground={widgetSettings.calendar.transparent} icsCalendarUrl={apiKeys.ICS_CALENDAR_URL} />;
-      case 'photos':
-        return widgetSettings.photos.enabled && 
-          <PhotoWidget key={`photos-${index}`} transparentBackground={widgetSettings.photos.transparent} />;
-      case 'weather':
-        return widgetSettings.weather.enabled && 
-          <WeatherWidget key={`weather-${index}`} transparentBackground={widgetSettings.weather.transparent} weatherApiKey={apiKeys.WEATHER_API_KEY} />;
-      default:
-        return null;
+  const toggleChoreCompletion = async (choreId, currentStatus) => {
+    try {
+      await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores/${choreId}`, {
+        completed: !currentStatus
+      });
+      
+      // Update local state
+      setChores(chores.map(chore => 
+        chore.id === choreId ? { ...chore, completed: !currentStatus } : chore
+      ));
+      
+      // Refresh users data to update clam totals
+      const usersResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users`);
+      setUsers(usersResponse.data);
+    } catch (error) {
+      console.error('Error updating chore:', error);
     }
   };
+
+  const assignBonusChore = async (choreId, userId) => {
+    try {
+      await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores/${choreId}/assign`, {
+        user_id: userId
+      });
+      
+      // Refresh data
+      fetchData();
+    } catch (error) {
+      console.error('Error assigning bonus chore:', error);
+      alert(error.response?.data?.error || 'Failed to assign bonus chore');
+    }
+  };
+
+  const getCurrentDay = () => {
+    const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    return days[new Date().getDay()];
+  };
+
+  const getUserChores = (userId) => {
+    const currentDay = getCurrentDay();
+    return chores.filter(chore => 
+      chore.user_id === userId && 
+      (chore.assigned_day_of_week === currentDay || chore.repeat_type === 'daily')
+    );
+  };
+
+  const getBonusChores = () => {
+    return chores.filter(chore => chore.user_id === 0 && chore.clam_value > 0);
+  };
+
+  const getAssignedBonusChores = (userId) => {
+    return chores.filter(chore => chore.user_id === userId && chore.clam_value > 0);
+  };
+
+  if (loading) {
+    return (
+      <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`} sx={{ height: '500px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Typography>Loading chores...</Typography>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`} sx={{ height: '500px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Typography color="error">{error}</Typography>
+      </Card>
+    );
+  }
+
+  // Filter out the bonus user (id: 0) from display
+  const displayUsers = users.filter(user => user.id !== 0);
+  const bonusChores = getBonusChores();
 
   return (
-    <>
-      <Container className="container">
-        {/* Horizontal widget layout */}
-        <Box sx={{ width: '100%', padding: '8px' }}>
-          {/* Calendar Widget - Full width horizontal */}
-          {widgetSettings.calendar.enabled && (
-            <Box sx={{ mb: 2 }}>
-              <CalendarWidget transparentBackground={widgetSettings.calendar.transparent} icsCalendarUrl={apiKeys.ICS_CALENDAR_URL} />
+    <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`} sx={{ height: '500px', display: 'flex', flexDirection: 'column' }}>
+      <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
+        ✅ Chores
+      </Typography>
+      
+      <Box sx={{ display: 'flex', height: '100%', gap: 2 }}>
+        {/* User Columns */}
+        {displayUsers.map((user) => {
+          const userChores = getUserChores(user.id);
+          const userBonusChores = getAssignedBonusChores(user.id);
+          const allUserChores = [...userChores, ...userBonusChores];
+          const completedChores = allUserChores.filter(chore => chore.completed).length;
+          const totalChores = allUserChores.length;
+          
+          return (
+            <Box key={user.id} sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              {/* User Header */}
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 2 }}>
+                <Box sx={{ position: 'relative', mb: 1 }}>
+                  <Avatar
+                    src={user.profile_picture ? `${import.meta.env.VITE_REACT_APP_API_URL}/Uploads/users/${user.profile_picture}` : undefined}
+                    sx={{ width: 60, height: 60, fontSize: '1.5rem' }}
+                  >
+                    {user.username.charAt(0).toUpperCase()}
+                  </Avatar>
+                  {user.clam_total > 0 && (
+                    <Chip
+                      label={`🐚 ${user.clam_total}`}
+                      size="small"
+                      sx={{
+                        position: 'absolute',
+                        top: -8,
+                        right: -8,
+                        backgroundColor: 'var(--accent)',
+                        color: 'white',
+                        fontSize: '0.7rem',
+                        height: '20px',
+                      }}
+                    />
+                  )}
+                </Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', textAlign: 'center' }}>
+                  {user.username}
+                </Typography>
+                {totalChores > 0 ? (
+                  <Typography variant="caption" sx={{ color: completedChores === totalChores ? 'green' : 'var(--accent)' }}>
+                    {completedChores === totalChores ? 'All done! 🎉' : `${completedChores}/${totalChores} tasks`}
+                  </Typography>
+                ) : (
+                  <Typography variant="caption" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
+                    No tasks today
+                  </Typography>
+                )}
+              </Box>
+
+              {/* User's Chores List */}
+              <Box sx={{ flex: 1, overflow: 'hidden' }}>
+                {allUserChores.length > 0 ? (
+                  <List sx={{ p: 0, overflow: 'auto', height: '100%' }}>
+                    {allUserChores.map((chore) => (
+                      <ListItem 
+                        key={chore.id} 
+                        sx={{ 
+                          px: 0, 
+                          py: 0.5,
+                          borderBottom: '1px solid var(--card-border)',
+                          '&:last-child': { borderBottom: 'none' }
+                        }}
+                      >
+                        <IconButton
+                          size="small"
+                          onClick={() => toggleChoreCompletion(chore.id, chore.completed)}
+                          sx={{ mr: 1, color: chore.completed ? 'green' : 'var(--accent)' }}
+                        >
+                          {chore.completed ? <CheckCircle /> : <RadioButtonUnchecked />}
+                        </IconButton>
+                        <ListItemText
+                          primary={
+                            <Typography 
+                              variant="body2" 
+                              sx={{ 
+                                fontSize: '0.8rem',
+                                textDecoration: chore.completed ? 'line-through' : 'none',
+                                opacity: chore.completed ? 0.6 : 1,
+                                fontWeight: chore.clam_value > 0 ? 'bold' : 'normal'
+                              }}
+                            >
+                              {chore.title}
+                              {chore.clam_value > 0 && (
+                                <Chip
+                                  label={`🐚 ${chore.clam_value}`}
+                                  size="small"
+                                  sx={{
+                                    ml: 1,
+                                    height: '16px',
+                                    fontSize: '0.6rem',
+                                    backgroundColor: 'gold',
+                                    color: 'black',
+                                  }}
+                                />
+                              )}
+                            </Typography>
+                          }
+                          secondary={
+                            chore.time_period && chore.time_period !== 'any-time' && (
+                              <Typography variant="caption" sx={{ fontSize: '0.7rem', opacity: 0.7 }}>
+                                {chore.time_period}
+                              </Typography>
+                            )
+                          }
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                ) : (
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary', fontStyle: 'italic', textAlign: 'center' }}>
+                      No tasks today
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+
+              {/* Grab Bonus Button */}
+              {bonusChores.length > 0 && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<Add />}
+                  onClick={() => {
+                    const availableBonus = bonusChores[0];
+                    if (availableBonus) {
+                      assignBonusChore(availableBonus.id, user.id);
+                    }
+                  }}
+                  sx={{
+                    mt: 1,
+                    fontSize: '0.7rem',
+                    borderColor: 'gold',
+                    color: 'gold',
+                    '&:hover': {
+                      borderColor: 'gold',
+                      backgroundColor: 'rgba(255, 215, 0, 0.1)',
+                    },
+                  }}
+                >
+                  GRAB BONUS
+                </Button>
+              )}
             </Box>
-          )}
+          );
+        })}
 
-          {/* Weather Widget - Full width horizontal */}
-          {widgetSettings.weather.enabled && (
-            <Box sx={{ mb: 2 }}>
-              <WeatherWidget transparentBackground={widgetSettings.weather.transparent} weatherApiKey={apiKeys.WEATHER_API_KEY} />
+        {/* Bonus Chores Column (if any available) */}
+        {bonusChores.length > 0 && (
+          <Box sx={{ flex: 0.8, display: 'flex', flexDirection: 'column', minHeight: 0, borderLeft: '2px solid gold', pl: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h4" sx={{ mb: 1 }}>🎁</Typography>
+              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'gold', textAlign: 'center' }}>
+                Bonus Chores
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'text.secondary', textAlign: 'center' }}>
+                Extra clams available!
+              </Typography>
             </Box>
-          )}
 
-          {/* Chores Widget - Full width horizontal */}
-          {widgetSettings.chores.enabled && (
-            <Box sx={{ mb: 2 }}>
-              <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />
+            <Box sx={{ flex: 1, overflow: 'hidden' }}>
+              <List sx={{ p: 0, overflow: 'auto', height: '100%' }}>
+                {bonusChores.map((chore) => (
+                  <ListItem 
+                    key={chore.id} 
+                    sx={{ 
+                      px: 0, 
+                      py: 1,
+                      borderBottom: '1px solid gold',
+                      '&:last-child': { borderBottom: 'none' }
+                    }}
+                  >
+                    <ListItemText
+                      primary={
+                        <Typography variant="body2" sx={{ fontSize: '0.8rem', fontWeight: 'bold' }}>
+                          {chore.title}
+                        </Typography>
+                      }
+                      secondary={
+                        <Chip
+                          label={`🐚 ${chore.clam_value} clams`}
+                          size="small"
+                          sx={{
+                            mt: 0.5,
+                            height: '18px',
+                            fontSize: '0.7rem',
+                            backgroundColor: 'gold',
+                            color: 'black',
+                          }}
+                        />
+                      }
+                    />
+                  </ListItem>
+                ))}
+              </List>
             </Box>
-          )}
-
-          {/* Photos Widget - Full width horizontal */}
-          {widgetSettings.photos.enabled && (
-            <Box sx={{ mb: 2 }}>
-              <PhotoWidget transparentBackground={widgetSettings.photos.transparent} />
-            </Box>
-          )}
-        </Box>
-      </Container>
-
-      <WidgetGallery key={widgetGalleryKey} theme={theme} />
-
-      {/* Admin Panel as a Dialog (Popup) */}
-      <Dialog open={showAdminPanel} onClose={toggleAdminPanel} maxWidth="lg"> {/* CHANGED maxWidth to "lg" */}
-        <DialogContent>
-          <AdminPanel setWidgetSettings={setWidgetSettings} onWidgetUploaded={refreshWidgetGallery} />
-        </DialogContent>
-      </Dialog>
-
-      {/* Bottom Bar for Logo and Buttons */}
-      <Box
-        sx={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          width: '100%',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          padding: isBottomBarCollapsed ? '5px 0' : '10px 0',
-          backgroundColor: 'var(--bottom-bar-bg)',
-          borderTop: '1px solid var(--card-border)',
-          backdropFilter: 'var(--backdrop-blur)',
-          boxShadow: 'var(--shadow)',
-          zIndex: 1000,
-          transition: 'height 0.3s ease-in-out, padding 0.3s ease-in-out',
-          height: isBottomBarCollapsed ? '40px' : '100px', // Fixed height for collapsed, 100px for expanded
-          overflow: 'hidden', // Hide overflowing content when collapsed
-        }}
-      >
-        {/* Toggle Button for the bar */}
-        <IconButton
-          onClick={toggleBottomBar}
-          aria-label={isBottomBarCollapsed ? 'Expand bottom bar' : 'Collapse bottom bar'}
-          sx={{
-            color: theme === 'light' ? 'action.active' : 'white',
-            alignSelf: 'flex-end', // Position to the right
-            marginRight: '10px',
-            padding: '5px',
-          }}
-        >
-          {isBottomBarCollapsed ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-        </IconButton>
-
-        {!isBottomBarCollapsed && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%' }}>
-            {/* App Logo Placeholder */}
-            <img src="/HomeGlowLogo.png" alt="App Logo" style={{ height: '80px', marginRight: '20px' }} />
-
-            {/* Theme Toggle Button */}
-            <IconButton
-              onClick={toggleTheme}
-              aria-label="Toggle theme"
-              sx={{
-                color: theme === 'light' ? 'action.active' : 'white',
-                margin: '0 5px',
-              }}
-            >
-              {theme === 'light' ? <Brightness4 /> : <Brightness7 />}
-            </IconButton>
-
-            {/* Admin Panel Toggle Button (Gear Icon) */}
-            <IconButton
-              onClick={toggleAdminPanel}
-              aria-label="Toggle Admin Panel"
-              sx={{
-                color: theme === 'light' ? 'action.active' : 'white',
-                margin: '0 5px',
-              }}
-            >
-              <SettingsIcon />
-            </IconButton>
-
-            {/* Page Refresh Button */}
-            <IconButton
-              onClick={handlePageRefresh}
-              aria-label="Refresh Page"
-              sx={{
-                color: theme === 'light' ? 'action.active' : 'white',
-                margin: '0 5px',
-              }}
-            >
-              <RefreshIcon />
-            </IconButton>
           </Box>
         )}
       </Box>
-    </>
+    </Card>
   );
 };
 
-export default App;
+export default ChoreWidget;
