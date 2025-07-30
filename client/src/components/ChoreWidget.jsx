@@ -171,10 +171,17 @@ const ChoreWidget = ({ transparentBackground }) => {
       e.target.nextSibling.style.display = 'flex';
     };
 
-    // Direct image URL without cache busting to avoid header issues
-    const imageUrl = user.profile_picture 
-      ? `${import.meta.env.VITE_REACT_APP_API_URL}/Uploads/users/${user.profile_picture}`
-      : null;
+    // Handle both base64 data URLs and file paths
+    let imageUrl = null;
+    if (user.profile_picture) {
+      if (user.profile_picture.startsWith('data:')) {
+        // It's a base64 data URL, use it directly
+        imageUrl = user.profile_picture;
+      } else {
+        // It's a filename, construct the URL
+        imageUrl = `${import.meta.env.VITE_REACT_APP_API_URL}/Uploads/users/${user.profile_picture}`;
+      }
+    }
 
     return (
       <Box sx={{ position: 'relative', display: 'inline-block' }}>
