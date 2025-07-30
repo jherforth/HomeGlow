@@ -81,12 +81,8 @@ const App = () => {
       console.log('Skipping calculation - already calculating or no container');
       return;
     }
-      console.log('Skipping calculation - already calculating or no container');
-      return;
-    }
     
     setIsCalculating(true);
-    console.log('=== Starting masonry calculation ===');
     console.log('=== Starting masonry calculation ===');
     
     try {
@@ -407,152 +403,8 @@ const App = () => {
               <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />
             </Box>
           )}
-    <Card 
-      className={`card ${transparentBackground ? 'transparent-card' : ''}`}
-      sx={{ 
-        width: '100%', 
-        height: fixedHeight,
-        display: 'flex',
-        flexDirection: 'row',
-        overflow: 'hidden'
-      }}
-    >
-      {/* Left Column - Current Weather */}
-      <Box sx={{ flex: 1, pr: 2, display: 'flex', flexDirection: 'column' }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-          <Typography variant="h6">Weather</Typography>
-          <IconButton onClick={handleOpenSettings} size="small">
-            <SettingsIcon fontSize="small" />
-          </IconButton>
         </Box>
-        <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold', fontSize: '1rem' }}>
-          {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-        </Typography>
-
-        {(!weatherData && !loading) && (
-          <Box sx={{ mt: 2 }}>
-            <TextField
-              label="Enter Zip Code"
-              variant="outlined"
-              size="small"
-              value={zipCode}
-              onChange={(e) => setZipCode(e.target.value)}
-              fullWidth
-              sx={{ mb: 1 }}
-            />
-            <Button variant="contained" onClick={fetchWeather} disabled={loading} fullWidth size="small">
-              {loading ? 'Loading...' : 'Get Weather'}
-            </Button>
-          </Box>
-        )}
-
-        {error && <Typography color="error" sx={{ mt: 2, fontSize: '0.875rem' }}>{error}</Typography>}
-
-        {weatherData && (
-          <Box sx={{ flex: 1 }}>
-            <Typography variant="h6" sx={{ fontSize: '1.1rem' }}>{weatherData.name}</Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
-              {weatherData.weather[0].icon && (
-                <img
-                  src={getWeatherIcon(weatherData.weather[0].icon)}
-                  alt={weatherData.weather[0].description}
-                  width="40"
-                  height="40"
-                />
-              )}
-              <Typography variant="h5" sx={{ ml: 1 }}>
-                {Math.round(weatherData.main.temp)}°F
-              </Typography>
-            </Box>
-            <Typography variant="body2" sx={{ textTransform: 'capitalize' }}>
-              {weatherData.weather[0].description}
-            </Typography>
-            <Typography variant="body2">
-              Feels like: {Math.round(weatherData.main.feels_like)}°F
-            </Typography>
-          </Box>
-        )}
-      </Box>
-
-      {/* Middle Column - 3-Day Forecast */}
-      {forecastData && (
-        <Box sx={{ flex: 1, px: 2, borderLeft: '1px solid var(--card-border)', borderRight: '1px solid var(--card-border)' }}>
-          <Typography variant="h6" sx={{ mb: 2, fontSize: '1.1rem' }}>3-Day Forecast</Typography>
-          {Array.isArray(forecastData) && forecastData.map((day, index) => (
-            <Box key={index} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-              <Typography variant="body2" sx={{ fontSize: '0.8rem', minWidth: '60px' }}>{day.date}</Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                {day.icon && (
-                  <img
-                    src={getWeatherIcon(day.icon)}
-                    alt={day.description}
-                    width="24"
-                    height="24"
-                  />
-                )}
-                <Typography variant="body2" sx={{ ml: 1, fontSize: '0.8rem' }}>
-                  {Math.round(day.temp_min)}°F / {Math.round(day.temp_max)}°F
-                </Typography>
-              </Box>
-            </Box>
-          ))}
-        </Box>
-      )}
-
-      {/* Right Column - Charts */}
-      {chartData.length > 0 && (
-        <Box sx={{ flex: 2, pl: 2, display: 'flex', flexDirection: 'column' }}>
-          <Tabs value={selectedTab} onChange={handleTabChange} aria-label="weather graphs tabs" sx={{ minHeight: '36px' }}>
-            <Tab label="Temperature" sx={{ minHeight: '36px', fontSize: '0.8rem' }} />
-            <Tab label="Precipitation" sx={{ minHeight: '36px', fontSize: '0.8rem' }} />
-          </Tabs>
-          <Box sx={{ flex: 1, mt: 1 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={chartData}
-                margin={{
-                  top: 5,
-                  right: 15,
-                  left: 10,
-                  bottom: 5,
-                }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke={transparentBackground ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.1)'} />
-                <XAxis dataKey="time" stroke={transparentBackground ? 'white' : 'black'} fontSize={10} />
-                <YAxis stroke={transparentBackground ? 'white' : 'black'} fontSize={10} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: transparentBackground ? 'rgba(0,0,0,0.8)' : 'white',
-                    border: transparentBackground ? '1px solid rgba(255,255,255,0.5)' : '1px solid #ccc',
-                    color: transparentBackground ? 'white' : 'black',
-                    fontSize: '0.8rem'
-                  }}
-                  itemStyle={{ color: transparentBackground ? 'white' : 'black' }}
-                />
-                <Legend />
-                {selectedTab === 0 && (
-                  <Line
-                    type="monotone"
-                    dataKey="temp"
-                    name="Temperature (°F)"
-                    stroke="#8884d8"
-                    activeDot={{ r: 6 }}
-                  />
-                )}
-                {selectedTab === 1 && (
-                  <Line
-                    type="monotone"
-                    dataKey="pop"
-                    name="Precipitation (%)"
-                    stroke="#82ca9d"
-                    activeDot={{ r: 6 }}
-                  />
-                )}
-              </LineChart>
-            </ResponsiveContainer>
-          </Box>
-        </Box>
-      )}
+      </Container>
 
       <WidgetGallery key={widgetGalleryKey} theme={theme} />
 
@@ -614,115 +466,32 @@ const App = () => {
               }}
             >
               {theme === 'light' ? <Brightness4 /> : <Brightness7 />}
-    try {
-      // Small delay to ensure DOM is ready
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      if (!masonryContainerRef.current) {
-        setIsCalculating(false);
-        return;
-      }
-
-      const container = masonryContainerRef.current;
-      const containerRect = container.getBoundingClientRect();
-      const containerWidth = containerRect.width;
-      
-      console.log('Container width:', containerWidth);
-      
-      // Calculate number of columns based on screen width
-      let columns = 1;
-      if (containerWidth >= 1600) columns = 5;
-      else if (containerWidth >= 1200) columns = 4;
-      else if (containerWidth >= 900) columns = 3;
-      else if (containerWidth >= 600) columns = 2;
-      else columns = 1;
-
-      console.log('Using', columns, 'columns');
-
-      const gap = 16;
-      const columnWidth = (containerWidth - (gap * (columns - 1))) / columns;
-      console.log('Column width:', columnWidth, 'Gap:', gap);
-      
-      // Get all widget elements
-      const widgets = container.querySelectorAll('.masonry-widget');
-      console.log('Found', widgets.length, 'widgets');
-      
-      if (widgets.length === 0) {
-        setIsCalculating(false);
-        return;
-      }
-      
-      const columnHeights = new Array(columns).fill(0);
-
-      // Reset all widgets to get accurate measurements
-      widgets.forEach((widget) => {
-        widget.style.position = 'static';
-        widget.style.width = 'auto';
-        widget.style.left = 'auto';
-        widget.style.top = 'auto';
-        widget.style.transform = 'none';
-      });
-
-      // Force a reflow to ensure measurements are accurate
-      container.offsetHeight;
-
-      widgets.forEach((widget, index) => {
-        // Find the shortest column
-        const shortestColumnIndex = columnHeights.indexOf(Math.min(...columnHeights));
-        const currentColumnHeight = columnHeights[shortestColumnIndex];
-        
-        // Calculate position
-        const x = shortestColumnIndex * (columnWidth + gap);
-        const y = currentColumnHeight; // THIS WAS THE BUG - y should be currentColumnHeight, not 0
-        
-        // Set width first, then measure height
-        widget.style.width = `${columnWidth}px`;
-        
-        // Force reflow and get accurate height
-        container.offsetHeight;
-        const widgetHeight = widget.offsetHeight;
-        
-        // Now position absolutely
-        widget.style.position = 'absolute';
-        widget.style.left = `${x}px`;
-        widget.style.top = `${y}px`; // Use the calculated y position
-        widget.style.zIndex = '1';
-        
-        console.log(`Widget ${index}:`);
-        console.log(`  Position: x=${x}, y=${y}`);
-        console.log(`  Size: width=${columnWidth}, height=${widgetHeight}`);
-        console.log(`  Placed in column ${shortestColumnIndex} (was ${currentColumnHeight}px tall)`);
-        
-        // Update column height - THIS IS THE KEY FIX
-        columnHeights[shortestColumnIndex] = currentColumnHeight + widgetHeight + gap;
-        console.log(`  Column ${shortestColumnIndex} now ${columnHeights[shortestColumnIndex]}px tall`);
-      });
-
-      // Set container height to the tallest column
-      const maxHeight = Math.max(...columnHeights);
-      container.style.height = `${maxHeight}px`;
-      container.style.position = 'relative';
-      
-      console.log('Final column heights:', columnHeights);
-      console.log('Container height set to:', maxHeight);
-      console.log('=== Masonry calculation complete ===');
-      
-    } catch (error) {
-      console.error('Error in masonry calculation:', error);
-    } finally {
-      setIsCalculating(false);
-    }
-  };
-
-  // Debounced version to prevent excessive calls
-  const debouncedCalculateMasonryLayout = React.useCallback(() => {
-    clearTimeout(window.masonryTimeout);
-    window.masonryTimeout = setTimeout(() => {
-      calculateMasonryLayout();
-    }, 300);
-  }, []);
+            </IconButton>
 
             {/* Admin Panel Toggle Button (Gear Icon) */}
+            <IconButton
+              onClick={toggleAdminPanel}
+              aria-label="Open admin panel"
+              sx={{
+                color: theme === 'light' ? 'action.active' : 'white',
+                margin: '0 5px',
+              }}
+            >
+              <SettingsIcon />
+            </IconButton>
+
+            {/* Page Refresh Button */}
+            <IconButton
+              onClick={handlePageRefresh}
+              aria-label="Refresh page"
+              sx={{
+                color: theme === 'light' ? 'action.active' : 'white',
+                margin: '0 5px',
+              }}
+            >
+              <RefreshIcon />
+            </IconButton>
+          </Box>
         )}
       </Box>
     </>
