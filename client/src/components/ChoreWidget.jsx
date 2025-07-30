@@ -360,7 +360,7 @@ const ChoreWidget = ({ transparentBackground }) => {
             </Typography>
           )}
           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-            {chore.time_period.replace('-', ' ')} • {chore.assigned_day_of_week} • {repeatTypes.find(t => t.value === chore.repeat_type)?.label}
+            {chore.time_period.replace('-', ' ')} • {repeatTypes.find(t => t.value === chore.repeat_type)?.label}
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
