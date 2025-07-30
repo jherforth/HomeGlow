@@ -1,625 +1,493 @@
-import React, { useEffect, useState, useRef } from 'react';
+// client/src/app.jsx
+import React, { useState, useEffect, useRef } from 'react';
+import { Container, IconButton, Box, Dialog, DialogContent, Button } from '@mui/material';
+import { Brightness4, Brightness7 } from '@mui/icons-material';
+import SettingsIcon from '@mui/icons-material/Settings';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+
+// GeoPattern import - CORRECTED LINE (using the direct geopattern library)
+import GeoPattern from 'geopattern'; // Import GeoPattern from the 'geopattern' package
+
 import axios from 'axios';
-import {
-  Button,
-  Card,
-  Typography,
-  TextField,
-  Box,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Radio,
-  RadioGroup,
-  FormControlLabel,
-  FormLabel,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  List,
-  ListItem,
-  ListItemText,
-} from '@mui/material';
-import Hammer from 'hammerjs';
-import '../index.css';
+import CalendarWidget from './components/CalendarWidget.jsx';
+import PhotoWidget from './components/PhotoWidget.jsx';
+import AdminPanel from './components/AdminPanel.jsx';
+import WeatherWidget from './components/WeatherWidget.jsx';
+import ChoreWidget from './components/ChoreWidget.jsx';
+import WidgetGallery from './components/WidgetGallery.jsx';
+import './index.css';
 
-const ChoreWidget = ({ transparentBackground }) => {
-  const [chores, setChores] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [newTask, setNewTask] = useState({
-    title: '',
-    description: '',
-    assignedTo: '',
-    selectedDays: [], // Array of day indices (0=Sunday, 1=Monday, etc.)
-    repeatType: 'no-repeat', // 'no-repeat', 'weekly', 'daily', 'until-completed'
-    timePeriod: 'any-time', // 'morning', 'afternoon', 'evening', 'any-time'
-    clamValue: '', // New field for bonus chores
+const App = () => {
+  const [theme, setTheme] = useState('light');
+  const [widgetSettings, setWidgetSettings] = useState(() => {
+    const defaultSettings = {
+      chores: { enabled: false, transparent: false },
+      calendar: { enabled: false, transparent: false },
+      photos: { enabled: false, transparent: false },
+      weather: { enabled: false, transparent: false },
+      textSize: 16,
+      cardSize: 300,
+      cardPadding: 20,
+      cardHeight: 200,
+      refreshInterval: 'manual',
+      enableGeoPatternBackground: false,
+      enableCardShuffle: false,
+      // NEW: Color settings
+      lightGradientStart: '#00ddeb',
+      lightGradientEnd: '#ff6b6b',
+      darkGradientStart: '#2e2767',
+      darkGradientEnd: '#620808',
+      lightButtonGradientStart: '#00ddeb',
+      lightButtonGradientEnd: '#ff6b6b',
+      darkButtonGradientStart: '#2e2767',
+      darkButtonGradientEnd: '#620808',
+    };
+    const savedSettings = localStorage.getItem('widgetSettings');
+    return savedSettings ? { ...defaultSettings, ...JSON.parse(savedSettings) } : defaultSettings;
   });
-  const [error, setError] = useState(null);
-  const [openAddTaskDialog, setOpenAddTaskDialog] = useState(false);
-  const [openBonusChoresDialog, setOpenBonusChoresDialog] = useState(false);
-  const [bonusChores, setBonusChores] = useState([]);
-  const [selectedBonusChore, setSelectedBonusChore] = useState(null);
-  const [claimingUser, setClaimingUser] = useState(null);
-  const [openPrizeListDialog, setOpenPrizeListDialog] = useState(false);
-  const [prizes, setPrizes] = useState([]);
-  const cardRef = useRef(null);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
 
-  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const dayAbbreviations = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  // State for shuffled widget order
+  const [shuffledWidgetOrder, setShuffledWidgetOrder] = useState([]);
 
-  const getCurrentDayOfWeek = () => {
-    const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    return days[new Date().getDay()];
-  };
+  // NEW: State for dynamic GeoPattern seed
+  const [currentGeoPatternSeed, setCurrentGeoPatternSeed] = useState('');
 
-  // Function to fetch all necessary data
-  const fetchData = async () => {
-    try {
-      const usersResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users`);
-      setUsers(Array.isArray(usersResponse.data) ? usersResponse.data : []);
+  // NEW: State for API keys fetched from backend
+  const [apiKeys, setApiKeys] = useState({
+    WEATHER_API_KEY: '',
+    ICS_CALENDAR_URL: '',
+  });
 
-      const choresResponse = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`);
-      setChores(Array.isArray(choresResponse.data) ? choresResponse.data : []);
-      // Filter for bonus chores (user_id 0, clam_value > 0)
-      const fetchedBonusChores = choresResponse.data.filter(chore => chore.user_id === 0 && chore.clam_value > 0);
-      setBonusChores(fetchedBonusChores);
-      setError(null);
-    } catch (err) {
-      console.error('Error fetching data:', err);
-      setError('Cannot connect to service. Please try again later.');
-    }
-  };
+  // NEW: State for bottom bar collapse
+  const [isBottomBarCollapsed, setIsBottomBarCollapsed] = useState(true);
 
-  // Fetch data on component mount
-  useEffect(() => {
-    fetchData();
-  }, []);
+  // NEW: State to trigger widget gallery refresh
+  const [widgetGalleryKey, setWidgetGalleryKey] = useState(0);
 
-  // Hammer.js for swipe to complete (existing functionality)
-  useEffect(() => {
-    if (cardRef.current) { // Add this check
-      const hammer = new Hammer(cardRef.current);
-      hammer.on('swiperight', (e) => {
-        const choreId = e.target.dataset.choreId;
-        if (choreId) {
-          markChoreComplete(choreId);
-        }
-      });
-      return () => hammer.destroy();
-    }
-  }, [chores]);
+  // NEW: Refs and state for JavaScript masonry layout
+  const masonryContainerRef = useRef(null);
+  const [masonryLayout, setMasonryLayout] = useState([]);
+  const [containerWidth, setContainerWidth] = useState(0);
 
-  const markChoreComplete = async (choreId) => {
-    try {
-      await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores/${choreId}`, {
-        completed: true,
-      });
-      setError(null);
-      // Re-fetch data to update UI
-      fetchData(); // Re-fetch data to update chores and user clam totals
-    } catch (err) {
-      console.error('Error marking chore complete:', err);
-      setError('Failed to update chore. Please try again.');
-    }
-  };
+  // Add a flag to prevent multiple simultaneous calculations
+  const [isCalculating, setIsCalculating] = useState(false);
 
-  const handleNewTaskInputChange = (e) => {
-    const { name, value } = e.target;
-    setNewTask((prevTask) => {
-      const updatedTask = { ...prevTask, [name]: value };
-
-      // If assignedTo changes to bonus user (ID 0), set defaults for timePeriod, assignedDayOfWeek, and repeats
-      if (name === 'assignedTo' && parseInt(value) === 0) {
-        updatedTask.timePeriod = 'any-time';
-        updatedTask.selectedDays = [new Date().getDay()]; // Current day
-        updatedTask.repeatType = 'no-repeat'; // Bonus chores don't repeat in the traditional sense
-      } else if (name === 'assignedTo' && parseInt(value) !== 0) {
-        // If assignedTo changes to a regular user, reset these fields if they were previously set by bonus logic
-        if (prevTask.assignedTo === '0') {
-          updatedTask.timePeriod = 'any-time';
-          updatedTask.selectedDays = [];
-          updatedTask.repeatType = 'no-repeat';
-        }
-      }
-      return updatedTask;
-    });
-  };
-
-  const handleDayToggle = (dayIndex) => {
-    setNewTask(prevTask => {
-      const selectedDays = [...prevTask.selectedDays];
-      const dayIndexNum = parseInt(dayIndex);
-      
-      if (selectedDays.includes(dayIndexNum)) {
-        // Remove day
-        return {
-          ...prevTask,
-          selectedDays: selectedDays.filter(day => day !== dayIndexNum)
-        };
-      } else {
-        // Add day
-        return {
-          ...prevTask,
-          selectedDays: [...selectedDays, dayIndexNum].sort()
-        };
-      }
-    });
-  };
-
-  const handleAddTask = async () => {
-    // General validation for all tasks
-    if (!newTask.title.trim()) {
-      setError('Please fill all required fields for the new task.');
+  // NEW: Calculate masonry layout function
+  const calculateMasonryLayout = async () => {
+    if (isCalculating || !masonryContainerRef.current) {
+      console.log('Skipping calculation - already calculating or no container');
       return;
     }
-
-    // Specific validation for non-bonus tasks
-    if (parseInt(newTask.assignedTo) !== 0) {
-      if (!newTask.assignedTo || newTask.selectedDays.length === 0) {
-        setError('Please select an assignee and at least one day for the task.');
+    
+    setIsCalculating(true);
+    console.log('=== Starting masonry calculation ===');
+    
+    try {
+      // Small delay to ensure DOM is ready
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      if (!masonryContainerRef.current) {
+        setIsCalculating(false);
         return;
       }
-    }
 
-    // Validation for clamValue if bonus user is selected
-    if (parseInt(newTask.assignedTo) === 0 && (!newTask.clamValue || parseInt(newTask.clamValue) <= 0)) {
-      setError('Clam Value is required and must be a positive integer for bonus chores.');
-      return;
-    }
-
-    try {
-      // Create chores for each selected day
-      const chorePromises = newTask.selectedDays.map(dayIndex => {
-        const dayName = dayNames[dayIndex].toLowerCase();
-        return axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`, {
-          user_id: parseInt(newTask.assignedTo),
-          title: newTask.title,
-          description: newTask.description,
-          time_period: newTask.timePeriod,
-          assigned_day_of_week: dayName,
-          repeat_type: newTask.repeatType,
-          completed: false,
-          clam_value: parseInt(newTask.assignedTo) === 0 ? parseInt(newTask.clamValue) : 0,
-          expiration_date: null,
-        });
-      });
-
-      await Promise.all(chorePromises);
+      const container = masonryContainerRef.current;
+      const containerRect = container.getBoundingClientRect();
+      const containerWidth = containerRect.width;
       
-      setNewTask({
-        title: '',
-        description: '',
-        timePeriod: 'any-time',
-        assignedTo: '',
-        selectedDays: [],
-        repeatType: 'no-repeat',
-        clamValue: '',
+      console.log('Container width:', containerWidth);
+      
+      // Calculate number of columns based on screen width
+      let columns = 1;
+      if (containerWidth >= 1600) columns = 5;
+      else if (containerWidth >= 1200) columns = 4;
+      else if (containerWidth >= 900) columns = 3;
+      else if (containerWidth >= 600) columns = 2;
+      else columns = 1;
+
+      console.log('Using', columns, 'columns');
+
+      const gap = 16;
+      const columnWidth = (containerWidth - (gap * (columns - 1))) / columns;
+      console.log('Column width:', columnWidth, 'Gap:', gap);
+      
+      // Get all widget elements
+      const widgets = container.querySelectorAll('.masonry-widget');
+      console.log('Found', widgets.length, 'widgets');
+      
+      if (widgets.length === 0) {
+        setIsCalculating(false);
+        return;
+      }
+      
+      const columnHeights = new Array(columns).fill(0);
+
+      // Reset all widgets to get accurate measurements
+      widgets.forEach((widget) => {
+        widget.style.position = 'static';
+        widget.style.width = 'auto';
+        widget.style.left = 'auto';
+        widget.style.top = 'auto';
+        widget.style.transform = 'none';
       });
-      setError(null);
-      setOpenAddTaskDialog(false);
-      // Re-fetch data to update UI
-      fetchData();
-    } catch (err) {
-      console.error('Error adding chore:', err);
-      setError('Failed to add chore. Please try again.');
-    }
-  };
 
-  const currentDay = getCurrentDayOfWeek();
+      // Force a reflow to ensure measurements are accurate
+      container.offsetHeight;
 
-  const handleOpenAddTaskDialog = () => {
-    setOpenAddTaskDialog(true);
-    setError(null);
-  };
-
-  const handleCloseAddTaskDialog = () => {
-    setOpenAddTaskDialog(false);
-    setError(null);
-    setNewTask({
-      title: '',
-      description: '',
-      timePeriod: 'any-time',
-      assignedTo: '',
-      selectedDays: [],
-      repeatType: 'no-repeat',
-      clamValue: '',
-    });
-  };
-
-  const handleOpenBonusChoresDialog = () => {
-    setOpenBonusChoresDialog(true);
-    setError(null);
-  };
-
-  const handleCloseBonusChoresDialog = () => {
-    setOpenBonusChoresDialog(false);
-    setError(null);
-    setSelectedBonusChore(null);
-    setClaimingUser(null);
-  };
-
-  const handleOpenPrizeListDialog = async () => {
-    try {
-      const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/prizes`);
-      setPrizes(Array.isArray(response.data) ? response.data : []);
-      setOpenPrizeListDialog(true);
-      setError(null);
-    } catch (err) {
-      console.error('Error fetching prizes:', err);
-      setError('Failed to fetch prizes. Please try again.');
-    }
-  };
-
-  const handleClosePrizeListDialog = () => {
-    setOpenPrizeListDialog(false);
-    setError(null);
-  };
-
-  const handleGrabBonusClick = (userId) => {
-    setClaimingUser(userId);
-    setOpenBonusChoresDialog(true);
-    setError(null);
-  };
-
-  const handleSelectBonusChore = (event) => {
-    setSelectedBonusChore(parseInt(event.target.value));
-  };
-
-  const handleConfirmGrabBonus = async () => {
-    if (!selectedBonusChore || !claimingUser) {
-      setError('Please select a bonus chore and ensure a user is claiming it.');
-      return;
-    }
-
-    try {
-      await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores/${selectedBonusChore}/assign`, {
-        user_id: claimingUser,
+      widgets.forEach((widget, index) => {
+        // Find the shortest column
+        const shortestColumnIndex = columnHeights.indexOf(Math.min(...columnHeights));
+        const currentColumnHeight = columnHeights[shortestColumnIndex];
+        
+        // Calculate position
+        const x = shortestColumnIndex * (columnWidth + gap);
+        const y = currentColumnHeight; // THIS WAS THE BUG - y should be currentColumnHeight, not 0
+        
+        // Set width first, then measure height
+        widget.style.width = `${columnWidth}px`;
+        
+        // Force reflow and get accurate height
+        container.offsetHeight;
+        const widgetHeight = widget.offsetHeight;
+        
+        // Now position absolutely
+        widget.style.position = 'absolute';
+        widget.style.left = `${x}px`;
+        widget.style.top = `${y}px`; // Use the calculated y position
+        widget.style.zIndex = '1';
+        
+        console.log(`Widget ${index}:`);
+        console.log(`  Position: x=${x}, y=${y}`);
+        console.log(`  Size: width=${columnWidth}, height=${widgetHeight}`);
+        console.log(`  Placed in column ${shortestColumnIndex} (was ${currentColumnHeight}px tall)`);
+        
+        // Update column height - THIS IS THE KEY FIX
+        columnHeights[shortestColumnIndex] = currentColumnHeight + widgetHeight + gap;
+        console.log(`  Column ${shortestColumnIndex} now ${columnHeights[shortestColumnIndex]}px tall`);
       });
-      setError(null);
-      handleCloseBonusChoresDialog();
-      fetchData(); // Re-fetch data to update UI
-    } catch (err) {
-      console.error('Error assigning bonus chore:', err);
-      setError(err.response?.data?.error || 'Failed to assign bonus chore. Please try again.');
+
+      // Set container height to the tallest column
+      const maxHeight = Math.max(...columnHeights);
+      container.style.height = `${maxHeight}px`;
+      container.style.position = 'relative';
+      
+      console.log('Final column heights:', columnHeights);
+      console.log('Container height set to:', maxHeight);
+      console.log('=== Masonry calculation complete ===');
+      
+    } catch (error) {
+      console.error('Error in masonry calculation:', error);
+    } finally {
+      setIsCalculating(false);
+    }
+  };
+
+  // Debounced version to prevent excessive calls
+  const debouncedCalculateMasonryLayout = React.useCallback(() => {
+    clearTimeout(window.masonryTimeout);
+    window.masonryTimeout = setTimeout(() => {
+      calculateMasonryLayout();
+    }, 300);
+  }, []);
+
+  // NEW: Function to refresh widget gallery
+  const refreshWidgetGallery = () => {
+    setWidgetGalleryKey(prev => prev + 1);
+  };
+
+  useEffect(() => {
+    const fetchApiKeys = async () => {
+      try {
+        const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`);
+        setApiKeys(response.data);
+      } catch (error) {
+        console.error('Error fetching API keys:', error);
+      }
+    };
+    fetchApiKeys();
+  }, []); // Run once on mount
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    setTheme(savedTheme);
+    document.documentElement.setAttribute('data-theme', savedTheme);
+
+    // NEW: Generate a random seed once on component mount
+    // This ensures a new pattern on each full page refresh
+    setCurrentGeoPatternSeed(Math.random().toString());
+  }, []);
+
+  // Effect to apply dynamic CSS variables
+  useEffect(() => {
+    document.documentElement.style.setProperty('--dynamic-text-size', `${widgetSettings.textSize}px`);
+    document.documentElement.style.setProperty('--dynamic-card-width', `${widgetSettings.cardSize}px`);
+    document.documentElement.style.setProperty('--dynamic-card-padding', `${widgetSettings.cardPadding}px`);
+    document.documentElement.style.setProperty('--dynamic-card-height', `${widgetSettings.cardHeight}px`);
+
+    // NEW: Apply custom color variables
+    document.documentElement.style.setProperty('--light-gradient-start', widgetSettings.lightGradientStart);
+    document.documentElement.style.setProperty('--light-gradient-end', widgetSettings.lightGradientEnd);
+    document.documentElement.style.setProperty('--dark-gradient-start', widgetSettings.darkGradientStart);
+    document.documentElement.style.setProperty('--dark-gradient-end', widgetSettings.darkGradientEnd);
+    document.documentElement.style.setProperty('--light-button-gradient-start', widgetSettings.lightButtonGradientStart);
+    document.documentElement.style.setProperty('--light-button-gradient-end', widgetSettings.lightButtonGradientEnd);
+    document.documentElement.style.setProperty('--dark-button-gradient-start', widgetSettings.darkButtonGradientStart);
+    document.documentElement.style.setProperty('--dark-button-gradient-end', widgetSettings.darkButtonGradientEnd);
+
+  }, [widgetSettings]); // Depend on all widgetSettings to re-apply colors when they change
+
+  // NEW: Effect for automatic page refresh
+  useEffect(() => {
+    let intervalId;
+    const intervalHours = parseInt(widgetSettings.refreshInterval);
+
+    if (!isNaN(intervalHours) && intervalHours > 0) {
+      const intervalMilliseconds = intervalHours * 60 * 60 * 1000; // Convert hours to milliseconds
+      intervalId = setInterval(() => {
+        console.log(`Auto-refreshing page after ${intervalHours} hours.`);
+        window.location.reload();
+      }, intervalMilliseconds);
+    }
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [widgetSettings.refreshInterval]);
+
+  // NEW: Effect to update body padding based on bottom bar height
+  useEffect(() => {
+    const barHeight = isBottomBarCollapsed ? 40 : 100; // Approximate height of collapsed/expanded bar
+    document.documentElement.style.setProperty('--bottom-bar-height', `${barHeight}px`);
+  }, [isBottomBarCollapsed]);
+
+  // NEW: Effect for GeoPattern background and container transparency
+  useEffect(() => {
+    if (widgetSettings.enableGeoPatternBackground) {
+      // Call generate directly from the imported GeoPattern using the dynamic seed
+      const pattern = GeoPattern.generate(currentGeoPatternSeed);
+      document.body.style.backgroundImage = pattern.toDataUrl();
+      document.body.style.backgroundAttachment = 'fixed'; // Ensure it stays fixed
+      document.body.style.backgroundSize = 'cover'; // Ensure it covers the whole body
+
+      // Make the main container transparent to reveal the body background
+      document.documentElement.style.setProperty('--container-background-override', 'transparent');
+    } else {
+      // Revert to original background (from index.css)
+      document.body.style.backgroundImage = 'var(--gradient)';
+      document.body.style.backgroundAttachment = 'fixed';
+      document.body.style.backgroundSize = 'auto'; // Or whatever your default is
+
+      // Revert container background
+      document.documentElement.style.setProperty('--container-background-override', 'var(--gradient)');
+    }
+  }, [widgetSettings.enableGeoPatternBackground, theme, currentGeoPatternSeed]); // Re-apply if theme or seed changes
+
+  // NEW: Effect for card shuffle
+  useEffect(() => {
+    const widgetsToShuffle = [];
+    if (widgetSettings.calendar.enabled) widgetsToShuffle.push('calendar');
+    if (widgetSettings.photos.enabled) widgetsToShuffle.push('photos');
+    if (widgetSettings.weather.enabled) widgetsToShuffle.push('weather');
+
+    if (widgetSettings.enableCardShuffle && widgetsToShuffle.length > 0) {
+      // Simple shuffle function (Fisher-Yates)
+      const shuffleArray = (array) => {
+        for (let i = array.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+      };
+      setShuffledWidgetOrder(shuffleArray([...widgetsToShuffle]));
+    } else {
+      // If shuffle is disabled or no widgets to shuffle, revert to default order
+      setShuffledWidgetOrder(['calendar', 'photos', 'weather'].filter(w => widgetSettings[w].enabled));
+    }
+  }, [widgetSettings.enableCardShuffle, widgetSettings.calendar.enabled, widgetSettings.photos.enabled, widgetSettings.weather.enabled]);
+
+  // NEW: Effect to recalculate layout when widgets change or window resizes
+  useEffect(() => {
+    const handleResize = () => {
+      setTimeout(() => calculateMasonryLayout(), 300);
+    };
+
+    window.addEventListener('resize', handleResize);
+    
+    // Initial calculation
+    setTimeout(() => calculateMasonryLayout(), 500);
+    
+    return () => window.removeEventListener('resize', handleResize);
+  }, [shuffledWidgetOrder, widgetSettings]);
+
+  // NEW: Effect to recalculate when widgets are enabled/disabled
+  useEffect(() => {
+    setTimeout(() => calculateMasonryLayout(), 600);
+  }, [widgetSettings.chores.enabled, widgetSettings.calendar.enabled, widgetSettings.photos.enabled, widgetSettings.weather.enabled]);
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('theme', newTheme);
+  };
+
+  const toggleAdminPanel = () => {
+    setShowAdminPanel(!showAdminPanel);
+  };
+
+  const handlePageRefresh = () => {
+    window.location.reload();
+  };
+
+  const toggleBottomBar = () => {
+    setIsBottomBarCollapsed(!isBottomBarCollapsed);
+  };
+  // Helper function to render a widget based on its name
+  const renderWidget = (widgetName, index) => {
+    switch (widgetName) {
+      case 'calendar':
+        return widgetSettings.calendar.enabled && 
+          <CalendarWidget key={`calendar-${index}`} transparentBackground={widgetSettings.calendar.transparent} icsCalendarUrl={apiKeys.ICS_CALENDAR_URL} />;
+      case 'photos':
+        return widgetSettings.photos.enabled && 
+          <PhotoWidget key={`photos-${index}`} transparentBackground={widgetSettings.photos.transparent} />;
+      case 'weather':
+        return widgetSettings.weather.enabled && 
+          <WeatherWidget key={`weather-${index}`} transparentBackground={widgetSettings.weather.transparent} weatherApiKey={apiKeys.WEATHER_API_KEY} />;
+      default:
+        return null;
     }
   };
 
   return (
-    <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`} ref={cardRef} sx={{ width: '100%', maxWidth: 'none' }}>
-      <Typography variant="h6" gutterBottom>Chores</Typography>
-      {error && <Typography color="error">{error}</Typography>}
-
-      {/* User Row with Profile Pictures and Tasks */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-evenly', flexWrap: 'wrap', mb: 3, gap: 2 }}> {/* Changed justifyContent to 'space-evenly' */}
-        {users.length === 0 && !error && <Typography>No users available.</Typography>}
-        {users.filter(user => user.id !== 0).map(user => {
-          const userDailyChores = chores.filter(
-            chore => parseInt(chore.user_id) === user.id && chore.assigned_day_of_week === currentDay
-          );
-          const completedDailyChores = userDailyChores.filter(chore => chore.completed).length;
-          const totalDailyChores = userDailyChores.length;
-          const completionPercentage = totalDailyChores > 0 ? (completedDailyChores / totalDailyChores) * 100 : 0;
-
-          return (
-            <Box key={user.id} sx={{ textAlign: 'center', mb: 2, position: 'relative' }}> {/* Removed mx: 1 */}
-              <Box sx={{ // Profile picture Box (no longer relative, no clam total inside)
-                width: 80,
-                height: 80,
-                borderRadius: '50%',
-                overflow: 'hidden',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                bgcolor: 'lightgray',
-                mx: 'auto',
-                mb: 1,
-                border: '2px solid grey', // Default border for profile pic
-              }}>
-                {user.profile_picture ? (
-                  <img
-                    src={user.profile_picture}
-                    alt={user.username}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
-                  />
-                ) : (
-                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>No Pic</Typography>
-                )}
-              </Box>
-              {/* Display Clam Total - now a sibling of the profile picture Box */}
-              <Typography
-                variant="caption"
-                sx={{
-                  position: 'absolute',
-                  top: '0%', // Center vertically
-                  left: '50%', // Center horizontally
-                  transform: 'translate(-50%, -50%)', // Adjust for its own size
-                  width: 35, // Fixed width for circular shape
-                  height: 35, // Fixed height for circular shape
-                  borderRadius: '50%', // Circular shape
-                  bgcolor: 'rgba(137, 152, 218, 0.53)', // Changed color for better visibility
-                  color: 'white',
-                  display: 'flex', // Use flexbox for centering content
-                  alignItems: 'center', // Center vertically
-                  justifyContent: 'center', // Center horizontally
-                  fontSize: '0.9rem',
-                  fontWeight: 'bold',
-                }}
-              >
-                {user.clam_total || 0}🥟
-              </Typography>
-              {/* Progress Bar */}
-              <Box sx={{
-                width: 80,
-                height: 8,
-                bgcolor: 'grey.300', // Background for empty part
-                borderRadius: 4,
-                mx: 'auto',
-                mt: 0.5,
-                overflow: 'hidden', // Ensure inner bar is clipped
-              }}>
-                <Box sx={{
-                  width: `${completionPercentage}%`,
-                  height: '100%',
-                  bgcolor: 'green', // Color for filled part
-                  borderRadius: 4,
-                  transition: 'width 0.5s ease-in-out', // Smooth transition
-                }} />
-              </Box>
-              <Typography variant="subtitle2" sx={{ textTransform: 'capitalize', mt: 0.5 }}>{user.username}</Typography>
-              <Box sx={{ mt: 1, textAlign: 'left' }}>
-                {userDailyChores.map(chore => (
-                  <Box key={chore.id} sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
-                    <Radio
-                      checked={chore.completed}
-                      onChange={() => markChoreComplete(chore.id)}
-                      value={chore.id}
-                      name={`chore-complete-${chore.id}`}
-                      sx={{
-                        color: chore.completed ? 'green' : 'inherit',
-                        '&.Mui-checked': {
-                          color: 'green',
-                        },
-                      }}
-                    />
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        textDecoration: chore.completed ? 'line-through' : 'none',
-                        ml: 0.5,
-                      }}
-                    >
-                      {chore.title} ({chore.time_period})
-                    </Typography>
-                  </Box>
-                ))}
-                {userDailyChores.length === 0 && (
-                  <Typography variant="body2" color="text.secondary">No tasks today</Typography>
-                )}
-              </Box>
-              {user.id !== 0 && ( // Only show "Grab Bonus" for actual users, not the bonus user itself
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={() => handleGrabBonusClick(user.id)}
-                  sx={{ mt: 1 }}
-                >
-                  Grab Bonus
-                </Button>
-              )}
+    <>
+      <Container className="container">
+        {/* Horizontal widget layout */}
+        <Box sx={{ width: '100%', padding: '8px' }}>
+          {/* Calendar Widget - Full width horizontal */}
+          {widgetSettings.calendar.enabled && (
+            <Box sx={{ mb: 2 }}>
+              <CalendarWidget transparentBackground={widgetSettings.calendar.transparent} icsCalendarUrl={apiKeys.ICS_CALENDAR_URL} />
             </Box>
-          );
-        })}
-      </Box>
-
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mb: 2 }}>
-        <Button
-          variant="contained"
-          onClick={handleOpenPrizeListDialog}
-          sx={{
-            minWidth: 'auto',
-            padding: '8px 12px',
-            fontSize: '1.2rem',
-            lineHeight: 1,
-          }}
-        >
-          🛍️
-        </Button>
-        <Button
-          variant="contained"
-          onClick={handleOpenBonusChoresDialog}
-          sx={{
-            minWidth: 'auto',
-            padding: '8px 12px',
-            fontSize: '1.2rem',
-            lineHeight: 1,
-          }}
-        >
-          🥟
-        </Button>
-        <Button
-          variant="contained"
-          onClick={handleOpenAddTaskDialog}
-          sx={{
-            minWidth: 'auto',
-            padding: '8px 12px',
-            fontSize: '1.2rem',
-            lineHeight: 1,
-          }}
-        >
-          +
-        </Button>
-      </Box>
-
-      {/* Add New Task Dialog */}
-      <Dialog open={openAddTaskDialog} onClose={handleCloseAddTaskDialog}>
-        <DialogTitle>Add New Task</DialogTitle>
-        <DialogContent>
-          {error && <Typography color="error" sx={{ mb: 2 }}>{error}</Typography>}
-          <TextField
-            name="title"
-            label="Task Name"
-            variant="outlined"
-            size="small"
-            fullWidth
-            value={newTask.title}
-            onChange={handleNewTaskInputChange}
-            sx={{ mb: 2 }}
-          />
-          <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-            <InputLabel>Time of Day</InputLabel>
-            <Select
-              name="timePeriod"
-              value={newTask.timePeriod}
-              label="Time of Day"
-              onChange={handleNewTaskInputChange}
-            >
-              <MenuItem value="any-time">Any Time</MenuItem>
-              <MenuItem value="morning">Morning</MenuItem>
-              <MenuItem value="afternoon">Afternoon</MenuItem>
-              <MenuItem value="evening">Evening</MenuItem>
-            </Select>
-          </FormControl>
-          
-          <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-            <InputLabel>Assign Member</InputLabel>
-            <Select
-              name="assignedTo"
-              value={newTask.assignedTo}
-              label="Assign Member"
-              onChange={handleNewTaskInputChange}
-            >
-              <MenuItem value=""><em>None</em></MenuItem>
-              {users.map(user => (
-                <MenuItem key={user.id} value={user.id}>{user.username}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          
-          {parseInt(newTask.assignedTo) === 0 && (
-            <TextField
-              name="clamValue"
-              label="Clam Value"
-              variant="outlined"
-              size="small"
-              fullWidth
-              type="number"
-              value={newTask.clamValue}
-              onChange={handleNewTaskInputChange}
-              sx={{ mb: 2 }}
-              inputProps={{ min: 1 }}
-            />
           )}
-          
-          {/* Day Selection */}
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-              Select Days *
-            </Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-              {dayNames.map((day, index) => (
-                <Button
-                  key={index}
-                  variant={newTask.selectedDays.includes(index) ? "contained" : "outlined"}
-                  size="small"
-                  onClick={() => handleDayToggle(index)}
-                  sx={{
-                    minWidth: '45px',
-                    fontSize: '0.75rem',
-                    padding: '4px 8px',
-                  }}
-                >
-                  {dayAbbreviations[index]}
-                </Button>
-              ))}
+
+          {/* Weather Widget - Full width horizontal */}
+          {widgetSettings.weather.enabled && (
+            <Box sx={{ mb: 2 }}>
+              <WeatherWidget transparentBackground={widgetSettings.weather.transparent} weatherApiKey={apiKeys.WEATHER_API_KEY} />
             </Box>
+          )}
+
+          {/* Chores Widget - Full width horizontal */}
+          {widgetSettings.chores.enabled && (
+            <Box sx={{ mb: 2 }}>
+              <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />
+            </Box>
+          )}
+
+          {/* Photos Widget - Full width horizontal */}
+          {widgetSettings.photos.enabled && (
+            <Box sx={{ mb: 2 }}>
+              <PhotoWidget transparentBackground={widgetSettings.photos.transparent} />
+            </Box>
+          )}
+        </Box>
+      </Container>
+
+      <WidgetGallery key={widgetGalleryKey} theme={theme} />
+
+      {/* Admin Panel as a Dialog (Popup) */}
+      <Dialog open={showAdminPanel} onClose={toggleAdminPanel} maxWidth="lg"> {/* CHANGED maxWidth to "lg" */}
+        <DialogContent>
+          <AdminPanel setWidgetSettings={setWidgetSettings} onWidgetUploaded={refreshWidgetGallery} />
+        </DialogContent>
+      </Dialog>
+
+      {/* Bottom Bar for Logo and Buttons */}
+      <Box
+        sx={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          width: '100%',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: isBottomBarCollapsed ? '5px 0' : '10px 0',
+          backgroundColor: 'var(--bottom-bar-bg)',
+          borderTop: '1px solid var(--card-border)',
+          backdropFilter: 'var(--backdrop-blur)',
+          boxShadow: 'var(--shadow)',
+          zIndex: 1000,
+          transition: 'height 0.3s ease-in-out, padding 0.3s ease-in-out',
+          height: isBottomBarCollapsed ? '40px' : '100px', // Fixed height for collapsed, 100px for expanded
+          overflow: 'hidden', // Hide overflowing content when collapsed
+        }}
+      >
+        {/* Toggle Button for the bar */}
+        <IconButton
+          onClick={toggleBottomBar}
+          aria-label={isBottomBarCollapsed ? 'Expand bottom bar' : 'Collapse bottom bar'}
+          sx={{
+            color: theme === 'light' ? 'action.active' : 'white',
+            alignSelf: 'flex-end', // Position to the right
+            marginRight: '10px',
+            padding: '5px',
+          }}
+        >
+          {isBottomBarCollapsed ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+        </IconButton>
+
+        {!isBottomBarCollapsed && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%' }}>
+            {/* App Logo Placeholder */}
+            <img src="/HomeGlowLogo.png" alt="App Logo" style={{ height: '80px', marginRight: '20px' }} />
+
+            {/* Theme Toggle Button */}
+            <IconButton
+              onClick={toggleTheme}
+              aria-label="Toggle theme"
+              sx={{
+                color: theme === 'light' ? 'action.active' : 'white',
+                margin: '0 5px',
+              }}
+            >
+              {theme === 'light' ? <Brightness4 /> : <Brightness7 />}
+            </IconButton>
+
+            {/* Admin Panel Toggle Button (Gear Icon) */}
+            <IconButton
+              onClick={toggleAdminPanel}
+              aria-label="Toggle Admin Panel"
+              sx={{
+                color: theme === 'light' ? 'action.active' : 'white',
+                margin: '0 5px',
+              }}
+            >
+              <SettingsIcon />
+            </IconButton>
+
+            {/* Page Refresh Button */}
+            <IconButton
+              onClick={handlePageRefresh}
+              aria-label="Refresh Page"
+              sx={{
+                color: theme === 'light' ? 'action.active' : 'white',
+                margin: '0 5px',
+              }}
+            >
+              <RefreshIcon />
+            </IconButton>
           </Box>
-          
-          <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-            <InputLabel>Repeat Options</InputLabel>
-            <Select
-              name="repeatType"
-              value={newTask.repeatType}
-              label="Repeat Options"
-              onChange={handleNewTaskInputChange}
-            >
-              <MenuItem value="no-repeat">No Repeat</MenuItem>
-              <MenuItem value="weekly">Weekly (on selected days)</MenuItem>
-              <MenuItem value="daily">Daily</MenuItem>
-              <MenuItem value="until-completed">Repeat Until Completed</MenuItem>
-            </Select>
-          </FormControl>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseAddTaskDialog}>Cancel</Button>
-          <Button onClick={handleAddTask} variant="contained">Add Task</Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Bonus Chores Dialog */}
-      <Dialog open={openBonusChoresDialog} onClose={handleCloseBonusChoresDialog} key="bonus-chores-dialog">
-        <DialogTitle>Grab a Bonus Chore</DialogTitle>
-        <DialogContent>
-          {error && <Typography color="error" sx={{ mb: 2 }}>{error}</Typography>}
-          {bonusChores.length === 0 ? (
-            <Typography>No bonus chores available at the moment.</Typography>
-          ) : (
-            <FormControl component="fieldset">
-              <FormLabel component="legend">Available Bonus Chores</FormLabel>
-              <RadioGroup
-                aria-label="bonus-chores"
-                name="bonus-chores-group"
-                value={selectedBonusChore}
-                onChange={handleSelectBonusChore}
-              >
-                {bonusChores.map((chore) => (
-                  <FormControlLabel
-                    key={chore.id}
-                    value={chore.id}
-                    control={<Radio />}
-                    label={`${chore.title} (${chore.clam_value} 🥟)`}
-                  />
-                ))}
-              </RadioGroup>
-            </FormControl>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseBonusChoresDialog}>Cancel</Button>
-          <Button onClick={handleConfirmGrabBonus} variant="contained" disabled={!selectedBonusChore || bonusChores.length === 0}>
-            Confirm
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Prize List Dialog */}
-      <Dialog open={openPrizeListDialog} onClose={handleClosePrizeListDialog} key="prize-list-dialog">
-        <DialogTitle>Available Prizes</DialogTitle>
-        <DialogContent>
-          {error && <Typography color="error" sx={{ mb: 2 }}>{error}</Typography>}
-          {prizes.length === 0 ? (
-            <Typography>No prizes available at the moment.</Typography>
-          ) : (
-            <List>
-              {prizes.map((prize) => (
-                <ListItem key={prize.id}>
-                  <ListItemText
-                    primary={prize.name}
-                    secondary={`${prize.clam_cost} 🥟`}
-                  />
-                </ListItem>
-              ))}
-            </List>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClosePrizeListDialog}>Close</Button>
-        </DialogActions>
-      </Dialog>
-    </Card>
+        )}
+      </Box>
+    </>
   );
 };
 
-export default ChoreWidget;
+export default App;

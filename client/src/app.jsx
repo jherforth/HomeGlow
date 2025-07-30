@@ -193,6 +193,95 @@ const App = () => {
     }, 300);
   }, []);
 
+    
+    if (!masonryContainerRef.current) return;
+
+    const container = masonryContainerRef.current;
+    const containerRect = container.getBoundingClientRect();
+    const containerWidth = containerRect.width;
+    
+    console.log('=== Starting masonry calculation ===');
+    console.log('Container width:', containerWidth);
+    
+    // Calculate number of columns based on screen width
+    let columns = 1;
+    if (containerWidth >= 1600) columns = 5;
+    else if (containerWidth >= 1200) columns = 4;
+    else if (containerWidth >= 900) columns = 3;
+    else if (containerWidth >= 600) columns = 2;
+    else columns = 1;
+
+    console.log('Using', columns, 'columns');
+
+    const gap = 16;
+    const columnWidth = (containerWidth - (gap * (columns - 1))) / columns;
+    console.log('Column width:', columnWidth, 'Gap:', gap);
+    
+    // Get all widget elements
+    const widgets = container.querySelectorAll('.masonry-widget');
+    console.log('Found', widgets.length, 'widgets');
+    
+    const columnHeights = new Array(columns).fill(0);
+
+    // Reset all widgets to get accurate measurements
+    widgets.forEach((widget) => {
+      widget.style.position = 'static';
+      widget.style.width = 'auto';
+      widget.style.left = 'auto';
+      widget.style.top = 'auto';
+      widget.style.transform = 'none';
+    });
+
+    // Force a reflow to ensure measurements are accurate
+    container.offsetHeight;
+
+    widgets.forEach((widget, index) => {
+      // Find the shortest column
+      const shortestColumnIndex = columnHeights.indexOf(Math.min(...columnHeights));
+      const currentColumnHeight = columnHeights[shortestColumnIndex];
+      
+      // Calculate position
+      const x = shortestColumnIndex * (columnWidth + gap);
+      const y = currentColumnHeight;
+      
+      // Set width first, then measure height
+      widget.style.width = `${columnWidth}px`;
+      
+      // Force reflow and get accurate height
+      container.offsetHeight; // Force reflow on container
+      const widgetHeight = widget.offsetHeight;
+      
+      // Now position absolutely
+      widget.style.position = 'absolute';
+      widget.style.left = `${x}px`;
+      widget.style.top = `${y}px`;
+      widget.style.zIndex = '1';
+      widget.style.zIndex = '1'; // Ensure proper stacking
+      
+      console.log(`Widget ${index}:`);
+      console.log(`  Position: x=${x}, y=${y}`);
+      console.log(`  Size: width=${columnWidth}, height=${widgetHeight}`);
+      console.log(`  Placed in column ${shortestColumnIndex} (was ${currentColumnHeight}px tall)`);
+      console.log(`  Shortest column was ${shortestColumnIndex} with height ${columnHeights[shortestColumnIndex]}`);
+      
+      // Update column height
+      columnHeights[shortestColumnIndex] += widgetHeight + gap;
+      console.log(`  After update - Column heights:`, [...columnHeights]);
+      console.log(`  Column ${shortestColumnIndex} now ${columnHeights[shortestColumnIndex]}px tall`);
+    });
+
+    // Set container height to the tallest column
+    const maxHeight = Math.max(...columnHeights);
+    container.style.height = `${maxHeight}px`;
+    container.style.position = 'relative'; // Ensure container is positioned for absolute children
+    
+    console.log('Final column heights:', columnHeights);
+    console.log('Container height set to:', maxHeight);
+    console.log('=== Masonry calculation complete ===');
+    
+    setIsCalculating(false);
+  };
+
   // NEW: Function to refresh widget gallery
   const refreshWidgetGallery = () => {
     setWidgetGalleryKey(prev => prev + 1);
@@ -328,7 +417,6 @@ const App = () => {
   useEffect(() => {
     setTimeout(() => calculateMasonryLayout(), 600);
   }, [widgetSettings.chores.enabled, widgetSettings.calendar.enabled, widgetSettings.photos.enabled, widgetSettings.weather.enabled]);
-  
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
@@ -347,7 +435,6 @@ const App = () => {
   const toggleBottomBar = () => {
     setIsBottomBarCollapsed(!isBottomBarCollapsed);
   };
-  
   // Helper function to render a widget based on its name
   const renderWidget = (widgetName, index) => {
     switch (widgetName) {
@@ -368,39 +455,33 @@ const App = () => {
   return (
     <>
       <Container className="container">
-        {/* JavaScript-based masonry layout container */}
-        <Box 
-          ref={masonryContainerRef}
-          className="js-masonry-container"
-          sx={{
-            position: 'relative',
-            width: '100%',
-            minHeight: '100vh',
-            padding: '8px',
-            overflow: 'visible' // Ensure widgets aren't clipped during measurement
-          }}
-        >
-          {/* Render shuffled widgets in masonry layout */}
-          {shuffledWidgetOrder.map((widgetName, index) => {
-            const widget = renderWidget(widgetName, index);
-            return widget ? (
-              <Box 
-                key={`${widgetName}-${index}`} 
-                className="masonry-widget"
-                onLoad={calculateMasonryLayout} // Recalculate when widget content loads
-              >
-                {widget}
-              </Box>
-            ) : null;
-          })}
+        {/* Horizontal widget layout */}
+        <Box sx={{ width: '100%', padding: '8px' }}>
+          {/* Calendar Widget - Full width horizontal */}
+          {widgetSettings.calendar.enabled && (
+            <Box sx={{ mb: 2 }}>
+              <CalendarWidget transparentBackground={widgetSettings.calendar.transparent} icsCalendarUrl={apiKeys.ICS_CALENDAR_URL} />
+            </Box>
+          )}
 
-          {/* Chores Widget - Special positioning */}
+          {/* Weather Widget - Full width horizontal */}
+          {widgetSettings.weather.enabled && (
+            <Box sx={{ mb: 2 }}>
+              <WeatherWidget transparentBackground={widgetSettings.weather.transparent} weatherApiKey={apiKeys.WEATHER_API_KEY} />
+            </Box>
+          )}
+
+          {/* Chores Widget - Full width horizontal */}
           {widgetSettings.chores.enabled && (
-            <Box 
-              className="masonry-widget chores-widget"
-              onLoad={calculateMasonryLayout} // Recalculate when chores widget loads
-            >
+            <Box sx={{ mb: 2 }}>
               <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />
+            </Box>
+          )}
+
+          {/* Photos Widget - Full width horizontal */}
+          {widgetSettings.photos.enabled && (
+            <Box sx={{ mb: 2 }}>
+              <PhotoWidget transparentBackground={widgetSettings.photos.transparent} />
             </Box>
           )}
         </Box>

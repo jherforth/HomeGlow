@@ -1,490 +1,501 @@
-// client/src/components/CalendarWidget.jsx
-import React, { useState, useEffect } from 'react';
-import { Card, Typography, Box, List, ListItem, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, Button, IconButton } from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
-import { Calendar, momentLocalizer } from 'react-big-calendar';
-import moment from 'moment';
+// client/src/app.jsx
+import React, { useState, useEffect, useRef } from 'react';
+import { Container, IconButton, Box, Dialog, DialogContent, Button } from '@mui/material';
+import { Brightness4, Brightness7 } from '@mui/icons-material';
+import SettingsIcon from '@mui/icons-material/Settings';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+
+// GeoPattern import - CORRECTED LINE (using the direct geopattern library)
+import GeoPattern from 'geopattern'; // Import GeoPattern from the 'geopattern' package
+
 import axios from 'axios';
-import 'react-big-calendar/lib/css/react-big-calendar.css';
-import '../index.css'; // Assuming global styles are here
+import CalendarWidget from './components/CalendarWidget.jsx';
+import PhotoWidget from './components/PhotoWidget.jsx';
+import AdminPanel from './components/AdminPanel.jsx';
+import WeatherWidget from './components/WeatherWidget.jsx';
+import ChoreWidget from './components/ChoreWidget.jsx';
+import WidgetGallery from './components/WidgetGallery.jsx';
+import './index.css';
 
-const localizer = momentLocalizer(moment);
-
-// Custom Header Component for react-big-calendar
-const CustomDayHeader = ({ label, date }) => {
-  // Check if the day of the week for this header matches the current day of the week
-  const todayDayOfWeek = moment().format('ddd'); // e.g., "Mon", "Tue"
-  const headerDayOfWeek = moment(date).format('ddd'); // e.g., "Mon", "Tue" for the header's date
-
-  const highlightHeader = todayDayOfWeek === headerDayOfWeek;
-
-  return (
-    <div className={`rbc-header ${highlightHeader ? 'rbc-current-day-header' : ''}`}>
-      {label}
-    </div>
-  );
-};
-
-const CalendarWidget = ({ transparentBackground }) => {
-  const [events, setEvents] = useState([]);
-  const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [selectedDateEvents, setSelectedDateEvents] = useState([]);
-  const [modalOpen, setModalOpen] = useState(false);
-
-  useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        setLoading(true);
-        const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/calendar-events`);
-        
-        const formattedEvents = response.data.map(event => ({
-          title: event.title,
-          start: new Date(event.start),
-          end: new Date(event.end),
-          allDay: false,
-          resource: event,
-        }));
-        setEvents(formattedEvents);
-        setError(null);
-      } catch (err) {
-        console.error('Error fetching calendar events:', err);
-        setError('Failed to load calendar events. Please check the ICS URL and server.');
-      } finally {
-        setLoading(false);
-      }
+const App = () => {
+  const [theme, setTheme] = useState('light');
+  const [widgetSettings, setWidgetSettings] = useState(() => {
+    const defaultSettings = {
+      chores: { enabled: false, transparent: false },
+      calendar: { enabled: false, transparent: false },
+      photos: { enabled: false, transparent: false },
+      weather: { enabled: false, transparent: false },
+      textSize: 16,
+      cardSize: 300,
+      cardPadding: 20,
+      cardHeight: 200,
+      refreshInterval: 'manual',
+      enableGeoPatternBackground: false,
+      enableCardShuffle: false,
+      // NEW: Color settings
+      lightGradientStart: '#00ddeb',
+      lightGradientEnd: '#ff6b6b',
+      darkGradientStart: '#2e2767',
+      darkGradientEnd: '#620808',
+      lightButtonGradientStart: '#00ddeb',
+      lightButtonGradientEnd: '#ff6b6b',
+      darkButtonGradientStart: '#2e2767',
+      darkButtonGradientEnd: '#620808',
     };
+    const savedSettings = localStorage.getItem('widgetSettings');
+    return savedSettings ? { ...defaultSettings, ...JSON.parse(savedSettings) } : defaultSettings;
+  });
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
 
-    fetchEvents();
+  // State for shuffled widget order
+  const [shuffledWidgetOrder, setShuffledWidgetOrder] = useState([]);
+
+  // NEW: State for dynamic GeoPattern seed
+  const [currentGeoPatternSeed, setCurrentGeoPatternSeed] = useState('');
+
+  // NEW: State for API keys fetched from backend
+  const [apiKeys, setApiKeys] = useState({
+    WEATHER_API_KEY: '',
+    ICS_CALENDAR_URL: '',
+  });
+
+  // NEW: State for bottom bar collapse
+  const [isBottomBarCollapsed, setIsBottomBarCollapsed] = useState(true);
+
+  // NEW: State to trigger widget gallery refresh
+  const [widgetGalleryKey, setWidgetGalleryKey] = useState(0);
+
+  // NEW: Refs and state for JavaScript masonry layout
+  const masonryContainerRef = useRef(null);
+  const [masonryLayout, setMasonryLayout] = useState([]);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  // Add a flag to prevent multiple simultaneous calculations
+  const [isCalculating, setIsCalculating] = useState(false);
+
+  // NEW: Calculate masonry layout function
+  const calculateMasonryLayout = async () => {
+    if (isCalculating || !masonryContainerRef.current) {
+      console.log('Skipping calculation - already calculating or no container');
+      return;
+    }
+    
+    setIsCalculating(true);
+    console.log('=== Starting masonry calculation ===');
+    
+    try {
+      // Small delay to ensure DOM is ready
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      if (!masonryContainerRef.current) {
+        setIsCalculating(false);
+        return;
+      }
+
+      const container = masonryContainerRef.current;
+      const containerRect = container.getBoundingClientRect();
+      const containerWidth = containerRect.width;
+      
+      console.log('Container width:', containerWidth);
+      
+      // Calculate number of columns based on screen width
+      let columns = 1;
+      if (containerWidth >= 1600) columns = 5;
+      else if (containerWidth >= 1200) columns = 4;
+      else if (containerWidth >= 900) columns = 3;
+      else if (containerWidth >= 600) columns = 2;
+      else columns = 1;
+
+      console.log('Using', columns, 'columns');
+
+      const gap = 16;
+      const columnWidth = (containerWidth - (gap * (columns - 1))) / columns;
+      console.log('Column width:', columnWidth, 'Gap:', gap);
+      
+      // Get all widget elements
+      const widgets = container.querySelectorAll('.masonry-widget');
+      console.log('Found', widgets.length, 'widgets');
+      
+      if (widgets.length === 0) {
+        setIsCalculating(false);
+        return;
+      }
+      
+      const columnHeights = new Array(columns).fill(0);
+
+      // Reset all widgets to get accurate measurements
+      widgets.forEach((widget) => {
+        widget.style.position = 'static';
+        widget.style.width = 'auto';
+        widget.style.left = 'auto';
+        widget.style.top = 'auto';
+        widget.style.transform = 'none';
+      });
+
+      // Force a reflow to ensure measurements are accurate
+      container.offsetHeight;
+
+      widgets.forEach((widget, index) => {
+        // Find the shortest column
+        const shortestColumnIndex = columnHeights.indexOf(Math.min(...columnHeights));
+        const currentColumnHeight = columnHeights[shortestColumnIndex];
+        
+        // Calculate position
+        const x = shortestColumnIndex * (columnWidth + gap);
+        const y = currentColumnHeight; // THIS WAS THE BUG - y should be currentColumnHeight, not 0
+        
+        // Set width first, then measure height
+        widget.style.width = `${columnWidth}px`;
+        
+        // Force reflow and get accurate height
+        container.offsetHeight;
+        const widgetHeight = widget.offsetHeight;
+        
+        // Now position absolutely
+        widget.style.position = 'absolute';
+        widget.style.left = `${x}px`;
+        widget.style.top = `${y}px`; // Use the calculated y position
+        widget.style.zIndex = '1';
+        
+        console.log(`Widget ${index}:`);
+        console.log(`  Position: x=${x}, y=${y}`);
+        console.log(`  Size: width=${columnWidth}, height=${widgetHeight}`);
+        console.log(`  Placed in column ${shortestColumnIndex} (was ${currentColumnHeight}px tall)`);
+        
+        // Update column height - THIS IS THE KEY FIX
+        columnHeights[shortestColumnIndex] = currentColumnHeight + widgetHeight + gap;
+        console.log(`  Column ${shortestColumnIndex} now ${columnHeights[shortestColumnIndex]}px tall`);
+      });
+
+      // Set container height to the tallest column
+      const maxHeight = Math.max(...columnHeights);
+      container.style.height = `${maxHeight}px`;
+      container.style.position = 'relative';
+      
+      console.log('Final column heights:', columnHeights);
+      console.log('Container height set to:', maxHeight);
+      console.log('=== Masonry calculation complete ===');
+      
+    } catch (error) {
+      console.error('Error in masonry calculation:', error);
+    } finally {
+      setIsCalculating(false);
+    }
+  };
+
+  // Debounced version to prevent excessive calls
+  const debouncedCalculateMasonryLayout = React.useCallback(() => {
+    clearTimeout(window.masonryTimeout);
+    window.masonryTimeout = setTimeout(() => {
+      calculateMasonryLayout();
+    }, 300);
   }, []);
 
-  // Handle day click to show modal
-  const handleSelectSlot = ({ start, end, slots }) => {
-    const clickedDate = moment(start).startOf('day');
-    const dayEvents = events.filter(event => {
-      const eventStart = moment(event.start).startOf('day');
-      return eventStart.isSame(clickedDate, 'day');
-    });
-
-    setSelectedDate(clickedDate);
-    setSelectedDateEvents(dayEvents);
-    setModalOpen(true);
+  // NEW: Function to refresh widget gallery
+  const refreshWidgetGallery = () => {
+    setWidgetGalleryKey(prev => prev + 1);
   };
 
-  // Handle event click
-  const handleSelectEvent = (event) => {
-    const eventDate = moment(event.start).startOf('day');
-    const dayEvents = events.filter(e => {
-      const eStart = moment(e.start).startOf('day');
-      return eStart.isSame(eventDate, 'day');
-    });
-
-    setSelectedDate(eventDate);
-    setSelectedDateEvents(dayEvents);
-    setModalOpen(true);
-  };
-
-  const handleCloseModal = () => {
-    setModalOpen(false);
-    setSelectedDate(null);
-    setSelectedDateEvents([]);
-  };
-
-  // Filter events for the next 7 days
-  const today = moment().startOf('day');
-  const sevenDaysLater = moment().add(7, 'days').endOf('day');
-
-  const upcomingEvents = events.filter(event => {
-    const eventStart = moment(event.start);
-    // Check if event starts within the next 7 days (inclusive of today and the 7th day)
-    return eventStart.isBetween(today, sevenDaysLater, null, '[]');
-  }).sort((a, b) => moment(a.start).diff(moment(b.start))); // Sort by start time
-
-  // Group upcoming events by day for display
-  const groupedUpcomingEvents = upcomingEvents.reduce((acc, event) => {
-    const dateKey = moment(event.start).format('YYYY-MM-DD'); // e.g., "2023-10-27"
-    if (!acc[dateKey]) {
-      acc[dateKey] = [];
-    }
-    acc[dateKey].push(event);
-    return acc;
-  }, {});
-
-  // Enhanced height for the main calendar (month view)
-  const mainCalendarHeight = 500;
-
-  // Custom calendar styles
-  const calendarStyle = {
-    height: '100%',
-    fontFamily: 'Inter, sans-serif',
-  };
-
-  // Custom event style function
-  const eventStyleGetter = (event, start, end, isSelected) => {
-    return {
-      style: {
-        backgroundColor: 'var(--accent)',
-        borderRadius: '6px',
-        opacity: 0.9,
-        color: 'white',
-        border: 'none',
-        fontSize: '0.85rem',
-        fontWeight: '500',
-        padding: '2px 6px',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+  useEffect(() => {
+    const fetchApiKeys = async () => {
+      try {
+        const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`);
+        setApiKeys(response.data);
+      } catch (error) {
+        console.error('Error fetching API keys:', error);
       }
     };
+    fetchApiKeys();
+  }, []); // Run once on mount
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    setTheme(savedTheme);
+    document.documentElement.setAttribute('data-theme', savedTheme);
+
+    // NEW: Generate a random seed once on component mount
+    // This ensures a new pattern on each full page refresh
+    setCurrentGeoPatternSeed(Math.random().toString());
+  }, []);
+
+  // Effect to apply dynamic CSS variables
+  useEffect(() => {
+    document.documentElement.style.setProperty('--dynamic-text-size', `${widgetSettings.textSize}px`);
+    document.documentElement.style.setProperty('--dynamic-card-width', `${widgetSettings.cardSize}px`);
+    document.documentElement.style.setProperty('--dynamic-card-padding', `${widgetSettings.cardPadding}px`);
+    document.documentElement.style.setProperty('--dynamic-card-height', `${widgetSettings.cardHeight}px`);
+
+    // NEW: Apply custom color variables
+    document.documentElement.style.setProperty('--light-gradient-start', widgetSettings.lightGradientStart);
+    document.documentElement.style.setProperty('--light-gradient-end', widgetSettings.lightGradientEnd);
+    document.documentElement.style.setProperty('--dark-gradient-start', widgetSettings.darkGradientStart);
+    document.documentElement.style.setProperty('--dark-gradient-end', widgetSettings.darkGradientEnd);
+    document.documentElement.style.setProperty('--light-button-gradient-start', widgetSettings.lightButtonGradientStart);
+    document.documentElement.style.setProperty('--light-button-gradient-end', widgetSettings.lightButtonGradientEnd);
+    document.documentElement.style.setProperty('--dark-button-gradient-start', widgetSettings.darkButtonGradientStart);
+    document.documentElement.style.setProperty('--dark-button-gradient-end', widgetSettings.darkButtonGradientEnd);
+
+  }, [widgetSettings]); // Depend on all widgetSettings to re-apply colors when they change
+
+  // NEW: Effect for automatic page refresh
+  useEffect(() => {
+    let intervalId;
+    const intervalHours = parseInt(widgetSettings.refreshInterval);
+
+    if (!isNaN(intervalHours) && intervalHours > 0) {
+      const intervalMilliseconds = intervalHours * 60 * 60 * 1000; // Convert hours to milliseconds
+      intervalId = setInterval(() => {
+        console.log(`Auto-refreshing page after ${intervalHours} hours.`);
+        window.location.reload();
+      }, intervalMilliseconds);
+    }
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [widgetSettings.refreshInterval]);
+
+  // NEW: Effect to update body padding based on bottom bar height
+  useEffect(() => {
+    const barHeight = isBottomBarCollapsed ? 40 : 100; // Approximate height of collapsed/expanded bar
+    document.documentElement.style.setProperty('--bottom-bar-height', `${barHeight}px`);
+  }, [isBottomBarCollapsed]);
+
+  // NEW: Effect for GeoPattern background and container transparency
+  useEffect(() => {
+    if (widgetSettings.enableGeoPatternBackground) {
+      // Call generate directly from the imported GeoPattern using the dynamic seed
+      const pattern = GeoPattern.generate(currentGeoPatternSeed);
+      document.body.style.backgroundImage = pattern.toDataUrl();
+      document.body.style.backgroundAttachment = 'fixed'; // Ensure it stays fixed
+      document.body.style.backgroundSize = 'cover'; // Ensure it covers the whole body
+
+      // Make the main container transparent to reveal the body background
+      document.documentElement.style.setProperty('--container-background-override', 'transparent');
+    } else {
+      // Revert to original background (from index.css)
+      document.body.style.backgroundImage = 'var(--gradient)';
+      document.body.style.backgroundAttachment = 'fixed';
+      document.body.style.backgroundSize = 'auto'; // Or whatever your default is
+
+      // Revert container background
+      document.documentElement.style.setProperty('--container-background-override', 'var(--gradient)');
+    }
+  }, [widgetSettings.enableGeoPatternBackground, theme, currentGeoPatternSeed]); // Re-apply if theme or seed changes
+
+  // NEW: Effect for card shuffle
+  useEffect(() => {
+    const widgetsToShuffle = [];
+    if (widgetSettings.calendar.enabled) widgetsToShuffle.push('calendar');
+    if (widgetSettings.photos.enabled) widgetsToShuffle.push('photos');
+    if (widgetSettings.weather.enabled) widgetsToShuffle.push('weather');
+
+    if (widgetSettings.enableCardShuffle && widgetsToShuffle.length > 0) {
+      // Simple shuffle function (Fisher-Yates)
+      const shuffleArray = (array) => {
+        for (let i = array.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+      };
+      setShuffledWidgetOrder(shuffleArray([...widgetsToShuffle]));
+    } else {
+      // If shuffle is disabled or no widgets to shuffle, revert to default order
+      setShuffledWidgetOrder(['calendar', 'photos', 'weather'].filter(w => widgetSettings[w].enabled));
+    }
+  }, [widgetSettings.enableCardShuffle, widgetSettings.calendar.enabled, widgetSettings.photos.enabled, widgetSettings.weather.enabled]);
+
+  // NEW: Effect to recalculate layout when widgets change or window resizes
+  useEffect(() => {
+    const handleResize = () => {
+      setTimeout(() => calculateMasonryLayout(), 300);
+    };
+
+    window.addEventListener('resize', handleResize);
+    
+    // Initial calculation
+    setTimeout(() => calculateMasonryLayout(), 500);
+    
+    return () => window.removeEventListener('resize', handleResize);
+  }, [shuffledWidgetOrder, widgetSettings]);
+
+  // NEW: Effect to recalculate when widgets are enabled/disabled
+  useEffect(() => {
+    setTimeout(() => calculateMasonryLayout(), 600);
+  }, [widgetSettings.chores.enabled, widgetSettings.calendar.enabled, widgetSettings.photos.enabled, widgetSettings.weather.enabled]);
+  
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('theme', newTheme);
+  };
+
+  const toggleAdminPanel = () => {
+    setShowAdminPanel(!showAdminPanel);
+  };
+
+  const handlePageRefresh = () => {
+    window.location.reload();
+  };
+
+  const toggleBottomBar = () => {
+    setIsBottomBarCollapsed(!isBottomBarCollapsed);
+  };
+  
+  // Helper function to render a widget based on its name
+  const renderWidget = (widgetName, index) => {
+    switch (widgetName) {
+      case 'calendar':
+        return widgetSettings.calendar.enabled && 
+          <CalendarWidget key={`calendar-${index}`} transparentBackground={widgetSettings.calendar.transparent} icsCalendarUrl={apiKeys.ICS_CALENDAR_URL} />;
+      case 'photos':
+        return widgetSettings.photos.enabled && 
+          <PhotoWidget key={`photos-${index}`} transparentBackground={widgetSettings.photos.transparent} />;
+      case 'weather':
+        return widgetSettings.weather.enabled && 
+          <WeatherWidget key={`weather-${index}`} transparentBackground={widgetSettings.weather.transparent} weatherApiKey={apiKeys.WEATHER_API_KEY} />;
+      default:
+        return null;
+    }
   };
 
   return (
-    <Card 
-      className={`card ${transparentBackground ? 'transparent-card' : ''}`}
-      sx={{ 
-        width: '100%', 
-        maxWidth: '800px', // Increased from default
-        minWidth: '600px', // Ensure minimum width
-        margin: '0 auto' // Center the card
-      }}
-    >
-      <Typography 
-        variant="h6" 
-        gutterBottom 
-        sx={{ 
-          fontWeight: 600,
-          fontSize: '1.25rem',
-          marginBottom: '1rem',
-          color: 'var(--text-color)'
-        }}
-      >
-        Calendar
-      </Typography>
-      
-      {loading && (
-        <Typography sx={{ color: 'var(--text-color)', textAlign: 'center', py: 2 }}>
-          Loading events...
-        </Typography>
-      )}
-      
-      {error && (
-        <Typography 
-          color="error" 
-          sx={{ 
-            textAlign: 'center', 
-            py: 2,
-            backgroundColor: 'rgba(255, 0, 0, 0.1)',
-            borderRadius: '8px',
-            padding: '12px',
-            marginBottom: '16px'
+    <>
+      <Container className="container">
+        {/* JavaScript-based masonry layout container */}
+        <Box 
+          ref={masonryContainerRef}
+          className="js-masonry-container"
+          sx={{
+            position: 'relative',
+            width: '100%',
+            minHeight: '100vh',
+            padding: '8px',
+            overflow: 'visible' // Ensure widgets aren't clipped during measurement
           }}
         >
-          {error}
-        </Typography>
-      )}
-      
-      {!loading && !error && (
-        <>
-          {/* Enhanced Main Calendar (Month View) */}
-          <Box 
-            sx={{ 
-              height: mainCalendarHeight,
-              marginBottom: '2rem',
-              '& .rbc-calendar': {
-                borderRadius: '12px',
-                overflow: 'hidden',
-                border: '1px solid var(--card-border)',
-                backgroundColor: 'transparent',
-              },
-              '& .rbc-toolbar': {
-                backgroundColor: 'var(--card-bg)',
-                borderBottom: '1px solid var(--card-border)',
-                padding: '12px 16px',
-                marginBottom: 0,
-              },
-              '& .rbc-toolbar button': {
-                color: 'var(--text-color)',
-                border: '1px solid var(--card-border)',
-                borderRadius: '6px',
-                padding: '6px 12px',
-                backgroundColor: 'transparent',
-                fontSize: '0.875rem',
-                fontWeight: '500',
-                transition: 'all 0.2s ease',
-              },
-              '& .rbc-toolbar button:hover': {
-                backgroundColor: 'var(--accent)',
-                borderColor: 'var(--accent)',
-                color: 'white',
-              },
-              '& .rbc-toolbar button.rbc-active': {
-                backgroundColor: 'var(--accent)',
-                borderColor: 'var(--accent)',
-                color: 'white',
-              },
-              '& .rbc-toolbar-label': {
-                color: 'var(--text-color)',
-                fontSize: '1.1rem',
-                fontWeight: '600',
-              },
-              '& .rbc-header': {
-                backgroundColor: 'transparent',
-                borderBottom: '1px solid var(--card-border)',
-                padding: '12px 8px',
-                color: 'var(--text-color)',
-                fontSize: '0.875rem',
-                fontWeight: '600',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-              },
-              '& .rbc-day-bg': {
-                border: 'none',
-                borderRight: '1px solid var(--card-border)',
-                borderBottom: '1px solid var(--card-border)',
-                cursor: 'pointer',
-                transition: 'background-color 0.2s ease',
-              },
-              '& .rbc-day-bg:hover': {
-                backgroundColor: 'rgba(var(--accent-rgb), 0.05)',
-              },
-              '& .rbc-date-cell': {
-                padding: '8px',
-                color: 'var(--text-color)',
-                fontSize: '0.875rem',
-                fontWeight: '500',
-              },
-              '& .rbc-today': {
-                backgroundColor: 'rgba(var(--accent-rgb), 0.1)',
-              },
-              '& .rbc-off-range-bg': {
-                backgroundColor: 'rgba(var(--text-color-rgb), 0.02)',
-              },
-              '& .rbc-off-range .rbc-date-cell': {
-                color: 'rgba(var(--text-color-rgb), 0.4)',
-              },
-              '& .rbc-event': {
-                borderRadius: '6px',
-                border: 'none',
-                fontSize: '0.75rem',
-                fontWeight: '500',
-                padding: '2px 6px',
-                cursor: 'pointer',
-              },
-              '& .rbc-month-view': {
-                border: 'none',
-                backgroundColor: 'transparent',
-              },
-            }}
-          >
-            <Calendar
-              localizer={localizer}
-              events={events}
-              startAccessor="start"
-              endAccessor="end"
-              style={calendarStyle}
-              views={['month']} // Only show month view
-              defaultView="month"
-              className="modern-calendar"
-              components={{
-                header: CustomDayHeader,
-              }}
-              eventPropGetter={eventStyleGetter}
-              onSelectSlot={handleSelectSlot}
-              onSelectEvent={handleSelectEvent}
-              selectable={true}
-            />
-          </Box>
-
-          {/* Upcoming Events List (Next 7 Days) */}
-          <Box 
-            sx={{ 
-              borderTop: '1px solid var(--card-border)',
-              paddingTop: '1.5rem'
-            }}
-          >
-            <Typography 
-              variant="h6" 
-              gutterBottom
-              sx={{ 
-                fontSize: '1.1rem',
-                fontWeight: '600',
-                color: 'var(--text-color)',
-                marginBottom: '1rem'
-              }}
-            >
-              Upcoming Events (Next 7 Days)
-            </Typography>
-            
-            {Object.keys(groupedUpcomingEvents).length === 0 ? (
-              <Typography 
-                variant="body2" 
-                sx={{ 
-                  color: 'rgba(var(--text-color-rgb), 0.6)',
-                  textAlign: 'center',
-                  padding: '2rem',
-                  fontStyle: 'italic'
-                }}
+          {/* Render shuffled widgets in masonry layout */}
+          {shuffledWidgetOrder.map((widgetName, index) => {
+            const widget = renderWidget(widgetName, index);
+            return widget ? (
+              <Box 
+                key={`${widgetName}-${index}`} 
+                className="masonry-widget"
+                onLoad={calculateMasonryLayout} // Recalculate when widget content loads
               >
-                No upcoming events in the next 7 days.
-              </Typography>
-            ) : (
-              <Box sx={{ maxHeight: 300, overflowY: 'auto' }}>
-                <List dense sx={{ padding: 0 }}>
-                  {Object.keys(groupedUpcomingEvents).map(dateKey => (
-                    <React.Fragment key={dateKey}>
-                      <ListItem sx={{ paddingLeft: 0, paddingRight: 0 }}>
-                        <ListItemText
-                          primary={moment(dateKey).format('dddd, MMMM Do')}
-                          primaryTypographyProps={{ 
-                            fontWeight: '600', 
-                            color: 'var(--text-color)',
-                            fontSize: '0.95rem'
-                          }}
-                        />
-                      </ListItem>
-                      {groupedUpcomingEvents[dateKey].map((event, index) => (
-                        <ListItem 
-                          key={event.title + index} 
-                          sx={{ 
-                            paddingLeft: '2rem',
-                            paddingRight: 0,
-                            paddingTop: '4px',
-                            paddingBottom: '4px'
-                          }}
-                        >
-                          <ListItemText
-                            primary={`${moment(event.start).format('h:mm A')} - ${event.title}`}
-                            secondary={event.description || event.location}
-                            primaryTypographyProps={{ 
-                              color: 'var(--text-color)',
-                              fontSize: '0.875rem'
-                            }}
-                            secondaryTypographyProps={{ 
-                              color: 'rgba(var(--text-color-rgb), 0.7)',
-                              fontSize: '0.8rem'
-                            }}
-                          />
-                        </ListItem>
-                      ))}
-                    </React.Fragment>
-                  ))}
-                </List>
+                {widget}
               </Box>
-            )}
-          </Box>
-        </>
-      )}
+            ) : null;
+          })}
 
-      {/* Day Detail Modal */}
-      <Dialog 
-        open={modalOpen} 
-        onClose={handleCloseModal}
-        maxWidth="sm"
-        fullWidth
-        PaperProps={{
-          sx: {
-            backgroundColor: 'var(--card-bg)',
-            border: '1px solid var(--card-border)',
-            borderRadius: '16px',
-            backdropFilter: 'var(--backdrop-blur)',
-          }
+          {/* Chores Widget - Special positioning */}
+          {widgetSettings.chores.enabled && (
+            <Box 
+              className="masonry-widget chores-widget"
+              onLoad={calculateMasonryLayout} // Recalculate when chores widget loads
+            >
+              <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />
+            </Box>
+          )}
+        </Box>
+      </Container>
+
+      <WidgetGallery key={widgetGalleryKey} theme={theme} />
+
+      {/* Admin Panel as a Dialog (Popup) */}
+      <Dialog open={showAdminPanel} onClose={toggleAdminPanel} maxWidth="lg"> {/* CHANGED maxWidth to "lg" */}
+        <DialogContent>
+          <AdminPanel setWidgetSettings={setWidgetSettings} onWidgetUploaded={refreshWidgetGallery} />
+        </DialogContent>
+      </Dialog>
+
+      {/* Bottom Bar for Logo and Buttons */}
+      <Box
+        sx={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          width: '100%',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: isBottomBarCollapsed ? '5px 0' : '10px 0',
+          backgroundColor: 'var(--bottom-bar-bg)',
+          borderTop: '1px solid var(--card-border)',
+          backdropFilter: 'var(--backdrop-blur)',
+          boxShadow: 'var(--shadow)',
+          zIndex: 1000,
+          transition: 'height 0.3s ease-in-out, padding 0.3s ease-in-out',
+          height: isBottomBarCollapsed ? '40px' : '100px', // Fixed height for collapsed, 100px for expanded
+          overflow: 'hidden', // Hide overflowing content when collapsed
         }}
       >
-        <DialogTitle 
-          sx={{ 
-            color: 'var(--text-color)',
-            fontSize: '1.25rem',
-            fontWeight: '600',
-            paddingBottom: '8px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
+        {/* Toggle Button for the bar */}
+        <IconButton
+          onClick={toggleBottomBar}
+          aria-label={isBottomBarCollapsed ? 'Expand bottom bar' : 'Collapse bottom bar'}
+          sx={{
+            color: theme === 'light' ? 'action.active' : 'white',
+            alignSelf: 'flex-end', // Position to the right
+            marginRight: '10px',
+            padding: '5px',
           }}
         >
-          {selectedDate && selectedDate.format('dddd, MMMM Do, YYYY')}
-          <IconButton 
-            onClick={handleCloseModal}
-            sx={{ 
-              color: 'var(--text-color)',
-              '&:hover': {
-                backgroundColor: 'rgba(var(--text-color-rgb), 0.1)'
-              }
-            }}
-          >
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        
-        <DialogContent sx={{ paddingTop: '8px' }}>
-          {selectedDateEvents.length === 0 ? (
-            <Typography 
-              sx={{ 
-                color: 'rgba(var(--text-color-rgb), 0.6)',
-                textAlign: 'center',
-                padding: '2rem',
-                fontStyle: 'italic'
+          {isBottomBarCollapsed ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+        </IconButton>
+
+        {!isBottomBarCollapsed && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%' }}>
+            {/* App Logo Placeholder */}
+            <img src="/HomeGlowLogo.png" alt="App Logo" style={{ height: '80px', marginRight: '20px' }} />
+
+            {/* Theme Toggle Button */}
+            <IconButton
+              onClick={toggleTheme}
+              aria-label="Toggle theme"
+              sx={{
+                color: theme === 'light' ? 'action.active' : 'white',
+                margin: '0 5px',
               }}
             >
-              No events scheduled for this day.
-            </Typography>
-          ) : (
-            <List sx={{ padding: 0 }}>
-              {selectedDateEvents.map((event, index) => (
-                <ListItem 
-                  key={index}
-                  sx={{ 
-                    paddingLeft: 0,
-                    paddingRight: 0,
-                    marginBottom: '12px',
-                    backgroundColor: 'rgba(var(--accent-rgb), 0.05)',
-                    borderRadius: '8px',
-                    border: '1px solid rgba(var(--accent-rgb), 0.2)'
-                  }}
-                >
-                  <ListItemText
-                    primary={event.title}
-                    secondary={
-                      <Box>
-                        <Typography variant="body2" sx={{ color: 'var(--text-color)', fontWeight: '500' }}>
-                          {moment(event.start).format('h:mm A')} - {moment(event.end).format('h:mm A')}
-                        </Typography>
-                        {(event.resource?.description || event.resource?.location) && (
-                          <Typography variant="body2" sx={{ color: 'rgba(var(--text-color-rgb), 0.7)', marginTop: '4px' }}>
-                            {event.resource.description || event.resource.location}
-                          </Typography>
-                        )}
-                      </Box>
-                    }
-                    primaryTypographyProps={{
-                      color: 'var(--text-color)',
-                      fontSize: '1rem',
-                      fontWeight: '600'
-                    }}
-                  />
-                </ListItem>
-              ))}
-            </List>
-          )}
-        </DialogContent>
-        
-        <DialogActions sx={{ padding: '16px 24px' }}>
-          <Button 
-            onClick={handleCloseModal}
-            sx={{
-              color: 'var(--text-color)',
-              borderColor: 'var(--card-border)',
-              '&:hover': {
-                backgroundColor: 'rgba(var(--text-color-rgb), 0.1)',
-                borderColor: 'var(--accent)'
-              }
-            }}
-            variant="outlined"
-          >
-            Close
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Card>
+              {theme === 'light' ? <Brightness4 /> : <Brightness7 />}
+            </IconButton>
+
+            {/* Admin Panel Toggle Button (Gear Icon) */}
+            <IconButton
+              onClick={toggleAdminPanel}
+              aria-label="Toggle Admin Panel"
+              sx={{
+                color: theme === 'light' ? 'action.active' : 'white',
+                margin: '0 5px',
+              }}
+            >
+              <SettingsIcon />
+            </IconButton>
+
+            {/* Page Refresh Button */}
+            <IconButton
+              onClick={handlePageRefresh}
+              aria-label="Refresh Page"
+              sx={{
+                color: theme === 'light' ? 'action.active' : 'white',
+                margin: '0 5px',
+              }}
+            >
+              <RefreshIcon />
+            </IconButton>
+          </Box>
+        )}
+      </Box>
+    </>
   );
 };
 
-export default CalendarWidget;
+export default App;
