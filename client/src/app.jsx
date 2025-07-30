@@ -96,6 +96,17 @@ const App = () => {
     const columnHeights = new Array(columns).fill(0);
     const layout = [];
 
+    // Reset all widgets to get accurate measurements
+    widgets.forEach((widget) => {
+      widget.style.position = 'static';
+      widget.style.width = 'auto';
+      widget.style.left = 'auto';
+      widget.style.top = 'auto';
+    });
+
+    // Force a reflow to ensure measurements are accurate
+    container.offsetHeight;
+
     widgets.forEach((widget, index) => {
       // Find the shortest column
       const shortestColumnIndex = columnHeights.indexOf(Math.min(...columnHeights));
@@ -104,13 +115,19 @@ const App = () => {
       const x = shortestColumnIndex * (columnWidth + gap);
       const y = columnHeights[shortestColumnIndex];
       
-      // Get widget height (force a reflow to get accurate height)
+      // Set width first, then measure height
       widget.style.width = `${columnWidth}px`;
+      widget.style.position = 'static';
+      
+      // Force reflow and get accurate height
+      const widgetHeight = widget.offsetHeight;
+      
+      // Now position absolutely
       widget.style.position = 'absolute';
       widget.style.left = `${x}px`;
       widget.style.top = `${y}px`;
       
-      const widgetHeight = widget.offsetHeight;
+      console.log(`Widget ${index}: x=${x}, y=${y}, width=${columnWidth}, height=${widgetHeight}`);
       
       // Update column height
       columnHeights[shortestColumnIndex] += widgetHeight + gap;
@@ -126,6 +143,9 @@ const App = () => {
     // Set container height to the tallest column
     const maxHeight = Math.max(...columnHeights);
     container.style.height = `${maxHeight}px`;
+    
+    console.log('Column heights:', columnHeights);
+    console.log('Container height set to:', maxHeight);
     
     setMasonryLayout(layout);
     setContainerWidth(containerWidth);
@@ -251,20 +271,20 @@ const App = () => {
   // NEW: Effect to recalculate layout when widgets change or window resizes
   useEffect(() => {
     const handleResize = () => {
-      setTimeout(calculateMasonryLayout, 100); // Small delay to ensure DOM is updated
+      setTimeout(calculateMasonryLayout, 300); // Increased delay for better measurement
     };
 
     window.addEventListener('resize', handleResize);
     
     // Initial calculation
-    setTimeout(calculateMasonryLayout, 100);
+    setTimeout(calculateMasonryLayout, 500); // Longer initial delay
     
     return () => window.removeEventListener('resize', handleResize);
   }, [shuffledWidgetOrder, widgetSettings]);
 
   // NEW: Effect to recalculate when widgets are enabled/disabled
   useEffect(() => {
-    setTimeout(calculateMasonryLayout, 200);
+    setTimeout(calculateMasonryLayout, 600); // Longer delay for widget changes
   }, [widgetSettings.chores.enabled, widgetSettings.calendar.enabled, widgetSettings.photos.enabled, widgetSettings.weather.enabled]);
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
@@ -312,14 +332,19 @@ const App = () => {
             position: 'relative',
             width: '100%',
             minHeight: '100vh',
-            padding: '8px'
+            padding: '8px',
+            overflow: 'visible' // Ensure widgets aren't clipped during measurement
           }}
         >
           {/* Render shuffled widgets in masonry layout */}
           {shuffledWidgetOrder.map((widgetName, index) => {
             const widget = renderWidget(widgetName, index);
             return widget ? (
-              <Box key={`${widgetName}-${index}`} className="masonry-widget">
+              <Box 
+                key={`${widgetName}-${index}`} 
+                className="masonry-widget"
+                onLoad={calculateMasonryLayout} // Recalculate when widget content loads
+              >
                 {widget}
               </Box>
             ) : null;
@@ -327,7 +352,10 @@ const App = () => {
 
           {/* Chores Widget - Special positioning */}
           {widgetSettings.chores.enabled && (
-            <Box className="masonry-widget chores-widget">
+            <Box 
+              className="masonry-widget chores-widget"
+              onLoad={calculateMasonryLayout} // Recalculate when chores widget loads
+            >
               <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />
             </Box>
           )}
