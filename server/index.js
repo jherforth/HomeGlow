@@ -540,6 +540,64 @@ async function initializeDatabase() {
         clam_cost INTEGER NOT NULL
       );
     `);
+    
+    // Migration: Add repeat_type column if it doesn't exist and remove old repeats column
+    try {
+      // Check if repeat_type column exists
+      const columns = newDb.prepare("PRAGMA table_info(chores)").all();
+      const hasRepeatType = columns.some(col => col.name === 'repeat_type');
+      const hasRepeats = columns.some(col => col.name === 'repeats');
+      
+      if (!hasRepeatType) {
+        console.log('Adding repeat_type column to chores table...');
+        newDb.exec('ALTER TABLE chores ADD COLUMN repeat_type TEXT DEFAULT "no-repeat"');
+        
+        // If old repeats column exists, migrate data
+        if (hasRepeats) {
+          console.log('Migrating data from repeats to repeat_type...');
+          newDb.exec(`
+            UPDATE chores 
+            SET repeat_type = CASE 
+              WHEN repeats = 1 OR repeats = 'true' THEN 'weekly'
+              ELSE 'no-repeat'
+            END
+          `);
+        }
+      }
+      
+      // Remove old repeats column if it exists
+      if (hasRepeats) {
+        console.log('Removing old repeats column...');
+        // SQLite doesn't support DROP COLUMN directly, so we need to recreate the table
+        newDb.exec(`
+          CREATE TABLE chores_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            title TEXT,
+            description TEXT,
+            time_period TEXT,
+            assigned_day_of_week TEXT,
+            repeat_type TEXT,
+            completed BOOLEAN,
+            clam_value INTEGER DEFAULT 0,
+            expiration_date TEXT
+          );
+          
+          INSERT INTO chores_new (id, user_id, title, description, time_period, assigned_day_of_week, repeat_type, completed, clam_value, expiration_date)
+          SELECT id, user_id, title, description, time_period, assigned_day_of_week, repeat_type, completed, clam_value, expiration_date
+          FROM chores;
+          
+          DROP TABLE chores;
+          ALTER TABLE chores_new RENAME TO chores;
+        `);
+        console.log('Migration completed successfully!');
+      }
+      
+    } catch (migrationError) {
+      console.error('Migration error:', migrationError);
+      // Continue anyway - the app might still work with the new schema
+    }
+    
     return newDb; // Return the new database instance
   } catch (error) {
     console.error('Failed to initialize database:', error);
