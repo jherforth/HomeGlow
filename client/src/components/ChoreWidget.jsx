@@ -21,7 +21,7 @@ import {
   DialogContent,
   DialogActions
 } from '@mui/material';
-import { Edit, Save, Cancel, Add, Delete } from '@mui/icons-material';
+import { Edit, Save, Cancel, Add, Delete, Check, Undo } from '@mui/icons-material';
 import axios from 'axios';
 
 const ChoreWidget = ({ transparentBackground }) => {
@@ -333,7 +333,7 @@ const ChoreWidget = ({ transparentBackground }) => {
       <Box
         key={chore.id}
         sx={{
-          p: 2,
+          p: 1.5, // Reduced padding
           border: '1px solid var(--card-border)',
           borderRadius: 2,
           mb: 1,
@@ -344,7 +344,7 @@ const ChoreWidget = ({ transparentBackground }) => {
         }}
       >
         <Box sx={{ flex: 1 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: chore.completed ? 'normal' : 'bold' }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: chore.completed ? 'normal' : 'bold', fontSize: '0.85rem' }}>
             {chore.title}
             {chore.clam_value > 0 && (
               <Chip
@@ -355,23 +355,33 @@ const ChoreWidget = ({ transparentBackground }) => {
             )}
           </Typography>
           {chore.description && (
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
               {chore.description}
             </Typography>
           )}
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
             {chore.time_period.replace('-', ' ')} • {chore.assigned_day_of_week} • {repeatTypes.find(t => t.value === chore.repeat_type)?.label}
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button
-            variant={chore.completed ? "outlined" : "contained"}
+          <IconButton
             color={chore.completed ? "secondary" : "primary"}
             onClick={() => toggleChoreCompletion(chore.id, chore.completed)}
             size="small"
+            sx={{ 
+              minWidth: 'auto',
+              width: 32,
+              height: 32,
+              bgcolor: chore.completed ? 'transparent' : 'var(--accent)',
+              color: chore.completed ? 'var(--accent)' : 'white',
+              '&:hover': {
+                bgcolor: chore.completed ? 'rgba(var(--accent-rgb), 0.1)' : 'var(--accent)',
+                filter: 'brightness(1.1)'
+              }
+            }}
           >
-            {chore.completed ? 'Undo' : 'Complete'}
-          </Button>
+            {chore.completed ? <Undo fontSize="small" /> : <Check fontSize="small" />}
+          </IconButton>
         </Box>
       </Box>
     );
@@ -433,11 +443,11 @@ const ChoreWidget = ({ transparentBackground }) => {
               key={user.id}
               sx={{
                 width: { xs: '100%', sm: 'calc(50% - 8px)', md: 'calc(33.333% - 11px)', lg: 'calc(25% - 12px)', xl: 'calc(20% - 13px)' },
-                minWidth: '280px', // Minimum width to maintain readability
+                minWidth: '220px', // Reduced minimum width
                 flex: '0 0 auto',
                 border: '2px solid var(--card-border)',
                 borderRadius: 2,
-                p: 2,
+                p: 1.5, // Reduced padding
                 bgcolor: allRegularChoresCompleted ? 'rgba(0, 255, 0, 0.05)' : 'transparent'
               }}
             >
@@ -456,9 +466,9 @@ const ChoreWidget = ({ transparentBackground }) => {
                 )}
               </Box>
 
-              <Box sx={{ maxHeight: 400, overflowY: 'auto' }}>
+              <Box sx={{ maxHeight: 350, overflowY: 'auto' }}>
                 {userChores.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
                     No chores for today
                   </Typography>
                 ) : (
@@ -473,11 +483,11 @@ const ChoreWidget = ({ transparentBackground }) => {
         <Box
           sx={{
             width: { xs: '100%', sm: 'calc(50% - 8px)', md: 'calc(33.333% - 11px)', lg: 'calc(25% - 12px)', xl: 'calc(20% - 13px)' },
-            minWidth: '280px', // Minimum width to maintain readability
+            minWidth: '220px', // Reduced minimum width
             flex: '0 0 auto',
             border: '2px solid var(--accent)',
             borderRadius: 2,
-            p: 2,
+            p: 1.5, // Reduced padding
             bgcolor: 'rgba(var(--accent-rgb), 0.05)'
           }}
         >
