@@ -581,6 +581,7 @@ const ChoreWidget = ({ transparentBackground }) => {
           </Box>
         </Box>
       </Box>
+      </Box>
 
       {/* Add Chore Dialog */}
       <Dialog open={showAddDialog} onClose={() => setShowAddDialog(false)} maxWidth="sm" fullWidth>
