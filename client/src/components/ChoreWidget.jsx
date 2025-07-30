@@ -406,7 +406,14 @@ const ChoreWidget = ({ transparentBackground }) => {
       </Box>
 
       <Box sx={{ display: 'flex', gap: 2, overflowX: 'auto', pb: 2 }}>
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, pb: 2 }}>
+      <Box sx={{ 
+        display: 'flex', 
+        flexWrap: 'wrap', 
+        gap: 2, 
+        pb: 2,
+        justifyContent: 'flex-start',
+        alignItems: 'flex-start'
+      }}>
         {/* User Columns - Regular users first */}
         {users.filter(user => user.id !== 0).map(user => {
           const userChores = getUserChores(user.id, currentDay);
@@ -418,8 +425,8 @@ const ChoreWidget = ({ transparentBackground }) => {
             <Box
               key={user.id}
               sx={{
-                width: { xs: '100%', sm: '280px', md: '300px', lg: '320px' },
-                minWidth: '280px',
+                width: { xs: '100%', sm: 'calc(50% - 8px)', md: 'calc(33.333% - 11px)', lg: 'calc(25% - 12px)', xl: 'calc(20% - 13px)' },
+                minWidth: '280px', // Minimum width to maintain readability
                 flex: '0 0 auto',
                 border: '2px solid var(--card-border)',
                 borderRadius: 2,
@@ -458,8 +465,8 @@ const ChoreWidget = ({ transparentBackground }) => {
         {/* Bonus Chores Column */}
         <Box
           sx={{
-            width: { xs: '100%', sm: '280px', md: '300px', lg: '320px' },
-            minWidth: '280px',
+            width: { xs: '100%', sm: 'calc(50% - 8px)', md: 'calc(33.333% - 11px)', lg: 'calc(25% - 12px)', xl: 'calc(20% - 13px)' },
+            minWidth: '280px', // Minimum width to maintain readability
             flex: '0 0 auto',
             border: '2px solid var(--accent)',
             borderRadius: 2,
@@ -573,7 +580,6 @@ const ChoreWidget = ({ transparentBackground }) => {
             )}
           </Box>
         </Box>
-      </Box>
       </Box>
 
       {/* Add Chore Dialog */}
