@@ -448,7 +448,9 @@ const ChoreWidget = ({ transparentBackground }) => {
                 border: '2px solid var(--card-border)',
                 borderRadius: 2,
                 p: 2.25, // Even more reduced padding
-                bgcolor: allRegularChoresCompleted ? 'rgba(0, 255, 0, 0.05)' : 'transparent'
+                bgcolor: allRegularChoresCompleted ? 'rgba(0, 255, 0, 0.05)' : 'transparent',
+                justifyContent: 'center',
+                alignItems: 'center'
               }}
             >
               <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 2 }}>
@@ -488,7 +490,9 @@ const ChoreWidget = ({ transparentBackground }) => {
             border: '2px solid var(--accent)',
             borderRadius: 2,
             p: 2.25, // Even more reduced padding
-            bgcolor: 'rgba(var(--accent-rgb), 0.05)'
+            bgcolor: 'rgba(var(--accent-rgb), 0.05)',
+            justifyContent: 'center',
+            alignItems: 'center'
           }}
         >
           <Typography variant="subtitle1" sx={{ textAlign: 'center', mb: 2, color: 'var(--accent)', fontSize: '0.9rem', fontWeight: 'bold' }}>
