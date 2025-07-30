@@ -31,10 +31,10 @@ const ChoreWidget = ({ transparentBackground }) => {
   const [newTask, setNewTask] = useState({
     title: '',
     description: '',
-    timePeriod: '',
     assignedTo: '',
-    assignedDayOfWeek: '',
-    repeats: 'Doesn\'t repeat',
+    selectedDays: [], // Array of day indices (0=Sunday, 1=Monday, etc.)
+    repeatType: 'no-repeat', // 'no-repeat', 'weekly', 'daily', 'until-completed'
+    timePeriod: 'any-time', // 'morning', 'afternoon', 'evening', 'any-time'
     clamValue: '', // New field for bonus chores
   });
   const [error, setError] = useState(null);
@@ -46,6 +46,9 @@ const ChoreWidget = ({ transparentBackground }) => {
   const [openPrizeListDialog, setOpenPrizeListDialog] = useState(false);
   const [prizes, setPrizes] = useState([]);
   const cardRef = useRef(null);
+
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const dayAbbreviations = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   const getCurrentDayOfWeek = () => {
     const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
@@ -110,18 +113,39 @@ const ChoreWidget = ({ transparentBackground }) => {
 
       // If assignedTo changes to bonus user (ID 0), set defaults for timePeriod, assignedDayOfWeek, and repeats
       if (name === 'assignedTo' && parseInt(value) === 0) {
-        updatedTask.timePeriod = 'evening';
-        updatedTask.assignedDayOfWeek = getCurrentDayOfWeek();
-        updatedTask.repeats = 'Doesn\'t repeat'; // Bonus chores don't repeat in the traditional sense
+        updatedTask.timePeriod = 'any-time';
+        updatedTask.selectedDays = [new Date().getDay()]; // Current day
+        updatedTask.repeatType = 'no-repeat'; // Bonus chores don't repeat in the traditional sense
       } else if (name === 'assignedTo' && parseInt(value) !== 0) {
         // If assignedTo changes to a regular user, reset these fields if they were previously set by bonus logic
-        if (prevTask.assignedTo === 0) {
-          updatedTask.timePeriod = '';
-          updatedTask.assignedDayOfWeek = '';
-          updatedTask.repeats = 'Doesn\'t repeat';
+        if (prevTask.assignedTo === '0') {
+          updatedTask.timePeriod = 'any-time';
+          updatedTask.selectedDays = [];
+          updatedTask.repeatType = 'no-repeat';
         }
       }
       return updatedTask;
+    });
+  };
+
+  const handleDayToggle = (dayIndex) => {
+    setNewTask(prevTask => {
+      const selectedDays = [...prevTask.selectedDays];
+      const dayIndexNum = parseInt(dayIndex);
+      
+      if (selectedDays.includes(dayIndexNum)) {
+        // Remove day
+        return {
+          ...prevTask,
+          selectedDays: selectedDays.filter(day => day !== dayIndexNum)
+        };
+      } else {
+        // Add day
+        return {
+          ...prevTask,
+          selectedDays: [...selectedDays, dayIndexNum].sort()
+        };
+      }
     });
   };
 
@@ -133,38 +157,45 @@ const ChoreWidget = ({ transparentBackground }) => {
     }
 
     // Specific validation for non-bonus tasks
-    if (newTask.assignedTo !== 0) {
-      if (!newTask.assignedTo || !newTask.timePeriod || !newTask.assignedDayOfWeek) {
-        setError('Please fill all required fields for the new task.');
+    if (parseInt(newTask.assignedTo) !== 0) {
+      if (!newTask.assignedTo || newTask.selectedDays.length === 0) {
+        setError('Please select an assignee and at least one day for the task.');
         return;
       }
     }
 
     // Validation for clamValue if bonus user is selected
-    if (newTask.assignedTo === 0 && (!newTask.clamValue || parseInt(newTask.clamValue) <= 0)) {
+    if (parseInt(newTask.assignedTo) === 0 && (!newTask.clamValue || parseInt(newTask.clamValue) <= 0)) {
       setError('Clam Value is required and must be a positive integer for bonus chores.');
       return;
     }
 
     try {
-      await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`, {
-        user_id: newTask.assignedTo,
-        title: newTask.title,
-        description: newTask.description,
-        time_period: newTask.timePeriod,
-        assigned_day_of_week: newTask.assignedDayOfWeek,
-        repeats: newTask.repeats,
-        completed: false,
-        clam_value: newTask.assignedTo === 0 ? parseInt(newTask.clamValue) : 0, // Only send clamValue if assigned to bonus user
-        expiration_date: null, // Explicitly send null for new chores
+      // Create chores for each selected day
+      const chorePromises = newTask.selectedDays.map(dayIndex => {
+        const dayName = dayNames[dayIndex].toLowerCase();
+        return axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`, {
+          user_id: parseInt(newTask.assignedTo),
+          title: newTask.title,
+          description: newTask.description,
+          time_period: newTask.timePeriod,
+          assigned_day_of_week: dayName,
+          repeat_type: newTask.repeatType,
+          completed: false,
+          clam_value: parseInt(newTask.assignedTo) === 0 ? parseInt(newTask.clamValue) : 0,
+          expiration_date: null,
+        });
       });
+
+      await Promise.all(chorePromises);
+      
       setNewTask({
         title: '',
         description: '',
-        timePeriod: '',
+        timePeriod: 'any-time',
         assignedTo: '',
-        assignedDayOfWeek: '',
-        repeats: 'Doesn\'t repeat',
+        selectedDays: [],
+        repeatType: 'no-repeat',
         clamValue: '',
       });
       setError(null);
@@ -190,10 +221,11 @@ const ChoreWidget = ({ transparentBackground }) => {
     setNewTask({
       title: '',
       description: '',
-      timePeriod: '',
+      timePeriod: 'any-time',
       assignedTo: '',
-      assignedDayOfWeek: '',
-      repeats: 'Doesn\'t repeat',
+      selectedDays: [],
+      repeatType: 'no-repeat',
+      clamValue: '',
     });
   };
 
@@ -437,20 +469,20 @@ const ChoreWidget = ({ transparentBackground }) => {
             sx={{ mb: 2 }}
           />
           <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-            <InputLabel>Task Time Period</InputLabel>
+            <InputLabel>Time of Day</InputLabel>
             <Select
               name="timePeriod"
               value={newTask.timePeriod}
-              label="Task Time Period"
+              label="Time of Day"
               onChange={handleNewTaskInputChange}
-              required={newTask.assignedTo !== 0} // Required only for non-bonus tasks
             >
-              <MenuItem value=""><em>None</em></MenuItem>
+              <MenuItem value="any-time">Any Time</MenuItem>
               <MenuItem value="morning">Morning</MenuItem>
               <MenuItem value="afternoon">Afternoon</MenuItem>
               <MenuItem value="evening">Evening</MenuItem>
             </Select>
           </FormControl>
+          
           <FormControl fullWidth size="small" sx={{ mb: 2 }}>
             <InputLabel>Assign Member</InputLabel>
             <Select
@@ -465,7 +497,8 @@ const ChoreWidget = ({ transparentBackground }) => {
               ))}
             </Select>
           </FormControl>
-          {newTask.assignedTo === 0 && (
+          
+          {parseInt(newTask.assignedTo) === 0 && (
             <TextField
               name="clamValue"
               label="Clam Value"
@@ -479,37 +512,43 @@ const ChoreWidget = ({ transparentBackground }) => {
               inputProps={{ min: 1 }}
             />
           )}
+          
+          {/* Day Selection */}
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+              Select Days *
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              {dayNames.map((day, index) => (
+                <Button
+                  key={index}
+                  variant={newTask.selectedDays.includes(index) ? "contained" : "outlined"}
+                  size="small"
+                  onClick={() => handleDayToggle(index)}
+                  sx={{
+                    minWidth: '45px',
+                    fontSize: '0.75rem',
+                    padding: '4px 8px',
+                  }}
+                >
+                  {dayAbbreviations[index]}
+                </Button>
+              ))}
+            </Box>
+          </Box>
+          
           <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-            <InputLabel>Assigned Day of the Week</InputLabel>
+            <InputLabel>Repeat Options</InputLabel>
             <Select
-              name="assignedDayOfWeek"
-              value={newTask.assignedDayOfWeek}
-              label="Assigned Day of the Week"
+              name="repeatType"
+              value={newTask.repeatType}
+              label="Repeat Options"
               onChange={handleNewTaskInputChange}
-              required={newTask.assignedTo !== 0} // Required only for non-bonus tasks
             >
-              <MenuItem value=""><em>None</em></MenuItem>
-              <MenuItem value="sunday">Sunday</MenuItem>
-              <MenuItem value="monday">Monday</MenuItem>
-              <MenuItem value="tuesday">Tuesday</MenuItem>
-              <MenuItem value="wednesday">Wednesday</MenuItem>
-              <MenuItem value="thursday">Thursday</MenuItem>
-              <MenuItem value="friday">Friday</MenuItem>
-              <MenuItem value="saturday">Saturday</MenuItem>
-            </Select>
-          </FormControl>
-          <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-            <InputLabel>Repeats</InputLabel>
-            <Select
-              name="repeats"
-              value={newTask.repeats}
-              label="Repeats"
-              onChange={handleNewTaskInputChange}
-              required={newTask.assignedTo !== 0} // Required only for non-bonus tasks
-            >
-              <MenuItem value="Doesn't repeat">Doesn't repeat</MenuItem>
-              <MenuItem value="Weekly on this day">Weekly on this day</MenuItem>
-              <MenuItem value="Daily">Daily</MenuItem>
+              <MenuItem value="no-repeat">No Repeat</MenuItem>
+              <MenuItem value="weekly">Weekly (on selected days)</MenuItem>
+              <MenuItem value="daily">Daily</MenuItem>
+              <MenuItem value="until-completed">Repeat Until Completed</MenuItem>
             </Select>
           </FormControl>
         </DialogContent>

@@ -509,7 +509,7 @@ async function initializeDatabase() {
         description TEXT,\
         time_period TEXT,\
         assigned_day_of_week TEXT,\
-        repeats TEXT,\
+        repeat_type TEXT,\
         completed BOOLEAN,
         clam_value INTEGER DEFAULT 0,
         expiration_date TEXT
@@ -555,7 +555,7 @@ async function pruneAndResetChores() {
     const now = new Date();
 
     // Select all chores to process
-    const allChores = db.prepare('SELECT id, user_id, assigned_day_of_week, repeats, completed, clam_value, expiration_date FROM chores').all();
+    const allChores = db.prepare('SELECT id, user_id, assigned_day_of_week, repeat_type, completed, clam_value, expiration_date FROM chores').all();
 
     for (const chore of allChores) {
       // Handle bonus chores
@@ -576,12 +576,28 @@ async function pruneAndResetChores() {
       } else {
         // Handle regular chores (existing logic)
         if (chore.completed && chore.assigned_day_of_week !== currentDay) {
-          if (chore.repeats === "Doesn't repeat") {
+          if (chore.repeat_type === "no-repeat") {
             db.prepare('DELETE FROM chores WHERE id = ?').run(chore.id);
-            console.log(`Deleted non-repeating chore ID ${chore.id} from a past day.`);
-          } else if (chore.repeats === "Weekly on this day" || chore.repeats === "Daily") {
+            console.log(`Deleted non-repeating chore ID ${chore.id}.`);
+          } else if (chore.repeat_type === "until-completed") {
+            // Delete "until-completed" chores once they're completed
+            db.prepare('DELETE FROM chores WHERE id = ?').run(chore.id);
+            console.log(`Deleted "until-completed" chore ID ${chore.id} after completion.`);
+          } else if (chore.repeat_type === "weekly" || chore.repeat_type === "daily") {
             db.prepare('UPDATE chores SET completed = 0 WHERE id = ?').run(chore.id);
             console.log(`Reset repeating chore ID ${chore.id} to uncompleted.`);
+          }
+        } else if (!chore.completed && chore.repeat_type === "until-completed") {
+          // For "until-completed" chores that aren't completed, check if they should repeat daily
+          if (chore.assigned_day_of_week !== currentDay) {
+            // Create a new instance for today if it doesn't exist
+            const existingTodayChore = db.prepare('SELECT id FROM chores WHERE user_id = ? AND title = ? AND assigned_day_of_week = ? AND repeat_type = "until-completed"').get(chore.user_id, chore.title, currentDay);
+            if (!existingTodayChore) {
+              db.prepare('INSERT INTO chores (user_id, title, description, time_period, assigned_day_of_week, repeat_type, completed, clam_value, expiration_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+                chore.user_id, chore.title, chore.description || '', chore.time_period || 'any-time', currentDay, 'until-completed', 0, 0, null
+              );
+              console.log(`Created new "until-completed" chore instance for today: ${chore.title}`);
+            }
           }
         }
       }
@@ -604,11 +620,11 @@ fastify.get('/api/chores', async (request, reply) => {
 });
 
 fastify.post('/api/chores', async (request, reply) => {
-  const { user_id, title, description, time_period, assigned_day_of_week, repeats, completed, clam_value, expiration_date } = request.body;
+  const { user_id, title, description, time_period, assigned_day_of_week, repeat_type, completed, clam_value, expiration_date } = request.body;
   try {
     const completedInt = completed ? 1 : 0;
-    const stmt = db.prepare('INSERT INTO chores (user_id, title, description, time_period, assigned_day_of_week, repeats, completed, clam_value, expiration_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
-    const info = stmt.run(user_id, title, description, time_period, assigned_day_of_week, repeats, completedInt, clam_value, expiration_date);
+    const stmt = db.prepare('INSERT INTO chores (user_id, title, description, time_period, assigned_day_of_week, repeat_type, completed, clam_value, expiration_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const info = stmt.run(user_id, title, description, time_period, assigned_day_of_week, repeat_type, completedInt, clam_value, expiration_date);
     return { id: info.lastInsertRowid };
   } catch (error) {
     console.error('Error adding chore:', error);
