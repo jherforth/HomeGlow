@@ -166,7 +166,7 @@ const ChoreWidget = ({ transparentBackground }) => {
         {user.profile_picture ? (
           <>
             <img
-              src={`${import.meta.env.VITE_REACT_APP_API_URL}/uploads/users/${user.profile_picture}`}
+              src={`${import.meta.env.VITE_REACT_APP_API_URL}/Uploads/users/${user.profile_picture}`}
               alt={user.username}
               style={{
                 width: 60,
@@ -229,7 +229,8 @@ const ChoreWidget = ({ transparentBackground }) => {
   };
 
   const renderChoreItem = (chore, isEditing = false) => {
-    if (isEditing && editingChore?.id === chore.id) {
+    // Only allow editing in admin context (this function is now only used for display)
+    if (false) { // Disable editing in user view
       return (
         <Box key={chore.id} sx={{ p: 2, border: '1px solid var(--accent)', borderRadius: 2, mb: 1 }}>
           <TextField
@@ -349,12 +350,6 @@ const ChoreWidget = ({ transparentBackground }) => {
           >
             {chore.completed ? 'Undo' : 'Complete'}
           </Button>
-          <IconButton onClick={() => setEditingChore(chore)} size="small">
-            <Edit />
-          </IconButton>
-          <IconButton onClick={() => deleteChore(chore.id)} size="small" color="error">
-            <Delete />
-          </IconButton>
         </Box>
       </Box>
     );
@@ -427,7 +422,7 @@ const ChoreWidget = ({ transparentBackground }) => {
                     No chores for today
                   </Typography>
                 ) : (
-                  userChores.map(chore => renderChoreItem(chore, true))
+                  userChores.map(chore => renderChoreItem(chore, false))
                 )}
               </Box>
             </Box>

@@ -37,6 +37,14 @@ fastify.addHook('preHandler', (request, reply, done) => {
 fastify.register(require('@fastify/static'), {
   root: path.join(__dirname, 'uploads'),
   prefix: '/Uploads/',
+  decorateReply: false
+});
+
+// Additional static route specifically for user uploads
+fastify.register(require('@fastify/static'), {
+  root: path.join(__dirname, 'uploads', 'users'),
+  prefix: '/Uploads/users/',
+  decorateReply: false
 });
 
 // Serve static files for widgets
