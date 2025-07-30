@@ -443,7 +443,7 @@ const ChoreWidget = ({ transparentBackground }) => {
               key={user.id}
               sx={{
                 width: { xs: '100%', sm: 'calc(33.333% - 11px)', md: 'calc(25% - 12px)', lg: 'calc(20% - 13px)', xl: 'calc(16.666% - 13px)' },
-                minWidth: '150px', // Even more reduced minimum width
+                minWidth: '165px', // Even more reduced minimum width
                 flex: '0 0 auto',
                 border: '2px solid var(--card-border)',
                 borderRadius: 2,
@@ -483,7 +483,7 @@ const ChoreWidget = ({ transparentBackground }) => {
         <Box
           sx={{
             width: { xs: '100%', sm: 'calc(33.333% - 11px)', md: 'calc(25% - 12px)', lg: 'calc(20% - 13px)', xl: 'calc(16.666% - 13px)' },
-            minWidth: '150px', // Even more reduced minimum width
+            minWidth: '165px', // Even more reduced minimum width
             flex: '0 0 auto',
             border: '2px solid var(--accent)',
             borderRadius: 2,
