@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Rolling Weekly Menu</title>
+  <link rel="stylesheet" href="/index.css">
+  <style>
+    * {
+      background: transparent !important;
+      background-color: transparent !important;
+      background-image: none !important;
+    }
+
+    body {
+      background: transparent !important;
+      font-family: 'Inter', sans-serif;
+      margin: 0;
+      padding: 0.75rem;
+      box-sizing: border-box;
+      font-size: 0.85rem;
+      color: #333;
+    }
+
+    [data-theme="dark"] body {
+      color: #a6a6d1;
+      background: transparent !important;
+    }
+
+    .widget-container {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      backdrop-filter: none !important;
+      border-radius: 12px;
+      padding: 0.5rem;
+      width: 100%;
+      max-height: calc(100vh - 1.5rem);
+      overflow-y: auto;
+    }
+
+    .widget-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin: 0 0 1rem 0;
+      color: inherit;
+      text-align: center;
+    }
+
+    .menu-controls {
+      display: flex;
+      justify-content: center;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .custom-button {
+      background: linear-gradient(45deg, #00ddeb, #ff6b6b) !important;
+      color: #333 !important;
+      border: none;
+      border-radius: 8px;
+      padding: 6px 12px;
+      cursor: pointer;
+      font-size: 0.75rem;
+      font-weight: 600;
+      transition: all 0.3s ease;
+    }
+
+    [data-theme="dark"] .custom-button {
+      background: linear-gradient(45deg, #2e2767, #620808) !important;
+      color: #a6a6d1 !important;
+    }
+
+    .custom-button:hover {
+      filter: brightness(1.1);
+      transform: translateY(-1px);
+    }
+
+    .day-container {
+      margin-bottom: 0.75rem;
+      border-radius: 8px;
+      padding: 0.5rem;
+      transition: all 0.3s ease;
+    }
+
+    .day-container.current-day {
+      border: 2px solid #00ddeb;
+      background: rgba(0, 221, 235, 0.1) !important;
+    }
+
+    [data-theme="dark"] .day-container.current-day {
+      border-color: #00ddeb;
+      background: rgba(0, 221, 235, 0.15) !important;
+    }
+
+    .day-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+
+    .day-name {
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: inherit;
+    }
+
+    .day-date {
+      font-size: 0.75rem;
+      opacity: 0.7;
+      color: inherit;
+    }
+
+    .menu-items {
+      min-height: 2rem;
+    }
+
+    .menu-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.25rem 0;
+      border-bottom: 1px solid rgba(128, 128, 128, 0.2);
+    }
+
+    .menu-item:last-child {
+      border-bottom: none;
+    }
+
+    .menu-item-text {
+      flex: 1;
+      color: inherit;
+      font-size: 0.8rem;
+    }
+
+    .menu-item-actions {
+      display: flex;
+      gap: 0.25rem;
+    }
+
+    .small-button {
+      background: none !important;
+      border: 1px solid rgba(128, 128, 128, 0.3);
+      border-radius: 4px;
+      padding: 2px 6px;
+      cursor: pointer;
+      font-size: 0.7rem;
+      color: inherit;
+      transition: all 0.2s ease;
+    }
+
+    .small-button:hover {
+      border-color: #00ddeb;
+      background: rgba(0, 221, 235, 0.1) !important;
+    }
+
+    [data-theme="dark"] .small-button:hover {
+      border-color: #00ddeb;
+      background: rgba(0, 221, 235, 0.15) !important;
+    }
+
+    .add-item-container {
+      margin-top: 0.5rem;
+      display: none;
+    }
+
+    .add-item-container.active {
+      display: block;
+    }
+
+    .add-item-input {
+      width: 100%;
+      padding: 0.5rem;
+      border: 1px solid rgba(128, 128, 128, 0.3);
+      border-radius: 6px;
+      background: transparent !important;
+      color: inherit;
+      font-size: 0.8rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .add-item-input:focus {
+      outline: none;
+      border-color: #00ddeb;
+    }
+
+    .add-item-actions {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+    }
+
+    .empty-day {
+      color: rgba(128, 128, 128, 0.6);
+      font-style: italic;
+      font-size: 0.8rem;
+      text-align: center;
+      padding: 1rem 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="widget-container">
+    <h1 class="widget-title">🍽️ Rolling Weekly Menu</h1>
+    
+    <div class="menu-controls">
+      <button class="custom-button" onclick="toggleEditMode()">
+        <span id="edit-mode-text">Edit Mode</span>
+      </button>
+      <button class="custom-button" onclick="resetWeek()">Reset Week</button>
+    </div>
+
+    <div id="menu-days"></div>
+  </div>
+
+  <script>
+    let editMode = false;
+    let menuData = {};
+    let currentAddingDay = null;
+
+    // Day names for the rolling cycle
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+    document.addEventListener('DOMContentLoaded', () => {
+      // Handle theme
+      const params = new URLSearchParams(window.location.search);
+      const theme = params.get('theme');
+      if (theme === 'dark' || theme === 'light') {
+        document.documentElement.setAttribute('data-theme', theme);
+      }
+
+      // Load saved menu data
+      loadMenuData();
+      
+      // Render the menu
+      renderMenu();
+      
+      // Check if we need to cycle days (once per day)
+      checkAndCycleDays();
+    });
+
+    function getCurrentDayIndex() {
+      return new Date().getDay(); // 0 = Sunday, 1 = Monday, etc.
+    }
+
+    function getDateForDayOffset(offset) {
+      const today = new Date();
+      const targetDate = new Date(today);
+      targetDate.setDate(today.getDate() + offset);
+      return targetDate;
+    }
+
+    function formatDate(date) {
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+
+    function getRollingDayOrder() {
+      const currentDayIndex = getCurrentDayIndex();
+      const rollingOrder = [];
+      
+      // Start with today and go forward 7 days
+      for (let i = 0; i < 7; i++) {
+        const dayIndex = (currentDayIndex + i) % 7;
+        const date = getDateForDayOffset(i);
+        rollingOrder.push({
+          name: dayNames[dayIndex],
+          index: dayIndex,
+          date: date,
+          isToday: i === 0
+        });
+      }
+      
+      return rollingOrder;
+    }
+
+    function loadMenuData() {
+      const saved = localStorage.getItem('rollingWeeklyMenu');
+      if (saved) {
+        menuData = JSON.parse(saved);
+      } else {
+        // Initialize empty menu data
+        menuData = {};
+        dayNames.forEach((day, index) => {
+          menuData[index] = [];
+        });
+      }
+    }
+
+    function saveMenuData() {
+      localStorage.setItem('rollingWeeklyMenu', JSON.stringify(menuData));
+    }
+
+    function checkAndCycleDays() {
+      const lastCycleDate = localStorage.getItem('lastMenuCycleDate');
+      const today = new Date().toDateString();
+      
+      if (lastCycleDate !== today) {
+        // It's a new day, cycle the menu
+        cycleDays();
+        localStorage.setItem('lastMenuCycleDate', today);
+      }
+    }
+
+    function cycleDays() {
+      // Get yesterday's day index
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayIndex = yesterday.getDay();
+      
+      // Clear yesterday's menu items (they've been "consumed")
+      if (menuData[yesterdayIndex]) {
+        menuData[yesterdayIndex] = [];
+        saveMenuData();
+      }
+    }
+
+    function renderMenu() {
+      const container = document.getElementById('menu-days');
+      const rollingDays = getRollingDayOrder();
+      
+      container.innerHTML = '';
+      
+      rollingDays.forEach((day, position) => {
+        const dayContainer = document.createElement('div');
+        dayContainer.className = `day-container ${day.isToday ? 'current-day' : ''}`;
+        
+        const dayItems = menuData[day.index] || [];
+        
+        dayContainer.innerHTML = `
+          <div class="day-header">
+            <span class="day-name">${day.name}</span>
+            <span class="day-date">${formatDate(day.date)}</span>
+          </div>
+          <div class="menu-items" id="items-${day.index}">
+            ${dayItems.length === 0 ? 
+              '<div class="empty-day">No menu items planned</div>' : 
+              dayItems.map((item, itemIndex) => `
+                <div class="menu-item">
+                  <span class="menu-item-text">${item}</span>
+                  ${editMode ? `
+                    <div class="menu-item-actions">
+                      <button class="small-button" onclick="removeItem(${day.index}, ${itemIndex})">×</button>
+                    </div>
+                  ` : ''}
+                </div>
+              `).join('')
+            }
+          </div>
+          ${editMode ? `
+            <div class="add-item-container" id="add-container-${day.index}">
+              <input type="text" class="add-item-input" id="add-input-${day.index}" 
+                     placeholder="Add menu item..." 
+                     onkeypress="handleAddKeyPress(event, ${day.index})">
+              <div class="add-item-actions">
+                <button class="small-button" onclick="cancelAdd(${day.index})">Cancel</button>
+                <button class="small-button" onclick="addItem(${day.index})">Add</button>
+              </div>
+            </div>
+            <button class="custom-button" onclick="showAddItem(${day.index})" 
+                    id="add-btn-${day.index}" style="margin-top: 0.5rem; font-size: 0.7rem; padding: 4px 8px;">
+              + Add Item
+            </button>
+          ` : ''}
+        `;
+        
+        container.appendChild(dayContainer);
+      });
+    }
+
+    function toggleEditMode() {
+      editMode = !editMode;
+      document.getElementById('edit-mode-text').textContent = editMode ? 'View Mode' : 'Edit Mode';
+      renderMenu();
+    }
+
+    function showAddItem(dayIndex) {
+      // Hide all other add containers
+      document.querySelectorAll('.add-item-container').forEach(container => {
+        container.classList.remove('active');
+      });
+      
+      // Show this day's add container
+      const container = document.getElementById(`add-container-${dayIndex}`);
+      const button = document.getElementById(`add-btn-${dayIndex}`);
+      const input = document.getElementById(`add-input-${dayIndex}`);
+      
+      container.classList.add('active');
+      button.style.display = 'none';
+      input.focus();
+      currentAddingDay = dayIndex;
+    }
+
+    function cancelAdd(dayIndex) {
+      const container = document.getElementById(`add-container-${dayIndex}`);
+      const button = document.getElementById(`add-btn-${dayIndex}`);
+      const input = document.getElementById(`add-input-${dayIndex}`);
+      
+      container.classList.remove('active');
+      button.style.display = 'block';
+      input.value = '';
+      currentAddingDay = null;
+    }
+
+    function addItem(dayIndex) {
+      const input = document.getElementById(`add-input-${dayIndex}`);
+      const text = input.value.trim();
+      
+      if (text) {
+        if (!menuData[dayIndex]) {
+          menuData[dayIndex] = [];
+        }
+        menuData[dayIndex].push(text);
+        saveMenuData();
+        renderMenu();
+      }
+    }
+
+    function removeItem(dayIndex, itemIndex) {
+      if (menuData[dayIndex]) {
+        menuData[dayIndex].splice(itemIndex, 1);
+        saveMenuData();
+        renderMenu();
+      }
+    }
+
+    function handleAddKeyPress(event, dayIndex) {
+      if (event.key === 'Enter') {
+        addItem(dayIndex);
+      } else if (event.key === 'Escape') {
+        cancelAdd(dayIndex);
+      }
+    }
+
+    function resetWeek() {
+      if (confirm('Are you sure you want to clear all menu items for the week?')) {
+        menuData = {};
+        dayNames.forEach((day, index) => {
+          menuData[index] = [];
+        });
+        saveMenuData();
+        renderMenu();
+      }
+    }
+  </script>
+</body>
+</html>
