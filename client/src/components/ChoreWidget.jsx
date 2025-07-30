@@ -447,7 +447,7 @@ const ChoreWidget = ({ transparentBackground }) => {
                 flex: '0 0 auto',
                 border: '2px solid var(--card-border)',
                 borderRadius: 2,
-                p: 0.75, // Even more reduced padding
+                p: 1.25, // Even more reduced padding
                 bgcolor: allRegularChoresCompleted ? 'rgba(0, 255, 0, 0.05)' : 'transparent'
               }}
             >
@@ -483,11 +483,11 @@ const ChoreWidget = ({ transparentBackground }) => {
         <Box
           sx={{
             width: { xs: '100%', sm: 'calc(33.333% - 11px)', md: 'calc(25% - 12px)', lg: 'calc(20% - 13px)', xl: 'calc(16.666% - 13px)' },
-            minWidth: '165px', // Even more reduced minimum width
+            minWidth: '180px', // Even more reduced minimum width
             flex: '0 0 auto',
             border: '2px solid var(--accent)',
             borderRadius: 2,
-            p: 0.75, // Even more reduced padding
+            p: 1.25, // Even more reduced padding
             bgcolor: 'rgba(var(--accent-rgb), 0.05)'
           }}
         >
