@@ -277,12 +277,6 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
                     bgcolor: 'rgba(var(--accent-rgb), 0.05)'
                   }}
                 >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Typography variant="h5">
-                      {getWeatherIcon(day.weather.icon)}
-                    </Typography>
-                    <Box>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
                 <Box sx={{ textAlign: 'right' }}>
                   <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#ff6b6b' }}>
                     {day.tempHigh}°F
@@ -291,13 +285,14 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
                     {day.tempLow}°F
                   </Typography>
                 </Box>
-                        {day.weather.description}
-                      </Typography>
-                    </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Typography variant="h5">
+                      {getWeatherIcon(day.weather.icon)}
+                    </Typography>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                      {day.weather.description}
+                    </Typography>
                   </Box>
-                  <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                    {day.temp}°F
-                  </Typography>
                 </Box>
               ))}
             </Box>
