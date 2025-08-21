@@ -1,0 +1,50 @@
+services:
+  homeglow-backend:
+    container_name: homeglow-backend
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    volumes:
+      - /apps/homeglow/data:/app/data
+      - /apps/homeglow/uploads:/app/uploads
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+    networks:
+      - homeglow-network
+
+  homeglow-frontend:
+    container_name: homeglow-frontend
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      args:
+        - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
+        - VITE_REACT_APP_API_URL=http://homeglow:5000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - homeglow-backend
+    networks:
+      - homeglow-network
+
+  tailscale:
+    container_name: homeglow-tailscale
+    image: tailscale/tailscale:latest
+    volumes:
+      - /apps/homeglow/tailscale-state:/var/lib/tailscale
+    cap_add:
+      - NET_ADMIN
+    network_mode: host
+    environment:
+      - TS_AUTHKEY=${TS_AUTHKEY}
+      - TS_USERSPACE=true
+      - TS_SERVE_HTTP=:3000
+      - TS_SERVE_HTTPS=:5000
+    restart: unless-stopped
+
+networks:
+  homeglow-network:
+    driver: bridge
