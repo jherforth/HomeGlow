@@ -22,7 +22,7 @@ services:
       dockerfile: Dockerfile
       args:
         - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
-        - VITE_REACT_APP_API_URL=http://localhost:5000
+        - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}
     ports:
       - "3000:3000"
     depends_on:
