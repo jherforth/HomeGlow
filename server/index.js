@@ -913,15 +913,29 @@ fastify.patch('/api/users/:id/clams', async (request, reply) => {
 // NEW: Endpoint to delete a user
 fastify.delete('/api/users/:id', async (request, reply) => {
   const { id } = request.params;
+  
+  // Prevent deletion of the bonus user (ID 0)
+  if (parseInt(id) === 0) {
+    return reply.status(400).send({ error: 'Cannot delete the bonus user' });
+  }
+  
   try {
-    // Optional: Delete associated chores first if desired, or set user_id to NULL
-    // db.prepare('DELETE FROM chores WHERE user_id = ?').run(id);\
+    // Delete associated chores first to maintain data integrity
+    const deleteChoresStmt = db.prepare('DELETE FROM chores WHERE user_id = ?');
+    const choresResult = deleteChoresStmt.run(id);
+    console.log(`Deleted ${choresResult.changes} chores for user ${id}`);
+    
+    // Then delete the user
     const stmt = db.prepare('DELETE FROM users WHERE id = ?');
     const info = stmt.run(id);
     if (info.changes === 0) {
       return reply.status(404).send({ error: 'User not found' });
     }
-    return { success: true, message: 'User deleted successfully' };
+    return { 
+      success: true, 
+      message: 'User deleted successfully',
+      choresDeleted: choresResult.changes
+    };
   } catch (error) {
     console.error('Error deleting user:', error);
     reply.status(500).send({ error: 'Failed to delete user' });

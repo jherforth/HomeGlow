@@ -179,12 +179,13 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   };
 
   const handleUserDelete = async (userId) => {
-    if (window.confirm('Are you sure you want to delete this user?')) {
+    if (window.confirm('Are you sure you want to delete this user? This will also delete all their assigned chores.')) {
       try {
         await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users/${userId}`);
         fetchUsers();
       } catch (error) {
         console.error('Error deleting user:', error);
+        alert('Failed to delete user. Please try again.');
       }
     }
   };
