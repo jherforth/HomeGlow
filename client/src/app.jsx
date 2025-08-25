@@ -28,7 +28,6 @@ const App = () => {
       photos: { enabled: false, transparent: false },
       weather: { enabled: false, transparent: false },
       textSize: 16,
-      cardSize: 300,
       cardPadding: 20,
       cardHeight: 200,
       refreshInterval: 'manual',
@@ -49,8 +48,8 @@ const App = () => {
   });
   const [showAdminPanel, setShowAdminPanel] = useState(false);
 
-  // State for shuffled widget order
-  const [shuffledWidgetOrder, setShuffledWidgetOrder] = useState([]);
+  // State for card shuffle positions
+  const [cardPositions, setCardPositions] = useState({});
 
   // NEW: State for dynamic GeoPattern seed
   const [currentGeoPatternSeed, setCurrentGeoPatternSeed] = useState('');
@@ -67,131 +66,42 @@ const App = () => {
   // NEW: State to trigger widget gallery refresh
   const [widgetGalleryKey, setWidgetGalleryKey] = useState(0);
 
-  // NEW: Refs and state for JavaScript masonry layout
-  const masonryContainerRef = useRef(null);
-  const [masonryLayout, setMasonryLayout] = useState([]);
-  const [containerWidth, setContainerWidth] = useState(0);
+  // Function to generate random positions for card shuffle
+  const generateCardPositions = () => {
+    const enabledWidgets = [];
+    if (widgetSettings.calendar.enabled) enabledWidgets.push('calendar');
+    if (widgetSettings.weather.enabled) enabledWidgets.push('weather');
+    if (widgetSettings.chores.enabled) enabledWidgets.push('chores');
+    if (widgetSettings.photos.enabled) enabledWidgets.push('photos');
 
-  // Add a flag to prevent multiple simultaneous calculations
-  const [isCalculating, setIsCalculating] = useState(false);
-
-  // NEW: Calculate masonry layout function
-  const calculateMasonryLayout = async () => {
-    if (isCalculating || !masonryContainerRef.current) {
-      console.log('Skipping calculation - already calculating or no container');
-      return;
+    if (!widgetSettings.enableCardShuffle || enabledWidgets.length === 0) {
+      return {};
     }
+
+    const positions = {};
+    const usedPositions = new Set();
     
-    setIsCalculating(true);
-    console.log('=== Starting masonry calculation ===');
-    
-    try {
-      // Small delay to ensure DOM is ready
-      await new Promise(resolve => setTimeout(resolve, 100));
+    // Generate random positions for each widget
+    enabledWidgets.forEach(widget => {
+      let attempts = 0;
+      let position;
       
-      if (!masonryContainerRef.current) {
-        setIsCalculating(false);
-        return;
-      }
-
-      const container = masonryContainerRef.current;
-      const containerRect = container.getBoundingClientRect();
-      const containerWidth = containerRect.width;
-      
-      console.log('Container width:', containerWidth);
-      
-      // Calculate number of columns based on screen width
-      let columns = 1;
-      if (containerWidth >= 1600) columns = 5;
-      else if (containerWidth >= 1200) columns = 4;
-      else if (containerWidth >= 900) columns = 3;
-      else if (containerWidth >= 600) columns = 2;
-      else columns = 1;
-
-      console.log('Using', columns, 'columns');
-
-      const gap = 16;
-      const columnWidth = (containerWidth - (gap * (columns - 1))) / columns;
-      console.log('Column width:', columnWidth, 'Gap:', gap);
-      
-      // Get all widget elements
-      const widgets = container.querySelectorAll('.masonry-widget');
-      console.log('Found', widgets.length, 'widgets');
-      
-      if (widgets.length === 0) {
-        setIsCalculating(false);
-        return;
-      }
-      
-      const columnHeights = new Array(columns).fill(0);
-
-      // Reset all widgets to get accurate measurements
-      widgets.forEach((widget) => {
-        widget.style.position = 'static';
-        widget.style.width = 'auto';
-        widget.style.left = 'auto';
-        widget.style.top = 'auto';
-        widget.style.transform = 'none';
-      });
-
-      // Force a reflow to ensure measurements are accurate
-      container.offsetHeight;
-
-      widgets.forEach((widget, index) => {
-        // Find the shortest column
-        const shortestColumnIndex = columnHeights.indexOf(Math.min(...columnHeights));
-        const currentColumnHeight = columnHeights[shortestColumnIndex];
+      do {
+        // Generate random transform values
+        const translateX = Math.random() * 40 - 20; // -20px to +20px
+        const translateY = Math.random() * 40 - 20; // -20px to +20px
+        const rotate = Math.random() * 4 - 2; // -2deg to +2deg
         
-        // Calculate position
-        const x = shortestColumnIndex * (columnWidth + gap);
-        const y = currentColumnHeight; // THIS WAS THE BUG - y should be currentColumnHeight, not 0
-        
-        // Set width first, then measure height
-        widget.style.width = `${columnWidth}px`;
-        
-        // Force reflow and get accurate height
-        container.offsetHeight;
-        const widgetHeight = widget.offsetHeight;
-        
-        // Now position absolutely
-        widget.style.position = 'absolute';
-        widget.style.left = `${x}px`;
-        widget.style.top = `${y}px`; // Use the calculated y position
-        widget.style.zIndex = '1';
-        
-        console.log(`Widget ${index}:`);
-        console.log(`  Position: x=${x}, y=${y}`);
-        console.log(`  Size: width=${columnWidth}, height=${widgetHeight}`);
-        console.log(`  Placed in column ${shortestColumnIndex} (was ${currentColumnHeight}px tall)`);
-        
-        // Update column height - THIS IS THE KEY FIX
-        columnHeights[shortestColumnIndex] = currentColumnHeight + widgetHeight + gap;
-        console.log(`  Column ${shortestColumnIndex} now ${columnHeights[shortestColumnIndex]}px tall`);
-      });
+        position = `translate(${translateX}px, ${translateY}px) rotate(${rotate}deg)`;
+        attempts++;
+      } while (usedPositions.has(position) && attempts < 10);
+      
+      positions[widget] = position;
+      usedPositions.add(position);
+    });
 
-      // Set container height to the tallest column
-      const maxHeight = Math.max(...columnHeights);
-      container.style.height = `${maxHeight}px`;
-      container.style.position = 'relative';
-      
-      console.log('Final column heights:', columnHeights);
-      console.log('Container height set to:', maxHeight);
-      console.log('=== Masonry calculation complete ===');
-      
-    } catch (error) {
-      console.error('Error in masonry calculation:', error);
-    } finally {
-      setIsCalculating(false);
-    }
+    return positions;
   };
-
-  // Debounced version to prevent excessive calls
-  const debouncedCalculateMasonryLayout = React.useCallback(() => {
-    clearTimeout(window.masonryTimeout);
-    window.masonryTimeout = setTimeout(() => {
-      calculateMasonryLayout();
-    }, 300);
-  }, []);
 
   // NEW: Function to refresh widget gallery
   const refreshWidgetGallery = () => {
@@ -218,12 +128,14 @@ const App = () => {
     // NEW: Generate a random seed once on component mount
     // This ensures a new pattern on each full page refresh
     setCurrentGeoPatternSeed(Math.random().toString());
+
+    // Generate initial card positions
+    setCardPositions(generateCardPositions());
   }, []);
 
   // Effect to apply dynamic CSS variables
   useEffect(() => {
     document.documentElement.style.setProperty('--dynamic-text-size', `${widgetSettings.textSize}px`);
-    document.documentElement.style.setProperty('--dynamic-card-width', `${widgetSettings.cardSize}px`);
     document.documentElement.style.setProperty('--dynamic-card-padding', `${widgetSettings.cardPadding}px`);
     document.documentElement.style.setProperty('--dynamic-card-height', `${widgetSettings.cardHeight}px`);
 
@@ -248,6 +160,10 @@ const App = () => {
       const intervalMilliseconds = intervalHours * 60 * 60 * 1000; // Convert hours to milliseconds
       intervalId = setInterval(() => {
         console.log(`Auto-refreshing page after ${intervalHours} hours.`);
+        // Generate new card positions before refresh if shuffle is enabled
+        if (widgetSettings.enableCardShuffle) {
+          setCardPositions(generateCardPositions());
+        }
         window.location.reload();
       }, intervalMilliseconds);
     }
@@ -287,28 +203,10 @@ const App = () => {
     }
   }, [widgetSettings.enableGeoPatternBackground, theme, currentGeoPatternSeed]); // Re-apply if theme or seed changes
 
-  // NEW: Effect for card shuffle
+  // Effect to regenerate card positions when shuffle setting changes
   useEffect(() => {
-    const widgetsToShuffle = [];
-    if (widgetSettings.calendar.enabled) widgetsToShuffle.push('calendar');
-    if (widgetSettings.photos.enabled) widgetsToShuffle.push('photos');
-    if (widgetSettings.weather.enabled) widgetsToShuffle.push('weather');
-
-    if (widgetSettings.enableCardShuffle && widgetsToShuffle.length > 0) {
-      // Simple shuffle function (Fisher-Yates)
-      const shuffleArray = (array) => {
-        for (let i = array.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [array[i], array[j]] = [array[j], array[i]];
-        }
-        return array;
-      };
-      setShuffledWidgetOrder(shuffleArray([...widgetsToShuffle]));
-    } else {
-      // If shuffle is disabled or no widgets to shuffle, revert to default order
-      setShuffledWidgetOrder(['calendar', 'photos', 'weather'].filter(w => widgetSettings[w].enabled));
-    }
-  }, [widgetSettings.enableCardShuffle, widgetSettings.calendar.enabled, widgetSettings.photos.enabled, widgetSettings.weather.enabled]);
+    setCardPositions(generateCardPositions());
+  }, [widgetSettings.enableCardShuffle, widgetSettings.calendar.enabled, widgetSettings.weather.enabled, widgetSettings.chores.enabled, widgetSettings.photos.enabled]);
 
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
@@ -322,28 +220,15 @@ const App = () => {
   };
 
   const handlePageRefresh = () => {
+    // Generate new card positions before refresh if shuffle is enabled
+    if (widgetSettings.enableCardShuffle) {
+      setCardPositions(generateCardPositions());
+    }
     window.location.reload();
   };
 
   const toggleBottomBar = () => {
     setIsBottomBarCollapsed(!isBottomBarCollapsed);
-  };
-  
-  // Helper function to render a widget based on its name
-  const renderWidget = (widgetName, index) => {
-    switch (widgetName) {
-      case 'calendar':
-        return widgetSettings.calendar.enabled && 
-          <CalendarWidget key={`calendar-${index}`} transparentBackground={widgetSettings.calendar.transparent} icsCalendarUrl={apiKeys.ICS_CALENDAR_URL} />;
-      case 'photos':
-        return widgetSettings.photos.enabled && 
-          <PhotoWidget key={`photos-${index}`} transparentBackground={widgetSettings.photos.transparent} />;
-      case 'weather':
-        return widgetSettings.weather.enabled && 
-          <WeatherWidget key={`weather-${index}`} transparentBackground={widgetSettings.weather.transparent} weatherApiKey={apiKeys.WEATHER_API_KEY} />;
-      default:
-        return null;
-    }
   };
 
   return (
@@ -353,28 +238,52 @@ const App = () => {
         <Box sx={{ width: '100%', padding: '8px' }}>
           {/* Calendar Widget - Full width horizontal */}
           {widgetSettings.calendar.enabled && (
-            <Box sx={{ mb: 2 }}>
+            <Box 
+              sx={{ 
+                mb: 2,
+                transform: cardPositions.calendar || 'none',
+                transition: 'transform 0.3s ease-in-out'
+              }}
+            >
               <CalendarWidget transparentBackground={widgetSettings.calendar.transparent} icsCalendarUrl={apiKeys.ICS_CALENDAR_URL} />
             </Box>
           )}
 
           {/* Weather Widget - Full width horizontal */}
           {widgetSettings.weather.enabled && (
-            <Box sx={{ mb: 2 }}>
+            <Box 
+              sx={{ 
+                mb: 2,
+                transform: cardPositions.weather || 'none',
+                transition: 'transform 0.3s ease-in-out'
+              }}
+            >
               <WeatherWidget transparentBackground={widgetSettings.weather.transparent} weatherApiKey={apiKeys.WEATHER_API_KEY} />
             </Box>
           )}
 
           {/* Chores Widget - Full width horizontal */}
           {widgetSettings.chores.enabled && (
-            <Box sx={{ mb: 2 }}>
+            <Box 
+              sx={{ 
+                mb: 2,
+                transform: cardPositions.chores || 'none',
+                transition: 'transform 0.3s ease-in-out'
+              }}
+            >
               <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />
             </Box>
           )}
 
           {/* Photos Widget - Full width horizontal */}
           {widgetSettings.photos.enabled && (
-            <Box sx={{ mb: 2 }}>
+            <Box 
+              sx={{ 
+                mb: 2,
+                transform: cardPositions.photos || 'none',
+                transition: 'transform 0.3s ease-in-out'
+              }}
+            >
               <PhotoWidget transparentBackground={widgetSettings.photos.transparent} />
             </Box>
           )}
