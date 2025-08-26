@@ -397,9 +397,6 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
               </Box>
             )}
           </Box>
-    </Card>
-  );
-};
 
           <Button
             variant="outlined"
@@ -414,4 +411,8 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
           </Button>
         </Box>
       </Popover>
+    </Card>
+  );
+};
+
 export default CalendarWidget;
