@@ -161,6 +161,28 @@ const ChoreWidget = ({ transparentBackground }) => {
     }
   };
 
+  const deleteUser = async (userId, username) => {
+    if (window.confirm(`Are you sure you want to delete user "${username}" and all their associated chores? This action cannot be undone.`)) {
+      try {
+        // First delete all chores associated with this user
+        const userChores = chores.filter(chore => chore.user_id === userId);
+        for (const chore of userChores) {
+          await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores/${chore.id}`);
+        }
+        
+        // Then delete the user
+        await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users/${userId}`);
+        
+        // Refresh data
+        fetchUsers();
+        fetchChores();
+      } catch (error) {
+        console.error('Error deleting user:', error);
+        alert('Failed to delete user. Please try again.');
+      }
+    }
+  };
+
   const getCurrentDay = () => {
     return daysOfWeek[new Date().getDay()];
   };
@@ -497,6 +519,23 @@ const ChoreWidget = ({ transparentBackground }) => {
                 <Typography variant="subtitle1" sx={{ mt: 1, fontSize: '0.9rem', fontWeight: 'bold' }}>
                   {user.username}
                 </Typography>
+                <IconButton
+                  size="small"
+                  onClick={() => deleteUser(user.id, user.username)}
+                  sx={{
+                    color: '#ff4444',
+                    mt: 0.5,
+                    width: 24,
+                    height: 24,
+                    '&:hover': {
+                      bgcolor: 'rgba(255, 68, 68, 0.1)',
+                      color: '#ff6666'
+                    }
+                  }}
+                  title={`Delete ${user.username}`}
+                >
+                  <Delete fontSize="small" />
+                </IconButton>
                 {allRegularChoresCompleted && (
                   <Chip
                     label="All Done! +2 🥟"
