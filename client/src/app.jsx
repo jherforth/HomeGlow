@@ -242,19 +242,25 @@ const App = () => {
   // NEW: Effect for automatic page refresh
   useEffect(() => {
     let intervalId;
-    const intervalHours = parseInt(widgetSettings.refreshInterval);
+    const intervalHours = parseInt(widgetSettings.refreshInterval, 10);
 
     if (!isNaN(intervalHours) && intervalHours > 0) {
       const intervalMilliseconds = intervalHours * 60 * 60 * 1000; // Convert hours to milliseconds
       intervalId = setInterval(() => {
         console.log(`Auto-refreshing page after ${intervalHours} hours.`);
+        // Generate new seed before refresh to ensure new pattern/shuffle
+        setCurrentGeoPatternSeed(Math.random().toString());
         window.location.reload();
       }, intervalMilliseconds);
+      console.log(`Auto-refresh set for ${intervalHours} hours (${intervalMilliseconds}ms)`);
+    } else {
+      console.log('Auto-refresh disabled or invalid interval:', widgetSettings.refreshInterval);
     }
 
     return () => {
       if (intervalId) {
         clearInterval(intervalId);
+        console.log('Auto-refresh interval cleared');
       }
     };
   }, [widgetSettings.refreshInterval]);
@@ -289,26 +295,35 @@ const App = () => {
 
   // NEW: Effect for card shuffle
   useEffect(() => {
-    const widgetsToShuffle = [];
-    if (widgetSettings.calendar.enabled) widgetsToShuffle.push('calendar');
-    if (widgetSettings.photos.enabled) widgetsToShuffle.push('photos');
-    if (widgetSettings.weather.enabled) widgetsToShuffle.push('weather');
+    // Create array of enabled widgets with their original indices
+    const enabledWidgets = [];
+    if (widgetSettings.calendar.enabled) enabledWidgets.push({ name: 'calendar', originalIndex: 0 });
+    if (widgetSettings.weather.enabled) enabledWidgets.push({ name: 'weather', originalIndex: 1 });
+    if (widgetSettings.chores.enabled) enabledWidgets.push({ name: 'chores', originalIndex: 2 });
+    if (widgetSettings.photos.enabled) enabledWidgets.push({ name: 'photos', originalIndex: 3 });
 
-    if (widgetSettings.enableCardShuffle && widgetsToShuffle.length > 0) {
+    if (widgetSettings.enableCardShuffle && enabledWidgets.length > 0) {
       // Simple shuffle function (Fisher-Yates)
       const shuffleArray = (array) => {
+        const shuffled = [...array];
         for (let i = array.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
-          [array[i], array[j]] = [array[j], array[i]];
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
         }
-        return array;
+        return shuffled;
       };
-      setShuffledWidgetOrder(shuffleArray([...widgetsToShuffle]));
+      
+      const shuffledWidgets = shuffleArray(enabledWidgets);
+      setShuffledWidgetOrder(shuffledWidgets.map(widget => widget.name));
+      console.log('Card shuffle enabled - new order:', shuffledWidgets.map(widget => widget.name));
     } else {
-      // If shuffle is disabled or no widgets to shuffle, revert to default order
-      setShuffledWidgetOrder(['calendar', 'photos', 'weather'].filter(w => widgetSettings[w].enabled));
+      // If shuffle is disabled, use original order
+      const orderedWidgets = enabledWidgets
+        .sort((a, b) => a.originalIndex - b.originalIndex)
+        .map(widget => widget.name);
+      setShuffledWidgetOrder(orderedWidgets);
+      console.log('Card shuffle disabled - default order:', orderedWidgets);
     }
-  }, [widgetSettings.enableCardShuffle, widgetSettings.calendar.enabled, widgetSettings.photos.enabled, widgetSettings.weather.enabled]);
 
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
@@ -351,33 +366,23 @@ const App = () => {
       <Container className="container">
         {/* Horizontal widget layout */}
         <Box sx={{ width: '100%', padding: '8px' }}>
-          {/* Calendar Widget - Full width horizontal */}
-          {widgetSettings.calendar.enabled && (
-            <Box sx={{ mb: 2 }}>
-              <CalendarWidget transparentBackground={widgetSettings.calendar.transparent} icsCalendarUrl={apiKeys.ICS_CALENDAR_URL} />
+          {/* Render widgets in shuffled order */}
+          {shuffledWidgetOrder.map((widgetName, index) => (
+            <Box key={`${widgetName}-${index}`} sx={{ mb: 2 }}>
+              {widgetName === 'calendar' && widgetSettings.calendar.enabled && (
+                <CalendarWidget transparentBackground={widgetSettings.calendar.transparent} icsCalendarUrl={apiKeys.ICS_CALENDAR_URL} />
+              )}
+              {widgetName === 'weather' && widgetSettings.weather.enabled && (
+                <WeatherWidget transparentBackground={widgetSettings.weather.transparent} weatherApiKey={apiKeys.WEATHER_API_KEY} />
+              )}
+              {widgetName === 'chores' && widgetSettings.chores.enabled && (
+                <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />
+              )}
+              {widgetName === 'photos' && widgetSettings.photos.enabled && (
+                <PhotoWidget transparentBackground={widgetSettings.photos.transparent} />
+              )}
             </Box>
-          )}
-
-          {/* Weather Widget - Full width horizontal */}
-          {widgetSettings.weather.enabled && (
-            <Box sx={{ mb: 2 }}>
-              <WeatherWidget transparentBackground={widgetSettings.weather.transparent} weatherApiKey={apiKeys.WEATHER_API_KEY} />
-            </Box>
-          )}
-
-          {/* Chores Widget - Full width horizontal */}
-          {widgetSettings.chores.enabled && (
-            <Box sx={{ mb: 2 }}>
-              <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />
-            </Box>
-          )}
-
-          {/* Photos Widget - Full width horizontal */}
-          {widgetSettings.photos.enabled && (
-            <Box sx={{ mb: 2 }}>
-              <PhotoWidget transparentBackground={widgetSettings.photos.transparent} />
-            </Box>
-          )}
+          ))}
         </Box>
       </Container>
 
