@@ -698,7 +698,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
             sx={{ width: '90%', mb: 2 }}
           />
 
-         # <Typography id="card-size-slider" gutterBottom>
+     {/* # <Typography id="card-size-slider" gutterBottom>
          #   Card Width: {toggles.cardSize}px
          # </Typography>
          # <Slider
@@ -711,6 +711,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
          #   valueLabelDisplay="auto"
          #   sx={{ width: '90%', mb: 2 }}
          # />
+         #*/}
 
           <Typography id="card-padding-slider" gutterBottom>
             Card Padding: {toggles.cardPadding}px
