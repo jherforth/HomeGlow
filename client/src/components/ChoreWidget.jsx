@@ -27,6 +27,7 @@ import axios from 'axios';
 const ChoreWidget = ({ transparentBackground }) => {
   const [users, setUsers] = useState([]);
   const [chores, setChores] = useState([]);
+  const [prizes, setPrizes] = useState([]);
   const [editingChore, setEditingChore] = useState(null);
   const [newChore, setNewChore] = useState({
     user_id: '',
@@ -38,6 +39,7 @@ const ChoreWidget = ({ transparentBackground }) => {
     clam_value: 0
   });
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showPrizesModal, setShowPrizesModal] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
@@ -52,6 +54,7 @@ const ChoreWidget = ({ transparentBackground }) => {
   useEffect(() => {
     fetchUsers();
     fetchChores();
+    fetchPrizes();
   }, []);
 
   const fetchUsers = async () => {
@@ -74,6 +77,14 @@ const ChoreWidget = ({ transparentBackground }) => {
     }
   };
 
+  const fetchPrizes = async () => {
+    try {
+      const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/prizes`);
+      setPrizes(response.data);
+    } catch (error) {
+      console.error('Error fetching prizes:', error);
+    }
+  };
   const toggleChoreCompletion = async (choreId, currentStatus) => {
     try {
       await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores/${choreId}`, {
@@ -412,14 +423,24 @@ const ChoreWidget = ({ transparentBackground }) => {
     <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h6">🥟 Daily Chores</Typography>
-        <Button
-          startIcon={<Add />}
-          onClick={() => setShowAddDialog(true)}
-          variant="contained"
-          size="small"
-        >
-          Add Chore
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            onClick={() => setShowPrizesModal(true)}
+            variant="outlined"
+            size="small"
+            sx={{ minWidth: 'auto', px: 1 }}
+          >
+            🛍️
+          </Button>
+          <Button
+            startIcon={<Add />}
+            onClick={() => setShowAddDialog(true)}
+            variant="contained"
+            size="small"
+          >
+            Add Chore
+          </Button>
+        </Box>
       </Box>
 
       <Box sx={{ display: 'flex', gap: 2, overflowX: 'auto', pb: 2 }}>
@@ -614,6 +635,58 @@ const ChoreWidget = ({ transparentBackground }) => {
       </Box>
       </Box>
 
+      {/* Prizes Modal */}
+      <Dialog open={showPrizesModal} onClose={() => setShowPrizesModal(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            🛍️ Available Prizes
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          {prizes.length === 0 ? (
+            <Typography variant="body1" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
+              No prizes available. Ask an admin to add some prizes!
+            </Typography>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+              {prizes.map((prize) => (
+                <Box
+                  key={prize.id}
+                  sx={{
+                    p: 2,
+                    border: '1px solid var(--card-border)',
+                    borderRadius: 2,
+                    bgcolor: 'rgba(var(--accent-rgb), 0.05)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}
+                >
+                  <Box>
+                    <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                      {prize.name}
+                    </Typography>
+                  </Box>
+                  <Chip
+                    label={`${prize.clam_cost} 🥟`}
+                    sx={{
+                      bgcolor: 'var(--accent)',
+                      color: 'white',
+                      fontWeight: 'bold',
+                      fontSize: '0.9rem'
+                    }}
+                  />
+                </Box>
+              ))}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowPrizesModal(false)} variant="contained">
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
       {/* Add Chore Dialog */}
       <Dialog open={showAddDialog} onClose={() => setShowAddDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Add New Chore</DialogTitle>
