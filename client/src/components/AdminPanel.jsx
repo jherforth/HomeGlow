@@ -179,6 +179,11 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     setWidgetSettings(widgetSettings);
   };
 
+  // Update the parent component's widgetSettings whenever localWidgetSettings changes
+  useEffect(() => {
+    setWidgetSettings(widgetSettings);
+  }, [widgetSettings, setWidgetSettings]);
+
   const handleWidgetToggle = (widget, field) => {
     setLocalWidgetSettings(prev => ({
       ...prev,
