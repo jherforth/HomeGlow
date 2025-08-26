@@ -357,9 +357,6 @@ const App = () => {
       case 'weather':
         return widgetSettings.weather.enabled && 
           <WeatherWidget key={`weather-${index}`} transparentBackground={widgetSettings.weather.transparent} weatherApiKey={apiKeys.WEATHER_API_KEY} />;
-      case 'chores':
-        return widgetSettings.chores.enabled && 
-          <ChoreWidget key={`chores-${index}`} transparentBackground={widgetSettings.chores.transparent} />;
       default:
         return null;
     }
@@ -370,33 +367,23 @@ const App = () => {
       <Container className="container">
         {/* Horizontal widget layout */}
         <Box sx={{ width: '100%', padding: '8px' }}>
-          {/* Calendar Widget - Full width horizontal */}
-          {widgetSettings.calendar.enabled && (
-            <Box sx={{ mb: 2 }}>
-              <CalendarWidget transparentBackground={widgetSettings.calendar.transparent} icsCalendarUrl={apiKeys.ICS_CALENDAR_URL} />
+          {/* Render widgets in shuffled order */}
+          {shuffledWidgetOrder.map((widgetName, index) => (
+            <Box key={`${widgetName}-${index}`} sx={{ mb: 2 }}>
+              {widgetName === 'calendar' && widgetSettings.calendar.enabled && (
+                <CalendarWidget transparentBackground={widgetSettings.calendar.transparent} icsCalendarUrl={apiKeys.ICS_CALENDAR_URL} />
+              )}
+              {widgetName === 'weather' && widgetSettings.weather.enabled && (
+                <WeatherWidget transparentBackground={widgetSettings.weather.transparent} weatherApiKey={apiKeys.WEATHER_API_KEY} />
+              )}
+              {widgetName === 'chores' && widgetSettings.chores.enabled && (
+                <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />
+              )}
+              {widgetName === 'photos' && widgetSettings.photos.enabled && (
+                <PhotoWidget transparentBackground={widgetSettings.photos.transparent} />
+              )}
             </Box>
-          )}
-
-          {/* Weather Widget - Full width horizontal */}
-          {widgetSettings.weather.enabled && (
-            <Box sx={{ mb: 2 }}>
-              <WeatherWidget transparentBackground={widgetSettings.weather.transparent} weatherApiKey={apiKeys.WEATHER_API_KEY} />
-            </Box>
-          )}
-
-          {/* Chores Widget - Full width horizontal */}
-          {widgetSettings.chores.enabled && (
-            <Box sx={{ mb: 2 }}>
-              <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />
-            </Box>
-          )}
-
-          {/* Photos Widget - Full width horizontal */}
-          {widgetSettings.photos.enabled && (
-            <Box sx={{ mb: 2 }}>
-              <PhotoWidget transparentBackground={widgetSettings.photos.transparent} />
-            </Box>
-          )}
+          ))}
         </Box>
       </Container>
 
