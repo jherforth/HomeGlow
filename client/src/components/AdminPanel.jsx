@@ -698,19 +698,19 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
             sx={{ width: '90%', mb: 2 }}
           />
 
-          <Typography id="card-size-slider" gutterBottom>
-            Card Width: {toggles.cardSize}px
-          </Typography>
-          <Slider
-            aria-labelledby="card-size-slider"
-            value={toggles.cardSize}
-            onChange={handleSliderChange('cardSize')}
-            min={200}
-            max={500}
-            step={10}
-            valueLabelDisplay="auto"
-            sx={{ width: '90%', mb: 2 }}
-          />
+         # <Typography id="card-size-slider" gutterBottom>
+         #   Card Width: {toggles.cardSize}px
+         # </Typography>
+         # <Slider
+         #   aria-labelledby="card-size-slider"
+         #   value={toggles.cardSize}
+         #   onChange={handleSliderChange('cardSize')}
+         #   min={200}
+         #   max={500}
+         #   step={10}
+         #   valueLabelDisplay="auto"
+         #   sx={{ width: '90%', mb: 2 }}
+         # />
 
           <Typography id="card-padding-slider" gutterBottom>
             Card Padding: {toggles.cardPadding}px
