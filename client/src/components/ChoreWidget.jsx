@@ -580,7 +580,7 @@ const ChoreWidget = ({ transparentBackground }) => {
               )}
             </Box>
 
-            {/* Assigned Bonus Chores */}
+            {/* Assigned Bonus Chores REMOVED
             <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
               Assigned:
             </Typography>
@@ -634,11 +634,11 @@ const ChoreWidget = ({ transparentBackground }) => {
                           {chore.completed ? <Undo fontSize="small" /> : <Check fontSize="small" />}
                         </IconButton>
                       </Box>
-                    </Box>
+                    </Box> 
                   );
                 })
               )}
-            </Box>
+            </Box> */}
           </Box>
         )}
       </Box>
