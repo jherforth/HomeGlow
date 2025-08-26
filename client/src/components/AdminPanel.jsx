@@ -537,15 +537,6 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
                   sx={{ mb: 2 }}
                 />
                 
-                <TextField
-                  fullWidth
-                  label="Card Height (px)"
-                  type="number"
-                  value={widgetSettings.cardHeight}
-                  onChange={(e) => handleSettingChange('cardHeight', parseInt(e.target.value))}
-                  sx={{ mb: 2 }}
-                />
-                
                 <FormControl fullWidth sx={{ mb: 2 }}>
                   <InputLabel>Screen Refresh Interval</InputLabel>
                   <Select
