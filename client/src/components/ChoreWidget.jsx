@@ -150,17 +150,6 @@ const ChoreWidget = ({ transparentBackground }) => {
     }
   };
 
-  const deleteChore = async (choreId) => {
-    if (window.confirm('Are you sure you want to delete this chore?')) {
-      try {
-        await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores/${choreId}`);
-        fetchChores();
-      } catch (error) {
-        console.error('Error deleting chore:', error);
-      }
-    }
-  };
-
   const getCurrentDay = () => {
     return daysOfWeek[new Date().getDay()];
   };
@@ -497,23 +486,6 @@ const ChoreWidget = ({ transparentBackground }) => {
                 <Typography variant="subtitle1" sx={{ mt: 1, fontSize: '0.9rem', fontWeight: 'bold' }}>
                   {user.username}
                 </Typography>
-                <IconButton
-                  size="small"
-                  onClick={() => deleteUser(user.id, user.username)}
-                  sx={{
-                    color: '#ff4444',
-                    mt: 0.5,
-                    width: 24,
-                    height: 24,
-                    '&:hover': {
-                      bgcolor: 'rgba(255, 68, 68, 0.1)',
-                      color: '#ff6666'
-                    }
-                  }}
-                  title={`Delete ${user.username}`}
-                >
-                  <Delete fontSize="small" />
-                </IconButton>
                 {allRegularChoresCompleted && (
                   <Chip
                     label="All Done! +2 🥟"
