@@ -91,6 +91,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const [loadingGithub, setLoadingGithub] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState({});
   const [deleteUserDialog, setDeleteUserDialog] = useState({ open: false, user: null });
+  const [choreModal, setChoreModal] = useState({ open: false, user: null, userChores: [] });
 
   useEffect(() => {
     const savedSettings = localStorage.getItem('widgetSettings');
@@ -323,6 +324,32 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     } catch (error) {
       console.error('Error installing GitHub widget:', error);
       alert('Failed to install widget. Please try again.');
+    }
+  };
+
+  const openChoreModal = (user) => {
+    const userChores = chores.filter(chore => chore.user_id === user.id);
+    setChoreModal({ open: true, user, userChores });
+  };
+
+  const closeChoreModal = () => {
+    setChoreModal({ open: false, user: null, userChores: [] });
+  };
+
+  const deleteChore = async (choreId) => {
+    if (window.confirm('Are you sure you want to delete this chore?')) {
+      try {
+        await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores/${choreId}`);
+        fetchChores();
+        // Update the modal with fresh data
+        if (choreModal.user) {
+          const updatedUserChores = chores.filter(chore => chore.user_id === choreModal.user.id && chore.id !== choreId);
+          setChoreModal(prev => ({ ...prev, userChores: updatedUserChores }));
+        }
+      } catch (error) {
+        console.error('Error deleting chore:', error);
+        alert('Failed to delete chore. Please try again.');
+      }
     }
   };
 
@@ -731,11 +758,14 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
                         </Box>
                       </TableCell>
                       <TableCell>
-                        <Chip
-                          label={`${getUserChoreCount(user.id)} chores`}
+                        <Button
                           variant="outlined"
                           size="small"
-                        />
+                          onClick={() => openChoreModal(user)}
+                          sx={{ minWidth: 'auto' }}
+                        >
+                          {getUserChoreCount(user.id)} chores
+                        </Button>
                       </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', gap: 1 }}>
@@ -984,6 +1014,119 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
             startIcon={<Delete />}
           >
             Delete User & Chores
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* User Chores Modal */}
+      <Dialog
+        open={choreModal.open}
+        onClose={closeChoreModal}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="h6">
+              Chores for {choreModal.user?.username}
+            </Typography>
+            <Chip
+              label={`${choreModal.userChores.length} total`}
+              color="primary"
+              size="small"
+            />
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {choreModal.userChores.length === 0 ? (
+            <Typography variant="body1" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
+              No chores assigned to this user.
+            </Typography>
+          ) : (
+            <TableContainer component={Paper} sx={{ mt: 1 }}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Title</TableCell>
+                    <TableCell>Description</TableCell>
+                    <TableCell>Day</TableCell>
+                    <TableCell>Time</TableCell>
+                    <TableCell>Repeat</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Clams</TableCell>
+                    <TableCell>Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {choreModal.userChores.map((chore) => (
+                    <TableRow key={chore.id}>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                          {chore.title}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary">
+                          {chore.description || 'No description'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={chore.assigned_day_of_week}
+                          size="small"
+                          variant="outlined"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {chore.time_period.replace('-', ' ')}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {chore.repeat_type.replace('-', ' ')}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={chore.completed ? 'Completed' : 'Pending'}
+                          color={chore.completed ? 'success' : 'default'}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {chore.clam_value > 0 ? (
+                          <Chip
+                            label={`${chore.clam_value} 🥟`}
+                            color="primary"
+                            size="small"
+                          />
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            Regular
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <IconButton
+                          onClick={() => deleteChore(chore.id)}
+                          color="error"
+                          size="small"
+                          title="Delete chore"
+                        >
+                          <Delete />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeChoreModal} variant="contained">
+            Close
           </Button>
         </DialogActions>
       </Dialog>
