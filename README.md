@@ -368,3 +368,6 @@ This project is open-source and available under the [MIT License](LICENSE).
 ---
 
 **HomeGlow** - Transform your home with a beautiful, intelligent dashboard that grows with your family's needs.
+
+![Image](https://github.com/user-attachments/assets/a3b72db0-510b-4da8-a1bc-e2257dca2799)
+ENJOY!
