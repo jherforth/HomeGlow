@@ -167,12 +167,22 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const handleApiKeyChange = async (key, value) => {
     try {
       console.log(`Saving API key ${key} with value:`, value);
+      console.log('API URL:', import.meta.env.VITE_REACT_APP_API_URL);
+      console.log('Full request URL:', `${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`);
+      
       await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, { key, value });
       setApiKeys(prev => ({ ...prev, [key]: value }));
       setTempApiKeys(prev => ({ ...prev, [key]: value }));
       console.log(`Successfully saved ${key}`);
     } catch (error) {
       console.error(`Error saving ${key}:`, error);
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data
+      });
       // Show user-friendly error message
       alert(`Failed to save ${key}. Please check your connection and try again.`);
     }

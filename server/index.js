@@ -20,9 +20,10 @@ const GITHUB_API_BASE = 'https://api.github.com';
 
 // Initialize Fastify with CORS
 fastify.register(require('@fastify/cors'), {
-  origin: '*', // Allow all origins for development. Consider restricting in production.
+  origin: ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://192.168.68.43:3000', '*'], // Allow frontend origins
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], // Explicitly allow PATCH
-  allowedHeaders: ['Content-Type', 'Authorization'], // Add any other headers your client might send
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'], // Add any other headers your client might send
+  credentials: true // Allow credentials
 });
 
 fastify.register(multipart);
