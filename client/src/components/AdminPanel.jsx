@@ -74,6 +74,12 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const [newUser, setNewUser] = useState({ username: '', email: '', profile_picture: '' });
   const [newPrize, setNewPrize] = useState({ name: '', clam_cost: 0 });
 
+  // Temporary state for API keys to prevent saving on every keystroke
+  const [tempApiKeys, setTempApiKeys] = useState({
+    WEATHER_API_KEY: '',
+    ICS_CALENDAR_URL: '',
+    PROXY_WHITELIST: 'calapi.inadiutorium.cz'
+  });
   // Profile picture upload state
   const [uploadingProfilePicture, setUploadingProfilePicture] = useState(false);
 
@@ -102,7 +108,9 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const fetchApiKeys = async () => {
     try {
       const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`);
-      setApiKeys(prev => ({ ...prev, ...response.data }));
+      const fetchedKeys = { ...apiKeys, ...response.data };
+      setApiKeys(fetchedKeys);
+      setTempApiKeys(fetchedKeys);
     } catch (error) {
       console.error('Error fetching API keys:', error);
     }
@@ -161,6 +169,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       console.log(`Saving API key ${key} with value:`, value);
       await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, { key, value });
       setApiKeys(prev => ({ ...prev, [key]: value }));
+      setTempApiKeys(prev => ({ ...prev, [key]: value }));
       console.log(`Successfully saved ${key}`);
     } catch (error) {
       console.error(`Error saving ${key}:`, error);
@@ -169,6 +178,16 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     }
   };
 
+  const handleTempApiKeyChange = (key, value) => {
+    setTempApiKeys(prev => ({ ...prev, [key]: value }));
+  };
+
+  const saveApiKey = async (key) => {
+    const value = tempApiKeys[key];
+    if (value !== apiKeys[key]) {
+      await handleApiKeyChange(key, value);
+    }
+  };
   const handleUserSave = async () => {
     try {
       // Validate required fields
@@ -472,32 +491,62 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
         <Box sx={{ mt: 3 }}>
           <Typography variant="h6" gutterBottom>API Configuration</Typography>
           
-          <TextField
-            fullWidth
-            label="OpenWeatherMap API Key"
-            value={apiKeys.WEATHER_API_KEY || ''}
-            onChange={(e) => handleApiKeyChange('WEATHER_API_KEY', e.target.value)}
-            sx={{ mb: 2 }}
-            helperText="Get your free API key from openweathermap.org"
-          />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+            <TextField
+              fullWidth
+              label="OpenWeatherMap API Key"
+              value={tempApiKeys.WEATHER_API_KEY || ''}
+              onChange={(e) => handleTempApiKeyChange('WEATHER_API_KEY', e.target.value)}
+              onBlur={() => saveApiKey('WEATHER_API_KEY')}
+              helperText="Get your free API key from openweathermap.org"
+            />
+            <Button
+              variant="contained"
+              onClick={() => saveApiKey('WEATHER_API_KEY')}
+              size="small"
+              sx={{ minWidth: 'auto', px: 2 }}
+            >
+              Save
+            </Button>
+          </Box>
           
-          <TextField
-            fullWidth
-            label="ICS Calendar URL"
-            value={apiKeys.ICS_CALENDAR_URL || ''}
-            onChange={(e) => handleApiKeyChange('ICS_CALENDAR_URL', e.target.value)}
-            sx={{ mb: 2 }}
-            helperText="Public ICS calendar URL (e.g., from Google Calendar)"
-          />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+            <TextField
+              fullWidth
+              label="ICS Calendar URL"
+              value={tempApiKeys.ICS_CALENDAR_URL || ''}
+              onChange={(e) => handleTempApiKeyChange('ICS_CALENDAR_URL', e.target.value)}
+              onBlur={() => saveApiKey('ICS_CALENDAR_URL')}
+              helperText="Public ICS calendar URL (e.g., from Google Calendar)"
+            />
+            <Button
+              variant="contained"
+              onClick={() => saveApiKey('ICS_CALENDAR_URL')}
+              size="small"
+              sx={{ minWidth: 'auto', px: 2 }}
+            >
+              Save
+            </Button>
+          </Box>
           
-          <TextField
-            fullWidth
-            label="Proxy Whitelist"
-            value={apiKeys.PROXY_WHITELIST || ''}
-            onChange={(e) => handleApiKeyChange('PROXY_WHITELIST', e.target.value)}
-            sx={{ mb: 2 }}
-            helperText="Comma-separated list of allowed domains for API proxy"
-          />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+            <TextField
+              fullWidth
+              label="Proxy Whitelist"
+              value={tempApiKeys.PROXY_WHITELIST || ''}
+              onChange={(e) => handleTempApiKeyChange('PROXY_WHITELIST', e.target.value)}
+              onBlur={() => saveApiKey('PROXY_WHITELIST')}
+              helperText="Comma-separated list of allowed domains for API proxy"
+            />
+            <Button
+              variant="contained"
+              onClick={() => saveApiKey('PROXY_WHITELIST')}
+              size="small"
+              sx={{ minWidth: 'auto', px: 2 }}
+            >
+              Save
+            </Button>
+          </Box>
         </Box>
       )}
 
