@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Typography, Box, List, ListItem, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, Button } from '@mui/material';
+import { Card, Typography, Box, List, ListItem, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, Button, IconButton, Popover } from '@mui/material';
+import { Settings } from '@mui/icons-material';
 import { Calendar, momentLocalizer } from 'react-big-calendar';
 import moment from 'moment';
+import { ChromePicker } from 'react-color';
 import axios from 'axios';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 
@@ -15,6 +17,15 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedDateEvents, setSelectedDateEvents] = useState([]);
   const [showDayModal, setShowDayModal] = useState(false);
+  const [settingsAnchor, setSettingsAnchor] = useState(null);
+  const [eventColors, setEventColors] = useState(() => {
+    const saved = localStorage.getItem('calendarEventColors');
+    return saved ? JSON.parse(saved) : {
+      backgroundColor: '#6e44ff',
+      textColor: '#ffffff'
+    };
+  });
+  const [showColorPicker, setShowColorPicker] = useState({ background: false, text: false });
 
   useEffect(() => {
     if (!icsCalendarUrl) {
@@ -27,6 +38,10 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
     fetchCalendarEvents();
   }, [icsCalendarUrl]);
 
+  // Save event colors to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('calendarEventColors', JSON.stringify(eventColors));
+  }, [eventColors]);
   const fetchCalendarEvents = async () => {
     try {
       setLoading(true);
@@ -101,6 +116,22 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
     return new Date().getDay(); // 0 = Sunday, 1 = Monday, etc.
   };
 
+  const handleSettingsClick = (event) => {
+    setSettingsAnchor(event.currentTarget);
+  };
+
+  const handleSettingsClose = () => {
+    setSettingsAnchor(null);
+    setShowColorPicker({ background: false, text: false });
+  };
+
+  const handleColorChange = (colorType, color) => {
+    setEventColors(prev => ({
+      ...prev,
+      [colorType === 'background' ? 'backgroundColor' : 'textColor']: color.hex
+    }));
+  };
+
   // Custom header component to highlight current day
   const CustomHeader = ({ date, label }) => {
     const today = new Date();
@@ -127,7 +158,16 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
   return (
     <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`}>
-      <Typography variant="h6" sx={{ mb: 2 }}>📅 Calendar</Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h6">📅 Calendar</Typography>
+        <IconButton
+          onClick={handleSettingsClick}
+          size="small"
+          sx={{ color: 'var(--text-color)' }}
+        >
+          <Settings />
+        </IconButton>
+      </Box>
       
       {error && (
         <Box sx={{ mb: 2, p: 2, bgcolor: 'rgba(255, 0, 0, 0.1)', borderRadius: 1 }}>
@@ -159,10 +199,10 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
             }}
             eventPropGetter={(event) => ({
               style: {
-                backgroundColor: 'var(--accent)',
+                backgroundColor: eventColors.backgroundColor,
                 borderRadius: '4px',
                 border: 'none',
-                color: 'white',
+                color: eventColors.textColor,
                 fontSize: '0.8rem',
                 cursor: 'pointer'
               }
@@ -286,8 +326,92 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Settings Popover */}
+      <Popover
+        open={Boolean(settingsAnchor)}
+        anchorEl={settingsAnchor}
+        onClose={handleSettingsClose}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'right',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'right',
+        }}
+      >
+        <Box sx={{ p: 3, minWidth: 300 }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>Calendar Event Colors</Typography>
+          
+          {/* Background Color */}
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>Event Background Color</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box
+                sx={{
+                  width: 40,
+                  height: 40,
+                  backgroundColor: eventColors.backgroundColor,
+                  border: '1px solid var(--card-border)',
+                  borderRadius: 1,
+                  cursor: 'pointer'
+                }}
+                onClick={() => setShowColorPicker(prev => ({ ...prev, background: !prev.background }))}
+              />
+              <Typography variant="body2">{eventColors.backgroundColor}</Typography>
+            </Box>
+            {showColorPicker.background && (
+              <Box sx={{ mt: 2 }}>
+                <ChromePicker
+                  color={eventColors.backgroundColor}
+                  onChange={(color) => handleColorChange('background', color)}
+                />
+              </Box>
+            )}
+          </Box>
+
+          {/* Text Color */}
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>Event Text Color</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box
+                sx={{
+                  width: 40,
+                  height: 40,
+                  backgroundColor: eventColors.textColor,
+                  border: '1px solid var(--card-border)',
+                  borderRadius: 1,
+                  cursor: 'pointer'
+                }}
+                onClick={() => setShowColorPicker(prev => ({ ...prev, text: !prev.text }))}
+              />
+              <Typography variant="body2">{eventColors.textColor}</Typography>
+            </Box>
+            {showColorPicker.text && (
+              <Box sx={{ mt: 2 }}>
+                <ChromePicker
+                  color={eventColors.textColor}
+                  onChange={(color) => handleColorChange('text', color)}
+                />
+              </Box>
+            )}
+          </Box>
     </Card>
   );
 };
 
+          <Button
+            variant="outlined"
+            fullWidth
+            onClick={() => {
+              setEventColors({ backgroundColor: '#6e44ff', textColor: '#ffffff' });
+              setShowColorPicker({ background: false, text: false });
+            }}
+            sx={{ mt: 2 }}
+          >
+            Reset to Default
+          </Button>
+        </Box>
+      </Popover>
 export default CalendarWidget;
