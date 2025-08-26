@@ -20,10 +20,9 @@ const GITHUB_API_BASE = 'https://api.github.com';
 
 // Initialize Fastify with CORS
 fastify.register(require('@fastify/cors'), {
-  origin: ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://192.168.68.43:3000', '*'], // Allow frontend origins
+  origin: '*', // Allow all origins for development. Consider restricting in production.
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], // Explicitly allow PATCH
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'], // Add any other headers your client might send
-  credentials: true // Allow credentials
+  allowedHeaders: ['Content-Type', 'Authorization'], // Add any other headers your client might send
 });
 
 fastify.register(multipart);
@@ -821,15 +820,9 @@ fastify.get('/api/users', async (request, reply) => {
 
 fastify.post('/api/users', async (request, reply) => {
   const { username, email, profile_picture } = request.body;
-  
-  // Validate required fields
-  if (!username || !username.trim()) {
-    return reply.status(400).send({ error: 'Username is required' });
-  }
-  
   try {
     const stmt = db.prepare('INSERT INTO users (username, email, profile_picture) VALUES (?, ?, ?)');
-    const info = stmt.run(username.trim(), email || null, profile_picture || null);
+    const info = stmt.run(username, email, profile_picture);
     return { id: info.lastInsertRowid };
   } catch (error) {
     console.error('Error adding user:', error);
@@ -841,15 +834,9 @@ fastify.post('/api/users', async (request, reply) => {
 fastify.patch('/api/users/:id', async (request, reply) => {
   const { id } = request.params;
   const { username, email, profile_picture } = request.body;
-  
-  // Validate required fields
-  if (!username || !username.trim()) {
-    return reply.status(400).send({ error: 'Username is required' });
-  }
-  
   try {
     const stmt = db.prepare('UPDATE users SET username = ?, email = ?, profile_picture = ? WHERE id = ?');
-    const info = stmt.run(username.trim(), email || null, profile_picture || null, id);
+    const info = stmt.run(username, email, profile_picture, id);
     if (info.changes === 0) {
       return reply.status(404).send({ error: 'User not found' });
     }
@@ -926,29 +913,15 @@ fastify.patch('/api/users/:id/clams', async (request, reply) => {
 // NEW: Endpoint to delete a user
 fastify.delete('/api/users/:id', async (request, reply) => {
   const { id } = request.params;
-  
-  // Prevent deletion of the bonus user (ID 0)
-  if (parseInt(id) === 0) {
-    return reply.status(400).send({ error: 'Cannot delete the bonus user' });
-  }
-  
   try {
-    // Delete associated chores first to maintain data integrity
-    const deleteChoresStmt = db.prepare('DELETE FROM chores WHERE user_id = ?');
-    const choresResult = deleteChoresStmt.run(id);
-    console.log(`Deleted ${choresResult.changes} chores for user ${id}`);
-    
-    // Then delete the user
+    // Optional: Delete associated chores first if desired, or set user_id to NULL
+    // db.prepare('DELETE FROM chores WHERE user_id = ?').run(id);\
     const stmt = db.prepare('DELETE FROM users WHERE id = ?');
     const info = stmt.run(id);
     if (info.changes === 0) {
       return reply.status(404).send({ error: 'User not found' });
     }
-    return { 
-      success: true, 
-      message: 'User deleted successfully',
-      choresDeleted: choresResult.changes
-    };
+    return { success: true, message: 'User deleted successfully' };
   } catch (error) {
     console.error('Error deleting user:', error);
     reply.status(500).send({ error: 'Failed to delete user' });

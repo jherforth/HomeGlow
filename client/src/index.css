@@ -16,6 +16,7 @@
   --backdrop-blur: blur(10px);
   /* New CSS variables for customization */
   --dynamic-text-size: 16px;
+  --dynamic-card-width: 300px;
   --dynamic-card-padding: 20px;
   --container-background-override: var(--gradient);
   /* NEW: Default container background */
@@ -89,13 +90,29 @@ body {
 }
 
 /* Material-UI Grid Container specific styles */
+/* JavaScript-based Masonry Layout Styles */
+.js-masonry-container {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+}
+
+.masonry-widget {
+  position: absolute;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+}
+
+.masonry-widget.chores-widget {
+  /* Special handling for chores widget if needed */
+}
+
 /* Override Material-UI Container's max-width to allow full dynamic width */
 .MuiContainer-root {
   max-width: none !important;
   padding-left: 4px !important;
   padding-right: 4px !important;
 }
-
 .card {
   background: var(--card-bg);
   border: 1px solid var(--card-border);

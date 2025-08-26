@@ -27,7 +27,6 @@ import axios from 'axios';
 const ChoreWidget = ({ transparentBackground }) => {
   const [users, setUsers] = useState([]);
   const [chores, setChores] = useState([]);
-  const [prizes, setPrizes] = useState([]);
   const [editingChore, setEditingChore] = useState(null);
   const [newChore, setNewChore] = useState({
     user_id: '',
@@ -39,7 +38,6 @@ const ChoreWidget = ({ transparentBackground }) => {
     clam_value: 0
   });
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [showPrizeShop, setShowPrizeShop] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
@@ -54,7 +52,6 @@ const ChoreWidget = ({ transparentBackground }) => {
   useEffect(() => {
     fetchUsers();
     fetchChores();
-    fetchPrizes();
   }, []);
 
   const fetchUsers = async () => {
@@ -77,38 +74,6 @@ const ChoreWidget = ({ transparentBackground }) => {
     }
   };
 
-  const fetchPrizes = async () => {
-    try {
-      const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/prizes`);
-      setPrizes(response.data);
-    } catch (error) {
-      console.error('Error fetching prizes:', error);
-    }
-  };
-
-  const handlePrizePurchase = async (prizeId, clamCost, userId) => {
-    try {
-      // Check if user has enough clams
-      const user = users.find(u => u.id === userId);
-      if (!user || user.clam_total < clamCost) {
-        alert('Not enough clams to purchase this prize!');
-        return;
-      }
-
-      // Deduct clams from user
-      await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users/${userId}/clams`, {
-        clam_total: user.clam_total - clamCost
-      });
-
-      // Refresh users to update clam totals
-      fetchUsers();
-      
-      alert('Prize purchased successfully! 🎉');
-    } catch (error) {
-      console.error('Error purchasing prize:', error);
-      alert('Failed to purchase prize. Please try again.');
-    }
-  };
   const toggleChoreCompletion = async (choreId, currentStatus) => {
     try {
       await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores/${choreId}`, {
@@ -447,24 +412,14 @@ const ChoreWidget = ({ transparentBackground }) => {
     <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h6">🥟 Daily Chores</Typography>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button
-            onClick={() => setShowPrizeShop(true)}
-            variant="outlined"
-            size="small"
-            sx={{ minWidth: 'auto', px: 2 }}
-          >
-            🛍️
-          </Button>
-          <Button
-            startIcon={<Add />}
-            onClick={() => setShowAddDialog(true)}
-            variant="contained"
-            size="small"
-          >
-            Add Chore
-          </Button>
-        </Box>
+        <Button
+          startIcon={<Add />}
+          onClick={() => setShowAddDialog(true)}
+          variant="contained"
+          size="small"
+        >
+          Add Chore
+        </Button>
       </Box>
 
       <Box sx={{ display: 'flex', gap: 2, overflowX: 'auto', pb: 2 }}>
@@ -758,97 +713,6 @@ const ChoreWidget = ({ transparentBackground }) => {
             disabled={newChore.assigned_days_of_week.length === 0}
           >
             Add Chore{newChore.assigned_days_of_week.length > 1 ? 's' : ''}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Prize Shop Dialog */}
-      <Dialog open={showPrizeShop} onClose={() => setShowPrizeShop(false)} maxWidth="md" fullWidth>
-        <DialogTitle>
-          <Typography variant="h5" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            🛍️ Prize Shop
-          </Typography>
-        </DialogTitle>
-        <DialogContent>
-          {prizes.length === 0 ? (
-            <Typography variant="body1" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-              No prizes available yet. Ask an admin to add some prizes!
-            </Typography>
-          ) : (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {prizes.map((prize) => (
-                <Box
-                  key={prize.id}
-                  sx={{
-                    border: '2px solid var(--card-border)',
-                    borderRadius: 2,
-                    p: 3,
-                    bgcolor: 'rgba(var(--accent-rgb), 0.05)'
-                  }}
-                >
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                      🎁 {prize.name}
-                    </Typography>
-                    <Chip
-                      label={`${prize.clam_cost} 🥟`}
-                      sx={{
-                        bgcolor: 'var(--accent)',
-                        color: 'white',
-                        fontSize: '1rem',
-                        height: 32,
-                        '& .MuiChip-label': { px: 2 }
-                      }}
-                    />
-                  </Box>
-                  
-                  <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
-                    Choose a user to purchase this prize:
-                  </Typography>
-                  
-                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                    {users.map((user) => {
-                      const canAfford = user.clam_total >= prize.clam_cost;
-                      return (
-                        <Button
-                          key={user.id}
-                          variant={canAfford ? "contained" : "outlined"}
-                          disabled={!canAfford}
-                          onClick={() => handlePrizePurchase(prize.id, prize.clam_cost, user.id)}
-                          sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 1,
-                            opacity: canAfford ? 1 : 0.5
-                          }}
-                        >
-                          {renderUserAvatar(user)}
-                          <Box sx={{ textAlign: 'left' }}>
-                            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                              {user.username}
-                            </Typography>
-                            <Typography variant="caption">
-                              {user.clam_total} 🥟
-                            </Typography>
-                          </Box>
-                        </Button>
-                      );
-                    })}
-                  </Box>
-                  
-                  {users.every(user => user.clam_total < prize.clam_cost) && (
-                    <Typography variant="body2" color="error" sx={{ mt: 1, textAlign: 'center' }}>
-                      No users have enough clams for this prize yet!
-                    </Typography>
-                  )}
-                </Box>
-              ))}
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowPrizeShop(false)} variant="contained">
-            Close Shop
           </Button>
         </DialogActions>
       </Dialog>
