@@ -530,19 +530,19 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
                 
                 <TextField
                   fullWidth
-                  label="Card Width (px)"
+                  label="Card Padding (px)"
                   type="number"
-                  value={widgetSettings.cardSize}
-                  onChange={(e) => handleSettingChange('cardSize', parseInt(e.target.value))}
+                  value={widgetSettings.cardPadding}
+                  onChange={(e) => handleSettingChange('cardPadding', parseInt(e.target.value))}
                   sx={{ mb: 2 }}
                 />
                 
                 <TextField
                   fullWidth
-                  label="Card Padding (px)"
+                  label="Card Height (px)"
                   type="number"
-                  value={widgetSettings.cardPadding}
-                  onChange={(e) => handleSettingChange('cardPadding', parseInt(e.target.value))}
+                  value={widgetSettings.cardHeight}
+                  onChange={(e) => handleSettingChange('cardHeight', parseInt(e.target.value))}
                   sx={{ mb: 2 }}
                 />
                 
