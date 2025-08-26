@@ -161,28 +161,6 @@ const ChoreWidget = ({ transparentBackground }) => {
     }
   };
 
-  const deleteUser = async (userId, username) => {
-    if (window.confirm(`Are you sure you want to delete user "${username}" and all their associated chores? This action cannot be undone.`)) {
-      try {
-        // First delete all chores associated with this user
-        const userChores = chores.filter(chore => chore.user_id === userId);
-        for (const chore of userChores) {
-          await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores/${chore.id}`);
-        }
-        
-        // Then delete the user
-        await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users/${userId}`);
-        
-        // Refresh data
-        fetchUsers();
-        fetchChores();
-      } catch (error) {
-        console.error('Error deleting user:', error);
-        alert('Failed to delete user. Please try again.');
-      }
-    }
-  };
-
   const getCurrentDay = () => {
     return daysOfWeek[new Date().getDay()];
   };
