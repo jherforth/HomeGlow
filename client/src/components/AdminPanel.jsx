@@ -74,6 +74,9 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const [newUser, setNewUser] = useState({ username: '', email: '', profile_picture: '' });
   const [newPrize, setNewPrize] = useState({ name: '', clam_cost: 0 });
 
+  // Profile picture upload state
+  const [uploadingProfilePicture, setUploadingProfilePicture] = useState(false);
+
   // Widget upload states
   const [uploadedWidgets, setUploadedWidgets] = useState([]);
   const [githubWidgets, setGithubWidgets] = useState([]);
@@ -155,15 +158,25 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
 
   const handleApiKeyChange = async (key, value) => {
     try {
+      console.log(`Saving API key ${key} with value:`, value);
       await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, { key, value });
       setApiKeys(prev => ({ ...prev, [key]: value }));
+      console.log(`Successfully saved ${key}`);
     } catch (error) {
       console.error(`Error saving ${key}:`, error);
+      // Show user-friendly error message
+      alert(`Failed to save ${key}. Please check your connection and try again.`);
     }
   };
 
   const handleUserSave = async () => {
     try {
+      // Validate required fields
+      if (!newUser.username.trim()) {
+        alert('Username is required');
+        return;
+      }
+
       if (editingUser) {
         await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users/${editingUser.id}`, newUser);
       } else {
@@ -175,6 +188,55 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       setNewUser({ username: '', email: '', profile_picture: '' });
     } catch (error) {
       console.error('Error saving user:', error);
+    }
+  };
+
+  const handleProfilePictureUpload = async (event, userId = null) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+    if (!allowedTypes.includes(file.type)) {
+      alert('Please upload an image file (JPEG, PNG, or GIF)');
+      return;
+    }
+
+    setUploadingProfilePicture(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const targetUserId = userId || (editingUser ? editingUser.id : 'new');
+      let uploadUrl;
+      
+      if (targetUserId === 'new') {
+        // For new users, we'll convert to base64 and store temporarily
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          setNewUser(prev => ({ ...prev, profile_picture: e.target.result }));
+        };
+        reader.readAsDataURL(file);
+      } else {
+        // For existing users, upload to server
+        uploadUrl = `${import.meta.env.VITE_REACT_APP_API_URL}/api/users/${targetUserId}/upload-picture`;
+        const response = await axios.post(uploadUrl, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        
+        if (editingUser) {
+          setNewUser(prev => ({ ...prev, profile_picture: response.data.filename }));
+        }
+        
+        // Refresh users list to show updated picture
+        fetchUsers();
+      }
+    } catch (error) {
+      console.error('Error uploading profile picture:', error);
+      alert('Failed to upload profile picture. Please try again.');
+    } finally {
+      setUploadingProfilePicture(false);
+      event.target.value = ''; // Reset file input
     }
   };
 
@@ -840,6 +902,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
           <TextField
             fullWidth
             label="Username"
+            required
             value={newUser.username}
             onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
             sx={{ mb: 2, mt: 1 }}
@@ -847,17 +910,54 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
           <TextField
             fullWidth
             label="Email"
+            type="email"
             value={newUser.email}
             onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
             sx={{ mb: 2 }}
+            helperText="Optional"
           />
-          <TextField
-            fullWidth
-            label="Profile Picture URL"
-            value={newUser.profile_picture}
-            onChange={(e) => setNewUser({ ...newUser, profile_picture: e.target.value })}
-            helperText="Optional: URL to profile picture"
-          />
+          
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="body2" sx={{ mb: 1 }}>Profile Picture</Typography>
+            {newUser.profile_picture && (
+              <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
+                <img
+                  src={newUser.profile_picture.startsWith('data:') 
+                    ? newUser.profile_picture 
+                    : `${import.meta.env.VITE_REACT_APP_API_URL}/Uploads/users/${newUser.profile_picture}`
+                  }
+                  alt="Profile preview"
+                  style={{
+                    width: 60,
+                    height: 60,
+                    borderRadius: '50%',
+                    objectFit: 'cover',
+                    border: '2px solid var(--accent)'
+                  }}
+                />
+                <Button
+                  size="small"
+                  onClick={() => setNewUser(prev => ({ ...prev, profile_picture: '' }))}
+                >
+                  Remove
+                </Button>
+              </Box>
+            )}
+            <Button
+              variant="outlined"
+              component="label"
+              disabled={uploadingProfilePicture}
+              startIcon={uploadingProfilePicture ? <CircularProgress size={20} /> : <Upload />}
+            >
+              {uploadingProfilePicture ? 'Uploading...' : 'Upload Picture'}
+              <input
+                type="file"
+                hidden
+                accept="image/*"
+                onChange={(e) => handleProfilePictureUpload(e)}
+              />
+            </Button>
+          </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setShowUserDialog(false)}>Cancel</Button>

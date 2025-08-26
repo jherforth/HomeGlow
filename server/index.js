@@ -820,9 +820,15 @@ fastify.get('/api/users', async (request, reply) => {
 
 fastify.post('/api/users', async (request, reply) => {
   const { username, email, profile_picture } = request.body;
+  
+  // Validate required fields
+  if (!username || !username.trim()) {
+    return reply.status(400).send({ error: 'Username is required' });
+  }
+  
   try {
     const stmt = db.prepare('INSERT INTO users (username, email, profile_picture) VALUES (?, ?, ?)');
-    const info = stmt.run(username, email, profile_picture);
+    const info = stmt.run(username.trim(), email || null, profile_picture || null);
     return { id: info.lastInsertRowid };
   } catch (error) {
     console.error('Error adding user:', error);
@@ -834,9 +840,15 @@ fastify.post('/api/users', async (request, reply) => {
 fastify.patch('/api/users/:id', async (request, reply) => {
   const { id } = request.params;
   const { username, email, profile_picture } = request.body;
+  
+  // Validate required fields
+  if (!username || !username.trim()) {
+    return reply.status(400).send({ error: 'Username is required' });
+  }
+  
   try {
     const stmt = db.prepare('UPDATE users SET username = ?, email = ?, profile_picture = ? WHERE id = ?');
-    const info = stmt.run(username, email, profile_picture, id);
+    const info = stmt.run(username.trim(), email || null, profile_picture || null, id);
     if (info.changes === 0) {
       return reply.status(404).send({ error: 'User not found' });
     }
