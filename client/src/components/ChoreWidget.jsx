@@ -41,6 +41,10 @@ const ChoreWidget = ({ transparentBackground }) => {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showPrizesModal, setShowPrizesModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showBonusChores, setShowBonusChores] = useState(() => {
+    const saved = localStorage.getItem('showBonusChores');
+    return saved !== null ? JSON.parse(saved) : true; // Default to true (show bonus chores)
+  });
 
   const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
   const timePeriods = ['morning', 'afternoon', 'evening', 'any-time'];
@@ -56,6 +60,11 @@ const ChoreWidget = ({ transparentBackground }) => {
     fetchChores();
     fetchPrizes();
   }, []);
+
+  // Save showBonusChores preference to localStorage
+  useEffect(() => {
+    localStorage.setItem('showBonusChores', JSON.stringify(showBonusChores));
+  }, [showBonusChores]);
 
   const fetchUsers = async () => {
     try {
@@ -425,6 +434,15 @@ const ChoreWidget = ({ transparentBackground }) => {
         <Typography variant="h6">🥟 Daily Chores</Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button
+            onClick={() => setShowBonusChores(!showBonusChores)}
+            variant={showBonusChores ? "contained" : "outlined"}
+            size="small"
+            sx={{ minWidth: 'auto', px: 1 }}
+            title={showBonusChores ? "Hide Bonus Chores" : "Show Bonus Chores"}
+          >
+            🥟
+          </Button>
+          <Button
             onClick={() => setShowPrizesModal(true)}
             variant="outlined"
             size="small"
@@ -503,96 +521,43 @@ const ChoreWidget = ({ transparentBackground }) => {
         })}
 
         {/* Bonus Chores Column */}
-        <Box
-          sx={{
-            width: { xs: '100%', sm: 'calc(33.333% - 11px)', md: 'calc(25% - 12px)', lg: 'calc(20% - 13px)', xl: 'calc(16.666% - 13px)' },
-            minWidth: '180px', // Even more reduced minimum width
-            flex: '0 0 auto',
-            border: '2px solid var(--accent)',
-            borderRadius: 2,
-            p: 2.25, // Even more reduced padding
-            bgcolor: 'rgba(var(--accent-rgb), 0.05)',
-            justifyContent: 'center',
-            alignItems: 'center'
-          }}
-        >
-          <Typography variant="subtitle1" sx={{ textAlign: 'center', mb: 2, color: 'var(--accent)', fontSize: '0.9rem', fontWeight: 'bold' }}>
-            🥟 Bonus Chores
-          </Typography>
+        {showBonusChores && (
+          <Box
+            sx={{
+              width: { xs: '100%', sm: 'calc(33.333% - 11px)', md: 'calc(25% - 12px)', lg: 'calc(20% - 13px)', xl: 'calc(16.666% - 13px)' },
+              minWidth: '180px', // Even more reduced minimum width
+              flex: '0 0 auto',
+              border: '2px solid var(--accent)',
+              borderRadius: 2,
+              p: 2.25, // Even more reduced padding
+              bgcolor: 'rgba(var(--accent-rgb), 0.05)',
+              justifyContent: 'center',
+              alignItems: 'center'
+            }}
+          >
+            <Typography variant="subtitle1" sx={{ textAlign: 'center', mb: 2, color: 'var(--accent)', fontSize: '0.9rem', fontWeight: 'bold' }}>
+              🥟 Bonus Chores
+            </Typography>
 
-          {/* Available Bonus Chores */}
-          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-            Available:
-          </Typography>
-          <Box sx={{ maxHeight: 150, overflowY: 'auto', mb: 2 }}>
-            {availableBonusChores.length === 0 ? (
-              <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
-                No bonus chores available
-              </Typography>
-            ) : (
-              availableBonusChores.map(chore => (
-                <Box
-                  key={chore.id}
-                  sx={{
-                    p: 1,
-                    border: '1px solid var(--accent)',
-                    borderRadius: 1,
-                    mb: 1,
-                    bgcolor: 'rgba(var(--accent-rgb), 0.1)'
-                  }}
-                >
-                  <Typography variant="subtitle2">
-                    {chore.title}
-                    <Chip
-                      label={`${chore.clam_value} 🥟`}
-                      size="small"
-                      sx={{ ml: 1, bgcolor: 'var(--accent)', color: 'white' }}
-                    />
-                  </Typography>
-                  {chore.description && (
-                    <Typography variant="caption" color="text.secondary">
-                      {chore.description}
-                    </Typography>
-                  )}
-                  <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                    {users.map(user => (
-                      <Button
-                        key={user.id}
-                        size="small"
-                        variant="outlined"
-                        onClick={() => assignBonusChore(chore.id, user.id)}
-                        sx={{ fontSize: '0.7rem', minWidth: 'auto', px: 1 }}
-                      >
-                        {user.username}
-                      </Button>
-                    ))}
-                  </Box>
-                </Box>
-              ))
-            )}
-          </Box>
-
-          {/* Assigned Bonus Chores */}
-          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-            Assigned:
-          </Typography>
-          <Box sx={{ maxHeight: 150, overflowY: 'auto' }}>
-            {assignedBonusChores.length === 0 ? (
-              <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
-                No assigned bonus chores
-              </Typography>
-            ) : (
-              assignedBonusChores.map(chore => {
-                const assignedUser = users.find(u => u.id === chore.user_id);
-                return (
+            {/* Available Bonus Chores */}
+            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+              Available:
+            </Typography>
+            <Box sx={{ maxHeight: 150, overflowY: 'auto', mb: 2 }}>
+              {availableBonusChores.length === 0 ? (
+                <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
+                  No bonus chores available
+                </Typography>
+              ) : (
+                availableBonusChores.map(chore => (
                   <Box
                     key={chore.id}
                     sx={{
                       p: 1,
-                      border: '1px solid var(--card-border)',
+                      border: '1px solid var(--accent)',
                       borderRadius: 1,
                       mb: 1,
-                      bgcolor: chore.completed ? 'rgba(0, 255, 0, 0.1)' : 'transparent'
+                      bgcolor: 'rgba(var(--accent-rgb), 0.1)'
                     }}
                   >
                     <Typography variant="subtitle2">
@@ -603,35 +568,90 @@ const ChoreWidget = ({ transparentBackground }) => {
                         sx={{ ml: 1, bgcolor: 'var(--accent)', color: 'white' }}
                       />
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Assigned to: {assignedUser?.username}
-                    </Typography>
-                    <Box sx={{ mt: 1 }}>
-                      <IconButton
-                        size="small"
-                        color={chore.completed ? "secondary" : "primary"}
-                        onClick={() => toggleChoreCompletion(chore.id, chore.completed)}
-                        sx={{ 
-                          minWidth: 'auto',
-                          width: 32,
-                          height: 32,
-                          bgcolor: chore.completed ? 'transparent' : 'var(--accent)',
-                          color: chore.completed ? 'var(--accent)' : 'white',
-                          '&:hover': {
-                            bgcolor: chore.completed ? 'rgba(var(--accent-rgb), 0.1)' : 'var(--accent)',
-                            filter: 'brightness(1.1)'
-                          }
-                        }}
-                      >
-                        {chore.completed ? <Undo fontSize="small" /> : <Check fontSize="small" />}
-                      </IconButton>
+                    {chore.description && (
+                      <Typography variant="caption" color="text.secondary">
+                        {chore.description}
+                      </Typography>
+                    )}
+                    <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                      {users.map(user => (
+                        <Button
+                          key={user.id}
+                          size="small"
+                          variant="outlined"
+                          onClick={() => assignBonusChore(chore.id, user.id)}
+                          sx={{ fontSize: '0.7rem', minWidth: 'auto', px: 1 }}
+                        >
+                          {user.username}
+                        </Button>
+                      ))}
                     </Box>
                   </Box>
-                );
-              })
-            )}
+                ))
+              )}
+            </Box>
+
+            {/* Assigned Bonus Chores */}
+            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+              Assigned:
+            </Typography>
+            <Box sx={{ maxHeight: 150, overflowY: 'auto' }}>
+              {assignedBonusChores.length === 0 ? (
+                <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
+                  No assigned bonus chores
+                </Typography>
+              ) : (
+                assignedBonusChores.map(chore => {
+                  const assignedUser = users.find(u => u.id === chore.user_id);
+                  return (
+                    <Box
+                      key={chore.id}
+                      sx={{
+                        p: 1,
+                        border: '1px solid var(--card-border)',
+                        borderRadius: 1,
+                        mb: 1,
+                        bgcolor: chore.completed ? 'rgba(0, 255, 0, 0.1)' : 'transparent'
+                      }}
+                    >
+                      <Typography variant="subtitle2">
+                        {chore.title}
+                        <Chip
+                          label={`${chore.clam_value} 🥟`}
+                          size="small"
+                          sx={{ ml: 1, bgcolor: 'var(--accent)', color: 'white' }}
+                        />
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Assigned to: {assignedUser?.username}
+                      </Typography>
+                      <Box sx={{ mt: 1 }}>
+                        <IconButton
+                          size="small"
+                          color={chore.completed ? "secondary" : "primary"}
+                          onClick={() => toggleChoreCompletion(chore.id, chore.completed)}
+                          sx={{ 
+                            minWidth: 'auto',
+                            width: 32,
+                            height: 32,
+                            bgcolor: chore.completed ? 'transparent' : 'var(--accent)',
+                            color: chore.completed ? 'var(--accent)' : 'white',
+                            '&:hover': {
+                              bgcolor: chore.completed ? 'rgba(var(--accent-rgb), 0.1)' : 'var(--accent)',
+                              filter: 'brightness(1.1)'
+                            }
+                          }}
+                        >
+                          {chore.completed ? <Undo fontSize="small" /> : <Check fontSize="small" />}
+                        </IconButton>
+                      </Box>
+                    </Box>
+                  );
+                })
+              )}
+            </Box>
           </Box>
-        </Box>
+        )}
       </Box>
       </Box>
 
