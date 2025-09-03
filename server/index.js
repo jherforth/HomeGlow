@@ -651,19 +651,28 @@ async function pruneAndResetChores() {
         }
       } else {
         // Handle regular chores (existing logic)
-        if (chore.completed && chore.assigned_day_of_week !== currentDay) {
+        if (chore.completed) {
           if (chore.repeat_type === "no-repeat") {
-            db.prepare('DELETE FROM chores WHERE id = ?').run(chore.id);
-            console.log(`Deleted non-repeating chore ID ${chore.id}.`);
+            // Only delete non-repeating chores if they're not for today
+            if (chore.assigned_day_of_week !== currentDay) {
+              db.prepare('DELETE FROM chores WHERE id = ?').run(chore.id);
+              console.log(`Deleted non-repeating chore ID ${chore.id}.`);
+            }
           } else if (chore.repeat_type === "until-completed") {
             // Delete "until-completed" chores once they're completed
             db.prepare('DELETE FROM chores WHERE id = ?').run(chore.id);
             console.log(`Deleted "until-completed" chore ID ${chore.id} after completion.`);
           } else if (chore.repeat_type === "weekly" || chore.repeat_type === "daily") {
-            db.prepare('UPDATE chores SET completed = 0 WHERE id = ?').run(chore.id);
-            console.log(`Reset repeating chore ID ${chore.id} to uncompleted.`);
+            // For daily chores, reset every day. For weekly chores, reset when it's their assigned day again
+            if (chore.repeat_type === "daily" || chore.assigned_day_of_week === currentDay) {
+              db.prepare('UPDATE chores SET completed = 0 WHERE id = ?').run(chore.id);
+              console.log(`Reset repeating chore ID ${chore.id} to uncompleted.`);
+            }
           }
-        } else if (!chore.completed && chore.repeat_type === "until-completed") {
+        }
+        
+        // Handle "until-completed" chores that need to appear on new days
+        if (!chore.completed && chore.repeat_type === "until-completed") {
           // For "until-completed" chores that aren't completed, check if they should repeat daily
           if (chore.assigned_day_of_week !== currentDay) {
             // Create a new instance for today if it doesn't exist
