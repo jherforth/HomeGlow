@@ -64,7 +64,33 @@ const WidgetGallery = ({ theme }) => {
       <Box sx={{ mt: 4, padding: '0 20px', textAlign: 'center' }}>
         <Typography variant="h6">Loading widgets...</Typography>
       </Box>
-    ) : null;
+    ) : (
+      <Box sx={{ mt: 4, padding: '0 20px' }}>
+        <Typography variant="h5" gutterBottom align="center">
+          Widget Gallery
+        </Typography>
+        
+        {/* Widget Transparency Toggle */}
+        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={widgetGalleryTransparent}
+                onChange={handleWidgetGalleryTransparencyToggle}
+                color="secondary"
+              />
+            }
+            label="Make Widget Gallery Transparent"
+          />
+        </Box>
+        
+        <Box sx={{ textAlign: 'center', py: 4 }}>
+          <Typography variant="body1" color="text.secondary">
+            No custom widgets available. Upload widgets through the Admin Panel to see them here.
+          </Typography>
+        </Box>
+      </Box>
+    );
   }
 
   return (
