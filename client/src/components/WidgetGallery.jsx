@@ -4,12 +4,12 @@ import { Card, Typography, Switch, FormControlLabel, Box } from '@mui/material';
 
 // Define separate localStorage keys for clarity
 const ENABLED_WIDGETS_KEY = 'enabledWidgets';
-const MASTER_TRANSPARENT_KEY = 'masterTransparent';
+const WIDGET_TRANSPARENT_KEY = 'widgetTransparent';
 
 const WidgetGallery = ({ theme }) => {
   const [plugins, setPlugins] = useState([]);
   const [enabled, setEnabled] = useState({});
-  const [masterTransparent, setMasterTransparent] = useState(false); // Master transparency toggle
+  const [widgetTransparent, setWidgetTransparent] = useState(false); // Widget transparency toggle
   const [loading, setLoading] = useState(true);
 
   // Fetch plugins from server (no changes here)
@@ -33,8 +33,8 @@ const WidgetGallery = ({ theme }) => {
     const savedEnabled = localStorage.getItem(ENABLED_WIDGETS_KEY);
     setEnabled(savedEnabled ? JSON.parse(savedEnabled) : {});
 
-    const savedMasterTransparent = localStorage.getItem(MASTER_TRANSPARENT_KEY);
-    setMasterTransparent(savedMasterTransparent === 'true');
+    const savedWidgetTransparent = localStorage.getItem(WIDGET_TRANSPARENT_KEY);
+    setWidgetTransparent(savedWidgetTransparent === 'true');
   }, []);
 
   // Save enabled state to localStorage
@@ -42,10 +42,10 @@ const WidgetGallery = ({ theme }) => {
     localStorage.setItem(ENABLED_WIDGETS_KEY, JSON.stringify(enabled));
   }, [enabled]);
 
-  // Save master transparent state to localStorage
+  // Save widget transparent state to localStorage
   useEffect(() => {
-    localStorage.setItem(MASTER_TRANSPARENT_KEY, masterTransparent.toString());
-  }, [masterTransparent]);
+    localStorage.setItem(WIDGET_TRANSPARENT_KEY, widgetTransparent.toString());
+  }, [widgetTransparent]);
 
   const handleToggle = (filename) => {
     setEnabled((prev) => ({
@@ -54,9 +54,9 @@ const WidgetGallery = ({ theme }) => {
     }));
   };
 
-  // Master transparency toggle handler
-  const handleMasterTransparencyToggle = () => {
-    setMasterTransparent(!masterTransparent);
+  // Widget transparency toggle handler
+  const handleWidgetTransparencyToggle = () => {
+    setWidgetTransparent(!widgetTransparent);
   };
 
   if (plugins.length === 0) {
@@ -73,17 +73,17 @@ const WidgetGallery = ({ theme }) => {
         Widget Gallery
       </Typography>
       
-      {/* Master Transparency Toggle */}
+      {/* Widget Transparency Toggle */}
       <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
         <FormControlLabel
           control={
             <Switch
-              checked={masterTransparent}
-              onChange={handleMasterTransparencyToggle}
+              checked={widgetTransparent}
+              onChange={handleWidgetTransparencyToggle}
               color="secondary"
             />
           }
-          label="Make All Widgets Transparent"
+          label="Make Widget Gallery Transparent"
         />
       </Box>
       
@@ -97,7 +97,7 @@ const WidgetGallery = ({ theme }) => {
         {plugins.map((plugin) => (
           <Card 
             key={plugin.filename} 
-            className={`card ${masterTransparent ? 'transparent-card' : ''}`}
+            className={`card ${widgetTransparent ? 'transparent-card' : ''}`}
             sx={{ 
               flex: '1 1 300px', // Flexible width with minimum of 300px
               maxWidth: '500px', // Maximum width to prevent cards from getting too wide

@@ -385,9 +385,10 @@ const App = () => {
             </Box>
           ))}
         </Box>
-      </Container>
 
-      <WidgetGallery key={widgetGalleryKey} theme={theme} />
+        {/* Always show Widget Gallery */}
+        <WidgetGallery key={widgetGalleryKey} theme={theme} />
+      </Container>
 
       {/* Admin Panel as a Dialog (Popup) */}
       <Dialog open={showAdminPanel} onClose={toggleAdminPanel} maxWidth="lg"> {/* CHANGED maxWidth to "lg" */}
