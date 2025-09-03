@@ -456,7 +456,7 @@ const ChoreWidget = ({ transparentBackground }) => {
         flexWrap: 'wrap', 
         gap: 2, 
         pb: 2,
-        justifyContent: 'flex-start',
+        justifyContent: 'center',
         alignItems: 'flex-start'
       }}>
         {/* User Columns - Regular users first */}
