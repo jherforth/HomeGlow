@@ -177,87 +177,35 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
         </Box>
       )}
 
-      <Box sx={{ display: 'flex', gap: 2, height: 500 }}>
-        {/* Calendar View */}
-        <Box sx={{ flex: 2, minHeight: 400 }}>
-          <Calendar
-            localizer={localizer}
-            events={events}
-            startAccessor="start"
-            endAccessor="end"
-            style={{ height: '100%' }}
-            views={['month']}
-            defaultView="month"
-            className="custom-calendar"
-            selectable={true}
-            onSelectSlot={handleSelectSlot}
-            onSelectEvent={handleSelectEvent}
-            components={{
-              month: {
-                header: CustomHeader
-              }
-            }}
-            eventPropGetter={(event) => ({
-              style: {
-                backgroundColor: eventColors.backgroundColor,
-                borderRadius: '4px',
-                border: 'none',
-                color: eventColors.textColor,
-                fontSize: '0.8rem',
-                cursor: 'pointer'
-              }
-            })}
-          />
-        </Box>
-
-        {/* Upcoming Events List */}
-        <Box sx={{ flex: 1, minWidth: 250 }}>
-          <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'bold' }}>
-            Upcoming Events
-          </Typography>
-          
-          {upcomingEvents.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">
-              No upcoming events in the next 7 days
-            </Typography>
-          ) : (
-            <List dense sx={{ maxHeight: 400, overflowY: 'auto' }}>
-              {upcomingEvents.map((event, index) => (
-                <ListItem
-                  key={event.id || index}
-                  sx={{
-                    border: '1px solid var(--card-border)',
-                    borderRadius: 1,
-                    mb: 1,
-                    bgcolor: 'rgba(var(--accent-rgb), 0.05)'
-                  }}
-                >
-                  <ListItemText
-                    primary={event.title}
-                    secondary={
-                      <Box>
-                        <Typography variant="caption" display="block">
-                          {formatEventTime(event.start)}
-                        </Typography>
-                        {event.location && (
-                          <Typography variant="caption" display="block" color="text.secondary">
-                            📍 {event.location}
-                          </Typography>
-                        )}
-                        {event.description && (
-                          <Typography variant="caption" display="block" color="text.secondary">
-                            {event.description.substring(0, 100)}
-                            {event.description.length > 100 ? '...' : ''}
-                          </Typography>
-                        )}
-                      </Box>
-                    }
-                  />
-                </ListItem>
-              ))}
-            </List>
-          )}
-        </Box>
+      <Box sx={{ height: 500 }}>
+        <Calendar
+          localizer={localizer}
+          events={events}
+          startAccessor="start"
+          endAccessor="end"
+          style={{ height: '100%' }}
+          views={['month']}
+          defaultView="month"
+          className="custom-calendar"
+          selectable={true}
+          onSelectSlot={handleSelectSlot}
+          onSelectEvent={handleSelectEvent}
+          components={{
+            month: {
+              header: CustomHeader
+            }
+          }}
+          eventPropGetter={(event) => ({
+            style: {
+              backgroundColor: eventColors.backgroundColor,
+              borderRadius: '4px',
+              border: 'none',
+              color: eventColors.textColor,
+              fontSize: '0.8rem',
+              cursor: 'pointer'
+            }
+          })}
+        />
       </Box>
 
       {/* Day Details Modal */}
