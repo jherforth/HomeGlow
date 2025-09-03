@@ -69,9 +69,6 @@ const WidgetGallery = ({ theme }) => {
 
   return (
     <Box sx={{ mt: 4, padding: '0 20px' }}>
-      <Typography variant="h5" gutterBottom align="center">
-        Widget Gallery
-      </Typography>
       
       {/* Widget Transparency Toggle */}
       <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
