@@ -4,12 +4,12 @@ import { Card, Typography, Switch, FormControlLabel, Box } from '@mui/material';
 
 // Define separate localStorage keys for clarity
 const ENABLED_WIDGETS_KEY = 'enabledWidgets';
-const WIDGET_TRANSPARENT_KEY = 'widgetTransparent';
+const WIDGET_GALLERY_TRANSPARENT_KEY = 'widgetGalleryTransparent';
 
 const WidgetGallery = ({ theme }) => {
   const [plugins, setPlugins] = useState([]);
   const [enabled, setEnabled] = useState({});
-  const [widgetTransparent, setWidgetTransparent] = useState(false); // Widget transparency toggle
+  const [widgetGalleryTransparent, setWidgetGalleryTransparent] = useState(false); // Widget gallery transparency toggle
   const [loading, setLoading] = useState(true);
 
   // Fetch plugins from server (no changes here)
@@ -33,8 +33,8 @@ const WidgetGallery = ({ theme }) => {
     const savedEnabled = localStorage.getItem(ENABLED_WIDGETS_KEY);
     setEnabled(savedEnabled ? JSON.parse(savedEnabled) : {});
 
-    const savedWidgetTransparent = localStorage.getItem(WIDGET_TRANSPARENT_KEY);
-    setWidgetTransparent(savedWidgetTransparent === 'true');
+    const savedWidgetGalleryTransparent = localStorage.getItem(WIDGET_GALLERY_TRANSPARENT_KEY);
+    setWidgetGalleryTransparent(savedWidgetGalleryTransparent === 'true');
   }, []);
 
   // Save enabled state to localStorage
@@ -42,10 +42,10 @@ const WidgetGallery = ({ theme }) => {
     localStorage.setItem(ENABLED_WIDGETS_KEY, JSON.stringify(enabled));
   }, [enabled]);
 
-  // Save widget transparent state to localStorage
+  // Save widget gallery transparent state to localStorage
   useEffect(() => {
-    localStorage.setItem(WIDGET_TRANSPARENT_KEY, widgetTransparent.toString());
-  }, [widgetTransparent]);
+    localStorage.setItem(WIDGET_GALLERY_TRANSPARENT_KEY, widgetGalleryTransparent.toString());
+  }, [widgetGalleryTransparent]);
 
   const handleToggle = (filename) => {
     setEnabled((prev) => ({
@@ -54,9 +54,9 @@ const WidgetGallery = ({ theme }) => {
     }));
   };
 
-  // Widget transparency toggle handler
-  const handleWidgetTransparencyToggle = () => {
-    setWidgetTransparent(!widgetTransparent);
+  // Widget gallery transparency toggle handler
+  const handleWidgetGalleryTransparencyToggle = () => {
+    setWidgetGalleryTransparent(!widgetGalleryTransparent);
   };
 
   if (plugins.length === 0) {
@@ -64,33 +64,7 @@ const WidgetGallery = ({ theme }) => {
       <Box sx={{ mt: 4, padding: '0 20px', textAlign: 'center' }}>
         <Typography variant="h6">Loading widgets...</Typography>
       </Box>
-    ) : (
-      <Box sx={{ mt: 4, padding: '0 20px' }}>
-        <Typography variant="h5" gutterBottom align="center">
-          Widget Gallery
-        </Typography>
-        
-        {/* Widget Transparency Toggle */}
-        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={widgetGalleryTransparent}
-                onChange={handleWidgetGalleryTransparencyToggle}
-                color="secondary"
-              />
-            }
-            label="Make Widget Gallery Transparent"
-          />
-        </Box>
-        
-        <Box sx={{ textAlign: 'center', py: 4 }}>
-          <Typography variant="body1" color="text.secondary">
-            No custom widgets available. Upload widgets through the Admin Panel to see them here.
-          </Typography>
-        </Box>
-      </Box>
-    );
+    ) : null;
   }
 
   return (
@@ -104,8 +78,8 @@ const WidgetGallery = ({ theme }) => {
         <FormControlLabel
           control={
             <Switch
-              checked={widgetTransparent}
-              onChange={handleWidgetTransparencyToggle}
+              checked={widgetGalleryTransparent}
+              onChange={handleWidgetGalleryTransparencyToggle}
               color="secondary"
             />
           }
@@ -123,7 +97,7 @@ const WidgetGallery = ({ theme }) => {
         {plugins.map((plugin) => (
           <Card 
             key={plugin.filename} 
-            className={`card ${widgetTransparent ? 'transparent-card' : ''}`}
+            className={`card ${widgetGalleryTransparent ? 'transparent-card' : ''}`}
             sx={{ 
               flex: '1 1 300px', // Flexible width with minimum of 300px
               maxWidth: '500px', // Maximum width to prevent cards from getting too wide
