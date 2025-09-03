@@ -297,10 +297,12 @@ const App = () => {
   useEffect(() => {
     // Create array of enabled widgets with their original indices
     const enabledWidgets = [];
-    if (widgetSettings.calendar.enabled) enabledWidgets.push({ name: 'calendar', originalIndex: 0 });
-    if (widgetSettings.weather.enabled) enabledWidgets.push({ name: 'weather', originalIndex: 1 });
-    if (widgetSettings.chores.enabled) enabledWidgets.push({ name: 'chores', originalIndex: 2 });
-    if (widgetSettings.photos.enabled) enabledWidgets.push({ name: 'photos', originalIndex: 3 });
+    // Combine calendar and weather into a single widget group
+    if (widgetSettings.calendar.enabled || widgetSettings.weather.enabled) {
+      enabledWidgets.push({ name: 'calendar-weather', originalIndex: 0 });
+    }
+    if (widgetSettings.chores.enabled) enabledWidgets.push({ name: 'chores', originalIndex: 1 });
+    if (widgetSettings.photos.enabled) enabledWidgets.push({ name: 'photos', originalIndex: 2 });
 
     if (widgetSettings.enableCardShuffle && enabledWidgets.length > 0) {
       // Simple shuffle function (Fisher-Yates)
@@ -348,15 +350,37 @@ const App = () => {
   // Helper function to render a widget based on its name
   const renderWidget = (widgetName, index) => {
     switch (widgetName) {
-      case 'calendar':
-        return widgetSettings.calendar.enabled && 
-          <CalendarWidget key={`calendar-${index}`} transparentBackground={widgetSettings.calendar.transparent} icsCalendarUrl={apiKeys.ICS_CALENDAR_URL} />;
+      case 'calendar-weather':
+        return (widgetSettings.calendar.enabled || widgetSettings.weather.enabled) && (
+          <Box key={`calendar-weather-${index}`} sx={{ 
+            display: 'flex', 
+            gap: 2, 
+            flexWrap: 'wrap',
+            '& > *': { 
+              flex: '1 1 400px',
+              minWidth: '400px'
+            }
+          }}>
+            {widgetSettings.calendar.enabled && (
+              <CalendarWidget 
+                transparentBackground={widgetSettings.calendar.transparent} 
+                icsCalendarUrl={apiKeys.ICS_CALENDAR_URL} 
+              />
+            )}
+            {widgetSettings.weather.enabled && (
+              <WeatherWidget 
+                transparentBackground={widgetSettings.weather.transparent} 
+                weatherApiKey={apiKeys.WEATHER_API_KEY} 
+              />
+            )}
+          </Box>
+        );
       case 'photos':
         return widgetSettings.photos.enabled && 
           <PhotoWidget key={`photos-${index}`} transparentBackground={widgetSettings.photos.transparent} />;
-      case 'weather':
-        return widgetSettings.weather.enabled && 
-          <WeatherWidget key={`weather-${index}`} transparentBackground={widgetSettings.weather.transparent} weatherApiKey={apiKeys.WEATHER_API_KEY} />;
+      case 'chores':
+        return widgetSettings.chores.enabled && 
+          <ChoreWidget key={`chores-${index}`} transparentBackground={widgetSettings.chores.transparent} />;
       default:
         return null;
     }
@@ -370,11 +394,29 @@ const App = () => {
           {/* Render widgets in shuffled order */}
           {shuffledWidgetOrder.map((widgetName, index) => (
             <Box key={`${widgetName}-${index}`} sx={{ mb: 2 }}>
-              {widgetName === 'calendar' && widgetSettings.calendar.enabled && (
-                <CalendarWidget transparentBackground={widgetSettings.calendar.transparent} icsCalendarUrl={apiKeys.ICS_CALENDAR_URL} />
-              )}
-              {widgetName === 'weather' && widgetSettings.weather.enabled && (
-                <WeatherWidget transparentBackground={widgetSettings.weather.transparent} weatherApiKey={apiKeys.WEATHER_API_KEY} />
+              {widgetName === 'calendar-weather' && (widgetSettings.calendar.enabled || widgetSettings.weather.enabled) && (
+                <Box sx={{ 
+                  display: 'flex', 
+                  gap: 2, 
+                  flexWrap: 'wrap',
+                  '& > *': { 
+                    flex: '1 1 400px',
+                    minWidth: '400px'
+                  }
+                }}>
+                  {widgetSettings.calendar.enabled && (
+                    <CalendarWidget 
+                      transparentBackground={widgetSettings.calendar.transparent} 
+                      icsCalendarUrl={apiKeys.ICS_CALENDAR_URL} 
+                    />
+                  )}
+                  {widgetSettings.weather.enabled && (
+                    <WeatherWidget 
+                      transparentBackground={widgetSettings.weather.transparent} 
+                      weatherApiKey={apiKeys.WEATHER_API_KEY} 
+                    />
+                  )}
+                </Box>
               )}
               {widgetName === 'chores' && widgetSettings.chores.enabled && (
                 <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />
