@@ -306,7 +306,7 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
                 variant={chartType === 'temperature' ? 'contained' : 'outlined'}
                 onClick={() => setChartType('temperature')}
               >
-                Temperature
+                Temp
               </Button>
               <Button
                 size="small"
@@ -318,7 +318,7 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
             </Box>
 
             <Box sx={{ height: 300 }}>
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="75%" height="100%">
                 {chartType === 'temperature' ? (
                   <LineChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" />
