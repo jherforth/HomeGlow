@@ -299,8 +299,8 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
           </Box>
 
           {/* Charts - Right Column */}
-          <Box sx={{ flex: 1 }}>
-            <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', gap: 1, mb: 2, justifyContent: 'center' }}>
               <Button
                 size="small"
                 variant={chartType === 'temperature' ? 'contained' : 'outlined'}
@@ -317,11 +317,10 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
               </Button>
             </Box>
 
-            <Box sx={{ height: 300 }}>
+            <Box sx={{ height: 300, width: '100%' }}>
               <ResponsiveContainer width="100%" height="100%">
                 {chartType === 'temperature' ? (
                   <LineChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="time" />
                     <YAxis />
                     <Tooltip />
@@ -335,7 +334,6 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
                   </LineChart>
                 ) : (
                   <BarChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="time" />
                     <YAxis />
                     <Tooltip />
