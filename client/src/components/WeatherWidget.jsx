@@ -291,6 +291,7 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
                 sx={{ 
                   mt: 3,
                   p: 2,
+                  mx: 2, // Add horizontal margin for padding from edges
                   border: '1px solid var(--card-border)',
                   borderRadius: 2,
                   bgcolor: 'rgba(var(--accent-rgb), 0.05)',
@@ -306,32 +307,36 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
                   const aqiInfo = getAirQualityLevel(aqi);
                   return (
                     <>
-                      <Typography variant="h6" sx={{ fontSize: '1.5rem', mb: 0.5 }}>
-                        {aqiInfo.emoji}
-                      </Typography>
-                      <Typography 
-                        variant="body1" 
-                        sx={{ 
-                          fontWeight: 'bold', 
-                          color: aqiInfo.color,
-                          mb: 1
-                        }}
-                      >
-                        {aqiInfo.label}
-                      </Typography>
-                      <Typography variant="caption" sx={{ display: 'block', mb: 1 }}>
-                        AQI: {aqi}/5
-                      </Typography>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
-                        <Typography variant="caption">
-                          PM2.5: {Math.round(airQualityData.list[0].components.pm2_5)}
-                        </Typography>
-                        <Typography variant="caption">
-                          PM10: {Math.round(airQualityData.list[0].components.pm10)}
-                        </Typography>
-                        <Typography variant="caption">
-                          O₃: {Math.round(airQualityData.list[0].components.o3)}
-                        </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, mb: 1 }}>
+                        <Box sx={{ textAlign: 'center' }}>
+                          <Typography variant="h6" sx={{ fontSize: '1.5rem', mb: 0.5 }}>
+                            {aqiInfo.emoji}
+                          </Typography>
+                          <Typography 
+                            variant="body1" 
+                            sx={{ 
+                              fontWeight: 'bold', 
+                              color: aqiInfo.color,
+                              mb: 0.5
+                            }}
+                          >
+                            {aqiInfo.label}
+                          </Typography>
+                          <Typography variant="caption" sx={{ display: 'block' }}>
+                            AQI: {aqi}/5
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, fontSize: '0.75rem' }}>
+                          <Typography variant="caption">
+                            PM2.5: {Math.round(airQualityData.list[0].components.pm2_5)}
+                          </Typography>
+                          <Typography variant="caption">
+                            PM10: {Math.round(airQualityData.list[0].components.pm10)}
+                          </Typography>
+                          <Typography variant="caption">
+                            O₃: {Math.round(airQualityData.list[0].components.o3)}
+                          </Typography>
+                        </Box>
                       </Box>
                     </>
                   );
