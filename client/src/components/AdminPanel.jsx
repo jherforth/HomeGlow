@@ -92,6 +92,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const [showColorPicker, setShowColorPicker] = useState({});
   const [deleteUserDialog, setDeleteUserDialog] = useState({ open: false, user: null });
   const [choreModal, setChoreModal] = useState({ open: false, user: null, userChores: [] });
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const savedSettings = localStorage.getItem('widgetSettings');
@@ -212,6 +213,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
 
   const saveUser = async () => {
     try {
+      setIsLoading(true);
       if (editingUser) {
         await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users/${editingUser.id}`, editingUser);
       } else {
@@ -222,11 +224,14 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       fetchUsers();
     } catch (error) {
       console.error('Error saving user:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const deleteUser = async (userId) => {
     try {
+      setIsLoading(true);
       // First, delete all chores associated with this user
       const userChores = chores.filter(chore => chore.user_id === userId);
       for (const chore of userChores) {
@@ -243,6 +248,8 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     } catch (error) {
       console.error('Error deleting user:', error);
       alert('Failed to delete user. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -252,17 +259,21 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
 
   const updateUserClams = async (userId, newTotal) => {
     try {
+      setIsLoading(true);
       await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users/${userId}/clams`, {
         clam_total: newTotal
       });
       fetchUsers();
     } catch (error) {
       console.error('Error updating user clams:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const savePrize = async () => {
     try {
+      setIsLoading(true);
       if (editingPrize) {
         await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/prizes/${editingPrize.id}`, editingPrize);
       } else {
@@ -273,16 +284,21 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       fetchPrizes();
     } catch (error) {
       console.error('Error saving prize:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const deletePrize = async (prizeId) => {
     if (window.confirm('Are you sure you want to delete this prize?')) {
       try {
+        setIsLoading(true);
         await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/prizes/${prizeId}`);
         fetchPrizes();
       } catch (error) {
         console.error('Error deleting prize:', error);
+      } finally {
+        setIsLoading(false);
       }
     }
   };
@@ -295,6 +311,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     formData.append('file', file);
 
     try {
+      setIsLoading(true);
       await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/widgets/upload`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
@@ -303,23 +320,29 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     } catch (error) {
       console.error('Error uploading widget:', error);
       alert('Failed to upload widget. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const deleteWidget = async (filename) => {
     if (window.confirm('Are you sure you want to delete this widget?')) {
       try {
+        setIsLoading(true);
         await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/widgets/${filename}`);
         fetchUploadedWidgets();
         if (onWidgetUploaded) onWidgetUploaded();
       } catch (error) {
         console.error('Error deleting widget:', error);
+      } finally {
+        setIsLoading(false);
       }
     }
   };
 
   const installGithubWidget = async (widget) => {
     try {
+      setIsLoading(true);
       await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/widgets/github/install`, {
         download_url: widget.download_url,
         filename: widget.filename,
@@ -331,6 +354,8 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     } catch (error) {
       console.error('Error installing GitHub widget:', error);
       alert('Failed to install widget. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -346,6 +371,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const deleteChore = async (choreId) => {
     if (window.confirm('Are you sure you want to delete this chore?')) {
       try {
+        setIsLoading(true);
         await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores/${choreId}`);
         fetchChores();
         // Update the modal with fresh data
@@ -356,6 +382,8 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       } catch (error) {
         console.error('Error deleting chore:', error);
         alert('Failed to delete chore. Please try again.');
+      } finally {
+        setIsLoading(false);
       }
     }
   };
@@ -368,6 +396,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     formData.append('file', file);
 
     try {
+      setIsLoading(true);
       const response = await axios.post(
         `${import.meta.env.VITE_REACT_APP_API_URL}/api/users/${userId}/upload-picture`,
         formData,
@@ -377,6 +406,8 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     } catch (error) {
       console.error('Error uploading profile picture:', error);
       alert('Failed to upload profile picture. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -1128,6 +1159,92 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Fun Loading Indicator */}
+      <Backdrop
+        sx={{
+          color: '#fff',
+          zIndex: (theme) => theme.zIndex.drawer + 1,
+          backdropFilter: 'blur(10px)',
+          backgroundColor: 'rgba(0, 0, 0, 0.3)',
+        }}
+        open={isLoading}
+      >
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 3,
+            p: 4,
+            borderRadius: 3,
+            background: 'rgba(255, 255, 255, 0.1)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+          }}
+        >
+          {/* Animated Clams */}
+          <Box
+            sx={{
+              position: 'relative',
+              width: 80,
+              height: 80,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {[0, 1, 2].map((index) => (
+              <Box
+                key={index}
+                sx={{
+                  position: 'absolute',
+                  fontSize: '2rem',
+                  animation: `clamBounce 1.5s ease-in-out ${index * 0.2}s infinite`,
+                  '@keyframes clamBounce': {
+                    '0%, 80%, 100%': {
+                      transform: 'scale(0.8) translateY(0)',
+                      opacity: 0.6,
+                    },
+                    '40%': {
+                      transform: 'scale(1.2) translateY(-20px)',
+                      opacity: 1,
+                    },
+                  },
+                }}
+              >
+                🥟
+              </Box>
+            ))}
+          </Box>
+          
+          {/* Loading Text */}
+          <Typography
+            variant="h6"
+            sx={{
+              color: 'white',
+              fontWeight: 'bold',
+              textAlign: 'center',
+              textShadow: '0 2px 4px rgba(0, 0, 0, 0.5)',
+            }}
+          >
+            Processing...
+          </Typography>
+          
+          {/* Subtle Progress Ring */}
+          <CircularProgress
+            size={40}
+            thickness={2}
+            sx={{
+              color: 'rgba(255, 255, 255, 0.7)',
+              '& .MuiCircularProgress-circle': {
+                strokeLinecap: 'round',
+              },
+            }}
+          />
+        </Box>
+      </Backdrop>
     </Box>
   );
 };
