@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Typography, Box, List, ListItem, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, Button, IconButton, Popover, ToggleButton, ToggleButtonGroup } from '@mui/material';
-import { Settings, ViewModule, ViewWeek } from '@mui/icons-material';
+import { Settings, ViewModule, ViewWeek, ChevronLeft, ChevronRight } from '@mui/icons-material';
 import { Calendar, momentLocalizer } from 'react-big-calendar';
 import moment from 'moment';
 import { ChromePicker } from 'react-color';
@@ -120,11 +120,11 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
   const getNext7Days = () => {
     const days = [];
-    const today = new Date();
+    const startDate = new Date(currentDate); // Use currentDate instead of today for pagination
     
     for (let i = 0; i < 7; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
+      const date = new Date(startDate);
+      date.setDate(startDate.getDate() + i);
       
       const dayEvents = events.filter(event => 
         moment(event.start).isSame(moment(date), 'day')
@@ -135,7 +135,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
         dayName: moment(date).format('ddd'),
         dayNumber: moment(date).format('D'),
         monthName: moment(date).format('MMM'),
-        isToday: moment(date).isSame(moment(today), 'day'),
+        isToday: moment(date).isSame(moment(new Date()), 'day'), // Compare with actual today
         events: dayEvents
       });
     }
@@ -169,6 +169,52 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
     return moment(currentDate).format('MMMM YYYY');
   };
 
+  const handlePreviousPeriod = () => {
+    if (viewMode === 'month') {
+      // Go to previous month
+      const newDate = new Date(currentDate);
+      newDate.setMonth(newDate.getMonth() - 1);
+      setCurrentDate(newDate);
+    } else {
+      // Go to previous week (7 days back)
+      const newDate = new Date(currentDate);
+      newDate.setDate(newDate.getDate() - 7);
+      setCurrentDate(newDate);
+    }
+  };
+
+  const handleNextPeriod = () => {
+    if (viewMode === 'month') {
+      // Go to next month
+      const newDate = new Date(currentDate);
+      newDate.setMonth(newDate.getMonth() + 1);
+      setCurrentDate(newDate);
+    } else {
+      // Go to next week (7 days forward)
+      const newDate = new Date(currentDate);
+      newDate.setDate(newDate.getDate() + 7);
+      setCurrentDate(newDate);
+    }
+  };
+
+  const getCurrentPeriodLabel = () => {
+    if (viewMode === 'month') {
+      return moment(currentDate).format('MMMM YYYY');
+    } else {
+      // For week view, show the date range
+      const startOfWeek = moment(currentDate);
+      const endOfWeek = moment(currentDate).add(6, 'days');
+      
+      if (startOfWeek.month() === endOfWeek.month()) {
+        // Same month: "Dec 15-21, 2024"
+        return `${startOfWeek.format('MMM D')}-${endOfWeek.format('D, YYYY')}`;
+      } else {
+        // Different months: "Dec 30 - Jan 5, 2024"
+        return `${startOfWeek.format('MMM D')} - ${endOfWeek.format('MMM D, YYYY')}`;
+      }
+    }
+  };
+
   // Custom header component to highlight current day
   const CustomHeader = ({ date, label }) => {
     const today = new Date();
@@ -196,7 +242,27 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   return (
     <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h6">📅 {getCurrentMonthYear()}</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <IconButton
+            onClick={handlePreviousPeriod}
+            size="small"
+            sx={{ color: 'var(--text-color)' }}
+            aria-label="Previous period"
+          >
+            <ChevronLeft />
+          </IconButton>
+          <Typography variant="h6" sx={{ minWidth: '200px', textAlign: 'center' }}>
+            📅 {getCurrentPeriodLabel()}
+          </Typography>
+          <IconButton
+            onClick={handleNextPeriod}
+            size="small"
+            sx={{ color: 'var(--text-color)' }}
+            aria-label="Next period"
+          >
+            <ChevronRight />
+          </IconButton>
+        </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <ToggleButtonGroup
             value={viewMode}
