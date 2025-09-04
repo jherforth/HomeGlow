@@ -452,12 +452,12 @@ const ChoreWidget = ({ transparentBackground }) => {
 
       <Box sx={{ display: 'flex', gap: 2, overflowX: 'auto', pb: 2 }}>
       <Box sx={{ 
-        display: 'flex', 
-        flexWrap: 'wrap', 
-        gap: 2, 
+        display: 'flex',
+        gap: 2,
         pb: 2,
-        justifyContent: 'center',
-        alignItems: 'flex-start'
+        justifyContent: 'space-evenly',
+        alignItems: 'flex-start',
+        width: '100%'
       }}>
         {/* User Columns - Regular users first */}
         {users.filter(user => user.id !== 0).map(user => {
@@ -470,9 +470,9 @@ const ChoreWidget = ({ transparentBackground }) => {
             <Box
               key={user.id}
               sx={{
-                width: { xs: '100%', sm: 'calc(50% - 8px)', md: 'calc(33.333% - 11px)', lg: 'calc(25% - 12px)', xl: 'calc(20% - 13px)' },
-                minWidth: '200px',
-                flex: '0 0 auto',
+                flex: '1 1 0',
+                minWidth: '180px',
+                maxWidth: '250px',
                 border: '2px solid var(--card-border)',
                 borderRadius: 2,
                 p: 2,
@@ -514,9 +514,9 @@ const ChoreWidget = ({ transparentBackground }) => {
         {showBonusChores && (
           <Box
             sx={{
-              width: { xs: '100%', sm: 'calc(50% - 8px)', md: 'calc(33.333% - 11px)', lg: 'calc(25% - 12px)', xl: 'calc(20% - 13px)' },
-              minWidth: '200px',
-              flex: '0 0 auto',
+              flex: '1 1 0',
+              minWidth: '180px',
+              maxWidth: '250px',
               border: '2px solid var(--accent)',
               borderRadius: 2,
               p: 2,
