@@ -408,8 +408,8 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
               <ResponsiveContainer width="100%" height="100%">
                 {chartType === 'temperature' ? (
                   <LineChart data={chartData}>
-                    <XAxis dataKey="time" />
-                    <YAxis />
+                    <XAxis dataKey="time" axisLine={false} tickLine={false} />
+                    <YAxis axisLine={false} tickLine={false} width={30} />
                     <Tooltip />
                     <Line 
                       type="monotone" 
@@ -421,8 +421,8 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
                   </LineChart>
                 ) : (
                   <BarChart data={chartData}>
-                    <XAxis dataKey="time" />
-                    <YAxis />
+                    <XAxis dataKey="time" axisLine={false} tickLine={false} />
+                    <YAxis axisLine={false} tickLine={false} width={30} />
                     <Tooltip />
                     <Bar dataKey="precipitation" fill="var(--accent)" />
                   </BarChart>
