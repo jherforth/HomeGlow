@@ -306,14 +306,14 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
                 variant={chartType === 'temperature' ? 'contained' : 'outlined'}
                 onClick={() => setChartType('temperature')}
               >
-                Temp
+                🌡️
               </Button>
               <Button
                 size="small"
                 variant={chartType === 'precipitation' ? 'contained' : 'outlined'}
                 onClick={() => setChartType('precipitation')}
               >
-                Precipitation
+                🌧️
               </Button>
             </Box>
 
