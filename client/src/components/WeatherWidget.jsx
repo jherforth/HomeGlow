@@ -229,7 +229,7 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
       )}
 
       {weatherData && (
-        <Box sx={{ display: 'flex', gap: 3, height: 400 }}>
+        <Box sx={{ display: 'flex', gap: 3, height: 500 }}>
           {/* Current Weather - Left Column */}
           <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <Typography variant="h4" sx={{ fontSize: '3rem', mb: 1 }}>
@@ -317,7 +317,7 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
               </Button>
             </Box>
 
-            <Box sx={{ height: 300, width: '100%' }}>
+            <Box sx={{ height: 400, width: '100%' }}>
               <ResponsiveContainer width="100%" height="100%">
                 {chartType === 'temperature' ? (
                   <LineChart data={chartData}>

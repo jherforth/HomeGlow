@@ -73,7 +73,7 @@ body {
 }
 
 .container {
-  padding: 8px 24px 8px 8px;
+  padding: 8px 24px 8px 24px;
   /* Removed min-height: 100vh; to allow dynamic height */
   background: var(--container-background-override);
   /* CHANGED: Use override variable */
