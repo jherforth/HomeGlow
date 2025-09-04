@@ -291,12 +291,12 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
                 sx={{ 
                   mt: 3,
                   p: 2,
-                  mx: 2, // Add horizontal margin for padding from edges
+                  width: '90%', // Set fixed width
+                  alignSelf: 'center', // Center the box
                   border: '1px solid var(--card-border)',
                   borderRadius: 2,
                   bgcolor: 'rgba(var(--accent-rgb), 0.05)',
-                  textAlign: 'center',
-                  width: '100%'
+                  textAlign: 'center'
                 }}
               >
                 <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
@@ -386,7 +386,7 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
           </Box>
 
           {/* Charts - Right Column */}
-          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
             <Box sx={{ display: 'flex', gap: 1, mb: 2, justifyContent: 'center' }}>
               <Button
                 size="small"
