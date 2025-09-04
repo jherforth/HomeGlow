@@ -7,6 +7,7 @@ import axios from 'axios';
 const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
   const [weatherData, setWeatherData] = useState(null);
   const [forecastData, setForecastData] = useState([]);
+  const [airQualityData, setAirQualityData] = useState(null);
   const [chartData, setChartData] = useState([]);
   const [zipCode, setZipCode] = useState('');
   const [editingZip, setEditingZip] = useState(false);
@@ -53,6 +54,22 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
       const currentResponse = await axios.get(currentWeatherUrl);
       console.log('Current weather response:', currentResponse.data);
       setWeatherData(currentResponse.data);
+
+      // Fetch air quality data using coordinates from weather response
+      if (currentResponse.data.coord) {
+        const { lat, lon } = currentResponse.data.coord;
+        const airQualityUrl = `https://api.openweathermap.org/data/2.5/air_pollution?lat=${lat}&lon=${lon}&appid=${weatherApiKey}`;
+        console.log('Air quality URL:', airQualityUrl);
+        
+        try {
+          const airQualityResponse = await axios.get(airQualityUrl);
+          console.log('Air quality response:', airQualityResponse.data);
+          setAirQualityData(airQualityResponse.data);
+        } catch (airError) {
+          console.warn('Failed to fetch air quality data:', airError);
+          setAirQualityData(null);
+        }
+      }
 
       // Fetch 5-day forecast
       const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?zip=${zipCode},US&appid=${weatherApiKey}&units=imperial`;
@@ -136,6 +153,17 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getAirQualityLevel = (aqi) => {
+    const levels = {
+      1: { label: 'Good', color: '#00e400', emoji: '😊' },
+      2: { label: 'Fair', color: '#ffff00', emoji: '😐' },
+      3: { label: 'Moderate', color: '#ff7e00', emoji: '😷' },
+      4: { label: 'Poor', color: '#ff0000', emoji: '😨' },
+      5: { label: 'Very Poor', color: '#8f3f97', emoji: '🤢' }
+    };
+    return levels[aqi] || { label: 'Unknown', color: '#gray', emoji: '❓' };
   };
 
   const handleZipCodeSave = () => {
@@ -256,6 +284,60 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
                 Wind: {Math.round(weatherData.wind.speed)} mph
               </Typography>
             </Box>
+
+            {/* Air Quality Box */}
+            {airQualityData && (
+              <Box 
+                sx={{ 
+                  mt: 3,
+                  p: 2,
+                  border: '1px solid var(--card-border)',
+                  borderRadius: 2,
+                  bgcolor: 'rgba(var(--accent-rgb), 0.05)',
+                  textAlign: 'center',
+                  width: '100%'
+                }}
+              >
+                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                  Air Quality
+                </Typography>
+                {(() => {
+                  const aqi = airQualityData.list[0].main.aqi;
+                  const aqiInfo = getAirQualityLevel(aqi);
+                  return (
+                    <>
+                      <Typography variant="h6" sx={{ fontSize: '1.5rem', mb: 0.5 }}>
+                        {aqiInfo.emoji}
+                      </Typography>
+                      <Typography 
+                        variant="body1" 
+                        sx={{ 
+                          fontWeight: 'bold', 
+                          color: aqiInfo.color,
+                          mb: 1
+                        }}
+                      >
+                        {aqiInfo.label}
+                      </Typography>
+                      <Typography variant="caption" sx={{ display: 'block', mb: 1 }}>
+                        AQI: {aqi}/5
+                      </Typography>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
+                        <Typography variant="caption">
+                          PM2.5: {Math.round(airQualityData.list[0].components.pm2_5)}
+                        </Typography>
+                        <Typography variant="caption">
+                          PM10: {Math.round(airQualityData.list[0].components.pm10)}
+                        </Typography>
+                        <Typography variant="caption">
+                          O₃: {Math.round(airQualityData.list[0].components.o3)}
+                        </Typography>
+                      </Box>
+                    </>
+                  );
+                })()}
+              </Box>
+            )}
           </Box>
 
           {/* 3-Day Forecast - Middle Column */}
