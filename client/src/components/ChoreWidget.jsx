@@ -470,14 +470,15 @@ const ChoreWidget = ({ transparentBackground }) => {
             <Box
               key={user.id}
               sx={{
-                width: { xs: '100%', sm: 'calc(33.333% - 11px)', md: 'calc(25% - 12px)', lg: 'calc(20% - 13px)', xl: 'calc(16.666% - 13px)' },
-                minWidth: '180px', // Even more reduced minimum width
+                width: { xs: '100%', sm: 'calc(50% - 8px)', md: 'calc(33.333% - 11px)', lg: 'calc(25% - 12px)', xl: 'calc(20% - 13px)' },
+                minWidth: '200px',
                 flex: '0 0 auto',
                 border: '2px solid var(--card-border)',
                 borderRadius: 2,
-                p: 2.25, // Even more reduced padding
+                p: 2,
                 bgcolor: allRegularChoresCompleted ? 'rgba(0, 255, 0, 0.05)' : 'transparent',
-                justifyContent: 'center',
+                display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center'
               }}
             >
@@ -513,14 +514,15 @@ const ChoreWidget = ({ transparentBackground }) => {
         {showBonusChores && (
           <Box
             sx={{
-              width: { xs: '100%', sm: 'calc(33.333% - 11px)', md: 'calc(25% - 12px)', lg: 'calc(20% - 13px)', xl: 'calc(16.666% - 13px)' },
-              minWidth: '180px', // Even more reduced minimum width
+              width: { xs: '100%', sm: 'calc(50% - 8px)', md: 'calc(33.333% - 11px)', lg: 'calc(25% - 12px)', xl: 'calc(20% - 13px)' },
+              minWidth: '200px',
               flex: '0 0 auto',
               border: '2px solid var(--accent)',
               borderRadius: 2,
-              p: 2.25, // Even more reduced padding
+              p: 2,
               bgcolor: 'rgba(var(--accent-rgb), 0.05)',
-              justifyContent: 'center',
+              display: 'flex',
+              flexDirection: 'column',
               alignItems: 'center'
             }}
           >
