@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Typography, Box, List, ListItem, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, Button, IconButton, Popover } from '@mui/material';
-import { Settings } from '@mui/icons-material';
+import { Card, Typography, Box, List, ListItem, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, Button, IconButton, Popover, ToggleButton, ToggleButtonGroup } from '@mui/material';
+import { Settings, ViewModule, ViewWeek } from '@mui/icons-material';
 import { Calendar, momentLocalizer } from 'react-big-calendar';
 import moment from 'moment';
 import { ChromePicker } from 'react-color';
@@ -18,6 +18,8 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   const [selectedDateEvents, setSelectedDateEvents] = useState([]);
   const [showDayModal, setShowDayModal] = useState(false);
   const [settingsAnchor, setSettingsAnchor] = useState(null);
+  const [viewMode, setViewMode] = useState('month'); // 'month' or 'week'
+  const [currentDate, setCurrentDate] = useState(new Date());
   const [eventColors, setEventColors] = useState(() => {
     const saved = localStorage.getItem('calendarEventColors');
     return saved ? JSON.parse(saved) : {
@@ -116,6 +118,31 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
     return new Date().getDay(); // 0 = Sunday, 1 = Monday, etc.
   };
 
+  const getNext7Days = () => {
+    const days = [];
+    const today = new Date();
+    
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + i);
+      
+      const dayEvents = events.filter(event => 
+        moment(event.start).isSame(moment(date), 'day')
+      );
+      
+      days.push({
+        date: date,
+        dayName: moment(date).format('ddd'),
+        dayNumber: moment(date).format('D'),
+        monthName: moment(date).format('MMM'),
+        isToday: moment(date).isSame(moment(today), 'day'),
+        events: dayEvents
+      });
+    }
+    
+    return days;
+  };
+
   const handleSettingsClick = (event) => {
     setSettingsAnchor(event.currentTarget);
   };
@@ -130,6 +157,16 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
       ...prev,
       [colorType === 'background' ? 'backgroundColor' : 'textColor']: color.hex
     }));
+  };
+
+  const handleViewModeChange = (event, newViewMode) => {
+    if (newViewMode !== null) {
+      setViewMode(newViewMode);
+    }
+  };
+
+  const getCurrentMonthYear = () => {
+    return moment(currentDate).format('MMMM YYYY');
   };
 
   // Custom header component to highlight current day
@@ -150,7 +187,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   if (loading) {
     return (
       <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`}>
-        <Typography variant="h6">📅 Calendar</Typography>
+        <Typography variant="h6">📅 Loading...</Typography>
         <Typography>Loading calendar events...</Typography>
       </Card>
     );
@@ -159,14 +196,29 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   return (
     <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h6">📅 Calendar</Typography>
-        <IconButton
-          onClick={handleSettingsClick}
-          size="small"
-          sx={{ color: 'var(--text-color)' }}
-        >
-          <Settings />
-        </IconButton>
+        <Typography variant="h6">📅 {getCurrentMonthYear()}</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <ToggleButtonGroup
+            value={viewMode}
+            exclusive
+            onChange={handleViewModeChange}
+            size="small"
+          >
+            <ToggleButton value="month" aria-label="month view">
+              <ViewModule />
+            </ToggleButton>
+            <ToggleButton value="week" aria-label="week view">
+              <ViewWeek />
+            </ToggleButton>
+          </ToggleButtonGroup>
+          <IconButton
+            onClick={handleSettingsClick}
+            size="small"
+            sx={{ color: 'var(--text-color)' }}
+          >
+            <Settings />
+          </IconButton>
+        </Box>
       </Box>
       
       {error && (
@@ -177,36 +229,107 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
         </Box>
       )}
 
-      <Box sx={{ height: 500 }}>
-        <Calendar
-          localizer={localizer}
-          events={events}
-          startAccessor="start"
-          endAccessor="end"
-          style={{ height: '100%' }}
-          views={['month']}
-          defaultView="month"
-          className="custom-calendar"
-          selectable={true}
-          onSelectSlot={handleSelectSlot}
-          onSelectEvent={handleSelectEvent}
-          components={{
-            month: {
-              header: CustomHeader
-            }
-          }}
-          eventPropGetter={(event) => ({
-            style: {
-              backgroundColor: eventColors.backgroundColor,
-              borderRadius: '4px',
-              border: 'none',
-              color: eventColors.textColor,
-              fontSize: '0.8rem',
-              cursor: 'pointer'
-            }
-          })}
-        />
-      </Box>
+      {viewMode === 'month' ? (
+        <Box sx={{ height: 500 }}>
+          <Calendar
+            localizer={localizer}
+            events={events}
+            startAccessor="start"
+            endAccessor="end"
+            style={{ height: '100%' }}
+            views={['month']}
+            defaultView="month"
+            className="custom-calendar"
+            selectable={true}
+            onSelectSlot={handleSelectSlot}
+            onSelectEvent={handleSelectEvent}
+            onNavigate={(date) => setCurrentDate(date)}
+            date={currentDate}
+            components={{
+              month: {
+                header: CustomHeader
+              },
+              toolbar: () => null // Hide the default toolbar since we moved month/year to title
+            }}
+            eventPropGetter={(event) => ({
+              style: {
+                backgroundColor: eventColors.backgroundColor,
+                borderRadius: '4px',
+                border: 'none',
+                color: eventColors.textColor,
+                fontSize: '0.8rem',
+                cursor: 'pointer'
+              }
+            })}
+          />
+        </Box>
+      ) : (
+        <Box sx={{ height: 500, overflowY: 'auto' }}>
+          <Box sx={{ display: 'flex', gap: 1, height: '100%' }}>
+            {getNext7Days().map((day, index) => (
+              <Box
+                key={index}
+                sx={{
+                  flex: 1,
+                  minWidth: 0,
+                  border: '1px solid var(--card-border)',
+                  borderRadius: 1,
+                  p: 1,
+                  bgcolor: day.isToday ? 'rgba(var(--accent-rgb), 0.1)' : 'transparent',
+                  display: 'flex',
+                  flexDirection: 'column'
+                }}
+              >
+                <Box sx={{ textAlign: 'center', mb: 1, borderBottom: '1px solid var(--card-border)', pb: 1 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 'bold', color: day.isToday ? 'var(--accent)' : 'inherit' }}>
+                    {day.dayName}
+                  </Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 'bold', color: day.isToday ? 'var(--accent)' : 'inherit' }}>
+                    {day.dayNumber}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                    {day.monthName}
+                  </Typography>
+                </Box>
+                
+                <Box sx={{ flex: 1, overflowY: 'auto' }}>
+                  {day.events.length === 0 ? (
+                    <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', display: 'block', mt: 2 }}>
+                      No events
+                    </Typography>
+                  ) : (
+                    day.events.map((event, eventIndex) => (
+                      <Box
+                        key={eventIndex}
+                        onClick={() => handleSelectEvent(event)}
+                        sx={{
+                          p: 0.5,
+                          mb: 0.5,
+                          backgroundColor: eventColors.backgroundColor,
+                          color: eventColors.textColor,
+                          borderRadius: 1,
+                          cursor: 'pointer',
+                          fontSize: '0.7rem',
+                          '&:hover': {
+                            filter: 'brightness(1.1)'
+                          }
+                        }}
+                      >
+                        <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block' }}>
+                          {moment(event.start).format('h:mm A')}
+                        </Typography>
+                        <Typography variant="caption" sx={{ display: 'block', lineHeight: 1.2 }}>
+                          {event.title}
+                        </Typography>
+                      </Box>
+                    ))
+                  )}
+                </Box>
+              </Box>
+            ))}
+          </Box>
+        </Box>
+      )}
 
       {/* Day Details Modal */}
       <Dialog 
