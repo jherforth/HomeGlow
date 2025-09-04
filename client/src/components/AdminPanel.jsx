@@ -118,7 +118,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const fetchUsers = async () => {
     try {
       const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users`);
-      setUsers(response.data.filter(user => user.id !== 0));
+      setUsers(response.data); // Include all users including bonus user (ID 0)
     } catch (error) {
       console.error('Error fetching users:', error);
     }
