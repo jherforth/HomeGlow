@@ -79,6 +79,9 @@ VITE_REACT_APP_API_URL=http://your-server-ip:5000
 
 # Optional: Tailscale Auth Key for secure remote access
 TS_AUTHKEY=your_tailscale_auth_key_here
+
+# Optional: Specifiy an alternative backend port
+# HOMEGLOW_BACKEND_PORT=5000
 ```
 
 #### Step 2: Deploy Stack from Git
@@ -113,6 +116,9 @@ VITE_REACT_APP_API_URL=http://your-server-ip:5000
 
 # Optional: Tailscale Auth Key
 TS_AUTHKEY=your_tailscale_auth_key_here
+
+# Optional: Specifiy an alternative backend port
+# HOMEGLOW_BACKEND_PORT=5000
 ```
 
 #### Step 3: Deploy with Docker Compose
