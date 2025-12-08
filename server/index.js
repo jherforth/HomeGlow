@@ -5,6 +5,7 @@ const ical = require('ical-generator');
 const path = require('path');
 const fs = require('fs').promises;
 const multipart = require('@fastify/multipart');
+const crypto = require('crypto');
 require('dotenv').config();
 
 // NEW: Import axios for HTTP requests and ical.js for parsing
@@ -17,6 +18,37 @@ const widgetRegistryPath = path.join(__dirname, 'widgets_registry.json');
 const GITHUB_REPO_OWNER = 'jherforth';
 const GITHUB_REPO_NAME = 'HomeGlowPlugins';
 const GITHUB_API_BASE = 'https://api.github.com';
+
+// Encryption utilities for calendar credentials
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'homeglow-default-key-change-in-production-32bytes';
+const ENCRYPTION_ALGORITHM = 'aes-256-cbc';
+
+function encryptPassword(password) {
+  if (!password) return null;
+  const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32);
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM, key, iv);
+  let encrypted = cipher.update(password, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  return iv.toString('hex') + ':' + encrypted;
+}
+
+function decryptPassword(encryptedPassword) {
+  if (!encryptedPassword) return null;
+  try {
+    const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32);
+    const parts = encryptedPassword.split(':');
+    const iv = Buffer.from(parts[0], 'hex');
+    const encrypted = parts[1];
+    const decipher = crypto.createDecipheriv(ENCRYPTION_ALGORITHM, key, iv);
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  } catch (error) {
+    console.error('Error decrypting password:', error);
+    return null;
+  }
+}
 
 // Initialize Fastify with CORS
 fastify.register(require('@fastify/cors'), {
@@ -557,6 +589,20 @@ async function initializeDatabase() {
         name TEXT NOT NULL,
         clam_cost INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS calendar_sources (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        url TEXT NOT NULL,
+        username TEXT,
+        password TEXT,
+        color TEXT NOT NULL DEFAULT '#6e44ff',
+        enabled INTEGER NOT NULL DEFAULT 1,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_calendar_sources_enabled ON calendar_sources(enabled);
+      CREATE INDEX IF NOT EXISTS idx_calendar_sources_sort_order ON calendar_sources(sort_order);
     `);
     
     // Migration: Add repeat_type column if it doesn't exist and remove old repeats column
@@ -615,7 +661,25 @@ async function initializeDatabase() {
       console.error('Migration error:', migrationError);
       // Continue anyway - the app might still work with the new schema
     }
-    
+
+    // Migration: Move existing ICS_CALENDAR_URL to calendar_sources table
+    try {
+      const existingCalendars = newDb.prepare('SELECT COUNT(*) as count FROM calendar_sources').get();
+      if (existingCalendars.count === 0) {
+        const icsUrlSetting = newDb.prepare('SELECT value FROM settings WHERE key = ?').get('ICS_CALENDAR_URL');
+        if (icsUrlSetting && icsUrlSetting.value) {
+          console.log('Migrating existing ICS_CALENDAR_URL to calendar_sources table...');
+          newDb.prepare(`
+            INSERT INTO calendar_sources (name, type, url, color, enabled, sort_order)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).run('Default Calendar', 'ICS', icsUrlSetting.value, '#6e44ff', 1, 0);
+          console.log('ICS calendar migrated successfully!');
+        }
+      }
+    } catch (calendarMigrationError) {
+      console.error('Calendar migration error:', calendarMigrationError);
+    }
+
     return newDb; // Return the new database instance
   } catch (error) {
     console.error('Failed to initialize database:', error);
@@ -1274,48 +1338,214 @@ fastify.delete('/api/prizes/:id', async (request, reply) => {
   }
 });
 
-
-// NEW: Endpoint to fetch and parse ICS calendar events
-fastify.get('/api/calendar-events', async (request, reply) => {
-  let icsUrl;
+// Calendar sources routes
+fastify.get('/api/calendar-sources', async (request, reply) => {
   try {
-    const icsUrlSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('ICS_CALENDAR_URL');
-    icsUrl = icsUrlSetting ? icsUrlSetting.value : null;
+    const rows = db.prepare('SELECT id, name, type, url, username, color, enabled, sort_order, created_at FROM calendar_sources ORDER BY sort_order, id').all();
+    return rows;
   } catch (error) {
-    console.error('Error fetching ICS_CALENDAR_URL from settings:', error);
-    reply.status(500).send({ error: 'Failed to retrieve ICS Calendar URL from settings.' });
-    return;
+    console.error('Error fetching calendar sources:', error);
+    reply.status(500).send({ error: 'Failed to fetch calendar sources' });
   }
+});
 
-  if (!icsUrl) {
-    reply.status(400).send({ error: 'ICS_CALENDAR_URL is not set in database settings.' });
-    return;
+fastify.post('/api/calendar-sources', async (request, reply) => {
+  const { name, type, url, username, password, color } = request.body;
+  if (!name || !type || !url) {
+    return reply.status(400).send({ error: 'Name, type, and URL are required.' });
   }
+  if (!['ICS', 'CalDAV'].includes(type)) {
+    return reply.status(400).send({ error: 'Type must be either ICS or CalDAV.' });
+  }
+  try {
+    const encryptedPassword = password ? encryptPassword(password) : null;
+    const maxOrder = db.prepare('SELECT MAX(sort_order) as max FROM calendar_sources').get();
+    const nextOrder = (maxOrder.max || 0) + 1;
+
+    const stmt = db.prepare(`
+      INSERT INTO calendar_sources (name, type, url, username, password, color, enabled, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const info = stmt.run(name, type, url, username || null, encryptedPassword, color || '#6e44ff', 1, nextOrder);
+    return { id: info.lastInsertRowid, success: true };
+  } catch (error) {
+    console.error('Error adding calendar source:', error);
+    reply.status(500).send({ error: 'Failed to add calendar source' });
+  }
+});
+
+fastify.patch('/api/calendar-sources/:id', async (request, reply) => {
+  const { id } = request.params;
+  const { name, type, url, username, password, color, enabled } = request.body;
 
   try {
-    const response = await axios.get(icsUrl);
-    const icsData = response.data;
+    const existing = db.prepare('SELECT * FROM calendar_sources WHERE id = ?').get(id);
+    if (!existing) {
+      return reply.status(404).send({ error: 'Calendar source not found' });
+    }
 
-    const jcalData = ICAL.parse(icsData);
-    const comp = new ICAL.Component(jcalData);
-    const vevents = comp.getAllSubcomponents('vevent');
+    const updateFields = [];
+    const updateValues = [];
 
-    const events = vevents.map(vevent => {
-      const event = new ICAL.Event(vevent);
-      return {
-        title: event.summary,
-        start: event.startDate.toJSDate(),
-        end: event.endDate.toJSDate(),
-        description: event.description,
-        location: event.location,
-        // Add other properties as needed
-      };
+    if (name !== undefined) { updateFields.push('name = ?'); updateValues.push(name); }
+    if (type !== undefined) {
+      if (!['ICS', 'CalDAV'].includes(type)) {
+        return reply.status(400).send({ error: 'Type must be either ICS or CalDAV.' });
+      }
+      updateFields.push('type = ?');
+      updateValues.push(type);
+    }
+    if (url !== undefined) { updateFields.push('url = ?'); updateValues.push(url); }
+    if (username !== undefined) { updateFields.push('username = ?'); updateValues.push(username || null); }
+    if (password !== undefined && password !== '') {
+      const encryptedPassword = encryptPassword(password);
+      updateFields.push('password = ?');
+      updateValues.push(encryptedPassword);
+    }
+    if (color !== undefined) { updateFields.push('color = ?'); updateValues.push(color); }
+    if (enabled !== undefined) { updateFields.push('enabled = ?'); updateValues.push(enabled ? 1 : 0); }
+
+    if (updateFields.length === 0) {
+      return reply.status(400).send({ error: 'No fields to update' });
+    }
+
+    updateValues.push(id);
+    const stmt = db.prepare(`UPDATE calendar_sources SET ${updateFields.join(', ')} WHERE id = ?`);
+    const info = stmt.run(...updateValues);
+
+    if (info.changes === 0) {
+      return reply.status(404).send({ error: 'Calendar source not found' });
+    }
+    return { success: true, message: 'Calendar source updated successfully' };
+  } catch (error) {
+    console.error('Error updating calendar source:', error);
+    reply.status(500).send({ error: 'Failed to update calendar source' });
+  }
+});
+
+fastify.delete('/api/calendar-sources/:id', async (request, reply) => {
+  const { id } = request.params;
+  try {
+    const stmt = db.prepare('DELETE FROM calendar_sources WHERE id = ?');
+    const info = stmt.run(id);
+    if (info.changes === 0) {
+      return reply.status(404).send({ error: 'Calendar source not found' });
+    }
+    return { success: true, message: 'Calendar source deleted successfully' };
+  } catch (error) {
+    console.error('Error deleting calendar source:', error);
+    reply.status(500).send({ error: 'Failed to delete calendar source' });
+  }
+});
+
+fastify.post('/api/calendar-sources/:id/test', async (request, reply) => {
+  const { id } = request.params;
+  try {
+    const source = db.prepare('SELECT * FROM calendar_sources WHERE id = ?').get(id);
+    if (!source) {
+      return reply.status(404).send({ error: 'Calendar source not found' });
+    }
+
+    if (source.type === 'ICS') {
+      const response = await axios.get(source.url, { timeout: 10000 });
+      const jcalData = ICAL.parse(response.data);
+      const comp = new ICAL.Component(jcalData);
+      const vevents = comp.getAllSubcomponents('vevent');
+      return { success: true, eventCount: vevents.length, message: 'ICS calendar connection successful' };
+    } else if (source.type === 'CalDAV') {
+      const decryptedPassword = decryptPassword(source.password);
+      const authHeader = 'Basic ' + Buffer.from(`${source.username}:${decryptedPassword}`).toString('base64');
+      const response = await axios.get(source.url, {
+        headers: { 'Authorization': authHeader },
+        timeout: 10000
+      });
+      return { success: true, message: 'CalDAV connection successful' };
+    }
+  } catch (error) {
+    console.error('Error testing calendar source:', error);
+    return reply.status(400).send({
+      success: false,
+      error: 'Failed to connect to calendar source',
+      details: error.message
+    });
+  }
+});
+
+
+// Enhanced endpoint to fetch and parse calendar events from multiple sources
+fastify.get('/api/calendar-events', async (request, reply) => {
+  try {
+    const sources = db.prepare('SELECT * FROM calendar_sources WHERE enabled = 1 ORDER BY sort_order, id').all();
+
+    if (sources.length === 0) {
+      return [];
+    }
+
+    const fetchPromises = sources.map(async (source) => {
+      try {
+        if (source.type === 'ICS') {
+          const response = await axios.get(source.url, { timeout: 15000 });
+          const icsData = response.data;
+          const jcalData = ICAL.parse(icsData);
+          const comp = new ICAL.Component(jcalData);
+          const vevents = comp.getAllSubcomponents('vevent');
+
+          return vevents.map(vevent => {
+            const event = new ICAL.Event(vevent);
+            return {
+              id: event.uid || Math.random().toString(),
+              title: event.summary,
+              start: event.startDate.toJSDate(),
+              end: event.endDate.toJSDate(),
+              description: event.description,
+              location: event.location,
+              source_id: source.id,
+              source_name: source.name,
+              source_color: source.color
+            };
+          });
+        } else if (source.type === 'CalDAV') {
+          const decryptedPassword = decryptPassword(source.password);
+          const authHeader = 'Basic ' + Buffer.from(`${source.username}:${decryptedPassword}`).toString('base64');
+
+          const response = await axios.get(source.url, {
+            headers: { 'Authorization': authHeader },
+            timeout: 15000
+          });
+
+          const icsData = response.data;
+          const jcalData = ICAL.parse(icsData);
+          const comp = new ICAL.Component(jcalData);
+          const vevents = comp.getAllSubcomponents('vevent');
+
+          return vevents.map(vevent => {
+            const event = new ICAL.Event(vevent);
+            return {
+              id: event.uid || Math.random().toString(),
+              title: event.summary,
+              start: event.startDate.toJSDate(),
+              end: event.endDate.toJSDate(),
+              description: event.description,
+              location: event.location,
+              source_id: source.id,
+              source_name: source.name,
+              source_color: source.color
+            };
+          });
+        }
+      } catch (error) {
+        console.error(`Error fetching calendar from source ${source.name}:`, error.message);
+        return [];
+      }
     });
 
-    return events;
+    const results = await Promise.all(fetchPromises);
+    const allEvents = results.flat();
+
+    return allEvents.sort((a, b) => new Date(a.start) - new Date(b.start));
   } catch (error) {
-    console.error('Error fetching or parsing ICS calendar:', error);
-    reply.status(500).send({ error: 'Failed to fetch or parse ICS calendar events.' });
+    console.error('Error fetching calendar events:', error);
+    reply.status(500).send({ error: 'Failed to fetch calendar events.' });
   }
 });
 
