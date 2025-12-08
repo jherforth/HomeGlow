@@ -475,31 +475,34 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>API Configuration</Typography>
-            
+
             <TextField
               fullWidth
               label="OpenWeatherMap API Key"
               type="password"
               value={settings.WEATHER_API_KEY || ''}
-              onChange={(e) => saveSetting('WEATHER_API_KEY', e.target.value)}
+              onChange={(e) => setSettings(prev => ({ ...prev, WEATHER_API_KEY: e.target.value }))}
+              onBlur={(e) => saveSetting('WEATHER_API_KEY', e.target.value)}
               sx={{ mb: 2 }}
               helperText="Get your free API key from openweathermap.org"
             />
-            
+
             <TextField
               fullWidth
               label="ICS Calendar URL"
               value={settings.ICS_CALENDAR_URL || ''}
-              onChange={(e) => saveSetting('ICS_CALENDAR_URL', e.target.value)}
+              onChange={(e) => setSettings(prev => ({ ...prev, ICS_CALENDAR_URL: e.target.value }))}
+              onBlur={(e) => saveSetting('ICS_CALENDAR_URL', e.target.value)}
               sx={{ mb: 2 }}
               helperText="Public ICS URL from Google Calendar or other calendar service"
             />
-            
+
             <TextField
               fullWidth
               label="Proxy Whitelist (comma-separated domains)"
               value={settings.PROXY_WHITELIST || ''}
-              onChange={(e) => saveSetting('PROXY_WHITELIST', e.target.value)}
+              onChange={(e) => setSettings(prev => ({ ...prev, PROXY_WHITELIST: e.target.value }))}
+              onBlur={(e) => saveSetting('PROXY_WHITELIST', e.target.value)}
               helperText="Domains allowed for proxy requests (e.g., api.example.com, another-api.com)"
             />
           </CardContent>
