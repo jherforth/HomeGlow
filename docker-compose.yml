@@ -11,7 +11,7 @@ services:
       - /apps/homeglowtest/uploads:/app/uploads
     environment:
       - NODE_ENV=production
-      - PORT=5000
+      - PORT=6000
     networks:
       - homeglow-network-test
 
