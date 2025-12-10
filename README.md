@@ -71,10 +71,14 @@ This is the easiest method for deploying HomeGlow using Portainer's Git integrat
 In Portainer, go to **Stacks** → **Add Stack** → **Environment Variables** and add:
 
 ```env
+# Port Configuration (customize as needed)
+BACKEND_PORT=5000
+FRONTEND_PORT=3000
+
 # OpenWeatherMap API Key (get from https://openweathermap.org/api)
 VITE_OPENWEATHER_API_KEY=your_openweather_api_key_here
 
-# Backend API URL (use your server's IP or domain)
+# Backend API URL (use your server's IP or domain and configured backend port)
 VITE_REACT_APP_API_URL=http://your-server-ip:5000
 
 # Optional: Tailscale Auth Key for secure remote access
@@ -90,8 +94,10 @@ TS_AUTHKEY=your_tailscale_auth_key_here
 6. Click **Deploy the Stack**
 
 #### Step 3: Access Your Application
-- **HomeGlow Dashboard**: `http://your-server-ip:3000`
-- **Backend API**: `http://your-server-ip:5000`
+- **HomeGlow Dashboard**: `http://your-server-ip:3000` (or your configured `FRONTEND_PORT`)
+- **Backend API**: `http://your-server-ip:5000` (or your configured `BACKEND_PORT`)
+
+> **Note**: The ports can be customized via the `BACKEND_PORT` and `FRONTEND_PORT` environment variables. If these are not set, the default ports are 5000 for the backend and 3000 for the frontend (or 5001/3001 for the test environment).
 
 ### Option 2: Manual Docker Compose Deployment
 
@@ -105,10 +111,14 @@ cd homeglow
 Create a `.env` file in the root directory:
 
 ```env
+# Port Configuration (customize as needed)
+BACKEND_PORT=5000
+FRONTEND_PORT=3000
+
 # OpenWeatherMap API Key
 VITE_OPENWEATHER_API_KEY=your_openweather_api_key_here
 
-# Backend API URL
+# Backend API URL (use configured backend port)
 VITE_REACT_APP_API_URL=http://your-server-ip:5000
 
 # Optional: Tailscale Auth Key
@@ -164,6 +174,31 @@ npm run dev
 ```
 
 ## ⚙️ Configuration
+
+### Port Configuration
+
+HomeGlow allows you to customize the ports used by the frontend and backend services via environment variables. This is particularly useful when deploying multiple instances or when standard ports are already in use.
+
+#### Default Ports
+- **Backend (API)**: 5000 (or 5001 for test environment)
+- **Frontend (Dashboard)**: 3000 (or 3001 for test environment)
+
+#### Customizing Ports
+
+Set these environment variables in your `.env` file or Portainer stack:
+
+```env
+BACKEND_PORT=8080   # Your custom backend port
+FRONTEND_PORT=8081  # Your custom frontend port
+```
+
+The configuration automatically applies to:
+- Docker container port mappings
+- Internal service communication
+- EXPOSE directives in Dockerfiles
+- Tailscale serve configuration (if using docker-compose-tailscale.yml)
+
+If not specified, the system falls back to sensible defaults based on which docker-compose file is used.
 
 ### Initial Setup via Admin Panel
 
