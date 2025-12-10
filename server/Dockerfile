@@ -7,5 +7,5 @@ RUN npm install -g npm@latest
 RUN npm install || { echo 'npm install failed'; exit 1; }
 COPY . .
 RUN mkdir -p /app/uploads/users /app/widgets && chmod -R 777 /app/uploads /app/widgets
-EXPOSE 5000
+EXPOSE 5001
 CMD ["node", "index.js"]
