@@ -94,6 +94,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const [deleteUserDialog, setDeleteUserDialog] = useState({ open: false, user: null });
   const [choreModal, setChoreModal] = useState({ open: false, user: null, userChores: [] });
   const [isLoading, setIsLoading] = useState(false);
+  const [saveMessage, setSaveMessage] = useState({ show: false, type: '', text: '' });
 
   useEffect(() => {
     const savedSettings = localStorage.getItem('widgetSettings');
@@ -170,12 +171,40 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     }
   };
 
-  const saveSetting = async (key, value) => {
+  const saveSetting = async (key, value, showMessage = true) => {
     try {
       await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, { key, value });
       setSettings(prev => ({ ...prev, [key]: value }));
+      if (showMessage) {
+        setSaveMessage({ show: true, type: 'success', text: 'Setting saved successfully!' });
+        setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+      }
     } catch (error) {
       console.error(`Error saving ${key}:`, error);
+      if (showMessage) {
+        setSaveMessage({ show: true, type: 'error', text: 'Failed to save setting. Please try again.' });
+        setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+      }
+      throw error;
+    }
+  };
+
+  const saveAllApiSettings = async () => {
+    setIsLoading(true);
+    try {
+      await Promise.all([
+        axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, { key: 'WEATHER_API_KEY', value: settings.WEATHER_API_KEY || '' }),
+        axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, { key: 'ICS_CALENDAR_URL', value: settings.ICS_CALENDAR_URL || '' }),
+        axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, { key: 'PROXY_WHITELIST', value: settings.PROXY_WHITELIST || '' })
+      ]);
+      setSaveMessage({ show: true, type: 'success', text: 'All API settings saved successfully!' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error saving API settings:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to save some settings. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -479,13 +508,18 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
           <CardContent>
             <Typography variant="h6" gutterBottom>API Configuration</Typography>
 
+            {saveMessage.show && (
+              <Alert severity={saveMessage.type} sx={{ mb: 2 }}>
+                {saveMessage.text}
+              </Alert>
+            )}
+
             <TextField
               fullWidth
               label="OpenWeatherMap API Key"
               type="password"
               value={settings.WEATHER_API_KEY || ''}
               onChange={(e) => setSettings(prev => ({ ...prev, WEATHER_API_KEY: e.target.value }))}
-              onBlur={(e) => saveSetting('WEATHER_API_KEY', e.target.value)}
               sx={{ mb: 2 }}
               helperText="Get your free API key from openweathermap.org"
             />
@@ -495,7 +529,6 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
               label="ICS Calendar URL"
               value={settings.ICS_CALENDAR_URL || ''}
               onChange={(e) => setSettings(prev => ({ ...prev, ICS_CALENDAR_URL: e.target.value }))}
-              onBlur={(e) => saveSetting('ICS_CALENDAR_URL', e.target.value)}
               sx={{ mb: 2 }}
               helperText="Public ICS URL from Google Calendar or other calendar service"
             />
@@ -505,9 +538,19 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
               label="Proxy Whitelist (comma-separated domains)"
               value={settings.PROXY_WHITELIST || ''}
               onChange={(e) => setSettings(prev => ({ ...prev, PROXY_WHITELIST: e.target.value }))}
-              onBlur={(e) => saveSetting('PROXY_WHITELIST', e.target.value)}
+              sx={{ mb: 2 }}
               helperText="Domains allowed for proxy requests (e.g., api.example.com, another-api.com)"
             />
+
+            <Button
+              variant="contained"
+              onClick={saveAllApiSettings}
+              disabled={isLoading}
+              startIcon={<Save />}
+              sx={{ mt: 2 }}
+            >
+              {isLoading ? 'Saving...' : 'Save API Settings'}
+            </Button>
           </CardContent>
         </Card>
       )}
