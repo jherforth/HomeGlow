@@ -5,13 +5,13 @@ services:
       context: ./server
       dockerfile: Dockerfile
     ports:
-      - "6000:6000"
+      - "5001:5001"
     volumes:
       - /apps/homeglowtest/data:/app/data
       - /apps/homeglowtest/uploads:/app/uploads
     environment:
       - NODE_ENV=production
-      - PORT=6000
+      - PORT=5001
     networks:
       - homeglow-network-test
 
@@ -24,7 +24,7 @@ services:
         - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
         - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}
     ports:
-      - "4000:4000"
+      - "3001:3001"
     depends_on:
       - homeglow-backend
     networks:
