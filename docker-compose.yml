@@ -1,5 +1,5 @@
 services:
-  homeglow-backend:
+  homeglow-backend-test:
     container_name: homeglow-backend-test
     build:
       context: ./server
@@ -15,7 +15,7 @@ services:
     networks:
       - homeglow-network-test
 
-  homeglow-frontend:
+  homeglow-frontend-test:
     container_name: homeglow-frontend-test
     build:
       context: ./client
