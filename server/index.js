@@ -1555,8 +1555,8 @@ const start = async () => {
   try {
     db = await initializeDatabase(); // Initialize db once here
     await pruneAndResetChores(); // Call the pruning/reset function on startup
-    await fastify.listen({ port: process.env.PORT || 5001, host: '0.0.0.0' });
-    console.log(`Server running on port ${process.env.PORT || 5001}`);
+    await fastify.listen({ port: process.env.PORT || 5000, host: '0.0.0.0' });
+    console.log(`Server running on port ${process.env.PORT || 5000}`);
   } catch (err) {
     console.error(err);
     process.exit(1);
