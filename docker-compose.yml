@@ -31,5 +31,5 @@ services:
       - homeglow-network-test
 
 networks:
-  homeglow-network-test:
+  homeglow-network:
     driver: bridge
