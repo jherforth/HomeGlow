@@ -6,7 +6,7 @@ const path = require('path');
 const fs = require('fs').promises;
 const multipart = require('@fastify/multipart');
 const crypto = require('crypto');
-require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 // NEW: Import axios for HTTP requests and ical.js for parsing
 const axios = require('axios');

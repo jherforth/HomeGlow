@@ -1,4 +1,4 @@
-[dotenv@17.2.3] injecting env (0) from .env -- tip: 🔑 add access controls to secrets: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (4) from ../.env -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
 Database path: /tmp/cc-agent/61238520/project/server/data/tasks.db
 CREATE TABLE IF NOT EXISTS chores (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,17 +41,28 @@ PRAGMA table_info(chores)
 SELECT COUNT(*) as count FROM calendar_sources
 SELECT value FROM settings WHERE key = 'ICS_CALENDAR_URL'
 SELECT id, user_id, assigned_day_of_week, repeat_type, completed, clam_value, expiration_date FROM chores
-{"level":40,"time":1765390359187,"pid":183,"hostname":"localhost","msg":"\"root\" path \"/tmp/cc-agent/61238520/project/server/uploads\" must exist"}
+{"level":40,"time":1765393234487,"pid":257,"hostname":"localhost","msg":"\"root\" path \"/tmp/cc-agent/61238520/project/server/uploads\" must exist"}
 Server running on port 5001
-{"level":40,"time":1765390359189,"pid":183,"hostname":"localhost","msg":"\"root\" path \"/tmp/cc-agent/61238520/project/server/uploads/users\" must exist"}
-{"level":30,"time":1765390359287,"pid":183,"hostname":"localhost","msg":"Server listening at http://127.0.0.1:5001"}
-{"level":30,"time":1765390359287,"pid":183,"hostname":"localhost","msg":"Server listening at http://169.254.8.1:5001"}
-{"level":30,"time":1765390359287,"pid":183,"hostname":"localhost","msg":"Server listening at http://169.254.9.1:5001"}
-{"level":30,"time":1765390359287,"pid":183,"hostname":"localhost","msg":"Server listening at http://169.254.169.1:5001"}
-{"level":30,"time":1765390370321,"pid":183,"hostname":"localhost","reqId":"req-1","req":{"method":"GET","url":"/api/test","host":"localhost:5001","remoteAddress":"127.0.0.1","remotePort":38482},"msg":"incoming request"}
+{"level":40,"time":1765393234488,"pid":257,"hostname":"localhost","msg":"\"root\" path \"/tmp/cc-agent/61238520/project/server/uploads/users\" must exist"}
+{"level":30,"time":1765393234497,"pid":257,"hostname":"localhost","msg":"Server listening at http://127.0.0.1:5001"}
+{"level":30,"time":1765393234497,"pid":257,"hostname":"localhost","msg":"Server listening at http://169.254.8.1:5001"}
+{"level":30,"time":1765393234497,"pid":257,"hostname":"localhost","msg":"Server listening at http://169.254.9.1:5001"}
+{"level":30,"time":1765393234497,"pid":257,"hostname":"localhost","msg":"Server listening at http://169.254.169.1:5001"}
+{"level":30,"time":1765393358324,"pid":257,"hostname":"localhost","reqId":"req-1","req":{"method":"GET","url":"/api/test","host":"localhost:5001","remoteAddress":"127.0.0.1","remotePort":43408},"msg":"incoming request"}
 Incoming request: GET /api/test
-{"level":30,"time":1765390370328,"pid":183,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":5.797649000000092,"msg":"request completed"}
-{"level":30,"time":1765390377499,"pid":183,"hostname":"localhost","reqId":"req-2","req":{"method":"GET","url":"/api/users","host":"localhost:5001","remoteAddress":"127.0.0.1","remotePort":38492},"msg":"incoming request"}
+{"level":30,"time":1765393358327,"pid":257,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":3.0121129999752156,"msg":"request completed"}
+{"level":30,"time":1765393359187,"pid":257,"hostname":"localhost","reqId":"req-2","req":{"method":"GET","url":"/api/users","host":"localhost:5001","remoteAddress":"127.0.0.1","remotePort":43420},"msg":"incoming request"}
 Incoming request: GET /api/users
 SELECT id, username, email, profile_picture, clam_total FROM users
-{"level":30,"time":1765390377501,"pid":183,"hostname":"localhost","reqId":"req-2","res":{"statusCode":200},"responseTime":1.292208999991999,"msg":"request completed"}
+{"level":30,"time":1765393359188,"pid":257,"hostname":"localhost","reqId":"req-2","res":{"statusCode":200},"responseTime":0.6147650000057183,"msg":"request completed"}
+{"level":30,"time":1765393497378,"pid":257,"hostname":"localhost","reqId":"req-3","req":{"method":"GET","url":"/api/settings","host":"localhost:5001","remoteAddress":"127.0.0.1","remotePort":37474},"msg":"incoming request"}
+Incoming request: GET /api/settings
+=== FETCHING SETTINGS ===
+SELECT key, value FROM settings
+Raw settings from database: []
+Processed settings object: {}
+{"level":30,"time":1765393497379,"pid":257,"hostname":"localhost","reqId":"req-3","res":{"statusCode":200},"responseTime":0.7957260000403039,"msg":"request completed"}
+{"level":30,"time":1765393498344,"pid":257,"hostname":"localhost","reqId":"req-4","req":{"method":"GET","url":"/api/chores","host":"localhost:5001","remoteAddress":"127.0.0.1","remotePort":42728},"msg":"incoming request"}
+Incoming request: GET /api/chores
+SELECT * FROM chores
+{"level":30,"time":1765393498344,"pid":257,"hostname":"localhost","reqId":"req-4","res":{"statusCode":200},"responseTime":0.6259309999877587,"msg":"request completed"}
