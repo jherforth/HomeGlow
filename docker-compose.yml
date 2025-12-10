@@ -13,7 +13,7 @@ services:
       - /apps/homeglowtest/uploads:/app/uploads
     environment:
       - NODE_ENV=production
-      - PORT=${BACKEND_PORT:-5000}
+      - PORT=${BACKEND_PORT:-5001}
     networks:
       - homeglow-network
 
@@ -25,7 +25,7 @@ services:
       args:
         - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
         - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}
-        - PORT=${FRONTEND_PORT:-3000}
+        - PORT=${FRONTEND_PORT:-3001}
     ports:
       - "${FRONTEND_PORT:-3001}:${FRONTEND_PORT:-3001}"
     depends_on:
