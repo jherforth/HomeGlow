@@ -21,4 +21,4 @@ COPY --from=build /app/dist ./dist
 COPY serve.json .
 RUN npm install -g serve
 EXPOSE 3001
-CMD ["serve", "--cors", "-s", "dist", "-l", "3000"]
+CMD ["serve", "--cors", "-s", "dist", "-l", "3001"]
