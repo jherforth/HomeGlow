@@ -120,27 +120,30 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const fetchUsers = async () => {
     try {
       const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users`);
-      setUsers(response.data); // Include all users including bonus user (ID 0)
+      setUsers(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching users:', error);
+      setUsers([]);
     }
   };
 
   const fetchChores = async () => {
     try {
       const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`);
-      setChores(response.data);
+      setChores(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching chores:', error);
+      setChores([]);
     }
   };
 
   const fetchPrizes = async () => {
     try {
       const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/prizes`);
-      setPrizes(response.data);
+      setPrizes(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching prizes:', error);
+      setPrizes([]);
     }
   };
 
