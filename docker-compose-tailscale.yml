@@ -4,14 +4,16 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
+      args:
+        - PORT=${BACKEND_PORT:-5000}
     ports:
-      - "5000:5000"
+      - "${BACKEND_PORT:-5000}:${BACKEND_PORT:-5000}"
     volumes:
       - /apps/homeglow/data:/app/data
       - /apps/homeglow/uploads:/app/uploads
     environment:
       - NODE_ENV=production
-      - PORT=5000
+      - PORT=${BACKEND_PORT:-5000}
     networks:
       - homeglow-network
 
@@ -22,9 +24,10 @@ services:
       dockerfile: Dockerfile
       args:
         - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
-        - VITE_REACT_APP_API_URL=http://homeglow:5000
+        - VITE_REACT_APP_API_URL=http://homeglow:${BACKEND_PORT:-5000}
+        - PORT=${FRONTEND_PORT:-3000}
     ports:
-      - "3000:3000"
+      - "${FRONTEND_PORT:-3000}:${FRONTEND_PORT:-3000}"
     depends_on:
       - homeglow-backend
     networks:
@@ -41,8 +44,8 @@ services:
     environment:
       - TS_AUTHKEY=${TS_AUTHKEY}
       - TS_USERSPACE=true
-      - TS_SERVE_HTTP=:3000
-      - TS_SERVE_HTTPS=:5000
+      - TS_SERVE_HTTP=:${FRONTEND_PORT:-3000}
+      - TS_SERVE_HTTPS=:${BACKEND_PORT:-5000}
     restart: unless-stopped
 
 networks:

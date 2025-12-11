@@ -479,3 +479,60 @@ input:checked+.toggle-slider:before {
   font-weight: bold;
   /* Make the text bold */
 }
+
+/* Custom month view with current week emphasis */
+.custom-calendar .rbc-month-view {
+  display: flex;
+  flex-direction: column;
+  height: 500px;
+}
+
+.custom-calendar .rbc-month-view .rbc-month-header {
+  flex-shrink: 0;
+}
+
+.custom-calendar .rbc-month-view .rbc-month-row {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex-basis: 12.5%;
+  flex-grow: 0;
+  flex-shrink: 0;
+}
+
+/* Other weeks - compressed to 25% of normal height */
+.custom-calendar .rbc-month-view .rbc-month-row {
+  flex-basis: 10%;
+}
+
+/* Current week - emphasized to 200% of normal height */
+.custom-calendar .rbc-month-view .rbc-month-row.rbc-current-week {
+  flex-basis: 40%;
+  background-color: rgba(var(--accent-rgb), 0.05);
+}
+
+/* Event overflow indicator */
+.rbc-show-more {
+  background-color: rgba(var(--accent-rgb), 0.1);
+  color: var(--accent);
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 0.7em;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-block;
+  margin-top: 2px;
+}
+
+.rbc-show-more:hover {
+  background-color: rgba(var(--accent-rgb), 0.2);
+}
+
+/* Ensure day cells can show overflow indicator */
+.custom-calendar .rbc-day-slot {
+  position: relative;
+}
+
+.custom-calendar .rbc-events-container {
+  position: relative;
+}

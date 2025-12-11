@@ -1,20 +1,20 @@
 {
   "name": "homeglow-server",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Backend for HomeGlow dashboard",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "axios": "^1.10.0",
-    "@fastify/cors": "^9.0.1",
-    "@fastify/static": "^7.0.4",
-    "@fastify/multipart": "^8.3.1",
-    "dotenv": "^17.0.0",
-    "fastify": "^4.29.1",
-    "ical-generator": "^9.0.0",
-    "better-sqlite3": "^12.2.0",
-    "ical.js": "^2.0.0"
+    "axios": "^1.13.2",
+    "@fastify/cors": "^11.1.0",
+    "@fastify/static": "^8.3.0",
+    "@fastify/multipart": "^9.3.0",
+    "dotenv": "^17.2.3",
+    "fastify": "^5.6.2",
+    "ical-generator": "^10.0.0",
+    "better-sqlite3": "^12.5.0",
+    "ical.js": "^2.2.1"
   }
 }

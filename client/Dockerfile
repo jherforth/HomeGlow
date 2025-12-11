@@ -20,5 +20,10 @@ WORKDIR /app
 COPY --from=build /app/dist ./dist
 COPY serve.json .
 RUN npm install -g serve
-EXPOSE 3000
-CMD ["serve", "--cors", "-s", "dist", "-l", "3000"]
+
+# Accept PORT as build argument with default value
+ARG PORT=3000
+ENV PORT=$PORT
+EXPOSE ${PORT}
+
+CMD sh -c "serve --cors -s dist -l ${PORT}"
