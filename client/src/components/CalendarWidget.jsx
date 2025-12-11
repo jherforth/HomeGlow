@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Typography, Box, List, ListItem, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, Button, IconButton, Popover, ToggleButton, ToggleButtonGroup, TextField, Switch, FormControlLabel, Select, MenuItem, FormControl, InputLabel, Chip, Divider, CircularProgress, Alert } from '@mui/material';
-import { Settings, ViewModule, ViewWeek, ChevronLeft, ChevronRight, Add, Delete, Edit, Refresh } from '@mui/icons-material';
+import { Settings, ViewModule, ViewWeek, ChevronLeft, ChevronRight, Add, Delete, Edit, Refresh, Remove } from '@mui/icons-material';
 import { Calendar, momentLocalizer } from 'react-big-calendar';
 import moment from 'moment';
 import { ChromePicker } from 'react-color';
@@ -25,6 +25,13 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
     return saved ? JSON.parse(saved) : {
       backgroundColor: '#6e44ff',
       textColor: '#ffffff'
+    };
+  });
+  const [displaySettings, setDisplaySettings] = useState(() => {
+    const saved = localStorage.getItem('calendarDisplaySettings');
+    return saved ? JSON.parse(saved) : {
+      textSize: 12,
+      bulletSize: 10
     };
   });
   const [showColorPicker, setShowColorPicker] = useState({ background: false, text: false });
@@ -52,6 +59,51 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   useEffect(() => {
     localStorage.setItem('calendarEventColors', JSON.stringify(eventColors));
   }, [eventColors]);
+
+  // Save display settings to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('calendarDisplaySettings', JSON.stringify(displaySettings));
+
+    // Also save to database
+    const saveToDatabase = async () => {
+      try {
+        await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, {
+          key: 'CALENDAR_TEXT_SIZE',
+          value: displaySettings.textSize.toString()
+        });
+        await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, {
+          key: 'CALENDAR_BULLET_SIZE',
+          value: displaySettings.bulletSize.toString()
+        });
+      } catch (error) {
+        console.error('Error saving display settings to database:', error);
+      }
+    };
+
+    const timeoutId = setTimeout(saveToDatabase, 500);
+    return () => clearTimeout(timeoutId);
+  }, [displaySettings]);
+
+  // Load display settings from database on mount
+  useEffect(() => {
+    const loadDisplaySettings = async () => {
+      try {
+        const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`);
+        const settings = response.data;
+
+        if (settings.CALENDAR_TEXT_SIZE || settings.CALENDAR_BULLET_SIZE) {
+          setDisplaySettings({
+            textSize: settings.CALENDAR_TEXT_SIZE ? parseInt(settings.CALENDAR_TEXT_SIZE) : 12,
+            bulletSize: settings.CALENDAR_BULLET_SIZE ? parseInt(settings.CALENDAR_BULLET_SIZE) : 10
+          });
+        }
+      } catch (error) {
+        console.error('Error loading display settings from database:', error);
+      }
+    };
+
+    loadDisplaySettings();
+  }, []);
 
   const fetchCalendarSources = async () => {
     try {
@@ -517,19 +569,19 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                       >
                         <Box
                           sx={{
-                            width: 6,
-                            height: 6,
-                            minWidth: 6,
-                            minHeight: 6,
+                            width: displaySettings.bulletSize,
+                            height: displaySettings.bulletSize,
+                            minWidth: displaySettings.bulletSize,
+                            minHeight: displaySettings.bulletSize,
                             borderRadius: '50%',
                             backgroundColor: event.source_color || eventColors.backgroundColor,
-                            mt: 0.3
+                            mt: displaySettings.bulletSize * 0.05
                           }}
                         />
                         <Typography
                           variant="caption"
                           sx={{
-                            fontSize: '0.65rem',
+                            fontSize: `${displaySettings.textSize}px`,
                             lineHeight: 1.2,
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
@@ -618,7 +670,6 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                           p: 0.5,
                           mb: 0.5,
                           cursor: 'pointer',
-                          fontSize: '0.7rem',
                           display: 'flex',
                           alignItems: 'flex-start',
                           gap: 0.5,
@@ -630,20 +681,20 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                       >
                         <Box
                           sx={{
-                            width: 8,
-                            height: 8,
-                            minWidth: 8,
-                            minHeight: 8,
+                            width: displaySettings.bulletSize,
+                            height: displaySettings.bulletSize,
+                            minWidth: displaySettings.bulletSize,
+                            minHeight: displaySettings.bulletSize,
                             borderRadius: '50%',
                             backgroundColor: event.source_color || eventColors.backgroundColor,
-                            mt: 0.5
+                            mt: displaySettings.bulletSize * 0.0625
                           }}
                         />
                         <Box sx={{ flex: 1, minWidth: 0 }}>
-                          <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block' }}>
+                          <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block', fontSize: `${displaySettings.textSize}px` }}>
                             {moment(event.start).format('h:mm A')}
                           </Typography>
-                          <Typography variant="caption" sx={{ display: 'block', lineHeight: 1.2 }}>
+                          <Typography variant="caption" sx={{ display: 'block', lineHeight: 1.2, fontSize: `${displaySettings.textSize}px` }}>
                             {event.title}
                           </Typography>
                         </Box>
@@ -886,6 +937,111 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
             sx={{ mt: 2 }}
           >
             Reset to Default
+          </Button>
+
+          <Divider sx={{ my: 3 }} />
+
+          <Typography variant="h6" sx={{ mb: 2 }}>Display Settings</Typography>
+
+          {/* Text Size Control */}
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>Event Text Size</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <IconButton
+                size="small"
+                onClick={() => setDisplaySettings(prev => ({
+                  ...prev,
+                  textSize: Math.max(8, prev.textSize - 1)
+                }))}
+                disabled={displaySettings.textSize <= 8}
+              >
+                <Remove />
+              </IconButton>
+              <TextField
+                type="number"
+                value={displaySettings.textSize}
+                onChange={(e) => {
+                  const value = parseInt(e.target.value) || 8;
+                  setDisplaySettings(prev => ({
+                    ...prev,
+                    textSize: Math.min(24, Math.max(8, value))
+                  }));
+                }}
+                inputProps={{ min: 8, max: 24 }}
+                sx={{ width: 100 }}
+                size="small"
+              />
+              <Typography variant="body2" sx={{ minWidth: 30 }}>px</Typography>
+              <IconButton
+                size="small"
+                onClick={() => setDisplaySettings(prev => ({
+                  ...prev,
+                  textSize: Math.min(24, prev.textSize + 1)
+                }))}
+                disabled={displaySettings.textSize >= 24}
+              >
+                <Add />
+              </IconButton>
+            </Box>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+              Range: 8-24 px
+            </Typography>
+          </Box>
+
+          {/* Bullet Size Control */}
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>Event Bullet Size</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <IconButton
+                size="small"
+                onClick={() => setDisplaySettings(prev => ({
+                  ...prev,
+                  bulletSize: Math.max(4, prev.bulletSize - 1)
+                }))}
+                disabled={displaySettings.bulletSize <= 4}
+              >
+                <Remove />
+              </IconButton>
+              <TextField
+                type="number"
+                value={displaySettings.bulletSize}
+                onChange={(e) => {
+                  const value = parseInt(e.target.value) || 4;
+                  setDisplaySettings(prev => ({
+                    ...prev,
+                    bulletSize: Math.min(20, Math.max(4, value))
+                  }));
+                }}
+                inputProps={{ min: 4, max: 20 }}
+                sx={{ width: 100 }}
+                size="small"
+              />
+              <Typography variant="body2" sx={{ minWidth: 30 }}>px</Typography>
+              <IconButton
+                size="small"
+                onClick={() => setDisplaySettings(prev => ({
+                  ...prev,
+                  bulletSize: Math.min(20, prev.bulletSize + 1)
+                }))}
+                disabled={displaySettings.bulletSize >= 20}
+              >
+                <Add />
+              </IconButton>
+            </Box>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+              Range: 4-20 px
+            </Typography>
+          </Box>
+
+          <Button
+            variant="outlined"
+            fullWidth
+            onClick={() => {
+              setDisplaySettings({ textSize: 12, bulletSize: 10 });
+            }}
+            sx={{ mt: 1 }}
+          >
+            Reset Display Settings
           </Button>
         </Box>
       </Popover>
