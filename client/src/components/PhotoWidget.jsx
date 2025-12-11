@@ -25,6 +25,7 @@ const PhotoWidget = ({ transparentBackground }) => {
   const [savingSource, setSavingSource] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
   const [slideshowInterval, setSlideshowInterval] = useState(5000);
+  const [photosPerView, setPhotosPerView] = useState(1);
 
   useEffect(() => {
     fetchPhotoSources();
@@ -33,14 +34,14 @@ const PhotoWidget = ({ transparentBackground }) => {
 
   // Slideshow timer
   useEffect(() => {
-    if (!isPlaying || photos.length <= 1) return;
+    if (!isPlaying || photos.length <= photosPerView) return;
 
     const timer = setInterval(() => {
-      setCurrentPhotoIndex((prev) => (prev + 1) % photos.length);
+      setCurrentPhotoIndex((prev) => (prev + photosPerView) % photos.length);
     }, slideshowInterval);
 
     return () => clearInterval(timer);
-  }, [isPlaying, photos.length, slideshowInterval, currentPhotoIndex]);
+  }, [isPlaying, photos.length, slideshowInterval, currentPhotoIndex, photosPerView]);
 
   const fetchPhotoSources = async () => {
     try {
@@ -169,18 +170,29 @@ const PhotoWidget = ({ transparentBackground }) => {
   };
 
   const handlePrevPhoto = () => {
-    setCurrentPhotoIndex((prev) => (prev - 1 + photos.length) % photos.length);
+    setCurrentPhotoIndex((prev) => (prev - photosPerView + photos.length) % photos.length);
   };
 
   const handleNextPhoto = () => {
-    setCurrentPhotoIndex((prev) => (prev + 1) % photos.length);
+    setCurrentPhotoIndex((prev) => (prev + photosPerView) % photos.length);
   };
 
   const handleTogglePlayback = () => {
     setIsPlaying((prev) => !prev);
   };
 
-  const currentPhoto = photos[currentPhotoIndex];
+  const getCurrentPhotos = () => {
+    const result = [];
+    for (let i = 0; i < photosPerView; i++) {
+      const index = (currentPhotoIndex + i) % photos.length;
+      if (photos[index]) {
+        result.push(photos[index]);
+      }
+    }
+    return result;
+  };
+
+  const currentPhotos = getCurrentPhotos();
 
   return (
     <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`}>
@@ -213,25 +225,36 @@ const PhotoWidget = ({ transparentBackground }) => {
         </Box>
       )}
 
-      {!loading && !error && photos.length > 0 && currentPhoto && (
+      {!loading && !error && photos.length > 0 && currentPhotos.length > 0 && (
         <Box>
           <Box sx={{ position: 'relative', height: 400, overflow: 'hidden', borderRadius: 2, mb: 2 }}>
-            <img
-              src={`${import.meta.env.VITE_REACT_APP_API_URL}${currentPhoto.url}`}
-              alt="Photo"
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                borderRadius: '8px'
-              }}
-              onError={(e) => {
-                console.error('Image load error:', e);
-                e.target.style.display = 'none';
-              }}
-            />
+            <Box sx={{
+              display: 'grid',
+              gridTemplateColumns: photosPerView === 1 ? '1fr' : photosPerView === 2 ? '1fr 1fr' : '1fr 1fr 1fr',
+              gap: 1,
+              height: '100%'
+            }}>
+              {currentPhotos.map((photo, index) => (
+                <Box key={`${photo.id}-${index}`} sx={{ height: '100%', overflow: 'hidden', borderRadius: 1 }}>
+                  <img
+                    src={`${import.meta.env.VITE_REACT_APP_API_URL}${photo.url}`}
+                    alt="Photo"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'contain',
+                      backgroundColor: 'rgba(0, 0, 0, 0.05)'
+                    }}
+                    onError={(e) => {
+                      console.error('Image load error:', e);
+                      e.target.style.display = 'none';
+                    }}
+                  />
+                </Box>
+              ))}
+            </Box>
 
-            {photos.length > 1 && (
+            {photos.length > photosPerView && (
               <>
                 <IconButton
                   onClick={handlePrevPhoto}
@@ -267,13 +290,15 @@ const PhotoWidget = ({ transparentBackground }) => {
 
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="caption" color="text.secondary">
-              {currentPhotoIndex + 1} / {photos.length}
+              {currentPhotoIndex + 1} - {Math.min(currentPhotoIndex + photosPerView, photos.length)} / {photos.length}
             </Typography>
-            <Chip
-              label={currentPhoto.source_name}
-              size="small"
-              variant="outlined"
-            />
+            {currentPhotos.length === 1 && (
+              <Chip
+                label={currentPhotos[0].source_name}
+                size="small"
+                variant="outlined"
+              />
+            )}
           </Box>
         </Box>
       )}
@@ -303,6 +328,22 @@ const PhotoWidget = ({ transparentBackground }) => {
             >
               Add Source
             </Button>
+          </Box>
+
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" color="text.secondary" gutterBottom display="block">
+              Photos Per View
+            </Typography>
+            <Select
+              fullWidth
+              size="small"
+              value={photosPerView}
+              onChange={(e) => setPhotosPerView(e.target.value)}
+            >
+              <MenuItem value={1}>1 Photo</MenuItem>
+              <MenuItem value={2}>2 Photos</MenuItem>
+              <MenuItem value={3}>3 Photos</MenuItem>
+            </Select>
           </Box>
 
           <Box sx={{ mb: 2 }}>
