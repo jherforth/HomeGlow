@@ -25,10 +25,15 @@ HomeGlow is built with a focus on modern aesthetics, user experience, and practi
 
 ### Enhanced Widgets
 -   **Calendar Widget**:
-    -   **Google Calendar Integration**: Connects directly to your Google Calendar via a shareable ICS link, fetching and displaying your events.
-    -   **Sleek Month View**: A refined, less "boxy" calendar display with subtle borders and improved spacing.
-    -   **Integrated Upcoming Events**: Eliminates the need for a separate agenda view by displaying a clean, non-scrolling list of events for the next 7 days directly below the main calendar.
-    -   **Current Day Highlight**: Visually emphasizes the current day of the week in the calendar header for quick reference.
+    -   **Multi-Source Calendar Support**: Connect multiple calendars simultaneously from different sources.
+    -   **ICS & CalDAV Integration**: Supports both public ICS links (Google Calendar, Apple Calendar, etc.) and private CalDAV servers with authentication.
+    -   **Individual Calendar Management**: Enable/disable specific calendars, customize colors for each source, and test connections independently.
+    -   **Color-Coded Events**: Each calendar source displays with its own custom color for easy identification.
+    -   **Month & Week Views**: Seamlessly toggle between a traditional month view and a dynamic week view with intuitive navigation controls.
+    -   **Sleek Week View**: Clean, organized 7-day view with colored bullet indicators showing calendar source, equalized row heights, and hover effects for better usability.
+    -   **Current Day Highlight**: Visually emphasizes the current day in both month and week views for quick reference.
+    -   **Interactive Event Details**: Click any event to view detailed information including time, location, and description.
+    -   **Customizable Event Styling**: Set default colors for events in the settings panel with live preview.
 -   **Menu Widget**:
     -   **Intuitive Edit/View Modes**: Easily switch between a clean display mode and an interactive editing mode for managing your weekly meal plans.
     -   **Multi-Item Support**: Add multiple menu items per day, allowing for detailed meal planning.
@@ -57,9 +62,9 @@ HomeGlow is built with a focus on modern aesthetics, user experience, and practi
 ### Prerequisites
 -   **Docker** and **Docker Compose** (required for all deployment methods)
 -   **Git** for cloning the repository (if not using Portainer Git integration)
--   **Google Calendar ICS Link**: A shareable, public ICS link from your Google Calendar (or any other calendar service).
 -   **OpenWeatherMap API Key**: For weather functionality (free tier available)
--   **Immich Instance** (Optional, for Photo Widget): A running Immich server with API access.
+-   **Calendar Source** (Optional, for Calendar Widget): ICS link from any calendar service (Google Calendar, Apple Calendar, etc.) or CalDAV server credentials
+-   **Immich Instance** (Optional, for Photo Widget): A running Immich server with API access
 
 ## 📦 Deployment Options
 
@@ -206,8 +211,28 @@ Access the Admin Panel by clicking the gear icon (⚙️) on the main dashboard:
 
 #### APIs Tab
 1. **OpenWeatherMap API Key**: Enter your API key for weather functionality
-2. **ICS Calendar URL**: Add your Google Calendar's public ICS link
-3. **Proxy Whitelist**: Configure allowed domains for external API calls
+2. **Proxy Whitelist**: Configure allowed domains for external API calls
+
+#### Calendar Configuration
+Configure calendar sources directly from the Calendar Widget settings:
+1. Click the **Settings** icon (⚙️) on the Calendar Widget
+2. Click **Add Calendar** to create a new calendar source
+3. **For ICS Calendars** (Google, Apple, etc.):
+   - Enter a display name
+   - Select "ICS" as the type
+   - Paste your calendar's public ICS link
+   - Choose a custom color
+4. **For CalDAV Calendars** (Private servers):
+   - Enter a display name
+   - Select "CalDAV" as the type
+   - Enter your CalDAV server URL
+   - Provide username and password
+   - Choose a custom color
+   - Test connection before saving
+5. **Manage Calendars**:
+   - Toggle calendars on/off without deleting them
+   - Edit calendar settings anytime
+   - Delete calendars you no longer need
 
 #### Widgets Tab
 Enable/disable and configure transparency for:
@@ -245,13 +270,30 @@ Enable/disable and configure transparency for:
 3. Navigate to API Keys section
 4. Copy your API key to the Admin Panel → APIs tab
 
-#### Google Calendar ICS Link
+#### Calendar Integration
+
+**For Google Calendar (ICS Link)**:
 1. Open Google Calendar
 2. Click the three dots next to your calendar name
 3. Select "Settings and sharing"
 4. Scroll to "Integrate calendar"
 5. Copy the "Secret address in iCal format"
-6. Paste into Admin Panel → APIs tab
+6. In HomeGlow, click Settings on the Calendar Widget
+7. Add a new calendar, select "ICS" type, and paste the URL
+
+**For Apple Calendar (ICS Link)**:
+1. Open Calendar app on Mac
+2. Right-click the calendar you want to share
+3. Select "Share Calendar" and make it public
+4. Copy the public URL
+5. Add to HomeGlow Calendar Widget as an ICS source
+
+**For CalDAV Servers** (Nextcloud, Radicale, etc.):
+1. Get your CalDAV server URL from your provider
+2. Obtain your calendar-specific endpoint
+3. In HomeGlow, add a new calendar with "CalDAV" type
+4. Enter your server URL, username, and password
+5. Use the "Test Connection" button to verify settings
 
 ## 🔧 Custom Widget Development
 
@@ -322,9 +364,11 @@ sudo cp -r /apps/homeglow/uploads /path/to/backup/
 HomeGlow uses SQLite with tables for:
 - **users**: Family member profiles and clam totals
 - **chores**: Task assignments and completion status
-- **events**: Calendar events (if using local storage)
+- **calendar_sources**: Calendar connection configurations (ICS/CalDAV)
+- **calendar_events**: Cached calendar events from all sources
 - **settings**: API keys and configuration
 - **prizes**: Reward system items
+- **menu_items**: Weekly meal planning entries
 
 ## 🛠️ Troubleshooting
 
@@ -336,9 +380,12 @@ HomeGlow uses SQLite with tables for:
 - Check browser console for JavaScript errors
 
 #### Calendar Not Showing Events
-- Verify ICS URL is public and accessible
-- Test the ICS URL in a browser
-- Check Admin Panel → APIs for correct URL format
+- **Check Calendar Sources**: Open Calendar Widget Settings to verify calendars are enabled
+- **Test ICS URLs**: For ICS calendars, paste the URL in a browser to verify it's accessible
+- **Test CalDAV Connection**: For CalDAV calendars, use the "Test Connection" button in the calendar editor
+- **Verify Credentials**: Ensure username/password are correct for CalDAV sources
+- **Check URL Format**: ICS URLs should end with `.ics` or `.ical`, CalDAV URLs should point to your calendar endpoint
+- **Enable Calendars**: Make sure calendar sources are toggled on (enabled) in the settings
 
 #### Weather Widget Not Working
 - Confirm OpenWeatherMap API key is valid
