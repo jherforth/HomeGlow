@@ -217,7 +217,7 @@ const PhotoWidget = ({ transparentBackground }) => {
         <Box>
           <Box sx={{ position: 'relative', height: 400, overflow: 'hidden', borderRadius: 2, mb: 2 }}>
             <img
-              src={currentPhoto.url}
+              src={`${import.meta.env.VITE_REACT_APP_API_URL}${currentPhoto.url}`}
               alt="Photo"
               style={{
                 width: '100%',
