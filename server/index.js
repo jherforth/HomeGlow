@@ -1688,29 +1688,34 @@ fastify.post('/api/photo-sources/:id/test', async (request, reply) => {
 
     if (source.type === 'Immich') {
       const decryptedApiKey = decryptPassword(source.api_key);
-      const response = await axios.get(`${source.url}/api/timeline/buckets`, {
-        headers: {
-          'X-Api-Key': decryptedApiKey,
-          'Accept': 'application/json'
-        },
-        params: {
-          size: 'MONTH',
-          withStacked: true,
-          withPartners: true
-        },
-        timeout: 10000
-      });
-      return { success: true, bucketCount: response.data.length || 0, message: 'Immich connection successful' };
+      const response = await axios.post(`${source.url}/api/search/random`,
+        { size: 1 },
+        {
+          headers: {
+            'x-api-key': decryptedApiKey,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          timeout: 10000
+        }
+      );
+      return { success: true, assetCount: response.data.length || 0, message: 'Immich connection successful' };
     } else if (source.type === 'GooglePhotos') {
       const decryptedRefreshToken = decryptPassword(source.refresh_token);
       return { success: true, message: 'Google Photos configuration saved (connection test not yet implemented)' };
     }
   } catch (error) {
-    console.error('Error testing photo source:', error);
+    console.error('Error testing photo source:', error.message);
+    if (error.response) {
+      console.error(`Response status: ${error.response.status}`);
+      console.error(`Response data:`, error.response.data);
+    }
     return reply.status(400).send({
       success: false,
       error: 'Failed to connect to photo source',
-      details: error.message
+      details: error.message,
+      responseStatus: error.response?.status,
+      responseData: error.response?.data
     });
   }
 });
@@ -1727,9 +1732,9 @@ fastify.get('/api/photo-proxy/:sourceId/:assetId', async (request, reply) => {
     }
 
     const decryptedApiKey = decryptPassword(source.api_key);
-    const response = await axios.get(`${source.url}/api/asset/thumbnail/${assetId}`, {
+    const response = await axios.get(`${source.url}/api/assets/${assetId}/thumbnail`, {
       headers: {
-        'X-Api-Key': decryptedApiKey
+        'x-api-key': decryptedApiKey
       },
       params: { size },
       responseType: 'arraybuffer',
@@ -1741,6 +1746,10 @@ fastify.get('/api/photo-proxy/:sourceId/:assetId', async (request, reply) => {
     return reply.send(Buffer.from(response.data));
   } catch (error) {
     console.error('Error proxying photo:', error.message);
+    if (error.response) {
+      console.error(`Immich response status: ${error.response.status}`);
+      console.error(`Immich response data:`, error.response.data);
+    }
     return reply.status(500).send({ error: 'Failed to load photo' });
   }
 });
@@ -1759,43 +1768,22 @@ fastify.get('/api/photo-items', async (request, reply) => {
         if (source.type === 'Immich') {
           const decryptedApiKey = decryptPassword(source.api_key);
 
-          // Try the timeline endpoint which returns random assets
-          const response = await axios.get(`${source.url}/api/timeline/buckets`, {
-            headers: {
-              'X-Api-Key': decryptedApiKey,
-              'Accept': 'application/json'
-            },
-            params: {
-              size: 'MONTH',
-              withStacked: true,
-              withPartners: true,
-              order: 'desc'
-            },
-            timeout: 15000
-          });
-
-          // Get the first few buckets
-          const buckets = response.data.slice(0, 3);
-          const assetPromises = buckets.map(bucket =>
-            axios.get(`${source.url}/api/timeline/bucket`, {
+          // Use the search/random endpoint to get random assets
+          const response = await axios.post(`${source.url}/api/search/random`,
+            { size: 100 },
+            {
               headers: {
-                'X-Api-Key': decryptedApiKey,
+                'x-api-key': decryptedApiKey,
+                'Content-Type': 'application/json',
                 'Accept': 'application/json'
               },
-              params: {
-                size: 'MONTH',
-                timeBucket: bucket.timeBucket,
-                withStacked: true,
-                withPartners: true
-              },
-              timeout: 10000
-            })
+              timeout: 15000
+            }
           );
 
-          const bucketResults = await Promise.all(assetPromises);
-          const allAssets = bucketResults.flatMap(result => result.data).slice(0, 50);
+          const assets = response.data || [];
 
-          return allAssets.map(asset => ({
+          return assets.map(asset => ({
             id: asset.id,
             url: `/api/photo-proxy/${source.id}/${asset.id}?size=preview`,
             thumbnail: `/api/photo-proxy/${source.id}/${asset.id}?size=thumbnail`,
