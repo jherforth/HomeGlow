@@ -603,6 +603,22 @@ async function initializeDatabase() {
       );
       CREATE INDEX IF NOT EXISTS idx_calendar_sources_enabled ON calendar_sources(enabled);
       CREATE INDEX IF NOT EXISTS idx_calendar_sources_sort_order ON calendar_sources(sort_order);
+      CREATE TABLE IF NOT EXISTS photo_sources (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        url TEXT,
+        api_key TEXT,
+        username TEXT,
+        password TEXT,
+        album_id TEXT,
+        refresh_token TEXT,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_photo_sources_enabled ON photo_sources(enabled);
+      CREATE INDEX IF NOT EXISTS idx_photo_sources_sort_order ON photo_sources(sort_order);
     `);
     
     // Migration: Add repeat_type column if it doesn't exist and remove old repeats column
@@ -1549,6 +1565,202 @@ fastify.get('/api/calendar-events', async (request, reply) => {
   }
 });
 
+
+// Photo sources routes
+fastify.get('/api/photo-sources', async (request, reply) => {
+  try {
+    const rows = db.prepare('SELECT id, name, type, url, album_id, enabled, sort_order, created_at FROM photo_sources ORDER BY sort_order, id').all();
+    return rows;
+  } catch (error) {
+    console.error('Error fetching photo sources:', error);
+    reply.status(500).send({ error: 'Failed to fetch photo sources' });
+  }
+});
+
+fastify.post('/api/photo-sources', async (request, reply) => {
+  const { name, type, url, api_key, username, password, album_id, refresh_token } = request.body;
+  if (!name || !type) {
+    return reply.status(400).send({ error: 'Name and type are required.' });
+  }
+  if (!['Immich', 'GooglePhotos'].includes(type)) {
+    return reply.status(400).send({ error: 'Type must be either Immich or GooglePhotos.' });
+  }
+  try {
+    const encryptedApiKey = api_key ? encryptPassword(api_key) : null;
+    const encryptedPassword = password ? encryptPassword(password) : null;
+    const encryptedRefreshToken = refresh_token ? encryptPassword(refresh_token) : null;
+    const maxOrder = db.prepare('SELECT MAX(sort_order) as max FROM photo_sources').get();
+    const nextOrder = (maxOrder.max || 0) + 1;
+
+    const stmt = db.prepare(`
+      INSERT INTO photo_sources (name, type, url, api_key, username, password, album_id, refresh_token, enabled, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const info = stmt.run(name, type, url || null, encryptedApiKey, username || null, encryptedPassword, album_id || null, encryptedRefreshToken, 1, nextOrder);
+    return { id: info.lastInsertRowid, success: true };
+  } catch (error) {
+    console.error('Error adding photo source:', error);
+    reply.status(500).send({ error: 'Failed to add photo source' });
+  }
+});
+
+fastify.patch('/api/photo-sources/:id', async (request, reply) => {
+  const { id } = request.params;
+  const { name, type, url, api_key, username, password, album_id, refresh_token, enabled } = request.body;
+
+  try {
+    const existing = db.prepare('SELECT * FROM photo_sources WHERE id = ?').get(id);
+    if (!existing) {
+      return reply.status(404).send({ error: 'Photo source not found' });
+    }
+
+    const updateFields = [];
+    const updateValues = [];
+
+    if (name !== undefined) { updateFields.push('name = ?'); updateValues.push(name); }
+    if (type !== undefined) {
+      if (!['Immich', 'GooglePhotos'].includes(type)) {
+        return reply.status(400).send({ error: 'Type must be either Immich or GooglePhotos.' });
+      }
+      updateFields.push('type = ?');
+      updateValues.push(type);
+    }
+    if (url !== undefined) { updateFields.push('url = ?'); updateValues.push(url || null); }
+    if (api_key !== undefined && api_key !== '') {
+      const encryptedApiKey = encryptPassword(api_key);
+      updateFields.push('api_key = ?');
+      updateValues.push(encryptedApiKey);
+    }
+    if (username !== undefined) { updateFields.push('username = ?'); updateValues.push(username || null); }
+    if (password !== undefined && password !== '') {
+      const encryptedPassword = encryptPassword(password);
+      updateFields.push('password = ?');
+      updateValues.push(encryptedPassword);
+    }
+    if (album_id !== undefined) { updateFields.push('album_id = ?'); updateValues.push(album_id || null); }
+    if (refresh_token !== undefined && refresh_token !== '') {
+      const encryptedRefreshToken = encryptPassword(refresh_token);
+      updateFields.push('refresh_token = ?');
+      updateValues.push(encryptedRefreshToken);
+    }
+    if (enabled !== undefined) { updateFields.push('enabled = ?'); updateValues.push(enabled ? 1 : 0); }
+
+    if (updateFields.length === 0) {
+      return reply.status(400).send({ error: 'No fields to update' });
+    }
+
+    updateValues.push(id);
+    const stmt = db.prepare(`UPDATE photo_sources SET ${updateFields.join(', ')} WHERE id = ?`);
+    const info = stmt.run(...updateValues);
+
+    if (info.changes === 0) {
+      return reply.status(404).send({ error: 'Photo source not found' });
+    }
+    return { success: true, message: 'Photo source updated successfully' };
+  } catch (error) {
+    console.error('Error updating photo source:', error);
+    reply.status(500).send({ error: 'Failed to update photo source' });
+  }
+});
+
+fastify.delete('/api/photo-sources/:id', async (request, reply) => {
+  const { id } = request.params;
+  try {
+    const stmt = db.prepare('DELETE FROM photo_sources WHERE id = ?');
+    const info = stmt.run(id);
+    if (info.changes === 0) {
+      return reply.status(404).send({ error: 'Photo source not found' });
+    }
+    return { success: true, message: 'Photo source deleted successfully' };
+  } catch (error) {
+    console.error('Error deleting photo source:', error);
+    reply.status(500).send({ error: 'Failed to delete photo source' });
+  }
+});
+
+fastify.post('/api/photo-sources/:id/test', async (request, reply) => {
+  const { id } = request.params;
+  try {
+    const source = db.prepare('SELECT * FROM photo_sources WHERE id = ?').get(id);
+    if (!source) {
+      return reply.status(404).send({ error: 'Photo source not found' });
+    }
+
+    if (source.type === 'Immich') {
+      const decryptedApiKey = decryptPassword(source.api_key);
+      const response = await axios.get(`${source.url}/api/assets`, {
+        headers: { 'X-Api-Key': decryptedApiKey },
+        params: { take: 1 },
+        timeout: 10000
+      });
+      return { success: true, photoCount: response.data.length || 0, message: 'Immich connection successful' };
+    } else if (source.type === 'GooglePhotos') {
+      const decryptedRefreshToken = decryptPassword(source.refresh_token);
+      return { success: true, message: 'Google Photos configuration saved (connection test not yet implemented)' };
+    }
+  } catch (error) {
+    console.error('Error testing photo source:', error);
+    return reply.status(400).send({
+      success: false,
+      error: 'Failed to connect to photo source',
+      details: error.message
+    });
+  }
+});
+
+// Enhanced endpoint to fetch photos from multiple sources
+fastify.get('/api/photo-items', async (request, reply) => {
+  try {
+    const sources = db.prepare('SELECT * FROM photo_sources WHERE enabled = 1 ORDER BY sort_order, id').all();
+
+    if (sources.length === 0) {
+      return [];
+    }
+
+    const fetchPromises = sources.map(async (source) => {
+      try {
+        if (source.type === 'Immich') {
+          const decryptedApiKey = decryptPassword(source.api_key);
+          const response = await axios.get(`${source.url}/api/assets`, {
+            headers: { 'X-Api-Key': decryptedApiKey },
+            params: { take: 50 },
+            timeout: 15000
+          });
+
+          return response.data.map(asset => ({
+            id: asset.id,
+            url: `${source.url}/api/assets/${asset.id}/thumbnail`,
+            thumbnail: `${source.url}/api/assets/${asset.id}/thumbnail`,
+            type: asset.type,
+            source_id: source.id,
+            source_name: source.name,
+            source_type: 'Immich',
+            headers: { 'X-Api-Key': decryptedApiKey }
+          }));
+        } else if (source.type === 'GooglePhotos') {
+          return [];
+        }
+      } catch (error) {
+        console.error(`Error fetching photos from source ${source.name}:`, error.message);
+        return [];
+      }
+    });
+
+    const results = await Promise.all(fetchPromises);
+    const allPhotos = results.flat();
+
+    // Shuffle photos
+    for (let i = allPhotos.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [allPhotos[i], allPhotos[j]] = [allPhotos[j], allPhotos[i]];
+    }
+
+    return allPhotos;
+  } catch (error) {
+    console.error('Error fetching photos:', error);
+    reply.status(500).send({ error: 'Failed to fetch photos.' });
+  }
+});
 
 // Start server
 const start = async () => {
