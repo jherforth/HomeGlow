@@ -506,22 +506,36 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                         sx={{
                           p: 0.5,
                           mb: 0.5,
-                          backgroundColor: event.source_color || eventColors.backgroundColor,
-                          color: eventColors.textColor,
-                          borderRadius: 1,
                           cursor: 'pointer',
                           fontSize: '0.7rem',
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: 0.5,
+                          minHeight: '36px',
                           '&:hover': {
-                            filter: 'brightness(1.1)'
+                            backgroundColor: 'rgba(0, 0, 0, 0.05)'
                           }
                         }}
                       >
-                        <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block' }}>
-                          {moment(event.start).format('h:mm A')}
-                        </Typography>
-                        <Typography variant="caption" sx={{ display: 'block', lineHeight: 1.2 }}>
-                          {event.title}
-                        </Typography>
+                        <Box
+                          sx={{
+                            width: 8,
+                            height: 8,
+                            minWidth: 8,
+                            minHeight: 8,
+                            borderRadius: '50%',
+                            backgroundColor: event.source_color || eventColors.backgroundColor,
+                            mt: 0.5
+                          }}
+                        />
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block' }}>
+                            {moment(event.start).format('h:mm A')}
+                          </Typography>
+                          <Typography variant="caption" sx={{ display: 'block', lineHeight: 1.2 }}>
+                            {event.title}
+                          </Typography>
+                        </Box>
                       </Box>
                     ))
                   )}
