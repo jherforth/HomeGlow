@@ -431,38 +431,142 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
       )}
 
       {viewMode === 'month' ? (
-        <Box sx={{ height: 500 }}>
-          <Calendar
-            localizer={localizer}
-            events={events}
-            startAccessor="start"
-            endAccessor="end"
-            style={{ height: '100%' }}
-            views={['month']}
-            defaultView="month"
-            className="custom-calendar"
-            selectable={true}
-            onSelectSlot={handleSelectSlot}
-            onSelectEvent={handleSelectEvent}
-            onNavigate={(date) => setCurrentDate(date)}
-            date={currentDate}
-            components={{
-              month: {
-                header: CustomHeader
-              },
-              toolbar: () => null // Hide the default toolbar since we moved month/year to title
-            }}
-            eventPropGetter={(event) => ({
-              style: {
-                backgroundColor: event.source_color || eventColors.backgroundColor,
-                borderRadius: '4px',
-                border: 'none',
-                color: eventColors.textColor,
-                fontSize: '0.8rem',
-                cursor: 'pointer'
+        <Box sx={{ height: 500, display: 'flex', flexDirection: 'column' }}>
+          {/* Day headers */}
+          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, mb: 1 }}>
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+              <Box key={day} sx={{ textAlign: 'center', fontWeight: 'bold', py: 1 }}>
+                <Typography variant="caption">{day}</Typography>
+              </Box>
+            ))}
+          </Box>
+
+          {/* Calendar grid */}
+          <Box sx={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(7, 1fr)',
+            gap: 1,
+            flex: 1,
+            gridAutoRows: '1fr'
+          }}>
+            {(() => {
+              const monthStart = moment(currentDate).startOf('month');
+              const monthEnd = moment(currentDate).endOf('month');
+              const startDate = moment(monthStart).startOf('week');
+              const endDate = moment(monthEnd).endOf('week');
+
+              const days = [];
+              let day = startDate.clone();
+
+              while (day.isSameOrBefore(endDate, 'day')) {
+                const dayEvents = events.filter(event =>
+                  moment(event.start).isSame(day, 'day')
+                );
+
+                const isCurrentMonth = day.month() === moment(currentDate).month();
+                const isToday = day.isSame(moment(), 'day');
+                const dayClone = day.clone();
+
+                days.push(
+                  <Box
+                    key={day.format('YYYY-MM-DD')}
+                    onClick={() => handleSelectSlot({ start: dayClone.toDate() })}
+                    sx={{
+                      border: '1px solid var(--card-border)',
+                      borderRadius: 1,
+                      p: 1,
+                      cursor: 'pointer',
+                      bgcolor: isToday ? 'rgba(var(--accent-rgb), 0.1)' : 'transparent',
+                      opacity: isCurrentMonth ? 1 : 0.4,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      minHeight: 0,
+                      '&:hover': {
+                        bgcolor: isToday ? 'rgba(var(--accent-rgb), 0.15)' : 'rgba(0, 0, 0, 0.05)'
+                      }
+                    }}
+                  >
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        fontWeight: 'bold',
+                        color: isToday ? 'var(--accent)' : 'inherit',
+                        mb: 0.5,
+                        textAlign: 'center'
+                      }}
+                    >
+                      {day.format('D')}
+                    </Typography>
+
+                    <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+                      {dayEvents.slice(0, 3).map((event, eventIndex) => (
+                        <Box
+                          key={eventIndex}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelectEvent(event);
+                          }}
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: 0.5,
+                            mb: 0.5,
+                            p: 0.3,
+                            borderRadius: 0.5,
+                            '&:hover': {
+                              bgcolor: 'rgba(0, 0, 0, 0.05)'
+                            }
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              width: 6,
+                              height: 6,
+                              minWidth: 6,
+                              minHeight: 6,
+                              borderRadius: '50%',
+                              backgroundColor: event.source_color || eventColors.backgroundColor,
+                              mt: 0.3
+                            }}
+                          />
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              fontSize: '0.65rem',
+                              lineHeight: 1.2,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            {event.title}
+                          </Typography>
+                        </Box>
+                      ))}
+                      {dayEvents.length > 3 && (
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            fontSize: '0.6rem',
+                            color: 'text.secondary',
+                            textAlign: 'center',
+                            display: 'block',
+                            mt: 0.5
+                          }}
+                        >
+                          +{dayEvents.length - 3} more
+                        </Typography>
+                      )}
+                    </Box>
+                  </Box>
+                );
+
+                day.add(1, 'day');
               }
-            })}
-          />
+
+              return days;
+            })()}
+          </Box>
         </Box>
       ) : (
         <Box sx={{ height: 500, overflowY: 'auto' }}>
