@@ -56,7 +56,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const [activeTab, setActiveTab] = useState(0);
   const [settings, setSettings] = useState({
     WEATHER_API_KEY: '',
-    ICS_CALENDAR_URL: '',
+    // ICS_CALENDAR_URL: '', // Now handled by calendar sources
     PROXY_WHITELIST: ''
   });
   const [widgetSettings, setLocalWidgetSettings] = useState({
@@ -194,7 +194,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     try {
       await Promise.all([
         axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, { key: 'WEATHER_API_KEY', value: settings.WEATHER_API_KEY || '' }),
-        axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, { key: 'ICS_CALENDAR_URL', value: settings.ICS_CALENDAR_URL || '' }),
+        // axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, { key: 'ICS_CALENDAR_URL', value: settings.ICS_CALENDAR_URL || '' }), // Now handled by calendar sources
         axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, { key: 'PROXY_WHITELIST', value: settings.PROXY_WHITELIST || '' })
       ]);
       setSaveMessage({ show: true, type: 'success', text: 'All API settings saved successfully!' });
@@ -524,6 +524,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
               helperText="Get your free API key from openweathermap.org"
             />
 
+            {/* ICS Calendar URL is now handled by Calendar Sources in the Calendar Widget
             <TextField
               fullWidth
               label="ICS Calendar URL"
@@ -532,6 +533,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
               sx={{ mb: 2 }}
               helperText="Public ICS URL from Google Calendar or other calendar service"
             />
+            */}
 
             <TextField
               fullWidth
