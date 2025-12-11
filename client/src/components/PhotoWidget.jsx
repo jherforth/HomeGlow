@@ -26,6 +26,7 @@ const PhotoWidget = ({ transparentBackground }) => {
   const [isPlaying, setIsPlaying] = useState(true);
   const [slideshowInterval, setSlideshowInterval] = useState(5000);
   const [photosPerView, setPhotosPerView] = useState(1);
+  const [transitionType, setTransitionType] = useState('none');
 
   useEffect(() => {
     fetchPhotoSources();
@@ -228,12 +229,35 @@ const PhotoWidget = ({ transparentBackground }) => {
       {!loading && !error && photos.length > 0 && currentPhotos.length > 0 && (
         <Box>
           <Box sx={{ position: 'relative', height: 400, overflow: 'hidden', borderRadius: 2, mb: 2 }}>
-            <Box sx={{
-              display: 'grid',
-              gridTemplateColumns: photosPerView === 1 ? '1fr' : photosPerView === 2 ? '1fr 1fr' : '1fr 1fr 1fr',
-              gap: 1,
-              height: '100%'
-            }}>
+            <Box
+              key={currentPhotoIndex}
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: photosPerView === 1 ? '1fr' : photosPerView === 2 ? '1fr 1fr' : '1fr 1fr 1fr',
+                gap: 1,
+                height: '100%',
+                animation: transitionType === 'fade' ? 'fadeIn 0.5s ease-in-out' :
+                          transitionType === 'slide' ? 'slideIn 0.5s ease-in-out' : 'none',
+                '@keyframes fadeIn': {
+                  '0%': {
+                    opacity: 0,
+                  },
+                  '100%': {
+                    opacity: 1,
+                  }
+                },
+                '@keyframes slideIn': {
+                  '0%': {
+                    transform: 'translateX(100%)',
+                    opacity: 0,
+                  },
+                  '100%': {
+                    transform: 'translateX(0)',
+                    opacity: 1,
+                  }
+                }
+              }}
+            >
               {currentPhotos.map((photo, index) => (
                 <Box key={`${photo.id}-${index}`} sx={{ height: '100%', overflow: 'hidden', borderRadius: 1 }}>
                   <img
@@ -343,6 +367,22 @@ const PhotoWidget = ({ transparentBackground }) => {
               <MenuItem value={1}>1 Photo</MenuItem>
               <MenuItem value={2}>2 Photos</MenuItem>
               <MenuItem value={3}>3 Photos</MenuItem>
+            </Select>
+          </Box>
+
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" color="text.secondary" gutterBottom display="block">
+              Transition Effect
+            </Typography>
+            <Select
+              fullWidth
+              size="small"
+              value={transitionType}
+              onChange={(e) => setTransitionType(e.target.value)}
+            >
+              <MenuItem value="none">None</MenuItem>
+              <MenuItem value="fade">Fade</MenuItem>
+              <MenuItem value="slide">Slide</MenuItem>
             </Select>
           </Box>
 
