@@ -297,12 +297,25 @@ const App = () => {
   useEffect(() => {
     // Create array of enabled widgets with their original indices
     const enabledWidgets = [];
-    // Combine calendar and weather into a single widget group
-    if (widgetSettings.calendar.enabled || widgetSettings.weather.enabled) {
-      enabledWidgets.push({ name: 'calendar-weather', originalIndex: 0 });
+
+    // Check if all three (calendar, weather, photos) are enabled
+    const allThreeEnabled = widgetSettings.calendar.enabled && widgetSettings.weather.enabled && widgetSettings.photos.enabled;
+
+    if (allThreeEnabled) {
+      // Priority layout: calendar full width, weather shares row with photos
+      if (widgetSettings.calendar.enabled) enabledWidgets.push({ name: 'calendar', originalIndex: 0 });
+      enabledWidgets.push({ name: 'weather-photos', originalIndex: 1 });
+    } else {
+      // Default behavior: calendar and weather share a row when both enabled
+      if (widgetSettings.calendar.enabled || widgetSettings.weather.enabled) {
+        enabledWidgets.push({ name: 'calendar-weather', originalIndex: 0 });
+      }
+      if (widgetSettings.photos.enabled && !allThreeEnabled) {
+        enabledWidgets.push({ name: 'photos', originalIndex: 2 });
+      }
     }
+
     if (widgetSettings.chores.enabled) enabledWidgets.push({ name: 'chores', originalIndex: 1 });
-    if (widgetSettings.photos.enabled) enabledWidgets.push({ name: 'photos', originalIndex: 2 });
 
     if (widgetSettings.enableCardShuffle && enabledWidgets.length > 0) {
       // Simple shuffle function (Fisher-Yates)
@@ -314,7 +327,7 @@ const App = () => {
         }
         return shuffled;
       };
-      
+
       const shuffledWidgets = shuffleArray(enabledWidgets);
       setShuffledWidgetOrder(shuffledWidgets.map(widget => widget.name));
       console.log('Card shuffle enabled - new order:', shuffledWidgets.map(widget => widget.name));
@@ -346,45 +359,6 @@ const App = () => {
   const toggleBottomBar = () => {
     setIsBottomBarCollapsed(!isBottomBarCollapsed);
   };
-  
-  // Helper function to render a widget based on its name
-  const renderWidget = (widgetName, index) => {
-    switch (widgetName) {
-      case 'calendar-weather':
-        return (widgetSettings.calendar.enabled || widgetSettings.weather.enabled) && (
-          <Box key={`calendar-weather-${index}`} sx={{ 
-            display: 'flex', 
-            gap: 2, 
-            flexWrap: 'wrap',
-            '& > *': { 
-              flex: '1 1 400px',
-              minWidth: '400px'
-            }
-          }}>
-            {widgetSettings.calendar.enabled && (
-              <CalendarWidget 
-                transparentBackground={widgetSettings.calendar.transparent} 
-                icsCalendarUrl={apiKeys.ICS_CALENDAR_URL} 
-              />
-            )}
-            {widgetSettings.weather.enabled && (
-              <WeatherWidget 
-                transparentBackground={widgetSettings.weather.transparent} 
-                weatherApiKey={apiKeys.WEATHER_API_KEY} 
-              />
-            )}
-          </Box>
-        );
-      case 'photos':
-        return widgetSettings.photos.enabled && 
-          <PhotoWidget key={`photos-${index}`} transparentBackground={widgetSettings.photos.transparent} />;
-      case 'chores':
-        return widgetSettings.chores.enabled && 
-          <ChoreWidget key={`chores-${index}`} transparentBackground={widgetSettings.chores.transparent} />;
-      default:
-        return null;
-    }
-  };
 
   return (
     <>
@@ -394,26 +368,53 @@ const App = () => {
           {/* Render widgets in shuffled order */}
           {shuffledWidgetOrder.map((widgetName, index) => (
             <Box key={`${widgetName}-${index}`} sx={{ mb: 2 }}>
-              {widgetName === 'calendar-weather' && (widgetSettings.calendar.enabled || widgetSettings.weather.enabled) && (
-                <Box sx={{ 
-                  display: 'flex', 
-                  gap: 2, 
+              {widgetName === 'calendar' && widgetSettings.calendar.enabled && (
+                <CalendarWidget
+                  transparentBackground={widgetSettings.calendar.transparent}
+                  icsCalendarUrl={apiKeys.ICS_CALENDAR_URL}
+                />
+              )}
+              {widgetName === 'weather-photos' && (widgetSettings.weather.enabled || widgetSettings.photos.enabled) && (
+                <Box sx={{
+                  display: 'flex',
+                  gap: 2,
                   flexWrap: 'wrap',
-                  '& > *': { 
+                  '& > *': {
+                    flex: '1 1 400px',
+                    minWidth: '400px'
+                  }
+                }}>
+                  {widgetSettings.weather.enabled && (
+                    <WeatherWidget
+                      transparentBackground={widgetSettings.weather.transparent}
+                      weatherApiKey={apiKeys.WEATHER_API_KEY}
+                    />
+                  )}
+                  {widgetSettings.photos.enabled && (
+                    <PhotoWidget transparentBackground={widgetSettings.photos.transparent} />
+                  )}
+                </Box>
+              )}
+              {widgetName === 'calendar-weather' && (widgetSettings.calendar.enabled || widgetSettings.weather.enabled) && (
+                <Box sx={{
+                  display: 'flex',
+                  gap: 2,
+                  flexWrap: 'wrap',
+                  '& > *': {
                     flex: '1 1 400px',
                     minWidth: '400px'
                   }
                 }}>
                   {widgetSettings.calendar.enabled && (
-                    <CalendarWidget 
-                      transparentBackground={widgetSettings.calendar.transparent} 
-                      icsCalendarUrl={apiKeys.ICS_CALENDAR_URL} 
+                    <CalendarWidget
+                      transparentBackground={widgetSettings.calendar.transparent}
+                      icsCalendarUrl={apiKeys.ICS_CALENDAR_URL}
                     />
                   )}
                   {widgetSettings.weather.enabled && (
-                    <WeatherWidget 
-                      transparentBackground={widgetSettings.weather.transparent} 
-                      weatherApiKey={apiKeys.WEATHER_API_KEY} 
+                    <WeatherWidget
+                      transparentBackground={widgetSettings.weather.transparent}
+                      weatherApiKey={apiKeys.WEATHER_API_KEY}
                     />
                   )}
                 </Box>
