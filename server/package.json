@@ -7,14 +7,15 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "axios": "^1.13.2",
     "@fastify/cors": "^11.1.0",
-    "@fastify/static": "^8.3.0",
     "@fastify/multipart": "^9.3.0",
+    "@fastify/static": "^8.3.0",
+    "@supabase/supabase-js": "^2.87.1",
+    "axios": "^1.13.2",
+    "better-sqlite3": "^12.5.0",
     "dotenv": "^17.2.3",
     "fastify": "^5.6.2",
     "ical-generator": "^10.0.0",
-    "better-sqlite3": "^12.5.0",
     "ical.js": "^2.2.1"
   }
 }
