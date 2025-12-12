@@ -229,7 +229,7 @@ const PhotoWidget = ({ transparentBackground }) => {
   return (
     <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h6">Photos</Typography>
+        <Typography variant="h6">📷 Photos</Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <IconButton onClick={handleTogglePlayback} size="small">
             {isPlaying ? <Pause /> : <PlayArrow />}
