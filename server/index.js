@@ -1566,66 +1566,6 @@ fastify.get('/api/calendar-events', async (request, reply) => {
 });
 
 
-// Widget preferences routes
-fastify.get('/api/widget-preferences/:widget_type', async (request, reply) => {
-  const { widget_type } = request.params;
-  try {
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(
-      process.env.VITE_SUPABASE_URL,
-      process.env.VITE_SUPABASE_ANON_KEY
-    );
-
-    const { data, error } = await supabase
-      .from('widget_preferences')
-      .select('preference_key, preference_value')
-      .eq('widget_type', widget_type);
-
-    if (error) throw error;
-
-    const preferences = {};
-    data.forEach(row => {
-      preferences[row.preference_key] = row.preference_value;
-    });
-
-    return preferences;
-  } catch (error) {
-    console.error('Error fetching widget preferences:', error);
-    reply.status(500).send({ error: 'Failed to fetch widget preferences' });
-  }
-});
-
-fastify.post('/api/widget-preferences', async (request, reply) => {
-  const { widget_type, preference_key, preference_value } = request.body;
-
-  if (!widget_type || !preference_key || preference_value === undefined) {
-    return reply.status(400).send({ error: 'widget_type, preference_key, and preference_value are required' });
-  }
-
-  try {
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(
-      process.env.VITE_SUPABASE_URL,
-      process.env.VITE_SUPABASE_ANON_KEY
-    );
-
-    const { data, error } = await supabase
-      .from('widget_preferences')
-      .upsert(
-        { widget_type, preference_key, preference_value },
-        { onConflict: 'widget_type,preference_key' }
-      )
-      .select();
-
-    if (error) throw error;
-
-    return { success: true, data };
-  } catch (error) {
-    console.error('Error saving widget preference:', error);
-    reply.status(500).send({ error: 'Failed to save widget preference' });
-  }
-});
-
 // Photo sources routes
 fastify.get('/api/photo-sources', async (request, reply) => {
   try {

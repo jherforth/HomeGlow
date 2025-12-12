@@ -29,7 +29,6 @@ const PhotoWidget = ({ transparentBackground }) => {
   const [transitionType, setTransitionType] = useState('none');
 
   useEffect(() => {
-    loadPreferences();
     fetchPhotoSources();
     fetchPhotos();
   }, []);
@@ -73,37 +72,6 @@ const PhotoWidget = ({ transparentBackground }) => {
       setPhotos([]);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadPreferences = async () => {
-    try {
-      const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/widget-preferences/photo`);
-      const prefs = response.data;
-
-      if (prefs.photosPerView !== undefined) {
-        setPhotosPerView(parseInt(prefs.photosPerView));
-      }
-      if (prefs.transitionType !== undefined) {
-        setTransitionType(prefs.transitionType);
-      }
-      if (prefs.slideshowInterval !== undefined) {
-        setSlideshowInterval(parseInt(prefs.slideshowInterval));
-      }
-    } catch (error) {
-      console.error('Error loading preferences:', error);
-    }
-  };
-
-  const savePreference = async (key, value) => {
-    try {
-      await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/widget-preferences`, {
-        widget_type: 'photo',
-        preference_key: key,
-        preference_value: value.toString()
-      });
-    } catch (error) {
-      console.error('Error saving preference:', error);
     }
   };
 
@@ -394,11 +362,7 @@ const PhotoWidget = ({ transparentBackground }) => {
               fullWidth
               size="small"
               value={photosPerView}
-              onChange={(e) => {
-                const value = e.target.value;
-                setPhotosPerView(value);
-                savePreference('photosPerView', value);
-              }}
+              onChange={(e) => setPhotosPerView(e.target.value)}
             >
               <MenuItem value={1}>1 Photo</MenuItem>
               <MenuItem value={2}>2 Photos</MenuItem>
@@ -414,11 +378,7 @@ const PhotoWidget = ({ transparentBackground }) => {
               fullWidth
               size="small"
               value={transitionType}
-              onChange={(e) => {
-                const value = e.target.value;
-                setTransitionType(value);
-                savePreference('transitionType', value);
-              }}
+              onChange={(e) => setTransitionType(e.target.value)}
             >
               <MenuItem value="none">None</MenuItem>
               <MenuItem value="fade">Fade</MenuItem>
@@ -434,11 +394,7 @@ const PhotoWidget = ({ transparentBackground }) => {
               fullWidth
               size="small"
               value={slideshowInterval}
-              onChange={(e) => {
-                const value = e.target.value;
-                setSlideshowInterval(value);
-                savePreference('slideshowInterval', value);
-              }}
+              onChange={(e) => setSlideshowInterval(e.target.value)}
             >
               <MenuItem value={3000}>Fast (3s)</MenuItem>
               <MenuItem value={5000}>Normal (5s)</MenuItem>
