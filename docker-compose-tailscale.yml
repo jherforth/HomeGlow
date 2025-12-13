@@ -15,7 +15,7 @@ services:
       - NODE_ENV=production
       - PORT=${BACKEND_PORT:-5000}
     networks:
-      - network
+      - homeglow-network
 
   frontend:
     container_name: frontend
@@ -31,7 +31,7 @@ services:
     depends_on:
       - backend
     networks:
-      - network
+      - homeglow-network
 
   tailscale:
     container_name: tailscale
@@ -49,5 +49,5 @@ services:
     restart: unless-stopped
 
 networks:
-  network:
+  homeglow-network:
     driver: bridge
