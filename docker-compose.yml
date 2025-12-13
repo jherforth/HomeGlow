@@ -1,6 +1,6 @@
 services:
   homeglow-backend-test:
-    container_name: homeglow-backend-test
+    container_name: backend
     build:
       context: ./server
       dockerfile: Dockerfile
@@ -18,7 +18,7 @@ services:
       - homeglow-network
 
   homeglow-frontend-test:
-    container_name: homeglow-frontend-test
+    container_name: frontend
     build:
       context: ./client
       dockerfile: Dockerfile
