@@ -98,6 +98,9 @@ Create a `.env` file or edit the docker-compose.yml directly:
 BACKEND_PORT=5000
 FRONTEND_PORT=3000
 
+# Vite React API URL (points to your server's ip address)
+VITE_REACT_APP_API_URL=http://192.168.1.xx
+
 # OpenWeatherMap API Key (get from https://openweathermap.org/api)
 VITE_OPENWEATHER_API_KEY=your_openweather_api_key_here
 
