@@ -1,0 +1,52 @@
+# HomeGlow Production Deployment
+# Uses pre-built images from GitHub Container Registry (GHCR)
+#
+# Quick Start:
+# 1. Customize environment variables below (or set via .env file)
+# 2. Create data directories: sudo mkdir -p /apps/homeglow/{data,uploads} && sudo chmod -R 777 /apps/homeglow
+# 3. Run: docker-compose pull && docker-compose up -d
+#
+# Updating:
+# - Pull latest images: docker-compose pull
+# - Restart services: docker-compose up -d
+#
+# For Tailscale support, use docker-compose-tailscale.yml instead
+
+services:
+  homeglow-backend:
+    container_name: homeglow-backend
+    image: ghcr.io/jherforth/homeglow-backend:latest
+    ports:
+      - "${BACKEND_PORT:-5000}:${BACKEND_PORT:-5000}"
+    volumes:
+      # Persistent data storage (SQLite database)
+      - /apps/homeglow/data:/app/data
+      # User uploads (profile photos, custom widgets)
+      - /apps/homeglow/uploads:/app/uploads
+    environment:
+      - NODE_ENV=production
+      - PORT=${BACKEND_PORT:-5000}
+    networks:
+      - homeglow-network
+    restart: unless-stopped
+
+  homeglow-frontend:
+    container_name: homeglow-frontend
+    image: ghcr.io/jherforth/homeglow-frontend:latest
+    ports:
+      - "${FRONTEND_PORT:-3000}:${FRONTEND_PORT:-3000}"
+    environment:
+      # OpenWeatherMap API key (get from https://openweathermap.org/api) -optional and can be set in UI later
+      - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
+      # Backend API URL - uses the host machine's ip address for internal communication (example: http://192.168.1.x)
+      - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}:${BACKEND_PORT:-5000}
+      - PORT=${FRONTEND_PORT:-3000}
+    depends_on:
+      - homeglow-backend
+    networks:
+      - homeglow-network
+    restart: unless-stopped
+
+networks:
+  homeglow-network:
+    driver: bridge
