@@ -1,29 +1,37 @@
-# File: client/Dockerfile
-FROM node:24 AS build
+# Multi-stage build for optimized production image
+FROM node:20-alpine AS builder
+
 WORKDIR /app
+
+# Copy package files
 COPY package*.json ./
-RUN npm install -g npm@latest
-RUN npm install --production=false
 
-# Add build arguments for environment variables
+# Install ALL dependencies (including devDependencies needed for build)
+RUN npm ci
+
+# Copy source code
+COPY . .
+
+# Build arguments for environment variables
 ARG VITE_OPENWEATHER_API_KEY
-ENV VITE_OPENWEATHER_API_KEY=$VITE_OPENWEATHER_API_KEY
-
 ARG VITE_REACT_APP_API_URL
+
+# Set environment variables for build
+ENV VITE_OPENWEATHER_API_KEY=$VITE_OPENWEATHER_API_KEY
 ENV VITE_REACT_APP_API_URL=$VITE_REACT_APP_API_URL
 
-COPY . .
+# Build the application
 RUN npm run build
 
-FROM node:24-alpine AS production
-WORKDIR /app
-COPY --from=build /app/dist ./dist
-COPY serve.json .
-RUN npm install -g serve
+# Production stage
+FROM nginx:alpine
 
-# Accept PORT as build argument with default value
-ARG PORT=3000
-ENV PORT=$PORT
-EXPOSE ${PORT}
+# Copy built assets from builder stage
+COPY --from=builder /app/dist /usr/share/nginx/html
 
-CMD sh -c "serve --cors -s dist -l ${PORT}"
+# Copy nginx configuration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 3000
+
+CMD ["nginx", "-g", "daemon off;"]
