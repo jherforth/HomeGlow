@@ -56,7 +56,6 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const [activeTab, setActiveTab] = useState(0);
   const [settings, setSettings] = useState({
     WEATHER_API_KEY: '',
-    // ICS_CALENDAR_URL: '', // Now handled by calendar sources
     PROXY_WHITELIST: ''
   });
   const [widgetSettings, setLocalWidgetSettings] = useState({
@@ -70,7 +69,6 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     cardHeight: 200,
     refreshInterval: 'manual',
     enableGeoPatternBackground: false,
-    enableCardShuffle: false,
     lightGradientStart: '#00ddeb',
     lightGradientEnd: '#ff6b6b',
     darkGradientStart: '#2e2767',
@@ -194,7 +192,6 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     try {
       await Promise.all([
         axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, { key: 'WEATHER_API_KEY', value: settings.WEATHER_API_KEY || '' }),
-        // axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, { key: 'ICS_CALENDAR_URL', value: settings.ICS_CALENDAR_URL || '' }), // Now handled by calendar sources
         axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, { key: 'PROXY_WHITELIST', value: settings.PROXY_WHITELIST || '' })
       ]);
       setSaveMessage({ show: true, type: 'success', text: 'All API settings saved successfully!' });
@@ -213,10 +210,8 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     setWidgetSettings(widgetSettings);
   };
 
-  // Update the parent component's widgetSettings whenever localWidgetSettings changes
   useEffect(() => {
     setWidgetSettings(widgetSettings);
-    // Save to localStorage whenever settings change
     localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
   }, [widgetSettings, setWidgetSettings]);
 
@@ -265,16 +260,13 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const deleteUser = async (userId) => {
     try {
       setIsLoading(true);
-      // First, delete all chores associated with this user
       const userChores = chores.filter(chore => chore.user_id === userId);
       for (const chore of userChores) {
         await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores/${chore.id}`);
       }
       
-      // Then delete the user
       await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users/${userId}`);
       
-      // Refresh data
       fetchUsers();
       fetchChores();
       setDeleteUserDialog({ open: false, user: null });
@@ -407,7 +399,6 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
         setIsLoading(true);
         await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores/${choreId}`);
         fetchChores();
-        // Update the modal with fresh data
         if (choreModal.user) {
           const updatedUserChores = chores.filter(chore => chore.user_id === choreModal.user.id && chore.id !== choreId);
           setChoreModal(prev => ({ ...prev, userChores: updatedUserChores }));
@@ -523,17 +514,6 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
               sx={{ mb: 2 }}
               helperText="Get your free API key from openweathermap.org"
             />
-
-            {/* ICS Calendar URL is now handled by Calendar Sources in the Calendar Widget
-            <TextField
-              fullWidth
-              label="ICS Calendar URL"
-              value={settings.ICS_CALENDAR_URL || ''}
-              onChange={(e) => setSettings(prev => ({ ...prev, ICS_CALENDAR_URL: e.target.value }))}
-              sx={{ mb: 2 }}
-              helperText="Public ICS URL from Google Calendar or other calendar service"
-            />
-            */}
 
             <TextField
               fullWidth
@@ -651,16 +631,6 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
                   }
                   label="Enable Geometric Background Patterns"
                   sx={{ mb: 1 }}
-                />
-                
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={widgetSettings.enableCardShuffle}
-                      onChange={(e) => handleSettingChange('enableCardShuffle', e.target.checked)}
-                    />
-                  }
-                  label="Enable Card Position Shuffle"
                 />
               </Grid>
               
@@ -1212,7 +1182,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
         </DialogActions>
       </Dialog>
 
-      {/* Fun Loading Indicator */}
+      {/* Loading Indicator */}
       <Backdrop
         sx={{
           color: '#fff',
@@ -1236,7 +1206,6 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
           }}
         >
-          {/* Animated Clams */}
           <Box
             sx={{
               position: 'relative',
@@ -1271,7 +1240,6 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
             ))}
           </Box>
           
-          {/* Loading Text */}
           <Typography
             variant="h6"
             sx={{
@@ -1284,7 +1252,6 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
             Processing...
           </Typography>
           
-          {/* Subtle Progress Ring */}
           <CircularProgress
             size={40}
             thickness={2}
