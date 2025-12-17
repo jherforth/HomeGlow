@@ -118,19 +118,6 @@ const WidgetContainer = ({ children, widgets = [] }) => {
           zIndex: 2,
           transition: 'all 100ms ease',
         },
-        '& .react-grid-item > .react-resizable-handle': {
-          display: 'none',
-        },
-        '& .react-grid-item:has(.selected) > .react-resizable-handle-s': {
-          display: 'block',
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          width: '100%',
-          height: '40px',
-          cursor: 'ns-resize',
-          zIndex: 1001,
-        },
       }}
     >
       {layout.length > 0 && (
@@ -232,42 +219,6 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                   {widget.content}
                 </Box>
 
-                {/* Resize handle bar - Only visible when selected */}
-                {isSelected && (
-                  <Box
-                    className="react-resizable-handle react-resizable-handle-s"
-                    sx={{
-                      position: 'absolute',
-                      bottom: 0,
-                      left: 0,
-                      right: 0,
-                      backgroundColor: 'var(--accent)',
-                      color: 'white',
-                      padding: '8px 16px',
-                      fontSize: '0.75rem',
-                      textAlign: 'center',
-                      boxShadow: '0 -2px 8px rgba(0, 0, 0, 0.2)',
-                      zIndex: 1001,
-                      userSelect: 'none',
-                      borderRadius: '0 0 8px 8px',
-                      cursor: 'ns-resize',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 1,
-                      '&:hover': {
-                        filter: 'brightness(1.1)',
-                      },
-                      '&::before': {
-                        content: '"⇕"',
-                        fontSize: '1rem',
-                        marginRight: '8px',
-                      }
-                    }}
-                  >
-                    Drag to Resize Height • Click outside to deselect
-                  </Box>
-                )}
               </Box>
             );
           })}
