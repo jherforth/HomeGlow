@@ -193,9 +193,9 @@ const App = () => {
       widgets.push({
         id: 'calendar-widget',
         defaultPosition: { x: 0, y: 0 },
-        defaultSize: { width: 8, height: 5 },
-        minWidth: 6,
-        minHeight: 4,
+        defaultSize: { width: 6, height: 4 },
+        minWidth: 4,
+        minHeight: 3,
         content: <CalendarWidget
           transparentBackground={widgetSettings.calendar.transparent}
           icsCalendarUrl={apiKeys.ICS_CALENDAR_URL}
@@ -206,9 +206,9 @@ const App = () => {
     if (widgetSettings.weather.enabled) {
       widgets.push({
         id: 'weather-widget',
-        defaultPosition: { x: 8, y: 0 },
-        defaultSize: { width: 4, height: 3 },
-        minWidth: 3,
+        defaultPosition: { x: 6, y: 0 },
+        defaultSize: { width: 3, height: 3 },
+        minWidth: 2,
         minHeight: 2,
         content: <WeatherWidget
           transparentBackground={widgetSettings.weather.transparent}
@@ -220,10 +220,10 @@ const App = () => {
     if (widgetSettings.chores.enabled) {
       widgets.push({
         id: 'chores-widget',
-        defaultPosition: { x: 0, y: 5 },
-        defaultSize: { width: 6, height: 4 },
-        minWidth: 4,
-        minHeight: 3,
+        defaultPosition: { x: 0, y: 4 },
+        defaultSize: { width: 4, height: 3 },
+        minWidth: 3,
+        minHeight: 2,
         content: <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />,
       });
     }
@@ -231,10 +231,10 @@ const App = () => {
     if (widgetSettings.photos.enabled) {
       widgets.push({
         id: 'photos-widget',
-        defaultPosition: { x: 6, y: 5 },
-        defaultSize: { width: 6, height: 4 },
-        minWidth: 4,
-        minHeight: 3,
+        defaultPosition: { x: 4, y: 4 },
+        defaultSize: { width: 4, height: 3 },
+        minWidth: 3,
+        minHeight: 2,
         content: <PhotoWidget transparentBackground={widgetSettings.photos.transparent} />,
       });
     }

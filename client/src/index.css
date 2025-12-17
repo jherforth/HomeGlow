@@ -117,13 +117,12 @@ body {
   justify-content: center;
   position: absolute;
   bottom: 0;
-  left: 0;
-  width: 100%;
+  left: 48px;
+  right: 48px;
   height: 48px;
   cursor: ns-resize;
   background-color: var(--accent);
   color: white;
-  border-radius: 0 0 8px 8px;
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.2);
   z-index: 1002;
   user-select: none;
@@ -131,11 +130,97 @@ body {
 }
 
 .react-grid-item.widget-selected > .react-resizable-handle-s::after {
-  content: "⇕ Drag to Resize Height • Click outside to deselect";
+  content: "⇕ Resize";
 }
 
 .react-grid-item.widget-selected > .react-resizable-handle-s:hover {
   filter: brightness(1.1);
+}
+
+.react-grid-item.widget-selected > .react-resizable-handle-e {
+  display: block !important;
+  position: absolute;
+  right: 0;
+  top: 48px;
+  bottom: 48px;
+  width: 20px;
+  cursor: ew-resize;
+  background-color: var(--accent);
+  z-index: 1002;
+}
+
+.react-grid-item.widget-selected > .react-resizable-handle-e::after {
+  content: "⇔";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 1rem;
+}
+
+.react-grid-item.widget-selected > .react-resizable-handle-w {
+  display: block !important;
+  position: absolute;
+  left: 0;
+  top: 48px;
+  bottom: 48px;
+  width: 20px;
+  cursor: ew-resize;
+  background-color: var(--accent);
+  z-index: 1002;
+}
+
+.react-grid-item.widget-selected > .react-resizable-handle-w::after {
+  content: "⇔";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 1rem;
+}
+
+.react-grid-item.widget-selected > .react-resizable-handle-se {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 48px;
+  height: 48px;
+  cursor: se-resize;
+  background-color: var(--accent);
+  z-index: 1003;
+  border-radius: 0 0 8px 0;
+}
+
+.react-grid-item.widget-selected > .react-resizable-handle-se::after {
+  content: "⇘";
+  color: white;
+  font-size: 1.2rem;
+}
+
+.react-grid-item.widget-selected > .react-resizable-handle-sw {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 48px;
+  height: 48px;
+  cursor: sw-resize;
+  background-color: var(--accent);
+  z-index: 1003;
+  border-radius: 0 0 0 8px;
+}
+
+.react-grid-item.widget-selected > .react-resizable-handle-sw::after {
+  content: "⇙";
+  color: white;
+  font-size: 1.2rem;
 }
 
 .react-grid-item.react-grid-placeholder {
