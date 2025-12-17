@@ -118,63 +118,13 @@ const DraggableWidget = ({
         },
         '& .react-grid-item > .react-resizable-handle': {
           display: isSelected ? 'block' : 'none',
-          width: '20px',
-          height: '20px',
-          position: 'absolute',
-        },
-        '& .react-grid-item > .react-resizable-handle::after': {
-          content: '""',
-          position: 'absolute',
-          right: '3px',
-          bottom: '3px',
-          width: '5px',
-          height: '5px',
-          borderRight: '2px solid rgba(158, 127, 255, 0.6)',
-          borderBottom: '2px solid rgba(158, 127, 255, 0.6)',
-        },
-        '& .react-grid-item > .react-resizable-handle-sw': {
-          bottom: '0',
-          left: '0',
-          cursor: 'sw-resize',
-        },
-        '& .react-grid-item > .react-resizable-handle-se': {
-          bottom: '0',
-          right: '0',
-          cursor: 'se-resize',
-        },
-        '& .react-grid-item > .react-resizable-handle-nw': {
-          top: '0',
-          left: '0',
-          cursor: 'nw-resize',
-        },
-        '& .react-grid-item > .react-resizable-handle-ne': {
-          top: '0',
-          right: '0',
-          cursor: 'ne-resize',
-        },
-        '& .react-grid-item > .react-resizable-handle-w': {
-          top: '50%',
-          left: '0',
-          transform: 'translateY(-50%)',
-          cursor: 'w-resize',
-        },
-        '& .react-grid-item > .react-resizable-handle-e': {
-          top: '50%',
-          right: '0',
-          transform: 'translateY(-50%)',
-          cursor: 'e-resize',
-        },
-        '& .react-grid-item > .react-resizable-handle-n': {
-          top: '0',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          cursor: 'n-resize',
         },
         '& .react-grid-item > .react-resizable-handle-s': {
-          bottom: '0',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          cursor: 's-resize',
+          bottom: 0,
+          left: 0,
+          width: '100%',
+          height: '40px',
+          cursor: 'ns-resize',
         },
         '& .react-grid-item.cssTransforms': {
           transitionProperty: isSelected ? 'none' : 'transform, width, height',
@@ -196,6 +146,7 @@ const DraggableWidget = ({
         containerPadding={[0, 0]}
         useCSSTransforms={true}
         draggableHandle=".drag-handle"
+        resizeHandles={['s']}
       >
         <Box
           key={id}
@@ -250,76 +201,11 @@ const DraggableWidget = ({
             >
               <DragIndicator />
               <Box sx={{ fontSize: '0.875rem', fontWeight: 'bold' }}>
-                Drag to Move • Resize from Corners
+                Drag to Move Widget
               </Box>
             </Box>
           )}
 
-          {/* Corner resize indicators - Only visible when selected */}
-          {isSelected && (
-            <>
-              <Box
-                sx={{
-                  position: 'absolute',
-                  top: -8,
-                  left: -8,
-                  width: 16,
-                  height: 16,
-                  backgroundColor: 'var(--accent)',
-                  borderRadius: '50%',
-                  border: '2px solid white',
-                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
-                  pointerEvents: 'none',
-                  zIndex: 1002,
-                }}
-              />
-              <Box
-                sx={{
-                  position: 'absolute',
-                  top: -8,
-                  right: -8,
-                  width: 16,
-                  height: 16,
-                  backgroundColor: 'var(--accent)',
-                  borderRadius: '50%',
-                  border: '2px solid white',
-                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
-                  pointerEvents: 'none',
-                  zIndex: 1002,
-                }}
-              />
-              <Box
-                sx={{
-                  position: 'absolute',
-                  bottom: -8,
-                  left: -8,
-                  width: 16,
-                  height: 16,
-                  backgroundColor: 'var(--accent)',
-                  borderRadius: '50%',
-                  border: '2px solid white',
-                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
-                  pointerEvents: 'none',
-                  zIndex: 1002,
-                }}
-              />
-              <Box
-                sx={{
-                  position: 'absolute',
-                  bottom: -8,
-                  right: -8,
-                  width: 16,
-                  height: 16,
-                  backgroundColor: 'var(--accent)',
-                  borderRadius: '50%',
-                  border: '2px solid white',
-                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
-                  pointerEvents: 'none',
-                  zIndex: 1002,
-                }}
-              />
-            </>
-          )}
 
           {/* Grid overlay - Only visible when selected */}
           {isSelected && (
@@ -354,9 +240,10 @@ const DraggableWidget = ({
             {children}
           </Box>
 
-          {/* Instruction overlay when selected */}
+          {/* Resize handle bar - Only visible when selected */}
           {isSelected && (
             <Box
+              className="react-resizable-handle react-resizable-handle-s"
               sx={{
                 position: 'absolute',
                 bottom: 0,
@@ -364,16 +251,29 @@ const DraggableWidget = ({
                 right: 0,
                 backgroundColor: 'var(--accent)',
                 color: 'white',
-                padding: '6px 16px',
+                padding: '8px 16px',
                 fontSize: '0.75rem',
                 textAlign: 'center',
                 boxShadow: '0 -2px 8px rgba(0, 0, 0, 0.2)',
                 zIndex: 1001,
                 userSelect: 'none',
                 borderRadius: '0 0 8px 8px',
+                cursor: 'ns-resize',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 1,
+                '&:hover': {
+                  filter: 'brightness(1.1)',
+                },
+                '&::before': {
+                  content: '"⇕"',
+                  fontSize: '1rem',
+                  marginRight: '8px',
+                }
               }}
             >
-              Click outside to deselect • Snaps to {gridCols}-column grid
+              Drag to Resize Height • Click outside to deselect
             </Box>
           )}
         </Box>
