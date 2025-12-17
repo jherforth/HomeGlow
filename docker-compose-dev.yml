@@ -26,8 +26,8 @@ services:
       - "${FRONTEND_PORT:-3001}:3001"
     volumes:
       # Mount source code for hot reload
-      - ./client/src:/app/src
-      - ./client/public:/app/public
+      - ./client:/app
+      - /app/node_modules
     environment:
       - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
       - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}:${BACKEND_PORT:-5001}
