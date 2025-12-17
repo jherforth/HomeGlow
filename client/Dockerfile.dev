@@ -2,17 +2,22 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files first
 COPY package*.json ./
 
 # Install dependencies
 RUN npm install
 
-# Copy source code
+# Copy the rest of the application to establish directory structure
 COPY . .
 
-# Expose Vite dev server port
-EXPOSE 3001
+# Create empty placeholder files to ensure mount points exist
+# This prevents "not a directory" errors when mounting individual files
+RUN touch /app/index.html.placeholder && \
+    touch /app/vite.config.js.placeholder
 
-# Run Vite dev server
+# Expose Vite dev server port
+EXPOSE 3000
+
+# Run Vite dev server with host binding
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3001"]
