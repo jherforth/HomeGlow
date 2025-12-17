@@ -119,36 +119,17 @@ const WidgetContainer = ({ children, widgets = [] }) => {
           transition: 'all 100ms ease',
         },
         '& .react-grid-item > .react-resizable-handle': {
-          opacity: 0,
+          display: 'none',
+        },
+        '& .react-grid-item:has(.selected) > .react-resizable-handle-s': {
+          display: 'block',
           position: 'absolute',
-          width: 30,
-          height: 30,
-          zIndex: 1003,
-          pointerEvents: 'none',
-        },
-        '& .react-grid-item:has(.selected) > .react-resizable-handle': {
-          opacity: 1,
-          pointerEvents: 'auto',
-        },
-        '& .react-resizable-handle-se': {
-          bottom: -3,
-          right: -3,
-          cursor: 'se-resize',
-        },
-        '& .react-resizable-handle-sw': {
-          bottom: -3,
-          left: -3,
-          cursor: 'sw-resize',
-        },
-        '& .react-resizable-handle-ne': {
-          top: -3,
-          right: -3,
-          cursor: 'ne-resize',
-        },
-        '& .react-resizable-handle-nw': {
-          top: -3,
-          left: -3,
-          cursor: 'nw-resize',
+          bottom: 0,
+          left: 0,
+          width: '100%',
+          height: '40px',
+          cursor: 'ns-resize',
+          zIndex: 1001,
         },
       }}
     >
@@ -162,7 +143,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
           onLayoutChange={handleLayoutChange}
           isDraggable={true}
           isResizable={true}
-          resizeHandles={['se', 'sw', 'ne', 'nw']}
+          resizeHandles={['s']}
           compactType={null}
           preventCollision={true}
           margin={[16, 16]}
@@ -176,6 +157,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
               <Box
                 key={widget.id}
                 className={`widget-wrapper ${isSelected ? 'selected' : ''}`}
+                data-grid={{ ...layout.find(l => l.i === widget.id) }}
                 onClick={(e) => handleWidgetClick(widget.id, e)}
                 sx={{
                   width: '100%',
@@ -227,20 +209,11 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                   >
                     <DragIndicator />
                     <Box sx={{ fontSize: '0.875rem', fontWeight: 'bold' }}>
-                      Drag to Move • Resize from Corners
+                      Drag to Move Widget
                     </Box>
                   </Box>
                 )}
 
-                {/* Corner resize indicators - Only visible when selected */}
-                {isSelected && (
-                  <>
-                    <Box sx={{ position: 'absolute', top: -8, left: -8, width: 16, height: 16, backgroundColor: 'var(--accent)', borderRadius: '50%', border: '2px solid white', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)', pointerEvents: 'none', zIndex: 1002 }} />
-                    <Box sx={{ position: 'absolute', top: -8, right: -8, width: 16, height: 16, backgroundColor: 'var(--accent)', borderRadius: '50%', border: '2px solid white', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)', pointerEvents: 'none', zIndex: 1002 }} />
-                    <Box sx={{ position: 'absolute', bottom: -8, left: -8, width: 16, height: 16, backgroundColor: 'var(--accent)', borderRadius: '50%', border: '2px solid white', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)', pointerEvents: 'none', zIndex: 1002 }} />
-                    <Box sx={{ position: 'absolute', bottom: -8, right: -8, width: 16, height: 16, backgroundColor: 'var(--accent)', borderRadius: '50%', border: '2px solid white', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)', pointerEvents: 'none', zIndex: 1002 }} />
-                  </>
-                )}
 
                 {/* Widget Content */}
                 <Box
@@ -249,8 +222,8 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                     width: '100%',
                     height: '100%',
                     overflow: 'auto',
-                    paddingTop: isSelected ? '40px' : '0',
-                    paddingBottom: isSelected ? '32px' : '0',
+                    paddingTop: isSelected ? '48px' : '0',
+                    paddingBottom: isSelected ? '48px' : '0',
                     pointerEvents: isSelected ? 'none' : 'auto',
                     display: 'flex',
                     flexDirection: 'column',
@@ -259,9 +232,10 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                   {widget.content}
                 </Box>
 
-                {/* Instruction overlay when selected */}
+                {/* Resize handle bar - Only visible when selected */}
                 {isSelected && (
                   <Box
+                    className="react-resizable-handle react-resizable-handle-s"
                     sx={{
                       position: 'absolute',
                       bottom: 0,
@@ -269,16 +243,29 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                       right: 0,
                       backgroundColor: 'var(--accent)',
                       color: 'white',
-                      padding: '6px 16px',
+                      padding: '8px 16px',
                       fontSize: '0.75rem',
                       textAlign: 'center',
                       boxShadow: '0 -2px 8px rgba(0, 0, 0, 0.2)',
                       zIndex: 1001,
                       userSelect: 'none',
                       borderRadius: '0 0 8px 8px',
+                      cursor: 'ns-resize',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 1,
+                      '&:hover': {
+                        filter: 'brightness(1.1)',
+                      },
+                      '&::before': {
+                        content: '"⇕"',
+                        fontSize: '1rem',
+                        marginRight: '8px',
+                      }
                     }}
                   >
-                    Click outside to deselect • Snaps to {gridCols}-column grid
+                    Drag to Resize Height • Click outside to deselect
                   </Box>
                 )}
               </Box>
