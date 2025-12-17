@@ -17,6 +17,7 @@ import AdminPanel from './components/AdminPanel.jsx';
 import WeatherWidget from './components/WeatherWidget.jsx';
 import ChoreWidget from './components/ChoreWidget.jsx';
 import WidgetGallery from './components/WidgetGallery.jsx';
+import WidgetContainer from './components/WidgetContainer.jsx';
 import './index.css';
 
 const App = () => {
@@ -165,6 +166,14 @@ const App = () => {
   };
 
   const toggleAdminPanel = () => {
+    if (showAdminPanel) {
+      // Closing - reload settings from localStorage
+      const savedSettings = localStorage.getItem('widgetSettings');
+      if (savedSettings) {
+        const parsed = JSON.parse(savedSettings);
+        setWidgetSettings(prev => ({ ...prev, ...parsed }));
+      }
+    }
     setShowAdminPanel(!showAdminPanel);
   };
 
@@ -176,97 +185,76 @@ const App = () => {
     setIsBottomBarCollapsed(!isBottomBarCollapsed);
   };
 
-  // Determine widget layout based on enabled widgets
-  const renderWidgets = () => {
-    const allThreeEnabled = widgetSettings.calendar.enabled && widgetSettings.weather.enabled && widgetSettings.photos.enabled;
+  // Build widgets array for DraggableWidget system
+  const buildWidgetsArray = () => {
+    const widgets = [];
 
-    return (
-      <Box sx={{ width: '100%', padding: '8px' }}>
-        {/* Priority layout: calendar full width, weather shares row with photos */}
-        {allThreeEnabled ? (
-          <>
-            {widgetSettings.calendar.enabled && (
-              <Box sx={{ mb: 2 }}>
-                <CalendarWidget
-                  transparentBackground={widgetSettings.calendar.transparent}
-                  icsCalendarUrl={apiKeys.ICS_CALENDAR_URL}
-                />
-              </Box>
-            )}
-            <Box sx={{
-              display: 'flex',
-              gap: 2,
-              flexWrap: 'wrap',
-              mb: 2,
-              '& > *': {
-                flex: '1 1 400px',
-                minWidth: '400px'
-              }
-            }}>
-              {widgetSettings.weather.enabled && (
-                <WeatherWidget
-                  transparentBackground={widgetSettings.weather.transparent}
-                  weatherApiKey={apiKeys.WEATHER_API_KEY}
-                />
-              )}
-              {widgetSettings.photos.enabled && (
-                <PhotoWidget transparentBackground={widgetSettings.photos.transparent} />
-              )}
-            </Box>
-          </>
-        ) : (
-          <>
-            {/* Default behavior: calendar and weather share a row when both enabled */}
-            {(widgetSettings.calendar.enabled || widgetSettings.weather.enabled) && (
-              <Box sx={{
-                display: 'flex',
-                gap: 2,
-                flexWrap: 'wrap',
-                mb: 2,
-                '& > *': {
-                  flex: '1 1 400px',
-                  minWidth: '400px'
-                }
-              }}>
-                {widgetSettings.calendar.enabled && (
-                  <CalendarWidget
-                    transparentBackground={widgetSettings.calendar.transparent}
-                    icsCalendarUrl={apiKeys.ICS_CALENDAR_URL}
-                  />
-                )}
-                {widgetSettings.weather.enabled && (
-                  <WeatherWidget
-                    transparentBackground={widgetSettings.weather.transparent}
-                    weatherApiKey={apiKeys.WEATHER_API_KEY}
-                  />
-                )}
-              </Box>
-            )}
-            {widgetSettings.photos.enabled && (
-              <Box sx={{ mb: 2 }}>
-                <PhotoWidget transparentBackground={widgetSettings.photos.transparent} />
-              </Box>
-            )}
-          </>
-        )}
-        
-        {widgetSettings.chores.enabled && (
-          <Box sx={{ mb: 2 }}>
-            <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />
-          </Box>
-        )}
-      </Box>
-    );
+    if (widgetSettings.calendar.enabled) {
+      widgets.push({
+        id: 'calendar-widget',
+        defaultPosition: { x: 0, y: 0 },
+        defaultSize: { width: 8, height: 5 },
+        minWidth: 6,
+        minHeight: 4,
+        content: <CalendarWidget
+          transparentBackground={widgetSettings.calendar.transparent}
+          icsCalendarUrl={apiKeys.ICS_CALENDAR_URL}
+        />,
+      });
+    }
+
+    if (widgetSettings.weather.enabled) {
+      widgets.push({
+        id: 'weather-widget',
+        defaultPosition: { x: 8, y: 0 },
+        defaultSize: { width: 4, height: 3 },
+        minWidth: 3,
+        minHeight: 2,
+        content: <WeatherWidget
+          transparentBackground={widgetSettings.weather.transparent}
+          weatherApiKey={apiKeys.WEATHER_API_KEY}
+        />,
+      });
+    }
+
+    if (widgetSettings.chores.enabled) {
+      widgets.push({
+        id: 'chores-widget',
+        defaultPosition: { x: 0, y: 5 },
+        defaultSize: { width: 6, height: 4 },
+        minWidth: 4,
+        minHeight: 3,
+        content: <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />,
+      });
+    }
+
+    if (widgetSettings.photos.enabled) {
+      widgets.push({
+        id: 'photos-widget',
+        defaultPosition: { x: 6, y: 5 },
+        defaultSize: { width: 6, height: 4 },
+        minWidth: 4,
+        minHeight: 3,
+        content: <PhotoWidget transparentBackground={widgetSettings.photos.transparent} />,
+      });
+    }
+
+    return widgets;
   };
+
+  const widgets = buildWidgetsArray();
 
   return (
     <>
-      <Container className="container">
-        {renderWidgets()}
+      <Box sx={{ width: '100%', minHeight: '100vh', position: 'relative' }}>
+        {/* Widget Container with Draggable Widgets */}
+        {widgets.length > 0 && <WidgetContainer widgets={widgets} />}
 
         {/* Always show Widget Gallery */}
-        <WidgetGallery key={widgetGalleryKey} theme={theme} />
-      </Container>
+        <Container className="container">
+          <WidgetGallery key={widgetGalleryKey} theme={theme} />
+        </Container>
+      </Box>
 
       {/* Admin Panel as a Dialog (Popup) */}
       <Dialog open={showAdminPanel} onClose={toggleAdminPanel} maxWidth="lg">

@@ -107,6 +107,15 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     fetchUploadedWidgets();
   }, []);
 
+  // Initialize from parent settings on mount
+  useEffect(() => {
+    const savedSettings = localStorage.getItem('widgetSettings');
+    if (savedSettings) {
+      const parsed = JSON.parse(savedSettings);
+      setLocalWidgetSettings(prev => ({ ...prev, ...parsed }));
+    }
+  }, []);
+
   const fetchSettings = async () => {
     try {
       const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`);
@@ -208,11 +217,14 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const saveWidgetSettings = () => {
     localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
     setWidgetSettings(widgetSettings);
+    // Show success message
+    setSaveMessage({ show: true, type: 'success', text: 'Widget settings saved successfully!' });
+    setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
   };
 
+  // Only sync to parent when explicitly saved, not on every change
   useEffect(() => {
-    setWidgetSettings(widgetSettings);
-    localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
+    // Don't sync on initial mount - wait for user action
   }, [widgetSettings, setWidgetSettings]);
 
   const handleWidgetToggle = (widget, field) => {
@@ -542,7 +554,17 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>Widget Settings</Typography>
-            
+
+            {saveMessage.show && (
+              <Alert severity={saveMessage.type} sx={{ mb: 2 }}>
+                {saveMessage.text}
+              </Alert>
+            )}
+
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Enable widgets to show them on the dashboard. Click to select a widget, then drag to move or resize from corners.
+            </Alert>
+
             {Object.entries(widgetSettings).filter(([key]) => 
               ['chores', 'calendar', 'photos', 'weather'].includes(key)
             ).map(([widget, config]) => (
