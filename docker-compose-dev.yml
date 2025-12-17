@@ -25,10 +25,18 @@ services:
     ports:
       - "${FRONTEND_PORT:-3001}:3001"
     volumes:
-      - ./client/src:/app/src
-      - ./client/public:/app/public
-      - ./client/index.html:/app/index.html
-      - ./client/vite.config.js:/app/vite.config.js
+      # Mount entire src directory (this works because it's a directory)
+      - ./client/src:/app/src:delegated
+      - ./client/public:/app/public:delegated
+      
+      # Mount individual config files (now works because /app exists from COPY . .)
+      - ./client/index.html:/app/index.html:delegated
+      - ./client/vite.config.js:/app/vite.config.js:delegated
+      
+      # Protect node_modules and package.json from being overwritten
+      - /app/node_modules
+      - /app/package.json
+      - /app/package-lock.json
     environment:
       - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
       - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}:${BACKEND_PORT:-5001}
