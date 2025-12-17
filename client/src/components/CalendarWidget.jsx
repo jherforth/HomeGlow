@@ -18,7 +18,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   const [selectedDateEvents, setSelectedDateEvents] = useState([]);
   const [showDayModal, setShowDayModal] = useState(false);
   const [settingsAnchor, setSettingsAnchor] = useState(null);
-  const [viewMode, setViewMode] = useState('month'); // 'month' or 'week'
+  const [viewMode, setViewMode] = useState('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [eventColors, setEventColors] = useState(() => {
     const saved = localStorage.getItem('calendarEventColors');
@@ -55,16 +55,13 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
     fetchCalendarEvents();
   }, []);
 
-  // Save event colors to localStorage whenever they change
   useEffect(() => {
     localStorage.setItem('calendarEventColors', JSON.stringify(eventColors));
   }, [eventColors]);
 
-  // Save display settings to localStorage whenever they change
   useEffect(() => {
     localStorage.setItem('calendarDisplaySettings', JSON.stringify(displaySettings));
 
-    // Also save to database
     const saveToDatabase = async () => {
       try {
         await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, {
@@ -84,7 +81,6 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
     return () => clearTimeout(timeoutId);
   }, [displaySettings]);
 
-  // Load display settings from database on mount
   useEffect(() => {
     const loadDisplaySettings = async () => {
       try {
@@ -113,6 +109,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
       console.error('Error fetching calendar sources:', error);
     }
   };
+
   const fetchCalendarEvents = async () => {
     try {
       setLoading(true);
@@ -135,7 +132,6 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
         setEvents(formattedEvents);
 
-        // Get upcoming events for the next 7 days
         const now = new Date();
         const nextWeek = new Date();
         nextWeek.setDate(now.getDate() + 7);
@@ -274,10 +270,9 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   };
 
   const getCurrentDayOfWeek = () => {
-    return new Date().getDay(); // 0 = Sunday, 1 = Monday, etc.
+    return new Date().getDay();
   };
 
-  // Add current week class to the appropriate row
   useEffect(() => {
     const highlightCurrentWeek = () => {
       const today = new Date();
@@ -307,7 +302,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
   const getNext7Days = () => {
     const days = [];
-    const startDate = new Date(currentDate); // Use currentDate instead of today for pagination
+    const startDate = new Date(currentDate);
     
     for (let i = 0; i < 7; i++) {
       const date = new Date(startDate);
@@ -322,7 +317,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
         dayName: moment(date).format('ddd'),
         dayNumber: moment(date).format('D'),
         monthName: moment(date).format('MMM'),
-        isToday: moment(date).isSame(moment(new Date()), 'day'), // Compare with actual today
+        isToday: moment(date).isSame(moment(new Date()), 'day'),
         events: dayEvents
       });
     }
@@ -358,12 +353,10 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
   const handlePreviousPeriod = () => {
     if (viewMode === 'month') {
-      // Go to previous month
       const newDate = new Date(currentDate);
       newDate.setMonth(newDate.getMonth() - 1);
       setCurrentDate(newDate);
     } else {
-      // Go to previous week (7 days back)
       const newDate = new Date(currentDate);
       newDate.setDate(newDate.getDate() - 7);
       setCurrentDate(newDate);
@@ -372,12 +365,10 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
   const handleNextPeriod = () => {
     if (viewMode === 'month') {
-      // Go to next month
       const newDate = new Date(currentDate);
       newDate.setMonth(newDate.getMonth() + 1);
       setCurrentDate(newDate);
     } else {
-      // Go to next week (7 days forward)
       const newDate = new Date(currentDate);
       newDate.setDate(newDate.getDate() + 7);
       setCurrentDate(newDate);
@@ -388,21 +379,17 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
     if (viewMode === 'month') {
       return moment(currentDate).format('MMMM YYYY');
     } else {
-      // For week view, show the date range
       const startOfWeek = moment(currentDate);
       const endOfWeek = moment(currentDate).add(6, 'days');
       
       if (startOfWeek.month() === endOfWeek.month()) {
-        // Same month: "Dec 15-21, 2024"
         return `${startOfWeek.format('MMM D')}-${endOfWeek.format('D, YYYY')}`;
       } else {
-        // Different months: "Dec 30 - Jan 5, 2024"
         return `${startOfWeek.format('MMM D')} - ${endOfWeek.format('MMM D, YYYY')}`;
       }
     }
   };
 
-  // Custom header component to highlight current day
   const CustomHeader = ({ date, label }) => {
     const today = new Date();
     const isToday = moment(date).isSame(today, 'day');
@@ -419,15 +406,29 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
   if (loading) {
     return (
-      <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`}>
-        <Typography variant="h6">📅 Loading...</Typography>
+      <Box sx={{ 
+        height: '100%', 
+        display: 'flex', 
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 2,
+        p: 3
+      }}>
+        <CircularProgress />
         <Typography>Loading calendar events...</Typography>
-      </Card>
+      </Box>
     );
   }
 
   return (
-    <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`}>
+    <Box sx={{ 
+      height: '100%', 
+      display: 'flex', 
+      flexDirection: 'column',
+      overflow: 'hidden',
+      p: 2
+    }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <IconButton
@@ -483,8 +484,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
       )}
 
       {viewMode === 'month' ? (
-        <Box sx={{ height: 500, display: 'flex', flexDirection: 'column' }}>
-          {/* Day headers */}
+        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, mb: 1 }}>
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
               <Box key={day} sx={{ textAlign: 'center', fontWeight: 'bold', py: 1 }}>
@@ -493,7 +493,6 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
             ))}
           </Box>
 
-          {/* Calendar grid */}
           {(() => {
             const monthStart = moment(currentDate).startOf('month');
             const monthEnd = moment(currentDate).endOf('month');
@@ -628,7 +627,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
           })()}
         </Box>
       ) : (
-        <Box sx={{ height: 500, overflowY: 'auto' }}>
+        <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
           <Box sx={{ display: 'flex', gap: 1, height: '100%' }}>
             {getNext7Days().map((day, index) => (
               <Box
@@ -708,7 +707,6 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
         </Box>
       )}
 
-      {/* Day Details Modal */}
       <Dialog 
         open={showDayModal} 
         onClose={() => setShowDayModal(false)}
@@ -775,7 +773,6 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
         </DialogActions>
       </Dialog>
 
-      {/* Settings Popover */}
       <Popover
         open={Boolean(settingsAnchor)}
         anchorEl={settingsAnchor}
@@ -873,7 +870,6 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
           <Typography variant="h6" sx={{ mb: 2 }}>Default Event Colors</Typography>
           
-          {/* Background Color */}
           <Box sx={{ mb: 3 }}>
             <Typography variant="subtitle2" sx={{ mb: 1 }}>Event Background Color</Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -900,7 +896,6 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
             )}
           </Box>
 
-          {/* Text Color */}
           <Box sx={{ mb: 2 }}>
             <Typography variant="subtitle2" sx={{ mb: 1 }}>Event Text Color</Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -943,7 +938,6 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
           <Typography variant="h6" sx={{ mb: 2 }}>Display Settings</Typography>
 
-          {/* Text Size Control */}
           <Box sx={{ mb: 3 }}>
             <Typography variant="subtitle2" sx={{ mb: 1 }}>Event Text Size</Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -988,7 +982,6 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
             </Typography>
           </Box>
 
-          {/* Bullet Size Control */}
           <Box sx={{ mb: 3 }}>
             <Typography variant="subtitle2" sx={{ mb: 1 }}>Event Bullet Size</Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1046,7 +1039,6 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
         </Box>
       </Popover>
 
-      {/* Calendar Dialog */}
       <Dialog
         open={showCalendarDialog}
         onClose={() => setShowCalendarDialog(false)}
@@ -1178,7 +1170,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Card>
+    </Box>
   );
 };
 
