@@ -118,6 +118,63 @@ const DraggableWidget = ({
         },
         '& .react-grid-item > .react-resizable-handle': {
           display: isSelected ? 'block' : 'none',
+          width: '20px',
+          height: '20px',
+          position: 'absolute',
+        },
+        '& .react-grid-item > .react-resizable-handle::after': {
+          content: '""',
+          position: 'absolute',
+          right: '3px',
+          bottom: '3px',
+          width: '5px',
+          height: '5px',
+          borderRight: '2px solid rgba(158, 127, 255, 0.6)',
+          borderBottom: '2px solid rgba(158, 127, 255, 0.6)',
+        },
+        '& .react-grid-item > .react-resizable-handle-sw': {
+          bottom: '0',
+          left: '0',
+          cursor: 'sw-resize',
+        },
+        '& .react-grid-item > .react-resizable-handle-se': {
+          bottom: '0',
+          right: '0',
+          cursor: 'se-resize',
+        },
+        '& .react-grid-item > .react-resizable-handle-nw': {
+          top: '0',
+          left: '0',
+          cursor: 'nw-resize',
+        },
+        '& .react-grid-item > .react-resizable-handle-ne': {
+          top: '0',
+          right: '0',
+          cursor: 'ne-resize',
+        },
+        '& .react-grid-item > .react-resizable-handle-w': {
+          top: '50%',
+          left: '0',
+          transform: 'translateY(-50%)',
+          cursor: 'w-resize',
+        },
+        '& .react-grid-item > .react-resizable-handle-e': {
+          top: '50%',
+          right: '0',
+          transform: 'translateY(-50%)',
+          cursor: 'e-resize',
+        },
+        '& .react-grid-item > .react-resizable-handle-n': {
+          top: '0',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          cursor: 'n-resize',
+        },
+        '& .react-grid-item > .react-resizable-handle-s': {
+          bottom: '0',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          cursor: 's-resize',
         },
         '& .react-grid-item.cssTransforms': {
           transitionProperty: isSelected ? 'none' : 'transform, width, height',
