@@ -83,10 +83,8 @@ const WidgetContainer = ({ children, widgets = [] }) => {
   };
 
   const handleWidgetClick = (widgetId, e) => {
-    // Only select if clicking on the widget itself
-    if (e.target.classList.contains('widget-content') || e.target.closest('.drag-handle')) {
-      setSelectedWidget(widgetId);
-    }
+    // Select widget when clicking anywhere on it
+    setSelectedWidget(widgetId);
   };
 
   // Click outside to deselect
