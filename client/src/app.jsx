@@ -193,8 +193,8 @@ const App = () => {
       widgets.push({
         id: 'calendar-widget',
         defaultPosition: { x: 0, y: 0 },
-        defaultSize: { width: 6, height: 4 },
-        minWidth: 4,
+        defaultSize: { width: 5, height: 4 },
+        minWidth: 3,
         minHeight: 3,
         content: <CalendarWidget
           transparentBackground={widgetSettings.calendar.transparent}
@@ -206,7 +206,7 @@ const App = () => {
     if (widgetSettings.weather.enabled) {
       widgets.push({
         id: 'weather-widget',
-        defaultPosition: { x: 6, y: 0 },
+        defaultPosition: { x: 5, y: 0 },
         defaultSize: { width: 3, height: 3 },
         minWidth: 2,
         minHeight: 2,

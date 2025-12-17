@@ -180,7 +180,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
           onLayoutChange={handleLayoutChange}
           isDraggable={true}
           isResizable={true}
-          resizeHandles={['s']}
+          resizeHandles={['s', 'e', 'w', 'se', 'sw']}
           compactType={null}
           preventCollision={true}
           margin={[16, 16]}
