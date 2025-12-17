@@ -1,6 +1,6 @@
 services:
-  backend:
-    container_name: backend
+  backend-test:
+    container_name: backend-test
     build:
       context: ./server
       dockerfile: Dockerfile
@@ -17,8 +17,8 @@ services:
     networks:
       - homeglow-network
 
-  frontend:
-    container_name: frontend
+  frontend-test:
+    container_name: frontend-test
     build:
       context: ./client
       dockerfile: Dockerfile.dev
@@ -34,7 +34,7 @@ services:
       - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
       - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}:${BACKEND_PORT:-5000}
     depends_on:
-      - backend
+      - backend-test
     networks:
       - homeglow-network
 
