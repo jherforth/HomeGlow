@@ -2,17 +2,15 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy package files first
+# Copy package files and install dependencies
 COPY package*.json ./
-
-# Install dependencies
 RUN npm install
 
-# Copy the rest of the application to establish directory structure
+# Copy all source code into the image
 COPY . .
 
 # Expose Vite dev server port
-EXPOSE 3001
+EXPOSE 3000
 
-# Run Vite dev server with host binding
+# Run Vite dev server
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3001"]
