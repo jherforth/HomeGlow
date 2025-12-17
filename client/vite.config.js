@@ -14,8 +14,5 @@ export default defineConfig({
       port: 3001,
     },
   },
-  // Ensure Vite resolves paths correctly
-  root: '/app',
-  publicDir: '/app/public',
 });
 

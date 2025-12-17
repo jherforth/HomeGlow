@@ -109,7 +109,7 @@ const Dashboard = () => {
             🏠 HomeGlow Dashboard
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Click any widget to select, drag to move, resize from corners
+            Click any widget to select, drag to move, click plus icons to expand
           </Typography>
         </Box>
         

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Box } from '@mui/material';
-import { DragIndicator } from '@mui/icons-material';
+import { Box, IconButton } from '@mui/material';
+import { DragIndicator, AddCircle } from '@mui/icons-material';
 import GridLayout from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
@@ -82,6 +82,56 @@ const WidgetContainer = ({ children, widgets = [] }) => {
     });
   };
 
+  // Handle resize button clicks
+  const handleResize = (widgetId, direction) => {
+    setLayout((currentLayout) => {
+      const newLayout = currentLayout.map((item) => {
+        if (item.i === widgetId) {
+          const updatedItem = { ...item };
+
+          switch (direction) {
+            case 'right':
+              // Increase width by 1, but don't exceed grid columns
+              if (item.x + item.w < gridCols) {
+                updatedItem.w = item.w + 1;
+              }
+              break;
+            case 'left':
+              // Increase width by 1 and move left
+              if (item.x > 0) {
+                updatedItem.x = item.x - 1;
+                updatedItem.w = item.w + 1;
+              }
+              break;
+            case 'bottom':
+              // Increase height by 1
+              updatedItem.h = item.h + 1;
+              break;
+            case 'top':
+              // Increase height by 1 and move up
+              if (item.y > 0) {
+                updatedItem.y = item.y - 1;
+                updatedItem.h = item.h + 1;
+              }
+              break;
+          }
+
+          // Save to localStorage
+          localStorage.setItem(`widget-layout-${item.i}`, JSON.stringify({
+            x: updatedItem.x,
+            y: updatedItem.y,
+            w: updatedItem.w,
+            h: updatedItem.h,
+          }));
+
+          return updatedItem;
+        }
+        return item;
+      });
+      return newLayout;
+    });
+  };
+
   const handleWidgetClick = (widgetId, e) => {
     // Select widget when clicking anywhere on it
     setSelectedWidget(widgetId);
@@ -129,8 +179,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
           width={containerWidth}
           onLayoutChange={handleLayoutChange}
           isDraggable={true}
-          isResizable={true}
-          resizeHandles={['s']}
+          isResizable={false}
           compactType={null}
           preventCollision={true}
           margin={[16, 16]}
@@ -201,6 +250,115 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                   </Box>
                 )}
 
+                {/* Resize Buttons - Only visible when selected */}
+                {isSelected && (
+                  <>
+                    {/* Top Resize Button */}
+                    <IconButton
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleResize(widget.id, 'top');
+                      }}
+                      sx={{
+                        position: 'absolute',
+                        top: -16,
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        backgroundColor: 'var(--accent)',
+                        color: 'white',
+                        width: 32,
+                        height: 32,
+                        zIndex: 1002,
+                        '&:hover': {
+                          backgroundColor: 'var(--accent)',
+                          filter: 'brightness(1.2)',
+                        },
+                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                      }}
+                    >
+                      <AddCircle sx={{ fontSize: 24 }} />
+                    </IconButton>
+
+                    {/* Right Resize Button */}
+                    <IconButton
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleResize(widget.id, 'right');
+                      }}
+                      sx={{
+                        position: 'absolute',
+                        right: -16,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        backgroundColor: 'var(--accent)',
+                        color: 'white',
+                        width: 32,
+                        height: 32,
+                        zIndex: 1002,
+                        '&:hover': {
+                          backgroundColor: 'var(--accent)',
+                          filter: 'brightness(1.2)',
+                        },
+                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                      }}
+                    >
+                      <AddCircle sx={{ fontSize: 24 }} />
+                    </IconButton>
+
+                    {/* Bottom Resize Button */}
+                    <IconButton
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleResize(widget.id, 'bottom');
+                      }}
+                      sx={{
+                        position: 'absolute',
+                        bottom: -16,
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        backgroundColor: 'var(--accent)',
+                        color: 'white',
+                        width: 32,
+                        height: 32,
+                        zIndex: 1002,
+                        '&:hover': {
+                          backgroundColor: 'var(--accent)',
+                          filter: 'brightness(1.2)',
+                        },
+                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                      }}
+                    >
+                      <AddCircle sx={{ fontSize: 24 }} />
+                    </IconButton>
+
+                    {/* Left Resize Button */}
+                    <IconButton
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleResize(widget.id, 'left');
+                      }}
+                      sx={{
+                        position: 'absolute',
+                        left: -16,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        backgroundColor: 'var(--accent)',
+                        color: 'white',
+                        width: 32,
+                        height: 32,
+                        zIndex: 1002,
+                        '&:hover': {
+                          backgroundColor: 'var(--accent)',
+                          filter: 'brightness(1.2)',
+                        },
+                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                      }}
+                    >
+                      <AddCircle sx={{ fontSize: 24 }} />
+                    </IconButton>
+                  </>
+                )}
+
 
                 {/* Widget Content */}
                 <Box
@@ -210,7 +368,6 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                     height: '100%',
                     overflow: 'auto',
                     paddingTop: isSelected ? '48px' : '0',
-                    paddingBottom: isSelected ? '48px' : '0',
                     pointerEvents: isSelected ? 'none' : 'auto',
                     display: 'flex',
                     flexDirection: 'column',
