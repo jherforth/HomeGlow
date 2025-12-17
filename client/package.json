@@ -1,6 +1,6 @@
 {
   "name": "homeglow-client",
-  "version": "1.1.1",
+  "version": "1.2.1",
   "private": true,
   "scripts": {
     "dev": "vite",
