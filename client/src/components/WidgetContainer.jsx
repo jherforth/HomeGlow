@@ -1,9 +1,59 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Box } from '@mui/material';
 import { DragIndicator } from '@mui/icons-material';
 import GridLayout from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
+
+const WidgetItem = ({ widget, isSelected, layout, handleWidgetClick, children }) => {
+  const widgetRef = useRef(null);
+
+  useEffect(() => {
+    if (widgetRef.current) {
+      const gridItem = widgetRef.current.parentElement;
+      if (gridItem && gridItem.classList.contains('react-grid-item')) {
+        if (isSelected) {
+          gridItem.classList.add('widget-selected');
+        } else {
+          gridItem.classList.remove('widget-selected');
+        }
+      }
+    }
+  }, [isSelected]);
+
+  return (
+    <Box
+      key={widget.id}
+      ref={widgetRef}
+      className={`widget-wrapper ${isSelected ? 'selected' : ''}`}
+      data-grid={{ ...layout.find(l => l.i === widget.id) }}
+      onClick={(e) => handleWidgetClick(widget.id, e)}
+      sx={{
+        width: '100%',
+        height: '100%',
+        position: 'relative',
+        border: isSelected ? '3px solid var(--accent)' : '3px solid transparent',
+        borderRadius: 2,
+        transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
+        boxShadow: isSelected
+          ? '0 8px 32px rgba(244, 114, 182, 0.3)'
+          : '0 2px 8px rgba(0, 0, 0, 0.1)',
+        backgroundColor: 'var(--card-bg)',
+        overflow: 'hidden',
+        '&:hover': {
+          border: isSelected
+            ? '3px solid var(--accent)'
+            : '3px solid rgba(244, 114, 182, 0.3)',
+          boxShadow: isSelected
+            ? '0 8px 32px rgba(244, 114, 182, 0.3)'
+            : '0 4px 16px rgba(0, 0, 0, 0.15)',
+        }
+      }}
+    >
+      {children}
+    </Box>
+  );
+};
 
 /**
  * Container component that manages multiple draggable widgets
@@ -140,33 +190,14 @@ const WidgetContainer = ({ children, widgets = [] }) => {
         >
           {widgets.map((widget) => {
             const isSelected = selectedWidget === widget.id;
+
             return (
-              <Box
+              <WidgetItem
                 key={widget.id}
-                className={`widget-wrapper ${isSelected ? 'selected' : ''}`}
-                data-grid={{ ...layout.find(l => l.i === widget.id) }}
-                onClick={(e) => handleWidgetClick(widget.id, e)}
-                sx={{
-                  width: '100%',
-                  height: '100%',
-                  position: 'relative',
-                  border: isSelected ? '3px solid var(--accent)' : '3px solid transparent',
-                  borderRadius: 2,
-                  transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
-                  boxShadow: isSelected
-                    ? '0 8px 32px rgba(244, 114, 182, 0.3)'
-                    : '0 2px 8px rgba(0, 0, 0, 0.1)',
-                  backgroundColor: 'var(--card-bg)',
-                  overflow: 'hidden',
-                  '&:hover': {
-                    border: isSelected
-                      ? '3px solid var(--accent)'
-                      : '3px solid rgba(244, 114, 182, 0.3)',
-                    boxShadow: isSelected
-                      ? '0 8px 32px rgba(244, 114, 182, 0.3)'
-                      : '0 4px 16px rgba(0, 0, 0, 0.15)',
-                  }
-                }}
+                widget={widget}
+                isSelected={isSelected}
+                layout={layout}
+                handleWidgetClick={handleWidgetClick}
               >
                 {/* Drag Handle - Always visible */}
                 {isSelected && (
@@ -219,7 +250,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                   {widget.content}
                 </Box>
 
-              </Box>
+              </WidgetItem>
             );
           })}
         </GridLayout>

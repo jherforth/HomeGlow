@@ -111,8 +111,8 @@ body {
   display: none;
 }
 
-.react-grid-item:has(.selected) > .react-resizable-handle-s {
-  display: flex;
+.react-grid-item.widget-selected > .react-resizable-handle-s {
+  display: flex !important;
   align-items: center;
   justify-content: center;
   position: absolute;
@@ -130,11 +130,11 @@ body {
   font-size: 0.75rem;
 }
 
-.react-grid-item:has(.selected) > .react-resizable-handle-s::after {
+.react-grid-item.widget-selected > .react-resizable-handle-s::after {
   content: "⇕ Drag to Resize Height • Click outside to deselect";
 }
 
-.react-grid-item:has(.selected) > .react-resizable-handle-s:hover {
+.react-grid-item.widget-selected > .react-resizable-handle-s:hover {
   filter: brightness(1.1);
 }
 
