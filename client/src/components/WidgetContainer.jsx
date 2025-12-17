@@ -121,47 +121,36 @@ const WidgetContainer = ({ children, widgets = [] }) => {
           transition: 'all 100ms ease',
         },
         '& .react-grid-item > .react-resizable-handle': {
-          display: 'none',
+          opacity: 0,
           position: 'absolute',
-          width: 20,
-          height: 20,
-          zIndex: 1000,
+          width: 30,
+          height: 30,
+          zIndex: 1003,
+          pointerEvents: 'none',
         },
         '& .react-grid-item:has(.selected) > .react-resizable-handle': {
-          display: 'block',
-        },
-        '& .react-resizable-handle::after': {
-          content: '""',
-          position: 'absolute',
-          right: 3,
-          bottom: 3,
-          width: 5,
-          height: 5,
-          borderRight: '2px solid var(--accent)',
-          borderBottom: '2px solid var(--accent)',
+          opacity: 1,
+          pointerEvents: 'auto',
         },
         '& .react-resizable-handle-se': {
-          bottom: 0,
-          right: 0,
+          bottom: -3,
+          right: -3,
           cursor: 'se-resize',
         },
         '& .react-resizable-handle-sw': {
-          bottom: 0,
-          left: 0,
+          bottom: -3,
+          left: -3,
           cursor: 'sw-resize',
-          transform: 'rotate(90deg)',
         },
         '& .react-resizable-handle-ne': {
-          top: 0,
-          right: 0,
+          top: -3,
+          right: -3,
           cursor: 'ne-resize',
-          transform: 'rotate(270deg)',
         },
         '& .react-resizable-handle-nw': {
-          top: 0,
-          left: 0,
+          top: -3,
+          left: -3,
           cursor: 'nw-resize',
-          transform: 'rotate(180deg)',
         },
       }}
     >
@@ -175,6 +164,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
           onLayoutChange={handleLayoutChange}
           isDraggable={true}
           isResizable={true}
+          resizeHandles={['se', 'sw', 'ne', 'nw']}
           compactType={null}
           preventCollision={true}
           margin={[16, 16]}
@@ -262,7 +252,10 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                     height: '100%',
                     overflow: 'auto',
                     paddingTop: isSelected ? '40px' : '0',
+                    paddingBottom: isSelected ? '32px' : '0',
                     pointerEvents: isSelected ? 'none' : 'auto',
+                    display: 'flex',
+                    flexDirection: 'column',
                   }}
                 >
                   {widget.content}

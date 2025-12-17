@@ -522,7 +522,7 @@ const ChoreWidget = ({ transparentBackground }) => {
                 )}
               </Box>
 
-              <Box sx={{ maxHeight: 300, overflowY: 'auto' }}>
+              <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
                 {userChores.length === 0 ? (
                   <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
                     No chores for today
@@ -559,7 +559,7 @@ const ChoreWidget = ({ transparentBackground }) => {
             <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
               Available:
             </Typography>
-            <Box sx={{ maxHeight: 150, overflowY: 'auto', mb: 2 }}>
+            <Box sx={{ flex: 1, overflowY: 'auto', mb: 2, minHeight: 0 }}>
               {availableBonusChores.length === 0 ? (
                 <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
                   No bonus chores available
