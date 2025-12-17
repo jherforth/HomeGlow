@@ -1,29 +1,28 @@
-/* client/src/index.css */
-/* Web 3.0-inspired global styles with light and dark themes */
 :root {
-  --background: #f4f4f9;
-  --card-bg: rgba(255, 255, 255, 0.8);
-  --card-border: rgba(255, 255, 255, 0.2);
-  --text-color: #1a1a2e;
-  --text-color-rgb: 26, 26, 46;
-  /* RGB values for #1a1a2e */
-  --accent: #6e44ff;
-  --accent-rgb: 110, 68, 255;
-  /* RGB values for #6e44ff */
-  /* CHANGED: Use dynamic color variables for gradient */
-  --gradient: linear-gradient(45deg, var(--light-gradient-start), var(--light-gradient-end));
-  --shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  --primary: #9E7FFF;
+  --secondary: #38bdf8;
+  --accent: #f472b6;
+  --background: #171717;
+  --surface: #262626;
+  --card-bg: #2a2a2a;
+  --text: #FFFFFF;
+  --text-secondary: #A3A3A3;
+  --border: #2F2F2F;
+  --card-border: #3a3a3a;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --error: #ef4444;
+  --accent-rgb: 158, 127, 255;
+  --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   --backdrop-blur: blur(10px);
-  /* New CSS variables for customization */
+  --gradient: linear-gradient(135deg, var(--background) 0%, var(--surface) 100%);
+  --bottom-bar-bg: rgba(38, 38, 38, 0.95);
+  --bottom-bar-height: 100px;
+  --container-background-override: var(--gradient);
   --dynamic-text-size: 16px;
   --dynamic-card-width: 300px;
   --dynamic-card-padding: 20px;
-  --container-background-override: var(--gradient);
-  /* NEW: Default container background */
-  --bottom-bar-height: 80px;
-  /* Default height for the bottom bar */
-
-  /* NEW: Default values for custom color variables (will be overridden by JS) */
+  --dynamic-card-height: 200px;
   --light-gradient-start: #00ddeb;
   --light-gradient-end: #ff6b6b;
   --dark-gradient-start: #2e2767;
@@ -32,507 +31,222 @@
   --light-button-gradient-end: #ff6b6b;
   --dark-button-gradient-start: #2e2767;
   --dark-button-gradient-end: #620808;
-  --bottom-bar-bg: rgba(255, 255, 255, 0.05);
-  /* NEW: Transparent background for bottom bar */
 }
 
-[data-theme="dark"] {
-  --background: #0a0a1a;
-  --card-bg: rgba(30, 30, 50, 0.7);
-  --card-border: rgba(100, 100, 150, 0.3);
-  --text-color: #a6a6d1;
-  --text-color-rgb: 166, 166, 209;
-  /* RGB values for #a6a6d1 */
-  --accent: #00ddeb;
-  --accent-rgb: 0, 221, 235;
-  /* RGB values for #00ddeb */
-  /* CHANGED: Use dynamic color variables for gradient */
-  --gradient: linear-gradient(45deg, var(--dark-gradient-start), var(--dark-gradient-end));
-  --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  --container-background-override: var(--gradient);
-  /* NEW: Default container background for dark theme */
-  --bottom-bar-bg: rgba(30, 30, 50, 0.05);
-  /* NEW: Transparent background for bottom bar */
+[data-theme="light"] {
+  --background: #f5f5f5;
+  --surface: #ffffff;
+  --card-bg: #ffffff;
+  --text: #171717;
+  --text-secondary: #666666;
+  --border: #e0e0e0;
+  --card-border: #e5e5e5;
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --gradient: linear-gradient(135deg, #f5f5f5 0%, #ffffff 100%);
+  --bottom-bar-bg: rgba(255, 255, 255, 0.95);
 }
 
-html,
-body {
+* {
   margin: 0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: var(--background);
-  color: var(--text-color);
-  transition: background 0.3s ease, color 0.3s ease;
-  touch-action: manipulation;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  font-size: var(--dynamic-text-size);
-  /* Apply dynamic text size */
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  background: var(--container-background-override);
+  background-attachment: fixed;
+  color: var(--text);
+  line-height: 1.6;
+  min-height: 100vh;
   padding-bottom: var(--bottom-bar-height);
-  /* Add padding to account for fixed bottom bar */
 }
 
 .container {
-  padding: 8px 24px 8px 24px;
-  /* Removed min-height: 100vh; to allow dynamic height */
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
   background: var(--container-background-override);
-  /* CHANGED: Use override variable */
-  background-attachment: fixed;
-  transition: transform 0.3s ease-in-out;
-  /* Smooth transition for rotation */
-  position: relative;
-  /* Ensure proper positioning of children */
-  width: 100%;
-  /* Ensure container fills its parent */
-  height: calc(100vh - var(--bottom-bar-height));
-  overflow-y: auto;
-  overflow-x: hidden;
+  min-height: calc(100vh - var(--bottom-bar-height));
 }
 
-/* Material-UI Grid Container specific styles */
-/* JavaScript-based Masonry Layout Styles */
-.js-masonry-container {
-  position: relative;
-  width: 100%;
-  min-height: 100vh;
-}
-
-.masonry-widget {
-  position: absolute;
-  transition: all 0.3s ease;
-  box-sizing: border-box;
-}
-
-.masonry-widget.chores-widget {
-  /* Special handling for chores widget if needed */
-}
-
-/* Override Material-UI Container's max-width to allow full dynamic width */
-.MuiContainer-root {
-  max-width: none !important;
-  padding-left: 4px !important;
-  padding-right: 4px !important;
-}
 .card {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
-  border-radius: 12px;
+  border-radius: 16px;
   padding: var(--dynamic-card-padding);
-  /* Apply dynamic card padding */
-  backdrop-filter: var(--backdrop-blur);
   box-shadow: var(--shadow);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  width: 100%;
-  max-width: none;
-  touch-action: manipulation;
-  height: fit-content;
-  min-height: 200px;
-  box-sizing: border-box;
-  overflow: hidden;
+  transition: all 0.3s ease;
+  backdrop-filter: var(--backdrop-blur);
 }
 
 .card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
-}
-
-h6,
-h1 {
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  color: var(--text-color);
-}
-
-button {
-  /* CHANGED: Use dynamic color variables for button gradient */
-  background: linear-gradient(45deg, var(--light-button-gradient-start), var(--light-button-gradient-end));
-  color: var(--text-color);
-  border: none;
-  border-radius: 8px;
-  padding: 10px 20px;
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: 600;
-  transition: background 0.3s ease;
-  touch-action: manipulation;
-}
-
-[data-theme="dark"] button {
-  /* CHANGED: Use dynamic color variables for dark theme button gradient */
-  background: linear-gradient(45deg, var(--dark-button-gradient-start), var(--dark-button-gradient-end));
-}
-
-button:hover {
-  filter: brightness(1.1);
-}
-
-.theme-toggle,
-.admin-toggle,
-.refresh-button {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-radius: 50%;
-  padding: 10px;
-  font-size: 1.2rem;
-  cursor: pointer;
-  backdrop-filter: var(--backdrop-blur);
-  box-shadow: var(--shadow);
-  z-index: 1000;
-  /* Ensure these are always on top */
-}
-
-/* Toggle switch for Web 3.0 */
-.toggle-label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 10px 0;
-  color: var(--text-color);
-}
-
-.toggle-switch {
-  position: relative;
-  width: 48px;
-  height: 24px;
-}
-
-.toggle-switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.toggle-slider {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-radius: 24px;
-  transition: 0.3s;
-  backdrop-filter: var(--backdrop-blur);
-}
-
-.toggle-slider:before {
-  position: absolute;
-  content: "";
-  height: 18px;
-  width: 18px;
-  left: 3px;
-  bottom: 2.5px;
-  background: var(--accent);
-  border-radius: 50%;
-  transition: 0.3s;
-}
-
-input:checked+.toggle-slider {
-  background: var(--gradient);
-}
-
-input:checked+.toggle-slider:before {
-  transform: translateX(24px);
-}
-
-/* Ensure Material-UI components adapt to themes */
-.MuiTextField-root input,
-.MuiTextField-root label,
-.MuiTypography-root {
-  color: var(--text-color) !important;
-}
-
-.MuiTextField-root .MuiOutlinedInput-notchedOutline {
-  border-color: var(--card-border) !important;
-}
-
-.MuiListItemText-primary,
-.MuiListItemText-secondary {
-  color: var(--text-color) !important;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
 }
 
 .card.transparent-card {
-  background: rgba(255, 255, 255, 0.2) !important;
-  /* Light theme transparency */
+  background: transparent;
+  backdrop-filter: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-[data-theme="dark"] .card.transparent-card {
-  background: rgba(30, 30, 50, 0.3) !important;
-  /* Dark theme transparency */
+/* React Grid Layout Styles */
+.react-grid-layout {
+  position: relative;
+  transition: height 200ms ease;
 }
 
-/* Specific rule for text color within transparent cards in dark mode */
-[data-theme="dark"] .card.transparent-card .MuiTypography-root,
-[data-theme="dark"] .card.transparent-card .MuiTextField-root input,
-[data-theme="dark"] .card.transparent-card .MuiTextField-root label,
-[data-theme="dark"] .card.transparent-card .MuiListItemText-primary,
-[data-theme="dark"] .card.transparent-card .MuiListItemText-secondary {
-  color: #a6a6d1 !important;
-  /* Ensure text color for transparent cards in dark mode */
+.react-grid-item {
+  transition: all 200ms ease;
+  transition-property: left, top, width, height;
 }
 
-/* React Big Calendar specific overrides */
-.rbc-calendar {
-  color: var(--text-color);
-  /* Ensure calendar text inherits theme color */
+.react-grid-item img {
+  pointer-events: none;
+  user-select: none;
 }
 
-.rbc-header,
-.rbc-day-bg,
-.rbc-date-cell,
-.rbc-event-content,
-.rbc-event-label,
-.rbc-event-title {
-  color: var(--text-color) !important;
-  /* Force text color for calendar elements */
+.react-grid-item > .react-resizable-handle {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  cursor: se-resize;
 }
 
-/* More specific rule for date numbers */
-.rbc-date-cell span.rbc-date-number {
-  color: var(--text-color) !important;
+.react-grid-item > .react-resizable-handle::after {
+  content: "";
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 5px;
+  height: 5px;
+  border-right: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
 }
 
-/* New rules for pagination and view toggles */
-.rbc-toolbar button {
-  color: var(--text-color) !important;
-  /* For the text/icons on buttons */
-  background-color: transparent !important;
-  /* Ensure button background is transparent */
-  border-color: var(--card-border) !important;
-  /* Match border to theme */
+.react-grid-item > .react-resizable-handle.react-resizable-handle-sw {
+  bottom: 0;
+  left: 0;
+  cursor: sw-resize;
+  transform: rotate(90deg);
 }
 
-.rbc-toolbar button:hover {
-  background-color: rgba(var(--text-color-rgb), 0.1) !important;
-  /* Subtle hover effect */
+.react-grid-item > .react-resizable-handle.react-resizable-handle-se {
+  bottom: 0;
+  right: 0;
+  cursor: se-resize;
 }
 
-.rbc-toolbar button.rbc-active {
-  background-color: var(--accent) !important;
-  /* Active button background */
-  color: white !important;
-  /* Active button text color */
+.react-grid-item > .react-resizable-handle.react-resizable-handle-nw {
+  top: 0;
+  left: 0;
+  cursor: nw-resize;
+  transform: rotate(180deg);
 }
 
-/* Adjust background for calendar cells in dark mode if needed */
-[data-theme="dark"] .rbc-day-bg {
-  background-color: rgba(255, 255, 255, 0.05);
-  /* Slightly visible background for days */
+.react-grid-item > .react-resizable-handle.react-resizable-handle-ne {
+  top: 0;
+  right: 0;
+  cursor: ne-resize;
+  transform: rotate(270deg);
 }
 
-[data-theme="dark"] .rbc-today {
-  background-color: rgba(0, 128, 0, 0.2) !important;
-  /* Highlight today in dark mode */
+.react-grid-item > .react-resizable-handle.react-resizable-handle-w,
+.react-grid-item > .react-resizable-handle.react-resizable-handle-e {
+  top: 50%;
+  margin-top: -10px;
+  cursor: ew-resize;
 }
 
-[data-theme="dark"] .rbc-off-range-bg {
-  background-color: rgba(255, 255, 255, 0.02) !important;
-  /* Off-range days in dark mode */
+.react-grid-item > .react-resizable-handle.react-resizable-handle-w {
+  left: 0;
+  transform: rotate(135deg);
 }
 
-/* General Calendar Styling */
-.custom-calendar {
-  font-family: 'Roboto', sans-serif;
-  /* Use a clean font */
-  border: none;
-  /* Remove main calendar border */
+.react-grid-item > .react-resizable-handle.react-resizable-handle-e {
+  right: 0;
+  transform: rotate(315deg);
+}
+
+.react-grid-item > .react-resizable-handle.react-resizable-handle-n,
+.react-grid-item > .react-resizable-handle.react-resizable-handle-s {
+  left: 50%;
+  margin-left: -10px;
+  cursor: ns-resize;
+}
+
+.react-grid-item > .react-resizable-handle.react-resizable-handle-n {
+  top: 0;
+  transform: rotate(225deg);
+}
+
+.react-grid-item > .react-resizable-handle.react-resizable-handle-s {
+  bottom: 0;
+  transform: rotate(45deg);
+}
+
+.react-grid-item.react-grid-placeholder {
+  background: var(--accent);
+  opacity: 0.2;
+  transition-duration: 100ms;
+  z-index: 2;
   border-radius: 8px;
-  /* Slightly rounded corners for the whole calendar */
-  overflow: hidden;
-  /* Ensure content respects border-radius */
-  background-color: var(--card-background);
-  /* Match card background */
 }
 
-/* Toolbar (Navigation and View Buttons) */
-.custom-calendar .rbc-toolbar {
-  background-color: var(--card-background);
-  border-bottom: 1px solid var(--card-border);
-  /* Subtle separator */
-  padding: 10px 15px;
-  border-radius: 8px 8px 0 0;
-  /* Rounded top corners */
-  margin-bottom: 0;
-  /* Remove default margin */
+.react-grid-item.cssTransforms {
+  transition-property: transform, width, height;
 }
 
-.custom-calendar .rbc-toolbar button {
-  color: var(--text-color-secondary);
-  border: 1px solid var(--card-border);
+.react-grid-item.resizing {
+  transition: none;
+  z-index: 100;
+}
+
+.react-grid-item.react-draggable-dragging {
+  transition: none;
+  z-index: 100;
+}
+
+.react-grid-item.dropping {
+  visibility: hidden;
+}
+
+.react-grid-item.react-grid-placeholder {
+  background: var(--accent);
+  opacity: 0.2;
+  transition-duration: 100ms;
+  z-index: 2;
+  border-radius: 8px;
+}
+
+/* Scrollbar Styles */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--surface);
   border-radius: 4px;
-  padding: 5px 10px;
-  transition: all 0.2s ease-in-out;
 }
 
-.custom-calendar .rbc-toolbar button:hover {
-  background-color: rgba(var(--text-color-rgb), 0.05);
-  color: var(--text-color);
-  border-color: var(--accent);
-}
-
-.custom-calendar .rbc-toolbar button.rbc-active {
-  background-color: var(--accent) !important;
-  /* Active button background */
-  color: white !important;
-  /* Active button text color */
-}
-
-.custom-calendar .rbc-toolbar button.rbc-active:hover {
-  background-color: var(--accent-dark);
-  border-color: var(--accent-dark);
-}
-
-.custom-calendar .rbc-toolbar-label {
-  color: var(--text-color);
-  font-weight: 500;
-}
-
-/* Month View Specifics */
-.custom-calendar .rbc-month-view {
-  border: none;
-  /* Remove month view border */
-  background-color: var(--card-background);
-}
-
-.custom-calendar .rbc-header {
-  background-color: var(--card-background);
-  border-bottom: 1px solid var(--card-border);
-  padding: 8px 0;
-  color: var(--text-color-secondary);
-  font-weight: 500;
-}
-
-.custom-calendar .rbc-day-bg {
-  border: none;
-  /* Remove day cell borders */
-  border-right: 1px solid var(--card-border);
-  /* Subtle vertical separators */
-  border-bottom: 1px solid var(--card-border);
-  /* Subtle horizontal separators */
-}
-
-.custom-calendar .rbc-day-bg:last-child {
-  border-right: none;
-  /* Remove right border from last day column */
-}
-
-.custom-calendar .rbc-row-content .rbc-row-segment:last-child .rbc-day-bg {
-  border-bottom: none;
-  /* Remove bottom border from last row of days */
-}
-
-.custom-calendar .rbc-date-cell {
-  padding: 5px;
-  color: var(--text-color);
-}
-
-.custom-calendar .rbc-now {
-  background-color: rgba(var(--accent-rgb), 0.1);
-  /* Subtle highlight for today */
-}
-
-.custom-calendar .rbc-today {
-  background-color: rgba(var(--accent-rgb), 0.15);
-  /* Stronger highlight for today */
-}
-
-.custom-calendar .rbc-event {
-  background-color: var(--accent);
-  /* Event background */
+::-webkit-scrollbar-thumb {
+  background: var(--border);
   border-radius: 4px;
-  padding: 2px 5px;
-  color: white;
-  font-size: 0.85em;
-  border: none;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  /* Subtle shadow for events */
 }
 
-.custom-calendar .rbc-event-content {
-  white-space: normal;
-  /* Allow event text to wrap */
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
 }
 
-/* Removed specific rbc-agenda-view styles as we are using a custom list now */
-
-/* Hide the default scrollbar if overflow: hidden is set on parent Box */
-.custom-calendar::-webkit-scrollbar {
-  display: none;
-}
-
-.custom-calendar {
-  -ms-overflow-style: none;
-  /* IE and Edge */
-  scrollbar-width: none;
-  /* Firefox */
-}
-
-/* Highlight for current day of the week header */
-.custom-calendar .rbc-current-day-header {
-  background-color: rgba(var(--accent-rgb), 0.2);
-  /* A subtle background highlight */
-  color: var(--accent);
-  /* Change text color to accent */
-  font-weight: bold;
-  /* Make the text bold */
-}
-
-/* Custom month view with current week emphasis */
-.custom-calendar .rbc-month-view {
-  display: flex;
-  flex-direction: column;
-  height: 500px;
-}
-
-.custom-calendar .rbc-month-view .rbc-month-header {
-  flex-shrink: 0;
-}
-
-.custom-calendar .rbc-month-view .rbc-month-row {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  flex-basis: 12.5%;
-  flex-grow: 0;
-  flex-shrink: 0;
-}
-
-/* Other weeks - compressed to 25% of normal height */
-.custom-calendar .rbc-month-view .rbc-month-row {
-  flex-basis: 10%;
-}
-
-/* Current week - emphasized to 200% of normal height */
-.custom-calendar .rbc-month-view .rbc-month-row.rbc-current-week {
-  flex-basis: 40%;
-  background-color: rgba(var(--accent-rgb), 0.05);
-}
-
-/* Event overflow indicator */
-.rbc-show-more {
-  background-color: rgba(var(--accent-rgb), 0.1);
-  color: var(--accent);
-  padding: 2px 4px;
-  border-radius: 3px;
-  font-size: 0.7em;
-  font-weight: 600;
-  cursor: pointer;
-  display: inline-block;
-  margin-top: 2px;
-}
-
-.rbc-show-more:hover {
-  background-color: rgba(var(--accent-rgb), 0.2);
-}
-
-/* Ensure day cells can show overflow indicator */
-.custom-calendar .rbc-day-slot {
-  position: relative;
-}
-
-.custom-calendar .rbc-events-container {
-  position: relative;
+/* Responsive Design */
+@media (max-width: 768px) {
+  .container {
+    padding: 10px;
+  }
+  
+  .card {
+    padding: 15px;
+  }
 }
