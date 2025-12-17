@@ -1,6 +1,6 @@
 services:
-  backend:
-    container_name: backend
+  backend-test:
+    container_name: backend-test
     build:
       context: ./server
       dockerfile: Dockerfile
@@ -17,8 +17,8 @@ services:
     networks:
       - homeglow-network
 
-  frontend:
-    container_name: frontend
+  frontend-test:
+    container_name: frontend=test
     build:
       context: ./client
       dockerfile: Dockerfile
@@ -28,7 +28,7 @@ services:
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     depends_on:
-      - backend
+      - backend-test
     networks:
       - homeglow-network
 
