@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Typography, Box, TextField, IconButton, Button } from '@mui/material';
+import { Typography, Box, TextField, IconButton, Button } from '@mui/material';
 import { Edit, Save, Cancel } from '@mui/icons-material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import axios from 'axios';
@@ -203,15 +203,28 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
 
   if (loading) {
     return (
-      <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`}>
+      <Box sx={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        p: 2
+      }}>
         <Typography variant="h6">🌤️ Weather</Typography>
         <Typography>Loading weather data...</Typography>
-      </Card>
+      </Box>
     );
   }
 
   return (
-    <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`}>
+    <Box sx={{
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden',
+      p: 2
+    }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h6">🌤️ Weather</Typography>
         
@@ -432,7 +445,7 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
           </Box>
         </Box>
       )}
-    </Card>
+    </Box>
   );
 };
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Typography, Box, IconButton, Popover, Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Switch, FormControlLabel, Select, MenuItem, FormControl, InputLabel, List, ListItem, ListItemText, ListItemSecondaryAction, CircularProgress, Alert, Chip } from '@mui/material';
+import { Typography, Box, IconButton, Popover, Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Switch, FormControlLabel, Select, MenuItem, FormControl, InputLabel, List, ListItem, ListItemText, ListItemSecondaryAction, CircularProgress, Alert, Chip } from '@mui/material';
 import { Settings, Add, Delete, Edit, Refresh, ChevronLeft, ChevronRight, PlayArrow, Pause } from '@mui/icons-material';
 import axios from 'axios';
 
@@ -227,7 +227,13 @@ const PhotoWidget = ({ transparentBackground }) => {
   const currentPhotos = getCurrentPhotos();
 
   return (
-    <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`}>
+    <Box sx={{
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden',
+      p: 2
+    }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h6">📷 Photos</Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
@@ -592,7 +598,7 @@ const PhotoWidget = ({ transparentBackground }) => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Card>
+    </Box>
   );
 };
 

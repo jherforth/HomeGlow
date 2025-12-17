@@ -1,16 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Card, 
-  Typography, 
-  Button, 
-  Box, 
-  Avatar, 
-  Chip, 
-  IconButton, 
-  TextField, 
-  Select, 
-  MenuItem, 
-  FormControl, 
+import {
+  Typography,
+  Button,
+  Box,
+  Avatar,
+  Chip,
+  IconButton,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
   InputLabel,
   FormControlLabel,
   Checkbox,
@@ -419,9 +418,16 @@ const ChoreWidget = ({ transparentBackground }) => {
 
   if (loading) {
     return (
-      <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`}>
+      <Box sx={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        p: 2
+      }}>
         <Typography variant="h6">Loading chores...</Typography>
-      </Card>
+      </Box>
     );
   }
 
@@ -431,7 +437,13 @@ const ChoreWidget = ({ transparentBackground }) => {
 
   return (
     <>
-      <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`}>
+      <Box sx={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        p: 2
+      }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h6">🥟 Daily Chores</Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
@@ -813,7 +825,7 @@ const ChoreWidget = ({ transparentBackground }) => {
           </Button>
         </DialogActions>
       </Dialog>
-      </Card>
+      </Box>
 
       {/* Fun Loading Indicator */}
       <Backdrop
