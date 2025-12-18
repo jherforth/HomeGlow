@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, IconButton } from '@mui/material';
-import { DragIndicator, AddCircle } from '@mui/icons-material';
+import { DragIndicator, AddCircle, RemoveCircle } from '@mui/icons-material';
 import GridLayout from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
@@ -82,36 +82,67 @@ const WidgetContainer = ({ children, widgets = [] }) => {
     });
   };
 
-  // Handle resize button clicks
-  const handleResize = (widgetId, direction) => {
+  // Handle resize button clicks (both increment and decrement)
+  const handleResize = (widgetId, direction, isDecrement = false) => {
     setLayout((currentLayout) => {
       const newLayout = currentLayout.map((item) => {
         if (item.i === widgetId) {
           const updatedItem = { ...item };
+          const delta = isDecrement ? -1 : 1;
 
           switch (direction) {
             case 'right':
-              // Increase width by 1, but don't exceed grid columns
-              if (item.x + item.w < gridCols) {
-                updatedItem.w = item.w + 1;
+              if (isDecrement) {
+                // Decrease width by 1, but respect minimum width
+                if (item.w > item.minW) {
+                  updatedItem.w = item.w - 1;
+                }
+              } else {
+                // Increase width by 1, but don't exceed grid columns
+                if (item.x + item.w < gridCols) {
+                  updatedItem.w = item.w + 1;
+                }
               }
               break;
             case 'left':
-              // Increase width by 1 and move left
-              if (item.x > 0) {
-                updatedItem.x = item.x - 1;
-                updatedItem.w = item.w + 1;
+              if (isDecrement) {
+                // Decrease width by 1 and move right
+                if (item.w > item.minW) {
+                  updatedItem.x = item.x + 1;
+                  updatedItem.w = item.w - 1;
+                }
+              } else {
+                // Increase width by 1 and move left
+                if (item.x > 0) {
+                  updatedItem.x = item.x - 1;
+                  updatedItem.w = item.w + 1;
+                }
               }
               break;
             case 'bottom':
-              // Increase height by 1
-              updatedItem.h = item.h + 1;
+              if (isDecrement) {
+                // Decrease height by 1, but respect minimum height
+                if (item.h > item.minH) {
+                  updatedItem.h = item.h - 1;
+                }
+              } else {
+                // Increase height by 1
+                updatedItem.h = item.h + 1;
+              }
               break;
             case 'top':
-              // Increase height by 1 and move up
-              if (item.y > 0) {
-                updatedItem.y = item.y - 1;
-                updatedItem.h = item.h + 1;
+              if (isDecrement) {
+                // Decrease height by 1 and move down
+                if (item.h > item.minH) {
+                  updatedItem.y = item.y + 1;
+                  updatedItem.h = item.h - 1;
+                }
+              } else {
+                // Increase height by 1 and move up
+                if (item.y > 0) {
+                  updatedItem.y = item.y - 1;
+                  updatedItem.h = item.h + 1;
+                }
               }
               break;
           }
@@ -189,11 +220,18 @@ const WidgetContainer = ({ children, widgets = [] }) => {
         >
           {widgets.map((widget) => {
             const isSelected = selectedWidget === widget.id;
+            const currentLayout = layout.find(l => l.i === widget.id);
+            const canDecreaseWidth = currentLayout && currentLayout.w > currentLayout.minW;
+            const canDecreaseHeight = currentLayout && currentLayout.h > currentLayout.minH;
+            const canIncreaseWidth = currentLayout && (currentLayout.x + currentLayout.w < gridCols);
+            const canIncreaseLeft = currentLayout && currentLayout.x > 0;
+            const canIncreaseTop = currentLayout && currentLayout.y > 0;
+
             return (
               <Box
                 key={widget.id}
                 className={`widget-wrapper ${isSelected ? 'selected' : ''}`}
-                data-grid={{ ...layout.find(l => l.i === widget.id) }}
+                data-grid={{ ...currentLayout }}
                 onClick={(e) => handleWidgetClick(widget.id, e)}
                 sx={{
                   width: '100%',
@@ -217,7 +255,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                   }
                 }}
               >
-                {/* Drag Handle - Always visible */}
+                {/* Drag Handle - Always visible when selected */}
                 {isSelected && (
                   <Box
                     className="drag-handle"
@@ -253,112 +291,266 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                 {/* Resize Buttons - Only visible when selected */}
                 {isSelected && (
                   <>
-                    {/* Top Resize Button */}
-                    <IconButton
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleResize(widget.id, 'top');
-                      }}
+                    {/* Top Resize Buttons */}
+                    <Box
                       sx={{
                         position: 'absolute',
-                        top: -16,
+                        top: -20,
                         left: '50%',
                         transform: 'translateX(-50%)',
-                        backgroundColor: 'var(--accent)',
-                        color: 'white',
-                        width: 32,
-                        height: 32,
+                        display: 'flex',
+                        gap: 1,
                         zIndex: 1002,
-                        '&:hover': {
-                          backgroundColor: 'var(--accent)',
-                          filter: 'brightness(1.2)',
-                        },
-                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
                       }}
                     >
-                      <AddCircle sx={{ fontSize: 24 }} />
-                    </IconButton>
+                      <IconButton
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleResize(widget.id, 'top', true);
+                        }}
+                        disabled={!canDecreaseHeight}
+                        sx={{
+                          backgroundColor: 'var(--error)',
+                          color: 'white',
+                          width: 32,
+                          height: 32,
+                          opacity: canDecreaseHeight ? 1 : 0.3,
+                          '&:hover': {
+                            backgroundColor: 'var(--error)',
+                            filter: canDecreaseHeight ? 'brightness(1.2)' : 'none',
+                          },
+                          '&:disabled': {
+                            backgroundColor: 'var(--error)',
+                            color: 'white',
+                            cursor: 'not-allowed',
+                          },
+                          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                        }}
+                      >
+                        <RemoveCircle sx={{ fontSize: 20 }} />
+                      </IconButton>
+                      <IconButton
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleResize(widget.id, 'top', false);
+                        }}
+                        disabled={!canIncreaseTop}
+                        sx={{
+                          backgroundColor: 'var(--accent)',
+                          color: 'white',
+                          width: 32,
+                          height: 32,
+                          opacity: canIncreaseTop ? 1 : 0.3,
+                          '&:hover': {
+                            backgroundColor: 'var(--accent)',
+                            filter: canIncreaseTop ? 'brightness(1.2)' : 'none',
+                          },
+                          '&:disabled': {
+                            backgroundColor: 'var(--accent)',
+                            color: 'white',
+                            cursor: 'not-allowed',
+                          },
+                          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                        }}
+                      >
+                        <AddCircle sx={{ fontSize: 20 }} />
+                      </IconButton>
+                    </Box>
 
-                    {/* Right Resize Button */}
-                    <IconButton
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleResize(widget.id, 'right');
-                      }}
+                    {/* Right Resize Buttons */}
+                    <Box
                       sx={{
                         position: 'absolute',
-                        right: -16,
+                        right: -20,
                         top: '50%',
                         transform: 'translateY(-50%)',
-                        backgroundColor: 'var(--accent)',
-                        color: 'white',
-                        width: 32,
-                        height: 32,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 1,
                         zIndex: 1002,
-                        '&:hover': {
-                          backgroundColor: 'var(--accent)',
-                          filter: 'brightness(1.2)',
-                        },
-                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
                       }}
                     >
-                      <AddCircle sx={{ fontSize: 24 }} />
-                    </IconButton>
+                      <IconButton
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleResize(widget.id, 'right', true);
+                        }}
+                        disabled={!canDecreaseWidth}
+                        sx={{
+                          backgroundColor: 'var(--error)',
+                          color: 'white',
+                          width: 32,
+                          height: 32,
+                          opacity: canDecreaseWidth ? 1 : 0.3,
+                          '&:hover': {
+                            backgroundColor: 'var(--error)',
+                            filter: canDecreaseWidth ? 'brightness(1.2)' : 'none',
+                          },
+                          '&:disabled': {
+                            backgroundColor: 'var(--error)',
+                            color: 'white',
+                            cursor: 'not-allowed',
+                          },
+                          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                        }}
+                      >
+                        <RemoveCircle sx={{ fontSize: 20 }} />
+                      </IconButton>
+                      <IconButton
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleResize(widget.id, 'right', false);
+                        }}
+                        disabled={!canIncreaseWidth}
+                        sx={{
+                          backgroundColor: 'var(--accent)',
+                          color: 'white',
+                          width: 32,
+                          height: 32,
+                          opacity: canIncreaseWidth ? 1 : 0.3,
+                          '&:hover': {
+                            backgroundColor: 'var(--accent)',
+                            filter: canIncreaseWidth ? 'brightness(1.2)' : 'none',
+                          },
+                          '&:disabled': {
+                            backgroundColor: 'var(--accent)',
+                            color: 'white',
+                            cursor: 'not-allowed',
+                          },
+                          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                        }}
+                      >
+                        <AddCircle sx={{ fontSize: 20 }} />
+                      </IconButton>
+                    </Box>
 
-                    {/* Bottom Resize Button */}
-                    <IconButton
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleResize(widget.id, 'bottom');
-                      }}
+                    {/* Bottom Resize Buttons */}
+                    <Box
                       sx={{
                         position: 'absolute',
-                        bottom: -16,
+                        bottom: -20,
                         left: '50%',
                         transform: 'translateX(-50%)',
-                        backgroundColor: 'var(--accent)',
-                        color: 'white',
-                        width: 32,
-                        height: 32,
+                        display: 'flex',
+                        gap: 1,
                         zIndex: 1002,
-                        '&:hover': {
-                          backgroundColor: 'var(--accent)',
-                          filter: 'brightness(1.2)',
-                        },
-                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
                       }}
                     >
-                      <AddCircle sx={{ fontSize: 24 }} />
-                    </IconButton>
+                      <IconButton
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleResize(widget.id, 'bottom', true);
+                        }}
+                        disabled={!canDecreaseHeight}
+                        sx={{
+                          backgroundColor: 'var(--error)',
+                          color: 'white',
+                          width: 32,
+                          height: 32,
+                          opacity: canDecreaseHeight ? 1 : 0.3,
+                          '&:hover': {
+                            backgroundColor: 'var(--error)',
+                            filter: canDecreaseHeight ? 'brightness(1.2)' : 'none',
+                          },
+                          '&:disabled': {
+                            backgroundColor: 'var(--error)',
+                            color: 'white',
+                            cursor: 'not-allowed',
+                          },
+                          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                        }}
+                      >
+                        <RemoveCircle sx={{ fontSize: 20 }} />
+                      </IconButton>
+                      <IconButton
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleResize(widget.id, 'bottom', false);
+                        }}
+                        sx={{
+                          backgroundColor: 'var(--accent)',
+                          color: 'white',
+                          width: 32,
+                          height: 32,
+                          '&:hover': {
+                            backgroundColor: 'var(--accent)',
+                            filter: 'brightness(1.2)',
+                          },
+                          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                        }}
+                      >
+                        <AddCircle sx={{ fontSize: 20 }} />
+                      </IconButton>
+                    </Box>
 
-                    {/* Left Resize Button */}
-                    <IconButton
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleResize(widget.id, 'left');
-                      }}
+                    {/* Left Resize Buttons */}
+                    <Box
                       sx={{
                         position: 'absolute',
-                        left: -16,
+                        left: -20,
                         top: '50%',
                         transform: 'translateY(-50%)',
-                        backgroundColor: 'var(--accent)',
-                        color: 'white',
-                        width: 32,
-                        height: 32,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 1,
                         zIndex: 1002,
-                        '&:hover': {
-                          backgroundColor: 'var(--accent)',
-                          filter: 'brightness(1.2)',
-                        },
-                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
                       }}
                     >
-                      <AddCircle sx={{ fontSize: 24 }} />
-                    </IconButton>
+                      <IconButton
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleResize(widget.id, 'left', true);
+                        }}
+                        disabled={!canDecreaseWidth}
+                        sx={{
+                          backgroundColor: 'var(--error)',
+                          color: 'white',
+                          width: 32,
+                          height: 32,
+                          opacity: canDecreaseWidth ? 1 : 0.3,
+                          '&:hover': {
+                            backgroundColor: 'var(--error)',
+                            filter: canDecreaseWidth ? 'brightness(1.2)' : 'none',
+                          },
+                          '&:disabled': {
+                            backgroundColor: 'var(--error)',
+                            color: 'white',
+                            cursor: 'not-allowed',
+                          },
+                          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                        }}
+                      >
+                        <RemoveCircle sx={{ fontSize: 20 }} />
+                      </IconButton>
+                      <IconButton
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleResize(widget.id, 'left', false);
+                        }}
+                        disabled={!canIncreaseLeft}
+                        sx={{
+                          backgroundColor: 'var(--accent)',
+                          color: 'white',
+                          width: 32,
+                          height: 32,
+                          opacity: canIncreaseLeft ? 1 : 0.3,
+                          '&:hover': {
+                            backgroundColor: 'var(--accent)',
+                            filter: canIncreaseLeft ? 'brightness(1.2)' : 'none',
+                          },
+                          '&:disabled': {
+                            backgroundColor: 'var(--accent)',
+                            color: 'white',
+                            cursor: 'not-allowed',
+                          },
+                          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                        }}
+                      >
+                        <AddCircle sx={{ fontSize: 20 }} />
+                      </IconButton>
+                    </Box>
                   </>
                 )}
-
 
                 {/* Widget Content */}
                 <Box
@@ -375,7 +567,6 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                 >
                   {widget.content}
                 </Box>
-
               </Box>
             );
           })}
