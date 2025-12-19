@@ -22,7 +22,7 @@
     "react-color": "2.19.3",
     "recharts": "^3.5.1",
     "react-rnd": "^10.5.2",
-    "react-grid-layout":"^2.1.0",
+    "react-grid-layout":"^2.1.0"
   },
   "devDependencies": {
     "vite": "^7.2.7",
