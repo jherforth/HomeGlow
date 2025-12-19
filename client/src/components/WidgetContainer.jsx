@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, IconButton } from '@mui/material';
-import { DragIndicator, AddCircle, RemoveCircle } from '@mui/icons-material';
+import { DragIndicator } from '@mui/icons-material';
 import GridLayout from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
@@ -314,6 +314,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                           color: 'white',
                           width: 32,
                           height: 32,
+                          fontSize: '1.25rem',
                           opacity: canDecreaseHeight ? 1 : 0.3,
                           '&:hover': {
                             backgroundColor: 'var(--error)',
@@ -327,7 +328,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                           boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
                         }}
                       >
-                        <RemoveCircle sx={{ fontSize: 20 }} />
+                        ➖
                       </IconButton>
                       <IconButton
                         onClick={(e) => {
@@ -340,6 +341,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                           color: 'white',
                           width: 32,
                           height: 32,
+                          fontSize: '1.25rem',
                           opacity: canIncreaseTop ? 1 : 0.3,
                           '&:hover': {
                             backgroundColor: 'var(--accent)',
@@ -353,7 +355,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                           boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
                         }}
                       >
-                        <AddCircle sx={{ fontSize: 20 }} />
+                        ➕
                       </IconButton>
                     </Box>
 
@@ -381,6 +383,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                           color: 'white',
                           width: 32,
                           height: 32,
+                          fontSize: '1.25rem',
                           opacity: canDecreaseWidth ? 1 : 0.3,
                           '&:hover': {
                             backgroundColor: 'var(--error)',
@@ -394,7 +397,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                           boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
                         }}
                       >
-                        <RemoveCircle sx={{ fontSize: 20 }} />
+                        ➖
                       </IconButton>
                       <IconButton
                         onClick={(e) => {
@@ -407,6 +410,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                           color: 'white',
                           width: 32,
                           height: 32,
+                          fontSize: '1.25rem',
                           opacity: canIncreaseWidth ? 1 : 0.3,
                           '&:hover': {
                             backgroundColor: 'var(--accent)',
@@ -420,7 +424,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                           boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
                         }}
                       >
-                        <AddCircle sx={{ fontSize: 20 }} />
+                        ➕
                       </IconButton>
                     </Box>
 
@@ -447,6 +451,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                           color: 'white',
                           width: 32,
                           height: 32,
+                          fontSize: '1.25rem',
                           opacity: canDecreaseHeight ? 1 : 0.3,
                           '&:hover': {
                             backgroundColor: 'var(--error)',
@@ -460,7 +465,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                           boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
                         }}
                       >
-                        <RemoveCircle sx={{ fontSize: 20 }} />
+                        ➖
                       </IconButton>
                       <IconButton
                         onClick={(e) => {
@@ -472,6 +477,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                           color: 'white',
                           width: 32,
                           height: 32,
+                          fontSize: '1.25rem',
                           '&:hover': {
                             backgroundColor: 'var(--accent)',
                             filter: 'brightness(1.2)',
@@ -479,7 +485,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                           boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
                         }}
                       >
-                        <AddCircle sx={{ fontSize: 20 }} />
+                        ➕
                       </IconButton>
                     </Box>
 
@@ -507,6 +513,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                           color: 'white',
                           width: 32,
                           height: 32,
+                          fontSize: '1.25rem',
                           opacity: canDecreaseWidth ? 1 : 0.3,
                           '&:hover': {
                             backgroundColor: 'var(--error)',
@@ -520,7 +527,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                           boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
                         }}
                       >
-                        <RemoveCircle sx={{ fontSize: 20 }} />
+                        ➖
                       </IconButton>
                       <IconButton
                         onClick={(e) => {
@@ -533,6 +540,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                           color: 'white',
                           width: 32,
                           height: 32,
+                          fontSize: '1.25rem',
                           opacity: canIncreaseLeft ? 1 : 0.3,
                           '&:hover': {
                             backgroundColor: 'var(--accent)',
@@ -546,7 +554,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                           boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
                         }}
                       >
-                        <AddCircle sx={{ fontSize: 20 }} />
+                        ➕
                       </IconButton>
                     </Box>
                   </>
