@@ -295,7 +295,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                     <Box
                       sx={{
                         position: 'absolute',
-                        top: -20,
+                        /*top: -20,*/
                         left: '50%',
                         transform: 'translateX(-50%)',
                         display: 'flex',
@@ -363,7 +363,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                     <Box
                       sx={{
                         position: 'absolute',
-                        right: -20,
+                        /*right: -20,*/
                         top: '50%',
                         transform: 'translateY(-50%)',
                         display: 'flex',
@@ -432,7 +432,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                     <Box
                       sx={{
                         position: 'absolute',
-                        bottom: -20,
+                        /*bottom: -20,*/
                         left: '50%',
                         transform: 'translateX(-50%)',
                         display: 'flex',
@@ -493,7 +493,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                     <Box
                       sx={{
                         position: 'absolute',
-                        left: -20,
+                        /*left: -20,*/
                         top: '50%',
                         transform: 'translateY(-50%)',
                         display: 'flex',
