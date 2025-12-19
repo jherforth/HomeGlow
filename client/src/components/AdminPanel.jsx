@@ -63,6 +63,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     calendar: { enabled: false, transparent: false },
     photos: { enabled: false, transparent: false },
     weather: { enabled: false, transparent: false },
+    widgetGallery: { enabled: true, transparent: false }, // Widget Gallery settings
     lightGradientStart: '#00ddeb',
     lightGradientEnd: '#ff6b6b',
     darkGradientStart: '#2e2767',
@@ -559,6 +560,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
               Enable widgets to show them on the dashboard. Click to select a widget, then drag to move or resize from corners.
             </Alert>
 
+            {/* Core Widgets */}
             {Object.entries(widgetSettings).filter(([key]) => 
               ['chores', 'calendar', 'photos', 'weather'].includes(key)
             ).map(([widget, config]) => (
@@ -587,6 +589,35 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
                 />
               </Box>
             ))}
+
+            {/* Widget Gallery Settings */}
+            <Box sx={{ mb: 2, p: 2, border: '2px solid var(--accent)', borderRadius: 1, backgroundColor: 'rgba(244, 114, 182, 0.05)' }}>
+              <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'bold' }}>
+                🎨 Widget Gallery
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                The Widget Gallery displays custom uploaded widgets below the main dashboard widgets.
+              </Typography>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={widgetSettings.widgetGallery?.enabled || false}
+                    onChange={() => handleWidgetToggle('widgetGallery', 'enabled')}
+                  />
+                }
+                label="Show Widget Gallery"
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={widgetSettings.widgetGallery?.transparent || false}
+                    onChange={() => handleWidgetToggle('widgetGallery', 'transparent')}
+                  />
+                }
+                label="Transparent Background"
+                sx={{ ml: 2 }}
+              />
+            </Box>
             
             <Button variant="contained" onClick={saveWidgetSettings} sx={{ mt: 2 }}>
               Save Widget Settings
