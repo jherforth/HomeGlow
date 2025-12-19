@@ -28,12 +28,7 @@ const App = () => {
       calendar: { enabled: false, transparent: false },
       photos: { enabled: false, transparent: false },
       weather: { enabled: false, transparent: false },
-      textSize: 16,
-      cardSize: 300,
-      cardPadding: 20,
-      cardHeight: 200,
-      refreshInterval: 'manual',
-      enableGeoPatternBackground: false,
+      widgetGallery: { enabled: true, transparent: false }, // Widget Gallery enabled by default
       // Color settings
       lightGradientStart: '#00ddeb',
       lightGradientEnd: '#ff6b6b',
@@ -92,11 +87,6 @@ const App = () => {
 
   // Effect to apply dynamic CSS variables
   useEffect(() => {
-    document.documentElement.style.setProperty('--dynamic-text-size', `${widgetSettings.textSize}px`);
-    document.documentElement.style.setProperty('--dynamic-card-width', `${widgetSettings.cardSize}px`);
-    document.documentElement.style.setProperty('--dynamic-card-padding', `${widgetSettings.cardPadding}px`);
-    document.documentElement.style.setProperty('--dynamic-card-height', `${widgetSettings.cardHeight}px`);
-
     // Apply custom color variables
     document.documentElement.style.setProperty('--light-gradient-start', widgetSettings.lightGradientStart);
     document.documentElement.style.setProperty('--light-gradient-end', widgetSettings.lightGradientEnd);
@@ -109,54 +99,11 @@ const App = () => {
 
   }, [widgetSettings]);
 
-  // Effect for automatic page refresh
-  useEffect(() => {
-    let intervalId;
-    const intervalHours = parseInt(widgetSettings.refreshInterval, 10);
-
-    if (!isNaN(intervalHours) && intervalHours > 0) {
-      const intervalMilliseconds = intervalHours * 60 * 60 * 1000;
-      intervalId = setInterval(() => {
-        console.log(`Auto-refreshing page after ${intervalHours} hours.`);
-        setCurrentGeoPatternSeed(Math.random().toString());
-        window.location.reload();
-      }, intervalMilliseconds);
-      console.log(`Auto-refresh set for ${intervalHours} hours (${intervalMilliseconds}ms)`);
-    } else {
-      console.log('Auto-refresh disabled or invalid interval:', widgetSettings.refreshInterval);
-    }
-
-    return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-        console.log('Auto-refresh interval cleared');
-      }
-    };
-  }, [widgetSettings.refreshInterval]);
-
   // Effect to update body padding based on bottom bar height
   useEffect(() => {
     const barHeight = isBottomBarCollapsed ? 40 : 100;
     document.documentElement.style.setProperty('--bottom-bar-height', `${barHeight}px`);
   }, [isBottomBarCollapsed]);
-
-  // Effect for GeoPattern background and container transparency
-  useEffect(() => {
-    if (widgetSettings.enableGeoPatternBackground) {
-      const pattern = GeoPattern.generate(currentGeoPatternSeed);
-      document.body.style.backgroundImage = pattern.toDataUrl();
-      document.body.style.backgroundAttachment = 'fixed';
-      document.body.style.backgroundSize = 'cover';
-
-      document.documentElement.style.setProperty('--container-background-override', 'transparent');
-    } else {
-      document.body.style.backgroundImage = 'var(--gradient)';
-      document.body.style.backgroundAttachment = 'fixed';
-      document.body.style.backgroundSize = 'auto';
-
-      document.documentElement.style.setProperty('--container-background-override', 'var(--gradient)');
-    }
-  }, [widgetSettings.enableGeoPatternBackground, theme, currentGeoPatternSeed]);
 
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
@@ -250,10 +197,16 @@ const App = () => {
         {/* Widget Container with Draggable Widgets */}
         {widgets.length > 0 && <WidgetContainer widgets={widgets} />}
 
-        {/* Always show Widget Gallery */}
-        <Container className="container">
-          <WidgetGallery key={widgetGalleryKey} theme={theme} />
-        </Container>
+        {/* Widget Gallery - Conditionally rendered based on settings */}
+        {widgetSettings.widgetGallery?.enabled && (
+          <Container className="container" sx={{ mt: widgets.length > 0 ? 4 : 0 }}>
+            <WidgetGallery 
+              key={widgetGalleryKey} 
+              theme={theme}
+              transparentBackground={widgetSettings.widgetGallery?.transparent || false}
+            />
+          </Container>
+        )}
       </Box>
 
       {/* Admin Panel as a Dialog (Popup) */}
