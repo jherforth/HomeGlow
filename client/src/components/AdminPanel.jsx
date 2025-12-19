@@ -63,12 +63,6 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     calendar: { enabled: false, transparent: false },
     photos: { enabled: false, transparent: false },
     weather: { enabled: false, transparent: false },
-    textSize: 16,
-    cardSize: 300,
-    cardPadding: 20,
-    cardHeight: 200,
-    refreshInterval: 'manual',
-    enableGeoPatternBackground: false,
     lightGradientStart: '#00ddeb',
     lightGradientEnd: '#ff6b6b',
     darkGradientStart: '#2e2767',
@@ -608,55 +602,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
             <Typography variant="h6" gutterBottom>Interface Customization</Typography>
             
             <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle1" gutterBottom>Display Settings</Typography>
-                
-                <TextField
-                  fullWidth
-                  label="Text Size (px)"
-                  type="number"
-                  value={widgetSettings.textSize}
-                  onChange={(e) => handleSettingChange('textSize', parseInt(e.target.value))}
-                  sx={{ mb: 2 }}
-                />
-                
-                <TextField
-                  fullWidth
-                  label="Card Padding (px)"
-                  type="number"
-                  value={widgetSettings.cardPadding}
-                  onChange={(e) => handleSettingChange('cardPadding', parseInt(e.target.value))}
-                  sx={{ mb: 2 }}
-                />
-                
-                <FormControl fullWidth sx={{ mb: 2 }}>
-                  <InputLabel>Screen Refresh Interval</InputLabel>
-                  <Select
-                    value={widgetSettings.refreshInterval}
-                    onChange={(e) => handleSettingChange('refreshInterval', e.target.value)}
-                  >
-                    <MenuItem value="manual">Manual Only</MenuItem>
-                    <MenuItem value="1">Every 1 Hour</MenuItem>
-                    <MenuItem value="3">Every 3 Hours</MenuItem>
-                    <MenuItem value="6">Every 6 Hours</MenuItem>
-                    <MenuItem value="9">Every 9 Hours</MenuItem>
-                    <MenuItem value="12">Every 12 Hours</MenuItem>
-                  </Select>
-                </FormControl>
-                
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={widgetSettings.enableGeoPatternBackground}
-                      onChange={(e) => handleSettingChange('enableGeoPatternBackground', e.target.checked)}
-                    />
-                  }
-                  label="Enable Geometric Background Patterns"
-                  sx={{ mb: 1 }}
-                />
-              </Grid>
-              
-              <Grid item xs={12} md={6}>
+              <Grid item xs={12}>
                 <Typography variant="subtitle1" gutterBottom>Color Customization</Typography>
                 
                 {[
