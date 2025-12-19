@@ -295,7 +295,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                     <Box
                       sx={{
                         position: 'absolute',
-                        top: 0,
+                        top: -20,
                         left: '50%',
                         transform: 'translateX(-50%)',
                         display: 'flex',
@@ -303,67 +303,59 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                         zIndex: 1002,
                       }}
                     >
-                      <IconButton
+                      <Box
                         onClick={(e) => {
                           e.stopPropagation();
                           handleResize(widget.id, 'top', true);
                         }}
-                        disabled={!canDecreaseHeight}
                         sx={{
-                          backgroundColor: 'var(--error)',
-                          color: 'white',
-                          width: 32,
-                          height: 32,
-                          fontSize: '1.25rem',
+                          fontSize: '1.5rem',
+                          cursor: canDecreaseHeight ? 'pointer' : 'not-allowed',
                           opacity: canDecreaseHeight ? 1 : 0.3,
+                          userSelect: 'none',
+                          filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
+                          transition: 'transform 0.1s ease, filter 0.1s ease',
                           '&:hover': {
-                            backgroundColor: 'var(--error)',
-                            filter: canDecreaseHeight ? 'brightness(1.2)' : 'none',
+                            transform: canDecreaseHeight ? 'scale(1.2)' : 'none',
+                            filter: canDecreaseHeight ? 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4))' : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
                           },
-                          '&:disabled': {
-                            backgroundColor: 'var(--error)',
-                            color: 'white',
-                            cursor: 'not-allowed',
-                          },
-                          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                          '&:active': {
+                            transform: canDecreaseHeight ? 'scale(1.1)' : 'none',
+                          }
                         }}
                       >
                         ➖
-                      </IconButton>
-                      <IconButton
+                      </Box>
+                      <Box
                         onClick={(e) => {
                           e.stopPropagation();
                           handleResize(widget.id, 'top', false);
                         }}
-                        disabled={!canIncreaseTop}
                         sx={{
-                          backgroundColor: 'var(--accent)',
-                          color: 'white',
-                          width: 32,
-                          height: 32,
-                          fontSize: '1.25rem',
+                          fontSize: '1.5rem',
+                          cursor: canIncreaseTop ? 'pointer' : 'not-allowed',
                           opacity: canIncreaseTop ? 1 : 0.3,
+                          userSelect: 'none',
+                          filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
+                          transition: 'transform 0.1s ease, filter 0.1s ease',
                           '&:hover': {
-                            backgroundColor: 'var(--accent)',
-                            filter: canIncreaseTop ? 'brightness(1.2)' : 'none',
+                            transform: canIncreaseTop ? 'scale(1.2)' : 'none',
+                            filter: canIncreaseTop ? 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4))' : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
                           },
-                          '&:disabled': {
-                            backgroundColor: 'var(--accent)',
-                            color: 'white',
-                            cursor: 'not-allowed',
-                          },
-                          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                          '&:active': {
+                            transform: canIncreaseTop ? 'scale(1.1)' : 'none',
+                          }
                         }}
                       >
                         ➕
-                      </IconButton>
+                      </Box>
                     </Box>
 
                     {/* Right Resize Buttons */}
                     <Box
                       sx={{
                         position: 'absolute',
-                        right: 0,
+                        right: -20,
                         top: '50%',
                         transform: 'translateY(-50%)',
                         display: 'flex',
@@ -372,67 +364,59 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                         zIndex: 1002,
                       }}
                     >
-                      <IconButton
+                      <Box
                         onClick={(e) => {
                           e.stopPropagation();
                           handleResize(widget.id, 'right', true);
                         }}
-                        disabled={!canDecreaseWidth}
                         sx={{
-                          backgroundColor: 'var(--error)',
-                          color: 'white',
-                          width: 32,
-                          height: 32,
-                          fontSize: '1.25rem',
+                          fontSize: '1.5rem',
+                          cursor: canDecreaseWidth ? 'pointer' : 'not-allowed',
                           opacity: canDecreaseWidth ? 1 : 0.3,
+                          userSelect: 'none',
+                          filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
+                          transition: 'transform 0.1s ease, filter 0.1s ease',
                           '&:hover': {
-                            backgroundColor: 'var(--error)',
-                            filter: canDecreaseWidth ? 'brightness(1.2)' : 'none',
+                            transform: canDecreaseWidth ? 'scale(1.2)' : 'none',
+                            filter: canDecreaseWidth ? 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4))' : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
                           },
-                          '&:disabled': {
-                            backgroundColor: 'var(--error)',
-                            color: 'white',
-                            cursor: 'not-allowed',
-                          },
-                          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                          '&:active': {
+                            transform: canDecreaseWidth ? 'scale(1.1)' : 'none',
+                          }
                         }}
                       >
                         ➖
-                      </IconButton>
-                      <IconButton
+                      </Box>
+                      <Box
                         onClick={(e) => {
                           e.stopPropagation();
                           handleResize(widget.id, 'right', false);
                         }}
-                        disabled={!canIncreaseWidth}
                         sx={{
-                          backgroundColor: 'var(--accent)',
-                          color: 'white',
-                          width: 32,
-                          height: 32,
-                          fontSize: '1.25rem',
+                          fontSize: '1.5rem',
+                          cursor: canIncreaseWidth ? 'pointer' : 'not-allowed',
                           opacity: canIncreaseWidth ? 1 : 0.3,
+                          userSelect: 'none',
+                          filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
+                          transition: 'transform 0.1s ease, filter 0.1s ease',
                           '&:hover': {
-                            backgroundColor: 'var(--accent)',
-                            filter: canIncreaseWidth ? 'brightness(1.2)' : 'none',
+                            transform: canIncreaseWidth ? 'scale(1.2)' : 'none',
+                            filter: canIncreaseWidth ? 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4))' : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
                           },
-                          '&:disabled': {
-                            backgroundColor: 'var(--accent)',
-                            color: 'white',
-                            cursor: 'not-allowed',
-                          },
-                          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                          '&:active': {
+                            transform: canIncreaseWidth ? 'scale(1.1)' : 'none',
+                          }
                         }}
                       >
                         ➕
-                      </IconButton>
+                      </Box>
                     </Box>
 
                     {/* Bottom Resize Buttons */}
                     <Box
                       sx={{
                         position: 'absolute',
-                        bottom: 0,
+                        bottom: -20,
                         left: '50%',
                         transform: 'translateX(-50%)',
                         display: 'flex',
@@ -440,60 +424,58 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                         zIndex: 1002,
                       }}
                     >
-                      <IconButton
+                      <Box
                         onClick={(e) => {
                           e.stopPropagation();
                           handleResize(widget.id, 'bottom', true);
                         }}
-                        disabled={!canDecreaseHeight}
                         sx={{
-                          backgroundColor: 'var(--error)',
-                          color: 'white',
-                          width: 32,
-                          height: 32,
-                          fontSize: '1.25rem',
+                          fontSize: '1.5rem',
+                          cursor: canDecreaseHeight ? 'pointer' : 'not-allowed',
                           opacity: canDecreaseHeight ? 1 : 0.3,
+                          userSelect: 'none',
+                          filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
+                          transition: 'transform 0.1s ease, filter 0.1s ease',
                           '&:hover': {
-                            backgroundColor: 'var(--error)',
-                            filter: canDecreaseHeight ? 'brightness(1.2)' : 'none',
+                            transform: canDecreaseHeight ? 'scale(1.2)' : 'none',
+                            filter: canDecreaseHeight ? 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4))' : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
                           },
-                          '&:disabled': {
-                            backgroundColor: 'var(--error)',
-                            color: 'white',
-                            cursor: 'not-allowed',
-                          },
-                          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                          '&:active': {
+                            transform: canDecreaseHeight ? 'scale(1.1)' : 'none',
+                          }
                         }}
                       >
                         ➖
-                      </IconButton>
-                      <IconButton
+                      </Box>
+                      <Box
                         onClick={(e) => {
                           e.stopPropagation();
                           handleResize(widget.id, 'bottom', false);
                         }}
                         sx={{
-                          backgroundColor: 'var(--accent)',
-                          color: 'white',
-                          width: 32,
-                          height: 32,
-                          fontSize: '1.25rem',
+                          fontSize: '1.5rem',
+                          cursor: 'pointer',
+                          userSelect: 'none',
+                          filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
+                          transition: 'transform 0.1s ease, filter 0.1s ease',
                           '&:hover': {
-                            backgroundColor: 'var(--accent)',
-                            filter: 'brightness(1.2)',
+                            transform: 'scale(1.2)',
+                            filter: 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4))',
                           },
-                          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                          '&:active': {
+                            transform: 'scale(1.1)',
+                          }
                         }}
                       >
                         ➕
-                      </IconButton>
+                      </Box>
                     </Box>
 
                     {/* Left Resize Buttons */}
                     <Box
                       sx={{
                         position: 'absolute',
-                        left: 0,
+                        left: -20,
                         top: '50%',
                         transform: 'translateY(-50%)',
                         display: 'flex',
@@ -502,60 +484,52 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                         zIndex: 1002,
                       }}
                     >
-                      <IconButton
+                      <Box
                         onClick={(e) => {
                           e.stopPropagation();
                           handleResize(widget.id, 'left', true);
                         }}
-                        disabled={!canDecreaseWidth}
                         sx={{
-                          backgroundColor: 'var(--error)',
-                          color: 'white',
-                          width: 32,
-                          height: 32,
-                          fontSize: '1.25rem',
+                          fontSize: '1.5rem',
+                          cursor: canDecreaseWidth ? 'pointer' : 'not-allowed',
                           opacity: canDecreaseWidth ? 1 : 0.3,
+                          userSelect: 'none',
+                          filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
+                          transition: 'transform 0.1s ease, filter 0.1s ease',
                           '&:hover': {
-                            backgroundColor: 'var(--error)',
-                            filter: canDecreaseWidth ? 'brightness(1.2)' : 'none',
+                            transform: canDecreaseWidth ? 'scale(1.2)' : 'none',
+                            filter: canDecreaseWidth ? 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4))' : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
                           },
-                          '&:disabled': {
-                            backgroundColor: 'var(--error)',
-                            color: 'white',
-                            cursor: 'not-allowed',
-                          },
-                          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                          '&:active': {
+                            transform: canDecreaseWidth ? 'scale(1.1)' : 'none',
+                          }
                         }}
                       >
                         ➖
-                      </IconButton>
-                      <IconButton
+                      </Box>
+                      <Box
                         onClick={(e) => {
                           e.stopPropagation();
                           handleResize(widget.id, 'left', false);
                         }}
-                        disabled={!canIncreaseLeft}
                         sx={{
-                          backgroundColor: 'var(--accent)',
-                          color: 'white',
-                          width: 32,
-                          height: 32,
-                          fontSize: '1.25rem',
+                          fontSize: '1.5rem',
+                          cursor: canIncreaseLeft ? 'pointer' : 'not-allowed',
                           opacity: canIncreaseLeft ? 1 : 0.3,
+                          userSelect: 'none',
+                          filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
+                          transition: 'transform 0.1s ease, filter 0.1s ease',
                           '&:hover': {
-                            backgroundColor: 'var(--accent)',
-                            filter: canIncreaseLeft ? 'brightness(1.2)' : 'none',
+                            transform: canIncreaseLeft ? 'scale(1.2)' : 'none',
+                            filter: canIncreaseLeft ? 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4))' : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
                           },
-                          '&:disabled': {
-                            backgroundColor: 'var(--accent)',
-                            color: 'white',
-                            cursor: 'not-allowed',
-                          },
-                          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                          '&:active': {
+                            transform: canIncreaseLeft ? 'scale(1.1)' : 'none',
+                          }
                         }}
                       >
                         ➕
-                      </IconButton>
+                      </Box>
                     </Box>
                   </>
                 )}
