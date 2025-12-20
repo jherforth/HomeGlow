@@ -1,7 +1,7 @@
 :root {
   --primary: #9E7FFF;
   --secondary: #38bdf8;
-  --accent: #f472b6;
+  --accent: #757575;
   --background: #171717;
   --surface: #262626;
   --card-bg: #2a2a2a;
@@ -13,7 +13,7 @@
   --warning: #f59e0b;
   --error: #ef4444;
   --accent-rgb: 158, 127, 255;
-  --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
   --backdrop-blur: blur(10px);
   --gradient: linear-gradient(135deg, var(--background) 0%, var(--surface) 100%);
   --bottom-bar-bg: rgba(38, 38, 38, 0.95);
