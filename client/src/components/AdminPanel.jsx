@@ -47,7 +47,8 @@ import {
   Upload,
   CloudDownload,
   Refresh,
-  Warning
+  Warning,
+  RestartAlt
 } from '@mui/icons-material';
 import { ChromePicker } from 'react-color';
 import axios from 'axios';
@@ -63,7 +64,8 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     calendar: { enabled: false, transparent: false },
     photos: { enabled: false, transparent: false },
     weather: { enabled: false, transparent: false },
-    widgetGallery: { enabled: true, transparent: false }, // Widget Gallery settings
+    widgetGallery: { enabled: true, transparent: false },
+    // Theme colors
     lightGradientStart: '#00ddeb',
     lightGradientEnd: '#ff6b6b',
     darkGradientStart: '#2e2767',
@@ -71,7 +73,32 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     lightButtonGradientStart: '#00ddeb',
     lightButtonGradientEnd: '#ff6b6b',
     darkButtonGradientStart: '#2e2767',
-    darkButtonGradientEnd: '#620808'
+    darkButtonGradientEnd: '#620808',
+    // Light theme colors
+    lightBackground: '#f5f5f5',
+    lightSurface: '#ffffff',
+    lightCardBg: '#ffffff',
+    lightText: '#171717',
+    lightTextSecondary: '#666666',
+    lightBorder: '#e0e0e0',
+    lightCardBorder: '#e5e5e5',
+    lightBottomBarBg: 'rgba(255, 255, 255, 0.95)',
+    // Dark theme colors
+    darkBackground: '#171717',
+    darkSurface: '#262626',
+    darkCardBg: '#2a2a2a',
+    darkText: '#FFFFFF',
+    darkTextSecondary: '#A3A3A3',
+    darkBorder: '#2F2F2F',
+    darkCardBorder: '#3a3a3a',
+    darkBottomBarBg: 'rgba(38, 38, 38, 0.95)',
+    // Accent colors (shared)
+    primary: '#9E7FFF',
+    secondary: '#38bdf8',
+    accent: '#f472b6',
+    success: '#10b981',
+    warning: '#f59e0b',
+    error: '#ef4444'
   });
   const [users, setUsers] = useState([]);
   const [chores, setChores] = useState([]);
@@ -100,15 +127,6 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     fetchChores();
     fetchPrizes();
     fetchUploadedWidgets();
-  }, []);
-
-  // Initialize from parent settings on mount
-  useEffect(() => {
-    const savedSettings = localStorage.getItem('widgetSettings');
-    if (savedSettings) {
-      const parsed = JSON.parse(savedSettings);
-      setLocalWidgetSettings(prev => ({ ...prev, ...parsed }));
-    }
   }, []);
 
   const fetchSettings = async () => {
@@ -212,15 +230,103 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const saveWidgetSettings = () => {
     localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
     setWidgetSettings(widgetSettings);
-    // Show success message
     setSaveMessage({ show: true, type: 'success', text: 'Widget settings saved successfully!' });
     setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
   };
 
-  // Only sync to parent when explicitly saved, not on every change
-  useEffect(() => {
-    // Don't sync on initial mount - wait for user action
-  }, [widgetSettings, setWidgetSettings]);
+  const saveInterfaceSettings = () => {
+    localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
+    setWidgetSettings(widgetSettings);
+    
+    // Apply CSS variables immediately
+    applyThemeColors();
+    
+    setSaveMessage({ show: true, type: 'success', text: 'Interface settings saved! Refresh page to see all changes.' });
+    setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+  };
+
+  const applyThemeColors = () => {
+    const root = document.documentElement;
+    
+    // Apply gradient colors
+    root.style.setProperty('--light-gradient-start', widgetSettings.lightGradientStart);
+    root.style.setProperty('--light-gradient-end', widgetSettings.lightGradientEnd);
+    root.style.setProperty('--dark-gradient-start', widgetSettings.darkGradientStart);
+    root.style.setProperty('--dark-gradient-end', widgetSettings.darkGradientEnd);
+    root.style.setProperty('--light-button-gradient-start', widgetSettings.lightButtonGradientStart);
+    root.style.setProperty('--light-button-gradient-end', widgetSettings.lightButtonGradientEnd);
+    root.style.setProperty('--dark-button-gradient-start', widgetSettings.darkButtonGradientStart);
+    root.style.setProperty('--dark-button-gradient-end', widgetSettings.darkButtonGradientEnd);
+    
+    // Apply accent colors
+    root.style.setProperty('--primary', widgetSettings.primary);
+    root.style.setProperty('--secondary', widgetSettings.secondary);
+    root.style.setProperty('--accent', widgetSettings.accent);
+    root.style.setProperty('--success', widgetSettings.success);
+    root.style.setProperty('--warning', widgetSettings.warning);
+    root.style.setProperty('--error', widgetSettings.error);
+    
+    // Apply theme-specific colors based on current theme
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    if (currentTheme === 'light') {
+      root.style.setProperty('--background', widgetSettings.lightBackground);
+      root.style.setProperty('--surface', widgetSettings.lightSurface);
+      root.style.setProperty('--card-bg', widgetSettings.lightCardBg);
+      root.style.setProperty('--text', widgetSettings.lightText);
+      root.style.setProperty('--text-secondary', widgetSettings.lightTextSecondary);
+      root.style.setProperty('--border', widgetSettings.lightBorder);
+      root.style.setProperty('--card-border', widgetSettings.lightCardBorder);
+      root.style.setProperty('--bottom-bar-bg', widgetSettings.lightBottomBarBg);
+    } else {
+      root.style.setProperty('--background', widgetSettings.darkBackground);
+      root.style.setProperty('--surface', widgetSettings.darkSurface);
+      root.style.setProperty('--card-bg', widgetSettings.darkCardBg);
+      root.style.setProperty('--text', widgetSettings.darkText);
+      root.style.setProperty('--text-secondary', widgetSettings.darkTextSecondary);
+      root.style.setProperty('--border', widgetSettings.darkBorder);
+      root.style.setProperty('--card-border', widgetSettings.darkCardBorder);
+      root.style.setProperty('--bottom-bar-bg', widgetSettings.darkBottomBarBg);
+    }
+  };
+
+  const resetToDefaults = () => {
+    const defaultSettings = {
+      lightGradientStart: '#00ddeb',
+      lightGradientEnd: '#ff6b6b',
+      darkGradientStart: '#2e2767',
+      darkGradientEnd: '#620808',
+      lightButtonGradientStart: '#00ddeb',
+      lightButtonGradientEnd: '#ff6b6b',
+      darkButtonGradientStart: '#2e2767',
+      darkButtonGradientEnd: '#620808',
+      lightBackground: '#f5f5f5',
+      lightSurface: '#ffffff',
+      lightCardBg: '#ffffff',
+      lightText: '#171717',
+      lightTextSecondary: '#666666',
+      lightBorder: '#e0e0e0',
+      lightCardBorder: '#e5e5e5',
+      lightBottomBarBg: 'rgba(255, 255, 255, 0.95)',
+      darkBackground: '#171717',
+      darkSurface: '#262626',
+      darkCardBg: '#2a2a2a',
+      darkText: '#FFFFFF',
+      darkTextSecondary: '#A3A3A3',
+      darkBorder: '#2F2F2F',
+      darkCardBorder: '#3a3a3a',
+      darkBottomBarBg: 'rgba(38, 38, 38, 0.95)',
+      primary: '#9E7FFF',
+      secondary: '#38bdf8',
+      accent: '#f472b6',
+      success: '#10b981',
+      warning: '#f59e0b',
+      error: '#ef4444'
+    };
+    
+    setLocalWidgetSettings(prev => ({ ...prev, ...defaultSettings }));
+    setSaveMessage({ show: true, type: 'info', text: 'Reset to default colors. Click Save to apply.' });
+    setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+  };
 
   const handleWidgetToggle = (widget, field) => {
     setLocalWidgetSettings(prev => ({
@@ -479,6 +585,60 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     return chores.filter(chore => chore.user_id === userId).length;
   };
 
+  const renderColorPicker = (key, label, category = '') => (
+    <Box key={key} sx={{ mb: 2 }}>
+      <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
+        {label}
+      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box
+          sx={{
+            width: 50,
+            height: 50,
+            backgroundColor: widgetSettings[key],
+            border: '2px solid var(--card-border)',
+            borderRadius: 2,
+            cursor: 'pointer',
+            transition: 'transform 0.2s',
+            '&:hover': {
+              transform: 'scale(1.05)',
+              boxShadow: '0 4px 8px rgba(0,0,0,0.2)'
+            }
+          }}
+          onClick={() => setShowColorPicker(prev => ({ ...prev, [key]: !prev[key] }))}
+        />
+        <TextField
+          size="small"
+          value={widgetSettings[key]}
+          onChange={(e) => handleSettingChange(key, e.target.value)}
+          sx={{ flex: 1 }}
+          placeholder="#000000"
+        />
+      </Box>
+      {showColorPicker[key] && (
+        <Box sx={{ position: 'relative', mt: 1 }}>
+          <Box
+            sx={{ 
+              position: 'fixed', 
+              top: 0, 
+              right: 0, 
+              bottom: 0, 
+              left: 0,
+              zIndex: 999
+            }}
+            onClick={() => setShowColorPicker(prev => ({ ...prev, [key]: false }))}
+          />
+          <Box sx={{ position: 'absolute', zIndex: 1000 }}>
+            <ChromePicker
+              color={widgetSettings[key]}
+              onChange={(color) => handleColorChange(key, color)}
+            />
+          </Box>
+        </Box>
+      )}
+    </Box>
+  );
+
   const tabs = [
     'APIs',
     'Widgets',
@@ -630,63 +790,161 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       {activeTab === 2 && (
         <Card>
           <CardContent>
-            <Typography variant="h6" gutterBottom>Interface Customization</Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+              <Typography variant="h6">Interface Customization</Typography>
+              <Button
+                variant="outlined"
+                startIcon={<RestartAlt />}
+                onClick={resetToDefaults}
+                size="small"
+              >
+                Reset to Defaults
+              </Button>
+            </Box>
+
+            {saveMessage.show && (
+              <Alert severity={saveMessage.type} sx={{ mb: 2 }}>
+                {saveMessage.text}
+              </Alert>
+            )}
+
+            <Alert severity="info" sx={{ mb: 3 }}>
+              Customize the appearance of your dashboard for both light and dark themes. Changes will be applied after saving and refreshing the page.
+            </Alert>
             
             <Grid container spacing={3}>
+              {/* Gradient Colors Section */}
               <Grid item xs={12}>
-                <Typography variant="subtitle1" gutterBottom>Color Customization</Typography>
-                
-                {[
-                  { key: 'lightGradientStart', label: 'Light Theme Gradient Start' },
-                  { key: 'lightGradientEnd', label: 'Light Theme Gradient End' },
-                  { key: 'darkGradientStart', label: 'Dark Theme Gradient Start' },
-                  { key: 'darkGradientEnd', label: 'Dark Theme Gradient End' },
-                  { key: 'lightButtonGradientStart', label: 'Light Button Gradient Start' },
-                  { key: 'lightButtonGradientEnd', label: 'Light Button Gradient End' },
-                  { key: 'darkButtonGradientStart', label: 'Dark Button Gradient Start' },
-                  { key: 'darkButtonGradientEnd', label: 'Dark Button Gradient End' }
-                ].map(({ key, label }) => (
-                  <Box key={key} sx={{ mb: 2 }}>
-                    <Typography variant="body2" sx={{ mb: 1 }}>{label}</Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Box
-                        sx={{
-                          width: 40,
-                          height: 40,
-                          backgroundColor: widgetSettings[key],
-                          border: '1px solid var(--card-border)',
-                          borderRadius: 1,
-                          cursor: 'pointer'
-                        }}
-                        onClick={() => setShowColorPicker(prev => ({ ...prev, [key]: !prev[key] }))}
-                      />
-                      <TextField
-                        size="small"
-                        value={widgetSettings[key]}
-                        onChange={(e) => handleSettingChange(key, e.target.value)}
-                        sx={{ flex: 1 }}
-                      />
-                    </Box>
-                    {showColorPicker[key] && (
-                      <Box sx={{ position: 'absolute', zIndex: 1000, mt: 1 }}>
-                        <Box
-                          sx={{ position: 'fixed', top: 0, right: 0, bottom: 0, left: 0 }}
-                          onClick={() => setShowColorPicker(prev => ({ ...prev, [key]: false }))}
-                        />
-                        <ChromePicker
-                          color={widgetSettings[key]}
-                          onChange={(color) => handleColorChange(key, color)}
-                        />
-                      </Box>
-                    )}
-                  </Box>
-                ))}
+                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  🌈 Background Gradients
+                </Typography>
+                <Divider sx={{ mb: 2 }} />
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle2" sx={{ mb: 2, color: 'text.secondary' }}>
+                      Light Theme Gradient
+                    </Typography>
+                    {renderColorPicker('lightGradientStart', 'Gradient Start Color')}
+                    {renderColorPicker('lightGradientEnd', 'Gradient End Color')}
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle2" sx={{ mb: 2, color: 'text.secondary' }}>
+                      Dark Theme Gradient
+                    </Typography>
+                    {renderColorPicker('darkGradientStart', 'Gradient Start Color')}
+                    {renderColorPicker('darkGradientEnd', 'Gradient End Color')}
+                  </Grid>
+                </Grid>
+              </Grid>
+
+              {/* Button Gradients Section */}
+              <Grid item xs={12}>
+                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  🔘 Button Gradients
+                </Typography>
+                <Divider sx={{ mb: 2 }} />
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle2" sx={{ mb: 2, color: 'text.secondary' }}>
+                      Light Theme Buttons
+                    </Typography>
+                    {renderColorPicker('lightButtonGradientStart', 'Button Gradient Start')}
+                    {renderColorPicker('lightButtonGradientEnd', 'Button Gradient End')}
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle2" sx={{ mb: 2, color: 'text.secondary' }}>
+                      Dark Theme Buttons
+                    </Typography>
+                    {renderColorPicker('darkButtonGradientStart', 'Button Gradient Start')}
+                    {renderColorPicker('darkButtonGradientEnd', 'Button Gradient End')}
+                  </Grid>
+                </Grid>
+              </Grid>
+
+              {/* Light Theme Colors */}
+              <Grid item xs={12}>
+                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  ☀️ Light Theme Colors
+                </Typography>
+                <Divider sx={{ mb: 2 }} />
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    {renderColorPicker('lightBackground', 'Background Color')}
+                    {renderColorPicker('lightSurface', 'Surface Color')}
+                    {renderColorPicker('lightCardBg', 'Card Background')}
+                    {renderColorPicker('lightBottomBarBg', 'Bottom Bar Background (with alpha)')}
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    {renderColorPicker('lightText', 'Primary Text Color')}
+                    {renderColorPicker('lightTextSecondary', 'Secondary Text Color')}
+                    {renderColorPicker('lightBorder', 'Border Color')}
+                    {renderColorPicker('lightCardBorder', 'Card Border Color')}
+                  </Grid>
+                </Grid>
+              </Grid>
+
+              {/* Dark Theme Colors */}
+              <Grid item xs={12}>
+                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  🌙 Dark Theme Colors
+                </Typography>
+                <Divider sx={{ mb: 2 }} />
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    {renderColorPicker('darkBackground', 'Background Color')}
+                    {renderColorPicker('darkSurface', 'Surface Color')}
+                    {renderColorPicker('darkCardBg', 'Card Background')}
+                    {renderColorPicker('darkBottomBarBg', 'Bottom Bar Background (with alpha)')}
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    {renderColorPicker('darkText', 'Primary Text Color')}
+                    {renderColorPicker('darkTextSecondary', 'Secondary Text Color')}
+                    {renderColorPicker('darkBorder', 'Border Color')}
+                    {renderColorPicker('darkCardBorder', 'Card Border Color')}
+                  </Grid>
+                </Grid>
+              </Grid>
+
+              {/* Accent Colors (Shared) */}
+              <Grid item xs={12}>
+                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  🎨 Accent Colors (Shared)
+                </Typography>
+                <Divider sx={{ mb: 2 }} />
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={4}>
+                    {renderColorPicker('primary', 'Primary Color')}
+                    {renderColorPicker('secondary', 'Secondary Color')}
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    {renderColorPicker('accent', 'Accent Color')}
+                    {renderColorPicker('success', 'Success Color')}
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    {renderColorPicker('warning', 'Warning Color')}
+                    {renderColorPicker('error', 'Error Color')}
+                  </Grid>
+                </Grid>
               </Grid>
             </Grid>
             
-            <Button variant="contained" onClick={saveWidgetSettings} sx={{ mt: 2 }}>
-              Save Interface Settings
-            </Button>
+            <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
+              <Button 
+                variant="contained" 
+                onClick={saveInterfaceSettings}
+                startIcon={<Save />}
+                sx={{ flex: 1 }}
+              >
+                Save Interface Settings
+              </Button>
+              <Button
+                variant="outlined"
+                onClick={() => window.location.reload()}
+                startIcon={<Refresh />}
+              >
+                Refresh Page
+              </Button>
+            </Box>
           </CardContent>
         </Card>
       )}
