@@ -15,14 +15,14 @@
 services:
   homeglow-backend:
     container_name: homeglow-backend
-    image: ghcr.io/jherforth/homeglow-backend:latest
+    image: ghcr.io/jherforth/main/homeglow-backend:latest
     ports:
       - "${BACKEND_PORT:-5000}:${BACKEND_PORT:-5000}"
     volumes:
       # Persistent data storage (SQLite database)
-      - /apps/homeglow/data:/app/data
+      - ./data:/app/data
       # User uploads (profile photos, custom widgets)
-      - /apps/homeglow/uploads:/app/uploads
+      - ./uploads:/app/uploads
     environment:
       - NODE_ENV=production
       - PORT=${BACKEND_PORT:-5000}
@@ -32,7 +32,7 @@ services:
 
   homeglow-frontend:
     container_name: homeglow-frontend
-    image: ghcr.io/jherforth/homeglow-frontend:latest
+    image: ghcr.io/jherforth/main/homeglow-frontend:latest
     ports:
       - "${FRONTEND_PORT:-3000}:${FRONTEND_PORT:-3000}"
     environment:
