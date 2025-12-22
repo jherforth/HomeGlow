@@ -5,7 +5,7 @@ services:
       context: ./server
       dockerfile: Dockerfile
       args:
-        - PORT=${BACKEND_PORT}:${BACKEND_PORT}
+        - PORT=${BACKEND_PORT}
     ports:
       - "${BACKEND_PORT}"
     volumes:
@@ -13,7 +13,7 @@ services:
       - /apps/homeglowtest/uploads:/app/uploads
     environment:
       - NODE_ENV=development
-      - PORT=${BACKEND_PORT}:${BACKEND_PORT}
+      - PORT=${BACKEND_PORT}
     networks:
       - homeglow-network
 
@@ -23,7 +23,7 @@ services:
       context: ./client
       dockerfile: Dockerfile.dev
     ports:
-      - "${FRONTEND_PORT}:${FRONTEND_PORT}"
+      - "${FRONTEND_PORT}"
     volumes:
       - /apps/homeglowtest/data:/app/data
       - /apps/homeglowtest/uploads:/app/uploads
