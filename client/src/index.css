@@ -17,7 +17,7 @@
   --backdrop-blur: blur(10px);
   --gradient: linear-gradient(135deg, var(--background) 0%, var(--surface) 100%);
   --bottom-bar-bg: rgba(38, 38, 38, 0.95);
-  --bottom-bar-height: 100px;
+  --bottom-bar-height: 40px;
   --container-background-override: var(--gradient);
   --dynamic-text-size: 16px;
   --dynamic-card-width: 300px;
