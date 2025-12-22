@@ -109,8 +109,8 @@ const App = () => {
         id: 'calendar-widget',
         defaultPosition: { x: 0, y: 0 },
         defaultSize: { width: 8, height: 5 },
-        minWidth: 6,
-        minHeight: 4,
+        minWidth: 2,
+        minHeight: 2,
         content: <CalendarWidget
           transparentBackground={widgetSettings.calendar.transparent}
           icsCalendarUrl={apiKeys.ICS_CALENDAR_URL}
@@ -123,7 +123,7 @@ const App = () => {
         id: 'weather-widget',
         defaultPosition: { x: 8, y: 0 },
         defaultSize: { width: 4, height: 3 },
-        minWidth: 3,
+        minWidth: 2,
         minHeight: 2,
         content: <WeatherWidget
           transparentBackground={widgetSettings.weather.transparent}
@@ -137,8 +137,8 @@ const App = () => {
         id: 'chores-widget',
         defaultPosition: { x: 0, y: 5 },
         defaultSize: { width: 6, height: 4 },
-        minWidth: 4,
-        minHeight: 3,
+        minWidth: 2,
+        minHeight: 2,
         content: <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />,
       });
     }
@@ -148,8 +148,8 @@ const App = () => {
         id: 'photos-widget',
         defaultPosition: { x: 6, y: 5 },
         defaultSize: { width: 6, height: 4 },
-        minWidth: 4,
-        minHeight: 3,
+        minWidth: 2,
+        minHeight: 2,
         content: <PhotoWidget transparentBackground={widgetSettings.photos.transparent} />,
       });
     }
@@ -189,7 +189,7 @@ const App = () => {
           left: 0,
           right: 0,
           width: '100%',
-          height: '60px',
+          height: '50px',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -207,7 +207,7 @@ const App = () => {
             src="/HomeGlowLogo.png" 
             alt="HomeGlow Logo" 
             style={{ 
-              height: '50px',
+              height: '40px',
               width: 'auto',
               objectFit: 'contain'
             }} 
