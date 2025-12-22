@@ -17,15 +17,15 @@ services:
     container_name: homeglow-backend
     image: ghcr.io/jherforth/homeglow-backend:latest
     ports:
-      - "${BACKEND_PORT:-5000}:${BACKEND_PORT:-5000}"
+      - "${BACKEND_PORT}"
     volumes:
       # Persistent data storage (SQLite database)
-      - /apps/homeglow/data:/app/data
+      - ./data:/app/data
       # User uploads (profile photos, custom widgets)
-      - /apps/homeglow/uploads:/app/uploads
+      - ./uploads:/app/uploads
     environment:
       - NODE_ENV=production
-      - PORT=${BACKEND_PORT:-5000}
+      - PORT=${BACKEND_PORT}
     networks:
       - homeglow-network
     restart: unless-stopped
@@ -34,13 +34,13 @@ services:
     container_name: homeglow-frontend
     image: ghcr.io/jherforth/homeglow-frontend:latest
     ports:
-      - "${FRONTEND_PORT:-3000}:${FRONTEND_PORT:-3000}"
+      - "${FRONTEND_PORT}"
     environment:
       # OpenWeatherMap API key (get from https://openweathermap.org/api) -optional and can be set in UI later
       - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
-      # Backend API URL - uses the host machine's ip address for internal communication (example: http://192.168.1.x)
-      - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}:${BACKEND_PORT:-5000}
-      - PORT=${FRONTEND_PORT:-3000}
+      # Backend API URL - uses the host machine's ip address for internal communication (example: http://192.168.x.x)
+      - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}:${BACKEND_PORT}
+      - PORT=${FRONTEND_PORT}
     depends_on:
       - homeglow-backend
     networks:
@@ -52,7 +52,7 @@ services:
     image: tailscale/tailscale:latest
     volumes:
       # Persistent Tailscale state
-      - /apps/homeglow/tailscale-state:/var/lib/tailscale
+      - ./tailscale-state:/var/lib/tailscale
     cap_add:
       - NET_ADMIN
     network_mode: host
