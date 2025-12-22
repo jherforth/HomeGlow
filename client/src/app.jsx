@@ -1,7 +1,7 @@
 // client/src/app.jsx
 import React, { useState, useEffect } from 'react';
 import { Container, IconButton, Box, Dialog, DialogContent } from '@mui/material';
-import { Brightness4, Brightness7 } from '@mui/icons-material';
+import { Brightness4, Brightness7, Lock, LockOpen } from '@mui/icons-material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RefreshIcon from '@mui/icons-material/Refresh';
 
@@ -17,6 +17,10 @@ import './index.css';
 
 const App = () => {
   const [theme, setTheme] = useState('light');
+  const [widgetsLocked, setWidgetsLocked] = useState(() => {
+    const saved = localStorage.getItem('widgetsLocked');
+    return saved !== null ? JSON.parse(saved) : true; // Default to locked
+  });
   const [widgetSettings, setWidgetSettings] = useState(() => {
     const defaultSettings = {
       chores: { enabled: false, transparent: false },
@@ -84,6 +88,12 @@ const App = () => {
     setTheme(newTheme);
     document.documentElement.setAttribute('data-theme', newTheme);
     localStorage.setItem('theme', newTheme);
+  };
+
+  const toggleWidgetsLock = () => {
+    const newLockState = !widgetsLocked;
+    setWidgetsLocked(newLockState);
+    localStorage.setItem('widgetsLocked', JSON.stringify(newLockState));
   };
 
   const toggleAdminPanel = () => {
@@ -162,7 +172,7 @@ const App = () => {
   return (
     <>
       <Box sx={{ width: '100%', minHeight: '100vh', position: 'relative' }}>
-        {widgets.length > 0 && <WidgetContainer widgets={widgets} />}
+        {widgets.length > 0 && <WidgetContainer widgets={widgets} locked={widgetsLocked} />}
 
         {widgetSettings.widgetGallery?.enabled && (
           <Container className="container" sx={{ mt: widgets.length > 0 ? 4 : 0 }}>
@@ -231,6 +241,19 @@ const App = () => {
             }}
           >
             {theme === 'light' ? <Brightness4 /> : <Brightness7 />}
+          </IconButton>
+
+          <IconButton
+            onClick={toggleWidgetsLock}
+            aria-label={widgetsLocked ? "Unlock widgets" : "Lock widgets"}
+            sx={{
+              color: widgetsLocked 
+                ? (theme === 'light' ? 'action.active' : 'white')
+                : 'var(--accent)',
+              transition: 'color 0.2s ease',
+            }}
+          >
+            {widgetsLocked ? <Lock /> : <LockOpen />}
           </IconButton>
 
           <IconButton
