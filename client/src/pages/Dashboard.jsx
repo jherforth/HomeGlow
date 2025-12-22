@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, IconButton, Switch, FormControlLabel } from '@mui/material';
-import { Settings } from '@mui/icons-material';
+import { Box, Typography, IconButton, Switch, FormControlLabel, Tooltip } from '@mui/material';
+import { Refresh, Brightness4, Brightness7 } from '@mui/icons-material';
 import WidgetContainer from '../components/WidgetContainer';
 import CalendarWidget from '../components/CalendarWidget';
 import WeatherWidget from '../components/WeatherWidget';
@@ -13,10 +13,14 @@ const Dashboard = () => {
     transparentBackground: false,
     icsCalendarUrl: ''
   });
-  const [showSettings, setShowSettings] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(true);
 
   useEffect(() => {
     fetchSettings();
+    // Load theme preference
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    setIsDarkMode(savedTheme === 'dark');
+    document.documentElement.setAttribute('data-theme', savedTheme);
   }, []);
 
   const fetchSettings = async () => {
@@ -42,6 +46,17 @@ const Dashboard = () => {
     } catch (error) {
       console.error('Error updating transparency setting:', error);
     }
+  };
+
+  const handleThemeToggle = () => {
+    const newTheme = isDarkMode ? 'light' : 'dark';
+    setIsDarkMode(!isDarkMode);
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('theme', newTheme);
+  };
+
+  const handleRefresh = () => {
+    window.location.reload();
   };
 
   const widgets = [
@@ -88,53 +103,99 @@ const Dashboard = () => {
   ];
 
   return (
-    <Box sx={{ width: '100%', minHeight: '100vh', position: 'relative' }}>
-      {/* Header */}
-      <Box
-        sx={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 1100,
-          backgroundColor: 'var(--surface)',
-          borderBottom: '1px solid var(--border)',
-          padding: 2,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          backdropFilter: 'blur(10px)',
-        }}
-      >
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'var(--text)' }}>
-            🏠 HomeGlow Dashboard
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Click any widget to select, drag to move, click plus icons to expand
-          </Typography>
-        </Box>
-        
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={settings.transparentBackground}
-                onChange={handleTransparencyToggle}
-                color="primary"
-              />
-            }
-            label="Transparent Widgets"
-          />
-          <IconButton
-            onClick={() => setShowSettings(!showSettings)}
-            sx={{ color: 'var(--text)' }}
-          >
-            <Settings />
-          </IconButton>
-        </Box>
-      </Box>
-
+    <Box sx={{ width: '100%', minHeight: '100vh', position: 'relative', paddingBottom: '40px' }}>
       {/* Widget Container */}
       <WidgetContainer widgets={widgets} />
+
+      {/* Fixed Bottom Settings Bar */}
+      <Box
+        sx={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: '40px',
+          zIndex: 1100,
+          backgroundColor: 'var(--bottom-bar-bg)',
+          borderTop: '1px solid var(--border)',
+          backdropFilter: 'blur(10px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 16px',
+          boxShadow: '0 -2px 8px rgba(0, 0, 0, 0.1)',
+        }}
+      >
+        {/* Left: Logo */}
+        <Box sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+          <img 
+            src="/HomeGlowLogo.png" 
+            alt="HomeGlow Logo" 
+            style={{ 
+              height: '36px',
+              width: 'auto',
+              objectFit: 'contain'
+            }} 
+          />
+        </Box>
+
+        {/* Right: Controls */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          {/* Transparent Widgets Toggle */}
+          <Tooltip title="Toggle transparent widget backgrounds" arrow>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={settings.transparentBackground}
+                  onChange={handleTransparencyToggle}
+                  color="primary"
+                  size="small"
+                />
+              }
+              label={
+                <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'var(--text)' }}>
+                  Transparent
+                </Typography>
+              }
+              sx={{ margin: 0 }}
+            />
+          </Tooltip>
+
+          {/* Theme Toggle */}
+          <Tooltip title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"} arrow>
+            <IconButton
+              onClick={handleThemeToggle}
+              size="small"
+              sx={{ 
+                color: 'var(--text)',
+                padding: '6px',
+                '&:hover': {
+                  backgroundColor: 'rgba(158, 127, 255, 0.1)',
+                }
+              }}
+            >
+              {isDarkMode ? <Brightness7 fontSize="small" /> : <Brightness4 fontSize="small" />}
+            </IconButton>
+          </Tooltip>
+
+          {/* Refresh Button */}
+          <Tooltip title="Refresh dashboard" arrow>
+            <IconButton
+              onClick={handleRefresh}
+              size="small"
+              sx={{ 
+                color: 'var(--text)',
+                padding: '6px',
+                '&:hover': {
+                  backgroundColor: 'rgba(158, 127, 255, 0.1)',
+                }
+              }}
+            >
+              <Refresh fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      </Box>
     </Box>
   );
 };
