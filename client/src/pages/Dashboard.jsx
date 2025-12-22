@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Typography, IconButton, Switch, FormControlLabel, Tooltip } from '@mui/material';
-import { Refresh, Brightness4, Brightness7 } from '@mui/icons-material';
+import { Refresh, Brightness4, Brightness7, Lock, LockOpen } from '@mui/icons-material';
 import WidgetContainer from '../components/WidgetContainer';
 import CalendarWidget from '../components/CalendarWidget';
 import WeatherWidget from '../components/WeatherWidget';
@@ -14,6 +14,11 @@ const Dashboard = () => {
     icsCalendarUrl: ''
   });
   const [isDarkMode, setIsDarkMode] = useState(true);
+  const [isLocked, setIsLocked] = useState(() => {
+    // Load lock state from localStorage, default to true (locked)
+    const savedLockState = localStorage.getItem('widgetsLocked');
+    return savedLockState === null ? true : savedLockState === 'true';
+  });
 
   useEffect(() => {
     fetchSettings();
@@ -55,6 +60,12 @@ const Dashboard = () => {
     localStorage.setItem('theme', newTheme);
   };
 
+  const handleLockToggle = () => {
+    const newLockState = !isLocked;
+    setIsLocked(newLockState);
+    localStorage.setItem('widgetsLocked', newLockState.toString());
+  };
+
   const handleRefresh = () => {
     window.location.reload();
   };
@@ -63,18 +74,18 @@ const Dashboard = () => {
     {
       id: 'calendar-widget',
       defaultPosition: { x: 0, y: 0 },
-      defaultSize: { width: 8, height: 5 },
-      minWidth: 6,
-      minHeight: 4,
+      defaultSize: { width: 6, height: 4 },
+      minWidth: 2,
+      minHeight: 2,
       content: <CalendarWidget transparentBackground={settings.transparentBackground} />,
       onPositionChange: (pos) => console.log('Calendar moved to:', pos),
       onSizeChange: (size) => console.log('Calendar resized to:', size),
     },
     {
       id: 'weather-widget',
-      defaultPosition: { x: 8, y: 0 },
-      defaultSize: { width: 4, height: 3 },
-      minWidth: 3,
+      defaultPosition: { x: 6, y: 0 },
+      defaultSize: { width: 3, height: 3 },
+      minWidth: 2,
       minHeight: 2,
       content: <WeatherWidget transparentBackground={settings.transparentBackground} />,
       onPositionChange: (pos) => console.log('Weather moved to:', pos),
@@ -82,10 +93,10 @@ const Dashboard = () => {
     },
     {
       id: 'chores-widget',
-      defaultPosition: { x: 0, y: 5 },
+      defaultPosition: { x: 0, y: 4 },
       defaultSize: { width: 6, height: 4 },
-      minWidth: 4,
-      minHeight: 3,
+      minWidth: 2,
+      minHeight: 2,
       content: <ChoreWidget transparentBackground={settings.transparentBackground} />,
       onPositionChange: (pos) => console.log('Chores moved to:', pos),
       onSizeChange: (size) => console.log('Chores resized to:', size),
@@ -94,8 +105,8 @@ const Dashboard = () => {
       id: 'photos-widget',
       defaultPosition: { x: 6, y: 5 },
       defaultSize: { width: 6, height: 4 },
-      minWidth: 4,
-      minHeight: 3,
+      minWidth: 2,
+      minHeight: 2,
       content: <PhotoWidget transparentBackground={settings.transparentBackground} />,
       onPositionChange: (pos) => console.log('Photos moved to:', pos),
       onSizeChange: (size) => console.log('Photos resized to:', size),
@@ -105,7 +116,7 @@ const Dashboard = () => {
   return (
     <Box sx={{ width: '100%', minHeight: '100vh', position: 'relative', paddingBottom: '40px' }}>
       {/* Widget Container */}
-      <WidgetContainer widgets={widgets} />
+      <WidgetContainer widgets={widgets} locked={isLocked} />
 
       {/* Fixed Bottom Settings Bar */}
       <Box
@@ -141,6 +152,23 @@ const Dashboard = () => {
 
         {/* Right: Controls */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          {/* Lock/Unlock Toggle */}
+          <Tooltip title={isLocked ? "Unlock widgets to edit layout" : "Lock widgets to prevent changes"} arrow>
+            <IconButton
+              onClick={handleLockToggle}
+              size="small"
+              sx={{ 
+                color: isLocked ? 'var(--accent)' : 'var(--text)',
+                padding: '6px',
+                '&:hover': {
+                  backgroundColor: 'rgba(158, 127, 255, 0.1)',
+                }
+              }}
+            >
+              {isLocked ? <Lock fontSize="small" /> : <LockOpen fontSize="small" />}
+            </IconButton>
+          </Tooltip>
+
           {/* Transparent Widgets Toggle */}
           <Tooltip title="Toggle transparent widget backgrounds" arrow>
             <FormControlLabel
