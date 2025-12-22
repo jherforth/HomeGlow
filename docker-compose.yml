@@ -20,7 +20,7 @@ services:
       context: ./server
       dockerfile: Dockerfile
     ports:
-      - "${BACKEND_PORT}"
+      - "${BACKEND_PORT:-5000}:${BACKEND_PORT:-5000}"
     volumes:
       # Persistent data storage (SQLite database)
       - ./data:/app/data
@@ -28,7 +28,7 @@ services:
       - ./uploads:/app/uploads
     environment:
       - NODE_ENV=production
-      - PORT=${BACKEND_PORT}
+      - PORT=${BACKEND_PORT:-5000}
     networks:
       - homeglow-network
     restart: unless-stopped
@@ -43,12 +43,12 @@ services:
         - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
         - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}
     ports:
-      - "${FRONTEND_PORT}"
+      - "${FRONTEND_PORT:-3000}:3000"
     environment:
       # OpenWeatherMap API key (get from https://openweathermap.org/api) -optional and can be set in UI later
       - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
       # Backend API URL - uses the host machine's ip address for internal communication (example: http://192.168.x.x)
-      - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}:${BACKEND_PORT}
+      - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}:${BACKEND_PORT:-5000}
     depends_on:
       - homeglow-backend
     networks:
