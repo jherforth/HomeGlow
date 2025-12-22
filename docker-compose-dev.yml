@@ -7,7 +7,7 @@ services:
       args:
         - PORT=${BACKEND_PORT:-5001}
     ports:
-      - "${BACKEND_PORT}"
+      - "${BACKEND_PORT:-5001}:${BACKEND_PORT:-5001}"
     volumes:
       - /apps/homeglowtest/data:/app/data
       - /apps/homeglowtest/uploads:/app/uploads
