@@ -526,27 +526,36 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                     bgcolor: isToday ? 'rgba(var(--accent-rgb), 0.1)' : 'transparent',
                     opacity: isCurrentMonth ? 1 : 0.4,
                     display: 'flex',
-                    flexDirection: 'column',
+                    flexDirection: 'row',
                     minHeight: 0,
                     overflow: 'hidden',
+                    gap: 1,
                     '&:hover': {
                       bgcolor: isToday ? 'rgba(var(--accent-rgb), 0.15)' : 'rgba(0, 0, 0, 0.05)'
                     }
                   }}
                 >
-                  <Typography
-                    variant="caption"
+                  <Box
                     sx={{
-                      fontWeight: 'bold',
-                      color: isToday ? 'var(--accent)' : 'inherit',
-                      mb: 0.5,
-                      textAlign: 'center'
+                      display: 'flex',
+                      alignItems: 'center',
+                      minWidth: '24px',
+                      flexShrink: 0
                     }}
                   >
-                    {day.format('D')}
-                  </Typography>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        fontWeight: 'bold',
+                        color: isToday ? 'var(--accent)' : 'inherit',
+                        fontSize: '0.875rem'
+                      }}
+                    >
+                      {day.format('D')}
+                    </Typography>
+                  </Box>
 
-                  <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+                  <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, minWidth: 0 }}>
                     {dayEvents.slice(0, 3).map((event, eventIndex) => (
                       <Box
                         key={eventIndex}
