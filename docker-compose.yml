@@ -23,9 +23,9 @@ services:
       - "${BACKEND_PORT:-5000}:${BACKEND_PORT:-5000}"
     volumes:
       # Persistent data storage (SQLite database)
-      - ./data:/app/data
+      - /apps/homeglow/data:/app/data
       # User uploads (profile photos, custom widgets)
-      - ./uploads:/app/uploads
+      - /apps/homeglow/uploads:/app/uploads
     environment:
       - NODE_ENV=production
       - PORT=${BACKEND_PORT:-5000}
@@ -47,7 +47,7 @@ services:
     environment:
       # OpenWeatherMap API key (get from https://openweathermap.org/api) -optional and can be set in UI later
       - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
-      # Backend API URL - uses the host machine's ip address for internal communication (example: http://192.168.x.x)
+      # Backend API URL - uses the host machine's ip address for internal communication (example: http://192.168.1.x)
       - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}:${BACKEND_PORT:-5000}
     depends_on:
       - homeglow-backend
