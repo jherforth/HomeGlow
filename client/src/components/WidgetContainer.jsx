@@ -9,7 +9,7 @@ import 'react-resizable/css/styles.css';
  * Container component that manages multiple draggable widgets
  * Provides a responsive grid system for optimal layout
  */
-const WidgetContainer = ({ children, widgets = [] }) => {
+const WidgetContainer = ({ children, widgets = [], locked = true }) => {
   const [containerWidth, setContainerWidth] = useState(1200);
   const [gridCols, setGridCols] = useState(12);
   const [selectedWidget, setSelectedWidget] = useState(null);
@@ -69,8 +69,17 @@ const WidgetContainer = ({ children, widgets = [] }) => {
     setLayout(initialLayout);
   }, [widgets]);
 
+  // Deselect widget when locked
+  useEffect(() => {
+    if (locked) {
+      setSelectedWidget(null);
+    }
+  }, [locked]);
+
   // Save layout to localStorage
   const handleLayoutChange = (newLayout) => {
+    if (locked) return; // Don't save if locked
+    
     setLayout(newLayout);
     newLayout.forEach((item) => {
       localStorage.setItem(`widget-layout-${item.i}`, JSON.stringify({
@@ -84,6 +93,8 @@ const WidgetContainer = ({ children, widgets = [] }) => {
 
   // Handle resize button clicks (both increment and decrement)
   const handleResize = (widgetId, direction, isDecrement = false) => {
+    if (locked) return; // Don't resize if locked
+    
     setLayout((currentLayout) => {
       const newLayout = currentLayout.map((item) => {
         if (item.i === widgetId) {
@@ -164,6 +175,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
   };
 
   const handleWidgetClick = (widgetId, e) => {
+    if (locked) return; // Don't select if locked
     // Select widget when clicking anywhere on it
     setSelectedWidget(widgetId);
   };
@@ -209,7 +221,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
           rowHeight={100}
           width={containerWidth}
           onLayoutChange={handleLayoutChange}
-          isDraggable={true}
+          isDraggable={!locked}
           isResizable={false}
           compactType={null}
           preventCollision={true}
@@ -219,7 +231,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
           draggableHandle=".drag-handle"
         >
           {widgets.map((widget) => {
-            const isSelected = selectedWidget === widget.id;
+            const isSelected = !locked && selectedWidget === widget.id;
             const currentLayout = layout.find(l => l.i === widget.id);
             const canDecreaseWidth = currentLayout && currentLayout.w > currentLayout.minW;
             const canDecreaseHeight = currentLayout && currentLayout.h > currentLayout.minH;
@@ -245,18 +257,23 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                     : '0 2px 8px rgba(0, 0, 0, 0.1)',
                   backgroundColor: 'var(--card-bg)',
                   overflow: 'hidden',
+                  cursor: locked ? 'default' : (isSelected ? 'move' : 'pointer'),
                   '&:hover': {
-                    border: isSelected
-                      ? '3px solid var(--accent)'
-                      : '3px solid rgba(244, 114, 182, 0.3)',
-                    boxShadow: isSelected
-                      ? '0 8px 32px rgba(244, 114, 182, 0.3)'
-                      : '0 4px 16px rgba(0, 0, 0, 0.15)',
+                    border: locked 
+                      ? '3px solid transparent'
+                      : (isSelected 
+                        ? '3px solid var(--accent)' 
+                        : '3px solid rgba(244, 114, 182, 0.3)'),
+                    boxShadow: locked
+                      ? '0 2px 8px rgba(0, 0, 0, 0.1)'
+                      : (isSelected 
+                        ? '0 8px 32px rgba(244, 114, 182, 0.3)' 
+                        : '0 4px 16px rgba(0, 0, 0, 0.15)'),
                   }
                 }}
               >
-                {/* Invisible Drag Handle - Covers entire widget when selected */}
-                {isSelected && (
+                {/* Invisible Drag Handle - Covers entire widget when selected and unlocked */}
+                {isSelected && !locked && (
                   <Box
                     className="drag-handle"
                     sx={{
@@ -272,8 +289,8 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                   />
                 )}
 
-                {/* Resize Buttons - Only visible when selected */}
-                {isSelected && (
+                {/* Resize Buttons - Only visible when selected and unlocked */}
+                {isSelected && !locked && (
                   <>
                     {/* Top Resize Buttons */}
                     <Box
