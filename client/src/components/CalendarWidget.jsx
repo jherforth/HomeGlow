@@ -734,27 +734,51 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                     border: '1px solid var(--card-border)',
                     borderRadius: 1,
                     mb: 1,
-                    bgcolor: 'rgba(var(--accent-rgb), 0.05)'
+                    bgcolor: 'rgba(var(--accent-rgb), 0.05)',
+                    flexDirection: 'column',
+                    alignItems: 'flex-start',
+                    p: 2
                   }}
                 >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, width: '100%' }}>
+                    <Box
+                      sx={{
+                        width: 16,
+                        height: 16,
+                        borderRadius: '50%',
+                        backgroundColor: event.source_color || eventColors.backgroundColor,
+                        flexShrink: 0
+                      }}
+                    />
+                    <Chip 
+                      label={event.source_name || 'Unknown Calendar'} 
+                      size="small"
+                      sx={{
+                        backgroundColor: event.source_color || eventColors.backgroundColor,
+                        color: '#ffffff',
+                        fontWeight: 'bold',
+                        fontSize: '0.75rem'
+                      }}
+                    />
+                  </Box>
                   <ListItemText
                     primary={
-                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                      <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
                         {event.title}
                       </Typography>
                     }
                     secondary={
                       <Box>
-                        <Typography variant="body1" sx={{ mb: 1 }}>
+                        <Typography variant="body1" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
                           🕐 {moment(event.start).format('h:mm A')} - {moment(event.end).format('h:mm A')}
                         </Typography>
                         {event.location && (
-                          <Typography variant="body2" sx={{ mb: 1 }}>
+                          <Typography variant="body2" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
                             📍 {event.location}
                           </Typography>
                         )}
                         {event.description && (
-                          <Typography variant="body2" color="text.secondary">
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                             {event.description}
                           </Typography>
                         )}
