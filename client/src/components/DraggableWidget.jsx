@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Box } from '@mui/material';
-import { DragIndicator } from '@mui/icons-material';
 import GridLayout from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 
@@ -73,10 +72,8 @@ const DraggableWidget = ({
   };
 
   const handleClick = (e) => {
-    // Only select if clicking on the widget itself
-    if (e.target === e.currentTarget || e.target.closest('.drag-handle')) {
-      setIsSelected(true);
-    }
+    // Select widget on click
+    setIsSelected(true);
   };
 
   const handleClickOutside = (e) => {
@@ -145,7 +142,6 @@ const DraggableWidget = ({
         margin={[16, 16]}
         containerPadding={[0, 0]}
         useCSSTransforms={true}
-        draggableHandle=".drag-handle"
         resizeHandles={['s']}
       >
         <Box
@@ -163,6 +159,7 @@ const DraggableWidget = ({
               : '0 2px 8px rgba(0, 0, 0, 0.1)',
             backgroundColor: 'var(--card-bg)',
             overflow: 'hidden',
+            cursor: isSelected ? 'move' : 'pointer',
             '&:hover': {
               border: isSelected 
                 ? '3px solid var(--accent)' 
@@ -173,40 +170,6 @@ const DraggableWidget = ({
             }
           }}
         >
-          {/* Drag Handle - Only visible when selected */}
-          {isSelected && (
-            <Box
-              className="drag-handle"
-              sx={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                backgroundColor: 'var(--accent)',
-                color: 'white',
-                padding: '8px 16px',
-                cursor: 'move',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 1,
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
-                zIndex: 1001,
-                userSelect: 'none',
-                borderRadius: '8px 8px 0 0',
-                '&:hover': {
-                  filter: 'brightness(1.1)',
-                }
-              }}
-            >
-              <DragIndicator />
-              <Box sx={{ fontSize: '0.875rem', fontWeight: 'bold' }}>
-                Drag to Move Widget
-              </Box>
-            </Box>
-          )}
-
-
           {/* Grid overlay - Only visible when selected */}
           {isSelected && (
             <Box
@@ -233,7 +196,6 @@ const DraggableWidget = ({
               width: '100%',
               height: '100%',
               overflow: 'auto',
-              paddingTop: isSelected ? '40px' : '0',
               pointerEvents: isSelected ? 'none' : 'auto',
             }}
           >
