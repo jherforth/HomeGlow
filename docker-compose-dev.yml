@@ -5,15 +5,15 @@ services:
       context: ./server
       dockerfile: Dockerfile
       args:
-        - PORT=${BACKEND_PORT:-5001}
+        - PORT=${BACKEND_PORT}
     ports:
       - "${BACKEND_PORT}"
     volumes:
-      - /apps/homeglowtest/data:/app/data
-      - /apps/homeglowtest/uploads:/app/uploads
+      - ./data:/app/data
+      - ./uploads:/app/uploads
     environment:
       - NODE_ENV=development
-      - PORT=${BACKEND_PORT:-5001}
+      - PORT=${BACKEND_PORT}
     networks:
       - homeglow-network
 
@@ -23,13 +23,13 @@ services:
       context: ./client
       dockerfile: Dockerfile.dev
     ports:
-      - "${FRONTEND_PORT:-3001}:3001"
+      - "${FRONTEND_PORT}"
     volumes:
-      - /apps/homeglowtest/data:/app/data
-      - /apps/homeglowtest/uploads:/app/uploads
+      - ./data:/app/data
+      - ./uploads:/app/uploads
     environment:
       - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
-      - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}:${BACKEND_PORT:-5001}
+      - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}:${BACKEND_PORT}
     depends_on:
       - backend-test
     networks:
