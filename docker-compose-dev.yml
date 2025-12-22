@@ -38,6 +38,3 @@ services:
 networks:
   homeglow-network:
     driver: bridge
-networks:
-  homeglow-network:
-    driver: bridge
