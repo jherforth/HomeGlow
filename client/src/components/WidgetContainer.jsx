@@ -255,7 +255,7 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                   }
                 }}
               >
-                {/* Drag Handle - Always visible when selected */}
+                {/* Invisible Drag Handle - Covers entire widget when selected */}
                 {isSelected && (
                   <Box
                     className="drag-handle"
@@ -264,28 +264,12 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                       top: 0,
                       left: 0,
                       right: 0,
-                      backgroundColor: 'var(--accent)',
-                      color: 'white',
-                      padding: '8px 16px',
+                      bottom: 0,
                       cursor: 'move',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 1,
-                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
                       zIndex: 1001,
                       userSelect: 'none',
-                      borderRadius: '8px 8px 0 0',
-                      '&:hover': {
-                        filter: 'brightness(1.1)',
-                      }
                     }}
-                  >
-                    <DragIndicator />
-                    <Box sx={{ fontSize: '0.875rem', fontWeight: 'bold' }}>
-                      Drag to Move Widget
-                    </Box>
-                  </Box>
+                  />
                 )}
 
                 {/* Resize Buttons - Only visible when selected */}
@@ -541,7 +525,6 @@ const WidgetContainer = ({ children, widgets = [] }) => {
                     width: '100%',
                     height: '100%',
                     overflow: 'auto',
-                    paddingTop: isSelected ? '48px' : '0',
                     pointerEvents: isSelected ? 'none' : 'auto',
                     display: 'flex',
                     flexDirection: 'column',
