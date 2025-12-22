@@ -7,7 +7,7 @@ const DraggableWidget = ({
   id, 
   children, 
   defaultPosition = { x: 0, y: 0 },
-  defaultSize = { width: 6, height: 4 }, // Grid units (cols x rows)
+  defaultSize = { width: 3, height: 2 }, // Grid units (cols x rows)
   minWidth = 3,
   minHeight = 2,
   onPositionChange,
