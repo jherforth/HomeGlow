@@ -1,14 +1,14 @@
 # HomeGlow Production Deployment
-# Uses pre-built images from GitHub Container Registry (GHCR)
+# Uses environment variables from .env file for flexible configuration
 #
 # Quick Start:
-# 1. Customize environment variables below (or set via .env file)
+# 1. Copy .env.example to .env and customize ports if needed
 # 2. Create data directories: sudo mkdir -p /apps/homeglow/{data,uploads} && sudo chmod -R 777 /apps/homeglow
-# 3. Run: docker-compose pull && docker-compose up -d
+# 3. Run: docker-compose up -d
 #
 # Updating:
-# - Pull latest images: docker-compose pull
-# - Restart services: docker-compose up -d
+# - Rebuild with new ports: docker-compose up -d --build
+# - Pull latest images: docker-compose pull && docker-compose up -d
 
 services:
   homeglow-backend:
@@ -17,6 +17,8 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
+      args:
+        - PORT=${BACKEND_PORT:-5000}
     ports:
       - "${BACKEND_PORT:-5000}:${BACKEND_PORT:-5000}"
     volumes:
@@ -31,7 +33,7 @@ services:
       - homeglow-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/api/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${BACKEND_PORT:-5000}/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -46,12 +48,13 @@ services:
       args:
         - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
         - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}
+        - FRONTEND_PORT=${FRONTEND_PORT:-3000}
+        - BACKEND_SERVICE=homeglow-backend
+        - BACKEND_PORT=${BACKEND_PORT:-5000}
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+      - "${FRONTEND_PORT:-3000}:${FRONTEND_PORT:-3000}"
     environment:
-      # OpenWeatherMap API key (get from https://openweathermap.org/api) - optional and can be set in UI later
       - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
-      # Backend API URL - uses the host machine's IP address for internal communication (example: http://192.168.1.x)
       - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}:${BACKEND_PORT:-5000}
     depends_on:
       homeglow-backend:
@@ -60,7 +63,7 @@ services:
       - homeglow-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${FRONTEND_PORT:-3000}/"]
       interval: 30s
       timeout: 10s
       retries: 3
