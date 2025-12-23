@@ -10,6 +10,7 @@ import WeatherWidget from '../components/WeatherWidget';
 const Dashboard = () => {
   const [locked, setLocked] = useState(true);
   const [weatherApiKey, setWeatherApiKey] = useState('');
+  const [widgetSizes, setWidgetSizes] = useState({});
 
   useEffect(() => {
     // Load weather API key from localStorage
@@ -18,6 +19,47 @@ const Dashboard = () => {
       setWeatherApiKey(settings.weather.apiKey);
     }
   }, []);
+
+  // Load saved layouts and initialize widget sizes
+  useEffect(() => {
+    console.log('Dashboard: Initializing widget sizes from localStorage');
+    const sizes = {};
+    
+    // Define default widgets
+    const defaultWidgets = [
+      { id: 'calendar', defaultSize: { width: 4, height: 4 } },
+      { id: 'chores', defaultSize: { width: 4, height: 4 } },
+      { id: 'photos', defaultSize: { width: 4, height: 4 } },
+      { id: 'weather', defaultSize: { width: 4, height: 4 } }
+    ];
+
+    defaultWidgets.forEach(widget => {
+      const savedLayout = localStorage.getItem(`widget-layout-${widget.id}`);
+      if (savedLayout) {
+        const parsed = JSON.parse(savedLayout);
+        sizes[widget.id] = { width: parsed.w, height: parsed.h };
+        console.log(`Dashboard: Loaded size for ${widget.id}:`, sizes[widget.id]);
+      } else {
+        sizes[widget.id] = widget.defaultSize;
+        console.log(`Dashboard: Using default size for ${widget.id}:`, sizes[widget.id]);
+      }
+    });
+    
+    setWidgetSizes(sizes);
+  }, []);
+
+  // Handle layout changes from WidgetContainer
+  const handleLayoutChange = (layout) => {
+    console.log('Dashboard: Layout changed:', layout);
+    
+    const newSizes = {};
+    layout.forEach(item => {
+      newSizes[item.i] = { width: item.w, height: item.h };
+      console.log(`Dashboard: Updated size for ${item.i}:`, newSizes[item.i]);
+    });
+    
+    setWidgetSizes(newSizes);
+  };
 
   // Define widgets with their configurations
   const widgets = [
@@ -53,28 +95,10 @@ const Dashboard = () => {
       minHeight: 2,
       content: <WeatherWidget 
         weatherApiKey={weatherApiKey}
-        widgetSize={{ width: 4, height: 4 }} // This will be updated dynamically
+        widgetSize={widgetSizes['weather'] || { width: 4, height: 4 }}
       />
     }
   ];
-
-  // Update widget sizes dynamically based on layout
-  const [widgetSizes, setWidgetSizes] = useState({});
-
-  useEffect(() => {
-    // Load saved layouts and update widget sizes
-    const sizes = {};
-    widgets.forEach(widget => {
-      const savedLayout = localStorage.getItem(`widget-layout-${widget.id}`);
-      if (savedLayout) {
-        const parsed = JSON.parse(savedLayout);
-        sizes[widget.id] = { width: parsed.w, height: parsed.h };
-      } else {
-        sizes[widget.id] = widget.defaultSize;
-      }
-    });
-    setWidgetSizes(sizes);
-  }, []);
 
   // Update widgets with dynamic sizes
   const widgetsWithSizes = widgets.map(widget => {
@@ -82,6 +106,7 @@ const Dashboard = () => {
     
     // Special handling for weather widget to pass size prop
     if (widget.id === 'weather') {
+      console.log('Dashboard: Rendering weather widget with size:', size);
       return {
         ...widget,
         content: <WeatherWidget 
@@ -94,14 +119,7 @@ const Dashboard = () => {
     return widget;
   });
 
-  const handleLayoutChange = (layout) => {
-    // Update widget sizes when layout changes
-    const newSizes = {};
-    layout.forEach(item => {
-      newSizes[item.i] = { width: item.w, height: item.h };
-    });
-    setWidgetSizes(newSizes);
-  };
+  console.log('Dashboard: Current widget sizes:', widgetSizes);
 
   return (
     <Box sx={{ 
