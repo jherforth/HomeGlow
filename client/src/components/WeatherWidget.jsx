@@ -16,37 +16,26 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
   const [error, setError] = useState(null);
   const [chartType, setChartType] = useState('temperature');
 
-  // Debug logging for widget size
-  useEffect(() => {
-    console.log('WeatherWidget received widgetSize:', widgetSize);
-  }, [widgetSize]);
-
   // Determine layout based on widget size
   const getLayoutType = () => {
     const { width: w, height: h } = widgetSize;
     
-    console.log(`Calculating layout for size: ${w}x${h}`);
-    
     // Compact: Small widgets (2 cols or less, 2 rows or less)
     if (w <= 2 || h <= 2) {
-      console.log('Layout: COMPACT');
       return 'compact';
     }
     
     // Medium: Medium-sized widgets (3 cols, 2-4 rows OR 4 cols, 2-3 rows)
     if ((w === 3 && h >= 2 && h <= 4) || (w === 4 && h >= 2 && h <= 3)) {
-      console.log('Layout: MEDIUM');
       return 'medium';
     }
     
     // Full: Large widgets (4+ cols and 4+ rows)
     if (w >= 4 && h >= 4) {
-      console.log('Layout: FULL');
       return 'full';
     }
     
     // Default to medium for edge cases
-    console.log('Layout: MEDIUM (default)');
     return 'medium';
   };
 
@@ -69,17 +58,13 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
     const refreshInterval = widgetSettings.weather?.refreshInterval || 0;
 
     if (refreshInterval > 0) {
-      console.log(`WeatherWidget: Auto-refresh enabled (${refreshInterval}ms)`);
-      
       const intervalId = setInterval(() => {
-        console.log('WeatherWidget: Auto-refreshing data...');
         if (zipCode && weatherApiKey) {
           fetchWeatherData();
         }
       }, refreshInterval);
 
       return () => {
-        console.log('WeatherWidget: Clearing auto-refresh interval');
         clearInterval(intervalId);
       };
     }
@@ -100,11 +85,8 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
     setError(null);
 
     try {
-      console.log('Fetching weather data for zip:', zipCode);
-
       const currentWeatherUrl = `https://api.openweathermap.org/data/2.5/weather?zip=${zipCode},US&appid=${weatherApiKey}&units=imperial`;
       const currentResponse = await axios.get(currentWeatherUrl);
-      console.log('Weather data received:', currentResponse.data);
       setWeatherData(currentResponse.data);
 
       if (currentResponse.data.coord) {
@@ -113,17 +95,14 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
         
         try {
           const airQualityResponse = await axios.get(airQualityUrl);
-          console.log('Air quality data received:', airQualityResponse.data);
           setAirQualityData(airQualityResponse.data);
         } catch (airError) {
-          console.warn('Failed to fetch air quality data:', airError);
           setAirQualityData(null);
         }
       }
 
       const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?zip=${zipCode},US&appid=${weatherApiKey}&units=imperial`;
       const forecastResponse = await axios.get(forecastUrl);
-      console.log('Forecast data received:', forecastResponse.data);
 
       const dailyForecasts = [];
       const chartDataPoints = [];
@@ -171,17 +150,12 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
           weather: day.weather,
           precipitation: day.precipitation
         }));
-
-        console.log('Processed forecast data:', dailyForecastArray);
-        console.log('Chart data:', chartDataPoints);
         
         setForecastData(dailyForecastArray);
         setChartData(chartDataPoints);
       }
 
     } catch (error) {
-      console.error('Error fetching weather data:', error);
-      
       if (error.response) {
         if (error.response.status === 401) {
           setError('Invalid API key. Please check your OpenWeatherMap API key in the Admin Panel.');
@@ -247,7 +221,6 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
 
   // Compact Layout - Current weather only
   const renderCompactLayout = () => {
-    console.log('Rendering COMPACT layout');
     return (
       <Box sx={{
         height: '100%',
@@ -275,7 +248,6 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
 
   // Medium Layout - Current weather + 3-day forecast
   const renderMediumLayout = () => {
-    console.log('Rendering MEDIUM layout');
     return (
       <Box sx={{
         height: '100%',
@@ -343,7 +315,6 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
 
   // Full Layout - All information
   const renderFullLayout = () => {
-    console.log('Rendering FULL layout');
     return (
       <Box sx={{
         height: '100%',
@@ -664,23 +635,6 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
         {layoutType === 'compact' && renderCompactLayout()}
         {layoutType === 'medium' && renderMediumLayout()}
         {layoutType === 'full' && renderFullLayout()}
-      </Box>
-
-      {/* Debug indicator */}
-      <Box sx={{ 
-        position: 'absolute', 
-        bottom: 4, 
-        right: 4, 
-        fontSize: '0.7rem', 
-        opacity: 0.3,
-        pointerEvents: 'none',
-        bgcolor: 'rgba(0,0,0,0.5)',
-        color: 'white',
-        px: 1,
-        py: 0.5,
-        borderRadius: 1
-      }}>
-        {layoutType.toUpperCase()} ({widgetSize.width}×{widgetSize.height})
       </Box>
     </Box>
   );
