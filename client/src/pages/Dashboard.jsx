@@ -25,12 +25,12 @@ const Dashboard = () => {
     console.log('Dashboard: Initializing widget sizes from localStorage');
     const sizes = {};
     
-    // Define default widgets
+    // Define default widgets - MUST MATCH IDs in widgets array below
     const defaultWidgets = [
-      { id: 'calendar', defaultSize: { width: 4, height: 4 } },
-      { id: 'chores', defaultSize: { width: 4, height: 4 } },
-      { id: 'photos', defaultSize: { width: 4, height: 4 } },
-      { id: 'weather', defaultSize: { width: 4, height: 4 } }
+      { id: 'calendar-widget', defaultSize: { width: 4, height: 4 } },
+      { id: 'chores-widget', defaultSize: { width: 4, height: 4 } },
+      { id: 'photos-widget', defaultSize: { width: 4, height: 4 } },
+      { id: 'weather-widget', defaultSize: { width: 4, height: 4 } }
     ];
 
     defaultWidgets.forEach(widget => {
@@ -50,21 +50,21 @@ const Dashboard = () => {
 
   // Handle layout changes from WidgetContainer
   const handleLayoutChange = (layout) => {
-    console.log('Dashboard: Layout changed:', layout);
+    console.log('📢 Dashboard: Layout changed:', layout);
     
     const newSizes = {};
     layout.forEach(item => {
       newSizes[item.i] = { width: item.w, height: item.h };
-      console.log(`Dashboard: Updated size for ${item.i}:`, newSizes[item.i]);
+      console.log(`📢 Dashboard: Updated size for ${item.i}:`, newSizes[item.i]);
     });
     
     setWidgetSizes(newSizes);
   };
 
-  // Define widgets with their configurations
+  // Define widgets with their configurations - IDs MUST MATCH localStorage keys
   const widgets = [
     {
-      id: 'calendar',
+      id: 'calendar-widget',
       defaultPosition: { x: 0, y: 0 },
       defaultSize: { width: 4, height: 4 },
       minWidth: 3,
@@ -72,7 +72,7 @@ const Dashboard = () => {
       content: <CalendarWidget />
     },
     {
-      id: 'chores',
+      id: 'chores-widget',
       defaultPosition: { x: 4, y: 0 },
       defaultSize: { width: 4, height: 4 },
       minWidth: 3,
@@ -80,7 +80,7 @@ const Dashboard = () => {
       content: <ChoreWidget />
     },
     {
-      id: 'photos',
+      id: 'photos-widget',
       defaultPosition: { x: 8, y: 0 },
       defaultSize: { width: 4, height: 4 },
       minWidth: 3,
@@ -88,14 +88,14 @@ const Dashboard = () => {
       content: <PhotoWidget />
     },
     {
-      id: 'weather',
+      id: 'weather-widget',
       defaultPosition: { x: 0, y: 4 },
       defaultSize: { width: 4, height: 4 },
       minWidth: 2,
       minHeight: 2,
       content: <WeatherWidget 
         weatherApiKey={weatherApiKey}
-        widgetSize={widgetSizes['weather'] || { width: 4, height: 4 }}
+        widgetSize={widgetSizes['weather-widget'] || { width: 4, height: 4 }}
       />
     }
   ];
@@ -105,8 +105,8 @@ const Dashboard = () => {
     const size = widgetSizes[widget.id] || widget.defaultSize;
     
     // Special handling for weather widget to pass size prop
-    if (widget.id === 'weather') {
-      console.log('Dashboard: Rendering weather widget with size:', size);
+    if (widget.id === 'weather-widget') {
+      console.log('📢 Dashboard: Rendering weather widget with size:', size);
       return {
         ...widget,
         content: <WeatherWidget 
@@ -119,7 +119,7 @@ const Dashboard = () => {
     return widget;
   });
 
-  console.log('Dashboard: Current widget sizes:', widgetSizes);
+  console.log('📢 Dashboard: Current widget sizes:', widgetSizes);
 
   return (
     <Box sx={{ 
