@@ -4,6 +4,9 @@ WORKDIR /app
 # Accept PORT as build argument with default
 ARG PORT=5000
 
+# Set as environment variable for runtime
+ENV PORT=$PORT
+
 # Install SQLite3 dependencies
 RUN apt-get update && apt-get install -y libsqlite3-dev
 
@@ -16,8 +19,5 @@ RUN mkdir -p /app/uploads/users /app/widgets && chmod -R 777 /app/uploads /app/w
 
 # Expose the port
 EXPOSE ${PORT}
-
-# Set PORT environment variable for runtime
-ENV PORT=${PORT}
 
 CMD ["node", "index.js"]
