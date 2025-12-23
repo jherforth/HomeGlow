@@ -1,229 +1,143 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, IconButton, Switch, FormControlLabel, Tooltip } from '@mui/material';
-import { Refresh, Brightness4, Brightness7, Lock, LockOpen } from '@mui/icons-material';
+import { Box, IconButton, Tooltip } from '@mui/material';
+import { Lock, LockOpen } from '@mui/icons-material';
 import WidgetContainer from '../components/WidgetContainer';
 import CalendarWidget from '../components/CalendarWidget';
-import WeatherWidget from '../components/WeatherWidget';
 import ChoreWidget from '../components/ChoreWidget';
 import PhotoWidget from '../components/PhotoWidget';
-import axios from 'axios';
+import WeatherWidget from '../components/WeatherWidget';
 
 const Dashboard = () => {
-  const [settings, setSettings] = useState({
-    transparentBackground: false,
-    icsCalendarUrl: ''
-  });
-  const [isDarkMode, setIsDarkMode] = useState(true);
-  const [isLocked, setIsLocked] = useState(() => {
-    // Load lock state from localStorage, default to true (locked)
-    const savedLockState = localStorage.getItem('widgetsLocked');
-    return savedLockState === null ? true : savedLockState === 'true';
-  });
+  const [locked, setLocked] = useState(true);
+  const [weatherApiKey, setWeatherApiKey] = useState('');
 
   useEffect(() => {
-    fetchSettings();
-    // Load theme preference
-    const savedTheme = localStorage.getItem('theme') || 'dark';
-    setIsDarkMode(savedTheme === 'dark');
-    document.documentElement.setAttribute('data-theme', savedTheme);
+    // Load weather API key from localStorage
+    const settings = JSON.parse(localStorage.getItem('widgetSettings') || '{}');
+    if (settings.weather?.apiKey) {
+      setWeatherApiKey(settings.weather.apiKey);
+    }
   }, []);
 
-  const fetchSettings = async () => {
-    try {
-      const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`);
-      setSettings({
-        transparentBackground: response.data.TRANSPARENT_BACKGROUND === 'true',
-        icsCalendarUrl: response.data.ICS_CALENDAR_URL || ''
-      });
-    } catch (error) {
-      console.error('Error fetching settings:', error);
-    }
-  };
-
-  const handleTransparencyToggle = async (event) => {
-    const newValue = event.target.checked;
-    try {
-      await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, {
-        key: 'TRANSPARENT_BACKGROUND',
-        value: newValue.toString()
-      });
-      setSettings(prev => ({ ...prev, transparentBackground: newValue }));
-    } catch (error) {
-      console.error('Error updating transparency setting:', error);
-    }
-  };
-
-  const handleThemeToggle = () => {
-    const newTheme = isDarkMode ? 'light' : 'dark';
-    setIsDarkMode(!isDarkMode);
-    document.documentElement.setAttribute('data-theme', newTheme);
-    localStorage.setItem('theme', newTheme);
-  };
-
-  const handleLockToggle = () => {
-    const newLockState = !isLocked;
-    setIsLocked(newLockState);
-    localStorage.setItem('widgetsLocked', newLockState.toString());
-  };
-
-  const handleRefresh = () => {
-    window.location.reload();
-  };
-
+  // Define widgets with their configurations
   const widgets = [
     {
-      id: 'calendar-widget',
+      id: 'calendar',
       defaultPosition: { x: 0, y: 0 },
-      defaultSize: { width: 6, height: 4 },
-      minWidth: 2,
-      minHeight: 2,
-      content: <CalendarWidget transparentBackground={settings.transparentBackground} />,
-      onPositionChange: (pos) => console.log('Calendar moved to:', pos),
-      onSizeChange: (size) => console.log('Calendar resized to:', size),
+      defaultSize: { width: 4, height: 4 },
+      minWidth: 3,
+      minHeight: 3,
+      content: <CalendarWidget />
     },
     {
-      id: 'weather-widget',
-      defaultPosition: { x: 6, y: 0 },
-      defaultSize: { width: 3, height: 3 },
-      minWidth: 2,
-      minHeight: 2,
-      content: <WeatherWidget transparentBackground={settings.transparentBackground} />,
-      onPositionChange: (pos) => console.log('Weather moved to:', pos),
-      onSizeChange: (size) => console.log('Weather resized to:', size),
+      id: 'chores',
+      defaultPosition: { x: 4, y: 0 },
+      defaultSize: { width: 4, height: 4 },
+      minWidth: 3,
+      minHeight: 3,
+      content: <ChoreWidget />
     },
     {
-      id: 'chores-widget',
+      id: 'photos',
+      defaultPosition: { x: 8, y: 0 },
+      defaultSize: { width: 4, height: 4 },
+      minWidth: 3,
+      minHeight: 3,
+      content: <PhotoWidget />
+    },
+    {
+      id: 'weather',
       defaultPosition: { x: 0, y: 4 },
-      defaultSize: { width: 6, height: 4 },
+      defaultSize: { width: 4, height: 4 },
       minWidth: 2,
       minHeight: 2,
-      content: <ChoreWidget transparentBackground={settings.transparentBackground} />,
-      onPositionChange: (pos) => console.log('Chores moved to:', pos),
-      onSizeChange: (size) => console.log('Chores resized to:', size),
-    },
-    {
-      id: 'photos-widget',
-      defaultPosition: { x: 6, y: 5 },
-      defaultSize: { width: 6, height: 4 },
-      minWidth: 2,
-      minHeight: 2,
-      content: <PhotoWidget transparentBackground={settings.transparentBackground} />,
-      onPositionChange: (pos) => console.log('Photos moved to:', pos),
-      onSizeChange: (size) => console.log('Photos resized to:', size),
-    },
+      content: <WeatherWidget 
+        weatherApiKey={weatherApiKey}
+        widgetSize={{ width: 4, height: 4 }} // This will be updated dynamically
+      />
+    }
   ];
 
+  // Update widget sizes dynamically based on layout
+  const [widgetSizes, setWidgetSizes] = useState({});
+
+  useEffect(() => {
+    // Load saved layouts and update widget sizes
+    const sizes = {};
+    widgets.forEach(widget => {
+      const savedLayout = localStorage.getItem(`widget-layout-${widget.id}`);
+      if (savedLayout) {
+        const parsed = JSON.parse(savedLayout);
+        sizes[widget.id] = { width: parsed.w, height: parsed.h };
+      } else {
+        sizes[widget.id] = widget.defaultSize;
+      }
+    });
+    setWidgetSizes(sizes);
+  }, []);
+
+  // Update widgets with dynamic sizes
+  const widgetsWithSizes = widgets.map(widget => {
+    const size = widgetSizes[widget.id] || widget.defaultSize;
+    
+    // Special handling for weather widget to pass size prop
+    if (widget.id === 'weather') {
+      return {
+        ...widget,
+        content: <WeatherWidget 
+          weatherApiKey={weatherApiKey}
+          widgetSize={size}
+        />
+      };
+    }
+    
+    return widget;
+  });
+
+  const handleLayoutChange = (layout) => {
+    // Update widget sizes when layout changes
+    const newSizes = {};
+    layout.forEach(item => {
+      newSizes[item.i] = { width: item.w, height: item.h };
+    });
+    setWidgetSizes(newSizes);
+  };
+
   return (
-    <Box sx={{ width: '100%', minHeight: '100vh', position: 'relative', paddingBottom: '40px' }}>
-      {/* Widget Container */}
-      <WidgetContainer widgets={widgets} locked={isLocked} />
-
-      {/* Fixed Bottom Settings Bar */}
-      <Box
-        sx={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: '40px',
-          zIndex: 1100,
-          backgroundColor: 'var(--bottom-bar-bg)',
-          borderTop: '1px solid var(--border)',
-          backdropFilter: 'blur(10px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 16px',
-          boxShadow: '0 -2px 8px rgba(0, 0, 0, 0.1)',
-        }}
-      >
-        {/* Left: Logo */}
-        <Box sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
-          <img 
-            src="/HomeGlowLogo.png" 
-            alt="HomeGlow Logo" 
-            style={{ 
-              height: '36px',
-              width: 'auto',
-              objectFit: 'contain'
-            }} 
-          />
-        </Box>
-
-        {/* Right: Controls */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          {/* Lock/Unlock Toggle */}
-          <Tooltip title={isLocked ? "Unlock widgets to edit layout" : "Lock widgets to prevent changes"} arrow>
-            <IconButton
-              onClick={handleLockToggle}
-              size="small"
-              sx={{ 
-                color: isLocked ? 'var(--accent)' : 'var(--text)',
-                padding: '6px',
-                '&:hover': {
-                  backgroundColor: 'rgba(158, 127, 255, 0.1)',
-                }
-              }}
-            >
-              {isLocked ? <Lock fontSize="small" /> : <LockOpen fontSize="small" />}
-            </IconButton>
-          </Tooltip>
-
-          {/* Transparent Widgets Toggle */}
-          <Tooltip title="Toggle transparent widget backgrounds" arrow>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={settings.transparentBackground}
-                  onChange={handleTransparencyToggle}
-                  color="primary"
-                  size="small"
-                />
-              }
-              label={
-                <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'var(--text)' }}>
-                  Transparent
-                </Typography>
-              }
-              sx={{ margin: 0 }}
-            />
-          </Tooltip>
-
-          {/* Theme Toggle */}
-          <Tooltip title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"} arrow>
-            <IconButton
-              onClick={handleThemeToggle}
-              size="small"
-              sx={{ 
-                color: 'var(--text)',
-                padding: '6px',
-                '&:hover': {
-                  backgroundColor: 'rgba(158, 127, 255, 0.1)',
-                }
-              }}
-            >
-              {isDarkMode ? <Brightness7 fontSize="small" /> : <Brightness4 fontSize="small" />}
-            </IconButton>
-          </Tooltip>
-
-          {/* Refresh Button */}
-          <Tooltip title="Refresh dashboard" arrow>
-            <IconButton
-              onClick={handleRefresh}
-              size="small"
-              sx={{ 
-                color: 'var(--text)',
-                padding: '6px',
-                '&:hover': {
-                  backgroundColor: 'rgba(158, 127, 255, 0.1)',
-                }
-              }}
-            >
-              <Refresh fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        </Box>
+    <Box sx={{ 
+      position: 'relative',
+      minHeight: '100vh',
+      backgroundColor: 'var(--background)'
+    }}>
+      {/* Lock/Unlock Button */}
+      <Box sx={{
+        position: 'fixed',
+        top: 16,
+        right: 16,
+        zIndex: 1000
+      }}>
+        <Tooltip title={locked ? 'Unlock to edit layout' : 'Lock layout'}>
+          <IconButton
+            onClick={() => setLocked(!locked)}
+            sx={{
+              backgroundColor: locked ? 'var(--surface)' : 'var(--accent)',
+              color: locked ? 'var(--text)' : 'white',
+              '&:hover': {
+                backgroundColor: locked ? 'var(--card-border)' : 'var(--secondary)',
+              },
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+            }}
+          >
+            {locked ? <Lock /> : <LockOpen />}
+          </IconButton>
+        </Tooltip>
       </Box>
+
+      <WidgetContainer 
+        widgets={widgetsWithSizes} 
+        locked={locked}
+        onLayoutChange={handleLayoutChange}
+      />
     </Box>
   );
 };
