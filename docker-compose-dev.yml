@@ -28,12 +28,12 @@ services:
       - PORT=${BACKEND_PORT:-5001}
     networks:
       - homeglow-network
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5001/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+   # healthcheck:
+   #   test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5001/api/health"]
+   #   interval: 30s
+   #   timeout: 10s
+   #   retries: 3
+   #   start_period: 40s
 
   frontend-test:
     container_name: frontend-test
@@ -55,12 +55,12 @@ services:
         condition: service_healthy
     networks:
       - homeglow-network
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+   # healthcheck:
+   #   test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+   #   interval: 30s
+   #   timeout: 10s
+   #   retries: 3
+   #   start_period: 40s
 
 networks:
   homeglow-network:
