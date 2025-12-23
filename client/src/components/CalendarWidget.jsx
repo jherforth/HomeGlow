@@ -50,9 +50,31 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   const [testResult, setTestResult] = useState(null);
   const [savingCalendar, setSavingCalendar] = useState(false);
 
+  // Initial data fetch
   useEffect(() => {
     fetchCalendarSources();
     fetchCalendarEvents();
+  }, []);
+
+  // Auto-refresh functionality
+  useEffect(() => {
+    const widgetSettings = JSON.parse(localStorage.getItem('widgetSettings') || '{}');
+    const refreshInterval = widgetSettings.calendar?.refreshInterval || 0;
+
+    if (refreshInterval > 0) {
+      console.log(`CalendarWidget: Auto-refresh enabled (${refreshInterval}ms)`);
+      
+      const intervalId = setInterval(() => {
+        console.log('CalendarWidget: Auto-refreshing data...');
+        fetchCalendarSources();
+        fetchCalendarEvents();
+      }, refreshInterval);
+
+      return () => {
+        console.log('CalendarWidget: Clearing auto-refresh interval');
+        clearInterval(intervalId);
+      };
+    }
   }, []);
 
   useEffect(() => {
