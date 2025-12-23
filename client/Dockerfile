@@ -15,7 +15,7 @@ COPY . .
 # Build arguments for environment variables
 ARG VITE_OPENWEATHER_API_KEY
 ARG VITE_REACT_APP_API_URL
-ARG BACKEND_SERVICE=homeglow-backend:5000
+ARG BACKEND_SERVICE=homeglow-backend:${BACKEND_PORT}
 
 # Set environment variables for build
 ENV VITE_OPENWEATHER_API_KEY=$VITE_OPENWEATHER_API_KEY
@@ -34,15 +34,15 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Accept backend service as build arg for API proxy configuration
-ARG BACKEND_SERVICE=homeglow-backend:5000
+ARG BACKEND_SERVICE=homeglow-backend:${BACKEND_PORT}
 
 # Update nginx config with correct backend service
-RUN sed -i "s|homeglow-backend:5000|${BACKEND_SERVICE}|g" /etc/nginx/conf.d/default.conf
+RUN sed -i "s|homeglow-backend:${BACKEND_PORT}|${BACKEND_SERVICE}|g" /etc/nginx/conf.d/default.conf
 
 # Add healthcheck
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:${FRONTEND_PORT}/ || exit 1
 
-EXPOSE 3000
+EXPOSE ${FRONTEND_PORT}
 
 CMD ["nginx", "-g", "daemon off;"]
