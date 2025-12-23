@@ -2,13 +2,18 @@
 # Uses separate ports from production for parallel testing
 #
 # Quick Start:
-# 1. Copy .env.example to .env and customize DEV ports if needed
+# 1. In Portainer, set these environment variables:
+#    - DEV_FRONTEND_PORT (default: 3001)
+#    - DEV_BACKEND_PORT (default: 5001)
+#    - VITE_OPENWEATHER_API_KEY
+#    - VITE_REACT_APP_API_URL
 # 2. Create data directories: sudo mkdir -p /apps/homeglowtest/{data,uploads} && sudo chmod -R 777 /apps/homeglowtest
-# 3. Run: docker-compose -f docker-compose-dev.yml up -d
+# 3. Deploy via Portainer or run: docker-compose -f docker-compose-dev.yml up -d
 #
 # Features:
 # - Same Nginx config as production (catches issues early!)
 # - Separate ports from production (default: 3001 frontend, 5001 backend)
+# - Runtime environment variable substitution for Portainer compatibility
 # - Rebuild required for code changes: docker-compose -f docker-compose-dev.yml up -d --build
 
 services:
@@ -28,7 +33,14 @@ services:
       - NODE_ENV=development
       - PORT=${DEV_BACKEND_PORT:-5001}
     networks:
-      - homeglow-network
+      - homeglow-test-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget --no-verbose --tries=1 --spider http://localhost:$${PORT:-5001}/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   frontend-test:
     container_name: frontend-test
@@ -45,12 +57,22 @@ services:
       - "${DEV_FRONTEND_PORT:-3001}:${DEV_FRONTEND_PORT:-3001}"
     environment:
       - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
-      - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}:${DEV_BACKEND_PORT:-5001}
+      - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}
+      - FRONTEND_PORT=${DEV_FRONTEND_PORT:-3001}
+      - BACKEND_PORT=${DEV_BACKEND_PORT:-5001}
     depends_on:
-      - backend-test
+      backend-test:
+        condition: service_healthy
     networks:
-      - homeglow-network
+      - homeglow-test-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget --no-verbose --tries=1 --spider http://localhost:$${FRONTEND_PORT:-3001}/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
 networks:
-  homeglow-network:
+  homeglow-test-network:
     driver: bridge
