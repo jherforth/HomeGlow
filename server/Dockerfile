@@ -9,7 +9,7 @@ COPY . .
 RUN mkdir -p /app/uploads/users /app/widgets && chmod -R 777 /app/uploads /app/widgets
 
 # Accept PORT as build argument
-ARG PORT=5000
-EXPOSE ${PORT}
+ARG PORT=${BACKEND_PORT}
+EXPOSE ${BACKEND_PORT}
 
 CMD ["node", "index.js"]
