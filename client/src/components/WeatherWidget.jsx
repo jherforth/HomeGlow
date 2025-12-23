@@ -16,26 +16,37 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
   const [error, setError] = useState(null);
   const [chartType, setChartType] = useState('temperature');
 
+  // Debug logging for widget size
+  useEffect(() => {
+    console.log('WeatherWidget received widgetSize:', widgetSize);
+  }, [widgetSize]);
+
   // Determine layout based on widget size
   const getLayoutType = () => {
     const { width: w, height: h } = widgetSize;
     
-    // Compact: Small widgets (2 cols or less, 3 rows or less)
+    console.log(`Calculating layout for size: ${w}x${h}`);
+    
+    // Compact: Small widgets (2 cols or less, 2 rows or less)
     if (w <= 2 || h <= 2) {
+      console.log('Layout: COMPACT');
       return 'compact';
     }
     
-    // Medium: Medium-sized widgets (3 cols, 3-4 rows OR 4 cols, 2-3 rows)
-    if ((w === 3 && h >= 3 && h <= 4) || (w === 4 && h <= 3)) {
+    // Medium: Medium-sized widgets (3 cols, 2-4 rows OR 4 cols, 2-3 rows)
+    if ((w === 3 && h >= 2 && h <= 4) || (w === 4 && h >= 2 && h <= 3)) {
+      console.log('Layout: MEDIUM');
       return 'medium';
     }
     
     // Full: Large widgets (4+ cols and 4+ rows)
     if (w >= 4 && h >= 4) {
+      console.log('Layout: FULL');
       return 'full';
     }
     
     // Default to medium for edge cases
+    console.log('Layout: MEDIUM (default)');
     return 'medium';
   };
 
@@ -93,6 +104,7 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
 
       const currentWeatherUrl = `https://api.openweathermap.org/data/2.5/weather?zip=${zipCode},US&appid=${weatherApiKey}&units=imperial`;
       const currentResponse = await axios.get(currentWeatherUrl);
+      console.log('Weather data received:', currentResponse.data);
       setWeatherData(currentResponse.data);
 
       if (currentResponse.data.coord) {
@@ -101,6 +113,7 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
         
         try {
           const airQualityResponse = await axios.get(airQualityUrl);
+          console.log('Air quality data received:', airQualityResponse.data);
           setAirQualityData(airQualityResponse.data);
         } catch (airError) {
           console.warn('Failed to fetch air quality data:', airError);
@@ -110,6 +123,7 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
 
       const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?zip=${zipCode},US&appid=${weatherApiKey}&units=imperial`;
       const forecastResponse = await axios.get(forecastUrl);
+      console.log('Forecast data received:', forecastResponse.data);
 
       const dailyForecasts = [];
       const chartDataPoints = [];
@@ -158,6 +172,9 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
           precipitation: day.precipitation
         }));
 
+        console.log('Processed forecast data:', dailyForecastArray);
+        console.log('Chart data:', chartDataPoints);
+        
         setForecastData(dailyForecastArray);
         setChartData(chartDataPoints);
       }
@@ -229,280 +246,289 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
   };
 
   // Compact Layout - Current weather only
-  const renderCompactLayout = () => (
-    <Box sx={{
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      p: 1
-    }}>
-      <Typography variant="h2" sx={{ fontSize: '3rem', mb: 1 }}>
-        {getWeatherIcon(weatherData.weather[0].icon)}
-      </Typography>
-      <Typography variant="h3" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-        {Math.round(weatherData.main.temp)}°F
-      </Typography>
-      <Typography variant="body1" sx={{ textAlign: 'center', textTransform: 'capitalize', mb: 0.5 }}>
-        {weatherData.weather[0].description}
-      </Typography>
-      <Typography variant="body2" sx={{ opacity: 0.7 }}>
-        {weatherData.name}
-      </Typography>
-    </Box>
-  );
-
-  // Medium Layout - Current weather + 3-day forecast
-  const renderMediumLayout = () => (
-    <Box sx={{
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      p: 2,
-      gap: 2
-    }}>
-      {/* Current Weather */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-        <Typography variant="h1" sx={{ fontSize: '3rem' }}>
+  const renderCompactLayout = () => {
+    console.log('Rendering COMPACT layout');
+    return (
+      <Box sx={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        p: 1
+      }}>
+        <Typography variant="h2" sx={{ fontSize: '3rem', mb: 1 }}>
           {getWeatherIcon(weatherData.weather[0].icon)}
         </Typography>
-        <Box sx={{ flex: 1 }}>
-          <Typography variant="h3" sx={{ fontWeight: 'bold' }}>
-            {Math.round(weatherData.main.temp)}°F
-          </Typography>
-          <Typography variant="body1" sx={{ textTransform: 'capitalize' }}>
-            {weatherData.weather[0].description}
-          </Typography>
-          <Typography variant="body2" sx={{ opacity: 0.7 }}>
-            Feels like {Math.round(weatherData.main.feels_like)}°F
-          </Typography>
-        </Box>
-      </Box>
-
-      {/* 3-Day Forecast */}
-      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
-        <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-          3-Day Forecast
+        <Typography variant="h3" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+          {Math.round(weatherData.main.temp)}°F
         </Typography>
-        {forecastData.map((day, index) => (
-          <Box
-            key={index}
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              p: 1,
-              border: '1px solid var(--card-border)',
-              borderRadius: 1,
-              bgcolor: 'rgba(var(--accent-rgb), 0.05)'
-            }}
-          >
-            <Typography variant="body2" sx={{ fontWeight: 'bold', minWidth: 40 }}>
-              {day.dayName}
-            </Typography>
-            <Typography variant="h6" sx={{ fontSize: '1.5rem' }}>
-              {getWeatherIcon(day.weather.icon)}
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1, minWidth: 80, justifyContent: 'flex-end' }}>
-              <Typography variant="body2" sx={{ color: '#ff6b6b', fontWeight: 'bold' }}>
-                {day.tempHigh}°
-              </Typography>
-              <Typography variant="body2" sx={{ color: '#00ddeb' }}>
-                {day.tempLow}°
-              </Typography>
-            </Box>
-          </Box>
-        ))}
+        <Typography variant="body1" sx={{ textAlign: 'center', textTransform: 'capitalize', mb: 0.5 }}>
+          {weatherData.weather[0].description}
+        </Typography>
+        <Typography variant="body2" sx={{ opacity: 0.7 }}>
+          {weatherData.name}
+        </Typography>
       </Box>
-    </Box>
-  );
+    );
+  };
 
-  // Full Layout - All information
-  const renderFullLayout = () => (
-    <Box sx={{
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'hidden',
-      p: 2
-    }}>
-      <Box sx={{ display: 'flex', gap: 3, flex: 1, minHeight: 0 }}>
-        {/* Current Weather - Left Column */}
-        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <Typography variant="h4" sx={{ fontSize: '3rem', mb: 1 }}>
+  // Medium Layout - Current weather + 3-day forecast
+  const renderMediumLayout = () => {
+    console.log('Rendering MEDIUM layout');
+    return (
+      <Box sx={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        p: 2,
+        gap: 2
+      }}>
+        {/* Current Weather */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Typography variant="h1" sx={{ fontSize: '3rem' }}>
             {getWeatherIcon(weatherData.weather[0].icon)}
           </Typography>
-          <Typography variant="h3" sx={{ fontWeight: 'bold', mb: 1 }}>
-            {Math.round(weatherData.main.temp)}°F
-          </Typography>
-          <Typography variant="h6" sx={{ mb: 1, textAlign: 'center' }}>
-            {weatherData.name}
-          </Typography>
-          <Typography variant="body1" sx={{ mb: 2, textAlign: 'center', textTransform: 'capitalize' }}>
-            {weatherData.weather[0].description}
-          </Typography>
-          
-          <Box sx={{ textAlign: 'center' }}>
-            <Typography variant="body2">
+          <Box sx={{ flex: 1 }}>
+            <Typography variant="h3" sx={{ fontWeight: 'bold' }}>
+              {Math.round(weatherData.main.temp)}°F
+            </Typography>
+            <Typography variant="body1" sx={{ textTransform: 'capitalize' }}>
+              {weatherData.weather[0].description}
+            </Typography>
+            <Typography variant="body2" sx={{ opacity: 0.7 }}>
               Feels like {Math.round(weatherData.main.feels_like)}°F
             </Typography>
-            <Typography variant="body2">
-              Humidity: {weatherData.main.humidity}%
-            </Typography>
-            <Typography variant="body2">
-              Wind: {Math.round(weatherData.wind.speed)} mph
-            </Typography>
           </Box>
-
-          {/* Air Quality Box */}
-          {airQualityData && (
-            <Box 
-              sx={{ 
-                mt: 3,
-                p: 2,
-                width: '90%',
-                alignSelf: 'center',
-                border: '1px solid var(--card-border)',
-                borderRadius: 2,
-                bgcolor: 'rgba(var(--accent-rgb), 0.05)',
-                textAlign: 'center'
-              }}
-            >
-              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
-                Air Quality
-              </Typography>
-              {(() => {
-                const aqi = airQualityData.list[0].main.aqi;
-                const aqiInfo = getAirQualityLevel(aqi);
-                return (
-                  <>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, mb: 1 }}>
-                      <Box sx={{ textAlign: 'center' }}>
-                        <Typography variant="h6" sx={{ fontSize: '1.5rem', mb: 0.5 }}>
-                          {aqiInfo.emoji}
-                        </Typography>
-                        <Typography 
-                          variant="body1" 
-                          sx={{ 
-                            fontWeight: 'bold', 
-                            color: aqiInfo.color,
-                            mb: 0.5
-                          }}
-                        >
-                          {aqiInfo.label}
-                        </Typography>
-                        <Typography variant="caption" sx={{ display: 'block' }}>
-                          AQI: {aqi}/5
-                        </Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, fontSize: '0.75rem' }}>
-                        <Typography variant="caption">
-                          PM2.5: {Math.round(airQualityData.list[0].components.pm2_5)}
-                        </Typography>
-                        <Typography variant="caption">
-                          PM10: {Math.round(airQualityData.list[0].components.pm10)}
-                        </Typography>
-                        <Typography variant="caption">
-                          O₃: {Math.round(airQualityData.list[0].components.o3)}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </>
-                );
-              })()}
-            </Box>
-          )}
         </Box>
 
-        {/* 3-Day Forecast - Middle Column */}
-        <Box sx={{ flex: 1 }}>
-          <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>
+        {/* 3-Day Forecast */}
+        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
             3-Day Forecast
           </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {forecastData.map((day, index) => (
-              <Box
-                key={index}
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
+          {forecastData.map((day, index) => (
+            <Box
+              key={index}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                p: 1,
+                border: '1px solid var(--card-border)',
+                borderRadius: 1,
+                bgcolor: 'rgba(var(--accent-rgb), 0.05)'
+              }}
+            >
+              <Typography variant="body2" sx={{ fontWeight: 'bold', minWidth: 40 }}>
+                {day.dayName}
+              </Typography>
+              <Typography variant="h6" sx={{ fontSize: '1.5rem' }}>
+                {getWeatherIcon(day.weather.icon)}
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 1, minWidth: 80, justifyContent: 'flex-end' }}>
+                <Typography variant="body2" sx={{ color: '#ff6b6b', fontWeight: 'bold' }}>
+                  {day.tempHigh}°
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#00ddeb' }}>
+                  {day.tempLow}°
+                </Typography>
+              </Box>
+            </Box>
+          ))}
+        </Box>
+      </Box>
+    );
+  };
+
+  // Full Layout - All information
+  const renderFullLayout = () => {
+    console.log('Rendering FULL layout');
+    return (
+      <Box sx={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        p: 2
+      }}>
+        <Box sx={{ display: 'flex', gap: 3, flex: 1, minHeight: 0 }}>
+          {/* Current Weather - Left Column */}
+          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <Typography variant="h4" sx={{ fontSize: '3rem', mb: 1 }}>
+              {getWeatherIcon(weatherData.weather[0].icon)}
+            </Typography>
+            <Typography variant="h3" sx={{ fontWeight: 'bold', mb: 1 }}>
+              {Math.round(weatherData.main.temp)}°F
+            </Typography>
+            <Typography variant="h6" sx={{ mb: 1, textAlign: 'center' }}>
+              {weatherData.name}
+            </Typography>
+            <Typography variant="body1" sx={{ mb: 2, textAlign: 'center', textTransform: 'capitalize' }}>
+              {weatherData.weather[0].description}
+            </Typography>
+            
+            <Box sx={{ textAlign: 'center' }}>
+              <Typography variant="body2">
+                Feels like {Math.round(weatherData.main.feels_like)}°F
+              </Typography>
+              <Typography variant="body2">
+                Humidity: {weatherData.main.humidity}%
+              </Typography>
+              <Typography variant="body2">
+                Wind: {Math.round(weatherData.wind.speed)} mph
+              </Typography>
+            </Box>
+
+            {/* Air Quality Box */}
+            {airQualityData && (
+              <Box 
+                sx={{ 
+                  mt: 3,
                   p: 2,
+                  width: '90%',
+                  alignSelf: 'center',
                   border: '1px solid var(--card-border)',
-                  borderRadius: 1,
-                  bgcolor: 'rgba(var(--accent-rgb), 0.05)'
+                  borderRadius: 2,
+                  bgcolor: 'rgba(var(--accent-rgb), 0.05)',
+                  textAlign: 'center'
                 }}
               >
-                <Box sx={{ textAlign: 'right' }}>
-                  <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#ff6b6b' }}>
-                    {day.tempHigh}°F
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: '#00ddeb' }}>
-                    {day.tempLow}°F
-                  </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <Typography variant="h5">
-                    {getWeatherIcon(day.weather.icon)}
-                  </Typography>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                    {day.weather.description}
-                  </Typography>
-                </Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                  Air Quality
+                </Typography>
+                {(() => {
+                  const aqi = airQualityData.list[0].main.aqi;
+                  const aqiInfo = getAirQualityLevel(aqi);
+                  return (
+                    <>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, mb: 1 }}>
+                        <Box sx={{ textAlign: 'center' }}>
+                          <Typography variant="h6" sx={{ fontSize: '1.5rem', mb: 0.5 }}>
+                            {aqiInfo.emoji}
+                          </Typography>
+                          <Typography 
+                            variant="body1" 
+                            sx={{ 
+                              fontWeight: 'bold', 
+                              color: aqiInfo.color,
+                              mb: 0.5
+                            }}
+                          >
+                            {aqiInfo.label}
+                          </Typography>
+                          <Typography variant="caption" sx={{ display: 'block' }}>
+                            AQI: {aqi}/5
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, fontSize: '0.75rem' }}>
+                          <Typography variant="caption">
+                            PM2.5: {Math.round(airQualityData.list[0].components.pm2_5)}
+                          </Typography>
+                          <Typography variant="caption">
+                            PM10: {Math.round(airQualityData.list[0].components.pm10)}
+                          </Typography>
+                          <Typography variant="caption">
+                            O₃: {Math.round(airQualityData.list[0].components.o3)}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </>
+                  );
+                })()}
               </Box>
-            ))}
-          </Box>
-        </Box>
-
-        {/* Charts - Right Column */}
-        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-          <Box sx={{ display: 'flex', gap: 1, mb: 2, justifyContent: 'center' }}>
-            <Button
-              size="small"
-              variant={chartType === 'temperature' ? 'contained' : 'outlined'}
-              onClick={() => setChartType('temperature')}
-            >
-              🌡️
-            </Button>
-            <Button
-              size="small"
-              variant={chartType === 'precipitation' ? 'contained' : 'outlined'}
-              onClick={() => setChartType('precipitation')}
-            >
-              🌧️
-            </Button>
+            )}
           </Box>
 
-          <Box sx={{ flex: 1, width: '100%', minHeight: 0 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              {chartType === 'temperature' ? (
-                <LineChart data={chartData}>
-                  <XAxis dataKey="time" axisLine={false} tickLine={false} />
-                  <YAxis axisLine={false} tickLine={false} width={30} />
-                  <Tooltip />
-                  <Line 
-                    type="monotone" 
-                    dataKey="temperature" 
-                    stroke="var(--accent)" 
-                    strokeWidth={2}
-                    dot={{ fill: 'var(--accent)' }}
-                  />
-                </LineChart>
-              ) : (
-                <BarChart data={chartData}>
-                  <XAxis dataKey="time" axisLine={false} tickLine={false} />
-                  <YAxis axisLine={false} tickLine={false} width={30} />
-                  <Tooltip />
-                  <Bar dataKey="precipitation" fill="var(--accent)" />
-                </BarChart>
-              )}
-            </ResponsiveContainer>
+          {/* 3-Day Forecast - Middle Column */}
+          <Box sx={{ flex: 1 }}>
+            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>
+              3-Day Forecast
+            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {forecastData.map((day, index) => (
+                <Box
+                  key={index}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    p: 2,
+                    border: '1px solid var(--card-border)',
+                    borderRadius: 1,
+                    bgcolor: 'rgba(var(--accent-rgb), 0.05)'
+                  }}
+                >
+                  <Box sx={{ textAlign: 'right' }}>
+                    <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#ff6b6b' }}>
+                      {day.tempHigh}°F
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: '#00ddeb' }}>
+                      {day.tempLow}°F
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Typography variant="h5">
+                      {getWeatherIcon(day.weather.icon)}
+                    </Typography>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                      {day.weather.description}
+                    </Typography>
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+          </Box>
+
+          {/* Charts - Right Column */}
+          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+            <Box sx={{ display: 'flex', gap: 1, mb: 2, justifyContent: 'center' }}>
+              <Button
+                size="small"
+                variant={chartType === 'temperature' ? 'contained' : 'outlined'}
+                onClick={() => setChartType('temperature')}
+              >
+                🌡️
+              </Button>
+              <Button
+                size="small"
+                variant={chartType === 'precipitation' ? 'contained' : 'outlined'}
+                onClick={() => setChartType('precipitation')}
+              >
+                🌧️
+              </Button>
+            </Box>
+
+            <Box sx={{ flex: 1, width: '100%', minHeight: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                {chartType === 'temperature' ? (
+                  <LineChart data={chartData}>
+                    <XAxis dataKey="time" axisLine={false} tickLine={false} />
+                    <YAxis axisLine={false} tickLine={false} width={30} />
+                    <Tooltip />
+                    <Line 
+                      type="monotone" 
+                      dataKey="temperature" 
+                      stroke="var(--accent)" 
+                      strokeWidth={2}
+                      dot={{ fill: 'var(--accent)' }}
+                    />
+                  </LineChart>
+                ) : (
+                  <BarChart data={chartData}>
+                    <XAxis dataKey="time" axisLine={false} tickLine={false} />
+                    <YAxis axisLine={false} tickLine={false} width={30} />
+                    <Tooltip />
+                    <Bar dataKey="precipitation" fill="var(--accent)" />
+                  </BarChart>
+                )}
+              </ResponsiveContainer>
+            </Box>
           </Box>
         </Box>
       </Box>
-    </Box>
-  );
+    );
+  };
 
   if (loading) {
     return (
@@ -516,6 +542,74 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
       }}>
         <Typography variant="h6">🌤️ Weather</Typography>
         <Typography>Loading weather data...</Typography>
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box sx={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        p: 2
+      }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>🌤️ Weather</Typography>
+        <Box sx={{ p: 2, bgcolor: 'rgba(255, 0, 0, 0.1)', borderRadius: 1, mb: 2 }}>
+          <Typography color="error" variant="body2">
+            {error}
+          </Typography>
+        </Box>
+        {layoutType !== 'compact' && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {editingZip ? (
+              <>
+                <TextField
+                  size="small"
+                  value={tempZipCode}
+                  onChange={(e) => setTempZipCode(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Enter zip code"
+                  sx={{ width: 120 }}
+                  autoFocus
+                />
+                <IconButton size="small" onClick={handleZipCodeSave}>
+                  <Save />
+                </IconButton>
+                <IconButton size="small" onClick={handleZipCodeCancel}>
+                  <Cancel />
+                </IconButton>
+              </>
+            ) : (
+              <>
+                <Typography variant="body2" sx={{ cursor: 'pointer' }} onClick={() => setEditingZip(true)}>
+                  {zipCode || 'Set zip code'}
+                </Typography>
+                <IconButton size="small" onClick={() => setEditingZip(true)}>
+                  <Edit />
+                </IconButton>
+              </>
+            )}
+          </Box>
+        )}
+      </Box>
+    );
+  }
+
+  if (!weatherData) {
+    return (
+      <Box sx={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        p: 2
+      }}>
+        <Typography variant="h6">🌤️ Weather</Typography>
+        <Typography>No weather data available</Typography>
       </Box>
     );
   }
@@ -565,32 +659,28 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
         </Box>
       )}
 
-      {error && (
-        <Box sx={{ mb: 2, p: 2, bgcolor: 'rgba(255, 0, 0, 0.1)', borderRadius: 1, mx: 2 }}>
-          <Typography color="error" variant="body2">
-            {error}
-          </Typography>
-        </Box>
-      )}
+      {/* Dynamic Content Based on Layout */}
+      <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+        {layoutType === 'compact' && renderCompactLayout()}
+        {layoutType === 'medium' && renderMediumLayout()}
+        {layoutType === 'full' && renderFullLayout()}
+      </Box>
 
-      {weatherData && (
-        <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-          {layoutType === 'compact' && renderCompactLayout()}
-          {layoutType === 'medium' && renderMediumLayout()}
-          {layoutType === 'full' && renderFullLayout()}
-        </Box>
-      )}
-
-      {/* Layout indicator for debugging - remove in production */}
+      {/* Debug indicator */}
       <Box sx={{ 
         position: 'absolute', 
         bottom: 4, 
         right: 4, 
         fontSize: '0.7rem', 
         opacity: 0.3,
-        pointerEvents: 'none'
+        pointerEvents: 'none',
+        bgcolor: 'rgba(0,0,0,0.5)',
+        color: 'white',
+        px: 1,
+        py: 0.5,
+        borderRadius: 1
       }}>
-        {layoutType} ({widgetSize.width}×{widgetSize.height})
+        {layoutType.toUpperCase()} ({widgetSize.width}×{widgetSize.height})
       </Box>
     </Box>
   );
