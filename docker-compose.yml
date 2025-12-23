@@ -9,8 +9,6 @@
 # Updating:
 # - Pull latest images: docker-compose pull
 # - Restart services: docker-compose up -d
-#
-# For Tailscale support, use docker-compose-tailscale.yml instead
 
 services:
   homeglow-backend:
@@ -32,6 +30,12 @@ services:
     networks:
       - homeglow-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   homeglow-frontend:
     container_name: homeglow-frontend
@@ -45,15 +49,22 @@ services:
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     environment:
-      # OpenWeatherMap API key (get from https://openweathermap.org/api) -optional and can be set in UI later
+      # OpenWeatherMap API key (get from https://openweathermap.org/api) - optional and can be set in UI later
       - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
-      # Backend API URL - uses the host machine's ip address for internal communication (example: http://192.168.1.x)
+      # Backend API URL - uses the host machine's IP address for internal communication (example: http://192.168.1.x)
       - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}:${BACKEND_PORT:-5000}
     depends_on:
-      - homeglow-backend
+      homeglow-backend:
+        condition: service_healthy
     networks:
       - homeglow-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
 networks:
   homeglow-network:
