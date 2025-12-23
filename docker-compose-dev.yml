@@ -53,6 +53,7 @@ services:
       - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
       - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}
       - FRONTEND_PORT=${DEV_FRONTEND_PORT:-3001}
+      - BACKEND_SERVICE=backend-test
       - BACKEND_PORT=${DEV_BACKEND_PORT:-5001}
     depends_on:
       - backend-test
