@@ -1,3 +1,15 @@
+# HomeGlow Development Environment
+# Uses IDENTICAL Nginx configuration as production for true parity
+#
+# Quick Start:
+# 1. Create data directories: sudo mkdir -p /apps/homeglowtest/{data,uploads} && sudo chmod -R 777 /apps/homeglowtest
+# 2. Run: docker-compose -f docker-compose.dev.yml up -d
+#
+# Features:
+# - Same Nginx config as production (catches issues early!)
+# - Separate ports from production (3001 frontend, 5001 backend)
+# - Rebuild required for code changes: docker-compose -f docker-compose.dev.yml up -d --build frontend-test
+
 services:
   backend-test:
     container_name: backend-test
@@ -16,24 +28,39 @@ services:
       - PORT=${BACKEND_PORT:-5001}
     networks:
       - homeglow-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   frontend-test:
     container_name: frontend-test
     build:
       context: ./client
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
+      args:
+        - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
+        - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}:${BACKEND_PORT:-5001}
+        - BACKEND_SERVICE=backend-test:5001
     ports:
-      - "${FRONTEND_PORT:-3001}:3001"
-    volumes:
-      - /apps/homeglowtest/data:/app/data
-      - /apps/homeglowtest/uploads:/app/uploads
+      - "${FRONTEND_PORT:-3001}:3000"
     environment:
       - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
       - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}:${BACKEND_PORT:-5001}
+      - BACKEND_SERVICE=backend-test:5001
     depends_on:
-      - backend-test
+      backend-test:
+        condition: service_healthy
     networks:
       - homeglow-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
 networks:
   homeglow-network:
