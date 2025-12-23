@@ -48,7 +48,8 @@ import {
   CloudDownload,
   Refresh,
   Warning,
-  RestartAlt
+  RestartAlt,
+  Timer
 } from '@mui/icons-material';
 import { ChromePicker } from 'react-color';
 import axios from 'axios';
@@ -60,11 +61,11 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     PROXY_WHITELIST: ''
   });
   const [widgetSettings, setLocalWidgetSettings] = useState({
-    chores: { enabled: false, transparent: false },
-    calendar: { enabled: false, transparent: false },
-    photos: { enabled: false, transparent: false },
-    weather: { enabled: false, transparent: false },
-    widgetGallery: { enabled: true, transparent: false },
+    chores: { enabled: false, transparent: false, refreshInterval: 0 },
+    calendar: { enabled: false, transparent: false, refreshInterval: 0 },
+    photos: { enabled: false, transparent: false, refreshInterval: 0 },
+    weather: { enabled: false, transparent: false, refreshInterval: 0 },
+    widgetGallery: { enabled: true, transparent: false, refreshInterval: 0 },
     // Accent colors (shared) - only these are customizable
     primary: '#9E7FFF',
     secondary: '#38bdf8',
@@ -86,11 +87,35 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [saveMessage, setSaveMessage] = useState({ show: false, type: '', text: '' });
 
+  // Refresh interval options in milliseconds
+  const refreshIntervalOptions = [
+    { label: 'Disabled', value: 0 },
+    { label: '5 minutes', value: 5 * 60 * 1000 },
+    { label: '15 minutes', value: 15 * 60 * 1000 },
+    { label: '30 minutes', value: 30 * 60 * 1000 },
+    { label: '1 hour', value: 60 * 60 * 1000 },
+    { label: '2 hours', value: 2 * 60 * 60 * 1000 },
+    { label: '6 hours', value: 6 * 60 * 60 * 1000 },
+    { label: '12 hours', value: 12 * 60 * 60 * 1000 },
+    { label: '24 hours', value: 24 * 60 * 60 * 1000 }
+  ];
+
   useEffect(() => {
     const savedSettings = localStorage.getItem('widgetSettings');
     if (savedSettings) {
       const parsed = JSON.parse(savedSettings);
-      setLocalWidgetSettings(prev => ({ ...prev, ...parsed }));
+      // Ensure refresh intervals are included
+      const settingsWithDefaults = {
+        chores: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.chores },
+        calendar: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.calendar },
+        photos: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.photos },
+        weather: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.weather },
+        widgetGallery: { enabled: true, transparent: false, refreshInterval: 0, ...parsed.widgetGallery },
+        primary: parsed.primary || '#9E7FFF',
+        secondary: parsed.secondary || '#38bdf8',
+        accent: parsed.accent || '#f472b6'
+      };
+      setLocalWidgetSettings(settingsWithDefaults);
     }
     fetchSettings();
     fetchUsers();
@@ -200,7 +225,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const saveWidgetSettings = () => {
     localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
     setWidgetSettings(widgetSettings);
-    setSaveMessage({ show: true, type: 'success', text: 'Widget settings saved successfully!' });
+    setSaveMessage({ show: true, type: 'success', text: 'Widget settings saved successfully! Refresh intervals will take effect on next page load.' });
     setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
   };
 
@@ -242,6 +267,16 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       [widget]: {
         ...prev[widget],
         [field]: !prev[widget][field]
+      }
+    }));
+  };
+
+  const handleRefreshIntervalChange = (widget, interval) => {
+    setLocalWidgetSettings(prev => ({
+      ...prev,
+      [widget]: {
+        ...prev[widget],
+        refreshInterval: interval
       }
     }));
   };
@@ -548,6 +583,11 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     </Box>
   );
 
+  const getRefreshIntervalLabel = (interval) => {
+    const option = refreshIntervalOptions.find(opt => opt.value === interval);
+    return option ? option.label : 'Disabled';
+  };
+
   const tabs = [
     'APIs',
     'Widgets',
@@ -633,29 +673,63 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
             {Object.entries(widgetSettings).filter(([key]) => 
               ['chores', 'calendar', 'photos', 'weather'].includes(key)
             ).map(([widget, config]) => (
-              <Box key={widget} sx={{ mb: 2, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
-                <Typography variant="subtitle1" sx={{ mb: 1, textTransform: 'capitalize' }}>
+              <Box key={widget} sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
+                <Typography variant="subtitle1" sx={{ mb: 2, textTransform: 'capitalize', fontWeight: 'bold' }}>
                   {widget} Widget
                 </Typography>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={config.enabled}
-                      onChange={() => handleWidgetToggle(widget, 'enabled')}
+                
+                <Grid container spacing={2} alignItems="center">
+                  <Grid item xs={12} sm={6}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={config.enabled}
+                          onChange={() => handleWidgetToggle(widget, 'enabled')}
+                        />
+                      }
+                      label="Enabled"
                     />
-                  }
-                  label="Enabled"
-                />
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={config.transparent}
-                      onChange={() => handleWidgetToggle(widget, 'transparent')}
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={config.transparent}
+                          onChange={() => handleWidgetToggle(widget, 'transparent')}
+                        />
+                      }
+                      label="Transparent Background"
+                      sx={{ ml: 2 }}
                     />
-                  }
-                  label="Transparent Background"
-                  sx={{ ml: 2 }}
-                />
+                  </Grid>
+                  
+                  <Grid item xs={12} sm={6}>
+                    <FormControl fullWidth size="small">
+                      <InputLabel id={`${widget}-refresh-label`}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Timer fontSize="small" />
+                          Auto-Refresh Interval
+                        </Box>
+                      </InputLabel>
+                      <Select
+                        labelId={`${widget}-refresh-label`}
+                        value={config.refreshInterval || 0}
+                        onChange={(e) => handleRefreshIntervalChange(widget, e.target.value)}
+                        label="Auto-Refresh Interval"
+                      >
+                        {refreshIntervalOptions.map((option) => (
+                          <MenuItem key={option.value} value={option.value}>
+                            {option.label}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                </Grid>
+                
+                {config.refreshInterval > 0 && (
+                  <Alert severity="info" sx={{ mt: 2 }} icon={<Timer />}>
+                    This widget will automatically refresh every {getRefreshIntervalLabel(config.refreshInterval).toLowerCase()}
+                  </Alert>
+                )}
               </Box>
             ))}
 
@@ -667,28 +741,62 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                 The Widget Gallery displays custom uploaded widgets below the main dashboard widgets.
               </Typography>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={widgetSettings.widgetGallery?.enabled || false}
-                    onChange={() => handleWidgetToggle('widgetGallery', 'enabled')}
+              
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={12} sm={6}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={widgetSettings.widgetGallery?.enabled || false}
+                        onChange={() => handleWidgetToggle('widgetGallery', 'enabled')}
+                      />
+                    }
+                    label="Show Widget Gallery"
                   />
-                }
-                label="Show Widget Gallery"
-              />
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={widgetSettings.widgetGallery?.transparent || false}
-                    onChange={() => handleWidgetToggle('widgetGallery', 'transparent')}
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={widgetSettings.widgetGallery?.transparent || false}
+                        onChange={() => handleWidgetToggle('widgetGallery', 'transparent')}
+                      />
+                    }
+                    label="Transparent Background"
+                    sx={{ ml: 2 }}
                   />
-                }
-                label="Transparent Background"
-                sx={{ ml: 2 }}
-              />
+                </Grid>
+                
+                <Grid item xs={12} sm={6}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="gallery-refresh-label">
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Timer fontSize="small" />
+                        Auto-Refresh Interval
+                      </Box>
+                    </InputLabel>
+                    <Select
+                      labelId="gallery-refresh-label"
+                      value={widgetSettings.widgetGallery?.refreshInterval || 0}
+                      onChange={(e) => handleRefreshIntervalChange('widgetGallery', e.target.value)}
+                      label="Auto-Refresh Interval"
+                    >
+                      {refreshIntervalOptions.map((option) => (
+                        <MenuItem key={option.value} value={option.value}>
+                          {option.label}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              </Grid>
+              
+              {widgetSettings.widgetGallery?.refreshInterval > 0 && (
+                <Alert severity="info" sx={{ mt: 2 }} icon={<Timer />}>
+                  Widget Gallery will automatically refresh every {getRefreshIntervalLabel(widgetSettings.widgetGallery.refreshInterval).toLowerCase()}
+                </Alert>
+              )}
             </Box>
             
-            <Button variant="contained" onClick={saveWidgetSettings} sx={{ mt: 2 }}>
+            <Button variant="contained" onClick={saveWidgetSettings} sx={{ mt: 2 }} startIcon={<Save />}>
               Save Widget Settings
             </Button>
           </CardContent>
