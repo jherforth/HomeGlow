@@ -9,7 +9,7 @@ import 'react-resizable/css/styles.css';
  * Container component that manages multiple draggable widgets
  * Provides a responsive grid system for optimal layout
  */
-const WidgetContainer = ({ children, widgets = [], locked = true }) => {
+const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange: onLayoutChangeCallback }) => {
   const [containerWidth, setContainerWidth] = useState(1200);
   const [gridCols, setGridCols] = useState(12);
   const [selectedWidget, setSelectedWidget] = useState(null);
@@ -76,7 +76,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true }) => {
     }
   }, [locked]);
 
-  // Save layout to localStorage
+  // Save layout to localStorage and notify parent
   const handleLayoutChange = (newLayout) => {
     if (locked) return; // Don't save if locked
     
@@ -89,6 +89,11 @@ const WidgetContainer = ({ children, widgets = [], locked = true }) => {
         h: item.h,
       }));
     });
+
+    // Notify parent component of layout change
+    if (onLayoutChangeCallback) {
+      onLayoutChangeCallback(newLayout);
+    }
   };
 
   // Handle resize button clicks (both increment and decrement)
@@ -104,12 +109,10 @@ const WidgetContainer = ({ children, widgets = [], locked = true }) => {
           switch (direction) {
             case 'right':
               if (isDecrement) {
-                // Decrease width by 1, but respect minimum width
                 if (item.w > item.minW) {
                   updatedItem.w = item.w - 1;
                 }
               } else {
-                // Increase width by 1, but don't exceed grid columns
                 if (item.x + item.w < gridCols) {
                   updatedItem.w = item.w + 1;
                 }
@@ -117,13 +120,11 @@ const WidgetContainer = ({ children, widgets = [], locked = true }) => {
               break;
             case 'left':
               if (isDecrement) {
-                // Decrease width by 1 and move right
                 if (item.w > item.minW) {
                   updatedItem.x = item.x + 1;
                   updatedItem.w = item.w - 1;
                 }
               } else {
-                // Increase width by 1 and move left
                 if (item.x > 0) {
                   updatedItem.x = item.x - 1;
                   updatedItem.w = item.w + 1;
@@ -132,24 +133,20 @@ const WidgetContainer = ({ children, widgets = [], locked = true }) => {
               break;
             case 'bottom':
               if (isDecrement) {
-                // Decrease height by 1, but respect minimum height
                 if (item.h > item.minH) {
                   updatedItem.h = item.h - 1;
                 }
               } else {
-                // Increase height by 1
                 updatedItem.h = item.h + 1;
               }
               break;
             case 'top':
               if (isDecrement) {
-                // Decrease height by 1 and move down
                 if (item.h > item.minH) {
                   updatedItem.y = item.y + 1;
                   updatedItem.h = item.h - 1;
                 }
               } else {
-                // Increase height by 1 and move up
                 if (item.y > 0) {
                   updatedItem.y = item.y - 1;
                   updatedItem.h = item.h + 1;
@@ -170,13 +167,18 @@ const WidgetContainer = ({ children, widgets = [], locked = true }) => {
         }
         return item;
       });
+
+      // Notify parent component of layout change
+      if (onLayoutChangeCallback) {
+        onLayoutChangeCallback(newLayout);
+      }
+
       return newLayout;
     });
   };
 
   const handleWidgetClick = (widgetId, e) => {
     if (locked) return; // Don't select if locked
-    // Select widget when clicking anywhere on it
     setSelectedWidget(widgetId);
   };
 
