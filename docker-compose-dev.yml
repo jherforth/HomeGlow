@@ -51,7 +51,7 @@ services:
       - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}:${BACKEND_PORT:-5001}
       - BACKEND_SERVICE=backend-test:5001
     depends_on:
-      backend-test:
+      backend-test
 #        condition: service_healthy
     networks:
       - homeglow-network
