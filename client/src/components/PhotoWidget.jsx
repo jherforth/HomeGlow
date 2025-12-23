@@ -64,6 +64,26 @@ const PhotoWidget = ({ transparentBackground }) => {
     }
   };
 
+  // Auto-refresh functionality
+  useEffect(() => {
+    const widgetSettings = JSON.parse(localStorage.getItem('widgetSettings') || '{}');
+    const refreshInterval = widgetSettings.photo?.refreshInterval || 0;
+
+    if (refreshInterval > 0) {
+      console.log(`PhotoWidget: Auto-refresh enabled (${refreshInterval}ms)`);
+      
+      const intervalId = setInterval(() => {
+        console.log('PhotoWidget: Auto-refreshing data...');
+        fetchPhotos();
+      }, refreshInterval);
+
+      return () => {
+        console.log('PhotoWidget: Clearing auto-refresh interval');
+        clearInterval(intervalId);
+      };
+    }
+  }, []);
+
   // Slideshow timer
   useEffect(() => {
     if (!isPlaying || photos.length <= photosPerView) return;
