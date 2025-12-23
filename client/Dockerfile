@@ -15,6 +15,7 @@ COPY . .
 # Build arguments for environment variables
 ARG VITE_OPENWEATHER_API_KEY
 ARG VITE_REACT_APP_API_URL
+ARG BACKEND_SERVICE=homeglow-backend:5000
 
 # Set environment variables for build
 ENV VITE_OPENWEATHER_API_KEY=$VITE_OPENWEATHER_API_KEY
@@ -23,14 +24,24 @@ ENV VITE_REACT_APP_API_URL=$VITE_REACT_APP_API_URL
 # Build the application
 RUN npm run build
 
-# Production stage
+# Production stage with Nginx
 FROM nginx:alpine
 
 # Copy built assets from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy nginx configuration
+# Copy unified nginx configuration (same for dev and prod!)
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Accept backend service as build arg for API proxy configuration
+ARG BACKEND_SERVICE=homeglow-backend:5000
+
+# Update nginx config with correct backend service
+RUN sed -i "s|homeglow-backend:5000|${BACKEND_SERVICE}|g" /etc/nginx/conf.d/default.conf
+
+# Add healthcheck
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
 
 EXPOSE 3000
 
