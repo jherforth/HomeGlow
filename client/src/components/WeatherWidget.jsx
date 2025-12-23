@@ -29,6 +29,28 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
     }
   }, [zipCode, weatherApiKey]);
 
+  // Auto-refresh functionality
+  useEffect(() => {
+    const widgetSettings = JSON.parse(localStorage.getItem('widgetSettings') || '{}');
+    const refreshInterval = widgetSettings.weather?.refreshInterval || 0;
+
+    if (refreshInterval > 0) {
+      console.log(`WeatherWidget: Auto-refresh enabled (${refreshInterval}ms)`);
+      
+      const intervalId = setInterval(() => {
+        console.log('WeatherWidget: Auto-refreshing data...');
+        if (zipCode && weatherApiKey) {
+          fetchWeatherData();
+        }
+      }, refreshInterval);
+
+      return () => {
+        console.log('WeatherWidget: Clearing auto-refresh interval');
+        clearInterval(intervalId);
+      };
+    }
+  }, [zipCode, weatherApiKey]);
+
   const fetchWeatherData = async () => {
     if (!weatherApiKey) {
       setError('Weather API key not configured. Please add your OpenWeatherMap API key in the Admin Panel.');
@@ -304,8 +326,8 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
                 sx={{ 
                   mt: 3,
                   p: 2,
-                  width: '90%', // Set fixed width
-                  alignSelf: 'center', // Center the box
+                  width: '90%',
+                  alignSelf: 'center',
                   border: '1px solid var(--card-border)',
                   borderRadius: 2,
                   bgcolor: 'rgba(var(--accent-rgb), 0.05)',
@@ -377,14 +399,14 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey }) => {
                     bgcolor: 'rgba(var(--accent-rgb), 0.05)'
                   }}
                 >
-                <Box sx={{ textAlign: 'right' }}>
-                  <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#ff6b6b' }}>
-                    {day.tempHigh}°F
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: '#00ddeb' }}>
-                    {day.tempLow}°F
-                  </Typography>
-                </Box>
+                  <Box sx={{ textAlign: 'right' }}>
+                    <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#ff6b6b' }}>
+                      {day.tempHigh}°F
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: '#00ddeb' }}>
+                      {day.tempLow}°F
+                    </Typography>
+                  </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <Typography variant="h5">
                       {getWeatherIcon(day.weather.icon)}
