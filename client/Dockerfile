@@ -16,6 +16,7 @@ COPY . .
 ARG VITE_OPENWEATHER_API_KEY
 ARG VITE_REACT_APP_API_URL
 ARG BACKEND_PORT=5000
+ARG FRONTEND_PORT=3000
 
 # Set environment variables for build
 ENV VITE_OPENWEATHER_API_KEY=$VITE_OPENWEATHER_API_KEY
@@ -32,21 +33,29 @@ ARG FRONTEND_PORT=3000
 ARG BACKEND_SERVICE=homeglow-backend
 ARG BACKEND_PORT=5000
 
+# Set as environment variables for runtime
+ENV FRONTEND_PORT=$FRONTEND_PORT
+ENV BACKEND_PORT=$BACKEND_PORT
+
 # Copy built assets from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Copy nginx configuration template
 COPY nginx.conf /etc/nginx/conf.d/default.conf.template
 
-# Replace placeholders with actual values
-RUN sed -i "s|REPLACE_FRONTEND_PORT|${FRONTEND_PORT}|g" /etc/nginx/conf.d/default.conf.template && \
-    sed -i "s|REPLACE_BACKEND_SERVICE|${BACKEND_SERVICE}:${BACKEND_PORT}|g" /etc/nginx/conf.d/default.conf.template && \
-    mv /etc/nginx/conf.d/default.conf.template /etc/nginx/conf.d/default.conf
+# Create entrypoint script to substitute variables at runtime
+RUN echo '#!/bin/sh' > /docker-entrypoint.sh && \
+    echo 'set -e' >> /docker-entrypoint.sh && \
+    echo 'echo "Configuring Nginx with FRONTEND_PORT=${FRONTEND_PORT} and BACKEND_PORT=${BACKEND_PORT}"' >> /docker-entrypoint.sh && \
+    echo 'envsubst "\$FRONTEND_PORT \$BACKEND_SERVICE \$BACKEND_PORT" < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf' >> /docker-entrypoint.sh && \
+    echo 'cat /etc/nginx/conf.d/default.conf' >> /docker-entrypoint.sh && \
+    echo 'exec nginx -g "daemon off;"' >> /docker-entrypoint.sh && \
+    chmod +x /docker-entrypoint.sh
 
-# Add healthcheck
+# Add healthcheck with environment variable
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:${FRONTEND_PORT}/ || exit 1
+  CMD sh -c 'wget --no-verbose --tries=1 --spider http://localhost:${FRONTEND_PORT}/ || exit 1'
 
 EXPOSE ${FRONTEND_PORT}
 
-CMD ["nginx", "-g", "daemon off;"]
+ENTRYPOINT ["/docker-entrypoint.sh"]
