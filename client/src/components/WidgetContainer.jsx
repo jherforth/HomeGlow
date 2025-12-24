@@ -42,12 +42,10 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
 
   // Initialize layout from localStorage or defaults
   useEffect(() => {
-    console.log('WidgetContainer: Initializing layout for', widgets.length, 'widgets');
     const initialLayout = widgets.map((widget) => {
       const savedLayout = localStorage.getItem(`widget-layout-${widget.id}`);
       if (savedLayout) {
         const parsed = JSON.parse(savedLayout);
-        console.log(`WidgetContainer: Loaded layout for ${widget.id}:`, parsed);
         return {
           i: widget.id,
           x: parsed.x || widget.defaultPosition.x,
@@ -58,7 +56,6 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
           minH: widget.minHeight || 2,
         };
       }
-      console.log(`WidgetContainer: Using default layout for ${widget.id}`);
       return {
         i: widget.id,
         x: widget.defaultPosition.x,
@@ -70,7 +67,6 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
       };
     });
     setLayout(initialLayout);
-    console.log('WidgetContainer: Initial layout set:', initialLayout);
   }, [widgets]);
 
   // Deselect widget when locked
@@ -84,8 +80,6 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
   const handleLayoutChange = (newLayout) => {
     if (locked) return; // Don't save if locked
     
-    console.log('WidgetContainer: Layout changed:', newLayout);
-    
     setLayout(newLayout);
     newLayout.forEach((item) => {
       const layoutData = {
@@ -95,52 +89,35 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
         h: item.h,
       };
       localStorage.setItem(`widget-layout-${item.i}`, JSON.stringify(layoutData));
-      console.log(`WidgetContainer: Saved layout for ${item.i}:`, layoutData);
     });
 
     // Notify parent component of layout change
     if (onLayoutChangeCallback) {
-      console.log('WidgetContainer: Notifying parent of layout change');
       onLayoutChangeCallback(newLayout);
     }
   };
 
   // Handle resize button clicks (both increment and decrement)
   const handleResize = (widgetId, direction, isDecrement = false) => {
-    console.log(`🔵 WidgetContainer: handleResize called! Widget: ${widgetId}, Direction: ${direction}, Decrement: ${isDecrement}, Locked: ${locked}`);
-    
     if (locked) {
-      console.log('🔴 WidgetContainer: Resize blocked - layout is locked');
       return;
     }
     
-    console.log(`✅ WidgetContainer: Processing resize for ${widgetId}`);
-    
     setLayout((currentLayout) => {
-      console.log('🔵 WidgetContainer: Current layout before resize:', currentLayout);
-      
       const newLayout = currentLayout.map((item) => {
         if (item.i === widgetId) {
           const updatedItem = { ...item };
           const delta = isDecrement ? -1 : 1;
-
-          console.log(`🔵 WidgetContainer: Found widget ${widgetId}, current size: ${item.w}×${item.h}`);
 
           switch (direction) {
             case 'right':
               if (isDecrement) {
                 if (item.w > item.minW) {
                   updatedItem.w = item.w - 1;
-                  console.log(`✅ Decreased width to ${updatedItem.w}`);
-                } else {
-                  console.log(`⚠️ Cannot decrease width below minimum ${item.minW}`);
                 }
               } else {
                 if (item.x + item.w < gridCols) {
                   updatedItem.w = item.w + 1;
-                  console.log(`✅ Increased width to ${updatedItem.w}`);
-                } else {
-                  console.log(`⚠️ Cannot increase width beyond grid boundary`);
                 }
               }
               break;
@@ -149,17 +126,11 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                 if (item.w > item.minW) {
                   updatedItem.x = item.x + 1;
                   updatedItem.w = item.w - 1;
-                  console.log(`✅ Decreased width to ${updatedItem.w}, moved x to ${updatedItem.x}`);
-                } else {
-                  console.log(`⚠️ Cannot decrease width below minimum ${item.minW}`);
                 }
               } else {
                 if (item.x > 0) {
                   updatedItem.x = item.x - 1;
                   updatedItem.w = item.w + 1;
-                  console.log(`✅ Increased width to ${updatedItem.w}, moved x to ${updatedItem.x}`);
-                } else {
-                  console.log(`⚠️ Cannot increase width beyond left boundary`);
                 }
               }
               break;
@@ -167,13 +138,9 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
               if (isDecrement) {
                 if (item.h > item.minH) {
                   updatedItem.h = item.h - 1;
-                  console.log(`✅ Decreased height to ${updatedItem.h}`);
-                } else {
-                  console.log(`⚠️ Cannot decrease height below minimum ${item.minH}`);
                 }
               } else {
                 updatedItem.h = item.h + 1;
-                console.log(`✅ Increased height to ${updatedItem.h}`);
               }
               break;
             case 'top':
@@ -181,23 +148,15 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                 if (item.h > item.minH) {
                   updatedItem.y = item.y + 1;
                   updatedItem.h = item.h - 1;
-                  console.log(`✅ Decreased height to ${updatedItem.h}, moved y to ${updatedItem.y}`);
-                } else {
-                  console.log(`⚠️ Cannot decrease height below minimum ${item.minH}`);
                 }
               } else {
                 if (item.y > 0) {
                   updatedItem.y = item.y - 1;
                   updatedItem.h = item.h + 1;
-                  console.log(`✅ Increased height to ${updatedItem.h}, moved y to ${updatedItem.y}`);
-                } else {
-                  console.log(`⚠️ Cannot increase height beyond top boundary`);
                 }
               }
               break;
           }
-
-          console.log(`🔵 WidgetContainer: Updated ${widgetId} from ${item.w}×${item.h} to ${updatedItem.w}×${updatedItem.h}`);
 
           // Save to localStorage
           const layoutData = {
@@ -207,21 +166,15 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
             h: updatedItem.h,
           };
           localStorage.setItem(`widget-layout-${item.i}`, JSON.stringify(layoutData));
-          console.log(`💾 WidgetContainer: Saved to localStorage:`, layoutData);
 
           return updatedItem;
         }
         return item;
       });
 
-      console.log('🔵 WidgetContainer: New layout after resize:', newLayout);
-
       // Notify parent component of layout change
       if (onLayoutChangeCallback) {
-        console.log('📢 WidgetContainer: Notifying parent of layout change');
         onLayoutChangeCallback(newLayout);
-      } else {
-        console.log('⚠️ WidgetContainer: No parent callback available');
       }
 
       return newLayout;
@@ -230,7 +183,6 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
 
   const handleWidgetClick = (widgetId, e) => {
     if (locked) return; // Don't select if locked
-    console.log('WidgetContainer: Widget clicked:', widgetId);
     setSelectedWidget(widgetId);
   };
 
@@ -239,7 +191,6 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
     const handleClickOutside = (e) => {
       if (!e.target.closest('.widget-wrapper')) {
         if (selectedWidget) {
-          console.log('WidgetContainer: Deselecting widget');
           setSelectedWidget(null);
         }
       }
@@ -348,7 +299,6 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       <Box
                         onMouseDown={(e) => {
                           e.stopPropagation();
-                          console.log('🟢 BUTTON CLICKED: Top Decrease');
                           handleResize(widget.id, 'top', true);
                         }}
                         sx={{
@@ -375,7 +325,6 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       <Box
                         onMouseDown={(e) => {
                           e.stopPropagation();
-                          console.log('🟢 BUTTON CLICKED: Top Increase');
                           handleResize(widget.id, 'top', false);
                         }}
                         sx={{
@@ -418,7 +367,6 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       <Box
                         onMouseDown={(e) => {
                           e.stopPropagation();
-                          console.log('🟢 BUTTON CLICKED: Right Decrease');
                           handleResize(widget.id, 'right', true);
                         }}
                         sx={{
@@ -445,7 +393,6 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       <Box
                         onMouseDown={(e) => {
                           e.stopPropagation();
-                          console.log('🟢 BUTTON CLICKED: Right Increase');
                           handleResize(widget.id, 'right', false);
                         }}
                         sx={{
@@ -487,7 +434,6 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       <Box
                         onMouseDown={(e) => {
                           e.stopPropagation();
-                          console.log('🟢 BUTTON CLICKED: Bottom Decrease');
                           handleResize(widget.id, 'bottom', true);
                         }}
                         sx={{
@@ -514,7 +460,6 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       <Box
                         onMouseDown={(e) => {
                           e.stopPropagation();
-                          console.log('🟢 BUTTON CLICKED: Bottom Increase');
                           handleResize(widget.id, 'bottom', false);
                         }}
                         sx={{
@@ -556,7 +501,6 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       <Box
                         onMouseDown={(e) => {
                           e.stopPropagation();
-                          console.log('🟢 BUTTON CLICKED: Left Decrease');
                           handleResize(widget.id, 'left', true);
                         }}
                         sx={{
@@ -583,7 +527,6 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       <Box
                         onMouseDown={(e) => {
                           e.stopPropagation();
-                          console.log('🟢 BUTTON CLICKED: Left Increase');
                           handleResize(widget.id, 'left', false);
                         }}
                         sx={{
