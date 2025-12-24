@@ -22,7 +22,6 @@ const Dashboard = () => {
 
   // Load saved layouts and initialize widget sizes
   useEffect(() => {
-    console.log('Dashboard: Initializing widget sizes from localStorage');
     const sizes = {};
     
     // Define default widgets - MUST MATCH IDs in widgets array below
@@ -38,10 +37,8 @@ const Dashboard = () => {
       if (savedLayout) {
         const parsed = JSON.parse(savedLayout);
         sizes[widget.id] = { width: parsed.w, height: parsed.h };
-        console.log(`Dashboard: Loaded size for ${widget.id}:`, sizes[widget.id]);
       } else {
         sizes[widget.id] = widget.defaultSize;
-        console.log(`Dashboard: Using default size for ${widget.id}:`, sizes[widget.id]);
       }
     });
     
@@ -50,12 +47,9 @@ const Dashboard = () => {
 
   // Handle layout changes from WidgetContainer
   const handleLayoutChange = (layout) => {
-    console.log('📢 Dashboard: Layout changed:', layout);
-    
     const newSizes = {};
     layout.forEach(item => {
       newSizes[item.i] = { width: item.w, height: item.h };
-      console.log(`📢 Dashboard: Updated size for ${item.i}:`, newSizes[item.i]);
     });
     
     setWidgetSizes(newSizes);
@@ -106,7 +100,6 @@ const Dashboard = () => {
     
     // Special handling for weather widget to pass size prop
     if (widget.id === 'weather-widget') {
-      console.log('📢 Dashboard: Rendering weather widget with size:', size);
       return {
         ...widget,
         content: <WeatherWidget 
@@ -118,8 +111,6 @@ const Dashboard = () => {
     
     return widget;
   });
-
-  console.log('📢 Dashboard: Current widget sizes:', widgetSizes);
 
   return (
     <Box sx={{ 
