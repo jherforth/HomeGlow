@@ -69,7 +69,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     chores: { enabled: false, transparent: false, refreshInterval: 0 },
     calendar: { enabled: false, transparent: false, refreshInterval: 0 },
     photos: { enabled: false, transparent: false, refreshInterval: 0 },
-    weather: { enabled: false, transparent: false, refreshInterval: 0, layoutMode: 'auto' },
+    weather: { enabled: false, transparent: false, refreshInterval: 0, layoutMode: 'medium' },
     widgetGallery: { enabled: true, transparent: false, refreshInterval: 0 },
     // Accent colors (shared) - only these are customizable
     primary: '#9E7FFF',
@@ -109,12 +109,18 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     const savedSettings = localStorage.getItem('widgetSettings');
     if (savedSettings) {
       const parsed = JSON.parse(savedSettings);
-      // Ensure refresh intervals and layout mode are included
+      // Ensure refresh intervals and layout mode are included, default to 'medium' if 'auto' or not set
       const settingsWithDefaults = {
         chores: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.chores },
         calendar: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.calendar },
         photos: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.photos },
-        weather: { enabled: false, transparent: false, refreshInterval: 0, layoutMode: 'auto', ...parsed.weather },
+        weather: { 
+          enabled: false, 
+          transparent: false, 
+          refreshInterval: 0, 
+          layoutMode: (parsed.weather?.layoutMode === 'auto' || !parsed.weather?.layoutMode) ? 'medium' : parsed.weather.layoutMode,
+          ...parsed.weather 
+        },
         widgetGallery: { enabled: true, transparent: false, refreshInterval: 0, ...parsed.widgetGallery },
         primary: parsed.primary || '#9E7FFF',
         secondary: parsed.secondary || '#38bdf8',
@@ -809,24 +815,9 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
                 </Typography>
                 
                 <RadioGroup
-                  value={widgetSettings.weather?.layoutMode || 'auto'}
+                  value={widgetSettings.weather?.layoutMode || 'medium'}
                   onChange={(e) => handleWeatherLayoutModeChange(e.target.value)}
                 >
-                  <FormControlLabel
-                    value="auto"
-                    control={<Radio />}
-                    label={
-                      <Box>
-                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                          Auto (Recommended)
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Automatically adjusts layout based on widget size
-                        </Typography>
-                      </Box>
-                    }
-                  />
-                  
                   <FormControlLabel
                     value="compact"
                     control={<Radio />}
@@ -882,11 +873,9 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
                   />
                 </RadioGroup>
 
-                {widgetSettings.weather?.layoutMode !== 'auto' && (
-                  <Alert severity="warning" sx={{ mt: 2 }}>
-                    Manual layout mode will override automatic size-based layout detection. The widget will always display in {widgetSettings.weather?.layoutMode} mode regardless of its size.
-                  </Alert>
-                )}
+                <Alert severity="info" sx={{ mt: 2 }}>
+                  The selected layout mode will be used regardless of widget size. Resize the widget to fit your preferred layout.
+                </Alert>
               </Box>
               
               {widgetSettings.weather?.refreshInterval > 0 && (
