@@ -11,6 +11,7 @@ const Dashboard = () => {
   const [locked, setLocked] = useState(true);
   const [weatherApiKey, setWeatherApiKey] = useState('');
   const [widgetSizes, setWidgetSizes] = useState({});
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     // Load weather API key from localStorage
@@ -55,6 +56,29 @@ const Dashboard = () => {
     setWidgetSizes(newSizes);
   };
 
+  // Handle lock toggle - refresh weather widget when locking
+  const handleLockToggle = () => {
+    const newLockedState = !locked;
+    setLocked(newLockedState);
+    
+    // When locking, query the latest weather widget size and force refresh
+    if (newLockedState) {
+      const savedLayout = localStorage.getItem('widget-layout-weather-widget');
+      if (savedLayout) {
+        const parsed = JSON.parse(savedLayout);
+        const newSize = { width: parsed.w, height: parsed.h };
+        
+        setWidgetSizes(prev => ({
+          ...prev,
+          'weather-widget': newSize
+        }));
+        
+        // Force weather widget to re-render with new size
+        setRefreshKey(prev => prev + 1);
+      }
+    }
+  };
+
   // Define widgets with their configurations - IDs MUST MATCH localStorage keys
   const widgets = [
     {
@@ -88,6 +112,7 @@ const Dashboard = () => {
       minWidth: 2,
       minHeight: 2,
       content: <WeatherWidget 
+        key={refreshKey}
         weatherApiKey={weatherApiKey}
         widgetSize={widgetSizes['weather-widget'] || { width: 4, height: 4 }}
       />
@@ -103,6 +128,7 @@ const Dashboard = () => {
       return {
         ...widget,
         content: <WeatherWidget 
+          key={refreshKey}
           weatherApiKey={weatherApiKey}
           widgetSize={size}
         />
@@ -127,7 +153,7 @@ const Dashboard = () => {
       }}>
         <Tooltip title={locked ? 'Unlock to edit layout' : 'Lock layout'}>
           <IconButton
-            onClick={() => setLocked(!locked)}
+            onClick={handleLockToggle}
             sx={{
               backgroundColor: locked ? 'var(--surface)' : 'var(--accent)',
               color: locked ? 'var(--text)' : 'white',
