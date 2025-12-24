@@ -16,8 +16,17 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
   const [error, setError] = useState(null);
   const [chartType, setChartType] = useState('temperature');
 
-  // Determine layout based on widget size
+  // Determine layout based on widget size OR manual override
   const getLayoutType = () => {
+    // Check for manual layout mode override
+    const widgetSettings = JSON.parse(localStorage.getItem('widgetSettings') || '{}');
+    const layoutMode = widgetSettings.weather?.layoutMode;
+    
+    if (layoutMode && layoutMode !== 'auto') {
+      return layoutMode;
+    }
+    
+    // Auto-calculate based on size
     const { width: w, height: h } = widgetSize;
     
     // Compact: Small widgets (2 cols or less, 2 rows or less)
