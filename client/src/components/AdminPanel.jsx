@@ -36,7 +36,9 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Backdrop
+  Backdrop,
+  RadioGroup,
+  Radio
 } from '@mui/material';
 import {
   Delete,
@@ -49,7 +51,10 @@ import {
   Refresh,
   Warning,
   RestartAlt,
-  Timer
+  Timer,
+  ViewCompact,
+  ViewModule,
+  ViewQuilt
 } from '@mui/icons-material';
 import { ChromePicker } from 'react-color';
 import axios from 'axios';
@@ -64,7 +69,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     chores: { enabled: false, transparent: false, refreshInterval: 0 },
     calendar: { enabled: false, transparent: false, refreshInterval: 0 },
     photos: { enabled: false, transparent: false, refreshInterval: 0 },
-    weather: { enabled: false, transparent: false, refreshInterval: 0 },
+    weather: { enabled: false, transparent: false, refreshInterval: 0, layoutMode: 'auto' },
     widgetGallery: { enabled: true, transparent: false, refreshInterval: 0 },
     // Accent colors (shared) - only these are customizable
     primary: '#9E7FFF',
@@ -104,12 +109,12 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     const savedSettings = localStorage.getItem('widgetSettings');
     if (savedSettings) {
       const parsed = JSON.parse(savedSettings);
-      // Ensure refresh intervals are included
+      // Ensure refresh intervals and layout mode are included
       const settingsWithDefaults = {
         chores: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.chores },
         calendar: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.calendar },
         photos: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.photos },
-        weather: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.weather },
+        weather: { enabled: false, transparent: false, refreshInterval: 0, layoutMode: 'auto', ...parsed.weather },
         widgetGallery: { enabled: true, transparent: false, refreshInterval: 0, ...parsed.widgetGallery },
         primary: parsed.primary || '#9E7FFF',
         secondary: parsed.secondary || '#38bdf8',
@@ -225,7 +230,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const saveWidgetSettings = () => {
     localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
     setWidgetSettings(widgetSettings);
-    setSaveMessage({ show: true, type: 'success', text: 'Widget settings saved successfully! Refresh intervals will take effect on next page load.' });
+    setSaveMessage({ show: true, type: 'success', text: 'Widget settings saved successfully! Refresh page to see changes.' });
     setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
   };
 
@@ -277,6 +282,16 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       [widget]: {
         ...prev[widget],
         refreshInterval: interval
+      }
+    }));
+  };
+
+  const handleWeatherLayoutModeChange = (mode) => {
+    setLocalWidgetSettings(prev => ({
+      ...prev,
+      weather: {
+        ...prev.weather,
+        layoutMode: mode
       }
     }));
   };
@@ -671,7 +686,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
 
             {/* Core Widgets */}
             {Object.entries(widgetSettings).filter(([key]) => 
-              ['chores', 'calendar', 'photos', 'weather'].includes(key)
+              ['chores', 'calendar', 'photos'].includes(key)
             ).map(([widget, config]) => (
               <Box key={widget} sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
                 <Typography variant="subtitle1" sx={{ mb: 2, textTransform: 'capitalize', fontWeight: 'bold' }}>
@@ -732,6 +747,154 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
                 )}
               </Box>
             ))}
+
+            {/* Weather Widget with Layout Mode */}
+            <Box sx={{ mb: 3, p: 2, border: '2px solid var(--accent)', borderRadius: 1, backgroundColor: 'rgba(158, 127, 255, 0.05)' }}>
+              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>
+                🌤️ Weather Widget
+              </Typography>
+              
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={12} sm={6}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={widgetSettings.weather?.enabled || false}
+                        onChange={() => handleWidgetToggle('weather', 'enabled')}
+                      />
+                    }
+                    label="Enabled"
+                  />
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={widgetSettings.weather?.transparent || false}
+                        onChange={() => handleWidgetToggle('weather', 'transparent')}
+                      />
+                    }
+                    label="Transparent Background"
+                    sx={{ ml: 2 }}
+                  />
+                </Grid>
+                
+                <Grid item xs={12} sm={6}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="weather-refresh-label">
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Timer fontSize="small" />
+                        Auto-Refresh Interval
+                      </Box>
+                    </InputLabel>
+                    <Select
+                      labelId="weather-refresh-label"
+                      value={widgetSettings.weather?.refreshInterval || 0}
+                      onChange={(e) => handleRefreshIntervalChange('weather', e.target.value)}
+                      label="Auto-Refresh Interval"
+                    >
+                      {refreshIntervalOptions.map((option) => (
+                        <MenuItem key={option.value} value={option.value}>
+                          {option.label}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              </Grid>
+
+              {/* Weather Layout Mode Selection */}
+              <Box sx={{ mt: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1, bgcolor: 'rgba(255, 255, 255, 0.02)' }}>
+                <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <ViewModule />
+                  Layout Mode
+                </Typography>
+                
+                <RadioGroup
+                  value={widgetSettings.weather?.layoutMode || 'auto'}
+                  onChange={(e) => handleWeatherLayoutModeChange(e.target.value)}
+                >
+                  <FormControlLabel
+                    value="auto"
+                    control={<Radio />}
+                    label={
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                          Auto (Recommended)
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Automatically adjusts layout based on widget size
+                        </Typography>
+                      </Box>
+                    }
+                  />
+                  
+                  <FormControlLabel
+                    value="compact"
+                    control={<Radio />}
+                    label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <ViewCompact />
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                            Compact
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Current weather only (minimal space)
+                          </Typography>
+                        </Box>
+                      </Box>
+                    }
+                  />
+                  
+                  <FormControlLabel
+                    value="medium"
+                    control={<Radio />}
+                    label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <ViewModule />
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                            Medium
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Current weather + 3-day forecast
+                          </Typography>
+                        </Box>
+                      </Box>
+                    }
+                  />
+                  
+                  <FormControlLabel
+                    value="full"
+                    control={<Radio />}
+                    label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <ViewQuilt />
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                            Full
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            All information with charts and air quality
+                          </Typography>
+                        </Box>
+                      </Box>
+                    }
+                  />
+                </RadioGroup>
+
+                {widgetSettings.weather?.layoutMode !== 'auto' && (
+                  <Alert severity="warning" sx={{ mt: 2 }}>
+                    Manual layout mode will override automatic size-based layout detection. The widget will always display in {widgetSettings.weather?.layoutMode} mode regardless of its size.
+                  </Alert>
+                )}
+              </Box>
+              
+              {widgetSettings.weather?.refreshInterval > 0 && (
+                <Alert severity="info" sx={{ mt: 2 }} icon={<Timer />}>
+                  Weather widget will automatically refresh every {getRefreshIntervalLabel(widgetSettings.weather.refreshInterval).toLowerCase()}
+                </Alert>
+              )}
+            </Box>
 
             {/* Widget Gallery Settings */}
             <Box sx={{ mb: 2, p: 2, border: '2px solid var(--accent)', borderRadius: 1, backgroundColor: 'rgba(244, 114, 182, 0.05)' }}>
