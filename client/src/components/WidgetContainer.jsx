@@ -229,7 +229,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
           rowHeight={100}
           width={containerWidth}
           onLayoutChange={handleLayoutChange}
-          isDraggable={!locked}
+          isDraggable={!locked && selectedWidget !== null}
           isResizable={false}
           compactType={null}
           preventCollision={true}
