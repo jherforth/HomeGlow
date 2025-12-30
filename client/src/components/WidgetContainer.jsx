@@ -183,6 +183,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
 
   const handleWidgetClick = (widgetId, e) => {
     if (locked) return; // Don't select if locked
+    if (e.target.closest('.drag-handle')) return; // Don't re-select when clicking drag handle
     setSelectedWidget(widgetId);
   };
 
@@ -564,7 +565,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                         cursor: 'move',
                         zIndex: 1001,
                         userSelect: 'none',
-                        pointerEvents: 'auto',
+                        pointerEvents: locked ? 'none' : 'auto',
                       }}
                     />
                   </>
