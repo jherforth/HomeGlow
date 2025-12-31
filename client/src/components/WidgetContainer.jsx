@@ -54,6 +54,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
           h: parsed.h || widget.defaultSize.height,
           minW: widget.minWidth || 3,
           minH: widget.minHeight || 2,
+          static: locked,
         };
       }
       return {
@@ -64,10 +65,11 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
         h: widget.defaultSize.height,
         minW: widget.minWidth || 3,
         minH: widget.minHeight || 2,
+        static: locked,
       };
     });
     setLayout(initialLayout);
-  }, [widgets]);
+  }, [widgets, locked]);
 
   // Deselect widget when locked
   useEffect(() => {
@@ -79,8 +81,14 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
   // Save layout to localStorage and notify parent
   const handleLayoutChange = (newLayout) => {
     if (locked) return; // Don't save if locked
-    
-    setLayout(newLayout);
+
+    // Update layout with static property based on locked state
+    const updatedLayout = newLayout.map(item => ({
+      ...item,
+      static: locked
+    }));
+
+    setLayout(updatedLayout);
     newLayout.forEach((item) => {
       const layoutData = {
         x: item.x,
@@ -102,11 +110,11 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
     if (locked) {
       return;
     }
-    
+
     setLayout((currentLayout) => {
       const newLayout = currentLayout.map((item) => {
         if (item.i === widgetId) {
-          const updatedItem = { ...item };
+          const updatedItem = { ...item, static: locked };
           const delta = isDecrement ? -1 : 1;
 
           switch (direction) {
@@ -169,7 +177,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
 
           return updatedItem;
         }
-        return item;
+        return { ...item, static: locked };
       });
 
       // Notify parent component of layout change
