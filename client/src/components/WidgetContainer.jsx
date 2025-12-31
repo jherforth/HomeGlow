@@ -71,7 +71,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
     setLayout(initialLayout);
   }, [widgets]);
 
-  // Update static property when lock state changes
+  // Update static property when lock state changes (without recreating entire layout)
   useEffect(() => {
     setLayout((currentLayout) =>
       currentLayout.map(item => ({
@@ -92,7 +92,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
   const handleLayoutChange = (newLayout) => {
     if (locked) return; // Don't save if locked
 
-    // Preserve the static property when updating layout
+    // Update layout with static property based on locked state
     const updatedLayout = newLayout.map(item => ({
       ...item,
       static: locked
@@ -252,7 +252,6 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
           isResizable={false}
           compactType={null}
           preventCollision={true}
-          allowOverlap={true}
           margin={[16, 16]}
           containerPadding={[0, 0]}
           useCSSTransforms={true}
