@@ -40,7 +40,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
 
-  // Initialize layout from localStorage or defaults
+  // Initialize layout from localStorage or defaults (only on mount or when widgets change)
   useEffect(() => {
     const initialLayout = widgets.map((widget) => {
       const savedLayout = localStorage.getItem(`widget-layout-${widget.id}`);
@@ -69,7 +69,17 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
       };
     });
     setLayout(initialLayout);
-  }, [widgets, locked]);
+  }, [widgets]);
+
+  // Update static property when lock state changes (without recreating entire layout)
+  useEffect(() => {
+    setLayout((currentLayout) =>
+      currentLayout.map(item => ({
+        ...item,
+        static: locked
+      }))
+    );
+  }, [locked]);
 
   // Deselect widget when locked
   useEffect(() => {
