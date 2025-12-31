@@ -54,6 +54,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
           h: parsed.h || widget.defaultSize.height,
           minW: widget.minWidth || 3,
           minH: widget.minHeight || 2,
+          static: locked,
         };
       }
       return {
@@ -64,10 +65,21 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
         h: widget.defaultSize.height,
         minW: widget.minWidth || 3,
         minH: widget.minHeight || 2,
+        static: locked,
       };
     });
     setLayout(initialLayout);
   }, [widgets]);
+
+  // Update static property when lock state changes
+  useEffect(() => {
+    setLayout((currentLayout) =>
+      currentLayout.map(item => ({
+        ...item,
+        static: locked
+      }))
+    );
+  }, [locked]);
 
   // Deselect widget when locked
   useEffect(() => {
@@ -80,7 +92,13 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
   const handleLayoutChange = (newLayout) => {
     if (locked) return; // Don't save if locked
 
-    setLayout(newLayout);
+    // Preserve the static property when updating layout
+    const updatedLayout = newLayout.map(item => ({
+      ...item,
+      static: locked
+    }));
+
+    setLayout(updatedLayout);
     newLayout.forEach((item) => {
       const layoutData = {
         x: item.x,
@@ -106,7 +124,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
     setLayout((currentLayout) => {
       const newLayout = currentLayout.map((item) => {
         if (item.i === widgetId) {
-          const updatedItem = { ...item };
+          const updatedItem = { ...item, static: locked };
           const delta = isDecrement ? -1 : 1;
 
           switch (direction) {
@@ -169,7 +187,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
 
           return updatedItem;
         }
-        return item;
+        return { ...item, static: locked };
       });
 
       // Notify parent component of layout change
@@ -234,6 +252,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
           isResizable={false}
           compactType={null}
           preventCollision={true}
+          allowOverlap={true}
           margin={[16, 16]}
           containerPadding={[0, 0]}
           useCSSTransforms={true}
