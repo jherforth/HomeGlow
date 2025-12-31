@@ -230,7 +230,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
           rowHeight={100}
           width={containerWidth}
           onLayoutChange={handleLayoutChange}
-          isDraggable={!locked && selectedWidget !== null}
+          isDraggable={!locked}
           isResizable={false}
           compactType={null}
           preventCollision={true}
@@ -238,6 +238,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
           containerPadding={[0, 0]}
           useCSSTransforms={true}
           draggableHandle=".drag-handle"
+          draggableCancel=".widget-content"
         >
           {widgets.map((widget) => {
             const isSelected = !locked && selectedWidget === widget.id;
