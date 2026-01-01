@@ -14,6 +14,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
   const [gridCols, setGridCols] = useState(12);
   const [selectedWidget, setSelectedWidget] = useState(null);
   const [layout, setLayout] = useState([]);
+  const [isLockTransitioning, setIsLockTransitioning] = useState(false);
   const containerRef = React.useRef(null);
 
   // Update container width and grid columns based on screen size
@@ -73,12 +74,21 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
 
   // Update static property when lock state changes (without recreating entire layout)
   useEffect(() => {
+    setIsLockTransitioning(true);
+
     setLayout((currentLayout) =>
       currentLayout.map(item => ({
         ...item,
         static: locked
       }))
     );
+
+    // Re-enable transitions after a short delay
+    const timer = setTimeout(() => {
+      setIsLockTransitioning(false);
+    }, 50);
+
+    return () => clearTimeout(timer);
   }, [locked]);
 
   // Deselect widget when locked
@@ -228,8 +238,11 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
         position: 'relative',
         backgroundColor: 'var(--background)',
         '& .react-grid-item': {
-          transition: selectedWidget ? 'none' : 'all 200ms ease',
+          transition: (selectedWidget || isLockTransitioning) ? 'none !important' : 'all 200ms ease',
           transitionProperty: 'left, top, width, height',
+        },
+        '& .react-grid-item.cssTransforms': {
+          transitionProperty: (selectedWidget || isLockTransitioning) ? 'none !important' : 'transform, width, height',
         },
         '& .react-grid-item.react-grid-placeholder': {
           background: 'var(--accent)',
