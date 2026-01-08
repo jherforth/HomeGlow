@@ -15,7 +15,6 @@
 services:
   homeglow-backend:
     container_name: homeglow-backend
-    image: ghcr.io/jherforth/homeglow-backend:latest
     build:
       context: ./server
       dockerfile: Dockerfile
@@ -35,7 +34,6 @@ services:
 
   homeglow-frontend:
     container_name: homeglow-frontend
-    image: ghcr.io/jherforth/homeglow-frontend:latest
     build:
       context: ./client
       dockerfile: Dockerfile
