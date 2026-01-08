@@ -1,38 +1,66 @@
+# HomeGlow Development Environment
+# Uses separate ports from production for parallel testing
+#
+# Quick Start:
+# 1. In Portainer, set these environment variables:
+#    - DEV_FRONTEND_PORT (default: 3001)
+#    - DEV_BACKEND_PORT (default: 5001)
+#    - VITE_OPENWEATHER_API_KEY
+#    - VITE_REACT_APP_API_URL
+# 2. Create data directories: sudo mkdir -p /apps/homeglowtest/{data,uploads} && sudo chmod -R 777 /apps/homeglowtest
+# 3. Deploy via Portainer or run: docker-compose -f docker-compose-dev.yml up -d
+#
+# Features:
+# - Same Nginx config as production (catches issues early!)
+# - Separate ports from production (default: 3001 frontend, 5001 backend)
+# - Runtime environment variable substitution for Portainer compatibility
+# - Rebuild required for code changes: docker-compose -f docker-compose-dev.yml up -d --build
+
 services:
-  backend:
-    container_name: backend
+  backend-test:
+    container_name: backend-test
     build:
       context: ./server
       dockerfile: Dockerfile
       args:
-        - PORT=${BACKEND_PORT:-5000}
+        - PORT=${DEV_BACKEND_PORT:-5001}
     ports:
-      - "${BACKEND_PORT:-5000}:${BACKEND_PORT:-5000}"
+      - "${DEV_BACKEND_PORT:-5001}:${DEV_BACKEND_PORT:-5001}"
     volumes:
-      - /apps/homeglow/data:/app/data
-      - /apps/homeglow/uploads:/app/uploads
+      - /apps/homeglowtest/data:/app/data
+      - /apps/homeglowtest/uploads:/app/uploads
     environment:
-      - NODE_ENV=production
-      - PORT=${BACKEND_PORT:-5000}
+      - NODE_ENV=development
+      - PORT=${DEV_BACKEND_PORT:-5001}
     networks:
-      - homeglow-network
+      - homeglow-test-network
+    restart: unless-stopped
 
-  frontend:
-    container_name: frontend
+  frontend-test:
+    container_name: frontend-test
     build:
       context: ./client
       dockerfile: Dockerfile
       args:
         - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
-        - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}:${BACKEND_PORT:-5000}
-        - PORT=${FRONTEND_PORT:-3000}
+        - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}
+        - FRONTEND_PORT=${DEV_FRONTEND_PORT:-3001}
+        - BACKEND_SERVICE=backend-test
+        - BACKEND_PORT=${DEV_BACKEND_PORT:-5001}
     ports:
-      - "${FRONTEND_PORT:-3000}:${FRONTEND_PORT:-3000}"
+      - "${DEV_FRONTEND_PORT:-3001}:${DEV_FRONTEND_PORT:-3001}"
+    environment:
+      - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
+      - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}
+      - FRONTEND_PORT=${DEV_FRONTEND_PORT:-3001}
+      - BACKEND_SERVICE=backend-test
+      - BACKEND_PORT=${DEV_BACKEND_PORT:-5001}
     depends_on:
-      - backend
+      - backend-test
     networks:
-      - homeglow-network
+      - homeglow-test-network
+    restart: unless-stopped
 
 networks:
-  homeglow-network:
+  homeglow-test-network:
     driver: bridge

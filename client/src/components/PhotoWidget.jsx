@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Typography, Box, IconButton, Popover, Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Switch, FormControlLabel, Select, MenuItem, FormControl, InputLabel, List, ListItem, ListItemText, ListItemSecondaryAction, CircularProgress, Alert, Chip } from '@mui/material';
+import { Typography, Box, IconButton, Popover, Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Switch, FormControlLabel, Select, MenuItem, FormControl, InputLabel, List, ListItem, ListItemText, ListItemSecondaryAction, CircularProgress, Alert, Chip } from '@mui/material';
 import { Settings, Add, Delete, Edit, Refresh, ChevronLeft, ChevronRight, PlayArrow, Pause } from '@mui/icons-material';
 import axios from 'axios';
 
@@ -63,6 +63,26 @@ const PhotoWidget = ({ transparentBackground }) => {
       console.error('Error saving photo widget preference:', error);
     }
   };
+
+  // Auto-refresh functionality
+  useEffect(() => {
+    const widgetSettings = JSON.parse(localStorage.getItem('widgetSettings') || '{}');
+    const refreshInterval = widgetSettings.photo?.refreshInterval || 0;
+
+    if (refreshInterval > 0) {
+      console.log(`PhotoWidget: Auto-refresh enabled (${refreshInterval}ms)`);
+      
+      const intervalId = setInterval(() => {
+        console.log('PhotoWidget: Auto-refreshing data...');
+        fetchPhotos();
+      }, refreshInterval);
+
+      return () => {
+        console.log('PhotoWidget: Clearing auto-refresh interval');
+        clearInterval(intervalId);
+      };
+    }
+  }, []);
 
   // Slideshow timer
   useEffect(() => {
@@ -227,7 +247,13 @@ const PhotoWidget = ({ transparentBackground }) => {
   const currentPhotos = getCurrentPhotos();
 
   return (
-    <Card className={`card ${transparentBackground ? 'transparent-card' : ''}`}>
+    <Box sx={{
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden',
+      p: 2
+    }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h6">📷 Photos</Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
@@ -592,7 +618,7 @@ const PhotoWidget = ({ transparentBackground }) => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Card>
+    </Box>
   );
 };
 

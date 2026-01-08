@@ -36,7 +36,9 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Backdrop
+  Backdrop,
+  RadioGroup,
+  Radio
 } from '@mui/material';
 import {
   Delete,
@@ -47,7 +49,12 @@ import {
   Upload,
   CloudDownload,
   Refresh,
-  Warning
+  Warning,
+  RestartAlt,
+  Timer,
+  ViewCompact,
+  ViewModule,
+  ViewQuilt
 } from '@mui/icons-material';
 import { ChromePicker } from 'react-color';
 import axios from 'axios';
@@ -56,29 +63,18 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const [activeTab, setActiveTab] = useState(0);
   const [settings, setSettings] = useState({
     WEATHER_API_KEY: '',
-    // ICS_CALENDAR_URL: '', // Now handled by calendar sources
     PROXY_WHITELIST: ''
   });
   const [widgetSettings, setLocalWidgetSettings] = useState({
-    chores: { enabled: false, transparent: false },
-    calendar: { enabled: false, transparent: false },
-    photos: { enabled: false, transparent: false },
-    weather: { enabled: false, transparent: false },
-    textSize: 16,
-    cardSize: 300,
-    cardPadding: 20,
-    cardHeight: 200,
-    refreshInterval: 'manual',
-    enableGeoPatternBackground: false,
-    enableCardShuffle: false,
-    lightGradientStart: '#00ddeb',
-    lightGradientEnd: '#ff6b6b',
-    darkGradientStart: '#2e2767',
-    darkGradientEnd: '#620808',
-    lightButtonGradientStart: '#00ddeb',
-    lightButtonGradientEnd: '#ff6b6b',
-    darkButtonGradientStart: '#2e2767',
-    darkButtonGradientEnd: '#620808'
+    chores: { enabled: false, transparent: false, refreshInterval: 0 },
+    calendar: { enabled: false, transparent: false, refreshInterval: 0 },
+    photos: { enabled: false, transparent: false, refreshInterval: 0 },
+    weather: { enabled: false, transparent: false, refreshInterval: 0, layoutMode: 'medium' },
+    widgetGallery: { enabled: true, transparent: false, refreshInterval: 0 },
+    // Accent colors (shared) - only these are customizable
+    primary: '#9E7FFF',
+    secondary: '#38bdf8',
+    accent: '#f472b6'
   });
   const [users, setUsers] = useState([]);
   const [chores, setChores] = useState([]);
@@ -96,11 +92,41 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [saveMessage, setSaveMessage] = useState({ show: false, type: '', text: '' });
 
+  // Refresh interval options in milliseconds
+  const refreshIntervalOptions = [
+    { label: 'Disabled', value: 0 },
+    { label: '5 minutes', value: 5 * 60 * 1000 },
+    { label: '15 minutes', value: 15 * 60 * 1000 },
+    { label: '30 minutes', value: 30 * 60 * 1000 },
+    { label: '1 hour', value: 60 * 60 * 1000 },
+    { label: '2 hours', value: 2 * 60 * 60 * 1000 },
+    { label: '6 hours', value: 6 * 60 * 60 * 1000 },
+    { label: '12 hours', value: 12 * 60 * 60 * 1000 },
+    { label: '24 hours', value: 24 * 60 * 60 * 1000 }
+  ];
+
   useEffect(() => {
     const savedSettings = localStorage.getItem('widgetSettings');
     if (savedSettings) {
       const parsed = JSON.parse(savedSettings);
-      setLocalWidgetSettings(prev => ({ ...prev, ...parsed }));
+      // Ensure refresh intervals and layout mode are included, default to 'medium' if 'auto' or not set
+      const settingsWithDefaults = {
+        chores: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.chores },
+        calendar: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.calendar },
+        photos: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.photos },
+        weather: { 
+          enabled: false, 
+          transparent: false, 
+          refreshInterval: 0, 
+          layoutMode: (parsed.weather?.layoutMode === 'auto' || !parsed.weather?.layoutMode) ? 'medium' : parsed.weather.layoutMode,
+          ...parsed.weather 
+        },
+        widgetGallery: { enabled: true, transparent: false, refreshInterval: 0, ...parsed.widgetGallery },
+        primary: parsed.primary || '#9E7FFF',
+        secondary: parsed.secondary || '#38bdf8',
+        accent: parsed.accent || '#f472b6'
+      };
+      setLocalWidgetSettings(settingsWithDefaults);
     }
     fetchSettings();
     fetchUsers();
@@ -194,7 +220,6 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     try {
       await Promise.all([
         axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, { key: 'WEATHER_API_KEY', value: settings.WEATHER_API_KEY || '' }),
-        // axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, { key: 'ICS_CALENDAR_URL', value: settings.ICS_CALENDAR_URL || '' }), // Now handled by calendar sources
         axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, { key: 'PROXY_WHITELIST', value: settings.PROXY_WHITELIST || '' })
       ]);
       setSaveMessage({ show: true, type: 'success', text: 'All API settings saved successfully!' });
@@ -211,14 +236,41 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const saveWidgetSettings = () => {
     localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
     setWidgetSettings(widgetSettings);
+    setSaveMessage({ show: true, type: 'success', text: 'Widget settings saved successfully! Refresh page to see changes.' });
+    setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
   };
 
-  // Update the parent component's widgetSettings whenever localWidgetSettings changes
-  useEffect(() => {
-    setWidgetSettings(widgetSettings);
-    // Save to localStorage whenever settings change
+  const saveInterfaceSettings = () => {
     localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
-  }, [widgetSettings, setWidgetSettings]);
+    setWidgetSettings(widgetSettings);
+    
+    // Apply CSS variables immediately
+    applyAccentColors();
+    
+    setSaveMessage({ show: true, type: 'success', text: 'Accent colors saved! Refresh page to see all changes.' });
+    setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+  };
+
+  const applyAccentColors = () => {
+    const root = document.documentElement;
+    
+    // Apply only accent colors
+    root.style.setProperty('--primary', widgetSettings.primary);
+    root.style.setProperty('--secondary', widgetSettings.secondary);
+    root.style.setProperty('--accent', widgetSettings.accent);
+  };
+
+  const resetToDefaults = () => {
+    const defaultSettings = {
+      primary: '#9E7FFF',
+      secondary: '#38bdf8',
+      accent: '#f472b6'
+    };
+    
+    setLocalWidgetSettings(prev => ({ ...prev, ...defaultSettings }));
+    setSaveMessage({ show: true, type: 'info', text: 'Reset to default colors. Click Save to apply.' });
+    setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+  };
 
   const handleWidgetToggle = (widget, field) => {
     setLocalWidgetSettings(prev => ({
@@ -226,6 +278,26 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       [widget]: {
         ...prev[widget],
         [field]: !prev[widget][field]
+      }
+    }));
+  };
+
+  const handleRefreshIntervalChange = (widget, interval) => {
+    setLocalWidgetSettings(prev => ({
+      ...prev,
+      [widget]: {
+        ...prev[widget],
+        refreshInterval: interval
+      }
+    }));
+  };
+
+  const handleWeatherLayoutModeChange = (mode) => {
+    setLocalWidgetSettings(prev => ({
+      ...prev,
+      weather: {
+        ...prev.weather,
+        layoutMode: mode
       }
     }));
   };
@@ -265,16 +337,13 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const deleteUser = async (userId) => {
     try {
       setIsLoading(true);
-      // First, delete all chores associated with this user
       const userChores = chores.filter(chore => chore.user_id === userId);
       for (const chore of userChores) {
         await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores/${chore.id}`);
       }
       
-      // Then delete the user
       await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users/${userId}`);
       
-      // Refresh data
       fetchUsers();
       fetchChores();
       setDeleteUserDialog({ open: false, user: null });
@@ -407,7 +476,6 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
         setIsLoading(true);
         await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores/${choreId}`);
         fetchChores();
-        // Update the modal with fresh data
         if (choreModal.user) {
           const updatedUserChores = chores.filter(chore => chore.user_id === choreModal.user.id && chore.id !== choreId);
           setChoreModal(prev => ({ ...prev, userChores: updatedUserChores }));
@@ -481,6 +549,66 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     return chores.filter(chore => chore.user_id === userId).length;
   };
 
+  const renderColorPicker = (key, label) => (
+    <Box key={key} sx={{ mb: 3 }}>
+      <Typography variant="body1" sx={{ mb: 1, fontWeight: 600 }}>
+        {label}
+      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        <Box
+          sx={{
+            width: 60,
+            height: 60,
+            backgroundColor: widgetSettings[key],
+            border: '3px solid var(--card-border)',
+            borderRadius: 2,
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+            '&:hover': {
+              transform: 'scale(1.05)',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+            }
+          }}
+          onClick={() => setShowColorPicker(prev => ({ ...prev, [key]: !prev[key] }))}
+        />
+        <TextField
+          size="medium"
+          value={widgetSettings[key]}
+          onChange={(e) => handleSettingChange(key, e.target.value)}
+          sx={{ flex: 1 }}
+          placeholder="#000000"
+        />
+      </Box>
+      {showColorPicker[key] && (
+        <Box sx={{ position: 'relative', mt: 2 }}>
+          <Box
+            sx={{ 
+              position: 'fixed', 
+              top: 0, 
+              right: 0, 
+              bottom: 0, 
+              left: 0,
+              zIndex: 999
+            }}
+            onClick={() => setShowColorPicker(prev => ({ ...prev, [key]: false }))}
+          />
+          <Box sx={{ position: 'absolute', zIndex: 1000 }}>
+            <ChromePicker
+              color={widgetSettings[key]}
+              onChange={(color) => handleColorChange(key, color)}
+            />
+          </Box>
+        </Box>
+      )}
+    </Box>
+  );
+
+  const getRefreshIntervalLabel = (interval) => {
+    const option = refreshIntervalOptions.find(opt => opt.value === interval);
+    return option ? option.label : 'Disabled';
+  };
+
   const tabs = [
     'APIs',
     'Widgets',
@@ -524,17 +652,6 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
               helperText="Get your free API key from openweathermap.org"
             />
 
-            {/* ICS Calendar URL is now handled by Calendar Sources in the Calendar Widget
-            <TextField
-              fullWidth
-              label="ICS Calendar URL"
-              value={settings.ICS_CALENDAR_URL || ''}
-              onChange={(e) => setSettings(prev => ({ ...prev, ICS_CALENDAR_URL: e.target.value }))}
-              sx={{ mb: 2 }}
-              helperText="Public ICS URL from Google Calendar or other calendar service"
-            />
-            */}
-
             <TextField
               fullWidth
               label="Proxy Whitelist (comma-separated domains)"
@@ -562,37 +679,276 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>Widget Settings</Typography>
-            
+
+            {saveMessage.show && (
+              <Alert severity={saveMessage.type} sx={{ mb: 2 }}>
+                {saveMessage.text}
+              </Alert>
+            )}
+
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Enable widgets to show them on the dashboard. Click to select a widget, then drag to move or resize from corners.
+            </Alert>
+
+            {/* Core Widgets */}
             {Object.entries(widgetSettings).filter(([key]) => 
-              ['chores', 'calendar', 'photos', 'weather'].includes(key)
+              ['chores', 'calendar', 'photos'].includes(key)
             ).map(([widget, config]) => (
-              <Box key={widget} sx={{ mb: 2, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
-                <Typography variant="subtitle1" sx={{ mb: 1, textTransform: 'capitalize' }}>
+              <Box key={widget} sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
+                <Typography variant="subtitle1" sx={{ mb: 2, textTransform: 'capitalize', fontWeight: 'bold' }}>
                   {widget} Widget
                 </Typography>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={config.enabled}
-                      onChange={() => handleWidgetToggle(widget, 'enabled')}
+                
+                <Grid container spacing={2} alignItems="center">
+                  <Grid item xs={12} sm={6}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={config.enabled}
+                          onChange={() => handleWidgetToggle(widget, 'enabled')}
+                        />
+                      }
+                      label="Enabled"
                     />
-                  }
-                  label="Enabled"
-                />
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={config.transparent}
-                      onChange={() => handleWidgetToggle(widget, 'transparent')}
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={config.transparent}
+                          onChange={() => handleWidgetToggle(widget, 'transparent')}
+                        />
+                      }
+                      label="Transparent Background"
+                      sx={{ ml: 2 }}
                     />
-                  }
-                  label="Transparent Background"
-                  sx={{ ml: 2 }}
-                />
+                  </Grid>
+                  
+                  <Grid item xs={12} sm={6}>
+                    <FormControl fullWidth size="small">
+                      <InputLabel id={`${widget}-refresh-label`}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Timer fontSize="small" />
+                          Auto-Refresh Interval
+                        </Box>
+                      </InputLabel>
+                      <Select
+                        labelId={`${widget}-refresh-label`}
+                        value={config.refreshInterval || 0}
+                        onChange={(e) => handleRefreshIntervalChange(widget, e.target.value)}
+                        label="Auto-Refresh Interval"
+                      >
+                        {refreshIntervalOptions.map((option) => (
+                          <MenuItem key={option.value} value={option.value}>
+                            {option.label}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                </Grid>
+                
+                {config.refreshInterval > 0 && (
+                  <Alert severity="info" sx={{ mt: 2 }} icon={<Timer />}>
+                    This widget will automatically refresh every {getRefreshIntervalLabel(config.refreshInterval).toLowerCase()}
+                  </Alert>
+                )}
               </Box>
             ))}
+
+            {/* Weather Widget with Layout Mode */}
+            <Box sx={{ mb: 3, p: 2, border: '2px solid var(--accent)', borderRadius: 1, backgroundColor: 'rgba(158, 127, 255, 0.05)' }}>
+              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>
+                🌤️ Weather Widget
+              </Typography>
+              
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={12} sm={6}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={widgetSettings.weather?.enabled || false}
+                        onChange={() => handleWidgetToggle('weather', 'enabled')}
+                      />
+                    }
+                    label="Enabled"
+                  />
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={widgetSettings.weather?.transparent || false}
+                        onChange={() => handleWidgetToggle('weather', 'transparent')}
+                      />
+                    }
+                    label="Transparent Background"
+                    sx={{ ml: 2 }}
+                  />
+                </Grid>
+                
+                <Grid item xs={12} sm={6}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="weather-refresh-label">
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Timer fontSize="small" />
+                        Auto-Refresh Interval
+                      </Box>
+                    </InputLabel>
+                    <Select
+                      labelId="weather-refresh-label"
+                      value={widgetSettings.weather?.refreshInterval || 0}
+                      onChange={(e) => handleRefreshIntervalChange('weather', e.target.value)}
+                      label="Auto-Refresh Interval"
+                    >
+                      {refreshIntervalOptions.map((option) => (
+                        <MenuItem key={option.value} value={option.value}>
+                          {option.label}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              </Grid>
+
+              {/* Weather Layout Mode Selection */}
+              <Box sx={{ mt: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1, bgcolor: 'rgba(255, 255, 255, 0.02)' }}>
+                <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <ViewModule />
+                  Layout Mode
+                </Typography>
+                
+                <RadioGroup
+                  value={widgetSettings.weather?.layoutMode || 'medium'}
+                  onChange={(e) => handleWeatherLayoutModeChange(e.target.value)}
+                >
+                  <FormControlLabel
+                    value="compact"
+                    control={<Radio />}
+                    label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <ViewCompact />
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                            Compact
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Current weather only (minimal space)
+                          </Typography>
+                        </Box>
+                      </Box>
+                    }
+                  />
+                  
+                  <FormControlLabel
+                    value="medium"
+                    control={<Radio />}
+                    label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <ViewModule />
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                            Medium
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Current weather + 3-day forecast
+                          </Typography>
+                        </Box>
+                      </Box>
+                    }
+                  />
+                  
+                  <FormControlLabel
+                    value="full"
+                    control={<Radio />}
+                    label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <ViewQuilt />
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                            Full
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            All information with charts and air quality
+                          </Typography>
+                        </Box>
+                      </Box>
+                    }
+                  />
+                </RadioGroup>
+
+                <Alert severity="info" sx={{ mt: 2 }}>
+                  The selected layout mode will be used regardless of widget size. Resize the widget to fit your preferred layout.
+                </Alert>
+              </Box>
+              
+              {widgetSettings.weather?.refreshInterval > 0 && (
+                <Alert severity="info" sx={{ mt: 2 }} icon={<Timer />}>
+                  Weather widget will automatically refresh every {getRefreshIntervalLabel(widgetSettings.weather.refreshInterval).toLowerCase()}
+                </Alert>
+              )}
+            </Box>
+
+            {/* Widget Gallery Settings */}
+            <Box sx={{ mb: 2, p: 2, border: '2px solid var(--accent)', borderRadius: 1, backgroundColor: 'rgba(244, 114, 182, 0.05)' }}>
+              <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'bold' }}>
+                🎨 Widget Gallery
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                The Widget Gallery displays custom uploaded widgets below the main dashboard widgets.
+              </Typography>
+              
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={12} sm={6}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={widgetSettings.widgetGallery?.enabled || false}
+                        onChange={() => handleWidgetToggle('widgetGallery', 'enabled')}
+                      />
+                    }
+                    label="Show Widget Gallery"
+                  />
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={widgetSettings.widgetGallery?.transparent || false}
+                        onChange={() => handleWidgetToggle('widgetGallery', 'transparent')}
+                      />
+                    }
+                    label="Transparent Background"
+                    sx={{ ml: 2 }}
+                  />
+                </Grid>
+                
+                <Grid item xs={12} sm={6}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="gallery-refresh-label">
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Timer fontSize="small" />
+                        Auto-Refresh Interval
+                      </Box>
+                    </InputLabel>
+                    <Select
+                      labelId="gallery-refresh-label"
+                      value={widgetSettings.widgetGallery?.refreshInterval || 0}
+                      onChange={(e) => handleRefreshIntervalChange('widgetGallery', e.target.value)}
+                      label="Auto-Refresh Interval"
+                    >
+                      {refreshIntervalOptions.map((option) => (
+                        <MenuItem key={option.value} value={option.value}>
+                          {option.label}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              </Grid>
+              
+              {widgetSettings.widgetGallery?.refreshInterval > 0 && (
+                <Alert severity="info" sx={{ mt: 2 }} icon={<Timer />}>
+                  Widget Gallery will automatically refresh every {getRefreshIntervalLabel(widgetSettings.widgetGallery.refreshInterval).toLowerCase()}
+                </Alert>
+              )}
+            </Box>
             
-            <Button variant="contained" onClick={saveWidgetSettings} sx={{ mt: 2 }}>
+            <Button variant="contained" onClick={saveWidgetSettings} sx={{ mt: 2 }} startIcon={<Save />}>
               Save Widget Settings
             </Button>
           </CardContent>
@@ -603,121 +959,52 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       {activeTab === 2 && (
         <Card>
           <CardContent>
-            <Typography variant="h6" gutterBottom>Interface Customization</Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+              <Typography variant="h6">Accent Colors</Typography>
+              <Button
+                variant="outlined"
+                startIcon={<RestartAlt />}
+                onClick={resetToDefaults}
+                size="small"
+              >
+                Reset to Defaults
+              </Button>
+            </Box>
+
+            {saveMessage.show && (
+              <Alert severity={saveMessage.type} sx={{ mb: 2 }}>
+                {saveMessage.text}
+              </Alert>
+            )}
+
+            <Alert severity="info" sx={{ mb: 3 }}>
+              Customize the accent colors used throughout the dashboard. These colors are shared between light and dark themes.
+            </Alert>
             
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle1" gutterBottom>Display Settings</Typography>
-                
-                <TextField
-                  fullWidth
-                  label="Text Size (px)"
-                  type="number"
-                  value={widgetSettings.textSize}
-                  onChange={(e) => handleSettingChange('textSize', parseInt(e.target.value))}
-                  sx={{ mb: 2 }}
-                />
-                
-                <TextField
-                  fullWidth
-                  label="Card Padding (px)"
-                  type="number"
-                  value={widgetSettings.cardPadding}
-                  onChange={(e) => handleSettingChange('cardPadding', parseInt(e.target.value))}
-                  sx={{ mb: 2 }}
-                />
-                
-                <FormControl fullWidth sx={{ mb: 2 }}>
-                  <InputLabel>Screen Refresh Interval</InputLabel>
-                  <Select
-                    value={widgetSettings.refreshInterval}
-                    onChange={(e) => handleSettingChange('refreshInterval', e.target.value)}
-                  >
-                    <MenuItem value="manual">Manual Only</MenuItem>
-                    <MenuItem value="1">Every 1 Hour</MenuItem>
-                    <MenuItem value="3">Every 3 Hours</MenuItem>
-                    <MenuItem value="6">Every 6 Hours</MenuItem>
-                    <MenuItem value="9">Every 9 Hours</MenuItem>
-                    <MenuItem value="12">Every 12 Hours</MenuItem>
-                  </Select>
-                </FormControl>
-                
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={widgetSettings.enableGeoPatternBackground}
-                      onChange={(e) => handleSettingChange('enableGeoPatternBackground', e.target.checked)}
-                    />
-                  }
-                  label="Enable Geometric Background Patterns"
-                  sx={{ mb: 1 }}
-                />
-                
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={widgetSettings.enableCardShuffle}
-                      onChange={(e) => handleSettingChange('enableCardShuffle', e.target.checked)}
-                    />
-                  }
-                  label="Enable Card Position Shuffle"
-                />
-              </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle1" gutterBottom>Color Customization</Typography>
-                
-                {[
-                  { key: 'lightGradientStart', label: 'Light Theme Gradient Start' },
-                  { key: 'lightGradientEnd', label: 'Light Theme Gradient End' },
-                  { key: 'darkGradientStart', label: 'Dark Theme Gradient Start' },
-                  { key: 'darkGradientEnd', label: 'Dark Theme Gradient End' },
-                  { key: 'lightButtonGradientStart', label: 'Light Button Gradient Start' },
-                  { key: 'lightButtonGradientEnd', label: 'Light Button Gradient End' },
-                  { key: 'darkButtonGradientStart', label: 'Dark Button Gradient Start' },
-                  { key: 'darkButtonGradientEnd', label: 'Dark Button Gradient End' }
-                ].map(({ key, label }) => (
-                  <Box key={key} sx={{ mb: 2 }}>
-                    <Typography variant="body2" sx={{ mb: 1 }}>{label}</Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Box
-                        sx={{
-                          width: 40,
-                          height: 40,
-                          backgroundColor: widgetSettings[key],
-                          border: '1px solid var(--card-border)',
-                          borderRadius: 1,
-                          cursor: 'pointer'
-                        }}
-                        onClick={() => setShowColorPicker(prev => ({ ...prev, [key]: !prev[key] }))}
-                      />
-                      <TextField
-                        size="small"
-                        value={widgetSettings[key]}
-                        onChange={(e) => handleSettingChange(key, e.target.value)}
-                        sx={{ flex: 1 }}
-                      />
-                    </Box>
-                    {showColorPicker[key] && (
-                      <Box sx={{ position: 'absolute', zIndex: 1000, mt: 1 }}>
-                        <Box
-                          sx={{ position: 'fixed', top: 0, right: 0, bottom: 0, left: 0 }}
-                          onClick={() => setShowColorPicker(prev => ({ ...prev, [key]: false }))}
-                        />
-                        <ChromePicker
-                          color={widgetSettings[key]}
-                          onChange={(color) => handleColorChange(key, color)}
-                        />
-                      </Box>
-                    )}
-                  </Box>
-                ))}
-              </Grid>
-            </Grid>
+            <Box sx={{ maxWidth: 600, mx: 'auto' }}>
+              {renderColorPicker('primary', '🎨 Primary Color')}
+              {renderColorPicker('secondary', '💎 Secondary Color')}
+              {renderColorPicker('accent', '✨ Accent Color')}
+            </Box>
             
-            <Button variant="contained" onClick={saveWidgetSettings} sx={{ mt: 2 }}>
-              Save Interface Settings
-            </Button>
+            <Box sx={{ mt: 4, display: 'flex', gap: 2, justifyContent: 'center' }}>
+              <Button 
+                variant="contained" 
+                onClick={saveInterfaceSettings}
+                startIcon={<Save />}
+                size="large"
+              >
+                Save Accent Colors
+              </Button>
+              <Button
+                variant="outlined"
+                onClick={() => window.location.reload()}
+                startIcon={<Refresh />}
+                size="large"
+              >
+                Refresh Page
+              </Button>
+            </Box>
           </CardContent>
         </Card>
       )}
@@ -1212,7 +1499,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
         </DialogActions>
       </Dialog>
 
-      {/* Fun Loading Indicator */}
+      {/* Loading Indicator */}
       <Backdrop
         sx={{
           color: '#fff',
@@ -1236,7 +1523,6 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
           }}
         >
-          {/* Animated Clams */}
           <Box
             sx={{
               position: 'relative',
@@ -1271,7 +1557,6 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
             ))}
           </Box>
           
-          {/* Loading Text */}
           <Typography
             variant="h6"
             sx={{
@@ -1284,7 +1569,6 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
             Processing...
           </Typography>
           
-          {/* Subtle Progress Ring */}
           <CircularProgress
             size={40}
             thickness={2}
