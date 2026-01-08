@@ -16,16 +16,19 @@ services:
   homeglow-backend:
     container_name: homeglow-backend
     image: ghcr.io/jherforth/homeglow-backend:latest
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+      args:
+        - PORT=${BACKEND_PORT:-5000}
     ports:
-      - "${BACKEND_PORT}"
+      - "${BACKEND_PORT:-5000}:${BACKEND_PORT:-5000}"
     volumes:
-      # Persistent data storage (SQLite database)
-      - ./data:/app/data
-      # User uploads (profile photos, custom widgets)
-      - ./uploads:/app/uploads
+      - /apps/homeglow/data:/app/data
+      - /apps/homeglow/uploads:/app/uploads
     environment:
       - NODE_ENV=production
-      - PORT=${BACKEND_PORT}
+      - PORT=${BACKEND_PORT:-5000}
     networks:
       - homeglow-network
     restart: unless-stopped
@@ -33,14 +36,23 @@ services:
   homeglow-frontend:
     container_name: homeglow-frontend
     image: ghcr.io/jherforth/homeglow-frontend:latest
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      args:
+        - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
+        - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}
+        - FRONTEND_PORT=${FRONTEND_PORT:-3000}
+        - BACKEND_SERVICE=homeglow-backend
+        - BACKEND_PORT=${BACKEND_PORT:-5000}
     ports:
-      - "${FRONTEND_PORT}"
+      - "${FRONTEND_PORT:-3000}:${FRONTEND_PORT:-3000}"
     environment:
-      # OpenWeatherMap API key (get from https://openweathermap.org/api) -optional and can be set in UI later
       - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
-      # Backend API URL - uses the host machine's ip address for internal communication (example: http://192.168.x.x)
-      - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}:${BACKEND_PORT}
-      - PORT=${FRONTEND_PORT}
+      - VITE_REACT_APP_API_URL=${VITE_REACT_APP_API_URL}
+      - FRONTEND_PORT=${FRONTEND_PORT:-3000}
+      - BACKEND_SERVICE=homeglow-backend
+      - BACKEND_PORT=${BACKEND_PORT:-5000}
     depends_on:
       - homeglow-backend
     networks:
