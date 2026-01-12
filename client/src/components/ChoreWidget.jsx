@@ -71,11 +71,11 @@ const ChoreWidget = ({ transparentBackground }) => {
   // Auto-refresh functionality
   useEffect(() => {
     const widgetSettings = JSON.parse(localStorage.getItem('widgetSettings') || '{}');
-    const refreshInterval = widgetSettings.chore?.refreshInterval || 0;
+    const refreshInterval = widgetSettings.chores?.refreshInterval || 0;
 
     if (refreshInterval > 0) {
       console.log(`ChoreWidget: Auto-refresh enabled (${refreshInterval}ms)`);
-      
+
       const intervalId = setInterval(() => {
         console.log('ChoreWidget: Auto-refreshing data...');
         fetchUsers();
