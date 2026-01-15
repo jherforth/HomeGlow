@@ -7,8 +7,11 @@ ARG PORT=5000
 # Set as environment variable for runtime
 ENV PORT=$PORT
 
-# Install SQLite3 dependencies
-RUN apt-get update && apt-get install -y libsqlite3-dev
+# Install SQLite3 dependencies with GPG error handling
+RUN apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get update --allow-insecure-repositories || apt-get update && \
+    apt-get install -y --allow-unauthenticated libsqlite3-dev python3 make g++
 
 COPY package*.json ./
 RUN npm install -g npm@latest
