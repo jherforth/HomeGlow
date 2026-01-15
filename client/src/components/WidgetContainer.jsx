@@ -4,6 +4,7 @@ import { DragIndicator } from '@mui/icons-material';
 import GridLayout from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
+import CountdownCircle from './CountdownCircle';
 
 /**
  * Container component that manages multiple draggable widgets
@@ -15,6 +16,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
   const [selectedWidget, setSelectedWidget] = useState(null);
   const [layout, setLayout] = useState([]);
   const [isLockTransitioning, setIsLockTransitioning] = useState(false);
+  const [refreshKeys, setRefreshKeys] = useState({});
   const containerRef = React.useRef(null);
 
   // Update container width and grid columns based on screen size
@@ -227,6 +229,32 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [selectedWidget]);
+
+  const getWidgetRefreshInterval = (widgetId) => {
+    const widgetSettings = JSON.parse(localStorage.getItem('widgetSettings') || '{}');
+
+    const widgetMap = {
+      'chores-widget': 'chores',
+      'calendar-widget': 'calendar',
+      'photos-widget': 'photos',
+      'weather-widget': 'weather',
+      'widget-gallery': 'widgetGallery'
+    };
+
+    const settingsKey = widgetMap[widgetId];
+    if (settingsKey && widgetSettings[settingsKey]) {
+      return widgetSettings[settingsKey].refreshInterval || 0;
+    }
+
+    return 0;
+  };
+
+  const handleWidgetRefresh = (widgetId) => {
+    setRefreshKeys(prev => ({
+      ...prev,
+      [widgetId]: (prev[widgetId] || 0) + 1
+    }));
+  };
 
   return (
     <Box
@@ -602,6 +630,13 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                     />
                   </>
                 )}
+
+                {/* Countdown Circle Indicator */}
+                <CountdownCircle
+                  key={refreshKeys[widget.id] || 0}
+                  refreshInterval={getWidgetRefreshInterval(widget.id)}
+                  onRefresh={() => handleWidgetRefresh(widget.id)}
+                />
 
                 {/* Widget Content */}
                 <Box

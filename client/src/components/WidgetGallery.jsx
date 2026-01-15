@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Card, Typography, Switch, FormControlLabel, Box } from '@mui/material';
+import CountdownCircle from './CountdownCircle';
 
-// Define localStorage key for enabled widgets
 const ENABLED_WIDGETS_KEY = 'enabledWidgets';
 
 const WidgetGallery = ({ theme, transparentBackground = false }) => {
   const [plugins, setPlugins] = useState([]);
   const [enabled, setEnabled] = useState({});
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Fetch plugins from server
   useEffect(() => {
@@ -44,6 +45,15 @@ const WidgetGallery = ({ theme, transparentBackground = false }) => {
     }));
   };
 
+  const getRefreshInterval = () => {
+    const widgetSettings = JSON.parse(localStorage.getItem('widgetSettings') || '{}');
+    return widgetSettings.widgetGallery?.refreshInterval || 0;
+  };
+
+  const handleRefresh = () => {
+    setRefreshKey(prev => prev + 1);
+  };
+
   if (plugins.length === 0) {
     return loading ? (
       <Box sx={{ mt: 4, padding: '0 20px', textAlign: 'center' }}>
@@ -53,7 +63,14 @@ const WidgetGallery = ({ theme, transparentBackground = false }) => {
   }
 
   return (
-    <Box sx={{ mt: 4, padding: '0 20px' }}>
+    <Box sx={{ mt: 4, padding: '0 20px', position: 'relative' }}>
+      {/* Countdown Circle Indicator */}
+      <CountdownCircle
+        key={refreshKey}
+        refreshInterval={getRefreshInterval()}
+        onRefresh={handleRefresh}
+      />
+
       {/* Widget Gallery Header */}
       <Box sx={{ mb: 3, textAlign: 'center' }}>
         <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'var(--text)', mb: 1 }}>
@@ -113,6 +130,7 @@ const WidgetGallery = ({ theme, transparentBackground = false }) => {
             </Box>
             {enabled[plugin.filename] && (
               <iframe
+                key={refreshKey}
                 src={`${import.meta.env.VITE_REACT_APP_API_URL}/widgets/${plugin.filename}?theme=${theme}`}
                 title={plugin.name}
                 style={{
