@@ -1,4 +1,4 @@
-FROM node:24-bookworm
+FROM node:24
 WORKDIR /app
 
 # Accept PORT as build argument with default
@@ -7,11 +7,8 @@ ARG PORT=5000
 # Set as environment variable for runtime
 ENV PORT=$PORT
 
-# Install SQLite3 dependencies with improved error handling
-RUN apt-get clean && \
-    rm -rf /var/lib/apt/lists/* && \
-    apt-get update && \
-    apt-get install -y libsqlite3-dev
+# Install SQLite3 dependencies
+RUN apt-get update && apt-get install -y libsqlite3-dev
 
 COPY package*.json ./
 RUN npm install -g npm@latest
