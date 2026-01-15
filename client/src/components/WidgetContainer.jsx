@@ -128,9 +128,14 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
   };
 
   // Handle resize button clicks (both increment and decrement)
-  const handleResize = (widgetId, direction, isDecrement = false) => {
+  const handleResize = (widgetId, direction, isDecrement = false, e) => {
     if (locked) {
       return;
+    }
+
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
     }
 
     setLayout((currentLayout) => {
@@ -212,12 +217,18 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
   };
 
   const handleWidgetClick = (widgetId, e) => {
-    if (locked) return; // Don't select if locked
-    if (e.target.closest('.drag-handle')) return; // Don't re-select when clicking drag handle
+    if (locked) return;
+    if (e.target.closest('.drag-handle')) return;
     setSelectedWidget(widgetId);
   };
 
-  // Click outside to deselect
+  const handleWidgetTouch = (widgetId, e) => {
+    if (locked) return;
+    if (e.target.closest('.drag-handle')) return;
+    setSelectedWidget(widgetId);
+  };
+
+  // Click/Touch outside to deselect
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (!e.target.closest('.widget-wrapper')) {
@@ -227,7 +238,11 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
   }, [selectedWidget]);
 
   const getWidgetRefreshInterval = (widgetId) => {
@@ -254,6 +269,18 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
       ...prev,
       [widgetId]: (prev[widgetId] || 0) + 1
     }));
+  };
+
+  const resizeButtonBaseStyle = {
+    fontSize: '1.5rem',
+    userSelect: 'none',
+    touchAction: 'none',
+    WebkitTouchCallout: 'none',
+    filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
+    transition: 'transform 0.1s ease, filter 0.1s ease',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    padding: '4px 8px',
+    borderRadius: '4px',
   };
 
   return (
@@ -314,6 +341,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                 className={`widget-wrapper ${isSelected ? 'selected' : ''}`}
                 data-grid={{ ...currentLayout }}
                 onClick={(e) => handleWidgetClick(widget.id, e)}
+                onTouchStart={(e) => handleWidgetTouch(widget.id, e)}
                 sx={{
                   width: '100%',
                   height: '100%',
@@ -360,18 +388,16 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       <Box
                         onMouseDown={(e) => {
                           e.stopPropagation();
-                          handleResize(widget.id, 'top', true);
+                          handleResize(widget.id, 'top', true, e);
+                        }}
+                        onTouchStart={(e) => {
+                          e.stopPropagation();
+                          handleResize(widget.id, 'top', true, e);
                         }}
                         sx={{
-                          fontSize: '1.5rem',
+                          ...resizeButtonBaseStyle,
                           cursor: canDecreaseHeight ? 'pointer' : 'not-allowed',
                           opacity: canDecreaseHeight ? 1 : 0.3,
-                          userSelect: 'none',
-                          filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
-                          transition: 'transform 0.1s ease, filter 0.1s ease',
-                          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                          padding: '4px 8px',
-                          borderRadius: '4px',
                           '&:hover': {
                             transform: canDecreaseHeight ? 'scale(1.2)' : 'none',
                             filter: canDecreaseHeight ? 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4))' : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
@@ -386,18 +412,16 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       <Box
                         onMouseDown={(e) => {
                           e.stopPropagation();
-                          handleResize(widget.id, 'top', false);
+                          handleResize(widget.id, 'top', false, e);
+                        }}
+                        onTouchStart={(e) => {
+                          e.stopPropagation();
+                          handleResize(widget.id, 'top', false, e);
                         }}
                         sx={{
-                          fontSize: '1.5rem',
+                          ...resizeButtonBaseStyle,
                           cursor: canIncreaseTop ? 'pointer' : 'not-allowed',
                           opacity: canIncreaseTop ? 1 : 0.3,
-                          userSelect: 'none',
-                          filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
-                          transition: 'transform 0.1s ease, filter 0.1s ease',
-                          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                          padding: '4px 8px',
-                          borderRadius: '4px',
                           '&:hover': {
                             transform: canIncreaseTop ? 'scale(1.2)' : 'none',
                             filter: canIncreaseTop ? 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4))' : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
@@ -428,18 +452,16 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       <Box
                         onMouseDown={(e) => {
                           e.stopPropagation();
-                          handleResize(widget.id, 'right', true);
+                          handleResize(widget.id, 'right', true, e);
+                        }}
+                        onTouchStart={(e) => {
+                          e.stopPropagation();
+                          handleResize(widget.id, 'right', true, e);
                         }}
                         sx={{
-                          fontSize: '1.5rem',
+                          ...resizeButtonBaseStyle,
                           cursor: canDecreaseWidth ? 'pointer' : 'not-allowed',
                           opacity: canDecreaseWidth ? 1 : 0.3,
-                          userSelect: 'none',
-                          filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
-                          transition: 'transform 0.1s ease, filter 0.1s ease',
-                          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                          padding: '4px 8px',
-                          borderRadius: '4px',
                           '&:hover': {
                             transform: canDecreaseWidth ? 'scale(1.2)' : 'none',
                             filter: canDecreaseWidth ? 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4))' : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
@@ -454,18 +476,16 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       <Box
                         onMouseDown={(e) => {
                           e.stopPropagation();
-                          handleResize(widget.id, 'right', false);
+                          handleResize(widget.id, 'right', false, e);
+                        }}
+                        onTouchStart={(e) => {
+                          e.stopPropagation();
+                          handleResize(widget.id, 'right', false, e);
                         }}
                         sx={{
-                          fontSize: '1.5rem',
+                          ...resizeButtonBaseStyle,
                           cursor: canIncreaseWidth ? 'pointer' : 'not-allowed',
                           opacity: canIncreaseWidth ? 1 : 0.3,
-                          userSelect: 'none',
-                          filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
-                          transition: 'transform 0.1s ease, filter 0.1s ease',
-                          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                          padding: '4px 8px',
-                          borderRadius: '4px',
                           '&:hover': {
                             transform: canIncreaseWidth ? 'scale(1.2)' : 'none',
                             filter: canIncreaseWidth ? 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4))' : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
@@ -495,18 +515,16 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       <Box
                         onMouseDown={(e) => {
                           e.stopPropagation();
-                          handleResize(widget.id, 'bottom', true);
+                          handleResize(widget.id, 'bottom', true, e);
+                        }}
+                        onTouchStart={(e) => {
+                          e.stopPropagation();
+                          handleResize(widget.id, 'bottom', true, e);
                         }}
                         sx={{
-                          fontSize: '1.5rem',
+                          ...resizeButtonBaseStyle,
                           cursor: canDecreaseHeight ? 'pointer' : 'not-allowed',
                           opacity: canDecreaseHeight ? 1 : 0.3,
-                          userSelect: 'none',
-                          filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
-                          transition: 'transform 0.1s ease, filter 0.1s ease',
-                          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                          padding: '4px 8px',
-                          borderRadius: '4px',
                           '&:hover': {
                             transform: canDecreaseHeight ? 'scale(1.2)' : 'none',
                             filter: canDecreaseHeight ? 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4))' : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
@@ -521,17 +539,15 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       <Box
                         onMouseDown={(e) => {
                           e.stopPropagation();
-                          handleResize(widget.id, 'bottom', false);
+                          handleResize(widget.id, 'bottom', false, e);
+                        }}
+                        onTouchStart={(e) => {
+                          e.stopPropagation();
+                          handleResize(widget.id, 'bottom', false, e);
                         }}
                         sx={{
-                          fontSize: '1.5rem',
+                          ...resizeButtonBaseStyle,
                           cursor: 'pointer',
-                          userSelect: 'none',
-                          filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
-                          transition: 'transform 0.1s ease, filter 0.1s ease',
-                          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                          padding: '4px 8px',
-                          borderRadius: '4px',
                           '&:hover': {
                             transform: 'scale(1.2)',
                             filter: 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4))',
@@ -562,18 +578,16 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       <Box
                         onMouseDown={(e) => {
                           e.stopPropagation();
-                          handleResize(widget.id, 'left', true);
+                          handleResize(widget.id, 'left', true, e);
+                        }}
+                        onTouchStart={(e) => {
+                          e.stopPropagation();
+                          handleResize(widget.id, 'left', true, e);
                         }}
                         sx={{
-                          fontSize: '1.5rem',
+                          ...resizeButtonBaseStyle,
                           cursor: canDecreaseWidth ? 'pointer' : 'not-allowed',
                           opacity: canDecreaseWidth ? 1 : 0.3,
-                          userSelect: 'none',
-                          filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
-                          transition: 'transform 0.1s ease, filter 0.1s ease',
-                          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                          padding: '4px 8px',
-                          borderRadius: '4px',
                           '&:hover': {
                             transform: canDecreaseWidth ? 'scale(1.2)' : 'none',
                             filter: canDecreaseWidth ? 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4))' : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
@@ -588,18 +602,16 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       <Box
                         onMouseDown={(e) => {
                           e.stopPropagation();
-                          handleResize(widget.id, 'left', false);
+                          handleResize(widget.id, 'left', false, e);
+                        }}
+                        onTouchStart={(e) => {
+                          e.stopPropagation();
+                          handleResize(widget.id, 'left', false, e);
                         }}
                         sx={{
-                          fontSize: '1.5rem',
+                          ...resizeButtonBaseStyle,
                           cursor: canIncreaseLeft ? 'pointer' : 'not-allowed',
                           opacity: canIncreaseLeft ? 1 : 0.3,
-                          userSelect: 'none',
-                          filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
-                          transition: 'transform 0.1s ease, filter 0.1s ease',
-                          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                          padding: '4px 8px',
-                          borderRadius: '4px',
                           '&:hover': {
                             transform: canIncreaseLeft ? 'scale(1.2)' : 'none',
                             filter: canIncreaseLeft ? 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4))' : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
