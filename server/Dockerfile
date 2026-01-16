@@ -16,6 +16,7 @@ RUN apt-get clean && \
 COPY package*.json ./
 RUN npm install -g npm@latest
 RUN npm install || { echo 'npm install failed'; exit 1; }
+RUN npm rebuild better-sqlite3 --build-from-source
 
 COPY . .
 RUN mkdir -p /app/uploads/users /app/widgets && chmod -R 777 /app/uploads /app/widgets
