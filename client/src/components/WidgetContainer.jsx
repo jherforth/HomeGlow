@@ -219,12 +219,16 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
   const handleWidgetClick = (widgetId, e) => {
     if (locked) return;
     if (e.target.closest('.drag-handle')) return;
+    if (e.target.closest('.resize-button')) return;
+    e.stopPropagation();
     setSelectedWidget(widgetId);
   };
 
   const handleWidgetTouch = (widgetId, e) => {
     if (locked) return;
     if (e.target.closest('.drag-handle')) return;
+    if (e.target.closest('.resize-button')) return;
+    e.stopPropagation();
     setSelectedWidget(widgetId);
   };
 
@@ -340,8 +344,17 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                 key={widget.id}
                 className={`widget-wrapper ${isSelected ? 'selected' : ''}`}
                 data-grid={{ ...currentLayout }}
-                onClick={(e) => handleWidgetClick(widget.id, e)}
-                onTouchStart={(e) => handleWidgetTouch(widget.id, e)}
+                onMouseDown={(e) => {
+                  if (!locked && !isSelected && !e.target.closest('.drag-handle') && !e.target.closest('.resize-button')) {
+                    e.stopPropagation();
+                    handleWidgetClick(widget.id, e);
+                  }
+                }}
+                onTouchStart={(e) => {
+                  if (!locked && !isSelected && !e.target.closest('.drag-handle') && !e.target.closest('.resize-button')) {
+                    handleWidgetTouch(widget.id, e);
+                  }
+                }}
                 sx={{
                   width: '100%',
                   height: '100%',
@@ -355,16 +368,17 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                   backgroundColor: 'var(--card-bg)',
                   overflow: 'hidden',
                   cursor: locked ? 'default' : (isSelected ? 'move' : 'pointer'),
+                  touchAction: locked ? 'auto' : 'none',
                   '&:hover': {
-                    border: locked 
+                    border: locked
                       ? '3px solid transparent'
-                      : (isSelected 
-                        ? '3px solid var(--accent)' 
+                      : (isSelected
+                        ? '3px solid var(--accent)'
                         : '3px solid rgba(244, 114, 182, 0.3)'),
                     boxShadow: locked
                       ? '0 2px 8px rgba(0, 0, 0, 0.1)'
-                      : (isSelected 
-                        ? '0 8px 32px rgba(244, 114, 182, 0.3)' 
+                      : (isSelected
+                        ? '0 8px 32px rgba(244, 114, 182, 0.3)'
                         : '0 4px 16px rgba(0, 0, 0, 0.15)'),
                   }
                 }}
@@ -386,11 +400,14 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       }}
                     >
                       <Box
+                        className="resize-button"
                         onMouseDown={(e) => {
+                          e.preventDefault();
                           e.stopPropagation();
                           handleResize(widget.id, 'top', true, e);
                         }}
                         onTouchStart={(e) => {
+                          e.preventDefault();
                           e.stopPropagation();
                           handleResize(widget.id, 'top', true, e);
                         }}
@@ -410,11 +427,14 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                         ➖
                       </Box>
                       <Box
+                        className="resize-button"
                         onMouseDown={(e) => {
+                          e.preventDefault();
                           e.stopPropagation();
                           handleResize(widget.id, 'top', false, e);
                         }}
                         onTouchStart={(e) => {
+                          e.preventDefault();
                           e.stopPropagation();
                           handleResize(widget.id, 'top', false, e);
                         }}
@@ -450,11 +470,14 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       }}
                     >
                       <Box
+                        className="resize-button"
                         onMouseDown={(e) => {
+                          e.preventDefault();
                           e.stopPropagation();
                           handleResize(widget.id, 'right', true, e);
                         }}
                         onTouchStart={(e) => {
+                          e.preventDefault();
                           e.stopPropagation();
                           handleResize(widget.id, 'right', true, e);
                         }}
@@ -474,11 +497,14 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                         ➖
                       </Box>
                       <Box
+                        className="resize-button"
                         onMouseDown={(e) => {
+                          e.preventDefault();
                           e.stopPropagation();
                           handleResize(widget.id, 'right', false, e);
                         }}
                         onTouchStart={(e) => {
+                          e.preventDefault();
                           e.stopPropagation();
                           handleResize(widget.id, 'right', false, e);
                         }}
@@ -513,11 +539,14 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       }}
                     >
                       <Box
+                        className="resize-button"
                         onMouseDown={(e) => {
+                          e.preventDefault();
                           e.stopPropagation();
                           handleResize(widget.id, 'bottom', true, e);
                         }}
                         onTouchStart={(e) => {
+                          e.preventDefault();
                           e.stopPropagation();
                           handleResize(widget.id, 'bottom', true, e);
                         }}
@@ -537,11 +566,14 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                         ➖
                       </Box>
                       <Box
+                        className="resize-button"
                         onMouseDown={(e) => {
+                          e.preventDefault();
                           e.stopPropagation();
                           handleResize(widget.id, 'bottom', false, e);
                         }}
                         onTouchStart={(e) => {
+                          e.preventDefault();
                           e.stopPropagation();
                           handleResize(widget.id, 'bottom', false, e);
                         }}
@@ -576,11 +608,14 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       }}
                     >
                       <Box
+                        className="resize-button"
                         onMouseDown={(e) => {
+                          e.preventDefault();
                           e.stopPropagation();
                           handleResize(widget.id, 'left', true, e);
                         }}
                         onTouchStart={(e) => {
+                          e.preventDefault();
                           e.stopPropagation();
                           handleResize(widget.id, 'left', true, e);
                         }}
@@ -600,11 +635,14 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                         ➖
                       </Box>
                       <Box
+                        className="resize-button"
                         onMouseDown={(e) => {
+                          e.preventDefault();
                           e.stopPropagation();
                           handleResize(widget.id, 'left', false, e);
                         }}
                         onTouchStart={(e) => {
+                          e.preventDefault();
                           e.stopPropagation();
                           handleResize(widget.id, 'left', false, e);
                         }}
