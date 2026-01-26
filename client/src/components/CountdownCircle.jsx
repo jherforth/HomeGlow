@@ -48,8 +48,8 @@ const CountdownCircle = ({ refreshInterval, onRefresh }) => {
     <Box
       sx={{
         position: 'absolute',
-        top: 8,
-        right: 8,
+        bottom: 8,
+        left: 8,
         zIndex: 1002,
         width: size,
         height: size,
