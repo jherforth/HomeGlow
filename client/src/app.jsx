@@ -172,13 +172,13 @@ const App = () => {
 
   return (
     <>
-      <Box sx={{ width: '100%', minHeight: '100vh', position: 'relative' }}>
+      <Box sx={{ width: '100%', minHeight: '100vh', position: 'relative', pb: '60px' }}>
         {widgets.length > 0 && <WidgetContainer widgets={widgets} locked={widgetsLocked} />}
 
         {widgetSettings.widgetGallery?.enabled && (
-          <Container className="container" sx={{ mt: widgets.length > 0 ? 4 : 0 }}>
-            <WidgetGallery 
-              key={widgetGalleryKey} 
+          <Container className="container" sx={{ mt: widgets.length > 0 ? 1 : 0 }}>
+            <WidgetGallery
+              key={widgetGalleryKey}
               theme={theme}
               transparentBackground={widgetSettings.widgetGallery?.transparent || false}
             />

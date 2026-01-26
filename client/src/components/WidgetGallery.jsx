@@ -64,7 +64,7 @@ const WidgetGallery = ({ theme, transparentBackground = false }) => {
   }
 
   return (
-    <Box sx={{ mt: 4, padding: '0 20px', position: 'relative' }}>
+    <Box sx={{ mt: 2, padding: '0 20px', position: 'relative' }}>
       {/* Countdown Circle Indicator */}
       <CountdownCircle
         key={refreshKey}
@@ -73,7 +73,7 @@ const WidgetGallery = ({ theme, transparentBackground = false }) => {
       />
 
       {/* Widget Gallery Header */}
-      <Box sx={{ mb: 3, textAlign: 'center' }}>
+      <Box sx={{ mb: 2, textAlign: 'center' }}>
         <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'var(--text)', mb: 1 }}>
           🎨 Widget Gallery
         </Typography>
