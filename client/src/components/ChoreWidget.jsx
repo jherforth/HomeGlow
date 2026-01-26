@@ -24,6 +24,7 @@ import {
 } from '@mui/material';
 import { Edit, Save, Cancel, Add, Delete, Check, Undo } from '@mui/icons-material';
 import axios from 'axios';
+import { API_BASE_URL } from '../utils/apiConfig.js';
 
 const ChoreWidget = ({ transparentBackground }) => {
   const [users, setUsers] = useState([]);
@@ -92,7 +93,7 @@ const ChoreWidget = ({ transparentBackground }) => {
 
   const fetchUsers = async () => {
     try {
-      const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users`);
+      const response = await axios.get(`${API_BASE_URL}/api/users`);
       setUsers(response.data.filter(user => user.id !== 0));
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -101,7 +102,7 @@ const ChoreWidget = ({ transparentBackground }) => {
 
   const fetchChores = async () => {
     try {
-      const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`);
+      const response = await axios.get(`${API_BASE_URL}/api/chores`);
       setChores(response.data);
       setLoading(false);
     } catch (error) {
@@ -112,7 +113,7 @@ const ChoreWidget = ({ transparentBackground }) => {
 
   const fetchPrizes = async () => {
     try {
-      const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/prizes`);
+      const response = await axios.get(`${API_BASE_URL}/api/prizes`);
       setPrizes(response.data);
     } catch (error) {
       console.error('Error fetching prizes:', error);
@@ -122,7 +123,7 @@ const ChoreWidget = ({ transparentBackground }) => {
   const toggleChoreCompletion = async (choreId, currentStatus) => {
     try {
       setIsLoading(true);
-      await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores/${choreId}`, {
+      await axios.patch(`${API_BASE_URL}/api/chores/${choreId}`, {
         completed: !currentStatus
       });
       fetchChores();
@@ -137,7 +138,7 @@ const ChoreWidget = ({ transparentBackground }) => {
   const assignBonusChore = async (choreId, userId) => {
     try {
       setIsLoading(true);
-      await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores/${choreId}/assign`, {
+      await axios.patch(`${API_BASE_URL}/api/chores/${choreId}/assign`, {
         user_id: userId
       });
       fetchChores();
@@ -153,14 +154,14 @@ const ChoreWidget = ({ transparentBackground }) => {
     try {
       setIsLoading(true);
       if (editingChore) {
-        await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores/${editingChore.id}`, editingChore);
+        await axios.patch(`${API_BASE_URL}/api/chores/${editingChore.id}`, editingChore);
       } else {
         for (const day of newChore.assigned_days_of_week) {
           const choreForDay = {
             ...newChore,
             assigned_day_of_week: day
           };
-          await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`, choreForDay);
+          await axios.post(`${API_BASE_URL}/api/chores`, choreForDay);
         }
         setNewChore({
           user_id: '',
@@ -217,7 +218,7 @@ const ChoreWidget = ({ transparentBackground }) => {
       if (user.profile_picture.startsWith('data:')) {
         imageUrl = user.profile_picture;
       } else {
-        imageUrl = `${import.meta.env.VITE_REACT_APP_API_URL}/Uploads/users/${user.profile_picture}`;
+        imageUrl = `${API_BASE_URL}/Uploads/users/${user.profile_picture}`;
       }
     }
 

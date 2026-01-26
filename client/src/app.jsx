@@ -13,6 +13,7 @@ import WeatherWidget from './components/WeatherWidget.jsx';
 import ChoreWidget from './components/ChoreWidget.jsx';
 import WidgetGallery from './components/WidgetGallery.jsx';
 import WidgetContainer from './components/WidgetContainer.jsx';
+import { API_BASE_URL } from './utils/apiConfig.js';
 import './index.css';
 
 const App = () => {
@@ -55,7 +56,7 @@ const App = () => {
   useEffect(() => {
     const fetchApiKeys = async () => {
       try {
-        const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`);
+        const response = await axios.get(`${API_BASE_URL}/api/settings`);
         setApiKeys(response.data);
       } catch (error) {
         console.error('Error fetching API keys:', error);

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Typography, Box, IconButton, Popover, Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Switch, FormControlLabel, Select, MenuItem, FormControl, InputLabel, List, ListItem, ListItemText, ListItemSecondaryAction, CircularProgress, Alert, Chip } from '@mui/material';
 import { Settings, Add, Delete, Edit, Refresh, ChevronLeft, ChevronRight, PlayArrow, Pause } from '@mui/icons-material';
 import axios from 'axios';
+import { API_BASE_URL } from '../utils/apiConfig.js';
 
 const PhotoWidget = ({ transparentBackground }) => {
   const [photos, setPhotos] = useState([]);
@@ -36,7 +37,7 @@ const PhotoWidget = ({ transparentBackground }) => {
 
   const loadPreferences = async () => {
     try {
-      const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`);
+      const response = await axios.get(`${API_BASE_URL}/api/settings`);
       const settings = response.data;
 
       if (settings.PHOTO_WIDGET_PHOTOS_PER_VIEW) {
@@ -55,7 +56,7 @@ const PhotoWidget = ({ transparentBackground }) => {
 
   const savePreference = async (key, value) => {
     try {
-      await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, {
+      await axios.post(`${API_BASE_URL}/api/settings`, {
         key,
         value: value.toString()
       });
@@ -97,7 +98,7 @@ const PhotoWidget = ({ transparentBackground }) => {
 
   const fetchPhotoSources = async () => {
     try {
-      const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/photo-sources`);
+      const response = await axios.get(`${API_BASE_URL}/api/photo-sources`);
       setPhotoSources(response.data);
     } catch (error) {
       console.error('Error fetching photo sources:', error);
@@ -109,7 +110,7 @@ const PhotoWidget = ({ transparentBackground }) => {
       setLoading(true);
       setError(null);
 
-      const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/photo-items`);
+      const response = await axios.get(`${API_BASE_URL}/api/photo-items`);
 
       if (Array.isArray(response.data)) {
         setPhotos(response.data);
@@ -156,7 +157,7 @@ const PhotoWidget = ({ transparentBackground }) => {
 
   const handleToggleSource = async (sourceId, enabled) => {
     try {
-      await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/photo-sources/${sourceId}`, {
+      await axios.patch(`${API_BASE_URL}/api/photo-sources/${sourceId}`, {
         enabled: !enabled
       });
       await fetchPhotoSources();
@@ -169,7 +170,7 @@ const PhotoWidget = ({ transparentBackground }) => {
   const handleDeleteSource = async (sourceId) => {
     if (window.confirm('Are you sure you want to delete this photo source?')) {
       try {
-        await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/photo-sources/${sourceId}`);
+        await axios.delete(`${API_BASE_URL}/api/photo-sources/${sourceId}`);
         await fetchPhotoSources();
         await fetchPhotos();
       } catch (error) {
@@ -182,7 +183,7 @@ const PhotoWidget = ({ transparentBackground }) => {
     if (editingSource) {
       setTestingConnection(true);
       try {
-        const response = await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/photo-sources/${editingSource.id}/test`);
+        const response = await axios.post(`${API_BASE_URL}/api/photo-sources/${editingSource.id}/test`);
         setTestResult({ success: true, message: response.data.message });
       } catch (error) {
         setTestResult({ success: false, message: error.response?.data?.error || 'Connection failed' });
@@ -198,9 +199,9 @@ const PhotoWidget = ({ transparentBackground }) => {
     setSavingSource(true);
     try {
       if (editingSource) {
-        await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/photo-sources/${editingSource.id}`, sourceForm);
+        await axios.patch(`${API_BASE_URL}/api/photo-sources/${editingSource.id}`, sourceForm);
       } else {
-        await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/photo-sources`, sourceForm);
+        await axios.post(`${API_BASE_URL}/api/photo-sources`, sourceForm);
       }
       await fetchPhotoSources();
       await fetchPhotos();
@@ -318,7 +319,7 @@ const PhotoWidget = ({ transparentBackground }) => {
               {currentPhotos.map((photo, index) => (
                 <Box key={`${photo.id}-${index}`} sx={{ height: '100%', overflow: 'hidden', borderRadius: 1 }}>
                   <img
-                    src={`${import.meta.env.VITE_REACT_APP_API_URL}${photo.url}`}
+                    src={`${API_BASE_URL}${photo.url}`}
                     alt="Photo"
                     style={{
                       width: '100%',

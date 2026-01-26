@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Card, Typography, Switch, FormControlLabel, Box } from '@mui/material';
 import CountdownCircle from './CountdownCircle';
+import { API_BASE_URL } from '../utils/apiConfig.js';
 
 const ENABLED_WIDGETS_KEY = 'enabledWidgets';
 
@@ -16,7 +17,7 @@ const WidgetGallery = ({ theme, transparentBackground = false }) => {
     const fetchPlugins = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/widgets`);
+        const response = await axios.get(`${API_BASE_URL}/api/widgets`);
         setPlugins(Array.isArray(response.data) ? response.data : []);
       } catch {
         setPlugins([]);
@@ -131,7 +132,7 @@ const WidgetGallery = ({ theme, transparentBackground = false }) => {
             {enabled[plugin.filename] && (
               <iframe
                 key={refreshKey}
-                src={`${import.meta.env.VITE_REACT_APP_API_URL}/widgets/${plugin.filename}?theme=${theme}`}
+                src={`${API_BASE_URL}/widgets/${plugin.filename}?theme=${theme}`}
                 title={plugin.name}
                 style={{
                   width: '100%',

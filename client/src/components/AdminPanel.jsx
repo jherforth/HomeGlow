@@ -58,6 +58,7 @@ import {
 } from '@mui/icons-material';
 import { ChromePicker } from 'react-color';
 import axios from 'axios';
+import { API_BASE_URL } from '../utils/apiConfig.js';
 
 const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const [activeTab, setActiveTab] = useState(0);
@@ -137,7 +138,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
 
   const fetchSettings = async () => {
     try {
-      const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`);
+      const response = await axios.get(`${API_BASE_URL}/api/settings`);
       setSettings(response.data);
     } catch (error) {
       console.error('Error fetching settings:', error);
@@ -146,7 +147,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
 
   const fetchUsers = async () => {
     try {
-      const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users`);
+      const response = await axios.get(`${API_BASE_URL}/api/users`);
       setUsers(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -156,7 +157,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
 
   const fetchChores = async () => {
     try {
-      const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores`);
+      const response = await axios.get(`${API_BASE_URL}/api/chores`);
       setChores(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching chores:', error);
@@ -166,7 +167,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
 
   const fetchPrizes = async () => {
     try {
-      const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/prizes`);
+      const response = await axios.get(`${API_BASE_URL}/api/prizes`);
       setPrizes(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching prizes:', error);
@@ -176,7 +177,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
 
   const fetchUploadedWidgets = async () => {
     try {
-      const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/widgets`);
+      const response = await axios.get(`${API_BASE_URL}/api/widgets`);
       setUploadedWidgets(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching uploaded widgets:', error);
@@ -187,7 +188,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const fetchGithubWidgets = async () => {
     setLoadingGithub(true);
     try {
-      const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/widgets/github`);
+      const response = await axios.get(`${API_BASE_URL}/api/widgets/github`);
       setGithubWidgets(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching GitHub widgets:', error);
@@ -199,7 +200,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
 
   const saveSetting = async (key, value, showMessage = true) => {
     try {
-      await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, { key, value });
+      await axios.post(`${API_BASE_URL}/api/settings`, { key, value });
       setSettings(prev => ({ ...prev, [key]: value }));
       if (showMessage) {
         setSaveMessage({ show: true, type: 'success', text: 'Setting saved successfully!' });
@@ -219,8 +220,8 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     setIsLoading(true);
     try {
       await Promise.all([
-        axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, { key: 'WEATHER_API_KEY', value: settings.WEATHER_API_KEY || '' }),
-        axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, { key: 'PROXY_WHITELIST', value: settings.PROXY_WHITELIST || '' })
+        axios.post(`${API_BASE_URL}/api/settings`, { key: 'WEATHER_API_KEY', value: settings.WEATHER_API_KEY || '' }),
+        axios.post(`${API_BASE_URL}/api/settings`, { key: 'PROXY_WHITELIST', value: settings.PROXY_WHITELIST || '' })
       ]);
       setSaveMessage({ show: true, type: 'success', text: 'All API settings saved successfully!' });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
@@ -320,9 +321,9 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     try {
       setIsLoading(true);
       if (editingUser) {
-        await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users/${editingUser.id}`, editingUser);
+        await axios.patch(`${API_BASE_URL}/api/users/${editingUser.id}`, editingUser);
       } else {
-        await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users`, newUser);
+        await axios.post(`${API_BASE_URL}/api/users`, newUser);
         setNewUser({ username: '', email: '', profile_picture: '' });
       }
       setEditingUser(null);
@@ -339,10 +340,10 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       setIsLoading(true);
       const userChores = chores.filter(chore => chore.user_id === userId);
       for (const chore of userChores) {
-        await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores/${chore.id}`);
+        await axios.delete(`${API_BASE_URL}/api/chores/${chore.id}`);
       }
       
-      await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users/${userId}`);
+      await axios.delete(`${API_BASE_URL}/api/users/${userId}`);
       
       fetchUsers();
       fetchChores();
@@ -362,7 +363,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const updateUserClams = async (userId, newTotal) => {
     try {
       setIsLoading(true);
-      await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/users/${userId}/clams`, {
+      await axios.patch(`${API_BASE_URL}/api/users/${userId}/clams`, {
         clam_total: newTotal
       });
       fetchUsers();
@@ -377,9 +378,9 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     try {
       setIsLoading(true);
       if (editingPrize) {
-        await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/prizes/${editingPrize.id}`, editingPrize);
+        await axios.patch(`${API_BASE_URL}/api/prizes/${editingPrize.id}`, editingPrize);
       } else {
-        await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/prizes`, newPrize);
+        await axios.post(`${API_BASE_URL}/api/prizes`, newPrize);
         setNewPrize({ name: '', clam_cost: 0 });
       }
       setEditingPrize(null);
@@ -395,7 +396,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     if (window.confirm('Are you sure you want to delete this prize?')) {
       try {
         setIsLoading(true);
-        await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/prizes/${prizeId}`);
+        await axios.delete(`${API_BASE_URL}/api/prizes/${prizeId}`);
         fetchPrizes();
       } catch (error) {
         console.error('Error deleting prize:', error);
@@ -414,7 +415,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
 
     try {
       setIsLoading(true);
-      await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/widgets/upload`, formData, {
+      await axios.post(`${API_BASE_URL}/api/widgets/upload`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       fetchUploadedWidgets();
@@ -431,7 +432,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     if (window.confirm('Are you sure you want to delete this widget?')) {
       try {
         setIsLoading(true);
-        await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/widgets/${filename}`);
+        await axios.delete(`${API_BASE_URL}/api/widgets/${filename}`);
         fetchUploadedWidgets();
         if (onWidgetUploaded) onWidgetUploaded();
       } catch (error) {
@@ -445,7 +446,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const installGithubWidget = async (widget) => {
     try {
       setIsLoading(true);
-      await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/widgets/github/install`, {
+      await axios.post(`${API_BASE_URL}/api/widgets/github/install`, {
         download_url: widget.download_url,
         filename: widget.filename,
         name: widget.name
@@ -474,7 +475,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     if (window.confirm('Are you sure you want to delete this chore?')) {
       try {
         setIsLoading(true);
-        await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/chores/${choreId}`);
+        await axios.delete(`${API_BASE_URL}/api/chores/${choreId}`);
         fetchChores();
         if (choreModal.user) {
           const updatedUserChores = chores.filter(chore => chore.user_id === choreModal.user.id && chore.id !== choreId);
@@ -499,7 +500,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     try {
       setIsLoading(true);
       const response = await axios.post(
-        `${import.meta.env.VITE_REACT_APP_API_URL}/api/users/${userId}/upload-picture`,
+        `${API_BASE_URL}/api/users/${userId}/upload-picture`,
         formData,
         { headers: { 'Content-Type': 'multipart/form-data' } }
       );
@@ -518,7 +519,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       if (user.profile_picture.startsWith('data:')) {
         imageUrl = user.profile_picture;
       } else {
-        imageUrl = `${import.meta.env.VITE_REACT_APP_API_URL}/Uploads/users/${user.profile_picture}`;
+        imageUrl = `${API_BASE_URL}/Uploads/users/${user.profile_picture}`;
       }
     }
 

@@ -5,6 +5,7 @@ import { Calendar, momentLocalizer } from 'react-big-calendar';
 import moment from 'moment';
 import { ChromePicker } from 'react-color';
 import axios from 'axios';
+import { API_BASE_URL } from '../utils/apiConfig.js';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 
 const localizer = momentLocalizer(moment);
@@ -86,11 +87,11 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
     const saveToDatabase = async () => {
       try {
-        await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, {
+        await axios.post(`${API_BASE_URL}/api/settings`, {
           key: 'CALENDAR_TEXT_SIZE',
           value: displaySettings.textSize.toString()
         });
-        await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`, {
+        await axios.post(`${API_BASE_URL}/api/settings`, {
           key: 'CALENDAR_BULLET_SIZE',
           value: displaySettings.bulletSize.toString()
         });
@@ -106,7 +107,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   useEffect(() => {
     const loadDisplaySettings = async () => {
       try {
-        const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/settings`);
+        const response = await axios.get(`${API_BASE_URL}/api/settings`);
         const settings = response.data;
 
         if (settings.CALENDAR_TEXT_SIZE || settings.CALENDAR_BULLET_SIZE) {
@@ -125,7 +126,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
   const fetchCalendarSources = async () => {
     try {
-      const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/calendar-sources`);
+      const response = await axios.get(`${API_BASE_URL}/api/calendar-sources`);
       setCalendarSources(response.data);
     } catch (error) {
       console.error('Error fetching calendar sources:', error);
@@ -137,7 +138,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
       setLoading(true);
       setError(null);
 
-      const response = await axios.get(`${import.meta.env.VITE_REACT_APP_API_URL}/api/calendar-events`);
+      const response = await axios.get(`${API_BASE_URL}/api/calendar-events`);
 
       if (Array.isArray(response.data)) {
         const formattedEvents = response.data.map(event => ({
@@ -208,7 +209,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
   const handleToggleCalendar = async (calendarId, enabled) => {
     try {
-      await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/calendar-sources/${calendarId}`, {
+      await axios.patch(`${API_BASE_URL}/api/calendar-sources/${calendarId}`, {
         enabled: !enabled
       });
       await fetchCalendarSources();
@@ -221,7 +222,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   const handleDeleteCalendar = async (calendarId) => {
     if (window.confirm('Are you sure you want to delete this calendar?')) {
       try {
-        await axios.delete(`${import.meta.env.VITE_REACT_APP_API_URL}/api/calendar-sources/${calendarId}`);
+        await axios.delete(`${API_BASE_URL}/api/calendar-sources/${calendarId}`);
         await fetchCalendarSources();
         await fetchCalendarEvents();
       } catch (error) {
@@ -234,7 +235,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
     if (editingCalendar) {
       setTestingConnection(true);
       try {
-        const response = await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/calendar-sources/${editingCalendar.id}/test`);
+        const response = await axios.post(`${API_BASE_URL}/api/calendar-sources/${editingCalendar.id}/test`);
         setTestResult({ success: true, message: response.data.message });
       } catch (error) {
         setTestResult({ success: false, message: error.response?.data?.error || 'Connection failed' });
@@ -250,9 +251,9 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
     setSavingCalendar(true);
     try {
       if (editingCalendar) {
-        await axios.patch(`${import.meta.env.VITE_REACT_APP_API_URL}/api/calendar-sources/${editingCalendar.id}`, calendarForm);
+        await axios.patch(`${API_BASE_URL}/api/calendar-sources/${editingCalendar.id}`, calendarForm);
       } else {
-        await axios.post(`${import.meta.env.VITE_REACT_APP_API_URL}/api/calendar-sources`, calendarForm);
+        await axios.post(`${API_BASE_URL}/api/calendar-sources`, calendarForm);
       }
       await fetchCalendarSources();
       await fetchCalendarEvents();
