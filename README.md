@@ -8,7 +8,7 @@ Discord: https://discord.gg/wFJEna8AdC
 
 HomeGlow is an open-source, self-hosted dashboard application designed for touch-enabled displays, drawing inspiration from projects like Magic Mirror. It offers a modular, browser-based interface to centralize and display essential home information, integrating with self-hosted services and providing custom modules for family management. Optimized for Linux environments (e.g., Raspberry Pi, Proxmox VMs), HomeGlow is lightweight, highly customizable, and perfect for creating a dynamic home hub.
 
-<img width="1610" height="946" alt="Image" src="https://github.com/user-attachments/assets/65796c77-b095-481f-a92e-180f0689378b" />
+<img width="957" height="991" alt="Screenshot 2026-01-27 113909" src="https://github.com/user-attachments/assets/a95eb642-b41e-44c9-9613-e7ef1797d49b" />
 
 ## ✨ Features
 
@@ -621,5 +621,5 @@ This project is open-source and available under the [MIT License](LICENSE).
 
 **HomeGlow** - Transform your home with a beautiful, intelligent dashboard that grows with your family's needs.
 
-![Image](https://github.com/user-attachments/assets/a3b72db0-510b-4da8-a1bc-e2257dca2799)
+![Media](https://github.com/user-attachments/assets/8ce4ddfe-6397-46e6-a371-c048f87b2ac6)
 ENJOY!
