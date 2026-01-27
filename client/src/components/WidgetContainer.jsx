@@ -344,6 +344,12 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                 key={widget.id}
                 className={`widget-wrapper ${isSelected ? 'selected' : ''}`}
                 data-grid={{ ...currentLayout }}
+                onClick={(e) => {
+                  if (!locked && !isSelected && !e.target.closest('.drag-handle') && !e.target.closest('.resize-button')) {
+                    e.stopPropagation();
+                    handleWidgetClick(widget.id, e);
+                  }
+                }}
                 onMouseDown={(e) => {
                   if (!locked && !isSelected && !e.target.closest('.drag-handle') && !e.target.closest('.resize-button')) {
                     e.stopPropagation();
