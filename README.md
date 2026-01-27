@@ -368,11 +368,7 @@ Enable/disable, configure transparency, and set auto-refresh intervals for:
 - Visual countdown circles show time until next refresh
 
 #### Interface Tab
-- **Screen Refresh Options**: Automatic page refresh intervals (1-12 hours)
-- **Geometric Background**: Dynamic pattern backgrounds
-- **Card Shuffle**: Randomize widget positions
-- **Display Settings**: Text size, card width, padding adjustments
-- **Custom Colors**: Personalize gradients for light/dark themes
+- **Custom Colors**: Choose your accent colors
 
 #### Users Tab
 - **Add Users**: Create family member profiles with photos
