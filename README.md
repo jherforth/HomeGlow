@@ -15,7 +15,6 @@ HomeGlow is an open-source, self-hosted dashboard application designed for touch
 HomeGlow is built with a focus on modern aesthetics, user experience, and practical utility, incorporating advanced features to prevent screen burn-in and enhance daily interactions.
 
 ### Core Design & Experience
--   **Web 3.0 Inspired Design**: A futuristic interface featuring glassmorphism effects, vibrant neon gradients, and bold typography for a visually stunning experience.
 -   **Dynamic Theming**: Seamlessly toggle between beautiful Light and Dark modes, with your preference intelligently saved in local storage.
 -   **Touch-Friendly Interface**: Designed from the ground up for touchscreens, allowing intuitive interaction with all widgets and controls.
 -   **Customizable Widget Layout**:
@@ -24,10 +23,6 @@ HomeGlow is built with a focus on modern aesthetics, user experience, and practi
     -   **Grid-Based System**: Responsive 12-column grid that adapts to mobile, tablet, and desktop screens
     -   **Persistent Layouts**: Your custom arrangement is automatically saved and restored
     -   **Touch & Mouse Support**: Full support for both touch gestures and traditional mouse interactions
--   **Burn-in Prevention**: Advanced features to protect your display from static image burn-in:
-    -   **Configurable Screen Refresh**: Set automatic page refreshes at intervals of 1, 3, 6, 9, or 12 hours, or opt for manual-only refresh. This ensures dynamic content updates and prevents static elements from remaining on screen too long.
-    -   **Random Geometric Backgrounds**: Enable a toggle in the Admin Panel to display unique, randomly generated geometric patterns as the background. These patterns are consistent across light/dark modes and regenerate on each page refresh.
-    -   **Dynamic Card Shuffle**: Randomize the layout of your main widgets (Calendar, Photos, Weather, Menu) to prevent static element placement. The Chores Widget intelligently shifts its position (top or bottom) to further mitigate burn-in.
 
 ### Enhanced Widgets
 -   **Widget Refresh System**:
