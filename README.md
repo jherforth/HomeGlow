@@ -18,12 +18,23 @@ HomeGlow is built with a focus on modern aesthetics, user experience, and practi
 -   **Web 3.0 Inspired Design**: A futuristic interface featuring glassmorphism effects, vibrant neon gradients, and bold typography for a visually stunning experience.
 -   **Dynamic Theming**: Seamlessly toggle between beautiful Light and Dark modes, with your preference intelligently saved in local storage.
 -   **Touch-Friendly Interface**: Designed from the ground up for touchscreens, allowing intuitive interaction with all widgets and controls.
+-   **Customizable Widget Layout**:
+    -   **Drag-and-Drop Positioning**: Unlock layout mode to freely arrange widgets on your dashboard
+    -   **Flexible Resizing**: Click or tap widgets to select, then use +/- buttons on each edge to resize
+    -   **Grid-Based System**: Responsive 12-column grid that adapts to mobile, tablet, and desktop screens
+    -   **Persistent Layouts**: Your custom arrangement is automatically saved and restored
+    -   **Touch & Mouse Support**: Full support for both touch gestures and traditional mouse interactions
 -   **Burn-in Prevention**: Advanced features to protect your display from static image burn-in:
     -   **Configurable Screen Refresh**: Set automatic page refreshes at intervals of 1, 3, 6, 9, or 12 hours, or opt for manual-only refresh. This ensures dynamic content updates and prevents static elements from remaining on screen too long.
     -   **Random Geometric Backgrounds**: Enable a toggle in the Admin Panel to display unique, randomly generated geometric patterns as the background. These patterns are consistent across light/dark modes and regenerate on each page refresh.
     -   **Dynamic Card Shuffle**: Randomize the layout of your main widgets (Calendar, Photos, Weather, Menu) to prevent static element placement. The Chores Widget intelligently shifts its position (top or bottom) to further mitigate burn-in.
 
 ### Enhanced Widgets
+-   **Widget Refresh System**:
+    -   **Individual Widget Refresh Intervals**: Configure auto-refresh rates for each widget independently (5, 15, 30 minutes, or 1-6 hours)
+    -   **Visual Countdown Indicators**: Circular countdown timers show when each widget will refresh
+    -   **Manual Refresh**: Instantly refresh any widget on-demand from the admin panel
+    -   **Smart Data Management**: Widgets automatically fetch fresh data at configured intervals without page reload
 -   **Calendar Widget**:
     -   **Multi-Source Calendar Support**: Connect multiple calendars simultaneously from different sources.
     -   **ICS & CalDAV Integration**: Supports both public ICS links (Google Calendar, Apple Calendar, etc.) and private CalDAV servers with authentication.
@@ -66,11 +77,40 @@ HomeGlow is built with a focus on modern aesthetics, user experience, and practi
 -   **Calendar Source** (Optional, for Calendar Widget): ICS link from any calendar service (Google Calendar, Apple Calendar, etc.) or CalDAV server credentials
 -   **Immich Instance** (Optional, for Photo Widget): A running Immich server with API access
 
+### Quick Start (5 minutes)
+Get HomeGlow running in just a few commands:
+
+```bash
+# 1. Download the docker-compose file
+wget https://raw.githubusercontent.com/jherforth/HomeGlow/main/docker-compose.yml
+
+# 2. Create data directories
+sudo mkdir -p /apps/homeglow/{data,uploads}
+sudo chmod -R 777 /apps/homeglow
+
+# 3. Set your server IP (replace with your actual IP)
+export VITE_REACT_APP_API_URL=http://192.168.1.100:5000
+
+# 4. Pull images and start services
+docker-compose pull && docker-compose up -d
+
+# 5. Access HomeGlow at http://your-server-ip:3000
+```
+
+That's it! HomeGlow is now running. Configure your API keys and widgets in the Admin Panel (⚙️ icon).
+
 ## 📦 Deployment Options
 
-### Option 1: Production Deployment with Pre-Built Images (Recommended)
+### Option 1: Production Deployment with Pre-Built Images ⭐ RECOMMENDED
 
-This is the fastest and easiest method using pre-built Docker images from GitHub Container Registry.
+**This is the fastest and easiest method** - uses pre-built multi-architecture Docker images from GitHub Container Registry (GHCR). No build time required, just pull and run!
+
+**Why use pre-built images:**
+- ✅ **Zero build time** - images are ready to use
+- ✅ **Multi-architecture support** - works on AMD64 and ARM64 (Raspberry Pi)
+- ✅ **Consistent and tested** - each image is built and tested via CI/CD
+- ✅ **Simple updates** - just run `docker-compose pull` to get the latest version
+- ✅ **Smaller downloads** - optimized, production-ready images
 
 #### Step 1: Download Docker Compose File
 ```bash
@@ -127,17 +167,21 @@ docker-compose -f docker-compose-tailscale.yml up -d
 ```bash
 # Pull latest images and restart services
 docker-compose pull && docker-compose up -d
+
+# Or for Tailscale variant
+docker-compose -f docker-compose-tailscale.yml pull && docker-compose -f docker-compose-tailscale.yml up -d
 ```
 
-**Benefits:**
-- Zero build time - images are pre-built
-- Multi-architecture support (AMD64, ARM64/Raspberry Pi)
-- Consistent, tested images
-- Simple updates with `docker-compose pull`
+**Image Information:**
+- **Container Registry**: GitHub Container Registry (GHCR)
+- **Images**: `ghcr.io/jherforth/homeglow-frontend:latest` and `ghcr.io/jherforth/homeglow-backend:latest`
+- **Architectures**: AMD64 (x86_64) and ARM64 (Raspberry Pi 3/4/5, Apple Silicon)
+- **Updates**: Images are automatically built when new versions are released
+- **No GitHub account required** - images are publicly available
 
 ### Option 2: Portainer Stack Deployment
 
-Deploy HomeGlow using Portainer's Git integration with pre-built images.
+**Perfect for Portainer users** - deploy HomeGlow directly from GitHub with automatic updates using pre-built GHCR images. No local repository needed!
 
 #### Step 1: Create Environment Variables
 In Portainer, go to **Stacks** → **Add Stack** → **Environment Variables** and add:
@@ -314,12 +358,19 @@ Configure calendar sources directly from the Calendar Widget settings:
    - Delete calendars you no longer need
 
 #### Widgets Tab
-Enable/disable and configure transparency for:
+Enable/disable, configure transparency, and set auto-refresh intervals for:
 - **Chores Widget**: Task management with reward system
-- **Calendar Widget**: Google Calendar integration
+- **Calendar Widget**: Multi-source calendar integration (ICS/CalDAV)
 - **Photos Widget**: Immich photo display
 - **Weather Widget**: Weather forecasts and graphs
 - **Menu Widget**: Weekly meal planning
+- **Widget Gallery**: Custom uploaded widgets
+
+**Refresh Intervals**: Set independent refresh rates for each widget:
+- Disabled (manual refresh only)
+- 5, 15, or 30 minutes
+- 1, 2, 3, 4, 5, or 6 hours
+- Visual countdown circles show time until next refresh
 
 #### Interface Tab
 - **Screen Refresh Options**: Automatic page refresh intervals (1-12 hours)
