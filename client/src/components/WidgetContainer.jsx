@@ -740,7 +740,9 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                     flexDirection: 'column',
                   }}
                 >
-                  {widget.content}
+                  {React.cloneElement(widget.content, {
+                    key: refreshKeys[widget.id] || 0
+                  })}
                 </Box>
               </Box>
             );
