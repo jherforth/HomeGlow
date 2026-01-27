@@ -401,6 +401,11 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                     >
                       <Box
                         className="resize-button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleResize(widget.id, 'top', true, e);
+                        }}
                         onMouseDown={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -428,6 +433,11 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       </Box>
                       <Box
                         className="resize-button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleResize(widget.id, 'top', false, e);
+                        }}
                         onMouseDown={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -471,6 +481,11 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                     >
                       <Box
                         className="resize-button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleResize(widget.id, 'right', true, e);
+                        }}
                         onMouseDown={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -498,6 +513,11 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       </Box>
                       <Box
                         className="resize-button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleResize(widget.id, 'right', false, e);
+                        }}
                         onMouseDown={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -540,6 +560,11 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                     >
                       <Box
                         className="resize-button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleResize(widget.id, 'bottom', true, e);
+                        }}
                         onMouseDown={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -567,6 +592,11 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       </Box>
                       <Box
                         className="resize-button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleResize(widget.id, 'bottom', false, e);
+                        }}
                         onMouseDown={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -609,6 +639,11 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                     >
                       <Box
                         className="resize-button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleResize(widget.id, 'left', true, e);
+                        }}
                         onMouseDown={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -636,6 +671,11 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       </Box>
                       <Box
                         className="resize-button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleResize(widget.id, 'left', false, e);
+                        }}
                         onMouseDown={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
