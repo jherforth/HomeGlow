@@ -1493,6 +1493,20 @@ fastify.get('/api/calendar-events', async (request, reply) => {
   try {
     const sources = db.prepare('SELECT * FROM calendar_sources WHERE enabled = 1 ORDER BY sort_order, id').all();
 
+    function makeEvent({ event, id, source, start, end }) {
+      return {
+        id: id,
+        title: event.summary,
+        start,
+        end,
+        description: event.description,
+        location: event.location,
+        source_id: source.id,
+        source_name: source.name,
+        source_color: source.color
+      };
+    }
+    
     if (sources.length === 0) {
       return [];
     }
@@ -1506,19 +1520,30 @@ fastify.get('/api/calendar-events', async (request, reply) => {
           const comp = new ICAL.Component(jcalData);
           const vevents = comp.getAllSubcomponents('vevent');
 
-          return vevents.map(vevent => {
+          return vevents.flatmap(vevent => {
             const event = new ICAL.Event(vevent);
-            return {
-              id: event.uid || Math.random().toString(),
-              title: event.summary,
-              start: event.startDate.toJSDate(),
-              end: event.endDate.toJSDate(),
-              description: event.description,
-              location: event.location,
-              source_id: source.id,
-              source_name: source.name,
-              source_color: source.color
-            };
+            // If recurring and no uid, all occurrences will get same random id - which is desired?
+            const id = event.uid || Math.random().toString();
+
+            const results = [];
+            let next;
+            let duration = event.endDate.toJSDate() - event.startDate.toJSDate();
+
+            // recurring events handler
+            var expand = new ICAL.RecurExpansion({
+              component: event,
+              dtstart: event.getFirstPropertyValue('dtstart')
+            });
+
+            // do-while to add at least 1 result to results, but if there are recurrences, add those too
+            do {
+              let start = next || event.startDate.toJSDate();
+              let end = new Date(start.getTime() + duration);
+              results.push(makeEvent({ event, id, source, start, end }));
+            } while ((next = expand.next()) && next.getTime() < new Date().setMonth(new Date().getMonth() + 13));
+            // limit recurrences to no more than 13 months from now
+
+            return results;
           });
         } else if (source.type === 'CalDAV') {
           const decryptedPassword = decryptPassword(source.password);
