@@ -14,6 +14,7 @@
     "dotenv": "^17.2.3",
     "fastify": "^5.6.2",
     "ical-generator": "^10.0.0",
+    "node-ical": "^0.25.0",
     "better-sqlite3": "^12.5.0",
     "ical.js": "^2.2.1"
   }
