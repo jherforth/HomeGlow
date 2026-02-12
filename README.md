@@ -574,7 +574,7 @@ For local builds and testing:
 **Prerequisites:**
 1. Docker with buildx support
 2. GitHub Personal Access Token with package permissions
-3. Authenticated with GHCR: `echo $GITHUB_TOKEN | docker login ghcr.io -u jherforth --password-stdin`
+3. Authenticated with GHCR: `echo $GITHUB_TOKEN | docker login ghcr.io -u username --password-stdin`
 
 For detailed instructions on building, publishing, and configuring GHCR, see [GHCR_SETUP.md](GHCR_SETUP.md).
 
