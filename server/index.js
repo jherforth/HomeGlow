@@ -2,6 +2,7 @@
 const fastify = require('fastify')({ logger: true });
 const Database = require('better-sqlite3');
 const ical = require('ical-generator');
+const node_ical = require('node-ical');
 const path = require('path');
 const fs = require('fs').promises;
 const multipart = require('@fastify/multipart');
@@ -1493,20 +1494,20 @@ fastify.get('/api/calendar-events', async (request, reply) => {
   try {
     const sources = db.prepare('SELECT * FROM calendar_sources WHERE enabled = 1 ORDER BY sort_order, id').all();
 
-    function makeEvent({ event, id, source, start, end }) {
+    function makeEvent({ item, source }) {
       return {
-        id: id,
-        title: event.summary,
-        start,
-        end,
-        description: event.description,
-        location: event.location,
+        id: item.uid ?? item.event?.uid ?? null,
+        title: item.summary ?? item.event?.summary ?? null,
+        start: item.start ?? item.event.start,
+        end: item.end ?? item.event.end,
+        description: item.description ?? item.event?.description ?? null,
+        location: item.location ?? item.event?.location ?? null,
         source_id: source.id,
         source_name: source.name,
         source_color: source.color
       };
     }
-    
+
     if (sources.length === 0) {
       return [];
     }
@@ -1514,37 +1515,28 @@ fastify.get('/api/calendar-events', async (request, reply) => {
     const fetchPromises = sources.map(async (source) => {
       try {
         if (source.type === 'ICS') {
-          const response = await axios.get(source.url, { timeout: 15000 });
-          const icsData = response.data;
-          const jcalData = ICAL.parse(icsData);
-          const comp = new ICAL.Component(jcalData);
-          const vevents = comp.getAllSubcomponents('vevent');
+          const events = await node_ical.async.fromURL(source.url);
+          let out = [];
+          for (const event of Object.values(events)) {
+            if (event.type === "VEVENT") {
+              // doing ~13 months forward and backward
+              const instances = node_ical.expandRecurringEvent(event, {
+                from: new Date(Date.now() - 13 * 30 * 24 * 60 * 60 * 1000),
+                to: new Date(Date.now() + 13 * 30 * 24 * 60 * 60 * 1000)
+              });
 
-          return vevents.flatmap(vevent => {
-            const event = new ICAL.Event(vevent);
-            // If recurring and no uid, all occurrences will get same random id - which is desired?
-            const id = event.uid || Math.random().toString();
+              // If solo event, append and go to next event
+              if (!instances) {
+                out.push(makeEvent({ item: event, source }));
+                continue;
+              }
+              instances.forEach(instance => {
+                out.push(makeEvent({ item: instance, source }));
+              });
+            }
+          };
+          return out;
 
-            const results = [];
-            let next;
-            let duration = event.endDate.toJSDate() - event.startDate.toJSDate();
-
-            // recurring events handler
-            var expand = new ICAL.RecurExpansion({
-              component: event,
-              dtstart: event.getFirstPropertyValue('dtstart')
-            });
-
-            // do-while to add at least 1 result to results, but if there are recurrences, add those too
-            do {
-              let start = next || event.startDate.toJSDate();
-              let end = new Date(start.getTime() + duration);
-              results.push(makeEvent({ event, id, source, start, end }));
-            } while ((next = expand.next()) && next.getTime() < new Date().setMonth(new Date().getMonth() + 13));
-            // limit recurrences to no more than 13 months from now
-
-            return results;
-          });
         } else if (source.type === 'CalDAV') {
           const decryptedPassword = decryptPassword(source.password);
           const authHeader = 'Basic ' + Buffer.from(`${source.username}:${decryptedPassword}`).toString('base64');
