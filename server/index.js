@@ -2,6 +2,7 @@
 const fastify = require('fastify')({ logger: true });
 const Database = require('better-sqlite3');
 const ical = require('ical-generator');
+const node_ical = require('node-ical');
 const path = require('path');
 const fs = require('fs').promises;
 const multipart = require('@fastify/multipart');
@@ -1493,6 +1494,20 @@ fastify.get('/api/calendar-events', async (request, reply) => {
   try {
     const sources = db.prepare('SELECT * FROM calendar_sources WHERE enabled = 1 ORDER BY sort_order, id').all();
 
+    function makeEvent({ item, source }) {
+      return {
+        id: item.uid ?? item.event?.uid ?? null,
+        title: item.summary ?? item.event?.summary ?? null,
+        start: item.start ?? item.event.start,
+        end: item.end ?? item.event.end,
+        description: item.description ?? item.event?.description ?? null,
+        location: item.location ?? item.event?.location ?? null,
+        source_id: source.id,
+        source_name: source.name,
+        source_color: source.color
+      };
+    }
+
     if (sources.length === 0) {
       return [];
     }
@@ -1500,26 +1515,28 @@ fastify.get('/api/calendar-events', async (request, reply) => {
     const fetchPromises = sources.map(async (source) => {
       try {
         if (source.type === 'ICS') {
-          const response = await axios.get(source.url, { timeout: 15000 });
-          const icsData = response.data;
-          const jcalData = ICAL.parse(icsData);
-          const comp = new ICAL.Component(jcalData);
-          const vevents = comp.getAllSubcomponents('vevent');
+          const events = await node_ical.async.fromURL(source.url);
+          let out = [];
+          for (const event of Object.values(events)) {
+            if (event.type === "VEVENT") {
+              // doing ~13 months forward and backward
+              const instances = node_ical.expandRecurringEvent(event, {
+                from: new Date(Date.now() - 13 * 30 * 24 * 60 * 60 * 1000),
+                to: new Date(Date.now() + 13 * 30 * 24 * 60 * 60 * 1000)
+              });
 
-          return vevents.map(vevent => {
-            const event = new ICAL.Event(vevent);
-            return {
-              id: event.uid || Math.random().toString(),
-              title: event.summary,
-              start: event.startDate.toJSDate(),
-              end: event.endDate.toJSDate(),
-              description: event.description,
-              location: event.location,
-              source_id: source.id,
-              source_name: source.name,
-              source_color: source.color
-            };
-          });
+              // If solo event, append and go to next event
+              if (!instances) {
+                out.push(makeEvent({ item: event, source }));
+                continue;
+              }
+              instances.forEach(instance => {
+                out.push(makeEvent({ item: instance, source }));
+              });
+            }
+          };
+          return out;
+
         } else if (source.type === 'CalDAV') {
           const decryptedPassword = decryptPassword(source.password);
           const authHeader = 'Basic ' + Buffer.from(`${source.username}:${decryptedPassword}`).toString('base64');
