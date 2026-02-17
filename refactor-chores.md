@@ -1,7 +1,7 @@
 Current State Analysis
 The existing system stores all chore information in a single chores table with fields: id, user_id, title, description, time_period, assigned_day_of_week, repeat_type, completed, clam_value, expiration_date. Clam totals are maintained in users.clam_total, and there's a pruneAndResetChores() function that runs on server startup to manage chore lifecycle.
 
-IMPORTANT: Retain as much of the current chore UI as possible, especially the global buttons for adding the chores, viewing prizes, and hiding/exposing the bonus chores. New UI/modal windows can be implements when those buttons are pressed to implement the new core functionality.
+IMPORTANT: Retain as much of the current chore UI as possible, especially the global buttons for adding the chores, viewing prizes, and hiding/exposing the bonus chores. New UI/modal windows can be implements when those buttons are pressed to implement the new core functionality. Retaining the sqlite as a database is required.
 
 1. Database Schema Changes
 Remove obsolete fields from chores table:
