@@ -1538,13 +1538,13 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
                 </Grid>
               </Grid>
 
-              <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
+              <Box sx={{ mt: 3, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                 <Button
                   variant="contained"
                   onClick={handleUpdatePin}
                   startIcon={<Lock />}
+                  fullWidth
                   sx={{
-                    flex: 1,
                     py: 1.5,
                     background: 'linear-gradient(135deg, var(--accent) 0%, var(--secondary) 100%)',
                     fontWeight: 'bold',
@@ -1558,7 +1558,8 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
                     variant="outlined"
                     onClick={handleClearPin}
                     color="error"
-                    sx={{ py: 1.5, fontWeight: 'bold' }}
+                    fullWidth
+                    sx={{ py: 1, fontWeight: 'bold' }}
                   >
                     Remove PIN
                   </Button>
