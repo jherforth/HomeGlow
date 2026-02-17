@@ -59,6 +59,7 @@ import {
 import { ChromePicker } from 'react-color';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
+import PinModal from './PinModal';
 
 const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const [activeTab, setActiveTab] = useState(0);
@@ -92,6 +93,10 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const [choreModal, setChoreModal] = useState({ open: false, user: null, userChores: [] });
   const [isLoading, setIsLoading] = useState(false);
   const [saveMessage, setSaveMessage] = useState({ show: false, type: '', text: '' });
+  const [pinExists, setPinExists] = useState(false);
+  const [pinModal, setPinModal] = useState({ open: false, mode: 'verify', title: '' });
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [checkingPin, setCheckingPin] = useState(true);
 
   // Refresh interval options in milliseconds
   const refreshIntervalOptions = [
@@ -115,12 +120,12 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
         chores: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.chores },
         calendar: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.calendar },
         photos: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.photos },
-        weather: { 
-          enabled: false, 
-          transparent: false, 
-          refreshInterval: 0, 
+        weather: {
+          enabled: false,
+          transparent: false,
+          refreshInterval: 0,
           layoutMode: (parsed.weather?.layoutMode === 'auto' || !parsed.weather?.layoutMode) ? 'medium' : parsed.weather.layoutMode,
-          ...parsed.weather 
+          ...parsed.weather
         },
         widgetGallery: { enabled: true, transparent: false, refreshInterval: 0, ...parsed.widgetGallery },
         primary: parsed.primary || '#9E7FFF',
@@ -129,12 +134,36 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       };
       setLocalWidgetSettings(settingsWithDefaults);
     }
-    fetchSettings();
-    fetchUsers();
-    fetchChores();
-    fetchPrizes();
-    fetchUploadedWidgets();
+    checkPinStatus();
   }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchSettings();
+      fetchUsers();
+      fetchChores();
+      fetchPrizes();
+      fetchUploadedWidgets();
+    }
+  }, [isAuthenticated]);
+
+  const checkPinStatus = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/admin-pin/exists`);
+      setPinExists(response.data.exists);
+
+      if (response.data.exists) {
+        setPinModal({ open: true, mode: 'verify', title: 'Enter Admin PIN' });
+      } else {
+        setPinModal({ open: true, mode: 'set', title: 'Set Admin PIN' });
+      }
+    } catch (error) {
+      console.error('Error checking PIN status:', error);
+      setIsAuthenticated(true);
+    } finally {
+      setCheckingPin(false);
+    }
+  };
 
   const fetchSettings = async () => {
     try {
@@ -550,6 +579,43 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     return chores.filter(chore => chore.user_id === userId).length;
   };
 
+  const handlePinVerify = async (pin) => {
+    try {
+      if (pinModal.mode === 'set') {
+        await axios.post(`${API_BASE_URL}/api/admin-pin/set`, { pin });
+        setPinExists(true);
+        setIsAuthenticated(true);
+        setPinModal({ open: false, mode: 'verify', title: '' });
+        setSaveMessage({ show: true, type: 'success', text: 'Admin PIN set successfully!' });
+        setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+      } else {
+        const response = await axios.post(`${API_BASE_URL}/api/admin-pin/verify`, { pin });
+        if (response.data.valid) {
+          setIsAuthenticated(true);
+          setPinModal({ open: false, mode: 'verify', title: '' });
+        } else {
+          throw new Error('Invalid PIN');
+        }
+      }
+    } catch (error) {
+      throw new Error(error.response?.data?.error || 'Invalid PIN. Please try again.');
+    }
+  };
+
+  const handlePinModalClose = () => {
+    if (pinModal.mode === 'set' && !pinExists) {
+      return;
+    }
+    if (!isAuthenticated) {
+      return;
+    }
+    setPinModal({ open: false, mode: 'verify', title: '' });
+  };
+
+  const handleUpdatePin = () => {
+    setPinModal({ open: true, mode: 'set', title: 'Update Admin PIN' });
+  };
+
   const renderColorPicker = (key, label) => (
     <Box key={key} sx={{ mb: 3 }}>
       <Typography variant="body1" sx={{ mb: 1, fontWeight: 600 }}>
@@ -616,8 +682,31 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     'Interface',
     'Users',
     'Prizes',
-    'Plugins'
+    'Plugins',
+    'Security'
   ];
+
+  if (checkingPin) {
+    return (
+      <Box sx={{ width: '100%', maxWidth: 1200, mx: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+        <CircularProgress size={60} />
+      </Box>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <Box sx={{ width: '100%', maxWidth: 1200, mx: 'auto' }}>
+        <PinModal
+          open={pinModal.open}
+          onClose={handlePinModalClose}
+          onVerify={handlePinVerify}
+          mode={pinModal.mode}
+          title={pinModal.title}
+        />
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ width: '100%', maxWidth: 1200, mx: 'auto' }}>
@@ -1345,6 +1434,98 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
         </Card>
       )}
 
+      {/* Security Tab */}
+      {activeTab === 6 && (
+        <Card>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>Security Settings</Typography>
+
+            {saveMessage.show && (
+              <Alert severity={saveMessage.type} sx={{ mb: 2 }}>
+                {saveMessage.text}
+              </Alert>
+            )}
+
+            <Alert severity="info" sx={{ mb: 3 }}>
+              The admin PIN is required to access the admin panel. Keep your PIN secure and memorable.
+            </Alert>
+
+            <Box sx={{ p: 3, border: '2px solid var(--accent)', borderRadius: 2, backgroundColor: 'rgba(158, 127, 255, 0.05)' }}>
+              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Lock />
+                Admin PIN Protection
+              </Typography>
+
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                {pinExists
+                  ? 'Your admin panel is protected with a PIN. You can update your PIN below.'
+                  : 'Set up a PIN to secure your admin panel access.'}
+              </Typography>
+
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Paper elevation={0} sx={{ p: 2, backgroundColor: 'rgba(0, 0, 0, 0.1)' }}>
+                    <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                      PIN Requirements:
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      • 4-8 numeric digits
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      • Numbers only (0-9)
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      • Required for admin access
+                    </Typography>
+                  </Paper>
+                </Grid>
+
+                <Grid item xs={12} sm={6}>
+                  <Paper elevation={0} sx={{ p: 2, backgroundColor: 'rgba(0, 0, 0, 0.1)' }}>
+                    <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                      Current Status:
+                    </Typography>
+                    <Chip
+                      label={pinExists ? 'PIN Configured' : 'No PIN Set'}
+                      color={pinExists ? 'success' : 'warning'}
+                      sx={{ mb: 2 }}
+                    />
+                    <Typography variant="body2" color="text.secondary">
+                      {pinExists
+                        ? 'Your admin panel is secured with a PIN.'
+                        : 'Please set a PIN to secure your admin panel.'}
+                    </Typography>
+                  </Paper>
+                </Grid>
+              </Grid>
+
+              <Box sx={{ mt: 3 }}>
+                <Button
+                  variant="contained"
+                  onClick={handleUpdatePin}
+                  startIcon={<Lock />}
+                  fullWidth
+                  sx={{
+                    py: 1.5,
+                    background: 'linear-gradient(135deg, var(--accent) 0%, var(--secondary) 100%)',
+                    fontWeight: 'bold',
+                    fontSize: '1rem'
+                  }}
+                >
+                  {pinExists ? 'Update Admin PIN' : 'Set Admin PIN'}
+                </Button>
+              </Box>
+
+              {pinExists && (
+                <Alert severity="warning" sx={{ mt: 2 }}>
+                  Changing your PIN will require you to use the new PIN on your next admin panel access.
+                </Alert>
+              )}
+            </Box>
+          </CardContent>
+        </Card>
+      )}
+
       {/* User Delete Confirmation Dialog */}
       <Dialog
         open={deleteUserDialog.open}
@@ -1582,6 +1763,15 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
           />
         </Box>
       </Backdrop>
+
+      {/* PIN Modal */}
+      <PinModal
+        open={pinModal.open}
+        onClose={handlePinModalClose}
+        onVerify={handlePinVerify}
+        mode={pinModal.mode}
+        title={pinModal.title}
+      />
     </Box>
   );
 };

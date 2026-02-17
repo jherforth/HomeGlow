@@ -620,6 +620,12 @@ async function initializeDatabase() {
       );
       CREATE INDEX IF NOT EXISTS idx_photo_sources_enabled ON photo_sources(enabled);
       CREATE INDEX IF NOT EXISTS idx_photo_sources_sort_order ON photo_sources(sort_order);
+      CREATE TABLE IF NOT EXISTS admin_pin (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        pin_hash TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
     `);
     
     // Migration: Add repeat_type column if it doesn't exist and remove old repeats column
@@ -1835,6 +1841,75 @@ fastify.get('/api/photo-items', async (request, reply) => {
   } catch (error) {
     console.error('Error fetching photos:', error);
     reply.status(500).send({ error: 'Failed to fetch photos.' });
+  }
+});
+
+// Admin PIN routes
+fastify.get('/api/admin-pin/exists', async (request, reply) => {
+  try {
+    const pin = db.prepare('SELECT id FROM admin_pin WHERE id = 1').get();
+    return { exists: !!pin };
+  } catch (error) {
+    console.error('Error checking PIN existence:', error);
+    reply.status(500).send({ error: 'Failed to check PIN existence' });
+  }
+});
+
+fastify.post('/api/admin-pin/set', async (request, reply) => {
+  const { pin } = request.body;
+
+  if (!pin || typeof pin !== 'string') {
+    return reply.status(400).send({ error: 'PIN is required and must be a string' });
+  }
+
+  if (pin.length < 4 || pin.length > 8) {
+    return reply.status(400).send({ error: 'PIN must be between 4 and 8 characters' });
+  }
+
+  if (!/^\d+$/.test(pin)) {
+    return reply.status(400).send({ error: 'PIN must contain only numbers' });
+  }
+
+  try {
+    const pinHash = crypto.createHash('sha256').update(pin).digest('hex');
+    const existingPin = db.prepare('SELECT id FROM admin_pin WHERE id = 1').get();
+
+    if (existingPin) {
+      const stmt = db.prepare('UPDATE admin_pin SET pin_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1');
+      stmt.run(pinHash);
+    } else {
+      const stmt = db.prepare('INSERT INTO admin_pin (id, pin_hash) VALUES (1, ?)');
+      stmt.run(pinHash);
+    }
+
+    return { success: true, message: 'PIN set successfully' };
+  } catch (error) {
+    console.error('Error setting PIN:', error);
+    reply.status(500).send({ error: 'Failed to set PIN' });
+  }
+});
+
+fastify.post('/api/admin-pin/verify', async (request, reply) => {
+  const { pin } = request.body;
+
+  if (!pin || typeof pin !== 'string') {
+    return reply.status(400).send({ error: 'PIN is required' });
+  }
+
+  try {
+    const storedPin = db.prepare('SELECT pin_hash FROM admin_pin WHERE id = 1').get();
+
+    if (!storedPin) {
+      return reply.status(404).send({ error: 'No PIN configured' });
+    }
+
+    const pinHash = crypto.createHash('sha256').update(pin).digest('hex');
+    const isValid = pinHash === storedPin.pin_hash;
+
+    return { valid: isValid };
+  } catch (error) {
+    console.error('Error verifying PIN:', error);
+    reply.status(500).send({ error: 'Failed to verify PIN' });
   }
 });
 
