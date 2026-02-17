@@ -6,90 +6,68 @@ import {
   Avatar,
   Chip,
   IconButton,
-  TextField,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  FormControlLabel,
-  Checkbox,
-  FormGroup,
-  FormLabel,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   Backdrop,
-  CircularProgress
+  CircularProgress,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemAvatar,
+  ListItemSecondaryAction
 } from '@mui/material';
-import { Edit, Save, Cancel, Add, Delete, Check, Undo } from '@mui/icons-material';
+import { Check, Undo, EmojiEvents } from '@mui/icons-material';
 import axios from 'axios';
+import parseExpression from 'cron-parser';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 
 const ChoreWidget = ({ transparentBackground }) => {
   const [users, setUsers] = useState([]);
+  const [schedules, setSchedules] = useState([]);
   const [chores, setChores] = useState([]);
+  const [history, setHistory] = useState([]);
   const [prizes, setPrizes] = useState([]);
-  const [editingChore, setEditingChore] = useState(null);
-  const [newChore, setNewChore] = useState({
-    user_id: '',
-    title: '',
-    description: '',
-    time_period: 'any-time',
-    assigned_days_of_week: ['monday'],
-    repeat_type: 'weekly',
-    clam_value: 0
-  });
-  const [showAddDialog, setShowAddDialog] = useState(false);
-  const [showPrizesModal, setShowPrizesModal] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [showBonusChores, setShowBonusChores] = useState(() => {
-    const saved = localStorage.getItem('showBonusChores');
-    return saved !== null ? JSON.parse(saved) : true;
-  });
+  const [showPrizesModal, setShowPrizesModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-  const timePeriods = ['morning', 'afternoon', 'evening', 'any-time'];
-  const repeatTypes = [
-    { value: 'weekly', label: 'Weekly' },
-    { value: 'daily', label: 'Daily' },
-    { value: 'until-completed', label: 'Until Completed' },
-    { value: 'no-repeat', label: 'No Repeat' }
-  ];
+  const today = new Date().toISOString().split('T')[0];
 
   useEffect(() => {
-    fetchUsers();
-    fetchChores();
-    fetchPrizes();
+    fetchData();
   }, []);
 
-  // Save showBonusChores preference to localStorage
-  useEffect(() => {
-    localStorage.setItem('showBonusChores', JSON.stringify(showBonusChores));
-  }, [showBonusChores]);
-
-  // Auto-refresh functionality
   useEffect(() => {
     const widgetSettings = JSON.parse(localStorage.getItem('widgetSettings') || '{}');
     const refreshInterval = widgetSettings.chore?.refreshInterval || 0;
 
     if (refreshInterval > 0) {
-      console.log(`ChoreWidget: Auto-refresh enabled (${refreshInterval}ms)`);
-      
       const intervalId = setInterval(() => {
-        console.log('ChoreWidget: Auto-refreshing data...');
-        fetchUsers();
-        fetchChores();
-        fetchPrizes();
+        fetchData();
       }, refreshInterval);
 
-      return () => {
-        console.log('ChoreWidget: Clearing auto-refresh interval');
-        clearInterval(intervalId);
-      };
+      return () => clearInterval(intervalId);
     }
   }, []);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      await Promise.all([
+        fetchUsers(),
+        fetchSchedules(),
+        fetchChores(),
+        fetchHistory(),
+        fetchPrizes()
+      ]);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -100,14 +78,30 @@ const ChoreWidget = ({ transparentBackground }) => {
     }
   };
 
+  const fetchSchedules = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/chore-schedules?visible=1`);
+      setSchedules(response.data);
+    } catch (error) {
+      console.error('Error fetching schedules:', error);
+    }
+  };
+
   const fetchChores = async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/chores`);
       setChores(response.data);
-      setLoading(false);
     } catch (error) {
       console.error('Error fetching chores:', error);
-      setLoading(false);
+    }
+  };
+
+  const fetchHistory = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/chore-history?date=${today}`);
+      setHistory(response.data);
+    } catch (error) {
+      console.error('Error fetching history:', error);
     }
   };
 
@@ -120,670 +114,344 @@ const ChoreWidget = ({ transparentBackground }) => {
     }
   };
 
-  const toggleChoreCompletion = async (choreId, currentStatus) => {
+  const shouldShowScheduleToday = (schedule) => {
+    if (!schedule.crontab) {
+      return true;
+    }
+
     try {
-      setIsLoading(true);
-      await axios.patch(`${API_BASE_URL}/api/chores/${choreId}`, {
-        completed: !currentStatus
+      const now = new Date();
+      const interval = parseExpression.parseExpression(schedule.crontab, {
+        currentDate: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0),
+        endDate: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59),
+        iterator: true
       });
-      fetchChores();
-      fetchUsers();
+
+      try {
+        interval.next();
+        return true;
+      } catch {
+        return false;
+      }
     } catch (error) {
-      console.error('Error updating chore:', error);
-    } finally {
-      setIsLoading(false);
+      console.error('Error parsing crontab:', schedule.crontab, error);
+      return false;
     }
   };
 
-  const assignBonusChore = async (choreId, userId) => {
+  const isScheduleCompleted = (scheduleId) => {
+    return history.some(h => h.chore_schedule_id === scheduleId);
+  };
+
+  const getSchedulesForUser = (userId) => {
+    return schedules.filter(schedule => {
+      if (schedule.user_id !== userId) return false;
+      if (!shouldShowScheduleToday(schedule)) return false;
+      return true;
+    });
+  };
+
+  const getChoreForSchedule = (scheduleId) => {
+    const schedule = schedules.find(s => s.id === scheduleId);
+    if (!schedule) return null;
+    return chores.find(c => c.id === schedule.chore_id);
+  };
+
+  const handleCompleteChore = async (scheduleId, userId) => {
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-      await axios.patch(`${API_BASE_URL}/api/chores/${choreId}/assign`, {
-        user_id: userId
+      await axios.post(`${API_BASE_URL}/api/chores/complete`, {
+        chore_schedule_id: scheduleId,
+        user_id: userId,
+        date: today
       });
-      fetchChores();
+      await Promise.all([fetchSchedules(), fetchHistory(), fetchUsers()]);
     } catch (error) {
-      console.error('Error assigning bonus chore:', error);
-      alert(error.response?.data?.error || 'Failed to assign bonus chore');
+      console.error('Error completing chore:', error);
+      alert('Error completing chore: ' + (error.response?.data?.error || error.message));
     } finally {
       setIsLoading(false);
     }
   };
 
-  const saveChore = async () => {
+  const handleUncompleteChore = async (scheduleId, userId) => {
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-      if (editingChore) {
-        await axios.patch(`${API_BASE_URL}/api/chores/${editingChore.id}`, editingChore);
-      } else {
-        for (const day of newChore.assigned_days_of_week) {
-          const choreForDay = {
-            ...newChore,
-            assigned_day_of_week: day
-          };
-          await axios.post(`${API_BASE_URL}/api/chores`, choreForDay);
-        }
-        setNewChore({
-          user_id: '',
-          title: '',
-          description: '',
-          time_period: 'any-time',
-          assigned_days_of_week: ['monday'],
-          repeat_type: 'weekly',
-          clam_value: 0
-        });
-        setShowAddDialog(false);
-      }
-      setEditingChore(null);
-      fetchChores();
+      await axios.post(`${API_BASE_URL}/api/chores/uncomplete`, {
+        chore_schedule_id: scheduleId,
+        user_id: userId,
+        date: today
+      });
+      await Promise.all([fetchSchedules(), fetchHistory(), fetchUsers()]);
     } catch (error) {
-      console.error('Error saving chore:', error);
+      console.error('Error uncompleting chore:', error);
+      alert('Error uncompleting chore: ' + (error.response?.data?.error || error.message));
     } finally {
       setIsLoading(false);
     }
   };
 
-  const getCurrentDay = () => {
-    return daysOfWeek[new Date().getDay()];
-  };
+  const handleClaimPrize = async (prizeId, userId) => {
+    const user = users.find(u => u.id === userId);
+    const prize = prizes.find(p => p.id === prizeId);
 
-  const getUserChores = (userId, dayOfWeek = null) => {
-    return chores.filter(chore => 
-      chore.user_id === userId && 
-      (dayOfWeek ? chore.assigned_day_of_week === dayOfWeek : true)
-    );
-  };
+    if (!user || !prize) return;
 
-  const getBonusChores = () => {
-    return chores.filter(chore => chore.clam_value > 0);
-  };
-
-  const getAvailableBonusChores = () => {
-    return getBonusChores().filter(chore => chore.user_id === 0);
-  };
-
-  const getAssignedBonusChores = () => {
-    return getBonusChores().filter(chore => chore.user_id !== 0);
-  };
-
-  const renderUserAvatar = (user) => {
-    const handleImageError = (e) => {
-      console.log(`Profile picture failed to load for user ${user.username}:`, user.profile_picture);
-      e.target.style.display = 'none';
-      e.target.nextSibling.style.display = 'flex';
-    };
-
-    let imageUrl = null;
-    if (user.profile_picture) {
-      if (user.profile_picture.startsWith('data:')) {
-        imageUrl = user.profile_picture;
-      } else {
-        imageUrl = `${API_BASE_URL}/Uploads/users/${user.profile_picture}`;
-      }
+    if (user.clam_total < prize.clam_cost) {
+      alert('Not enough clams!');
+      return;
     }
 
-    return (
-      <Box sx={{ position: 'relative', display: 'inline-block' }}>
-        {imageUrl ? (
-          <>
-            <img
-              src={imageUrl}
-              alt={user.username}
-              style={{
-                width: 60,
-                height: 60,
-                borderRadius: '50%',
-                objectFit: 'cover',
-                border: '3px solid var(--accent)',
-                display: 'block'
-              }}
-              onError={handleImageError}
-            />
-            <Avatar
-              sx={{
-                width: 60,
-                height: 60,
-                bgcolor: 'var(--accent)',
-                border: '3px solid var(--accent)',
-                fontSize: '1.5rem',
-                fontWeight: 'bold',
-                display: 'none'
-              }}
-            >
-              {user.username.charAt(0).toUpperCase()}
-            </Avatar>
-          </>
-        ) : (
-          <Avatar
-            sx={{
-              width: 60,
-              height: 60,
-              bgcolor: 'var(--accent)',
-              border: '3px solid var(--accent)',
-              fontSize: '1.5rem',
-              fontWeight: 'bold'
-            }}
-          >
-            {user.username.charAt(0).toUpperCase()}
-          </Avatar>
-        )}
-        
-        <Chip
-          label={`${user.clam_total || 0} 🥟`}
-          size="small"
-          sx={{
-            position: 'absolute',
-            top: -8,
-            right: -8,
-            bgcolor: 'var(--accent)',
-            color: 'white',
-            fontSize: '0.7rem',
-            height: 24,
-            '& .MuiChip-label': {
-              px: 1
-            }
-          }}
-        />
-      </Box>
-    );
-  };
+    if (!confirm(`Claim "${prize.name}" for ${prize.clam_cost} clams?`)) {
+      return;
+    }
 
-  const renderChoreItem = (chore, isEditing = false) => {
-    return (
-      <Box
-        key={chore.id}
-        sx={{
-          p: 1.5,
-          border: '1px solid var(--card-border)',
-          borderRadius: 2,
-          mb: 1,
-          bgcolor: chore.completed ? 'rgba(0, 255, 0, 0.1)' : 'transparent',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}
-      >
-        <Box sx={{ flex: 1 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: chore.completed ? 'normal' : 'bold', fontSize: '0.85rem' }}>
-            {chore.title}
-            {chore.clam_value > 0 && (
-              <Chip
-                label={`${chore.clam_value} 🥟`}
-                size="small"
-                sx={{ ml: 1, bgcolor: 'var(--accent)', color: 'white' }}
-              />
-            )}
-          </Typography>
-          {chore.description && (
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-              {chore.description}
-            </Typography>
-          )}
-          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-            {chore.time_period.replace('-', ' ')} • {repeatTypes.find(t => t.value === chore.repeat_type)?.label}
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <IconButton
-            color={chore.completed ? "secondary" : "primary"}
-            onClick={() => toggleChoreCompletion(chore.id, chore.completed)}
-            size="small"
-            sx={{ 
-              minWidth: 'auto',
-              width: 32,
-              height: 32,
-              bgcolor: chore.completed ? 'transparent' : 'var(--accent)',
-              color: chore.completed ? 'var(--accent)' : 'white',
-              '&:hover': {
-                bgcolor: chore.completed ? 'rgba(var(--accent-rgb), 0.1)' : 'var(--accent)',
-                filter: 'brightness(1.1)'
-              }
-            }}
-          >
-            {chore.completed ? <Undo fontSize="small" /> : <Check fontSize="small" />}
-          </IconButton>
-        </Box>
-      </Box>
-    );
-  };
-
-  const handleDayToggle = (day) => {
-    setNewChore(prev => ({
-      ...prev,
-      assigned_days_of_week: prev.assigned_days_of_week.includes(day)
-        ? prev.assigned_days_of_week.filter(d => d !== day)
-        : [...prev.assigned_days_of_week, day]
-    }));
+    setIsLoading(true);
+    try {
+      await axios.post(`${API_BASE_URL}/api/chore-history/reduce-clams`, {
+        user_id: userId,
+        amount: prize.clam_cost
+      });
+      await fetchUsers();
+      alert(`Prize claimed! ${user.username} now has ${user.clam_total - prize.clam_cost} clams remaining.`);
+    } catch (error) {
+      console.error('Error claiming prize:', error);
+      alert('Error claiming prize: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (loading) {
     return (
       <Box sx={{
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center',
-        p: 2
+        p: 3,
+        backgroundColor: transparentBackground ? 'transparent' : 'var(--widget-background)',
+        borderRadius: '12px',
+        textAlign: 'center'
       }}>
-        <Typography variant="h6">Loading chores...</Typography>
+        <CircularProgress size={40} />
       </Box>
     );
   }
 
-  const currentDay = getCurrentDay();
-  const availableBonusChores = getAvailableBonusChores();
-  const assignedBonusChores = getAssignedBonusChores();
-
   return (
-    <>
-      <Box sx={{
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        p: 2
-      }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6">🥟 Daily Chores</Typography>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button
-              onClick={() => setShowBonusChores(!showBonusChores)}
-              variant={showBonusChores ? "contained" : "outlined"}
-              size="small"
-              sx={{ minWidth: 'auto', px: 1 }}
-              title={showBonusChores ? "Hide Bonus Chores" : "Show Bonus Chores"}
-            >
-              🥟
-            </Button>
-            <Button
-              onClick={() => setShowPrizesModal(true)}
-              variant="outlined"
-              size="small"
-              sx={{ minWidth: 'auto', px: 1 }}
-            >
-              🛍️
-            </Button>
-            <Button
-              startIcon={<Add />}
-              onClick={() => setShowAddDialog(true)}
-              variant="contained"
-              size="small"
-            >
-              Add Chore
-            </Button>
-          </Box>
-        </Box>
+    <Box sx={{
+      p: 3,
+      backgroundColor: transparentBackground ? 'transparent' : 'var(--widget-background)',
+      borderRadius: '12px',
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'auto'
+    }}>
+      <Typography variant="h5" sx={{ mb: 2, fontWeight: 'bold' }}>
+        Chores
+      </Typography>
 
-        <Box sx={{ display: 'flex', gap: 2, overflowX: 'auto', pb: 2 }}>
-          <Box sx={{ 
-            display: 'flex',
-            gap: 2,
-            pb: 2,
-            justifyContent: 'space-evenly',
-            alignItems: 'flex-start',
-            width: '100%'
-          }}>
-            {users.filter(user => user.id !== 0).map(user => {
-              const userChores = getUserChores(user.id, currentDay);
-              const completedChores = userChores.filter(c => c.completed && c.clam_value === 0).length;
-              const totalRegularChores = userChores.filter(c => c.clam_value === 0).length;
-              const allRegularChoresCompleted = totalRegularChores > 0 && completedChores === totalRegularChores;
+      {users.map((user) => {
+        const userSchedules = getSchedulesForUser(user.id);
+        const regularChores = userSchedules.filter(s => {
+          const chore = getChoreForSchedule(s.id);
+          return chore && chore.clam_value === 0;
+        });
+        const bonusChores = userSchedules.filter(s => {
+          const chore = getChoreForSchedule(s.id);
+          return chore && chore.clam_value > 0;
+        });
 
-              return (
-                <Box
-                  key={user.id}
-                  sx={{
-                    flex: '1 1 0',
-                    minWidth: '180px',
-                    maxWidth: '250px',
-                    border: '2px solid var(--card-border)',
-                    borderRadius: 2,
-                    p: 2,
-                    bgcolor: allRegularChoresCompleted ? 'rgba(0, 255, 0, 0.05)' : 'transparent',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center'
-                  }}
-                >
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 2 }}>
-                    {renderUserAvatar(user)}
-                    <Typography variant="subtitle1" sx={{ mt: 1, fontSize: '0.9rem', fontWeight: 'bold' }}>
-                      {user.username}
-                    </Typography>
-                    {allRegularChoresCompleted && (
-                      <Chip
-                        label="All Done! +2 🥟"
-                        color="success"
-                        size="small"
-                        sx={{ mt: 1 }}
-                      />
-                    )}
-                  </Box>
+        const completedRegular = regularChores.filter(s => isScheduleCompleted(s.id)).length;
+        const totalRegular = regularChores.length;
+        const allRegularComplete = totalRegular > 0 && completedRegular === totalRegular;
 
-                  <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-                    {userChores.length === 0 ? (
-                      <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
-                        No chores for today
-                      </Typography>
-                    ) : (
-                      userChores.map(chore => renderChoreItem(chore, false))
-                    )}
-                  </Box>
-                </Box>
-              );
-            })}
-
-            {showBonusChores && (
-              <Box
-                sx={{
-                  flex: '1 1 0',
-                  minWidth: '180px',
-                  maxWidth: '250px',
-                  border: '2px solid var(--accent)',
-                  borderRadius: 2,
-                  p: 2,
-                  bgcolor: 'rgba(var(--accent-rgb), 0.05)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center'
-                }}
-              >
-                <Typography variant="subtitle1" sx={{ textAlign: 'center', mb: 2, color: 'var(--accent)', fontSize: '0.9rem', fontWeight: 'bold' }}>
-                  🥟 Bonus Chores
-                </Typography>
-
-                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                  Available:
-                </Typography>
-                <Box sx={{ flex: 1, overflowY: 'auto', mb: 2, minHeight: 0 }}>
-                  {availableBonusChores.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
-                      No bonus chores available
-                    </Typography>
-                  ) : (
-                    availableBonusChores.map(chore => (
-                      <Box
-                        key={chore.id}
-                        sx={{
-                          p: 1,
-                          border: '1px solid var(--accent)',
-                          borderRadius: 1,
-                          mb: 1,
-                          bgcolor: 'rgba(var(--accent-rgb), 0.1)'
-                        }}
-                      >
-                        <Typography variant="subtitle2">
-                          {chore.title}
-                          <Chip
-                            label={`${chore.clam_value} 🥟`}
-                            size="small"
-                            sx={{ ml: 1, bgcolor: 'var(--accent)', color: 'white' }}
-                          />
-                        </Typography>
-                        {chore.description && (
-                          <Typography variant="caption" color="text.secondary">
-                            {chore.description}
-                          </Typography>
-                        )}
-                        <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                          {users.map(user => (
-                            <Button
-                              key={user.id}
-                              size="small"
-                              variant="outlined"
-                              onClick={() => assignBonusChore(chore.id, user.id)}
-                              sx={{ fontSize: '0.7rem', minWidth: 'auto', px: 1 }}
-                            >
-                              {user.username}
-                            </Button>
-                          ))}
-                        </Box>
-                      </Box>
-                    ))
+        return (
+          <Box key={user.id} sx={{ mb: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+              <Avatar
+                src={user.profile_picture}
+                alt={user.username}
+                sx={{ width: 48, height: 48 }}
+              />
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="h6">{user.username}</Typography>
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <Chip
+                    label={`${user.clam_total} 🥟`}
+                    size="small"
+                    color="primary"
+                  />
+                  <Chip
+                    label={`${completedRegular}/${totalRegular} complete`}
+                    size="small"
+                    color={allRegularComplete ? 'success' : 'default'}
+                  />
+                  {allRegularComplete && totalRegular > 0 && (
+                    <Chip
+                      label="+2 🥟 Bonus!"
+                      size="small"
+                      color="success"
+                      icon={<Check />}
+                    />
                   )}
                 </Box>
               </Box>
-            )}
-          </Box>
-        </Box>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => setShowPrizesModal(user.id)}
+                startIcon={<EmojiEvents />}
+              >
+                Prizes
+              </Button>
+            </Box>
 
-        <Dialog open={showPrizesModal} onClose={() => setShowPrizesModal(false)} maxWidth="sm" fullWidth>
-          <DialogTitle>
-            <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              🛍️ Available Prizes
-            </Typography>
-          </DialogTitle>
-          <DialogContent>
-            {prizes.length === 0 ? (
-              <Typography variant="body1" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
-                No prizes available. Ask an admin to add some prizes!
-              </Typography>
+            {userSchedules.length === 0 ? (
+              <Box sx={{ p: 2, textAlign: 'center', opacity: 0.6 }}>
+                <Typography variant="body2">No chores for today</Typography>
+              </Box>
             ) : (
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-                {prizes.map((prize) => (
-                  <Box
-                    key={prize.id}
-                    sx={{
-                      p: 2,
-                      border: '1px solid var(--card-border)',
-                      borderRadius: 2,
-                      bgcolor: 'rgba(var(--accent-rgb), 0.05)',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center'
-                    }}
-                  >
-                    <Box>
-                      <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-                        {prize.name}
-                      </Typography>
-                    </Box>
-                    <Chip
-                      label={`${prize.clam_cost} 🥟`}
+              <List sx={{ width: '100%' }}>
+                {userSchedules.map(schedule => {
+                  const chore = getChoreForSchedule(schedule.id);
+                  if (!chore) return null;
+
+                  const isCompleted = isScheduleCompleted(schedule.id);
+                  const isBonus = chore.clam_value > 0;
+
+                  return (
+                    <ListItem
+                      key={schedule.id}
                       sx={{
-                        bgcolor: 'var(--accent)',
-                        color: 'white',
-                        fontWeight: 'bold',
-                        fontSize: '0.9rem'
+                        border: '1px solid var(--card-border)',
+                        borderRadius: 1,
+                        mb: 1,
+                        backgroundColor: isCompleted ? 'rgba(76, 175, 80, 0.1)' : 'transparent',
+                        opacity: isCompleted ? 0.7 : 1
                       }}
-                    />
-                  </Box>
-                ))}
-              </Box>
-            )}
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setShowPrizesModal(false)} variant="contained">
-              Close
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        <Dialog open={showAddDialog} onClose={() => setShowAddDialog(false)} maxWidth="sm" fullWidth>
-          <DialogTitle>Add New Chore</DialogTitle>
-          <DialogContent>
-            <TextField
-              fullWidth
-              label="Title"
-              value={newChore.title}
-              onChange={(e) => setNewChore({...newChore, title: e.target.value})}
-              sx={{ mb: 2, mt: 1 }}
-            />
-            <TextField
-              fullWidth
-              label="Description"
-              value={newChore.description}
-              onChange={(e) => setNewChore({...newChore, description: e.target.value})}
-              sx={{ mb: 2 }}
-            />
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel>Assign to User</InputLabel>
-              <Select
-                value={newChore.user_id}
-                onChange={(e) => setNewChore({...newChore, user_id: e.target.value})}
-              >
-                <MenuItem value={0}>Bonus Chore (Unassigned)</MenuItem>
-                {users.map(user => (
-                  <MenuItem key={user.id} value={user.id}>
-                    {user.username}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-              <FormControl sx={{ flex: 1 }}>
-                <InputLabel>Time Period</InputLabel>
-                <Select
-                  value={newChore.time_period}
-                  onChange={(e) => setNewChore({...newChore, time_period: e.target.value})}
-                >
-                  {timePeriods.map(period => (
-                    <MenuItem key={period} value={period}>
-                      {period.charAt(0).toUpperCase() + period.slice(1).replace('-', ' ')}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Box>
-            
-            <Box sx={{ mb: 2 }}>
-              <FormLabel component="legend" sx={{ mb: 1, display: 'block' }}>
-                Select Days (choose one or more):
-              </FormLabel>
-              <FormGroup row>
-                {daysOfWeek.map(day => (
-                  <FormControlLabel
-                    key={day}
-                    control={
-                      <Checkbox
-                        checked={newChore.assigned_days_of_week.includes(day)}
-                        onChange={() => handleDayToggle(day)}
-                        color="primary"
+                    >
+                      <ListItemText
+                        primary={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography
+                              variant="body1"
+                              sx={{
+                                textDecoration: isCompleted ? 'line-through' : 'none',
+                                fontWeight: isBonus ? 'bold' : 'normal'
+                              }}
+                            >
+                              {chore.title}
+                            </Typography>
+                            {isBonus && (
+                              <Chip
+                                label={`${chore.clam_value} 🥟`}
+                                size="small"
+                                color="primary"
+                              />
+                            )}
+                          </Box>
+                        }
+                        secondary={chore.description}
                       />
-                    }
-                    label={day.charAt(0).toUpperCase() + day.slice(1)}
-                  />
-                ))}
-              </FormGroup>
-            </Box>
-            
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel>Repeat Type</InputLabel>
-              <Select
-                value={newChore.repeat_type}
-                onChange={(e) => setNewChore({...newChore, repeat_type: e.target.value})}
-              >
-                {repeatTypes.map(type => (
-                  <MenuItem key={type.value} value={type.value}>
-                    {type.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <TextField
-              fullWidth
-              type="number"
-              label="🥟 Clam Value (0 for regular chore)"
-              value={newChore.clam_value}
-              onChange={(e) => setNewChore({...newChore, clam_value: parseInt(e.target.value) || 0})}
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setShowAddDialog(false)}>Cancel</Button>
-            <Button 
-              onClick={saveChore} 
-              variant="contained"
-              disabled={newChore.assigned_days_of_week.length === 0}
-            >
-              Add Chore{newChore.assigned_days_of_week.length > 1 ? 's' : ''}
-            </Button>
-          </DialogActions>
-        </Dialog>
-      </Box>
-
-      <Backdrop
-        sx={{
-          color: '#fff',
-          zIndex: (theme) => theme.zIndex.drawer + 1,
-          backdropFilter: 'blur(10px)',
-          backgroundColor: 'rgba(0, 0, 0, 0.3)',
-        }}
-        open={isLoading}
-      >
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 3,
-            p: 4,
-            borderRadius: 3,
-            background: 'rgba(255, 255, 255, 0.1)',
-            backdropFilter: 'blur(20px)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
-          }}
-        >
-          <Box
-            sx={{
-              position: 'relative',
-              width: 80,
-              height: 80,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            {[0, 1, 2].map((index) => (
-              <Box
-                key={index}
-                sx={{
-                  position: 'absolute',
-                  fontSize: '2rem',
-                  animation: `clamBounce 1.5s ease-in-out ${index * 0.2}s infinite`,
-                  '@keyframes clamBounce': {
-                    '0%, 80%, 100%': {
-                      transform: 'scale(0.8) translateY(0)',
-                      opacity: 0.6,
-                    },
-                    '40%': {
-                      transform: 'scale(1.2) translateY(-20px)',
-                      opacity: 1,
-                    },
-                  },
-                }}
-              >
-                🥟
-              </Box>
-            ))}
+                      <ListItemSecondaryAction>
+                        {isCompleted ? (
+                          <IconButton
+                            edge="end"
+                            onClick={() => handleUncompleteChore(schedule.id, user.id)}
+                            color="default"
+                            disabled={isLoading}
+                          >
+                            <Undo />
+                          </IconButton>
+                        ) : (
+                          <IconButton
+                            edge="end"
+                            onClick={() => handleCompleteChore(schedule.id, user.id)}
+                            color="success"
+                            disabled={isLoading}
+                          >
+                            <Check />
+                          </IconButton>
+                        )}
+                      </ListItemSecondaryAction>
+                    </ListItem>
+                  );
+                })}
+              </List>
+            )}
           </Box>
-          
-          <Typography
-            variant="h6"
-            sx={{
-              color: 'white',
-              fontWeight: 'bold',
-              textAlign: 'center',
-              textShadow: '0 2px 4px rgba(0, 0, 0, 0.5)',
-            }}
-          >
-            Processing...
+        );
+      })}
+
+      {users.length === 0 && (
+        <Box sx={{ textAlign: 'center', py: 4 }}>
+          <Typography variant="body2" color="text.secondary">
+            No users found. Add users in the Admin Panel.
           </Typography>
-          
-          <CircularProgress
-            size={40}
-            thickness={2}
-            sx={{
-              color: 'rgba(255, 255, 255, 0.7)',
-              '& .MuiCircularProgress-circle': {
-                strokeLinecap: 'round',
-              },
-            }}
-          />
         </Box>
+      )}
+
+      <Dialog
+        open={showPrizesModal !== false}
+        onClose={() => setShowPrizesModal(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Available Prizes</DialogTitle>
+        <DialogContent>
+          {showPrizesModal && (() => {
+            const user = users.find(u => u.id === showPrizesModal);
+            if (!user) return null;
+
+            return (
+              <Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  {user.username} has {user.clam_total} 🥟
+                </Typography>
+                <List>
+                  {prizes.map(prize => (
+                    <ListItem
+                      key={prize.id}
+                      sx={{
+                        border: '1px solid var(--card-border)',
+                        borderRadius: 1,
+                        mb: 1
+                      }}
+                    >
+                      <ListItemText
+                        primary={prize.name}
+                        secondary={`Cost: ${prize.clam_cost} 🥟`}
+                      />
+                      <ListItemSecondaryAction>
+                        <Button
+                          variant="contained"
+                          size="small"
+                          onClick={() => handleClaimPrize(prize.id, user.id)}
+                          disabled={user.clam_total < prize.clam_cost || isLoading}
+                        >
+                          Claim
+                        </Button>
+                      </ListItemSecondaryAction>
+                    </ListItem>
+                  ))}
+                </List>
+                {prizes.length === 0 && (
+                  <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                    No prizes available. Add prizes in the Admin Panel.
+                  </Typography>
+                )}
+              </Box>
+            );
+          })()}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowPrizesModal(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Backdrop open={isLoading} sx={{ zIndex: 9999 }}>
+        <CircularProgress />
       </Backdrop>
-    </>
+    </Box>
   );
 };
 

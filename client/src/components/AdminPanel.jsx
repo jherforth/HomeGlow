@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import parseExpression from 'cron-parser';
 import {
   Box,
   Typography,
@@ -683,6 +684,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     'Interface',
     'Users',
     'Prizes',
+    'Schedules',
     'Plugins',
     'Security'
   ];
@@ -1354,8 +1356,11 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
         </Card>
       )}
 
+      {/* Schedules Tab */}
+      {activeTab === 5 && <SchedulesTab apiUrl={apiUrl} users={users} />}
+
       {/* Plugins Tab */}
-      {activeTab === 5 && (
+      {activeTab === 6 && (
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>Plugin Management</Typography>
@@ -1436,7 +1441,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       )}
 
       {/* Security Tab */}
-      {activeTab === 6 && (
+      {activeTab === 7 && (
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>Security Settings</Typography>
@@ -1774,6 +1779,523 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
         title={pinModal.title}
       />
     </Box>
+  );
+};
+
+const SchedulesTab = ({ apiUrl, users }) => {
+  const [schedules, setSchedules] = useState([]);
+  const [chores, setChores] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [editingSchedule, setEditingSchedule] = useState(null);
+  const [newSchedule, setNewSchedule] = useState({
+    chore_id: '',
+    user_id: '',
+    crontab: '',
+    visible: true
+  });
+  const [showCronHelper, setShowCronHelper] = useState(false);
+  const [cronHelper, setCronHelper] = useState({
+    type: 'daily',
+    dayOfWeek: 0,
+    dayOfMonth: 1,
+    hour: 0,
+    minute: 0
+  });
+
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+  useEffect(() => {
+    fetchSchedules();
+    fetchChores();
+  }, []);
+
+  const fetchSchedules = async () => {
+    try {
+      const response = await fetch(`${apiUrl}/api/chore-schedules`);
+      const data = await response.json();
+      setSchedules(data);
+    } catch (error) {
+      console.error('Error fetching schedules:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchChores = async () => {
+    try {
+      const response = await fetch(`${apiUrl}/api/chores`);
+      const data = await response.json();
+      setChores(data);
+    } catch (error) {
+      console.error('Error fetching chores:', error);
+    }
+  };
+
+  const buildCrontab = () => {
+    const { type, dayOfWeek, dayOfMonth, hour, minute } = cronHelper;
+
+    if (type === 'daily') {
+      return `${minute} ${hour} * * *`;
+    } else if (type === 'weekly') {
+      return `${minute} ${hour} * * ${dayOfWeek}`;
+    } else if (type === 'monthly') {
+      return `${minute} ${hour} ${dayOfMonth} * *`;
+    } else if (type === 'one-time') {
+      return null;
+    }
+    return '';
+  };
+
+  const applyCronHelper = () => {
+    const crontab = buildCrontab();
+    if (editingSchedule) {
+      setEditingSchedule({ ...editingSchedule, crontab });
+    } else {
+      setNewSchedule({ ...newSchedule, crontab });
+    }
+    setShowCronHelper(false);
+  };
+
+  const describeCrontab = (crontab) => {
+    if (!crontab) return 'One-time task';
+
+    try {
+      const parts = crontab.split(' ');
+      if (parts.length !== 5) return crontab;
+
+      const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
+
+      if (minute === '0' && hour === '0' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
+        return 'Daily at midnight';
+      }
+
+      if (dayOfMonth === '*' && month === '*' && dayOfWeek !== '*') {
+        const day = dayNames[parseInt(dayOfWeek)] || dayOfWeek;
+        return `Weekly on ${day} at ${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`;
+      }
+
+      if (dayOfMonth !== '*' && month === '*' && dayOfWeek === '*') {
+        return `Monthly on day ${dayOfMonth} at ${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`;
+      }
+
+      if (hour !== '*' && minute !== '*') {
+        return `At ${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`;
+      }
+
+      return crontab;
+    } catch {
+      return crontab;
+    }
+  };
+
+  const saveSchedule = async () => {
+    try {
+      if (editingSchedule?.id) {
+        await fetch(`${apiUrl}/api/chore-schedules/${editingSchedule.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chore_id: editingSchedule.chore_id,
+            user_id: editingSchedule.user_id || null,
+            crontab: editingSchedule.crontab || null,
+            visible: editingSchedule.visible
+          })
+        });
+        setEditingSchedule(null);
+      } else {
+        await fetch(`${apiUrl}/api/chore-schedules`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chore_id: newSchedule.chore_id,
+            user_id: newSchedule.user_id || null,
+            crontab: newSchedule.crontab || null,
+            visible: newSchedule.visible
+          })
+        });
+        setNewSchedule({ chore_id: '', user_id: '', crontab: '', visible: true });
+      }
+      fetchSchedules();
+    } catch (error) {
+      console.error('Error saving schedule:', error);
+    }
+  };
+
+  const deleteSchedule = async (id) => {
+    if (!confirm('Delete this schedule?')) return;
+
+    try {
+      await fetch(`${apiUrl}/api/chore-schedules/${id}`, {
+        method: 'DELETE'
+      });
+      fetchSchedules();
+    } catch (error) {
+      console.error('Error deleting schedule:', error);
+    }
+  };
+
+  const copyScheduleToUser = async (scheduleId, targetUserId) => {
+    try {
+      const schedule = schedules.find(s => s.id === scheduleId);
+      if (!schedule) return;
+
+      await fetch(`${apiUrl}/api/chore-schedules`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chore_id: schedule.chore_id,
+          user_id: targetUserId || null,
+          crontab: schedule.crontab || null,
+          visible: schedule.visible
+        })
+      });
+      fetchSchedules();
+    } catch (error) {
+      console.error('Error copying schedule:', error);
+    }
+  };
+
+  const getChoreById = (id) => chores.find(c => c.id === id);
+  const getUserById = (id) => users.find(u => u.id === id);
+
+  if (loading) {
+    return <Box sx={{ p: 3, textAlign: 'center' }}>Loading schedules...</Box>;
+  }
+
+  return (
+    <Card>
+      <CardContent>
+        <Typography variant="h6" gutterBottom>Chore Schedules</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+          Manage when chores appear for each user. Use crontab expressions for flexible scheduling.
+        </Typography>
+
+        <Box sx={{ mb: 3, p: 2, backgroundColor: 'rgba(0, 0, 0, 0.05)', borderRadius: 1 }}>
+          <Typography variant="subtitle2" gutterBottom>Add New Schedule</Typography>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} sm={3}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Chore</InputLabel>
+                <Select
+                  value={newSchedule.chore_id}
+                  onChange={(e) => setNewSchedule({ ...newSchedule, chore_id: e.target.value })}
+                  label="Chore"
+                >
+                  {chores.map(chore => (
+                    <MenuItem key={chore.id} value={chore.id}>
+                      {chore.title} {chore.clam_value > 0 ? `(${chore.clam_value} 🥟)` : ''}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={3}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Assign To</InputLabel>
+                <Select
+                  value={newSchedule.user_id}
+                  onChange={(e) => setNewSchedule({ ...newSchedule, user_id: e.target.value })}
+                  label="Assign To"
+                >
+                  <MenuItem value="">Unassigned (Anyone)</MenuItem>
+                  {users.filter(u => u.id !== 0).map(user => (
+                    <MenuItem key={user.id} value={user.id}>{user.username}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={3}>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Crontab (or leave empty)"
+                  value={newSchedule.crontab}
+                  onChange={(e) => setNewSchedule({ ...newSchedule, crontab: e.target.value })}
+                  placeholder="0 0 * * *"
+                />
+                <IconButton
+                  size="small"
+                  onClick={() => setShowCronHelper(true)}
+                  sx={{ border: '1px solid rgba(0,0,0,0.23)' }}
+                >
+                  <Add />
+                </IconButton>
+              </Box>
+            </Grid>
+            <Grid item xs={12} sm={2}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={newSchedule.visible}
+                    onChange={(e) => setNewSchedule({ ...newSchedule, visible: e.target.checked })}
+                  />
+                }
+                label="Visible"
+              />
+            </Grid>
+            <Grid item xs={12} sm={1}>
+              <Button
+                fullWidth
+                variant="contained"
+                onClick={saveSchedule}
+                disabled={!newSchedule.chore_id}
+              >
+                Add
+              </Button>
+            </Grid>
+          </Grid>
+        </Box>
+
+        <List>
+          {schedules.map((schedule) => {
+            const chore = getChoreById(schedule.chore_id);
+            const user = schedule.user_id ? getUserById(schedule.user_id) : null;
+
+            if (!chore) return null;
+
+            return (
+              <ListItem
+                key={schedule.id}
+                sx={{
+                  border: '1px solid var(--card-border)',
+                  borderRadius: 1,
+                  mb: 1,
+                  backgroundColor: schedule.visible ? 'transparent' : 'rgba(0,0,0,0.05)'
+                }}
+              >
+                {editingSchedule?.id === schedule.id ? (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%' }}>
+                    <Grid container spacing={2} alignItems="center">
+                      <Grid item xs={12} sm={3}>
+                        <FormControl fullWidth size="small">
+                          <InputLabel>Chore</InputLabel>
+                          <Select
+                            value={editingSchedule.chore_id}
+                            onChange={(e) => setEditingSchedule({ ...editingSchedule, chore_id: e.target.value })}
+                            label="Chore"
+                          >
+                            {chores.map(c => (
+                              <MenuItem key={c.id} value={c.id}>
+                                {c.title} {c.clam_value > 0 ? `(${c.clam_value} 🥟)` : ''}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      <Grid item xs={12} sm={3}>
+                        <FormControl fullWidth size="small">
+                          <InputLabel>Assign To</InputLabel>
+                          <Select
+                            value={editingSchedule.user_id || ''}
+                            onChange={(e) => setEditingSchedule({ ...editingSchedule, user_id: e.target.value })}
+                            label="Assign To"
+                          >
+                            <MenuItem value="">Unassigned (Anyone)</MenuItem>
+                            {users.filter(u => u.id !== 0).map(u => (
+                              <MenuItem key={u.id} value={u.id}>{u.username}</MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      <Grid item xs={12} sm={3}>
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            label="Crontab"
+                            value={editingSchedule.crontab || ''}
+                            onChange={(e) => setEditingSchedule({ ...editingSchedule, crontab: e.target.value })}
+                          />
+                          <IconButton
+                            size="small"
+                            onClick={() => { setShowCronHelper(true); }}
+                            sx={{ border: '1px solid rgba(0,0,0,0.23)' }}
+                          >
+                            <Edit />
+                          </IconButton>
+                        </Box>
+                      </Grid>
+                      <Grid item xs={12} sm={2}>
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={editingSchedule.visible}
+                              onChange={(e) => setEditingSchedule({ ...editingSchedule, visible: e.target.checked })}
+                            />
+                          }
+                          label="Visible"
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={1}>
+                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                          <IconButton onClick={saveSchedule} color="primary" size="small">
+                            <Save />
+                          </IconButton>
+                          <IconButton onClick={() => setEditingSchedule(null)} size="small">
+                            <Cancel />
+                          </IconButton>
+                        </Box>
+                      </Grid>
+                    </Grid>
+                  </Box>
+                ) : (
+                  <>
+                    <ListItemText
+                      primary={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                          <Typography variant="body1" fontWeight="bold">{chore.title}</Typography>
+                          {chore.clam_value > 0 && (
+                            <Chip label={`${chore.clam_value} 🥟`} size="small" color="primary" />
+                          )}
+                          {!schedule.visible && (
+                            <Chip label="Hidden" size="small" color="default" />
+                          )}
+                        </Box>
+                      }
+                      secondary={
+                        <Box>
+                          <Typography variant="body2" color="text.secondary">
+                            Assigned to: {user ? user.username : 'Anyone'}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Schedule: {describeCrontab(schedule.crontab)}
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                    <ListItemSecondaryAction>
+                      <Box sx={{ display: 'flex', gap: 0.5 }}>
+                        <IconButton
+                          onClick={() => setEditingSchedule({ ...schedule })}
+                          color="primary"
+                          size="small"
+                        >
+                          <Edit />
+                        </IconButton>
+                        <FormControl size="small" sx={{ minWidth: 120 }}>
+                          <Select
+                            displayEmpty
+                            value=""
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                copyScheduleToUser(schedule.id, e.target.value);
+                              }
+                            }}
+                            renderValue={() => 'Copy to...'}
+                          >
+                            <MenuItem value="" disabled>Copy to user...</MenuItem>
+                            {users.filter(u => u.id !== 0 && u.id !== schedule.user_id).map(u => (
+                              <MenuItem key={u.id} value={u.id}>{u.username}</MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                        <IconButton
+                          onClick={() => deleteSchedule(schedule.id)}
+                          color="error"
+                          size="small"
+                        >
+                          <Delete />
+                        </IconButton>
+                      </Box>
+                    </ListItemSecondaryAction>
+                  </>
+                )}
+              </ListItem>
+            );
+          })}
+        </List>
+
+        {schedules.length === 0 && (
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            <Typography variant="body2" color="text.secondary">
+              No schedules yet. Add your first schedule above.
+            </Typography>
+          </Box>
+        )}
+      </CardContent>
+
+      <Dialog open={showCronHelper} onClose={() => setShowCronHelper(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Crontab Helper</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+            <FormControl fullWidth>
+              <InputLabel>Schedule Type</InputLabel>
+              <Select
+                value={cronHelper.type}
+                onChange={(e) => setCronHelper({ ...cronHelper, type: e.target.value })}
+                label="Schedule Type"
+              >
+                <MenuItem value="daily">Daily</MenuItem>
+                <MenuItem value="weekly">Weekly</MenuItem>
+                <MenuItem value="monthly">Monthly</MenuItem>
+                <MenuItem value="one-time">One-time (no repeat)</MenuItem>
+              </Select>
+            </FormControl>
+
+            {cronHelper.type === 'weekly' && (
+              <FormControl fullWidth>
+                <InputLabel>Day of Week</InputLabel>
+                <Select
+                  value={cronHelper.dayOfWeek}
+                  onChange={(e) => setCronHelper({ ...cronHelper, dayOfWeek: e.target.value })}
+                  label="Day of Week"
+                >
+                  {dayNames.map((day, idx) => (
+                    <MenuItem key={idx} value={idx}>{day}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+
+            {cronHelper.type === 'monthly' && (
+              <FormControl fullWidth>
+                <TextField
+                  label="Day of Month"
+                  type="number"
+                  value={cronHelper.dayOfMonth}
+                  onChange={(e) => setCronHelper({ ...cronHelper, dayOfMonth: parseInt(e.target.value) || 1 })}
+                  inputProps={{ min: 1, max: 31 }}
+                />
+              </FormControl>
+            )}
+
+            {cronHelper.type !== 'one-time' && (
+              <>
+                <TextField
+                  label="Hour (0-23)"
+                  type="number"
+                  value={cronHelper.hour}
+                  onChange={(e) => setCronHelper({ ...cronHelper, hour: parseInt(e.target.value) || 0 })}
+                  inputProps={{ min: 0, max: 23 }}
+                />
+                <TextField
+                  label="Minute (0-59)"
+                  type="number"
+                  value={cronHelper.minute}
+                  onChange={(e) => setCronHelper({ ...cronHelper, minute: parseInt(e.target.value) || 0 })}
+                  inputProps={{ min: 0, max: 59 }}
+                />
+              </>
+            )}
+
+            <Box sx={{ p: 2, backgroundColor: 'rgba(0, 0, 0, 0.05)', borderRadius: 1 }}>
+              <Typography variant="body2" fontWeight="bold">Preview:</Typography>
+              <Typography variant="body2" sx={{ fontFamily: 'monospace', mt: 1 }}>
+                {buildCrontab() || 'One-time task (no crontab)'}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                {describeCrontab(buildCrontab())}
+              </Typography>
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowCronHelper(false)}>Cancel</Button>
+          <Button onClick={applyCronHelper} variant="contained">Apply</Button>
+        </DialogActions>
+      </Dialog>
+    </Card>
   );
 };
 
