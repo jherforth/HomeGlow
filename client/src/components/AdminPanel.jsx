@@ -61,6 +61,7 @@ import { ChromePicker } from 'react-color';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import PinModal from './PinModal';
+import ChoreSchedulesTab from './ChoreSchedulesTab';
 
 const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const [activeTab, setActiveTab] = useState(0);
@@ -709,6 +710,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     'Widgets',
     'Interface',
     'Users',
+    'Schedules',
     'Prizes',
     'Plugins',
     'Security'
@@ -1293,8 +1295,17 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
         </Card>
       )}
 
-      {/* Prizes Tab */}
+      {/* Schedules Tab */}
       {activeTab === 4 && (
+        <Card>
+          <CardContent>
+            <ChoreSchedulesTab saveMessage={saveMessage} setSaveMessage={setSaveMessage} />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Prizes Tab */}
+      {activeTab === 5 && (
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>Prize Management</Typography>
@@ -1382,7 +1393,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       )}
 
       {/* Plugins Tab */}
-      {activeTab === 5 && (
+      {activeTab === 6 && (
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>Plugin Management</Typography>
@@ -1463,7 +1474,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       )}
 
       {/* Security Tab */}
-      {activeTab === 6 && (
+      {activeTab === 7 && (
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>Security Settings</Typography>
