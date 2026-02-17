@@ -54,7 +54,8 @@ import {
   Timer,
   ViewCompact,
   ViewModule,
-  ViewQuilt
+  ViewQuilt,
+  Lock
 } from '@mui/icons-material';
 import { ChromePicker } from 'react-color';
 import axios from 'axios';
