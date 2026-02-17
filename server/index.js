@@ -2367,6 +2367,16 @@ fastify.post('/api/admin-pin/set', async (request, reply) => {
   }
 });
 
+fastify.delete('/api/admin-pin', async (request, reply) => {
+  try {
+    db.prepare('DELETE FROM admin_pin WHERE id = 1').run();
+    return { success: true, message: 'PIN cleared successfully' };
+  } catch (error) {
+    console.error('Error clearing PIN:', error);
+    reply.status(500).send({ error: 'Failed to clear PIN' });
+  }
+});
+
 fastify.post('/api/admin-pin/verify', async (request, reply) => {
   const { pin } = request.body;
 

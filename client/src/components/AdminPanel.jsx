@@ -187,7 +187,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
 
   const fetchChores = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/chores`);
+      const response = await axios.get(`${API_BASE_URL}/api/chore-schedules`);
       setChores(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching chores:', error);
@@ -368,13 +368,13 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const deleteUser = async (userId) => {
     try {
       setIsLoading(true);
-      const userChores = chores.filter(chore => chore.user_id === userId);
-      for (const chore of userChores) {
-        await axios.delete(`${API_BASE_URL}/api/chores/${chore.id}`);
+      const userSchedules = chores.filter(schedule => schedule.user_id === userId);
+      for (const schedule of userSchedules) {
+        await axios.delete(`${API_BASE_URL}/api/chore-schedules/${schedule.id}`);
       }
-      
+
       await axios.delete(`${API_BASE_URL}/api/users/${userId}`);
-      
+
       fetchUsers();
       fetchChores();
       setDeleteUserDialog({ open: false, user: null });
@@ -393,9 +393,15 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const updateUserClams = async (userId, newTotal) => {
     try {
       setIsLoading(true);
-      await axios.patch(`${API_BASE_URL}/api/users/${userId}/clams`, {
-        clam_total: newTotal
-      });
+      const user = users.find(u => u.id === userId);
+      const currentTotal = user?.clam_total || 0;
+      const diff = newTotal - currentTotal;
+
+      if (diff > 0) {
+        await axios.post(`${API_BASE_URL}/api/users/${userId}/clams/add`, { amount: diff });
+      } else if (diff < 0) {
+        await axios.post(`${API_BASE_URL}/api/users/${userId}/clams/reduce`, { amount: Math.abs(diff) });
+      }
       fetchUsers();
     } catch (error) {
       console.error('Error updating user clams:', error);
@@ -501,19 +507,21 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     setChoreModal({ open: false, user: null, userChores: [] });
   };
 
-  const deleteChore = async (choreId) => {
-    if (window.confirm('Are you sure you want to delete this chore?')) {
+  const deleteChore = async (scheduleId) => {
+    if (window.confirm('Are you sure you want to remove this chore schedule?')) {
       try {
         setIsLoading(true);
-        await axios.delete(`${API_BASE_URL}/api/chores/${choreId}`);
-        fetchChores();
+        await axios.delete(`${API_BASE_URL}/api/chore-schedules/${scheduleId}`);
+        await fetchChores();
         if (choreModal.user) {
-          const updatedUserChores = chores.filter(chore => chore.user_id === choreModal.user.id && chore.id !== choreId);
-          setChoreModal(prev => ({ ...prev, userChores: updatedUserChores }));
+          setChoreModal(prev => ({
+            ...prev,
+            userChores: prev.userChores.filter(c => c.id !== scheduleId)
+          }));
         }
       } catch (error) {
-        console.error('Error deleting chore:', error);
-        alert('Failed to delete chore. Please try again.');
+        console.error('Error deleting chore schedule:', error);
+        alert('Failed to delete chore schedule. Please try again.');
       } finally {
         setIsLoading(false);
       }
@@ -615,6 +623,25 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
 
   const handleUpdatePin = () => {
     setPinModal({ open: true, mode: 'set', title: 'Update Admin PIN' });
+  };
+
+  const handleClearPin = async () => {
+    if (!window.confirm('Are you sure you want to remove the admin PIN? Anyone will be able to access the admin panel without a PIN.')) {
+      return;
+    }
+    try {
+      setIsLoading(true);
+      await axios.delete(`${API_BASE_URL}/api/admin-pin`);
+      setPinExists(false);
+      setSaveMessage({ show: true, type: 'success', text: 'Admin PIN removed. Admin panel is now unprotected.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 4000);
+    } catch (error) {
+      console.error('Error clearing PIN:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to remove PIN. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const renderColorPicker = (key, label) => (
@@ -1500,13 +1527,13 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
                 </Grid>
               </Grid>
 
-              <Box sx={{ mt: 3 }}>
+              <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
                 <Button
                   variant="contained"
                   onClick={handleUpdatePin}
                   startIcon={<Lock />}
-                  fullWidth
                   sx={{
+                    flex: 1,
                     py: 1.5,
                     background: 'linear-gradient(135deg, var(--accent) 0%, var(--secondary) 100%)',
                     fontWeight: 'bold',
@@ -1515,6 +1542,16 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
                 >
                   {pinExists ? 'Update Admin PIN' : 'Set Admin PIN'}
                 </Button>
+                {pinExists && (
+                  <Button
+                    variant="outlined"
+                    onClick={handleClearPin}
+                    color="error"
+                    sx={{ py: 1.5, fontWeight: 'bold' }}
+                  >
+                    Remove PIN
+                  </Button>
+                )}
               </Box>
 
               {pinExists && (
@@ -1600,10 +1637,8 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
                   <TableRow>
                     <TableCell>Title</TableCell>
                     <TableCell>Description</TableCell>
-                    <TableCell>Day</TableCell>
-                    <TableCell>Time</TableCell>
-                    <TableCell>Repeat</TableCell>
-                    <TableCell>Status</TableCell>
+                    <TableCell>Schedule (Crontab)</TableCell>
+                    <TableCell>Visible</TableCell>
                     <TableCell>Clams</TableCell>
                     <TableCell>Actions</TableCell>
                   </TableRow>
@@ -1622,26 +1657,14 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Chip
-                          label={chore.assigned_day_of_week}
-                          size="small"
-                          variant="outlined"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {chore.time_period.replace('-', ' ')}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {chore.repeat_type.replace('-', ' ')}
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                          {chore.crontab || 'One-time'}
                         </Typography>
                       </TableCell>
                       <TableCell>
                         <Chip
-                          label={chore.completed ? 'Completed' : 'Pending'}
-                          color={chore.completed ? 'success' : 'default'}
+                          label={chore.visible ? 'Visible' : 'Hidden'}
+                          color={chore.visible ? 'success' : 'default'}
                           size="small"
                         />
                       </TableCell>

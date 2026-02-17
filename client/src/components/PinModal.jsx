@@ -28,6 +28,44 @@ const PinModal = ({ open, onClose, onVerify, mode = 'verify', title }) => {
     }
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+
+    const handleKeyDown = (e) => {
+      if (isLoading) return;
+      if (e.key >= '0' && e.key <= '9') {
+        const currentPin = step === 'confirm' ? confirmPin : pin;
+        if (currentPin.length < 8) {
+          if (step === 'confirm') {
+            setConfirmPin(prev => prev + e.key);
+          } else {
+            setPin(prev => prev + e.key);
+          }
+          setError('');
+        }
+      } else if (e.key === 'Backspace') {
+        if (step === 'confirm') {
+          setConfirmPin(prev => prev.slice(0, -1));
+        } else {
+          setPin(prev => prev.slice(0, -1));
+        }
+        setError('');
+      } else if (e.key === 'Enter') {
+        const cur = step === 'confirm' ? confirmPin : pin;
+        if (cur.length >= 4 && cur.length <= 8) {
+          document.activeElement?.blur();
+          const submitBtn = document.querySelector('[data-pin-submit]');
+          if (submitBtn) submitBtn.click();
+        }
+      } else if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [open, isLoading, step, pin, confirmPin, onClose]);
+
   const handleNumberClick = (num) => {
     if (isLoading) return;
 
@@ -287,6 +325,7 @@ const PinModal = ({ open, onClose, onVerify, mode = 'verify', title }) => {
                 fullWidth
                 variant="contained"
                 onClick={handleSubmit}
+                data-pin-submit
                 disabled={!canSubmit || isLoading}
                 sx={{
                   py: 1.5,
