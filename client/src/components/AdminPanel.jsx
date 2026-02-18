@@ -157,7 +157,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       if (response.data.exists) {
         setPinModal({ open: true, mode: 'verify', title: 'Enter Admin PIN' });
       } else {
-        setPinModal({ open: true, mode: 'set', title: 'Set Admin PIN' });
+        setIsAuthenticated(true);
       }
     } catch (error) {
       console.error('Error checking PIN status:', error);
@@ -710,7 +710,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     'Widgets',
     'Interface',
     'Users',
-    'Schedules',
+    'Chores',
     'Prizes',
     'Plugins',
     'Security'
