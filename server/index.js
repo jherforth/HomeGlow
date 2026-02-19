@@ -868,6 +868,19 @@ async function migrateChoresDatabase() {
   }
 }
 
+// Initialize default settings
+function initializeDefaultSettings() {
+  try {
+    const existingSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('daily_completion_clam_reward');
+    if (!existingSetting) {
+      db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('daily_completion_clam_reward', '2');
+      console.log('Initialized default daily completion clam reward setting to 2');
+    }
+  } catch (error) {
+    console.error('Error initializing default settings:', error);
+  }
+}
+
 // Function to prune and reset chores based on the day
 async function pruneAndResetChores() {
   try {
@@ -1284,13 +1297,16 @@ fastify.post('/api/chores/complete', async (request, reply) => {
       const allRegularChoresCompleted = completedRegularChores.count === regularChores.length;
 
       if (allRegularChoresCompleted) {
+        const dailyRewardSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('daily_completion_clam_reward');
+        const dailyReward = dailyRewardSetting ? parseInt(dailyRewardSetting.value, 10) : 2;
+
         const bonusAlreadyAwarded = db.prepare(`
           SELECT id FROM chore_history
-          WHERE user_id = ? AND date = ? AND chore_schedule_id IS NULL AND clam_value = 2
-        `).get(user_id, date);
+          WHERE user_id = ? AND date = ? AND chore_schedule_id IS NULL AND clam_value = ?
+        `).get(user_id, date, dailyReward);
 
         if (!bonusAlreadyAwarded) {
-          db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value) VALUES (?, NULL, ?, 2)').run(user_id, date);
+          db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value) VALUES (?, NULL, ?, ?)').run(user_id, date, dailyReward);
         }
       }
     }
@@ -1318,10 +1334,13 @@ fastify.post('/api/chores/uncomplete', async (request, reply) => {
 
     db.prepare('DELETE FROM chore_history WHERE id = ?').run(history.id);
 
+    const dailyRewardSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('daily_completion_clam_reward');
+    const dailyReward = dailyRewardSetting ? parseInt(dailyRewardSetting.value, 10) : 2;
+
     const bonusEntry = db.prepare(`
       SELECT id FROM chore_history
-      WHERE user_id = ? AND date = ? AND chore_schedule_id IS NULL AND clam_value = 2
-    `).get(user_id, date);
+      WHERE user_id = ? AND date = ? AND chore_schedule_id IS NULL AND clam_value = ?
+    `).get(user_id, date, dailyReward);
 
     if (bonusEntry) {
       db.prepare('DELETE FROM chore_history WHERE id = ?').run(bonusEntry.id);
@@ -2438,6 +2457,7 @@ const start = async () => {
   try {
     db = await initializeDatabase(); // Initialize db once here
     await migrateChoresDatabase(); // Run migration if needed
+    initializeDefaultSettings(); // Initialize default settings
     await fastify.listen({ port: process.env.PORT || 5000, host: '0.0.0.0' });
     console.log(`Server running on port ${process.env.PORT || 5000}`);
   } catch (err) {

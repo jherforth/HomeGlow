@@ -49,6 +49,7 @@ const ChoreWidget = ({ transparentBackground }) => {
     return saved !== null ? JSON.parse(saved) : true;
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [dailyClamReward, setDailyClamReward] = useState(2);
 
   const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
@@ -86,12 +87,24 @@ const ChoreWidget = ({ transparentBackground }) => {
         fetchChores(),
         fetchSchedules(),
         fetchHistory(),
-        fetchPrizes()
+        fetchPrizes(),
+        fetchSettings()
       ]);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching data:', error);
       setLoading(false);
+    }
+  };
+
+  const fetchSettings = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/settings`);
+      if (response.data.daily_completion_clam_reward) {
+        setDailyClamReward(parseInt(response.data.daily_completion_clam_reward, 10));
+      }
+    } catch (error) {
+      console.error('Error fetching settings:', error);
     }
   };
 
@@ -512,7 +525,7 @@ const ChoreWidget = ({ transparentBackground }) => {
                     </Typography>
                     {allRegularChoresCompleted && (
                       <Chip
-                        label="All Done! +2 🥟"
+                        label={`All Done! +${dailyClamReward} 🥟`}
                         color="success"
                         size="small"
                         sx={{ mt: 1 }}

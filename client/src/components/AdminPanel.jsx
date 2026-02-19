@@ -67,7 +67,8 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const [activeTab, setActiveTab] = useState(0);
   const [settings, setSettings] = useState({
     WEATHER_API_KEY: '',
-    PROXY_WHITELIST: ''
+    PROXY_WHITELIST: '',
+    daily_completion_clam_reward: '2'
   });
   const [widgetSettings, setLocalWidgetSettings] = useState({
     chores: { enabled: false, transparent: false, refreshInterval: 0 },
@@ -252,9 +253,10 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     try {
       await Promise.all([
         axios.post(`${API_BASE_URL}/api/settings`, { key: 'WEATHER_API_KEY', value: settings.WEATHER_API_KEY || '' }),
-        axios.post(`${API_BASE_URL}/api/settings`, { key: 'PROXY_WHITELIST', value: settings.PROXY_WHITELIST || '' })
+        axios.post(`${API_BASE_URL}/api/settings`, { key: 'PROXY_WHITELIST', value: settings.PROXY_WHITELIST || '' }),
+        axios.post(`${API_BASE_URL}/api/settings`, { key: 'daily_completion_clam_reward', value: settings.daily_completion_clam_reward || '2' })
       ]);
-      setSaveMessage({ show: true, type: 'success', text: 'All API settings saved successfully!' });
+      setSaveMessage({ show: true, type: 'success', text: 'All settings saved successfully!' });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } catch (error) {
       console.error('Error saving API settings:', error);
@@ -781,6 +783,17 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
               helperText="Domains allowed for proxy requests (e.g., api.example.com, another-api.com)"
             />
 
+            <TextField
+              fullWidth
+              label="Daily Completion Clam Reward"
+              type="number"
+              value={settings.daily_completion_clam_reward || '2'}
+              onChange={(e) => setSettings(prev => ({ ...prev, daily_completion_clam_reward: e.target.value }))}
+              sx={{ mb: 2 }}
+              helperText="Number of clams awarded when a user completes all their daily chores"
+              inputProps={{ min: 0, max: 100 }}
+            />
+
             <Button
               variant="contained"
               onClick={saveAllApiSettings}
@@ -788,7 +801,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
               startIcon={<Save />}
               sx={{ mt: 2 }}
             >
-              {isLoading ? 'Saving...' : 'Save API Settings'}
+              {isLoading ? 'Saving...' : 'Save Settings'}
             </Button>
           </CardContent>
         </Card>
