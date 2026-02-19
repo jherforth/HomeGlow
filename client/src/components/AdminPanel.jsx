@@ -764,45 +764,47 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
               </Alert>
             )}
 
-            <TextField
-              fullWidth
-              label="OpenWeatherMap API Key"
-              type="password"
-              value={settings.WEATHER_API_KEY || ''}
-              onChange={(e) => setSettings(prev => ({ ...prev, WEATHER_API_KEY: e.target.value }))}
-              sx={{ mb: 2 }}
-              helperText="Get your free API key from openweathermap.org"
-            />
+            <Box sx={{ maxWidth: 600 }}>
+              <TextField
+                fullWidth
+                label="OpenWeatherMap API Key"
+                type="password"
+                value={settings.WEATHER_API_KEY || ''}
+                onChange={(e) => setSettings(prev => ({ ...prev, WEATHER_API_KEY: e.target.value }))}
+                sx={{ mb: 2 }}
+                helperText="Get your free API key from openweathermap.org"
+              />
 
-            <TextField
-              fullWidth
-              label="Proxy Whitelist (comma-separated domains)"
-              value={settings.PROXY_WHITELIST || ''}
-              onChange={(e) => setSettings(prev => ({ ...prev, PROXY_WHITELIST: e.target.value }))}
-              sx={{ mb: 2 }}
-              helperText="Domains allowed for proxy requests (e.g., api.example.com, another-api.com)"
-            />
+              <TextField
+                fullWidth
+                label="Proxy Whitelist (comma-separated domains)"
+                value={settings.PROXY_WHITELIST || ''}
+                onChange={(e) => setSettings(prev => ({ ...prev, PROXY_WHITELIST: e.target.value }))}
+                sx={{ mb: 2 }}
+                helperText="Domains allowed for proxy requests (e.g., api.example.com, another-api.com)"
+              />
 
-            <TextField
-              fullWidth
-              label="Daily Completion Clam Reward"
-              type="number"
-              value={settings.daily_completion_clam_reward || '2'}
-              onChange={(e) => setSettings(prev => ({ ...prev, daily_completion_clam_reward: e.target.value }))}
-              sx={{ mb: 2 }}
-              helperText="Number of clams awarded when a user completes all their daily chores"
-              inputProps={{ min: 0, max: 100 }}
-            />
+              <TextField
+                fullWidth
+                label="Daily Completion Clam Reward"
+                type="number"
+                value={settings.daily_completion_clam_reward || '2'}
+                onChange={(e) => setSettings(prev => ({ ...prev, daily_completion_clam_reward: e.target.value }))}
+                sx={{ mb: 2 }}
+                helperText="Number of clams awarded when a user completes all their daily chores"
+                inputProps={{ min: 0, max: 100 }}
+              />
 
-            <Button
-              variant="contained"
-              onClick={saveAllApiSettings}
-              disabled={isLoading}
-              startIcon={<Save />}
-              sx={{ mt: 2 }}
-            >
-              {isLoading ? 'Saving...' : 'Save Settings'}
-            </Button>
+              <Button
+                variant="contained"
+                onClick={saveAllApiSettings}
+                disabled={isLoading}
+                startIcon={<Save />}
+                sx={{ mt: 2 }}
+              >
+                {isLoading ? 'Saving...' : 'Save Settings'}
+              </Button>
+            </Box>
           </CardContent>
         </Card>
       )}
