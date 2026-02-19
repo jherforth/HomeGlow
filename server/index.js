@@ -1267,6 +1267,38 @@ fastify.post('/api/chores/complete', async (request, reply) => {
       db.prepare('UPDATE chore_schedules SET visible = 0 WHERE id = ?').run(chore_schedule_id);
     }
 
+    const allUserSchedules = db.prepare(`
+      SELECT cs.*, c.clam_value
+      FROM chore_schedules cs
+      JOIN chores c ON cs.chore_id = c.id
+      WHERE cs.user_id = ? AND cs.visible = 1
+    `).all(user_id);
+
+    const regularChores = allUserSchedules.filter(s => s.clam_value === 0);
+
+    if (regularChores.length > 0) {
+      const completedRegularChores = db.prepare(`
+        SELECT COUNT(*) as count
+        FROM chore_history ch
+        JOIN chore_schedules cs ON ch.chore_schedule_id = cs.id
+        JOIN chores c ON cs.chore_id = c.id
+        WHERE ch.user_id = ? AND ch.date = ? AND c.clam_value = 0
+      `).get(user_id, date);
+
+      const allRegularChoresCompleted = completedRegularChores.count === regularChores.length;
+
+      if (allRegularChoresCompleted) {
+        const bonusAlreadyAwarded = db.prepare(`
+          SELECT id FROM chore_history
+          WHERE user_id = ? AND date = ? AND chore_schedule_id IS NULL AND clam_value = 2
+        `).get(user_id, date);
+
+        if (!bonusAlreadyAwarded) {
+          db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value) VALUES (?, NULL, ?, 2)').run(user_id, date);
+        }
+      }
+    }
+
     const totalResult = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(user_id);
 
     return { success: true, clam_total: totalResult.total };
@@ -1293,6 +1325,15 @@ fastify.post('/api/chores/uncomplete', async (request, reply) => {
     const schedule = db.prepare('SELECT crontab FROM chore_schedules WHERE id = ?').get(chore_schedule_id);
     if (schedule && schedule.crontab === null) {
       db.prepare('UPDATE chore_schedules SET visible = 1 WHERE id = ?').run(chore_schedule_id);
+    }
+
+    const bonusEntry = db.prepare(`
+      SELECT id FROM chore_history
+      WHERE user_id = ? AND date = ? AND chore_schedule_id IS NULL AND clam_value = 2
+    `).get(user_id, date);
+
+    if (bonusEntry) {
+      db.prepare('DELETE FROM chore_history WHERE id = ?').run(bonusEntry.id);
     }
 
     const totalResult = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(user_id);
