@@ -174,7 +174,6 @@ const ChoreWidget = ({ transparentBackground }) => {
 
       const existingUserSchedules = schedules.filter(s =>
         s.user_id === userId &&
-        s.clam_value > 0 &&
         s.visible === 1
       );
 
@@ -264,7 +263,7 @@ const ChoreWidget = ({ transparentBackground }) => {
   };
 
   const getBonusChores = () => {
-    return schedules.filter(schedule => schedule.clam_value > 0 && schedule.visible);
+    return schedules.filter(schedule => schedule.visible);
   };
 
   const getAvailableBonusChores = () => {
