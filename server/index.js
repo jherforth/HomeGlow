@@ -1263,10 +1263,6 @@ fastify.post('/api/chores/complete', async (request, reply) => {
 
     db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value) VALUES (?, ?, ?, ?)').run(user_id, chore_schedule_id, date, schedule.clam_value);
 
-    if (schedule.crontab === null) {
-      db.prepare('UPDATE chore_schedules SET visible = 0 WHERE id = ?').run(chore_schedule_id);
-    }
-
     const allUserSchedules = db.prepare(`
       SELECT cs.*, c.clam_value
       FROM chore_schedules cs
@@ -1321,11 +1317,6 @@ fastify.post('/api/chores/uncomplete', async (request, reply) => {
     }
 
     db.prepare('DELETE FROM chore_history WHERE id = ?').run(history.id);
-
-    const schedule = db.prepare('SELECT crontab FROM chore_schedules WHERE id = ?').get(chore_schedule_id);
-    if (schedule && schedule.crontab === null) {
-      db.prepare('UPDATE chore_schedules SET visible = 1 WHERE id = ?').run(chore_schedule_id);
-    }
 
     const bonusEntry = db.prepare(`
       SELECT id FROM chore_history
