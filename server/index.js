@@ -777,6 +777,7 @@ async function migrateChoresDatabase() {
         chore_schedule_id INTEGER NULL,
         date TEXT NOT NULL,
         clam_value INTEGER NOT NULL DEFAULT 0,
+        source TEXT NULL,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (chore_schedule_id) REFERENCES chore_schedules(id) ON DELETE SET NULL
       );
@@ -784,6 +785,9 @@ async function migrateChoresDatabase() {
       CREATE INDEX IF NOT EXISTS idx_chore_history_user_id ON chore_history(user_id);
       CREATE INDEX IF NOT EXISTS idx_chore_history_date ON chore_history(date);
       CREATE INDEX IF NOT EXISTS idx_chore_history_user_date ON chore_history(user_id, date);
+      CREATE INDEX IF NOT EXISTS idx_chore_history_source ON chore_history(source);
+      CREATE INDEX IF NOT EXISTS idx_chore_history_user_date_source ON chore_history(user_id, date, source);
+      CREATE INDEX IF NOT EXISTS idx_chore_history_clam_value ON chore_history(clam_value);
     `);
     console.log('New tables created successfully');
 
@@ -865,6 +869,29 @@ async function migrateChoresDatabase() {
     console.error('Error:', error);
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('migration_error', error.message);
     throw error;
+  }
+}
+
+// Migration to add source column to chore_history
+async function migrateChoreHistorySource() {
+  try {
+    console.log('=== Checking for chore_history source column migration ===');
+
+    const columns = db.prepare("PRAGMA table_info(chore_history)").all();
+    const hasSourceColumn = columns.some(col => col.name === 'source');
+
+    if (hasSourceColumn) {
+      console.log('Source column already exists in chore_history table');
+      return;
+    }
+
+    console.log('Adding source column to chore_history table...');
+    db.exec('ALTER TABLE chore_history ADD COLUMN source TEXT NULL');
+    console.log('Source column added successfully to chore_history table');
+
+  } catch (error) {
+    console.error('=== chore_history source migration failed ===');
+    console.error('Error:', error);
   }
 }
 
@@ -1276,37 +1303,39 @@ fastify.post('/api/chores/complete', async (request, reply) => {
 
     db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value) VALUES (?, ?, ?, ?)').run(user_id, chore_schedule_id, date, schedule.clam_value);
 
-    const allUserSchedules = db.prepare(`
-      SELECT cs.*, c.clam_value
-      FROM chore_schedules cs
-      JOIN chores c ON cs.chore_id = c.id
-      WHERE cs.user_id = ? AND cs.visible = 1
-    `).all(user_id);
-
-    const regularChores = allUserSchedules.filter(s => s.clam_value === 0);
-
-    if (regularChores.length > 0) {
-      const completedRegularChores = db.prepare(`
-        SELECT COUNT(*) as count
-        FROM chore_history ch
-        JOIN chore_schedules cs ON ch.chore_schedule_id = cs.id
+    if (schedule.clam_value === 0) {
+      const allUserSchedules = db.prepare(`
+        SELECT cs.*, c.clam_value
+        FROM chore_schedules cs
         JOIN chores c ON cs.chore_id = c.id
-        WHERE ch.user_id = ? AND ch.date = ? AND c.clam_value = 0
-      `).get(user_id, date);
+        WHERE cs.user_id = ? AND cs.visible = 1
+      `).all(user_id);
 
-      const allRegularChoresCompleted = completedRegularChores.count === regularChores.length;
+      const regularChores = allUserSchedules.filter(s => s.clam_value === 0);
 
-      if (allRegularChoresCompleted) {
-        const dailyRewardSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('daily_completion_clam_reward');
-        const dailyReward = dailyRewardSetting ? parseInt(dailyRewardSetting.value, 10) : 2;
+      if (regularChores.length > 0) {
+        const completedRegularChores = db.prepare(`
+          SELECT COUNT(*) as count
+          FROM chore_history ch
+          JOIN chore_schedules cs ON ch.chore_schedule_id = cs.id
+          JOIN chores c ON cs.chore_id = c.id
+          WHERE ch.user_id = ? AND ch.date = ? AND c.clam_value = 0
+        `).get(user_id, date);
 
-        const bonusAlreadyAwarded = db.prepare(`
-          SELECT id FROM chore_history
-          WHERE user_id = ? AND date = ? AND chore_schedule_id IS NULL AND clam_value = ?
-        `).get(user_id, date, dailyReward);
+        const allRegularChoresCompleted = completedRegularChores.count === regularChores.length;
 
-        if (!bonusAlreadyAwarded) {
-          db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value) VALUES (?, NULL, ?, ?)').run(user_id, date, dailyReward);
+        if (allRegularChoresCompleted) {
+          const dailyRewardSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('daily_completion_clam_reward');
+          const dailyReward = dailyRewardSetting ? parseInt(dailyRewardSetting.value, 10) : 2;
+
+          const bonusAlreadyAwarded = db.prepare(`
+            SELECT id FROM chore_history
+            WHERE user_id = ? AND date = ? AND source = 'Regular'
+          `).get(user_id, date);
+
+          if (!bonusAlreadyAwarded) {
+            db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, source) VALUES (?, NULL, ?, ?, ?)').run(user_id, date, dailyReward, 'Regular');
+          }
         }
       }
     }
@@ -1334,16 +1363,11 @@ fastify.post('/api/chores/uncomplete', async (request, reply) => {
 
     db.prepare('DELETE FROM chore_history WHERE id = ?').run(history.id);
 
-    const dailyRewardSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('daily_completion_clam_reward');
-    const dailyReward = dailyRewardSetting ? parseInt(dailyRewardSetting.value, 10) : 2;
-
-    const bonusEntry = db.prepare(`
-      SELECT id FROM chore_history
-      WHERE user_id = ? AND date = ? AND chore_schedule_id IS NULL AND clam_value = ?
-    `).get(user_id, date, dailyReward);
-
-    if (bonusEntry) {
-      db.prepare('DELETE FROM chore_history WHERE id = ?').run(bonusEntry.id);
+    if (history.clam_value === 0) {
+      db.prepare(`
+        DELETE FROM chore_history
+        WHERE user_id = ? AND date = ? AND source = 'Regular'
+      `).run(user_id, date);
     }
 
     const totalResult = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(user_id);
@@ -1376,7 +1400,7 @@ fastify.post('/api/users/:id/clams/add', async (request, reply) => {
     }
 
     const useDate = date || new Date().toISOString().split('T')[0];
-    db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value) VALUES (?, NULL, ?, ?)').run(id, useDate, amount);
+    db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, source) VALUES (?, NULL, ?, ?, ?)').run(id, useDate, amount, 'Adjustment');
 
     const result = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(id);
     return { success: true, clam_total: result.total };
@@ -2457,6 +2481,7 @@ const start = async () => {
   try {
     db = await initializeDatabase(); // Initialize db once here
     await migrateChoresDatabase(); // Run migration if needed
+    await migrateChoreHistorySource(); // Run source column migration if needed
     initializeDefaultSettings(); // Initialize default settings
     await fastify.listen({ port: process.env.PORT || 5000, host: '0.0.0.0' });
     console.log(`Server running on port ${process.env.PORT || 5000}`);
