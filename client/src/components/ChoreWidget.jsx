@@ -185,14 +185,24 @@ const ChoreWidget = ({ transparentBackground }) => {
     try {
       setIsLoading(true);
 
+      const today = getTodayDateString();
+
       const userBonusSchedules = schedules.filter(s =>
         s.user_id === userId &&
         s.visible === 1 &&
-        s.clam_value > 0 &&
-        !s.completed
+        s.clam_value > 0
       );
 
-      if (userBonusSchedules.length > 0) {
+      const hasUncompletedBonusChoreToday = userBonusSchedules.some(schedule => {
+        const completedToday = history.some(h =>
+          h.chore_schedule_id === schedule.id &&
+          h.user_id === userId &&
+          h.date === today
+        );
+        return !completedToday;
+      });
+
+      if (hasUncompletedBonusChoreToday) {
         alert('User already has an uncompleted bonus chore. Complete it first!');
         return;
       }
