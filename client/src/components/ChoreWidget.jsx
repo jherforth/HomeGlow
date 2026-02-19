@@ -38,7 +38,8 @@ const ChoreWidget = ({ transparentBackground }) => {
     title: '',
     description: '',
     assigned_days_of_week: ['monday'],
-    clam_value: 0
+    clam_value: 0,
+    is_one_time: false
   });
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showPrizesModal, setShowPrizesModal] = useState(false);
@@ -213,7 +214,7 @@ const ChoreWidget = ({ transparentBackground }) => {
       });
 
       const choreId = choreResponse.data.id;
-      const crontab = convertDaysToCrontab(newChore.assigned_days_of_week);
+      const crontab = newChore.is_one_time ? null : convertDaysToCrontab(newChore.assigned_days_of_week);
 
       await axios.post(`${API_BASE_URL}/api/chore-schedules`, {
         chore_id: choreId,
@@ -227,7 +228,8 @@ const ChoreWidget = ({ transparentBackground }) => {
         title: '',
         description: '',
         assigned_days_of_week: ['monday'],
-        clam_value: 0
+        clam_value: 0,
+        is_one_time: false
       });
       setShowAddDialog(false);
       await fetchData();
@@ -691,25 +693,44 @@ const ChoreWidget = ({ transparentBackground }) => {
             </FormControl>
 
             <Box sx={{ mb: 2 }}>
-              <FormLabel component="legend" sx={{ mb: 1, display: 'block' }}>
-                Select Days (choose one or more):
-              </FormLabel>
-              <FormGroup row>
-                {daysOfWeek.map(day => (
-                  <FormControlLabel
-                    key={day}
-                    control={
-                      <Checkbox
-                        checked={newChore.assigned_days_of_week.includes(day)}
-                        onChange={() => handleDayToggle(day)}
-                        color="primary"
-                      />
-                    }
-                    label={day.charAt(0).toUpperCase() + day.slice(1)}
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={newChore.is_one_time}
+                    onChange={(e) => setNewChore({
+                      ...newChore,
+                      is_one_time: e.target.checked,
+                      assigned_days_of_week: e.target.checked ? [] : ['monday']
+                    })}
+                    color="primary"
                   />
-                ))}
-              </FormGroup>
+                }
+                label="One-time chore (no recurrence)"
+              />
             </Box>
+
+            {!newChore.is_one_time && (
+              <Box sx={{ mb: 2 }}>
+                <FormLabel component="legend" sx={{ mb: 1, display: 'block' }}>
+                  Select Days (choose one or more):
+                </FormLabel>
+                <FormGroup row>
+                  {daysOfWeek.map(day => (
+                    <FormControlLabel
+                      key={day}
+                      control={
+                        <Checkbox
+                          checked={newChore.assigned_days_of_week.includes(day)}
+                          onChange={() => handleDayToggle(day)}
+                          color="primary"
+                        />
+                      }
+                      label={day.charAt(0).toUpperCase() + day.slice(1)}
+                    />
+                  ))}
+                </FormGroup>
+              </Box>
+            )}
 
             <TextField
               fullWidth
@@ -724,7 +745,7 @@ const ChoreWidget = ({ transparentBackground }) => {
             <Button
               onClick={saveChore}
               variant="contained"
-              disabled={newChore.assigned_days_of_week.length === 0}
+              disabled={!newChore.is_one_time && newChore.assigned_days_of_week.length === 0}
             >
               Add Chore
             </Button>
