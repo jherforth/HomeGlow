@@ -13,6 +13,7 @@ require('dotenv').config();
 const axios = require('axios');
 const ICAL = require('ical.js');
 const parser = require('cron-parser');
+const cron = require('node-cron');
 // For widget upload and registry
 const widgetRegistryPath = path.join(__dirname, 'widgets_registry.json');
 
@@ -950,6 +951,50 @@ async function pruneAndResetChores() {
   }
 }
 
+async function pruneCompletedOneTimeChores() {
+  try {
+    console.log('=== Starting nightly prune of completed one-time chores ===');
+    const today = new Date().toISOString().split('T')[0];
+
+    const schedulesToPrune = db.prepare(`
+      SELECT cs.id, cs.chore_id, cs.user_id, c.title
+      FROM chore_schedules cs
+      JOIN chores c ON cs.chore_id = c.id
+      WHERE cs.crontab IS NULL
+        AND cs.visible = 1
+        AND EXISTS (
+          SELECT 1 FROM chore_history ch
+          WHERE ch.chore_schedule_id = cs.id
+        )
+    `).all();
+
+    console.log(`Found ${schedulesToPrune.length} completed one-time chores to prune`);
+
+    let prunedCount = 0;
+    for (const schedule of schedulesToPrune) {
+      db.prepare('UPDATE chore_schedules SET visible = 0 WHERE id = ?').run(schedule.id);
+      console.log(`Pruned schedule ID ${schedule.id}: "${schedule.title}" (user_id: ${schedule.user_id})`);
+      prunedCount++;
+    }
+
+    console.log(`=== Nightly prune completed: ${prunedCount} chores hidden ===`);
+    return { pruned: prunedCount, schedules: schedulesToPrune };
+  } catch (error) {
+    console.error('Error during nightly chore pruning:', error);
+    throw error;
+  }
+}
+
+function startNightlyCronJob() {
+  cron.schedule('0 0 * * *', async () => {
+    console.log('Running nightly chore prune job at midnight');
+    await pruneCompletedOneTimeChores();
+  }, {
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+  });
+  console.log('Nightly chore prune cron job scheduled for midnight');
+}
+
 
 // Chore routes (updated for new schema)
 fastify.get('/api/chores', async (request, reply) => {
@@ -1157,6 +1202,21 @@ fastify.delete('/api/chore-schedules/:id', async (request, reply) => {
   } catch (error) {
     console.error('Error deleting schedule:', error);
     reply.status(500).send({ error: 'Failed to delete schedule' });
+  }
+});
+
+fastify.post('/api/chore-schedules/prune', async (request, reply) => {
+  try {
+    const result = await pruneCompletedOneTimeChores();
+    return {
+      success: true,
+      message: `Pruned ${result.pruned} completed one-time chores`,
+      pruned: result.pruned,
+      schedules: result.schedules
+    };
+  } catch (error) {
+    console.error('Error running manual prune:', error);
+    reply.status(500).send({ error: 'Failed to prune chores' });
   }
 });
 
@@ -2458,6 +2518,7 @@ const start = async () => {
     db = await initializeDatabase(); // Initialize db once here
     await migrateChoresDatabase(); // Run migration if needed
     initializeDefaultSettings(); // Initialize default settings
+    startNightlyCronJob(); // Start the nightly chore pruning job
     await fastify.listen({ port: process.env.PORT || 5000, host: '0.0.0.0' });
     console.log(`Server running on port ${process.env.PORT || 5000}`);
   } catch (err) {

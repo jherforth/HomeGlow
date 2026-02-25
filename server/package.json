@@ -17,6 +17,7 @@
     "node-ical": "^0.25.0",
     "better-sqlite3": "^12.5.0",
     "ical.js": "^2.2.1",
-    "cron-parser": "^4.9.0"
+    "cron-parser": "^4.9.0",
+    "node-cron": "^3.0.3"
   }
 }
