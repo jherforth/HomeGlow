@@ -571,10 +571,9 @@ async function initializeDatabase() {
         id INTEGER PRIMARY KEY AUTOINCREMENT,\
         username TEXT,\
         email TEXT,\
-        profile_picture TEXT,\
-        clam_total INTEGER DEFAULT 0
+        profile_picture TEXT
       );
-      INSERT OR IGNORE INTO users (id, username, email, profile_picture, clam_total) VALUES (0, 'bonus', 'bonus@example.com', '', 0);\
+      INSERT OR IGNORE INTO users (id, username, email, profile_picture) VALUES (0, 'bonus', 'bonus@example.com', '');\
       CREATE TABLE IF NOT EXISTS events (
         id INTEGER PRIMARY KEY AUTOINCREMENT,\
         user_id INTEGER,\
@@ -865,6 +864,68 @@ async function migrateChoresDatabase() {
     console.error('=== Migration failed ===');
     console.error('Error:', error);
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('migration_error', error.message);
+    throw error;
+  }
+}
+
+async function migrateClamsToHistory() {
+  try {
+    console.log('=== Checking for clam_total migration ===');
+
+    const migrationVersionRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('clam_migration_version');
+    const currentVersion = migrationVersionRow ? parseInt(migrationVersionRow.value) : 0;
+
+    if (currentVersion >= 1) {
+      console.log('Clam migration already completed (version:', currentVersion, ')');
+      return;
+    }
+
+    const columns = db.prepare("PRAGMA table_info(users)").all();
+    const hasClaimTotal = columns.some(col => col.name === 'clam_total');
+
+    if (!hasClaimTotal) {
+      console.log('clam_total column does not exist, skipping migration');
+      db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('clam_migration_version', '1');
+      return;
+    }
+
+    console.log('=== Starting clam_total to chore_history migration ===');
+
+    const today = new Date().toISOString().split('T')[0];
+
+    const usersWithClams = db.prepare('SELECT id, username, clam_total FROM users WHERE clam_total > 0 AND id != 0').all();
+    console.log(`Found ${usersWithClams.length} users with clam_total > 0`);
+
+    for (const user of usersWithClams) {
+      db.prepare(`
+        INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value)
+        VALUES (?, NULL, ?, ?)
+      `).run(user.id, today, user.clam_total);
+      console.log(`Migrated ${user.clam_total} clams for user "${user.username}" (ID: ${user.id})`);
+    }
+
+    console.log('Removing clam_total column from users table...');
+    db.exec(`
+      CREATE TABLE users_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT,
+        email TEXT,
+        profile_picture TEXT
+      );
+      INSERT INTO users_new (id, username, email, profile_picture)
+      SELECT id, username, email, profile_picture FROM users;
+      DROP TABLE users;
+      ALTER TABLE users_new RENAME TO users;
+    `);
+
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('clam_migration_version', '1');
+
+    console.log('=== Clam migration completed successfully ===');
+    console.log(`Migrated clams for ${usersWithClams.length} users`);
+
+  } catch (error) {
+    console.error('=== Clam migration failed ===');
+    console.error('Error:', error);
     throw error;
   }
 }
@@ -1581,21 +1642,7 @@ fastify.post('/api/users/:id/upload-picture', async (request, reply) => {
   }
 });
 
-// NEW: Endpoint to update user clam total (for manual adjustments or future use)
-fastify.patch('/api/users/:id/clams', async (request, reply) => {
-  const { id } = request.params;
-  const { clam_total } = request.body; // Expecting the new total or a delta
-  try {
-    const stmt = db.prepare('UPDATE users SET clam_total = ? WHERE id = ?');
-    stmt.run(clam_total, id);
-    return { success: true };
-  } catch (error) {
-    console.error('Error updating user clams:', error);
-    reply.status(500).send({ error: 'Failed to update user clams' });
-  }
-});
-
-// NEW: Endpoint to delete a user
+// Endpoint to delete a user
 fastify.delete('/api/users/:id', async (request, reply) => {
   const { id } = request.params;
   try {
@@ -2517,6 +2564,7 @@ const start = async () => {
   try {
     db = await initializeDatabase(); // Initialize db once here
     await migrateChoresDatabase(); // Run migration if needed
+    await migrateClamsToHistory(); // Migrate clam_total to chore_history
     initializeDefaultSettings(); // Initialize default settings
     startNightlyCronJob(); // Start the nightly chore pruning job
     await fastify.listen({ port: process.env.PORT || 5000, host: '0.0.0.0' });
