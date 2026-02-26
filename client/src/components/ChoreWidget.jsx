@@ -128,7 +128,7 @@ const ChoreWidget = ({ transparentBackground }) => {
 
   const fetchSchedules = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/chore-schedules?visible=true`);
+      const response = await axios.get(`${API_BASE_URL}/api/chore-schedules?usage=chart`);
       setSchedules(response.data);
     } catch (error) {
       console.error('Error fetching schedules:', error);

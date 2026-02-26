@@ -1053,20 +1053,18 @@ async function dailyBackgroundProcessing() {
     const today = new Date().toISOString().split('T')[0];
 
     // We want to delete schedules that are completed and will never run again to avoid clutter
-    // BUT: exclude "until-completed" schedules - they should be handled separately
     const schedulesToPrune = db.prepare(`
-      SELECT cs.id, cs.chore_id, cs.user_id, cs.duration, c.title
+      SELECT cs.id, cs.chore_id, cs.user_id, c.title
       FROM chore_schedules cs
       JOIN chores c ON cs.chore_id = c.id
       WHERE cs.crontab IS NULL
         AND cs.visible = 1
-        AND cs.duration != 'until-completed'
         AND EXISTS (
           SELECT 1 FROM chore_history ch
           WHERE ch.chore_schedule_id = cs.id
         )
     `).all();
-    console.log(`Found ${schedulesToPrune.length} completed day-of chores to prune`);
+    console.log(`Found ${schedulesToPrune.length} completed one-time chores to prune`);
 
     let prunedScheduleCount = 0;
     for (const schedule of schedulesToPrune) {
@@ -1076,73 +1074,9 @@ async function dailyBackgroundProcessing() {
     }
     results = {
       ...results,
-      prunedSchedules: prunedScheduleCount,
-      schedules: schedulesToPrune,
+      prunedSchedulesCount: prunedScheduleCount,
+      prunedSchedules: schedulesToPrune,
     }
-
-    // Handle until-completed schedules: create new instances for uncompleted chores
-    const untilCompletedSchedules = db.prepare(`
-      SELECT cs.id, cs.chore_id, cs.user_id, c.title, c.description, c.clam_value
-      FROM chore_schedules cs
-      JOIN chores c ON cs.chore_id = c.id
-      WHERE cs.crontab IS NULL
-        AND cs.duration = 'until-completed'
-        AND cs.visible = 1
-        AND NOT EXISTS (
-          SELECT 1 FROM chore_history ch
-          WHERE ch.chore_schedule_id = cs.id
-          AND ch.date = ?
-        )
-    `).all(today);
-    console.log(`Found ${untilCompletedSchedules.length} until-completed schedules to check`);
-
-    let untilCompletedCreated = 0;
-    for (const schedule of untilCompletedSchedules) {
-      // Check if a schedule already exists for today for this chore/user combination
-      const existingToday = db.prepare(`
-        SELECT cs.id FROM chore_schedules cs
-        WHERE cs.chore_id = ?
-        AND cs.user_id IS ?
-        AND cs.crontab IS NULL
-        AND cs.duration = 'until-completed'
-        AND cs.id != ?
-      `).get(schedule.chore_id, schedule.user_id, schedule.id);
-
-      if (!existingToday) {
-        // This schedule still needs to appear today since it wasn't completed
-        console.log(`Until-completed schedule ID ${schedule.id}: "${schedule.title}" remains active (not completed today)`);
-      }
-    }
-
-    // Delete until-completed schedules that WERE completed today
-    const completedUntilCompletedSchedules = db.prepare(`
-      SELECT cs.id, cs.chore_id, cs.user_id, c.title
-      FROM chore_schedules cs
-      JOIN chores c ON cs.chore_id = c.id
-      WHERE cs.crontab IS NULL
-        AND cs.duration = 'until-completed'
-        AND cs.visible = 1
-        AND EXISTS (
-          SELECT 1 FROM chore_history ch
-          WHERE ch.chore_schedule_id = cs.id
-          AND ch.date = ?
-        )
-    `).all(today);
-    console.log(`Found ${completedUntilCompletedSchedules.length} completed until-completed chores to delete`);
-
-    let untilCompletedDeleted = 0;
-    for (const schedule of completedUntilCompletedSchedules) {
-      db.prepare('DELETE FROM chore_schedules WHERE id = ?').run(schedule.id);
-      console.log(`Deleted completed until-completed schedule ID ${schedule.id}: "${schedule.title}"`);
-      untilCompletedDeleted++;
-    }
-
-    results = {
-      ...results,
-      untilCompletedCreated,
-      untilCompletedDeleted
-    }
-
 
     // We should also delete chores that have no schedules to avoid clutter
     const choresToPrune = db.prepare(`
@@ -1164,8 +1098,8 @@ async function dailyBackgroundProcessing() {
     }
     results = {
       ...results,
-      prunedChores: prunedChoreCount,
-      chores: choresToPrune,
+      prunedChoresCount: prunedChoreCount,
+      prunedChores: choresToPrune,
     }
 
     // bonus chores that persist from day to day should reset to unassigned
@@ -1189,16 +1123,68 @@ async function dailyBackgroundProcessing() {
     }
     results = {
       ...results,
-      resetSchedules: resetScheduleCount,
-      rSchedules: choresToReset,
+      resetSchedulesCount: resetScheduleCount,
+      resetSchedules: choresToReset,
     }
+
+
+    // Handle until-completed schedules: create one-time schedules for until-completed chores that trigger today
+    // ensure there are no existing one-time schedules for the chore with an until-completed enabled schedule
+    const untilCompletedSchedules = db.prepare(`
+      SELECT id, chore_id, user_id, crontab FROM chore_schedules cs
+      WHERE crontab IS NOT NULL
+      AND duration = 'until-completed'
+      AND visible = 1
+      AND NOT EXISTS (
+        SELECT 1 FROM chore_schedules
+        WHERE crontab IS NULL
+        AND chore_id = cs.chore_id
+      )
+    `).all();
+    console.log(`Found ${untilCompletedSchedules.length} until-completed schedules to check`);
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const justBeforeToday = new Date(startOfToday.getTime() - 1);
+    let options = {
+      currentDate: justBeforeToday,
+      utc: false,
+    }
+    let untilCompletedCreated = 0;
+    let triggeredSchedules = []
+    for (const schedule of untilCompletedSchedules) {
+      const interval = parser.parseExpression(schedule.crontab, options);
+      // console.log(Object.getOwnPropertyNames(Object.getPrototypeOf(interval)));
+      const next = interval.next().toISOString().split('T')[0];
+      console.log(`-------------- Next date for ${schedule.id} is ${next}`);
+
+      // We need to add a one-time task because today is the trigger!
+      if (today === next) {
+        console.log(`-------------- Add ${schedule.id} to today's chores!`);
+
+        const scheduleResult = db.prepare(`
+          INSERT INTO chore_schedules (chore_id, user_id)
+          VALUES (?, ?)
+          RETURNING *
+          `).all(schedule.chore_id, schedule.user_id)
+        console.log(`-------------- Added ${scheduleResult} to today's chores!`);
+        triggeredSchedules.push(scheduleResult);
+        untilCompletedCreated++;
+      }
+    }
+    results = {
+      ...results,
+      triggeredSchedulesCount: untilCompletedCreated,
+      triggeredSchedules: triggeredSchedules,
+    }
+
 
     console.log(`=== Daily background processing completed ===`);
     console.log(`  - Day-of schedules pruned: ${prunedScheduleCount}`);
     console.log(`  - Orphaned chores deleted: ${prunedChoreCount}`);
-    console.log(`  - Until-completed chores deleted (completed): ${untilCompletedDeleted}`);
     console.log(`  - Bonus chores reset: ${resetScheduleCount}`);
-    console.log(`Total: ${prunedScheduleCount + prunedChoreCount + untilCompletedDeleted + resetScheduleCount} operations performed`);
+    console.log(`  - Until-completed chores triggered: ${untilCompletedCreated}`);
+    console.log(`Total: ${prunedScheduleCount + prunedChoreCount + resetScheduleCount} operations performed`);
     return results;
   } catch (error) {
     console.error('Error during daily background processing:', error);
@@ -1275,7 +1261,7 @@ fastify.delete('/api/chores/:id', async (request, reply) => {
 // Chore Schedules routes
 fastify.get('/api/chore-schedules', async (request, reply) => {
   try {
-    const { user_id, visible, chore_id } = request.query;
+    const { user_id, visible, usage, chore_id } = request.query;
     let query = 'SELECT cs.*, c.title, c.description, c.clam_value FROM chore_schedules cs JOIN chores c ON cs.chore_id = c.id';
     const conditions = [];
     const params = [];
@@ -1287,6 +1273,12 @@ fastify.get('/api/chore-schedules', async (request, reply) => {
     if (visible !== undefined) {
       conditions.push('cs.visible = ?');
       params.push(visible === 'true' || visible === '1' ? 1 : 0);
+    }
+    if (usage !== undefined && usage === 'chart') {
+      conditions.push('cs.visible = ?');
+      params.push(1);
+      conditions.push('cs.duration != ?');
+      params.push('until-completed');
     }
     if (chore_id !== undefined) {
       conditions.push('cs.chore_id = ?');
@@ -1424,20 +1416,6 @@ fastify.delete('/api/chore-schedules/:id', async (request, reply) => {
   } catch (error) {
     console.error('Error deleting schedule:', error);
     reply.status(500).send({ error: 'Failed to delete schedule' });
-  }
-});
-
-fastify.post('/api/chore-schedules/prune', async (request, reply) => {
-  try {
-    const result = await dailyBackgroundProcessing();
-    return {
-      success: true,
-      message: `Daily background processing completed: ${result.prunedSchedules} day-of schedules pruned, ${result.prunedChores} orphaned chores deleted, ${result.untilCompletedDeleted || 0} until-completed chores deleted, ${result.resetSchedules} bonus chores reset`,
-      ...result
-    };
-  } catch (error) {
-    console.error('Error running daily background processing:', error);
-    reply.status(500).send({ error: 'Failed to run daily background processing' });
   }
 });
 
@@ -2722,6 +2700,18 @@ fastify.post('/api/admin-pin/verify', async (request, reply) => {
   }
 });
 
+fastify.get('/api/system/backgroundTasks', async (request, reply) => {
+  try {
+    const result = await dailyBackgroundProcessing();
+    return {
+      success: true,
+      ...result
+    };
+  } catch (error) {
+    console.error('Error running daily background processing:', error);
+    reply.status(500).send({ error: 'Failed to run daily background processing' });
+  }
+});
 // Start server
 const start = async () => {
   try {
