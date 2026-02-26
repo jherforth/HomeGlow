@@ -1015,6 +1015,7 @@ async function pruneAndResetChores() {
 async function pruneCompletedOneTimeChores() {
   try {
     console.log('=== Starting prune of completed one-time chores ===');
+    let results = {};
     const today = new Date().toISOString().split('T')[0];
 
     // We want to delete schedules that are completed and will never run again to avoid clutter
@@ -1037,6 +1038,11 @@ async function pruneCompletedOneTimeChores() {
       console.log(`Pruned schedule ID ${schedule.id}: "${schedule.title}" (user_id: ${schedule.user_id})`);
       prunedScheduleCount++;
     }
+    results = {
+      ...results,
+      prunedSchedules: prunedScheduleCount,
+      schedules: schedulesToPrune,
+    }
 
 
     // We should also delete chores that have no schedules to avoid clutter
@@ -1057,16 +1063,41 @@ async function pruneCompletedOneTimeChores() {
       console.log(`Pruned chore ID ${chore.id}: "${chore.title}"`);
       prunedChoreCount++;
     }
-
-    console.log(`=== Prune completed: ${prunedScheduleCount} schedules affected, ${prunedChoreCount} chores affected ===`);
-    return {
-      prunedSchedules: prunedScheduleCount,
-      schedules: schedulesToPrune,
+    results = {
+      ...results,
       prunedChores: prunedChoreCount,
-      chores: choresToPrune
-    };
+      chores: choresToPrune,
+    }
+
+    // bonus chores that persist from day to day should reset to unassigned
+    const choresToReset = db.prepare(`
+      SELECT cs.id,
+        cs.user_id,
+        c.title
+      FROM chore_schedules cs
+      JOIN chores c ON cs.chore_id = c.id
+      WHERE cs.crontab IS NULL
+        AND cs.visible = 1
+        AND cs.user_id IS NOT NULL
+        AND c.clam_value > 0;
+    `).all();
+    console.log(`Found ${choresToReset.length} bonus chores to reset`);
+    let resetScheduleCount = 0;
+    for (const schedule of choresToReset) {
+      db.prepare('UPDATE chore_schedules set user_id = NULL WHERE id = ?').run(schedule.id);
+      console.log(`Reset schedule ID ${schedule.id}: "${schedule.title}" (user_id: ${schedule.user_id})`);
+      resetScheduleCount++;
+    }
+    results = {
+      ...results,
+      resetSchedules: resetScheduleCount,
+      rSchedules: choresToReset,
+    }
+
+    console.log(`=== Completed: ${prunedScheduleCount} schedules affected, ${prunedChoreCount} chores affected, ${resetScheduleCount} bonus chores reset ===`);
+    return results;
   } catch (error) {
-    console.error('Error during nightly chore pruning:', error);
+    console.error('Error during nightly tasks:', error);
     throw error;
   }
 }
@@ -1296,7 +1327,7 @@ fastify.post('/api/chore-schedules/prune', async (request, reply) => {
     const result = await pruneCompletedOneTimeChores();
     return {
       success: true,
-      message: `Pruned ${result.prunedSchedules} schedules and ${result.prunedChores} chores`,
+      message: `Pruned ${result.prunedSchedules} schedules, ${result.prunedChores} chores, and reset ${result.resetSchedules} bonus chores (rSchedules)`,
       ...result
     };
   } catch (error) {
