@@ -930,6 +930,40 @@ async function migrateClamsToHistory() {
   }
 }
 
+async function migrateToDurationField() {
+  try {
+    console.log('=== Checking for duration field migration ===');
+
+    const migrationVersionRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('duration_migration_version');
+    const currentVersion = migrationVersionRow ? parseInt(migrationVersionRow.value) : 0;
+
+    if (currentVersion >= 1) {
+      console.log('Duration migration already completed (version:', currentVersion, ')');
+      return;
+    }
+
+    console.log('=== Starting duration field migration ===');
+
+    const columns = db.prepare("PRAGMA table_info(chore_schedules)").all();
+    const hasDuration = columns.some(col => col.name === 'duration');
+
+    if (!hasDuration) {
+      console.log('Adding duration column to chore_schedules table...');
+      db.exec('ALTER TABLE chore_schedules ADD COLUMN duration TEXT DEFAULT "day-of"');
+      console.log('Duration column added successfully');
+    }
+
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('duration_migration_version', '1');
+
+    console.log('=== Duration migration completed successfully ===');
+
+  } catch (error) {
+    console.error('=== Duration migration failed ===');
+    console.error('Error:', error);
+    throw error;
+  }
+}
+
 // Initialize default settings
 function initializeDefaultSettings() {
   try {
@@ -1012,25 +1046,27 @@ async function pruneAndResetChores() {
   }
 }
 
-async function pruneCompletedOneTimeChores() {
+async function dailyBackgroundProcessing() {
   try {
-    console.log('=== Starting prune of completed one-time chores ===');
+    console.log('=== Starting daily background processing ===');
     let results = {};
     const today = new Date().toISOString().split('T')[0];
 
     // We want to delete schedules that are completed and will never run again to avoid clutter
+    // BUT: exclude "until-completed" schedules - they should be handled separately
     const schedulesToPrune = db.prepare(`
-      SELECT cs.id, cs.chore_id, cs.user_id, c.title
+      SELECT cs.id, cs.chore_id, cs.user_id, cs.duration, c.title
       FROM chore_schedules cs
       JOIN chores c ON cs.chore_id = c.id
       WHERE cs.crontab IS NULL
         AND cs.visible = 1
+        AND cs.duration != 'until-completed'
         AND EXISTS (
           SELECT 1 FROM chore_history ch
           WHERE ch.chore_schedule_id = cs.id
         )
     `).all();
-    console.log(`Found ${schedulesToPrune.length} completed one-time chores to prune`);
+    console.log(`Found ${schedulesToPrune.length} completed day-of chores to prune`);
 
     let prunedScheduleCount = 0;
     for (const schedule of schedulesToPrune) {
@@ -1042,6 +1078,69 @@ async function pruneCompletedOneTimeChores() {
       ...results,
       prunedSchedules: prunedScheduleCount,
       schedules: schedulesToPrune,
+    }
+
+    // Handle until-completed schedules: create new instances for uncompleted chores
+    const untilCompletedSchedules = db.prepare(`
+      SELECT cs.id, cs.chore_id, cs.user_id, c.title, c.description, c.clam_value
+      FROM chore_schedules cs
+      JOIN chores c ON cs.chore_id = c.id
+      WHERE cs.crontab IS NULL
+        AND cs.duration = 'until-completed'
+        AND cs.visible = 1
+        AND NOT EXISTS (
+          SELECT 1 FROM chore_history ch
+          WHERE ch.chore_schedule_id = cs.id
+          AND ch.date = ?
+        )
+    `).all(today);
+    console.log(`Found ${untilCompletedSchedules.length} until-completed schedules to check`);
+
+    let untilCompletedCreated = 0;
+    for (const schedule of untilCompletedSchedules) {
+      // Check if a schedule already exists for today for this chore/user combination
+      const existingToday = db.prepare(`
+        SELECT cs.id FROM chore_schedules cs
+        WHERE cs.chore_id = ?
+        AND cs.user_id IS ?
+        AND cs.crontab IS NULL
+        AND cs.duration = 'until-completed'
+        AND cs.id != ?
+      `).get(schedule.chore_id, schedule.user_id, schedule.id);
+
+      if (!existingToday) {
+        // This schedule still needs to appear today since it wasn't completed
+        console.log(`Until-completed schedule ID ${schedule.id}: "${schedule.title}" remains active (not completed today)`);
+      }
+    }
+
+    // Delete until-completed schedules that WERE completed today
+    const completedUntilCompletedSchedules = db.prepare(`
+      SELECT cs.id, cs.chore_id, cs.user_id, c.title
+      FROM chore_schedules cs
+      JOIN chores c ON cs.chore_id = c.id
+      WHERE cs.crontab IS NULL
+        AND cs.duration = 'until-completed'
+        AND cs.visible = 1
+        AND EXISTS (
+          SELECT 1 FROM chore_history ch
+          WHERE ch.chore_schedule_id = cs.id
+          AND ch.date = ?
+        )
+    `).all(today);
+    console.log(`Found ${completedUntilCompletedSchedules.length} completed until-completed chores to delete`);
+
+    let untilCompletedDeleted = 0;
+    for (const schedule of completedUntilCompletedSchedules) {
+      db.prepare('DELETE FROM chore_schedules WHERE id = ?').run(schedule.id);
+      console.log(`Deleted completed until-completed schedule ID ${schedule.id}: "${schedule.title}"`);
+      untilCompletedDeleted++;
+    }
+
+    results = {
+      ...results,
+      untilCompletedCreated,
+      untilCompletedDeleted
     }
 
 
@@ -1094,22 +1193,27 @@ async function pruneCompletedOneTimeChores() {
       rSchedules: choresToReset,
     }
 
-    console.log(`=== Completed: ${prunedScheduleCount} schedules affected, ${prunedChoreCount} chores affected, ${resetScheduleCount} bonus chores reset ===`);
+    console.log(`=== Daily background processing completed ===`);
+    console.log(`  - Day-of schedules pruned: ${prunedScheduleCount}`);
+    console.log(`  - Orphaned chores deleted: ${prunedChoreCount}`);
+    console.log(`  - Until-completed chores deleted (completed): ${untilCompletedDeleted}`);
+    console.log(`  - Bonus chores reset: ${resetScheduleCount}`);
+    console.log(`Total: ${prunedScheduleCount + prunedChoreCount + untilCompletedDeleted + resetScheduleCount} operations performed`);
     return results;
   } catch (error) {
-    console.error('Error during nightly tasks:', error);
+    console.error('Error during daily background processing:', error);
     throw error;
   }
 }
 
 function startNightlyCronJob() {
   cron.schedule('0 0 * * *', async () => {
-    console.log('Running nightly chore prune job at midnight');
-    await pruneCompletedOneTimeChores();
+    console.log('Running daily background processing at midnight');
+    await dailyBackgroundProcessing();
   }, {
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
   });
-  console.log('Nightly chore prune cron job scheduled for midnight');
+  console.log('Daily background processing cron job scheduled for midnight');
 }
 
 
@@ -1216,7 +1320,7 @@ fastify.get('/api/chore-schedules/:id', async (request, reply) => {
 });
 
 fastify.post('/api/chore-schedules', async (request, reply) => {
-  const { chore_id, user_id, crontab, visible } = request.body;
+  const { chore_id, user_id, crontab, duration, visible } = request.body;
   try {
     if (!chore_id) {
       return reply.status(400).send({ error: 'chore_id is required' });
@@ -1230,8 +1334,8 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
       }
     }
 
-    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, visible) VALUES (?, ?, ?, ?)');
-    const info = stmt.run(chore_id, user_id || null, crontab || null, visible !== undefined ? visible : 1);
+    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, visible) VALUES (?, ?, ?, ?, ?)');
+    const info = stmt.run(chore_id, user_id || null, crontab || null, duration || 'day-of', visible !== undefined ? visible : 1);
     return { id: info.lastInsertRowid, success: true };
   } catch (error) {
     console.error('Error adding schedule:', error);
@@ -1271,7 +1375,7 @@ fastify.post('/api/chore-schedules/bulk', async (request, reply) => {
 
 fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
   const { id } = request.params;
-  const { chore_id, user_id, crontab, visible } = request.body;
+  const { chore_id, user_id, crontab, duration, visible } = request.body;
   try {
     if (crontab !== undefined && crontab !== null) {
       try {
@@ -1287,6 +1391,7 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
     if (chore_id !== undefined) { updates.push('chore_id = ?'); params.push(chore_id); }
     if (user_id !== undefined) { updates.push('user_id = ?'); params.push(user_id || null); }
     if (crontab !== undefined) { updates.push('crontab = ?'); params.push(crontab || null); }
+    if (duration !== undefined) { updates.push('duration = ?'); params.push(duration); }
     if (visible !== undefined) { updates.push('visible = ?'); params.push(visible ? 1 : 0); }
 
     if (updates.length === 0) {
@@ -1324,15 +1429,15 @@ fastify.delete('/api/chore-schedules/:id', async (request, reply) => {
 
 fastify.post('/api/chore-schedules/prune', async (request, reply) => {
   try {
-    const result = await pruneCompletedOneTimeChores();
+    const result = await dailyBackgroundProcessing();
     return {
       success: true,
-      message: `Pruned ${result.prunedSchedules} schedules, ${result.prunedChores} chores, and reset ${result.resetSchedules} bonus chores (rSchedules)`,
+      message: `Daily background processing completed: ${result.prunedSchedules} day-of schedules pruned, ${result.prunedChores} orphaned chores deleted, ${result.untilCompletedDeleted || 0} until-completed chores deleted, ${result.resetSchedules} bonus chores reset`,
       ...result
     };
   } catch (error) {
-    console.error('Error running manual prune:', error);
-    reply.status(500).send({ error: 'Failed to prune chores' });
+    console.error('Error running daily background processing:', error);
+    reply.status(500).send({ error: 'Failed to run daily background processing' });
   }
 });
 
@@ -2620,6 +2725,7 @@ const start = async () => {
     db = await initializeDatabase(); // Initialize db once here
     await migrateChoresDatabase(); // Run migration if needed
     await migrateClamsToHistory(); // Migrate clam_total to chore_history
+    await migrateToDurationField(); // Add duration field to chore_schedules
     initializeDefaultSettings(); // Initialize default settings
     startNightlyCronJob(); // Start the nightly chore pruning job
     await fastify.listen({ port: process.env.PORT || 5000, host: '0.0.0.0' });

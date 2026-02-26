@@ -97,6 +97,7 @@ const defaultScheduleForm = {
   selectedDays: [],
   customCrontab: '',
   isOneTime: false,
+  duration: 'day-of',
   visible: true
 };
 
@@ -205,6 +206,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
       selectedDays,
       customCrontab,
       isOneTime,
+      duration: schedule.duration || 'day-of',
       visible: !!schedule.visible
     });
     setCrontabError(null);
@@ -227,6 +229,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
         chore_id: scheduleForm.chore_id,
         user_id: scheduleForm.user_id === '' ? null : scheduleForm.user_id,
         crontab: cron || null,
+        duration: scheduleForm.isOneTime ? scheduleForm.duration : 'day-of',
         visible: scheduleForm.visible ? 1 : 0
       };
 
@@ -480,6 +483,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
               <TableCell>Assigned To</TableCell>
               <TableCell>Crontab</TableCell>
               <TableCell>Next Occurrence</TableCell>
+              <TableCell>Duration</TableCell>
               <TableCell>Clams</TableCell>
               <TableCell>Visible</TableCell>
               <TableCell>Actions</TableCell>
@@ -488,7 +492,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
           <TableBody>
             {filteredSchedules.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
                   <Typography color="text.secondary">No schedules found.</Typography>
                 </TableCell>
               </TableRow>
@@ -518,6 +522,15 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                     <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
                       {getNextOccurrence(s.crontab)}
                     </Typography>
+                  </TableCell>
+                  <TableCell>
+                    {!s.crontab && s.duration === 'until-completed' ? (
+                      <Chip label="Until Completed" size="small" color="warning" />
+                    ) : !s.crontab ? (
+                      <Chip label="Day Of" size="small" variant="outlined" />
+                    ) : (
+                      <Typography variant="caption" color="text.secondary">—</Typography>
+                    )}
                   </TableCell>
                   <TableCell>
                     {s.clam_value > 0
@@ -671,6 +684,25 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
               }
               label="One-time task (no recurrence)"
             />
+
+            {scheduleForm.isOneTime && (
+              <FormControl fullWidth size="small">
+                <InputLabel>Duration</InputLabel>
+                <Select
+                  value={scheduleForm.duration}
+                  label="Duration"
+                  onChange={(e) => updateScheduleForm({ duration: e.target.value })}
+                >
+                  <MenuItem value="day-of">Day Of</MenuItem>
+                  <MenuItem value="until-completed">Until Completed</MenuItem>
+                </Select>
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, ml: 1.5 }}>
+                  {scheduleForm.duration === 'until-completed'
+                    ? 'This chore will appear daily until completed'
+                    : 'This chore will only appear on the day it is created'}
+                </Typography>
+              </FormControl>
+            )}
 
             {!scheduleForm.isOneTime && (
               <>
