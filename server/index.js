@@ -1014,9 +1014,10 @@ async function pruneAndResetChores() {
 
 async function pruneCompletedOneTimeChores() {
   try {
-    console.log('=== Starting nightly prune of completed one-time chores ===');
+    console.log('=== Starting prune of completed one-time chores ===');
     const today = new Date().toISOString().split('T')[0];
 
+    // We want to delete schedules that are completed and will never run again to avoid clutter
     const schedulesToPrune = db.prepare(`
       SELECT cs.id, cs.chore_id, cs.user_id, c.title
       FROM chore_schedules cs
@@ -1028,18 +1029,42 @@ async function pruneCompletedOneTimeChores() {
           WHERE ch.chore_schedule_id = cs.id
         )
     `).all();
-
     console.log(`Found ${schedulesToPrune.length} completed one-time chores to prune`);
 
-    let prunedCount = 0;
+    let prunedScheduleCount = 0;
     for (const schedule of schedulesToPrune) {
-      db.prepare('UPDATE chore_schedules SET visible = 0 WHERE id = ?').run(schedule.id);
+      db.prepare('DELETE FROM chore_schedules WHERE id = ?').run(schedule.id);
       console.log(`Pruned schedule ID ${schedule.id}: "${schedule.title}" (user_id: ${schedule.user_id})`);
-      prunedCount++;
+      prunedScheduleCount++;
     }
 
-    console.log(`=== Nightly prune completed: ${prunedCount} chores hidden ===`);
-    return { pruned: prunedCount, schedules: schedulesToPrune };
+
+    // We should also delete chores that have no schedules to avoid clutter
+    const choresToPrune = db.prepare(`
+      SELECT c.id, c.title
+      FROM chores c
+      WHERE NOT EXISTS (
+          SELECT 1
+          FROM chore_schedules cs
+          WHERE cs.chore_id = c.id
+      );
+    `).all();
+    console.log(`Found ${choresToPrune.length} orphaned chores to prune`);
+
+    let prunedChoreCount = 0;
+    for (const chore of choresToPrune) {
+      db.prepare('DELETE FROM chores WHERE id = ?').run(chore.id);
+      console.log(`Pruned chore ID ${chore.id}: "${chore.title}"`);
+      prunedChoreCount++;
+    }
+
+    console.log(`=== Prune completed: ${prunedScheduleCount} schedules affected, ${prunedChoreCount} chores affected ===`);
+    return {
+      prunedSchedules: prunedScheduleCount,
+      schedules: schedulesToPrune,
+      prunedChores: prunedChoreCount,
+      chores: choresToPrune
+    };
   } catch (error) {
     console.error('Error during nightly chore pruning:', error);
     throw error;
@@ -1271,9 +1296,8 @@ fastify.post('/api/chore-schedules/prune', async (request, reply) => {
     const result = await pruneCompletedOneTimeChores();
     return {
       success: true,
-      message: `Pruned ${result.pruned} completed one-time chores`,
-      pruned: result.pruned,
-      schedules: result.schedules
+      message: `Pruned ${result.prunedSchedules} schedules and ${result.prunedChores} chores`,
+      ...result
     };
   } catch (error) {
     console.error('Error running manual prune:', error);
