@@ -2356,6 +2356,7 @@ fastify.get('/api/calendar-events', async (request, reply) => {
 
           return vevents.map(vevent => {
             const event = new ICAL.Event(vevent);
+            const isAllDay = vevent.getFirstPropertyValue('dtstart').isDate || false;
             return {
               id: event.uid || Math.random().toString(),
               title: event.summary,
@@ -2363,6 +2364,7 @@ fastify.get('/api/calendar-events', async (request, reply) => {
               end: event.endDate.toJSDate(),
               description: event.description,
               location: event.location,
+              all_day: isAllDay,
               source_id: source.id,
               source_name: source.name,
               source_color: source.color

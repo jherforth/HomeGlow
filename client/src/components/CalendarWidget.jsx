@@ -623,32 +623,64 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                           }
                         }}
                       >
-                        <Box
-                          sx={{
-                            width: displaySettings.bulletSize,
-                            height: displaySettings.bulletSize,
-                            minWidth: displaySettings.bulletSize,
-                            minHeight: displaySettings.bulletSize,
-                            borderRadius: event.all_day ? 0 : '50%',
-                            backgroundColor: event.source_color || eventColors.backgroundColor,
-                            mt: displaySettings.bulletSize * 0.05,
-                            clipPath: event.all_day ? 'polygon(0 0, 100% 50%, 0 100%)' : 'none',
-                            border: event.all_day ? '1px solid rgba(0, 0, 0, 0.3)' : 'none'
-                          }}
-                        />
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            fontSize: `${displaySettings.textSize}px`,
-                            lineHeight: 1.2,
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            fontStyle: event.all_day ? 'italic' : 'normal'
-                          }}
-                        >
-                          {event.title}
-                        </Typography>
+                        {event.all_day ? (
+                          <Box
+                            sx={{
+                              flex: 1,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              backgroundColor: event.source_color || eventColors.backgroundColor,
+                              borderRadius: '12px',
+                              px: 1,
+                              py: 0.3,
+                              border: '1px solid rgba(0, 0, 0, 0.2)',
+                              minHeight: displaySettings.bulletSize * 1.5
+                            }}
+                          >
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                fontSize: `${displaySettings.textSize}px`,
+                                lineHeight: 1.2,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                fontStyle: 'italic',
+                                color: '#ffffff',
+                                fontWeight: 500
+                              }}
+                            >
+                              {event.title}
+                            </Typography>
+                          </Box>
+                        ) : (
+                          <>
+                            <Box
+                              sx={{
+                                width: displaySettings.bulletSize,
+                                height: displaySettings.bulletSize,
+                                minWidth: displaySettings.bulletSize,
+                                minHeight: displaySettings.bulletSize,
+                                borderRadius: '50%',
+                                backgroundColor: event.source_color || eventColors.backgroundColor,
+                                mt: displaySettings.bulletSize * 0.05
+                              }}
+                            />
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                fontSize: `${displaySettings.textSize}px`,
+                                lineHeight: 1.2,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
+                              {event.title}
+                            </Typography>
+                          </>
+                        )}
                       </Box>
                     ))}
                     {dayEvents.length > 3 && (
@@ -738,27 +770,72 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                           }
                         }}
                       >
-                        <Box
-                          sx={{
-                            width: displaySettings.bulletSize,
-                            height: displaySettings.bulletSize,
-                            minWidth: displaySettings.bulletSize,
-                            minHeight: displaySettings.bulletSize,
-                            borderRadius: event.all_day ? 0 : '50%',
-                            backgroundColor: event.source_color || eventColors.backgroundColor,
-                            mt: displaySettings.bulletSize * 0.0625,
-                            clipPath: event.all_day ? 'polygon(0 0, 100% 50%, 0 100%)' : 'none',
-                            border: event.all_day ? '1px solid rgba(0, 0, 0, 0.3)' : 'none'
-                          }}
-                        />
-                        <Box sx={{ flex: 1, minWidth: 0 }}>
-                          <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block', fontSize: `${displaySettings.textSize}px`, fontStyle: event.all_day ? 'italic' : 'normal' }}>
-                            {event.all_day ? 'All Day' : moment(event.start).format('h:mm A')}
-                          </Typography>
-                          <Typography variant="caption" sx={{ display: 'block', lineHeight: 1.2, fontSize: `${displaySettings.textSize}px`, fontStyle: event.all_day ? 'italic' : 'normal' }}>
-                            {event.title}
-                          </Typography>
-                        </Box>
+                        {event.all_day ? (
+                          <Box
+                            sx={{
+                              flex: 1,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              backgroundColor: event.source_color || eventColors.backgroundColor,
+                              borderRadius: '12px',
+                              px: 1.5,
+                              py: 0.5,
+                              border: '1px solid rgba(0, 0, 0, 0.2)',
+                              gap: 0.25
+                            }}
+                          >
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                fontWeight: 'bold',
+                                display: 'block',
+                                fontSize: `${displaySettings.textSize}px`,
+                                fontStyle: 'italic',
+                                color: '#ffffff'
+                              }}
+                            >
+                              All Day
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                display: 'block',
+                                lineHeight: 1.2,
+                                fontSize: `${displaySettings.textSize}px`,
+                                fontStyle: 'italic',
+                                color: '#ffffff',
+                                textAlign: 'center',
+                                fontWeight: 500
+                              }}
+                            >
+                              {event.title}
+                            </Typography>
+                          </Box>
+                        ) : (
+                          <>
+                            <Box
+                              sx={{
+                                width: displaySettings.bulletSize,
+                                height: displaySettings.bulletSize,
+                                minWidth: displaySettings.bulletSize,
+                                minHeight: displaySettings.bulletSize,
+                                borderRadius: '50%',
+                                backgroundColor: event.source_color || eventColors.backgroundColor,
+                                mt: displaySettings.bulletSize * 0.0625
+                              }}
+                            />
+                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                              <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block', fontSize: `${displaySettings.textSize}px` }}>
+                                {moment(event.start).format('h:mm A')}
+                              </Typography>
+                              <Typography variant="caption" sx={{ display: 'block', lineHeight: 1.2, fontSize: `${displaySettings.textSize}px` }}>
+                                {event.title}
+                              </Typography>
+                            </Box>
+                          </>
+                        )}
                       </Box>
                     ))
                   )}
