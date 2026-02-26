@@ -229,7 +229,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
         chore_id: scheduleForm.chore_id,
         user_id: scheduleForm.user_id === '' ? null : scheduleForm.user_id,
         crontab: cron || null,
-        duration: scheduleForm.isOneTime ? scheduleForm.duration : 'day-of',
+        duration: !scheduleForm.isOneTime ? scheduleForm.duration : 'day-of',
         visible: scheduleForm.visible ? 1 : 0
       };
 
@@ -524,9 +524,9 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                     </Typography>
                   </TableCell>
                   <TableCell>
-                    {!s.crontab && s.duration === 'until-completed' ? (
+                    {s.crontab && s.duration === 'until-completed' ? (
                       <Chip label="Until Completed" size="small" color="warning" />
-                    ) : !s.crontab ? (
+                    ) : s.crontab ? (
                       <Chip label="Day Of" size="small" variant="outlined" />
                     ) : (
                       <Typography variant="caption" color="text.secondary">—</Typography>
@@ -685,7 +685,18 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
               label="One-time task (no recurrence)"
             />
 
-            {scheduleForm.isOneTime && (
+            {!scheduleForm.isOneTime && (
+              <>
+                <RadioGroup
+                  row
+                  value={scheduleForm.scheduleMode}
+                  onChange={(e) => updateScheduleForm({ scheduleMode: e.target.value })}
+                >
+                  <FormControlLabel value="preset" control={<Radio size="small" />} label="Preset" />
+                  <FormControlLabel value="days" control={<Radio size="small" />} label="Days of Week" />
+                  <FormControlLabel value="custom" control={<Radio size="small" />} label="Custom Crontab" />
+                </RadioGroup>
+
               <FormControl fullWidth size="small">
                 <InputLabel>Duration</InputLabel>
                 <Select
@@ -702,19 +713,6 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                     : 'This chore will only appear on the day it is created'}
                 </Typography>
               </FormControl>
-            )}
-
-            {!scheduleForm.isOneTime && (
-              <>
-                <RadioGroup
-                  row
-                  value={scheduleForm.scheduleMode}
-                  onChange={(e) => updateScheduleForm({ scheduleMode: e.target.value })}
-                >
-                  <FormControlLabel value="preset" control={<Radio size="small" />} label="Preset" />
-                  <FormControlLabel value="days" control={<Radio size="small" />} label="Days of Week" />
-                  <FormControlLabel value="custom" control={<Radio size="small" />} label="Custom Crontab" />
-                </RadioGroup>
 
                 {scheduleForm.scheduleMode === 'preset' && (
                   <FormControl fullWidth size="small">
