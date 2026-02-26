@@ -214,6 +214,19 @@ const PinModal = ({ open, onClose, onVerify, mode = 'verify', title }) => {
             </Alert>
           )}
 
+          <Typography
+            variant="caption"
+            sx={{
+              display: 'block',
+              textAlign: 'center',
+              color: 'var(--text-muted)',
+              mb: 2,
+              fontSize: '0.85rem'
+            }}
+          >
+            Use keyboard or touch to enter PIN
+          </Typography>
+
           {renderPinDots(currentPin)}
 
           <Paper
