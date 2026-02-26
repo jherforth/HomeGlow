@@ -148,6 +148,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
           end: new Date(event.end),
           description: event.description || '',
           location: event.location || '',
+          all_day: event.all_day || false,
           source_id: event.source_id,
           source_name: event.source_name,
           source_color: event.source_color
@@ -272,10 +273,16 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
   const handleSelectSlot = ({ start }) => {
     const selectedDay = moment(start).startOf('day');
-    const dayEvents = events.filter(event => 
-      moment(event.start).isSame(selectedDay, 'day')
-    );
-    
+    const dayEvents = events
+      .filter(event =>
+        moment(event.start).isSame(selectedDay, 'day')
+      )
+      .sort((a, b) => {
+        if (a.all_day && !b.all_day) return -1;
+        if (!a.all_day && b.all_day) return 1;
+        return a.start - b.start;
+      });
+
     setSelectedDate(selectedDay.toDate());
     setSelectedDateEvents(dayEvents);
     setShowDayModal(true);
@@ -283,10 +290,16 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
   const handleSelectEvent = (event) => {
     const selectedDay = moment(event.start).startOf('day');
-    const dayEvents = events.filter(e => 
-      moment(e.start).isSame(selectedDay, 'day')
-    );
-    
+    const dayEvents = events
+      .filter(e =>
+        moment(e.start).isSame(selectedDay, 'day')
+      )
+      .sort((a, b) => {
+        if (a.all_day && !b.all_day) return -1;
+        if (!a.all_day && b.all_day) return 1;
+        return a.start - b.start;
+      });
+
     setSelectedDate(selectedDay.toDate());
     setSelectedDateEvents(dayEvents);
     setShowDayModal(true);
@@ -326,15 +339,21 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   const getNext7Days = () => {
     const days = [];
     const startDate = new Date(currentDate);
-    
+
     for (let i = 0; i < 7; i++) {
       const date = new Date(startDate);
       date.setDate(startDate.getDate() + i);
-      
-      const dayEvents = events.filter(event => 
-        moment(event.start).isSame(moment(date), 'day')
-      );
-      
+
+      const dayEvents = events
+        .filter(event =>
+          moment(event.start).isSame(moment(date), 'day')
+        )
+        .sort((a, b) => {
+          if (a.all_day && !b.all_day) return -1;
+          if (!a.all_day && b.all_day) return 1;
+          return a.start - b.start;
+        });
+
       days.push({
         date: date,
         dayName: moment(date).format('ddd'),
@@ -344,7 +363,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
         events: dayEvents
       });
     }
-    
+
     return days;
   };
 
@@ -529,9 +548,15 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
             let day = startDate.clone();
 
             while (day.isSameOrBefore(endDate, 'day')) {
-              const dayEvents = events.filter(event =>
-                moment(event.start).isSame(day, 'day')
-              );
+              const dayEvents = events
+                .filter(event =>
+                  moment(event.start).isSame(day, 'day')
+                )
+                .sort((a, b) => {
+                  if (a.all_day && !b.all_day) return -1;
+                  if (!a.all_day && b.all_day) return 1;
+                  return a.start - b.start;
+                });
 
               const isCurrentMonth = day.month() === moment(currentDate).month();
               const isToday = day.isSame(moment(), 'day');
@@ -604,9 +629,11 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                             height: displaySettings.bulletSize,
                             minWidth: displaySettings.bulletSize,
                             minHeight: displaySettings.bulletSize,
-                            borderRadius: '50%',
+                            borderRadius: event.all_day ? 0 : '50%',
                             backgroundColor: event.source_color || eventColors.backgroundColor,
-                            mt: displaySettings.bulletSize * 0.05
+                            mt: displaySettings.bulletSize * 0.05,
+                            clipPath: event.all_day ? 'polygon(0 0, 100% 50%, 0 100%)' : 'none',
+                            border: event.all_day ? '1px solid rgba(0, 0, 0, 0.3)' : 'none'
                           }}
                         />
                         <Typography
@@ -616,7 +643,8 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                             lineHeight: 1.2,
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap'
+                            whiteSpace: 'nowrap',
+                            fontStyle: event.all_day ? 'italic' : 'normal'
                           }}
                         >
                           {event.title}
@@ -716,16 +744,18 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                             height: displaySettings.bulletSize,
                             minWidth: displaySettings.bulletSize,
                             minHeight: displaySettings.bulletSize,
-                            borderRadius: '50%',
+                            borderRadius: event.all_day ? 0 : '50%',
                             backgroundColor: event.source_color || eventColors.backgroundColor,
-                            mt: displaySettings.bulletSize * 0.0625
+                            mt: displaySettings.bulletSize * 0.0625,
+                            clipPath: event.all_day ? 'polygon(0 0, 100% 50%, 0 100%)' : 'none',
+                            border: event.all_day ? '1px solid rgba(0, 0, 0, 0.3)' : 'none'
                           }}
                         />
                         <Box sx={{ flex: 1, minWidth: 0 }}>
-                          <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block', fontSize: `${displaySettings.textSize}px` }}>
-                            {moment(event.start).format('h:mm A')}
+                          <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block', fontSize: `${displaySettings.textSize}px`, fontStyle: event.all_day ? 'italic' : 'normal' }}>
+                            {event.all_day ? 'All Day' : moment(event.start).format('h:mm A')}
                           </Typography>
-                          <Typography variant="caption" sx={{ display: 'block', lineHeight: 1.2, fontSize: `${displaySettings.textSize}px` }}>
+                          <Typography variant="caption" sx={{ display: 'block', lineHeight: 1.2, fontSize: `${displaySettings.textSize}px`, fontStyle: event.all_day ? 'italic' : 'normal' }}>
                             {event.title}
                           </Typography>
                         </Box>
@@ -795,14 +825,14 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                   </Box>
                   <ListItemText
                     primary={
-                      <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1, fontStyle: event.all_day ? 'italic' : 'normal' }}>
                         {event.title}
                       </Typography>
                     }
                     secondary={
                       <Box>
-                        <Typography variant="body1" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          🕐 {moment(event.start).format('h:mm A')} - {moment(event.end).format('h:mm A')}
+                        <Typography variant="body1" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5, fontStyle: event.all_day ? 'italic' : 'normal' }}>
+                          🕐 {event.all_day ? 'All Day' : `${moment(event.start).format('h:mm A')} - ${moment(event.end).format('h:mm A')}`}
                         </Typography>
                         {event.location && (
                           <Typography variant="body2" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>

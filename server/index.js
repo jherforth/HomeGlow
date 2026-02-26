@@ -2304,6 +2304,7 @@ fastify.get('/api/calendar-events', async (request, reply) => {
         end: item.end ?? item.event.end,
         description: item.description ?? item.event?.description ?? null,
         location: item.location ?? item.event?.location ?? null,
+        all_day: item.start?.dateOnly ?? item.event?.start?.dateOnly ?? false,
         source_id: source.id,
         source_name: source.name,
         source_color: source.color
