@@ -687,7 +687,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
                 const renderMonthPill = (event, key, clickHandler) => {
                   if (!event) {
-                    return <Box key={key} sx={{ mb: 0.25, height: pillHeight, minHeight: pillHeight }} />;
+                    return null;
                   }
                   if (shownCount >= maxItems) { overflowCount++; return null; }
                   shownCount++;
