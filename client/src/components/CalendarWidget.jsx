@@ -957,7 +957,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                               backgroundColor: color,
                               borderRadius: '12px',
                               px: 1,
-                              py: 0.1,
+                              py: 0.125,
                               border: '1px solid rgba(0,0,0,0.2)',
                               overflow: 'hidden',
                               '&:hover': { filter: 'brightness(1.1)' }
