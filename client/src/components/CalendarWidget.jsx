@@ -619,8 +619,10 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                   <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, minWidth: 0 }}>
                     {dayEvents.slice(0, 3).map((event, eventIndex) => {
                       const multiDay = isMultiDay(event);
-                      const { isStart, isEnd } = multiDay ? getMultiDayPosition(event, dayClone.toDate()) : { isStart: true, isEnd: true };
+                      const multiDayAllDay = event.all_day && !moment(event.start).isSame(moment(event.end), 'day');
+                      const { isStart, isEnd } = (multiDay || multiDayAllDay) ? getMultiDayPosition(event, dayClone.toDate()) : { isStart: true, isEnd: true };
                       const showAsPill = event.all_day || multiDay;
+                      const pillColor = event.source_color || eventColors.backgroundColor;
                       return (
                       <Box
                         key={eventIndex}
@@ -646,8 +648,8 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                               flex: 1,
                               display: 'flex',
                               alignItems: 'center',
-                              justifyContent: 'center',
-                              backgroundColor: event.source_color || eventColors.backgroundColor,
+                              justifyContent: isStart && isEnd ? 'center' : isStart ? 'flex-start' : isEnd ? 'flex-end' : 'center',
+                              backgroundColor: pillColor,
                               borderTopLeftRadius: isStart ? '12px' : '0px',
                               borderBottomLeftRadius: isStart ? '12px' : '0px',
                               borderTopRightRadius: isEnd ? '12px' : '0px',
@@ -658,24 +660,25 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                               borderLeft: !isStart ? 'none' : '1px solid rgba(0, 0, 0, 0.2)',
                               borderRight: !isEnd ? 'none' : '1px solid rgba(0, 0, 0, 0.2)',
                               minHeight: displaySettings.bulletSize * 1.5,
+                              overflow: 'hidden',
                               '&:hover': { filter: 'brightness(1.1)' }
                             }}
                           >
-                            {(isStart || event.all_day) && (
-                              <Typography
-                                variant="caption"
-                                sx={{
-                                  fontSize: `${displaySettings.textSize}px`,
-                                  lineHeight: 1.2,
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                  fontStyle: 'italic',
-                                  color: '#ffffff',
-                                  fontWeight: 500
-                                }}
-                              >
-                                {event.title}
+                            {isStart && (
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0, overflow: 'hidden' }}>
+                                {!event.all_day && (
+                                  <Typography variant="caption" sx={{ fontSize: `${displaySettings.textSize}px`, color: '#fff', fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                    {moment(event.start).format('h:mma')}
+                                  </Typography>
+                                )}
+                                <Typography variant="caption" sx={{ fontSize: `${displaySettings.textSize}px`, color: '#fff', fontWeight: 500, fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {event.title}
+                                </Typography>
+                              </Box>
+                            )}
+                            {!isStart && isEnd && !event.all_day && (
+                              <Typography variant="caption" sx={{ fontSize: `${displaySettings.textSize}px`, color: '#fff', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                {moment(event.end).format('h:mma')}
                               </Typography>
                             )}
                           </Box>
@@ -781,8 +784,10 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                   ) : (
                     day.events.map((event, eventIndex) => {
                       const multiDay = isMultiDay(event);
-                      const { isStart, isEnd } = multiDay ? getMultiDayPosition(event, day.date) : { isStart: true, isEnd: true };
+                      const multiDayAllDay = event.all_day && !moment(event.start).isSame(moment(event.end), 'day');
+                      const { isStart, isEnd } = (multiDay || multiDayAllDay) ? getMultiDayPosition(event, day.date) : { isStart: true, isEnd: true };
                       const showAsPill = event.all_day || multiDay;
+                      const pillColor = event.source_color || eventColors.backgroundColor;
                       return (
                       <Box
                         key={eventIndex}
@@ -805,10 +810,10 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                             sx={{
                               flex: 1,
                               display: 'flex',
-                              flexDirection: 'column',
+                              flexDirection: 'row',
                               alignItems: 'center',
-                              justifyContent: 'center',
-                              backgroundColor: event.source_color || eventColors.backgroundColor,
+                              justifyContent: isStart && isEnd ? 'center' : isStart ? 'flex-start' : isEnd ? 'flex-end' : 'center',
+                              backgroundColor: pillColor,
                               borderTopLeftRadius: isStart ? '12px' : '0px',
                               borderBottomLeftRadius: isStart ? '12px' : '0px',
                               borderTopRightRadius: isEnd ? '12px' : '0px',
@@ -818,51 +823,30 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                               border: '1px solid rgba(0, 0, 0, 0.2)',
                               borderLeft: !isStart ? 'none' : '1px solid rgba(0, 0, 0, 0.2)',
                               borderRight: !isEnd ? 'none' : '1px solid rgba(0, 0, 0, 0.2)',
-                              gap: 0.25,
+                              overflow: 'hidden',
                               '&:hover': { filter: 'brightness(1.1)' }
                             }}
                           >
-                            {event.all_day && (
-                              <Typography
-                                variant="caption"
-                                sx={{
-                                  fontWeight: 'bold',
-                                  display: 'block',
-                                  fontSize: `${displaySettings.textSize}px`,
-                                  fontStyle: 'italic',
-                                  color: '#ffffff'
-                                }}
-                              >
-                                All Day
-                              </Typography>
+                            {isStart && (
+                              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: 0, overflow: 'hidden' }}>
+                                {event.all_day && (
+                                  <Typography variant="caption" sx={{ fontWeight: 'bold', fontSize: `${displaySettings.textSize}px`, fontStyle: 'italic', color: '#fff', whiteSpace: 'nowrap' }}>
+                                    All Day
+                                  </Typography>
+                                )}
+                                {!event.all_day && (
+                                  <Typography variant="caption" sx={{ fontWeight: 700, fontSize: `${displaySettings.textSize}px`, color: '#fff', whiteSpace: 'nowrap' }}>
+                                    {moment(event.start).format('h:mm A')}
+                                  </Typography>
+                                )}
+                                <Typography variant="caption" sx={{ fontWeight: 500, fontSize: `${displaySettings.textSize}px`, fontStyle: 'italic', color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {event.title}
+                                </Typography>
+                              </Box>
                             )}
-                            {(isStart || event.all_day) && (
-                              <Typography
-                                variant="caption"
-                                sx={{
-                                  display: 'block',
-                                  lineHeight: 1.2,
-                                  fontSize: `${displaySettings.textSize}px`,
-                                  fontStyle: 'italic',
-                                  color: '#ffffff',
-                                  textAlign: 'center',
-                                  fontWeight: 500
-                                }}
-                              >
-                                {event.title}
-                              </Typography>
-                            )}
-                            {multiDay && isStart && (
-                              <Typography
-                                variant="caption"
-                                sx={{
-                                  display: 'block',
-                                  fontSize: `${Math.max(displaySettings.textSize - 1, 8)}px`,
-                                  color: 'rgba(255,255,255,0.85)',
-                                  textAlign: 'center'
-                                }}
-                              >
-                                {moment(event.start).format('h:mm A')} - {moment(event.end).format('MMM D, h:mm A')}
+                            {!isStart && isEnd && !event.all_day && (
+                              <Typography variant="caption" sx={{ fontWeight: 700, fontSize: `${displaySettings.textSize}px`, color: '#fff', whiteSpace: 'nowrap' }}>
+                                ends {moment(event.end).format('h:mm A')}
                               </Typography>
                             )}
                           </Box>

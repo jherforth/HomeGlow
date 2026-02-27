@@ -2322,15 +2322,25 @@ fastify.get('/api/calendar-events', async (request, reply) => {
   try {
     const sources = db.prepare('SELECT * FROM calendar_sources WHERE enabled = 1 ORDER BY sort_order, id').all();
 
+    function normalizeAllDayEnd(end) {
+      // iCal all-day event ends are exclusive (DTEND is the day after the last day).
+      // Subtract 1 day so the end represents the actual last day of the event.
+      const d = new Date(end);
+      d.setDate(d.getDate() - 1);
+      return d;
+    }
+
     function makeEvent({ item, source }) {
+      const isAllDay = item.start?.dateOnly ?? item.event?.start?.dateOnly ?? false;
+      const rawEnd = item.end ?? item.event.end;
       return {
         id: item.uid ?? item.event?.uid ?? null,
         title: item.summary ?? item.event?.summary ?? null,
         start: item.start ?? item.event.start,
-        end: item.end ?? item.event.end,
+        end: isAllDay ? normalizeAllDayEnd(rawEnd) : rawEnd,
         description: item.description ?? item.event?.description ?? null,
         location: item.location ?? item.event?.location ?? null,
-        all_day: item.start?.dateOnly ?? item.event?.start?.dateOnly ?? false,
+        all_day: isAllDay,
         source_id: source.id,
         source_name: source.name,
         source_color: source.color
@@ -2383,11 +2393,12 @@ fastify.get('/api/calendar-events', async (request, reply) => {
           return vevents.map(vevent => {
             const event = new ICAL.Event(vevent);
             const isAllDay = vevent.getFirstPropertyValue('dtstart').isDate || false;
+            const rawEnd = event.endDate.toJSDate();
             return {
               id: event.uid || Math.random().toString(),
               title: event.summary,
               start: event.startDate.toJSDate(),
-              end: event.endDate.toJSDate(),
+              end: isAllDay ? normalizeAllDayEnd(rawEnd) : rawEnd,
               description: event.description,
               location: event.location,
               all_day: isAllDay,
