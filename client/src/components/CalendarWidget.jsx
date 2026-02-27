@@ -353,32 +353,55 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   };
 
   const getNext7Days = () => {
-    const days = [];
-    const startDate = new Date(currentDate);
+    const startDate = moment(currentDate).startOf('day');
+    const weekDates = Array.from({ length: 7 }, (_, i) => startDate.clone().add(i, 'days'));
 
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(startDate);
-      date.setDate(startDate.getDate() + i);
+    const isSpanningEvent = (e) => isMultiDay(e) || e.all_day;
 
+    const weekSpanning = [];
+    const seen = new Set();
+    weekDates.forEach(d => {
+      events.filter(e => isSpanningEvent(e) && eventSpansDay(e, d.toDate())).forEach(e => {
+        const key = e.id || (e.title + String(e.start));
+        if (!seen.has(key)) { seen.add(key); weekSpanning.push(e); }
+      });
+    });
+
+    weekSpanning.sort((a, b) => {
+      const aSpan = moment(a.end).diff(moment(a.start), 'days');
+      const bSpan = moment(b.end).diff(moment(b.start), 'days');
+      if (aSpan !== bSpan) return bSpan - aSpan;
+      return new Date(a.start) - new Date(b.start);
+    });
+
+    const spanningOrder = new Map();
+    weekSpanning.forEach((e, i) => spanningOrder.set(e.id || (e.title + String(e.start)), i));
+
+    return weekDates.map(d => {
+      const date = d.toDate();
       const dayEvents = events
         .filter(event => eventSpansDay(event, date))
         .sort((a, b) => {
-          if (a.all_day && !b.all_day) return -1;
-          if (!a.all_day && b.all_day) return 1;
-          return a.start - b.start;
+          const aSpanning = isSpanningEvent(a);
+          const bSpanning = isSpanningEvent(b);
+          if (aSpanning && !bSpanning) return -1;
+          if (!aSpanning && bSpanning) return 1;
+          if (aSpanning && bSpanning) {
+            const aKey = a.id || (a.title + String(a.start));
+            const bKey = b.id || (b.title + String(b.start));
+            return (spanningOrder.get(aKey) ?? 999) - (spanningOrder.get(bKey) ?? 999);
+          }
+          return new Date(a.start) - new Date(b.start);
         });
-
-      days.push({
-        date: date,
-        dayName: moment(date).format('ddd'),
-        dayNumber: moment(date).format('D'),
-        monthName: moment(date).format('MMM'),
-        isToday: moment(date).isSame(moment(new Date()), 'day'),
+      return {
+        date,
+        dayName: d.format('ddd'),
+        dayNumber: d.format('D'),
+        monthName: d.format('MMM'),
+        isToday: d.isSame(moment(), 'day'),
         events: dayEvents
-      });
-    }
-
-    return days;
+      };
+    });
   };
 
   const handleSettingsClick = (event) => {
@@ -541,10 +564,10 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
       {viewMode === 'month' ? (
         <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, mb: 1 }}>
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-              <Box key={day} sx={{ textAlign: 'center', fontWeight: 'bold', py: 1 }}>
-                <Typography variant="caption">{day}</Typography>
+          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', mb: 1 }}>
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((dow) => (
+              <Box key={dow} sx={{ textAlign: 'center', fontWeight: 'bold', py: 1 }}>
+                <Typography variant="caption">{dow}</Typography>
               </Box>
             ))}
           </Box>
@@ -554,195 +577,273 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
             const monthEnd = moment(currentDate).endOf('month');
             const startDate = moment(monthStart).startOf('week');
             const endDate = moment(monthEnd).endOf('week');
+            const numWeeks = endDate.diff(startDate, 'days') / 7 + 1;
 
-            const totalDays = endDate.diff(startDate, 'days') + 1;
-            const numWeeks = Math.ceil(totalDays / 7);
+            const isSpanning = (event) => isMultiDay(event) || event.all_day;
 
-            const days = [];
-            let day = startDate.clone();
+            const weekRows = [];
+            for (let w = 0; w < numWeeks; w++) {
+              const weekStart = startDate.clone().add(w * 7, 'days');
+              const weekDays = Array.from({ length: 7 }, (_, i) => weekStart.clone().add(i, 'days'));
 
-            while (day.isSameOrBefore(endDate, 'day')) {
-              const dayDate = day.toDate();
-              const dayEvents = events
-                .filter(event => eventSpansDay(event, dayDate))
-                .sort((a, b) => {
-                  if (a.all_day && !b.all_day) return -1;
-                  if (!a.all_day && b.all_day) return 1;
-                  return a.start - b.start;
-                });
-
-              const isCurrentMonth = day.month() === moment(currentDate).month();
-              const isToday = day.isSame(moment(), 'day');
-              const dayClone = day.clone();
-
-              days.push(
-                <Box
-                  key={day.format('YYYY-MM-DD')}
-                  onClick={() => handleSelectSlot({ start: dayClone.toDate() })}
-                  sx={{
-                    border: '1px solid var(--card-border)',
-                    borderRadius: 1,
-                    p: 1,
-                    cursor: 'pointer',
-                    bgcolor: isToday ? 'rgba(var(--accent-rgb), 0.1)' : 'transparent',
-                    opacity: isCurrentMonth ? 1 : 0.4,
-                    display: 'flex',
-                    flexDirection: 'row',
-                    minHeight: 0,
-                    overflow: 'hidden',
-                    gap: 1,
-                    '&:hover': {
-                      bgcolor: isToday ? 'rgba(var(--accent-rgb), 0.15)' : 'rgba(0, 0, 0, 0.05)'
+              const weekSpanningEvents = [];
+              const seen = new Set();
+              weekDays.forEach(d => {
+                events
+                  .filter(e => isSpanning(e) && eventSpansDay(e, d.toDate()))
+                  .forEach(e => {
+                    if (!seen.has(e.id || e.title + e.start)) {
+                      seen.add(e.id || e.title + e.start);
+                      weekSpanningEvents.push(e);
                     }
-                  }}
-                >
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      minWidth: '24px',
-                      flexShrink: 0
-                    }}
-                  >
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        fontWeight: 'bold',
-                        color: isToday ? 'var(--accent)' : 'inherit',
-                        fontSize: '0.875rem'
-                      }}
-                    >
-                      {day.format('D')}
-                    </Typography>
-                  </Box>
+                  });
+              });
 
-                  <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, minWidth: 0 }}>
-                    {dayEvents.slice(0, 3).map((event, eventIndex) => {
-                      const multiDay = isMultiDay(event);
-                      const multiDayAllDay = event.all_day && !moment(event.start).isSame(moment(event.end), 'day');
-                      const { isStart, isEnd } = (multiDay || multiDayAllDay) ? getMultiDayPosition(event, dayClone.toDate()) : { isStart: true, isEnd: true };
-                      const showAsPill = event.all_day || multiDay;
-                      const pillColor = event.source_color || eventColors.backgroundColor;
+              weekSpanningEvents.sort((a, b) => {
+                const aSpan = moment(a.end).diff(moment(a.start), 'days');
+                const bSpan = moment(b.end).diff(moment(b.start), 'days');
+                if (aSpan !== bSpan) return bSpan - aSpan;
+                return new Date(a.start) - new Date(b.start);
+              });
+
+              const slots = [];
+              const eventSlots = new Map();
+              weekSpanningEvents.forEach(event => {
+                const eventStartInWeek = Math.max(0, moment(event.start).isBefore(weekStart, 'day') ? 0 : weekStart.clone().diff(moment(event.start).startOf('day'), 'days') * -1);
+                const colStart = weekDays.findIndex(d => eventSpansDay(event, d.toDate()));
+                const colEnd = (() => {
+                  let last = colStart;
+                  for (let i = colStart + 1; i < 7; i++) {
+                    if (eventSpansDay(event, weekDays[i].toDate())) last = i;
+                    else break;
+                  }
+                  return last;
+                })();
+
+                let slot = 0;
+                while (true) {
+                  const conflict = slots[slot]?.some(([s, e]) => !(colEnd < s || colStart > e));
+                  if (!conflict) break;
+                  slot++;
+                }
+                if (!slots[slot]) slots[slot] = [];
+                slots[slot].push([colStart, colEnd]);
+                eventSlots.set(event, { colStart, colEnd, slot });
+              });
+
+              const numSlots = slots.length;
+
+              const singleDayEventsByCol = weekDays.map(d => ({
+                day: d,
+                events: events
+                  .filter(e => !isSpanning(e) && eventSpansDay(e, d.toDate()))
+                  .sort((a, b) => new Date(a.start) - new Date(b.start))
+              }));
+
+              const maxSingleEvents = 2;
+              const pillHeight = 22;
+              const pillGap = 2;
+              const headerHeight = 28;
+              const spanningAreaHeight = numSlots * (pillHeight + pillGap) + (numSlots > 0 ? 4 : 0);
+
+              weekRows.push(
+                <Box key={w} sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, mb: w < numWeeks - 1 ? '4px' : 0 }}>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', position: 'relative' }}>
+                    {weekDays.map((d, di) => {
+                      const isCurrentMonth = d.month() === moment(currentDate).month();
+                      const isToday = d.isSame(moment(), 'day');
                       return (
-                      <Box
-                        key={eventIndex}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSelectEvent(event);
-                        }}
-                        sx={{
-                          display: 'flex',
-                          alignItems: 'flex-start',
-                          gap: 0.5,
-                          mb: 0.5,
-                          p: showAsPill ? 0 : 0.3,
-                          borderRadius: 0.5,
-                          '&:hover': {
-                            bgcolor: showAsPill ? 'transparent' : 'rgba(0, 0, 0, 0.05)'
-                          }
-                        }}
-                      >
-                        {showAsPill ? (
-                          <Box
+                        <Box
+                          key={di}
+                          sx={{
+                            borderTop: '1px solid var(--card-border)',
+                            borderLeft: di === 0 ? '1px solid var(--card-border)' : 'none',
+                            borderRight: '1px solid var(--card-border)',
+                            borderBottom: 'none',
+                            bgcolor: isToday ? 'rgba(var(--accent-rgb), 0.08)' : 'transparent',
+                            opacity: isCurrentMonth ? 1 : 0.4,
+                            px: 1,
+                            pt: 0.5,
+                            pb: 0,
+                            height: `${headerHeight}px`,
+                            display: 'flex',
+                            alignItems: 'center'
+                          }}
+                        >
+                          <Typography
+                            variant="caption"
                             sx={{
-                              flex: 1,
+                              fontWeight: 'bold',
+                              fontSize: '0.875rem',
+                              lineHeight: 1,
+                              width: '22px',
+                              height: '22px',
                               display: 'flex',
                               alignItems: 'center',
-                              justifyContent: isStart && isEnd ? 'center' : isStart ? 'flex-start' : isEnd ? 'flex-end' : 'center',
-                              backgroundColor: pillColor,
-                              borderTopLeftRadius: isStart ? '12px' : '0px',
-                              borderBottomLeftRadius: isStart ? '12px' : '0px',
-                              borderTopRightRadius: isEnd ? '12px' : '0px',
-                              borderBottomRightRadius: isEnd ? '12px' : '0px',
-                              px: 1,
-                              py: 0.3,
-                              border: '1px solid rgba(0, 0, 0, 0.2)',
-                              borderLeft: !isStart ? 'none' : '1px solid rgba(0, 0, 0, 0.2)',
-                              borderRight: !isEnd ? 'none' : '1px solid rgba(0, 0, 0, 0.2)',
-                              minHeight: displaySettings.bulletSize * 1.5,
-                              overflow: 'hidden',
-                              '&:hover': { filter: 'brightness(1.1)' }
+                              justifyContent: 'center',
+                              borderRadius: '50%',
+                              bgcolor: isToday ? 'var(--accent)' : 'transparent',
+                              color: isToday ? '#fff' : 'inherit'
                             }}
                           >
-                            {isStart && (
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0, overflow: 'hidden' }}>
-                                {!event.all_day && (
-                                  <Typography variant="caption" sx={{ fontSize: `${displaySettings.textSize}px`, color: '#fff', fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                                    {moment(event.start).format('h:mma')}
-                                  </Typography>
-                                )}
-                                <Typography variant="caption" sx={{ fontSize: `${displaySettings.textSize}px`, color: '#fff', fontWeight: 500, fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {event.title}
-                                </Typography>
-                              </Box>
-                            )}
-                            {!isStart && isEnd && !event.all_day && (
-                              <Typography variant="caption" sx={{ fontSize: `${displaySettings.textSize}px`, color: '#fff', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                                {moment(event.end).format('h:mma')}
-                              </Typography>
-                            )}
-                          </Box>
-                        ) : (
-                          <>
-                            <Box
-                              sx={{
-                                width: displaySettings.bulletSize,
-                                height: displaySettings.bulletSize,
-                                minWidth: displaySettings.bulletSize,
-                                minHeight: displaySettings.bulletSize,
-                                borderRadius: '50%',
-                                backgroundColor: event.source_color || eventColors.backgroundColor,
-                                mt: displaySettings.bulletSize * 0.05
-                              }}
-                            />
-                            <Typography
-                              variant="caption"
-                              sx={{
-                                fontSize: `${displaySettings.textSize}px`,
-                                lineHeight: 1.2,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap'
-                              }}
-                            >
-                              {event.title}
-                            </Typography>
-                          </>
-                        )}
-                      </Box>
+                            {d.format('D')}
+                          </Typography>
+                        </Box>
                       );
                     })}
-                    {dayEvents.length > 3 && (
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          fontSize: '0.6rem',
-                          color: 'text.secondary',
-                          textAlign: 'center',
-                          display: 'block',
-                          mt: 0.5
-                        }}
-                      >
-                        +{dayEvents.length - 3} more
-                      </Typography>
-                    )}
+                  </Box>
+
+                  {numSlots > 0 && (
+                    <Box sx={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(7, 1fr)',
+                      position: 'relative',
+                      height: `${spanningAreaHeight}px`,
+                      flexShrink: 0
+                    }}>
+                      {weekDays.map((d, di) => {
+                        const isCurrentMonth = d.month() === moment(currentDate).month();
+                        const isToday = d.isSame(moment(), 'day');
+                        return (
+                          <Box key={di} sx={{
+                            borderLeft: di === 0 ? '1px solid var(--card-border)' : 'none',
+                            borderRight: '1px solid var(--card-border)',
+                            bgcolor: isToday ? 'rgba(var(--accent-rgb), 0.08)' : 'transparent',
+                            opacity: isCurrentMonth ? 1 : 0.4,
+                            height: '100%'
+                          }} />
+                        );
+                      })}
+
+                      <Box sx={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(7, 1fr)',
+                        px: '1px',
+                        pointerEvents: 'none'
+                      }}>
+                        {weekSpanningEvents.map((event, ei) => {
+                          const info = eventSlots.get(event);
+                          if (!info) return null;
+                          const { colStart, colEnd, slot } = info;
+                          const isStart = colStart === 0 ? moment(event.start).isSameOrAfter(weekStart, 'day') : true;
+                          const trueIsStart = moment(event.start).isSameOrAfter(weekStart, 'day');
+                          const trueIsEnd = moment(event.end).isSameOrBefore(weekDays[6], 'day');
+                          const pillColor = event.source_color || eventColors.backgroundColor;
+                          const top = slot * (pillHeight + pillGap) + pillGap;
+                          return (
+                            <Box
+                              key={ei}
+                              onClick={(e) => { e.stopPropagation(); handleSelectEvent(event); }}
+                              sx={{
+                                position: 'absolute',
+                                top: `${top}px`,
+                                height: `${pillHeight}px`,
+                                left: `calc(${colStart} * (100% / 7) + 2px)`,
+                                width: `calc(${colEnd - colStart + 1} * (100% / 7) - 4px)`,
+                                backgroundColor: pillColor,
+                                borderTopLeftRadius: trueIsStart ? '10px' : '0',
+                                borderBottomLeftRadius: trueIsStart ? '10px' : '0',
+                                borderTopRightRadius: trueIsEnd ? '10px' : '0',
+                                borderBottomRightRadius: trueIsEnd ? '10px' : '0',
+                                display: 'flex',
+                                alignItems: 'center',
+                                px: 1,
+                                cursor: 'pointer',
+                                pointerEvents: 'auto',
+                                overflow: 'hidden',
+                                justifyContent: trueIsStart ? 'flex-start' : trueIsEnd && !event.all_day ? 'flex-end' : 'flex-start',
+                                '&:hover': { filter: 'brightness(1.1)' }
+                              }}
+                            >
+                              {trueIsStart && (
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, overflow: 'hidden', minWidth: 0 }}>
+                                  {!event.all_day && (
+                                    <Typography variant="caption" sx={{ fontSize: `${displaySettings.textSize}px`, color: '#fff', fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                      {moment(event.start).format('h:mma')}
+                                    </Typography>
+                                  )}
+                                  <Typography variant="caption" sx={{ fontSize: `${displaySettings.textSize}px`, color: '#fff', fontWeight: 500, fontStyle: event.all_day ? 'italic' : 'normal', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {event.title}
+                                  </Typography>
+                                </Box>
+                              )}
+                              {!trueIsStart && (
+                                <Typography variant="caption" sx={{ fontSize: `${displaySettings.textSize}px`, color: 'rgba(255,255,255,0.7)', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {event.title}
+                                </Typography>
+                              )}
+                              {trueIsEnd && !event.all_day && !trueIsStart && (
+                                <Typography variant="caption" sx={{ fontSize: `${displaySettings.textSize}px`, color: '#fff', fontWeight: 700, whiteSpace: 'nowrap', ml: 'auto' }}>
+                                  {moment(event.end).format('h:mma')}
+                                </Typography>
+                              )}
+                            </Box>
+                          );
+                        })}
+                      </Box>
+                    </Box>
+                  )}
+
+                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', flex: 1, minHeight: 0 }}>
+                    {weekDays.map((d, di) => {
+                      const { day: _d, events: daySingleEvents } = singleDayEventsByCol[di];
+                      const isCurrentMonth = d.month() === moment(currentDate).month();
+                      const isToday = d.isSame(moment(), 'day');
+                      const spanningCountToday = weekSpanningEvents.filter(e => eventSpansDay(e, d.toDate())).length;
+                      const totalEvents = spanningCountToday + daySingleEvents.length;
+                      const dayClone = d.clone();
+                      return (
+                        <Box
+                          key={di}
+                          onClick={() => handleSelectSlot({ start: dayClone.toDate() })}
+                          sx={{
+                            borderLeft: di === 0 ? '1px solid var(--card-border)' : 'none',
+                            borderRight: '1px solid var(--card-border)',
+                            borderBottom: '1px solid var(--card-border)',
+                            bgcolor: isToday ? 'rgba(var(--accent-rgb), 0.08)' : 'transparent',
+                            opacity: isCurrentMonth ? 1 : 0.4,
+                            cursor: 'pointer',
+                            px: 1,
+                            pt: 0.5,
+                            pb: 0.5,
+                            minHeight: '48px',
+                            overflow: 'hidden',
+                            '&:hover': { bgcolor: isToday ? 'rgba(var(--accent-rgb), 0.12)' : 'rgba(0,0,0,0.03)' }
+                          }}
+                        >
+                          {daySingleEvents.slice(0, maxSingleEvents).map((event, ei) => (
+                            <Box
+                              key={ei}
+                              onClick={(e) => { e.stopPropagation(); handleSelectEvent(event); }}
+                              sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}
+                            >
+                              <Box sx={{ width: displaySettings.bulletSize, height: displaySettings.bulletSize, minWidth: displaySettings.bulletSize, borderRadius: '50%', backgroundColor: event.source_color || eventColors.backgroundColor, flexShrink: 0 }} />
+                              <Typography variant="caption" sx={{ fontSize: `${displaySettings.textSize}px`, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}>
+                                {moment(event.start).format('h:mma')} {event.title}
+                              </Typography>
+                            </Box>
+                          ))}
+                          {totalEvents > spanningCountToday + maxSingleEvents && (
+                            <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'text.secondary' }}>
+                              +{totalEvents - spanningCountToday - maxSingleEvents} more
+                            </Typography>
+                          )}
+                        </Box>
+                      );
+                    })}
                   </Box>
                 </Box>
               );
-
-              day.add(1, 'day');
             }
 
             return (
-              <Box sx={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(7, 1fr)',
-                gridTemplateRows: `repeat(${numWeeks}, 1fr)`,
-                gap: 1,
-                flex: 1,
-                minHeight: 0
-              }}>
-                {days}
+              <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
+                {weekRows}
               </Box>
             );
           })()}
