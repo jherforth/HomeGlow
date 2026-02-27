@@ -1181,8 +1181,7 @@ async function dailyBackgroundProcessing() {
     for (const schedule of untilCompletedSchedules) {
       const interval = parser.parseExpression(schedule.crontab, options);
       // console.log(Object.getOwnPropertyNames(Object.getPrototypeOf(interval)));
-      const nextDate = interval.next().toDate();
-      const next = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(nextDate.getDate()).padStart(2, '0')}`;
+      const next = interval.next().toISOString().split('T')[0];
       console.log(`-------------- Next date for ${schedule.id} is ${next}`);
 
       // We need to add a one-time task because today is the trigger!
@@ -1624,8 +1623,7 @@ fastify.post('/api/chores/complete', async (request, reply) => {
 
       // ensure only chores that are due today are part of today's chores
       const interval = parser.parseExpression(schedule.crontab, options);
-      const nextDate = interval.next().toDate();
-      const next = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(nextDate.getDate()).padStart(2, '0')}`;
+      const next = interval.next().toISOString().split('T')[0];
       if (today === next) {
         todaysChores.push(schedule);
       }
@@ -1638,8 +1636,12 @@ fastify.post('/api/chores/complete', async (request, reply) => {
 
       const bonusAlreadyAwarded = db.prepare(`
           SELECT id FROM chore_history
-          WHERE user_id = ? AND date = ? AND chore_schedule_id IS NULL AND clam_value = ?
-        `).get(user_id, date, dailyReward);
+          WHERE user_id = ?
+          AND date = ?
+          AND chore_schedule_id IS NULL
+          AND clam_value = ?
+          AND title = ?
+        `).get(user_id, date, dailyReward, 'Regular chores');
 
       if (!bonusAlreadyAwarded) {
         db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title) VALUES (?, NULL, ?, ?, ?)').run(user_id, date, dailyReward, 'Regular chores');
@@ -1676,8 +1678,12 @@ fastify.post('/api/chores/uncomplete', async (request, reply) => {
 
       const bonusEntry = db.prepare(`
       SELECT id FROM chore_history
-      WHERE user_id = ? AND date = ? AND chore_schedule_id IS NULL AND clam_value = ?
-    `).get(user_id, date, dailyReward);
+      WHERE user_id = ?
+      AND date = ?
+      AND chore_schedule_id IS NULL
+      AND clam_value = ?
+      AND title = ?
+    `).get(user_id, date, dailyReward, 'Regular chores');
 
       if (bonusEntry) {
         db.prepare('DELETE FROM chore_history WHERE id = ?').run(bonusEntry.id);
@@ -1714,7 +1720,7 @@ fastify.post('/api/users/:id/clams/add', async (request, reply) => {
     }
 
     const useDate = date || getTodayLocalDateString();
-    db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value) VALUES (?, NULL, ?, ?)').run(id, useDate, amount);
+    db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title) VALUES (?, NULL, ?, ?, ?)').run(id, useDate, amount, 'Adjustment');
 
     const result = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(id);
     return { success: true, clam_total: result.total };
