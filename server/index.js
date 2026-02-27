@@ -1613,23 +1613,26 @@ fastify.post('/api/chores/uncomplete', async (request, reply) => {
       return reply.status(400).send({ error: 'chore_schedule_id, user_id, and date are required' });
     }
 
-    const history = db.prepare('SELECT * FROM chore_history WHERE chore_schedule_id = ? AND user_id = ? AND date = ?').get(chore_schedule_id, user_id, date);
+    const history = db.prepare('SELECT id, clam_value FROM chore_history WHERE chore_schedule_id = ? AND user_id = ? AND date = ?').get(chore_schedule_id, user_id, date);
     if (!history) {
       return reply.status(404).send({ error: 'Completion record not found' });
     }
 
     db.prepare('DELETE FROM chore_history WHERE id = ?').run(history.id);
 
-    const dailyRewardSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('daily_completion_clam_reward');
-    const dailyReward = dailyRewardSetting ? parseInt(dailyRewardSetting.value, 10) : 2;
+    // if the uncompleted chore was a bonus chore (has clam value), don't remove the daily bonus when uncompleting
+    if (!history.clam_value) {
+      const dailyRewardSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('daily_completion_clam_reward');
+      const dailyReward = dailyRewardSetting ? parseInt(dailyRewardSetting.value, 10) : 2;
 
-    const bonusEntry = db.prepare(`
+      const bonusEntry = db.prepare(`
       SELECT id FROM chore_history
       WHERE user_id = ? AND date = ? AND chore_schedule_id IS NULL AND clam_value = ?
     `).get(user_id, date, dailyReward);
 
-    if (bonusEntry) {
-      db.prepare('DELETE FROM chore_history WHERE id = ?').run(bonusEntry.id);
+      if (bonusEntry) {
+        db.prepare('DELETE FROM chore_history WHERE id = ?').run(bonusEntry.id);
+      }
     }
 
     const totalResult = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(user_id);
