@@ -942,6 +942,20 @@ async function migrateClamsToHistory() {
   }
 }
 
+async function migrateChoreHistoryTitle() {
+  try {
+    const columns = db.prepare("PRAGMA table_info(chore_history)").all();
+    const hasTitle = columns.some(col => col.name === 'title');
+    if (!hasTitle) {
+      db.exec("ALTER TABLE chore_history ADD COLUMN title TEXT DEFAULT NULL");
+      console.log('Added title column to chore_history');
+    }
+  } catch (error) {
+    console.error('Error migrating chore_history title:', error);
+    throw error;
+  }
+}
+
 async function migrateToDurationField() {
   try {
     console.log('=== Checking for duration field migration ===');
@@ -1509,6 +1523,27 @@ fastify.post('/api/chore-history', async (request, reply) => {
   }
 });
 
+fastify.get('/api/chore-history/recent', async (request, reply) => {
+  try {
+    const days = parseInt(request.query.days || '7', 10);
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+    const sinceStr = `${since.getFullYear()}-${String(since.getMonth() + 1).padStart(2, '0')}-${String(since.getDate()).padStart(2, '0')}`;
+    const rows = db.prepare(`
+      SELECT ch.id, ch.date, ch.clam_value, ch.title, ch.created_at,
+             u.username
+      FROM chore_history ch
+      LEFT JOIN users u ON ch.user_id = u.id
+      WHERE ch.date >= ? AND ch.clam_value != 0
+      ORDER BY ch.date DESC, ch.created_at DESC
+    `).all(sinceStr);
+    return rows;
+  } catch (error) {
+    console.error('Error fetching recent chore history:', error);
+    reply.status(500).send({ error: 'Failed to fetch recent chore history' });
+  }
+});
+
 fastify.delete('/api/chore-history/:id', async (request, reply) => {
   const { id } = request.params;
   try {
@@ -1532,7 +1567,7 @@ fastify.post('/api/chores/complete', async (request, reply) => {
       return reply.status(400).send({ error: 'chore_schedule_id, user_id, and date are required' });
     }
 
-    const schedule = db.prepare('SELECT cs.*, c.clam_value FROM chore_schedules cs JOIN chores c ON cs.chore_id = c.id WHERE cs.id = ?').get(chore_schedule_id);
+    const schedule = db.prepare('SELECT cs.*, c.clam_value, c.title FROM chore_schedules cs JOIN chores c ON cs.chore_id = c.id WHERE cs.id = ?').get(chore_schedule_id);
     if (!schedule) {
       return reply.status(404).send({ error: 'Schedule not found' });
     }
@@ -1546,7 +1581,7 @@ fastify.post('/api/chores/complete', async (request, reply) => {
       return reply.status(409).send({ error: 'Chore already completed for this date' });
     }
 
-    db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value) VALUES (?, ?, ?, ?)').run(user_id, chore_schedule_id, date, schedule.clam_value);
+    db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title) VALUES (?, ?, ?, ?, ?)').run(user_id, chore_schedule_id, date, schedule.clam_value, schedule.title);
 
     const today = getTodayLocalDateString();
     const allUserSchedules = db.prepare(`
@@ -1607,7 +1642,7 @@ fastify.post('/api/chores/complete', async (request, reply) => {
         `).get(user_id, date, dailyReward);
 
       if (!bonusAlreadyAwarded) {
-        db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value) VALUES (?, NULL, ?, ?)').run(user_id, date, dailyReward);
+        db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title) VALUES (?, NULL, ?, ?, ?)').run(user_id, date, dailyReward, 'Regular chores');
       }
     }
 
@@ -2777,6 +2812,7 @@ const start = async () => {
     db = await initializeDatabase(); // Initialize db once here
     await migrateChoresDatabase(); // Run migration if needed
     await migrateClamsToHistory(); // Migrate clam_total to chore_history
+    await migrateChoreHistoryTitle(); // Add title field to chore_history
     await migrateToDurationField(); // Add duration field to chore_schedules
     initializeDefaultSettings(); // Initialize default settings
     startNightlyCronJob(); // Start the nightly chore pruning job

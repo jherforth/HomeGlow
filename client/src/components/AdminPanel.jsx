@@ -62,9 +62,11 @@ import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import PinModal from './PinModal';
 import ChoreSchedulesTab from './ChoreSchedulesTab';
+import ChoreHistoryTab from './ChoreHistoryTab';
 
 const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const [activeTab, setActiveTab] = useState(0);
+  const [choresSubTab, setChoresSubTab] = useState(0);
   const [settings, setSettings] = useState({
     WEATHER_API_KEY: '',
     PROXY_WHITELIST: '',
@@ -1310,11 +1312,22 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
         </Card>
       )}
 
-      {/* Schedules Tab */}
+      {/* Chores Tab */}
       {activeTab === 4 && (
         <Card>
           <CardContent>
-            <ChoreSchedulesTab saveMessage={saveMessage} setSaveMessage={setSaveMessage} />
+            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+              <Tabs value={choresSubTab} onChange={(_, v) => setChoresSubTab(v)} size="small">
+                <Tab label="Chores" />
+                <Tab label="History" />
+              </Tabs>
+            </Box>
+            {choresSubTab === 0 && (
+              <ChoreSchedulesTab saveMessage={saveMessage} setSaveMessage={setSaveMessage} />
+            )}
+            {choresSubTab === 1 && (
+              <ChoreHistoryTab />
+            )}
           </CardContent>
         </Card>
       )}
