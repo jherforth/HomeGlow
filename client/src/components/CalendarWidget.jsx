@@ -273,10 +273,9 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
   const handleSelectSlot = ({ start }) => {
     const selectedDay = moment(start).startOf('day');
+    const dayDate = selectedDay.toDate();
     const dayEvents = events
-      .filter(event =>
-        moment(event.start).isSame(selectedDay, 'day')
-      )
+      .filter(event => eventSpansDay(event, dayDate))
       .sort((a, b) => {
         if (a.all_day && !b.all_day) return -1;
         if (!a.all_day && b.all_day) return 1;
@@ -290,10 +289,9 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
   const handleSelectEvent = (event) => {
     const selectedDay = moment(event.start).startOf('day');
+    const dayDate = selectedDay.toDate();
     const dayEvents = events
-      .filter(e =>
-        moment(e.start).isSame(selectedDay, 'day')
-      )
+      .filter(e => eventSpansDay(e, dayDate))
       .sort((a, b) => {
         if (a.all_day && !b.all_day) return -1;
         if (!a.all_day && b.all_day) return 1;
@@ -336,6 +334,24 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
     return () => clearTimeout(timer);
   }, [currentDate, events]);
 
+  const isMultiDay = (event) => {
+    return !event.all_day && !moment(event.start).isSame(moment(event.end), 'day');
+  };
+
+  const eventSpansDay = (event, day) => {
+    const dayStart = moment(day).startOf('day');
+    const dayEnd = moment(day).endOf('day');
+    const eventStart = moment(event.start);
+    const eventEnd = moment(event.end);
+    return eventStart.isSameOrBefore(dayEnd) && eventEnd.isSameOrAfter(dayStart);
+  };
+
+  const getMultiDayPosition = (event, day) => {
+    const isStart = moment(event.start).isSame(moment(day), 'day');
+    const isEnd = moment(event.end).isSame(moment(day), 'day');
+    return { isStart, isEnd };
+  };
+
   const getNext7Days = () => {
     const days = [];
     const startDate = new Date(currentDate);
@@ -345,9 +361,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
       date.setDate(startDate.getDate() + i);
 
       const dayEvents = events
-        .filter(event =>
-          moment(event.start).isSame(moment(date), 'day')
-        )
+        .filter(event => eventSpansDay(event, date))
         .sort((a, b) => {
           if (a.all_day && !b.all_day) return -1;
           if (!a.all_day && b.all_day) return 1;
@@ -548,10 +562,9 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
             let day = startDate.clone();
 
             while (day.isSameOrBefore(endDate, 'day')) {
+              const dayDate = day.toDate();
               const dayEvents = events
-                .filter(event =>
-                  moment(event.start).isSame(day, 'day')
-                )
+                .filter(event => eventSpansDay(event, dayDate))
                 .sort((a, b) => {
                   if (a.all_day && !b.all_day) return -1;
                   if (!a.all_day && b.all_day) return 1;
@@ -604,7 +617,11 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                   </Box>
 
                   <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, minWidth: 0 }}>
-                    {dayEvents.slice(0, 3).map((event, eventIndex) => (
+                    {dayEvents.slice(0, 3).map((event, eventIndex) => {
+                      const multiDay = isMultiDay(event);
+                      const { isStart, isEnd } = multiDay ? getMultiDayPosition(event, dayClone.toDate()) : { isStart: true, isEnd: true };
+                      const showAsPill = event.all_day || multiDay;
+                      return (
                       <Box
                         key={eventIndex}
                         onClick={(e) => {
@@ -616,14 +633,14 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                           alignItems: 'flex-start',
                           gap: 0.5,
                           mb: 0.5,
-                          p: 0.3,
+                          p: showAsPill ? 0 : 0.3,
                           borderRadius: 0.5,
                           '&:hover': {
-                            bgcolor: 'rgba(0, 0, 0, 0.05)'
+                            bgcolor: showAsPill ? 'transparent' : 'rgba(0, 0, 0, 0.05)'
                           }
                         }}
                       >
-                        {event.all_day ? (
+                        {showAsPill ? (
                           <Box
                             sx={{
                               flex: 1,
@@ -631,28 +648,36 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                               alignItems: 'center',
                               justifyContent: 'center',
                               backgroundColor: event.source_color || eventColors.backgroundColor,
-                              borderRadius: '12px',
+                              borderTopLeftRadius: isStart ? '12px' : '0px',
+                              borderBottomLeftRadius: isStart ? '12px' : '0px',
+                              borderTopRightRadius: isEnd ? '12px' : '0px',
+                              borderBottomRightRadius: isEnd ? '12px' : '0px',
                               px: 1,
                               py: 0.3,
                               border: '1px solid rgba(0, 0, 0, 0.2)',
-                              minHeight: displaySettings.bulletSize * 1.5
+                              borderLeft: !isStart ? 'none' : '1px solid rgba(0, 0, 0, 0.2)',
+                              borderRight: !isEnd ? 'none' : '1px solid rgba(0, 0, 0, 0.2)',
+                              minHeight: displaySettings.bulletSize * 1.5,
+                              '&:hover': { filter: 'brightness(1.1)' }
                             }}
                           >
-                            <Typography
-                              variant="caption"
-                              sx={{
-                                fontSize: `${displaySettings.textSize}px`,
-                                lineHeight: 1.2,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                                fontStyle: 'italic',
-                                color: '#ffffff',
-                                fontWeight: 500
-                              }}
-                            >
-                              {event.title}
-                            </Typography>
+                            {(isStart || event.all_day) && (
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  fontSize: `${displaySettings.textSize}px`,
+                                  lineHeight: 1.2,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  fontStyle: 'italic',
+                                  color: '#ffffff',
+                                  fontWeight: 500
+                                }}
+                              >
+                                {event.title}
+                              </Typography>
+                            )}
                           </Box>
                         ) : (
                           <>
@@ -682,7 +707,8 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                           </>
                         )}
                       </Box>
-                    ))}
+                      );
+                    })}
                     {dayEvents.length > 3 && (
                       <Typography
                         variant="caption"
@@ -753,12 +779,16 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                       No events
                     </Typography>
                   ) : (
-                    day.events.map((event, eventIndex) => (
+                    day.events.map((event, eventIndex) => {
+                      const multiDay = isMultiDay(event);
+                      const { isStart, isEnd } = multiDay ? getMultiDayPosition(event, day.date) : { isStart: true, isEnd: true };
+                      const showAsPill = event.all_day || multiDay;
+                      return (
                       <Box
                         key={eventIndex}
                         onClick={() => handleSelectEvent(event)}
                         sx={{
-                          p: 0.5,
+                          p: showAsPill ? 0 : 0.5,
                           mb: 0.5,
                           cursor: 'pointer',
                           display: 'flex',
@@ -766,11 +796,11 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                           gap: 0.5,
                           minHeight: '36px',
                           '&:hover': {
-                            backgroundColor: 'rgba(0, 0, 0, 0.05)'
+                            backgroundColor: showAsPill ? 'transparent' : 'rgba(0, 0, 0, 0.05)'
                           }
                         }}
                       >
-                        {event.all_day ? (
+                        {showAsPill ? (
                           <Box
                             sx={{
                               flex: 1,
@@ -779,39 +809,62 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                               alignItems: 'center',
                               justifyContent: 'center',
                               backgroundColor: event.source_color || eventColors.backgroundColor,
-                              borderRadius: '12px',
+                              borderTopLeftRadius: isStart ? '12px' : '0px',
+                              borderBottomLeftRadius: isStart ? '12px' : '0px',
+                              borderTopRightRadius: isEnd ? '12px' : '0px',
+                              borderBottomRightRadius: isEnd ? '12px' : '0px',
                               px: 1.5,
                               py: 0.5,
                               border: '1px solid rgba(0, 0, 0, 0.2)',
-                              gap: 0.25
+                              borderLeft: !isStart ? 'none' : '1px solid rgba(0, 0, 0, 0.2)',
+                              borderRight: !isEnd ? 'none' : '1px solid rgba(0, 0, 0, 0.2)',
+                              gap: 0.25,
+                              '&:hover': { filter: 'brightness(1.1)' }
                             }}
                           >
-                            <Typography
-                              variant="caption"
-                              sx={{
-                                fontWeight: 'bold',
-                                display: 'block',
-                                fontSize: `${displaySettings.textSize}px`,
-                                fontStyle: 'italic',
-                                color: '#ffffff'
-                              }}
-                            >
-                              All Day
-                            </Typography>
-                            <Typography
-                              variant="caption"
-                              sx={{
-                                display: 'block',
-                                lineHeight: 1.2,
-                                fontSize: `${displaySettings.textSize}px`,
-                                fontStyle: 'italic',
-                                color: '#ffffff',
-                                textAlign: 'center',
-                                fontWeight: 500
-                              }}
-                            >
-                              {event.title}
-                            </Typography>
+                            {event.all_day && (
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  fontWeight: 'bold',
+                                  display: 'block',
+                                  fontSize: `${displaySettings.textSize}px`,
+                                  fontStyle: 'italic',
+                                  color: '#ffffff'
+                                }}
+                              >
+                                All Day
+                              </Typography>
+                            )}
+                            {(isStart || event.all_day) && (
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  display: 'block',
+                                  lineHeight: 1.2,
+                                  fontSize: `${displaySettings.textSize}px`,
+                                  fontStyle: 'italic',
+                                  color: '#ffffff',
+                                  textAlign: 'center',
+                                  fontWeight: 500
+                                }}
+                              >
+                                {event.title}
+                              </Typography>
+                            )}
+                            {multiDay && isStart && (
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  display: 'block',
+                                  fontSize: `${Math.max(displaySettings.textSize - 1, 8)}px`,
+                                  color: 'rgba(255,255,255,0.85)',
+                                  textAlign: 'center'
+                                }}
+                              >
+                                {moment(event.start).format('h:mm A')} - {moment(event.end).format('MMM D, h:mm A')}
+                              </Typography>
+                            )}
                           </Box>
                         ) : (
                           <>
@@ -837,7 +890,8 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                           </>
                         )}
                       </Box>
-                    ))
+                      );
+                    })
                   )}
                 </Box>
               </Box>
