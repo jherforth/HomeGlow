@@ -619,7 +619,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
             const isMultiDaySpanning = (event) => {
               return event.all_day
-                ? !moment(event.start).isSame(moment(event.end).subtract(1, 'ms'), 'day')
+                ? !moment(event.start).isSame(moment(event.end), 'day')
                 : !moment(event.start).isSame(moment(event.end), 'day');
             };
 
