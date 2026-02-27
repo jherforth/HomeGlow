@@ -28,6 +28,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=${BACKEND_PORT:-5000}
+      - TZ=${TZ:-America/New_York}
     networks:
       - homeglow-network
     restart: unless-stopped

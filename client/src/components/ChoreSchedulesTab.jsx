@@ -45,6 +45,7 @@ import {
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { parseExpression } from 'cron-parser';
+import { getServerTimezoneSync } from '../utils/timezone.js';
 
 const DAY_OPTIONS = [
   { label: 'Sun', value: 0 },
@@ -66,9 +67,10 @@ const CRONTAB_PRESETS = [
 function getNextOccurrence(crontab) {
   if (!crontab) return 'One-time';
   try {
-    const interval = parseExpression(crontab, { utc: false });
+    const tz = getServerTimezoneSync();
+    const interval = parseExpression(crontab, { tz });
     const next = interval.next().toDate();
-    return next.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    return next.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });
   } catch {
     return 'Invalid expression';
   }

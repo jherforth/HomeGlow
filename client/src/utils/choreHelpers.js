@@ -1,4 +1,5 @@
 import parser from 'cron-parser';
+import { getServerTimezoneSync } from './timezone.js';
 
 export function shouldShowChoreToday(schedule) {
   if (!schedule.visible) {
@@ -10,12 +11,13 @@ export function shouldShowChoreToday(schedule) {
   }
 
   try {
+    const tz = getServerTimezoneSync();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const interval = parser.parseExpression(schedule.crontab, {
       currentDate: new Date(today.getTime() + 24 * 60 * 60 * 1000),
-      tz: Intl.DateTimeFormat().resolvedOptions().timeZone
+      tz
     });
 
     const prevOccurrence = interval.prev().toDate();
@@ -29,11 +31,15 @@ export function shouldShowChoreToday(schedule) {
 }
 
 export function getTodayDateString() {
+  const tz = getServerTimezoneSync();
   const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  const day = String(today.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  return formatter.format(today);
 }
 
 export function convertDaysToCrontab(daysArray) {

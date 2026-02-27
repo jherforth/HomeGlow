@@ -1,4 +1,9 @@
 // File: server/index.js
+require('dotenv').config();
+
+const APP_TIMEZONE = process.env.TZ || 'America/New_York';
+process.env.TZ = APP_TIMEZONE;
+
 const fastify = require('fastify')({ logger: true });
 const Database = require('better-sqlite3');
 const ical = require('ical-generator');
@@ -7,7 +12,6 @@ const path = require('path');
 const fs = require('fs').promises;
 const multipart = require('@fastify/multipart');
 const crypto = require('crypto');
-require('dotenv').config();
 
 // NEW: Import axios for HTTP requests and ical.js for parsing
 const axios = require('axios');
@@ -21,6 +25,14 @@ const widgetRegistryPath = path.join(__dirname, 'widgets_registry.json');
 const GITHUB_REPO_OWNER = 'jherforth';
 const GITHUB_REPO_NAME = 'HomeGlowPlugins';
 const GITHUB_API_BASE = 'https://api.github.com';
+
+function getTodayLocalDateString() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 // Encryption utilities for calendar credentials
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'homeglow-default-key-change-in-production-32bytes';
@@ -807,7 +819,7 @@ async function migrateChoresDatabase() {
     `);
 
     console.log('Step 5: Migrating chore data...');
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayLocalDateString();
     const processedChores = new Map();
 
     for (const oldChore of existingChores) {
@@ -891,7 +903,7 @@ async function migrateClamsToHistory() {
 
     console.log('=== Starting clam_total to chore_history migration ===');
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayLocalDateString();
 
     const usersWithClams = db.prepare('SELECT id, username, clam_total FROM users WHERE clam_total > 0 AND id != 0').all();
     console.log(`Found ${usersWithClams.length} users with clam_total > 0`);
@@ -1050,7 +1062,7 @@ async function dailyBackgroundProcessing() {
   try {
     console.log('=== Starting daily background processing ===');
     let results = {};
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayLocalDateString();
 
     // We want to delete schedules that are completed and will never run again to avoid clutter
     const schedulesToPrune = db.prepare(`
@@ -1155,7 +1167,8 @@ async function dailyBackgroundProcessing() {
     for (const schedule of untilCompletedSchedules) {
       const interval = parser.parseExpression(schedule.crontab, options);
       // console.log(Object.getOwnPropertyNames(Object.getPrototypeOf(interval)));
-      const next = interval.next().toISOString().split('T')[0];
+      const nextDate = interval.next().toDate();
+      const next = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(nextDate.getDate()).padStart(2, '0')}`;
       console.log(`-------------- Next date for ${schedule.id} is ${next}`);
 
       // We need to add a one-time task because today is the trigger!
@@ -1197,7 +1210,7 @@ function startNightlyCronJob() {
     console.log('Running daily background processing at midnight');
     await dailyBackgroundProcessing();
   }, {
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    timezone: APP_TIMEZONE
   });
   console.log('Daily background processing cron job scheduled for midnight');
 }
@@ -1535,7 +1548,7 @@ fastify.post('/api/chores/complete', async (request, reply) => {
 
     db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value) VALUES (?, ?, ?, ?)').run(user_id, chore_schedule_id, date, schedule.clam_value);
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayLocalDateString();
     const allUserSchedules = db.prepare(`
       SELECT cs.*,
        c.clam_value,
@@ -1576,7 +1589,8 @@ fastify.post('/api/chores/complete', async (request, reply) => {
 
       // ensure only chores that are due today are part of today's chores
       const interval = parser.parseExpression(schedule.crontab, options);
-      const next = interval.next().toISOString().split('T')[0];
+      const nextDate = interval.next().toDate();
+      const next = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(nextDate.getDate()).padStart(2, '0')}`;
       if (today === next) {
         todaysChores.push(schedule);
       }
@@ -1664,7 +1678,7 @@ fastify.post('/api/users/:id/clams/add', async (request, reply) => {
       return reply.status(400).send({ error: 'Valid positive amount is required' });
     }
 
-    const useDate = date || new Date().toISOString().split('T')[0];
+    const useDate = date || getTodayLocalDateString();
     db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value) VALUES (?, NULL, ?, ?)').run(id, useDate, amount);
 
     const result = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(id);
@@ -1870,6 +1884,10 @@ fastify.get('/api/calendar/ics', async (request, reply) => {
     console.error('Error generating iCalendar:', error);
     reply.status(500).send('Failed to generate iCalendar');
   }
+});
+
+fastify.get('/api/timezone', async (request, reply) => {
+  return reply.send({ timezone: APP_TIMEZONE });
 });
 
 // NEW: API Endpoints for Settings (including API keys)
