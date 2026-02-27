@@ -372,7 +372,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
     const isMultiDaySpanning = (event) => {
       return event.all_day
-        ? !moment(event.start).isSame(moment(event.end).subtract(1, 'ms'), 'day')
+        ? !moment(event.start).isSame(moment(event.end), 'day')
         : !moment(event.start).isSame(moment(event.end), 'day');
     };
 
@@ -678,15 +678,6 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                 const dayTimed = events.filter(e =>
                   !e.all_day && !isMultiDaySpanning(e) && eventSpansDay(e, dayDate)
                 ).sort((a, b) => a.start - b.start);
-
-                // Debug logging for Feb 27
-                if (day.format('YYYY-MM-DD') === '2026-02-27') {
-                  console.log('Feb 27 Debug:');
-                  console.log('  multiDaySlottedRows:', multiDaySlottedRows);
-                  console.log('  dayAllDaySingle:', dayAllDaySingle);
-                  console.log('  dayTimed:', dayTimed);
-                  console.log('  multiDaySlotCount:', multiDaySlotCount);
-                }
 
                 const maxItems = 3;
                 const pillHeight = `${displaySettings.textSize * 2}px`;
