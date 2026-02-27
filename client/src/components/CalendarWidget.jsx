@@ -680,7 +680,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                 ).sort((a, b) => a.start - b.start);
 
                 const maxItems = 3;
-                const pillHeight = `${displaySettings.textSize * 1.75}px`;
+                const pillHeight = `${displaySettings.textSize * 1.5}px`;
 
                 // Count total events for this day
                 const totalEventCount = multiDaySlottedRows.filter(e => e !== null).length + dayAllDaySingle.length + dayTimed.length;
