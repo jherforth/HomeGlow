@@ -680,16 +680,17 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                 ).sort((a, b) => a.start - b.start);
 
                 const maxItems = 3;
-                let shownCount = 0;
-                let overflowCount = 0;
-
                 const pillHeight = `${displaySettings.textSize * 2}px`;
+
+                // Count total events for this day
+                const totalEventCount = multiDaySlottedRows.filter(e => e !== null).length + dayAllDaySingle.length + dayTimed.length;
+                let shownCount = 0;
 
                 const renderMonthPill = (event, key, clickHandler) => {
                   if (!event) {
                     return null;
                   }
-                  if (shownCount >= maxItems) { overflowCount++; return null; }
+                  if (shownCount >= maxItems) { return null; }
                   shownCount++;
                   const { isStart, isEnd } = getMultiDayPosition(event, dayDate);
                   const color = event.source_color || eventColors.backgroundColor;
@@ -763,7 +764,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                       )}
 
                       {dayAllDaySingle.map((event, evIdx) => {
-                        if (shownCount >= maxItems) { overflowCount++; return null; }
+                        if (shownCount >= maxItems) { return null; }
                         shownCount++;
                         const color = event.source_color || eventColors.backgroundColor;
                         return (
@@ -788,7 +789,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                       })}
 
                       {dayTimed.map((event, evIdx) => {
-                        if (shownCount >= maxItems) { overflowCount++; return null; }
+                        if (shownCount >= maxItems) { return null; }
                         shownCount++;
                         const color = event.source_color || eventColors.backgroundColor;
                         return (
@@ -802,9 +803,9 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                         );
                       })}
 
-                      {overflowCount > 0 && (
+                      {totalEventCount > maxItems && (
                         <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'text.secondary', display: 'block', mt: 0.25 }}>
-                          +{overflowCount} more
+                          +{totalEventCount - maxItems} more
                         </Typography>
                       )}
                     </Box>
