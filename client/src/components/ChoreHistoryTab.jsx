@@ -117,7 +117,7 @@ export default function ChoreHistoryTab() {
                   </TableCell>
                   <TableCell>
                     <Chip
-                      label={`${entry.clam_value} 🐚`}
+                      label={`${entry.clam_value} 🥟`}
                       size="small"
                       color="primary"
                       variant="filled"
