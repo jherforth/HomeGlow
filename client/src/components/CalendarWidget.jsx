@@ -343,7 +343,10 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
     const dayEnd = moment(day).endOf('day');
     const eventStart = moment(event.start);
     const eventEnd = moment(event.end);
-    return eventStart.isSameOrBefore(dayEnd) && eventEnd.isSameOrAfter(dayStart);
+    if (event.all_day) {
+      return eventStart.isSameOrBefore(day, 'day') && eventEnd.isSameOrAfter(day, 'day');
+    }
+    return eventStart.isBefore(dayEnd) && eventEnd.isAfter(dayStart) && !eventEnd.isSame(dayStart);
   };
 
   const getMultiDayPosition = (event, day) => {
@@ -356,7 +359,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
     const startDate = moment(currentDate).startOf('day');
     const weekDates = Array.from({ length: 7 }, (_, i) => startDate.clone().add(i, 'days'));
 
-    const isSpanningEvent = (e) => isMultiDay(e) || e.all_day;
+    const isSpanningEvent = (e) => isMultiDay(e) || (e.all_day && !moment(e.start).isSame(moment(e.end), 'day'));
 
     const weekSpanning = [];
     const seen = new Set();
@@ -579,7 +582,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
             const endDate = moment(monthEnd).endOf('week');
             const numWeeks = endDate.diff(startDate, 'days') / 7 + 1;
 
-            const isSpanning = (event) => isMultiDay(event) || event.all_day;
+            const isSpanning = (event) => isMultiDay(event) || (event.all_day && !moment(event.start).isSame(moment(event.end), 'day'));
 
             const weekRows = [];
             for (let w = 0; w < numWeeks; w++) {
@@ -637,7 +640,11 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                 day: d,
                 events: events
                   .filter(e => !isSpanning(e) && eventSpansDay(e, d.toDate()))
-                  .sort((a, b) => new Date(a.start) - new Date(b.start))
+                  .sort((a, b) => {
+                    if (a.all_day && !b.all_day) return -1;
+                    if (!a.all_day && b.all_day) return 1;
+                    return new Date(a.start) - new Date(b.start);
+                  })
               }));
 
               const maxSingleEvents = 2;
@@ -791,11 +798,11 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
                   <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', flex: 1, minHeight: 0 }}>
                     {weekDays.map((d, di) => {
-                      const { day: _d, events: daySingleEvents } = singleDayEventsByCol[di];
+                      const { events: daySingleEvents } = singleDayEventsByCol[di];
                       const isCurrentMonth = d.month() === moment(currentDate).month();
                       const isToday = d.isSame(moment(), 'day');
                       const spanningCountToday = weekSpanningEvents.filter(e => eventSpansDay(e, d.toDate())).length;
-                      const totalEvents = spanningCountToday + daySingleEvents.length;
+                      const hiddenCount = daySingleEvents.length - maxSingleEvents;
                       const dayClone = d.clone();
                       return (
                         <Box
@@ -822,15 +829,29 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                               onClick={(e) => { e.stopPropagation(); handleSelectEvent(event); }}
                               sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}
                             >
-                              <Box sx={{ width: displaySettings.bulletSize, height: displaySettings.bulletSize, minWidth: displaySettings.bulletSize, borderRadius: '50%', backgroundColor: event.source_color || eventColors.backgroundColor, flexShrink: 0 }} />
-                              <Typography variant="caption" sx={{ fontSize: `${displaySettings.textSize}px`, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}>
-                                {moment(event.start).format('h:mma')} {event.title}
-                              </Typography>
+                              {event.all_day ? (
+                                <Box sx={{ flex: 1, backgroundColor: event.source_color || eventColors.backgroundColor, borderRadius: '10px', px: 0.75, py: 0.1, overflow: 'hidden' }}>
+                                  <Typography variant="caption" sx={{ fontSize: `${displaySettings.textSize}px`, color: '#fff', fontWeight: 500, fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+                                    {event.title}
+                                  </Typography>
+                                </Box>
+                              ) : (
+                                <>
+                                  <Box sx={{ width: displaySettings.bulletSize, height: displaySettings.bulletSize, minWidth: displaySettings.bulletSize, borderRadius: '50%', backgroundColor: event.source_color || eventColors.backgroundColor, flexShrink: 0 }} />
+                                  <Typography variant="caption" sx={{ fontSize: `${displaySettings.textSize}px`, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}>
+                                    {moment(event.start).format('h:mma')} {event.title}
+                                  </Typography>
+                                </>
+                              )}
                             </Box>
                           ))}
-                          {totalEvents > spanningCountToday + maxSingleEvents && (
-                            <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'text.secondary' }}>
-                              +{totalEvents - spanningCountToday - maxSingleEvents} more
+                          {hiddenCount > 0 && (
+                            <Typography
+                              variant="caption"
+                              onClick={(e) => { e.stopPropagation(); handleSelectSlot({ start: dayClone.toDate() }); }}
+                              sx={{ fontSize: '0.65rem', color: 'var(--accent)', fontWeight: 600, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+                            >
+                              +{hiddenCount} more
                             </Typography>
                           )}
                         </Box>
