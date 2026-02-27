@@ -353,32 +353,93 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   };
 
   const getNext7Days = () => {
-    const days = [];
     const startDate = new Date(currentDate);
-
+    const dates = [];
     for (let i = 0; i < 7; i++) {
       const date = new Date(startDate);
       date.setDate(startDate.getDate() + i);
+      dates.push(date);
+    }
 
-      const dayEvents = events
-        .filter(event => eventSpansDay(event, date))
-        .sort((a, b) => {
-          if (a.all_day && !b.all_day) return -1;
-          if (!a.all_day && b.all_day) return 1;
-          return a.start - b.start;
+    const weekStart = moment(dates[0]).startOf('day');
+    const weekEnd = moment(dates[6]).endOf('day');
+
+    const weekEvents = events.filter(event => {
+      const eventStart = moment(event.start);
+      const eventEnd = moment(event.end);
+      return eventStart.isSameOrBefore(weekEnd) && eventEnd.isSameOrAfter(weekStart);
+    });
+
+    const isMultiDaySpanning = (event) => {
+      return event.all_day
+        ? !moment(event.start).isSame(moment(event.end).subtract(1, 'ms'), 'day')
+        : !moment(event.start).isSame(moment(event.end), 'day');
+    };
+
+    const multiDayEvents = weekEvents
+      .filter(e => isMultiDaySpanning(e))
+      .sort((a, b) => {
+        const aDur = moment(a.end).diff(moment(a.start), 'days');
+        const bDur = moment(b.end).diff(moment(b.start), 'days');
+        if (bDur !== aDur) return bDur - aDur;
+        return moment(a.start) - moment(b.start);
+      });
+
+    const slots = [];
+    multiDayEvents.forEach(event => {
+      let placed = false;
+      for (let s = 0; s < slots.length; s++) {
+        const overlaps = slots[s].some(slotEvent => {
+          return moment(event.start).isBefore(moment(slotEvent.end)) &&
+                 moment(event.end).isAfter(moment(slotEvent.start));
         });
+        if (!overlaps) {
+          slots[s].push(event);
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) slots.push([event]);
+    });
 
-      days.push({
-        date: date,
+    const multiDaySlotCount = slots.length;
+
+    const getMultiDaySlot = (event) => {
+      for (let s = 0; s < slots.length; s++) {
+        if (slots[s].includes(event)) return s;
+      }
+      return -1;
+    };
+
+    return dates.map(date => {
+      const dayMultiDay = multiDayEvents.filter(e => eventSpansDay(e, date));
+      const dayAllDaySingle = weekEvents.filter(e => {
+        if (!isMultiDaySpanning(e)) {
+          return e.all_day && eventSpansDay(e, date);
+        }
+        return false;
+      });
+      const dayTimed = weekEvents.filter(e => {
+        return !e.all_day && !isMultiDaySpanning(e) && eventSpansDay(e, date);
+      }).sort((a, b) => a.start - b.start);
+
+      const multiDaySlottedRows = Array(multiDaySlotCount).fill(null).map((_, slotIdx) => {
+        const event = dayMultiDay.find(e => getMultiDaySlot(e) === slotIdx) || null;
+        return event;
+      });
+
+      return {
+        date,
         dayName: moment(date).format('ddd'),
         dayNumber: moment(date).format('D'),
         monthName: moment(date).format('MMM'),
         isToday: moment(date).isSame(moment(new Date()), 'day'),
-        events: dayEvents
-      });
-    }
-
-    return days;
+        multiDaySlottedRows,
+        multiDaySlotCount,
+        allDaySingleEvents: dayAllDaySingle,
+        timedEvents: dayTimed,
+      };
+    });
   };
 
   const handleSettingsClick = (event) => {
@@ -750,136 +811,203 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
       ) : (
         <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
           <Box sx={{ display: 'flex', gap: 1, height: '100%' }}>
-            {getNext7Days().map((day, index) => (
-              <Box
-                key={index}
-                sx={{
-                  flex: 1,
-                  minWidth: 0,
-                  border: '1px solid var(--card-border)',
-                  borderRadius: 1,
-                  p: 1,
-                  bgcolor: day.isToday ? 'rgba(var(--accent-rgb), 0.1)' : 'transparent',
-                  display: 'flex',
-                  flexDirection: 'column'
-                }}
-              >
-                <Box sx={{ textAlign: 'center', mb: 1, borderBottom: '1px solid var(--card-border)', pb: 1 }}>
-                  <Typography variant="caption" sx={{ fontWeight: 'bold', color: day.isToday ? 'var(--accent)' : 'inherit' }}>
-                    {day.dayName}
-                  </Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 'bold', color: day.isToday ? 'var(--accent)' : 'inherit' }}>
-                    {day.dayNumber}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                    {day.monthName}
-                  </Typography>
-                </Box>
-                
-                <Box sx={{ flex: 1, overflowY: 'auto' }}>
-                  {day.events.length === 0 ? (
-                    <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', display: 'block', mt: 2 }}>
-                      No events
+            {getNext7Days().map((day, index) => {
+              const pillColor = (event) => event.source_color || eventColors.backgroundColor;
+              const renderPill = (event, key) => {
+                if (!event) {
+                  return (
+                    <Box
+                      key={key}
+                      sx={{
+                        mb: 0.5,
+                        height: `${displaySettings.textSize * 2.4}px`,
+                        minHeight: `${displaySettings.textSize * 2.4}px`,
+                      }}
+                    />
+                  );
+                }
+                const { isStart, isEnd } = getMultiDayPosition(event, day.date);
+                const color = pillColor(event);
+                return (
+                  <Box
+                    key={key}
+                    onClick={() => handleSelectEvent(event)}
+                    sx={{
+                      mb: 0.5,
+                      cursor: 'pointer',
+                      height: `${displaySettings.textSize * 2.4}px`,
+                      minHeight: `${displaySettings.textSize * 2.4}px`,
+                      display: 'flex',
+                      alignItems: 'stretch',
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        flex: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        backgroundColor: color,
+                        borderTopLeftRadius: isStart ? '12px' : '0px',
+                        borderBottomLeftRadius: isStart ? '12px' : '0px',
+                        borderTopRightRadius: isEnd ? '12px' : '0px',
+                        borderBottomRightRadius: isEnd ? '12px' : '0px',
+                        px: 1,
+                        border: '1px solid rgba(0,0,0,0.2)',
+                        borderLeft: !isStart ? 'none' : '1px solid rgba(0,0,0,0.2)',
+                        borderRight: !isEnd ? 'none' : '1px solid rgba(0,0,0,0.2)',
+                        overflow: 'hidden',
+                        '&:hover': { filter: 'brightness(1.1)' }
+                      }}
+                    >
+                      {isStart && (
+                        <Typography variant="caption" sx={{
+                          fontSize: `${displaySettings.textSize}px`,
+                          color: '#fff',
+                          fontWeight: 500,
+                          fontStyle: 'italic',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }}>
+                          {event.title}
+                        </Typography>
+                      )}
+                    </Box>
+                  </Box>
+                );
+              };
+
+              const hasAnyEvents = day.multiDaySlotCount > 0 || day.allDaySingleEvents.length > 0 || day.timedEvents.length > 0;
+
+              return (
+                <Box
+                  key={index}
+                  sx={{
+                    flex: 1,
+                    minWidth: 0,
+                    border: '1px solid var(--card-border)',
+                    borderRadius: 1,
+                    p: 1,
+                    bgcolor: day.isToday ? 'rgba(var(--accent-rgb), 0.1)' : 'transparent',
+                    display: 'flex',
+                    flexDirection: 'column'
+                  }}
+                >
+                  <Box sx={{ textAlign: 'center', mb: 1, borderBottom: '1px solid var(--card-border)', pb: 1 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 'bold', color: day.isToday ? 'var(--accent)' : 'inherit' }}>
+                      {day.dayName}
                     </Typography>
-                  ) : (
-                    day.events.map((event, eventIndex) => {
-                      const multiDay = isMultiDay(event);
-                      const multiDayAllDay = event.all_day && !moment(event.start).isSame(moment(event.end), 'day');
-                      const { isStart, isEnd } = (multiDay || multiDayAllDay) ? getMultiDayPosition(event, day.date) : { isStart: true, isEnd: true };
-                      const showAsPill = event.all_day || multiDay;
-                      const pillColor = event.source_color || eventColors.backgroundColor;
+                    <Typography variant="h6" sx={{ fontWeight: 'bold', color: day.isToday ? 'var(--accent)' : 'inherit' }}>
+                      {day.dayNumber}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                      {day.monthName}
+                    </Typography>
+                  </Box>
+
+                  <Box sx={{ flex: 1, overflowY: 'auto' }}>
+                    {day.multiDaySlottedRows.map((event, slotIdx) =>
+                      renderPill(event, `multi-${slotIdx}`)
+                    )}
+
+                    {day.allDaySingleEvents.map((event, evIdx) => {
+                      const color = pillColor(event);
                       return (
-                      <Box
-                        key={eventIndex}
-                        onClick={() => handleSelectEvent(event)}
-                        sx={{
-                          p: showAsPill ? 0 : 0.5,
-                          mb: 0.5,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'flex-start',
-                          gap: 0.5,
-                          minHeight: '36px',
-                          '&:hover': {
-                            backgroundColor: showAsPill ? 'transparent' : 'rgba(0, 0, 0, 0.05)'
-                          }
-                        }}
-                      >
-                        {showAsPill ? (
+                        <Box
+                          key={`allday-${evIdx}`}
+                          onClick={() => handleSelectEvent(event)}
+                          sx={{
+                            mb: 0.5,
+                            cursor: 'pointer',
+                            height: `${displaySettings.textSize * 2.4}px`,
+                            minHeight: `${displaySettings.textSize * 2.4}px`,
+                            display: 'flex',
+                            alignItems: 'stretch',
+                          }}
+                        >
                           <Box
                             sx={{
                               flex: 1,
                               display: 'flex',
-                              flexDirection: 'row',
                               alignItems: 'center',
-                              justifyContent: isStart && isEnd ? 'center' : isStart ? 'flex-start' : isEnd ? 'flex-end' : 'center',
-                              backgroundColor: pillColor,
-                              borderTopLeftRadius: isStart ? '12px' : '0px',
-                              borderBottomLeftRadius: isStart ? '12px' : '0px',
-                              borderTopRightRadius: isEnd ? '12px' : '0px',
-                              borderBottomRightRadius: isEnd ? '12px' : '0px',
-                              px: 1.5,
-                              py: 0.5,
-                              border: '1px solid rgba(0, 0, 0, 0.2)',
-                              borderLeft: !isStart ? 'none' : '1px solid rgba(0, 0, 0, 0.2)',
-                              borderRight: !isEnd ? 'none' : '1px solid rgba(0, 0, 0, 0.2)',
+                              backgroundColor: color,
+                              borderRadius: '12px',
+                              px: 1,
+                              border: '1px solid rgba(0,0,0,0.2)',
                               overflow: 'hidden',
                               '&:hover': { filter: 'brightness(1.1)' }
                             }}
                           >
-                            {isStart && (
-                              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: 0, overflow: 'hidden' }}>
-                                {event.all_day && (
-                                  <Typography variant="caption" sx={{ fontWeight: 'bold', fontSize: `${displaySettings.textSize}px`, fontStyle: 'italic', color: '#fff', whiteSpace: 'nowrap' }}>
-                                    All Day
-                                  </Typography>
-                                )}
-                                {!event.all_day && (
-                                  <Typography variant="caption" sx={{ fontWeight: 700, fontSize: `${displaySettings.textSize}px`, color: '#fff', whiteSpace: 'nowrap' }}>
-                                    {moment(event.start).format('h:mm A')}
-                                  </Typography>
-                                )}
-                                <Typography variant="caption" sx={{ fontWeight: 500, fontSize: `${displaySettings.textSize}px`, fontStyle: 'italic', color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {event.title}
-                                </Typography>
-                              </Box>
-                            )}
-                            {!isStart && isEnd && !event.all_day && (
-                              <Typography variant="caption" sx={{ fontWeight: 700, fontSize: `${displaySettings.textSize}px`, color: '#fff', whiteSpace: 'nowrap' }}>
-                                ends {moment(event.end).format('h:mm A')}
-                              </Typography>
-                            )}
+                            <Typography variant="caption" sx={{
+                              fontSize: `${displaySettings.textSize}px`,
+                              color: '#fff',
+                              fontWeight: 500,
+                              fontStyle: 'italic',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap'
+                            }}>
+                              {event.title}
+                            </Typography>
                           </Box>
-                        ) : (
-                          <>
-                            <Box
-                              sx={{
-                                width: displaySettings.bulletSize,
-                                height: displaySettings.bulletSize,
-                                minWidth: displaySettings.bulletSize,
-                                minHeight: displaySettings.bulletSize,
-                                borderRadius: '50%',
-                                backgroundColor: event.source_color || eventColors.backgroundColor,
-                                mt: displaySettings.bulletSize * 0.0625
-                              }}
-                            />
-                            <Box sx={{ flex: 1, minWidth: 0 }}>
-                              <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block', fontSize: `${displaySettings.textSize}px` }}>
-                                {moment(event.start).format('h:mm A')}
-                              </Typography>
-                              <Typography variant="caption" sx={{ display: 'block', lineHeight: 1.2, fontSize: `${displaySettings.textSize}px` }}>
-                                {event.title}
-                              </Typography>
-                            </Box>
-                          </>
-                        )}
-                      </Box>
+                        </Box>
                       );
-                    })
-                  )}
+                    })}
+
+                    {(day.multiDaySlotCount > 0 || day.allDaySingleEvents.length > 0) && day.timedEvents.length > 0 && (
+                      <Box sx={{ borderTop: '1px solid var(--card-border)', mt: 0.5, mb: 0.5 }} />
+                    )}
+
+                    {day.timedEvents.map((event, evIdx) => {
+                      const color = pillColor(event);
+                      return (
+                        <Box
+                          key={`timed-${evIdx}`}
+                          onClick={() => handleSelectEvent(event)}
+                          sx={{
+                            p: 0.5,
+                            mb: 0.5,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: 0.5,
+                            borderRadius: 0.5,
+                            '&:hover': { backgroundColor: 'rgba(0,0,0,0.05)' }
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              width: displaySettings.bulletSize,
+                              height: displaySettings.bulletSize,
+                              minWidth: displaySettings.bulletSize,
+                              minHeight: displaySettings.bulletSize,
+                              borderRadius: '50%',
+                              backgroundColor: color,
+                              mt: displaySettings.bulletSize * 0.0625,
+                              flexShrink: 0
+                            }}
+                          />
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block', fontSize: `${displaySettings.textSize}px` }}>
+                              {moment(event.start).format('h:mm A')}
+                            </Typography>
+                            <Typography variant="caption" sx={{ display: 'block', lineHeight: 1.2, fontSize: `${displaySettings.textSize}px` }}>
+                              {event.title}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      );
+                    })}
+
+                    {!hasAnyEvents && (
+                      <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', display: 'block', mt: 2 }}>
+                        No events
+                      </Typography>
+                    )}
+                  </Box>
                 </Box>
-              </Box>
-            ))}
+              );
+            })}
           </Box>
         </Box>
       )}
