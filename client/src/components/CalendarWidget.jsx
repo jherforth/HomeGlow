@@ -690,7 +690,9 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                   if (!event) {
                     return null;
                   }
-                  if (shownCount >= maxItems) { return null; }
+                  if (shownCount >= maxItems) {
+                    return null;
+                  }
                   shownCount++;
                   const { isStart, isEnd } = getMultiDayPosition(event, dayDate);
                   const color = event.source_color || eventColors.backgroundColor;
@@ -711,6 +713,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                         borderTopRightRadius: isEnd ? '10px' : '0px',
                         borderBottomRightRadius: isEnd ? '10px' : '0px',
                         px: 0.75,
+                        py: 0.125,
                         border: '1px solid rgba(0,0,0,0.2)',
                         borderLeft: !isStart ? 'none' : '1px solid rgba(0,0,0,0.2)',
                         borderRight: !isEnd ? 'none' : '1px solid rgba(0,0,0,0.2)',
@@ -759,9 +762,10 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                     </Typography>
 
                     <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-                      {multiDaySlottedRows.map((event, slotIdx) =>
-                        renderMonthPill(event, `multi-${slotIdx}`, (e) => { e.stopPropagation(); handleSelectEvent(event); })
-                      )}
+                      {multiDaySlottedRows.map((event, slotIdx) => {
+                        const result = renderMonthPill(event, `multi-${slotIdx}`, (e) => { e.stopPropagation(); handleSelectEvent(event); });
+                        return result;
+                      })}
 
                       {dayAllDaySingle.map((event, evIdx) => {
                         if (shownCount >= maxItems) { return null; }
@@ -772,7 +776,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                             sx={{ mb: 0.25, height: pillHeight, minHeight: pillHeight, display: 'flex', alignItems: 'stretch', cursor: 'pointer' }}>
                             <Box sx={{
                               flex: 1, display: 'flex', alignItems: 'center',
-                              backgroundColor: color, borderRadius: '10px', px: 0.75,
+                              backgroundColor: color, borderRadius: '10px', px: 0.75, py: 0.125,
                               border: '1px solid rgba(0,0,0,0.2)', overflow: 'hidden',
                               '&:hover': { filter: 'brightness(1.1)' }
                             }}>
@@ -872,6 +876,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                         borderTopRightRadius: isEnd ? '12px' : '0px',
                         borderBottomRightRadius: isEnd ? '12px' : '0px',
                         px: 1,
+                        py: 0.125,
                         border: '1px solid rgba(0,0,0,0.2)',
                         borderLeft: !isStart ? 'none' : '1px solid rgba(0,0,0,0.2)',
                         borderRight: !isEnd ? 'none' : '1px solid rgba(0,0,0,0.2)',
@@ -952,6 +957,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                               backgroundColor: color,
                               borderRadius: '12px',
                               px: 1,
+                              py: 0.125,
                               border: '1px solid rgba(0,0,0,0.2)',
                               overflow: 'hidden',
                               '&:hover': { filter: 'brightness(1.1)' }
