@@ -54,17 +54,23 @@ import {
   Timer,
   ViewCompact,
   ViewModule,
-  ViewQuilt
+  ViewQuilt,
+  Lock
 } from '@mui/icons-material';
 import { ChromePicker } from 'react-color';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
+import PinModal from './PinModal';
+import ChoreSchedulesTab from './ChoreSchedulesTab';
+import ChoreHistoryTab from './ChoreHistoryTab';
 
 const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const [activeTab, setActiveTab] = useState(0);
+  const [choresSubTab, setChoresSubTab] = useState(0);
   const [settings, setSettings] = useState({
     WEATHER_API_KEY: '',
-    PROXY_WHITELIST: ''
+    PROXY_WHITELIST: '',
+    daily_completion_clam_reward: '2'
   });
   const [widgetSettings, setLocalWidgetSettings] = useState({
     chores: { enabled: false, transparent: false, refreshInterval: 0 },
@@ -92,6 +98,10 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const [choreModal, setChoreModal] = useState({ open: false, user: null, userChores: [] });
   const [isLoading, setIsLoading] = useState(false);
   const [saveMessage, setSaveMessage] = useState({ show: false, type: '', text: '' });
+  const [pinExists, setPinExists] = useState(false);
+  const [pinModal, setPinModal] = useState({ open: false, mode: 'verify', title: '' });
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [checkingPin, setCheckingPin] = useState(true);
 
   // Refresh interval options in milliseconds
   const refreshIntervalOptions = [
@@ -115,12 +125,12 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
         chores: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.chores },
         calendar: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.calendar },
         photos: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.photos },
-        weather: { 
-          enabled: false, 
-          transparent: false, 
-          refreshInterval: 0, 
+        weather: {
+          enabled: false,
+          transparent: false,
+          refreshInterval: 0,
           layoutMode: (parsed.weather?.layoutMode === 'auto' || !parsed.weather?.layoutMode) ? 'medium' : parsed.weather.layoutMode,
-          ...parsed.weather 
+          ...parsed.weather
         },
         widgetGallery: { enabled: true, transparent: false, refreshInterval: 0, ...parsed.widgetGallery },
         primary: parsed.primary || '#9E7FFF',
@@ -129,12 +139,36 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       };
       setLocalWidgetSettings(settingsWithDefaults);
     }
-    fetchSettings();
-    fetchUsers();
-    fetchChores();
-    fetchPrizes();
-    fetchUploadedWidgets();
+    checkPinStatus();
   }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchSettings();
+      fetchUsers();
+      fetchChores();
+      fetchPrizes();
+      fetchUploadedWidgets();
+    }
+  }, [isAuthenticated]);
+
+  const checkPinStatus = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/admin-pin/exists`);
+      setPinExists(response.data.exists);
+
+      if (response.data.exists) {
+        setPinModal({ open: true, mode: 'verify', title: 'Enter Admin PIN' });
+      } else {
+        setIsAuthenticated(true);
+      }
+    } catch (error) {
+      console.error('Error checking PIN status:', error);
+      setIsAuthenticated(true);
+    } finally {
+      setCheckingPin(false);
+    }
+  };
 
   const fetchSettings = async () => {
     try {
@@ -157,7 +191,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
 
   const fetchChores = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/chores`);
+      const response = await axios.get(`${API_BASE_URL}/api/chore-schedules`);
       setChores(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching chores:', error);
@@ -221,9 +255,10 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     try {
       await Promise.all([
         axios.post(`${API_BASE_URL}/api/settings`, { key: 'WEATHER_API_KEY', value: settings.WEATHER_API_KEY || '' }),
-        axios.post(`${API_BASE_URL}/api/settings`, { key: 'PROXY_WHITELIST', value: settings.PROXY_WHITELIST || '' })
+        axios.post(`${API_BASE_URL}/api/settings`, { key: 'PROXY_WHITELIST', value: settings.PROXY_WHITELIST || '' }),
+        axios.post(`${API_BASE_URL}/api/settings`, { key: 'daily_completion_clam_reward', value: settings.daily_completion_clam_reward || '2' })
       ]);
-      setSaveMessage({ show: true, type: 'success', text: 'All API settings saved successfully!' });
+      setSaveMessage({ show: true, type: 'success', text: 'All settings saved successfully!' });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } catch (error) {
       console.error('Error saving API settings:', error);
@@ -338,13 +373,13 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const deleteUser = async (userId) => {
     try {
       setIsLoading(true);
-      const userChores = chores.filter(chore => chore.user_id === userId);
-      for (const chore of userChores) {
-        await axios.delete(`${API_BASE_URL}/api/chores/${chore.id}`);
+      const userSchedules = chores.filter(schedule => schedule.user_id === userId);
+      for (const schedule of userSchedules) {
+        await axios.delete(`${API_BASE_URL}/api/chore-schedules/${schedule.id}`);
       }
-      
+
       await axios.delete(`${API_BASE_URL}/api/users/${userId}`);
-      
+
       fetchUsers();
       fetchChores();
       setDeleteUserDialog({ open: false, user: null });
@@ -363,9 +398,15 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const updateUserClams = async (userId, newTotal) => {
     try {
       setIsLoading(true);
-      await axios.patch(`${API_BASE_URL}/api/users/${userId}/clams`, {
-        clam_total: newTotal
-      });
+      const user = users.find(u => u.id === userId);
+      const currentTotal = user?.clam_total || 0;
+      const diff = newTotal - currentTotal;
+
+      if (diff > 0) {
+        await axios.post(`${API_BASE_URL}/api/users/${userId}/clams/add`, { amount: diff });
+      } else if (diff < 0) {
+        await axios.post(`${API_BASE_URL}/api/users/${userId}/clams/reduce`, { amount: Math.abs(diff) });
+      }
       fetchUsers();
     } catch (error) {
       console.error('Error updating user clams:', error);
@@ -471,19 +512,21 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     setChoreModal({ open: false, user: null, userChores: [] });
   };
 
-  const deleteChore = async (choreId) => {
-    if (window.confirm('Are you sure you want to delete this chore?')) {
+  const deleteChore = async (scheduleId) => {
+    if (window.confirm('Are you sure you want to remove this chore schedule?')) {
       try {
         setIsLoading(true);
-        await axios.delete(`${API_BASE_URL}/api/chores/${choreId}`);
-        fetchChores();
+        await axios.delete(`${API_BASE_URL}/api/chore-schedules/${scheduleId}`);
+        await fetchChores();
         if (choreModal.user) {
-          const updatedUserChores = chores.filter(chore => chore.user_id === choreModal.user.id && chore.id !== choreId);
-          setChoreModal(prev => ({ ...prev, userChores: updatedUserChores }));
+          setChoreModal(prev => ({
+            ...prev,
+            userChores: prev.userChores.filter(c => c.id !== scheduleId)
+          }));
         }
       } catch (error) {
-        console.error('Error deleting chore:', error);
-        alert('Failed to delete chore. Please try again.');
+        console.error('Error deleting chore schedule:', error);
+        alert('Failed to delete chore schedule. Please try again.');
       } finally {
         setIsLoading(false);
       }
@@ -548,6 +591,62 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
 
   const getUserChoreCount = (userId) => {
     return chores.filter(chore => chore.user_id === userId).length;
+  };
+
+  const handlePinVerify = async (pin) => {
+    try {
+      if (pinModal.mode === 'set') {
+        await axios.post(`${API_BASE_URL}/api/admin-pin/set`, { pin });
+        setPinExists(true);
+        setIsAuthenticated(true);
+        setPinModal({ open: false, mode: 'verify', title: '' });
+        setSaveMessage({ show: true, type: 'success', text: 'Admin PIN set successfully!' });
+        setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+      } else {
+        const response = await axios.post(`${API_BASE_URL}/api/admin-pin/verify`, { pin });
+        if (response.data.valid) {
+          setIsAuthenticated(true);
+          setPinModal({ open: false, mode: 'verify', title: '' });
+        } else {
+          throw new Error('Invalid PIN');
+        }
+      }
+    } catch (error) {
+      throw new Error(error.response?.data?.error || 'Invalid PIN. Please try again.');
+    }
+  };
+
+  const handlePinModalClose = () => {
+    if (pinModal.mode === 'set' && !pinExists) {
+      return;
+    }
+    if (!isAuthenticated) {
+      return;
+    }
+    setPinModal({ open: false, mode: 'verify', title: '' });
+  };
+
+  const handleUpdatePin = () => {
+    setPinModal({ open: true, mode: 'set', title: 'Update Admin PIN' });
+  };
+
+  const handleClearPin = async () => {
+    if (!window.confirm('Are you sure you want to remove the admin PIN? Anyone will be able to access the admin panel without a PIN.')) {
+      return;
+    }
+    try {
+      setIsLoading(true);
+      await axios.delete(`${API_BASE_URL}/api/admin-pin`);
+      setPinExists(false);
+      setSaveMessage({ show: true, type: 'success', text: 'Admin PIN removed. Admin panel is now unprotected.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 4000);
+    } catch (error) {
+      console.error('Error clearing PIN:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to remove PIN. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const renderColorPicker = (key, label) => (
@@ -615,9 +714,33 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     'Widgets',
     'Interface',
     'Users',
+    'Chores',
     'Prizes',
-    'Plugins'
+    'Plugins',
+    'Security'
   ];
+
+  if (checkingPin) {
+    return (
+      <Box sx={{ width: '100%', maxWidth: 1200, mx: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+        <CircularProgress size={60} />
+      </Box>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <Box sx={{ width: '100%', maxWidth: 1200, mx: 'auto' }}>
+        <PinModal
+          open={pinModal.open}
+          onClose={handlePinModalClose}
+          onVerify={handlePinVerify}
+          mode={pinModal.mode}
+          title={pinModal.title}
+        />
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ width: '100%', maxWidth: 1200, mx: 'auto' }}>
@@ -643,34 +766,47 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
               </Alert>
             )}
 
-            <TextField
-              fullWidth
-              label="OpenWeatherMap API Key"
-              type="password"
-              value={settings.WEATHER_API_KEY || ''}
-              onChange={(e) => setSettings(prev => ({ ...prev, WEATHER_API_KEY: e.target.value }))}
-              sx={{ mb: 2 }}
-              helperText="Get your free API key from openweathermap.org"
-            />
+            <Box sx={{ maxWidth: 600 }}>
+              <TextField
+                fullWidth
+                label="OpenWeatherMap API Key"
+                type="password"
+                value={settings.WEATHER_API_KEY || ''}
+                onChange={(e) => setSettings(prev => ({ ...prev, WEATHER_API_KEY: e.target.value }))}
+                sx={{ mb: 2 }}
+                helperText="Get your free API key from openweathermap.org"
+              />
 
-            <TextField
-              fullWidth
-              label="Proxy Whitelist (comma-separated domains)"
-              value={settings.PROXY_WHITELIST || ''}
-              onChange={(e) => setSettings(prev => ({ ...prev, PROXY_WHITELIST: e.target.value }))}
-              sx={{ mb: 2 }}
-              helperText="Domains allowed for proxy requests (e.g., api.example.com, another-api.com)"
-            />
+              <TextField
+                fullWidth
+                label="Proxy Whitelist (comma-separated domains)"
+                value={settings.PROXY_WHITELIST || ''}
+                onChange={(e) => setSettings(prev => ({ ...prev, PROXY_WHITELIST: e.target.value }))}
+                sx={{ mb: 2 }}
+                helperText="Domains allowed for proxy requests (e.g., api.example.com, another-api.com)"
+              />
 
-            <Button
-              variant="contained"
-              onClick={saveAllApiSettings}
-              disabled={isLoading}
-              startIcon={<Save />}
-              sx={{ mt: 2 }}
-            >
-              {isLoading ? 'Saving...' : 'Save API Settings'}
-            </Button>
+              <TextField
+                fullWidth
+                label="Daily Completion Clam Reward"
+                type="number"
+                value={settings.daily_completion_clam_reward || '2'}
+                onChange={(e) => setSettings(prev => ({ ...prev, daily_completion_clam_reward: e.target.value }))}
+                sx={{ mb: 2 }}
+                helperText="Number of clams awarded when a user completes all their daily chores"
+                inputProps={{ min: 0, max: 100 }}
+              />
+
+              <Button
+                variant="contained"
+                onClick={saveAllApiSettings}
+                disabled={isLoading}
+                startIcon={<Save />}
+                sx={{ mt: 2 }}
+              >
+                {isLoading ? 'Saving...' : 'Save Settings'}
+              </Button>
+            </Box>
           </CardContent>
         </Card>
       )}
@@ -1176,8 +1312,28 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
         </Card>
       )}
 
-      {/* Prizes Tab */}
+      {/* Chores Tab */}
       {activeTab === 4 && (
+        <Card>
+          <CardContent>
+            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+              <Tabs value={choresSubTab} onChange={(_, v) => setChoresSubTab(v)} size="small">
+                <Tab label="Chores" />
+                <Tab label="History" />
+              </Tabs>
+            </Box>
+            {choresSubTab === 0 && (
+              <ChoreSchedulesTab saveMessage={saveMessage} setSaveMessage={setSaveMessage} />
+            )}
+            {choresSubTab === 1 && (
+              <ChoreHistoryTab />
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Prizes Tab */}
+      {activeTab === 5 && (
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>Prize Management</Typography>
@@ -1265,7 +1421,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       )}
 
       {/* Plugins Tab */}
-      {activeTab === 5 && (
+      {activeTab === 6 && (
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>Plugin Management</Typography>
@@ -1345,6 +1501,109 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
         </Card>
       )}
 
+      {/* Security Tab */}
+      {activeTab === 7 && (
+        <Card>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>Security Settings</Typography>
+
+            {saveMessage.show && (
+              <Alert severity={saveMessage.type} sx={{ mb: 2 }}>
+                {saveMessage.text}
+              </Alert>
+            )}
+
+            <Alert severity="info" sx={{ mb: 3 }}>
+              The admin PIN is required to access the admin panel. Keep your PIN secure and memorable.
+            </Alert>
+
+            <Box sx={{ p: 3, border: '2px solid var(--accent)', borderRadius: 2, backgroundColor: 'rgba(158, 127, 255, 0.05)' }}>
+              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Lock />
+                Admin PIN Protection
+              </Typography>
+
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                {pinExists
+                  ? 'Your admin panel is protected with a PIN. You can update your PIN below.'
+                  : 'Set up a PIN to secure your admin panel access.'}
+              </Typography>
+
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Paper elevation={0} sx={{ p: 2, backgroundColor: 'rgba(0, 0, 0, 0.1)' }}>
+                    <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                      PIN Requirements:
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      • 4-8 numeric digits
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      • Numbers only (0-9)
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      • Required for admin access
+                    </Typography>
+                  </Paper>
+                </Grid>
+
+                <Grid item xs={12} sm={6}>
+                  <Paper elevation={0} sx={{ p: 2, backgroundColor: 'rgba(0, 0, 0, 0.1)' }}>
+                    <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                      Current Status:
+                    </Typography>
+                    <Chip
+                      label={pinExists ? 'PIN Configured' : 'No PIN Set'}
+                      color={pinExists ? 'success' : 'warning'}
+                      sx={{ mb: 2 }}
+                    />
+                    <Typography variant="body2" color="text.secondary">
+                      {pinExists
+                        ? 'Your admin panel is secured with a PIN.'
+                        : 'Please set a PIN to secure your admin panel.'}
+                    </Typography>
+                  </Paper>
+                </Grid>
+              </Grid>
+
+              <Box sx={{ mt: 3, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                <Button
+                  variant="contained"
+                  onClick={handleUpdatePin}
+                  startIcon={<Lock />}
+                  fullWidth
+                  sx={{
+                    py: 1.5,
+                    background: 'linear-gradient(135deg, var(--accent) 0%, var(--secondary) 100%)',
+                    fontWeight: 'bold',
+                    fontSize: '1rem'
+                  }}
+                >
+                  {pinExists ? 'Update Admin PIN' : 'Set Admin PIN'}
+                </Button>
+                {pinExists && (
+                  <Button
+                    variant="outlined"
+                    onClick={handleClearPin}
+                    color="error"
+                    fullWidth
+                    sx={{ py: 1, fontWeight: 'bold' }}
+                  >
+                    Remove PIN
+                  </Button>
+                )}
+              </Box>
+
+              {pinExists && (
+                <Alert severity="warning" sx={{ mt: 2 }}>
+                  Changing your PIN will require you to use the new PIN on your next admin panel access.
+                </Alert>
+              )}
+            </Box>
+          </CardContent>
+        </Card>
+      )}
+
       {/* User Delete Confirmation Dialog */}
       <Dialog
         open={deleteUserDialog.open}
@@ -1418,10 +1677,8 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
                   <TableRow>
                     <TableCell>Title</TableCell>
                     <TableCell>Description</TableCell>
-                    <TableCell>Day</TableCell>
-                    <TableCell>Time</TableCell>
-                    <TableCell>Repeat</TableCell>
-                    <TableCell>Status</TableCell>
+                    <TableCell>Schedule (Crontab)</TableCell>
+                    <TableCell>Visible</TableCell>
                     <TableCell>Clams</TableCell>
                     <TableCell>Actions</TableCell>
                   </TableRow>
@@ -1440,26 +1697,14 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Chip
-                          label={chore.assigned_day_of_week}
-                          size="small"
-                          variant="outlined"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {chore.time_period.replace('-', ' ')}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {chore.repeat_type.replace('-', ' ')}
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                          {chore.crontab || 'One-time'}
                         </Typography>
                       </TableCell>
                       <TableCell>
                         <Chip
-                          label={chore.completed ? 'Completed' : 'Pending'}
-                          color={chore.completed ? 'success' : 'default'}
+                          label={chore.visible ? 'Visible' : 'Hidden'}
+                          color={chore.visible ? 'success' : 'default'}
                           size="small"
                         />
                       </TableCell>
@@ -1582,6 +1827,15 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
           />
         </Box>
       </Backdrop>
+
+      {/* PIN Modal */}
+      <PinModal
+        open={pinModal.open}
+        onClose={handlePinModalClose}
+        onVerify={handlePinVerify}
+        mode={pinModal.mode}
+        title={pinModal.title}
+      />
     </Box>
   );
 };

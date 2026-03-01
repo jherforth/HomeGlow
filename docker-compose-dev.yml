@@ -32,6 +32,7 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=${DEV_BACKEND_PORT:-5001}
+      - TZ=${TZ:-America/New_York}
     networks:
       - homeglow-test-network
     restart: unless-stopped
