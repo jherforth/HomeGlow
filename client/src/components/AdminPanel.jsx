@@ -774,7 +774,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
                 value={settings.WEATHER_API_KEY || ''}
                 onChange={(e) => setSettings(prev => ({ ...prev, WEATHER_API_KEY: e.target.value }))}
                 sx={{ mb: 2 }}
-                helperText="Get your free API key from openweathermap.org"
+                helperText="Get your free API key from openweathermap.org/api"
               />
 
               <TextField
