@@ -9,6 +9,8 @@ Update the UI so that tabs can be added and remove from the page, and tabs will 
   - A modal window will pop up and show a series of font-awesome icons to select from, and a label field to enter a tab name. Once saved, the tab can be used.
   - There will be a toggle to show or hide the tab label during the create.
 - Once a tab is added, another "+" mini tab will appear next to it so another can be added.
+  - The tabs can simply be pipes between them, similar to how the Chrome and Brave browsers render tabs:
+  - 
 - When the UI is locked again, the "+" mini tab and "-" red icon will be removed from view.
 - When a custom tab has been added, a new picklist/drop down selection will appear next to all of the core applications to allow them to be rended on the custom tab selected.
   - The picklist will show the tab label and not the icon.
