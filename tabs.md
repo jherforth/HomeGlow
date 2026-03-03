@@ -10,7 +10,7 @@ Update the UI so that tabs can be added and remove from the page, and tabs will 
   - There will be a toggle to show or hide the tab label during the create.
 - Once a tab is added, another "+" mini tab will appear next to it so another can be added.
   - The tabs can simply be pipes between them, similar to how the Chrome and Brave browsers render tabs:
-  - 
+  - ![tabs](https://github.com/jherforth/HomeGlow/blob/Testing/screenshots/Screenshot%202026-03-03%20103618.png?raw=true)
 - When the UI is locked again, the "+" mini tab and "-" red icon will be removed from view.
 - When a custom tab has been added, a new picklist/drop down selection will appear next to all of the core applications to allow them to be rended on the custom tab selected.
   - The picklist will show the tab label and not the icon.
