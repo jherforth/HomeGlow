@@ -1,11 +1,13 @@
 FROM node:24
 WORKDIR /app
 
-# Accept PORT as build argument with default
+# Accept PORT and TZ as build arguments with defaults
 ARG PORT=5000
+ARG TZ=America/New_York
 
-# Set as environment variable for runtime
+# Set as environment variables for runtime
 ENV PORT=$PORT
+ENV TZ=$TZ
 
 # Install SQLite3 dependencies with GPG error handling
 RUN apt-get clean && \

@@ -1,4 +1,9 @@
 // File: server/index.js
+require('dotenv').config();
+
+const APP_TIMEZONE = process.env.TZ || 'America/New_York';
+process.env.TZ = APP_TIMEZONE;
+
 const fastify = require('fastify')({ logger: true });
 const Database = require('better-sqlite3');
 const ical = require('ical-generator');
@@ -7,11 +12,12 @@ const path = require('path');
 const fs = require('fs').promises;
 const multipart = require('@fastify/multipart');
 const crypto = require('crypto');
-require('dotenv').config();
 
 // NEW: Import axios for HTTP requests and ical.js for parsing
 const axios = require('axios');
 const ICAL = require('ical.js');
+const parser = require('cron-parser');
+const cron = require('node-cron');
 // For widget upload and registry
 const widgetRegistryPath = path.join(__dirname, 'widgets_registry.json');
 
@@ -19,6 +25,14 @@ const widgetRegistryPath = path.join(__dirname, 'widgets_registry.json');
 const GITHUB_REPO_OWNER = 'jherforth';
 const GITHUB_REPO_NAME = 'HomeGlowPlugins';
 const GITHUB_API_BASE = 'https://api.github.com';
+
+function getTodayLocalDateString() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 // Encryption utilities for calendar credentials
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'homeglow-default-key-change-in-production-32bytes';
@@ -569,10 +583,9 @@ async function initializeDatabase() {
         id INTEGER PRIMARY KEY AUTOINCREMENT,\
         username TEXT,\
         email TEXT,\
-        profile_picture TEXT,\
-        clam_total INTEGER DEFAULT 0
+        profile_picture TEXT
       );
-      INSERT OR IGNORE INTO users (id, username, email, profile_picture, clam_total) VALUES (0, 'bonus', 'bonus@example.com', '', 0);\
+      INSERT OR IGNORE INTO users (id, username, email, profile_picture) VALUES (0, 'bonus', 'bonus@example.com', '');\
       CREATE TABLE IF NOT EXISTS events (
         id INTEGER PRIMARY KEY AUTOINCREMENT,\
         user_id INTEGER,\
@@ -620,6 +633,12 @@ async function initializeDatabase() {
       );
       CREATE INDEX IF NOT EXISTS idx_photo_sources_enabled ON photo_sources(enabled);
       CREATE INDEX IF NOT EXISTS idx_photo_sources_sort_order ON photo_sources(sort_order);
+      CREATE TABLE IF NOT EXISTS admin_pin (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        pin_hash TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
     `);
     
     // Migration: Add repeat_type column if it doesn't exist and remove old repeats column
@@ -704,6 +723,286 @@ async function initializeDatabase() {
   }
 }
 
+// Helper function to convert old repeat_type to crontab expression
+function convertRepeatTypeToCrontab(repeat_type, assigned_day_of_week) {
+  const dayMap = {
+    'sunday': '0',
+    'monday': '1',
+    'tuesday': '2',
+    'wednesday': '3',
+    'thursday': '4',
+    'friday': '5',
+    'saturday': '6'
+  };
+
+  switch (repeat_type) {
+    case 'daily':
+      return '0 0 * * *';
+    case 'weekly':
+      const dayNum = dayMap[assigned_day_of_week.toLowerCase()] || '1';
+      return `0 0 * * ${dayNum}`;
+    case 'until-completed':
+      return '0 0 * * *';
+    case 'no-repeat':
+      return null;
+    default:
+      return '0 0 * * *';
+  }
+}
+
+// Database migration function
+async function migrateChoresDatabase() {
+  try {
+    console.log('=== Checking for database migration ===');
+
+    const migrationVersionRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('chores_migration_version');
+    const currentVersion = migrationVersionRow ? parseInt(migrationVersionRow.value) : 0;
+
+    if (currentVersion >= 1) {
+      console.log('Migration already completed (version:', currentVersion, ')');
+      return;
+    }
+
+    console.log('=== Starting chores database migration ===');
+
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('migration_in_progress', '1');
+
+    console.log('Step 1: Creating new tables...');
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS chore_schedules (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chore_id INTEGER NOT NULL,
+        user_id INTEGER NULL,
+        crontab TEXT NULL,
+        visible INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (chore_id) REFERENCES chores(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_chore_schedules_chore_id ON chore_schedules(chore_id);
+      CREATE INDEX IF NOT EXISTS idx_chore_schedules_user_id ON chore_schedules(user_id);
+      CREATE INDEX IF NOT EXISTS idx_chore_schedules_visible ON chore_schedules(visible);
+
+      CREATE TABLE IF NOT EXISTS chore_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        chore_schedule_id INTEGER NULL,
+        date TEXT NOT NULL,
+        clam_value INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (chore_schedule_id) REFERENCES chore_schedules(id) ON DELETE SET NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_chore_history_user_id ON chore_history(user_id);
+      CREATE INDEX IF NOT EXISTS idx_chore_history_date ON chore_history(date);
+      CREATE INDEX IF NOT EXISTS idx_chore_history_user_date ON chore_history(user_id, date);
+    `);
+    console.log('New tables created successfully');
+
+    console.log('Step 2: Backing up existing chores...');
+    const existingChores = db.prepare('SELECT * FROM chores').all();
+    console.log(`Found ${existingChores.length} existing chores to migrate`);
+
+    console.log('Step 3: Creating backup table...');
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS chores_backup AS SELECT * FROM chores;
+    `);
+
+    console.log('Step 4: Creating new chores table structure...');
+    db.exec(`
+      CREATE TABLE chores_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        description TEXT,
+        clam_value INTEGER DEFAULT 0
+      );
+    `);
+
+    console.log('Step 5: Migrating chore data...');
+    const today = getTodayLocalDateString();
+    const processedChores = new Map();
+
+    for (const oldChore of existingChores) {
+      let choreId;
+
+      const key = `${oldChore.title}-${oldChore.description || ''}-${oldChore.clam_value}`;
+
+      if (processedChores.has(key)) {
+        choreId = processedChores.get(key);
+      } else {
+        const insertResult = db.prepare(`
+          INSERT INTO chores_new (title, description, clam_value)
+          VALUES (?, ?, ?)
+        `).run(oldChore.title, oldChore.description, oldChore.clam_value || 0);
+
+        choreId = insertResult.lastInsertRowid;
+        processedChores.set(key, choreId);
+      }
+
+      const crontab = convertRepeatTypeToCrontab(
+        oldChore.repeat_type || 'weekly',
+        oldChore.assigned_day_of_week || 'monday'
+      );
+
+      const visible = (oldChore.repeat_type === 'no-repeat' && oldChore.completed) ? 0 : 1;
+
+      const scheduleResult = db.prepare(`
+        INSERT INTO chore_schedules (chore_id, user_id, crontab, visible)
+        VALUES (?, ?, ?, ?)
+      `).run(choreId, oldChore.user_id, crontab, visible);
+
+      if (oldChore.completed && oldChore.completed === 1) {
+        db.prepare(`
+          INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value)
+          VALUES (?, ?, ?, ?)
+        `).run(oldChore.user_id, scheduleResult.lastInsertRowid, today, oldChore.clam_value || 0);
+      }
+    }
+
+    console.log('Step 6: Replacing old chores table...');
+    db.exec(`
+      DROP TABLE chores;
+      ALTER TABLE chores_new RENAME TO chores;
+    `);
+
+    console.log('Step 7: Updating migration version...');
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('chores_migration_version', '1');
+    db.prepare('DELETE FROM settings WHERE key = ?').run('migration_in_progress');
+
+    console.log('=== Migration completed successfully ===');
+    console.log(`Migrated ${existingChores.length} chores, created ${processedChores.size} unique chore definitions`);
+
+  } catch (error) {
+    console.error('=== Migration failed ===');
+    console.error('Error:', error);
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('migration_error', error.message);
+    throw error;
+  }
+}
+
+async function migrateClamsToHistory() {
+  try {
+    console.log('=== Checking for clam_total migration ===');
+
+    const migrationVersionRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('clam_migration_version');
+    const currentVersion = migrationVersionRow ? parseInt(migrationVersionRow.value) : 0;
+
+    if (currentVersion >= 1) {
+      console.log('Clam migration already completed (version:', currentVersion, ')');
+      return;
+    }
+
+    const columns = db.prepare("PRAGMA table_info(users)").all();
+    const hasClaimTotal = columns.some(col => col.name === 'clam_total');
+
+    if (!hasClaimTotal) {
+      console.log('clam_total column does not exist, skipping migration');
+      db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('clam_migration_version', '1');
+      return;
+    }
+
+    console.log('=== Starting clam_total to chore_history migration ===');
+
+    const today = getTodayLocalDateString();
+
+    const usersWithClams = db.prepare('SELECT id, username, clam_total FROM users WHERE clam_total > 0 AND id != 0').all();
+    console.log(`Found ${usersWithClams.length} users with clam_total > 0`);
+
+    for (const user of usersWithClams) {
+      db.prepare(`
+        INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value)
+        VALUES (?, NULL, ?, ?)
+      `).run(user.id, today, user.clam_total);
+      console.log(`Migrated ${user.clam_total} clams for user "${user.username}" (ID: ${user.id})`);
+    }
+
+    console.log('Removing clam_total column from users table...');
+    db.exec(`
+      CREATE TABLE users_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT,
+        email TEXT,
+        profile_picture TEXT
+      );
+      INSERT INTO users_new (id, username, email, profile_picture)
+      SELECT id, username, email, profile_picture FROM users;
+      DROP TABLE users;
+      ALTER TABLE users_new RENAME TO users;
+    `);
+
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('clam_migration_version', '1');
+
+    console.log('=== Clam migration completed successfully ===');
+    console.log(`Migrated clams for ${usersWithClams.length} users`);
+
+  } catch (error) {
+    console.error('=== Clam migration failed ===');
+    console.error('Error:', error);
+    throw error;
+  }
+}
+
+async function migrateChoreHistoryTitle() {
+  try {
+    const columns = db.prepare("PRAGMA table_info(chore_history)").all();
+    const hasTitle = columns.some(col => col.name === 'title');
+    if (!hasTitle) {
+      db.exec("ALTER TABLE chore_history ADD COLUMN title TEXT DEFAULT NULL");
+      console.log('Added title column to chore_history');
+    }
+  } catch (error) {
+    console.error('Error migrating chore_history title:', error);
+    throw error;
+  }
+}
+
+async function migrateToDurationField() {
+  try {
+    console.log('=== Checking for duration field migration ===');
+
+    const migrationVersionRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('duration_migration_version');
+    const currentVersion = migrationVersionRow ? parseInt(migrationVersionRow.value) : 0;
+
+    if (currentVersion >= 1) {
+      console.log('Duration migration already completed (version:', currentVersion, ')');
+      return;
+    }
+
+    console.log('=== Starting duration field migration ===');
+
+    const columns = db.prepare("PRAGMA table_info(chore_schedules)").all();
+    const hasDuration = columns.some(col => col.name === 'duration');
+
+    if (!hasDuration) {
+      console.log('Adding duration column to chore_schedules table...');
+      db.exec('ALTER TABLE chore_schedules ADD COLUMN duration TEXT DEFAULT "day-of"');
+      console.log('Duration column added successfully');
+    }
+
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('duration_migration_version', '1');
+
+    console.log('=== Duration migration completed successfully ===');
+
+  } catch (error) {
+    console.error('=== Duration migration failed ===');
+    console.error('Error:', error);
+    throw error;
+  }
+}
+
+// Initialize default settings
+function initializeDefaultSettings() {
+  try {
+    const existingSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('daily_completion_clam_reward');
+    if (!existingSetting) {
+      db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('daily_completion_clam_reward', '2');
+      console.log('Initialized default daily completion clam reward setting to 2');
+    }
+  } catch (error) {
+    console.error('Error initializing default settings:', error);
+  }
+}
+
 // Function to prune and reset chores based on the day
 async function pruneAndResetChores() {
   try {
@@ -773,11 +1072,167 @@ async function pruneAndResetChores() {
   }
 }
 
+async function dailyBackgroundProcessing() {
+  try {
+    console.log('=== Starting daily background processing ===');
+    let results = {};
+    const today = getTodayLocalDateString();
 
-// Chore routes
+    // We want to delete schedules that are completed and will never run again to avoid clutter
+    const schedulesToPrune = db.prepare(`
+      SELECT cs.id, cs.chore_id, cs.user_id, c.title
+      FROM chore_schedules cs
+      JOIN chores c ON cs.chore_id = c.id
+      WHERE cs.crontab IS NULL
+        AND cs.visible = 1
+        AND EXISTS (
+          SELECT 1 FROM chore_history ch
+          WHERE ch.chore_schedule_id = cs.id
+        )
+    `).all();
+    console.log(`Found ${schedulesToPrune.length} completed one-time chores to prune`);
+
+    let prunedScheduleCount = 0;
+    for (const schedule of schedulesToPrune) {
+      db.prepare('DELETE FROM chore_schedules WHERE id = ?').run(schedule.id);
+      console.log(`Pruned schedule ID ${schedule.id}: "${schedule.title}" (user_id: ${schedule.user_id})`);
+      prunedScheduleCount++;
+    }
+    results = {
+      ...results,
+      prunedSchedulesCount: prunedScheduleCount,
+      prunedSchedules: schedulesToPrune,
+    }
+
+    // We should also delete chores that have no schedules to avoid clutter
+    const choresToPrune = db.prepare(`
+      SELECT c.id, c.title
+      FROM chores c
+      WHERE NOT EXISTS (
+          SELECT 1
+          FROM chore_schedules cs
+          WHERE cs.chore_id = c.id
+      );
+    `).all();
+    console.log(`Found ${choresToPrune.length} orphaned chores to prune`);
+
+    let prunedChoreCount = 0;
+    for (const chore of choresToPrune) {
+      db.prepare('DELETE FROM chores WHERE id = ?').run(chore.id);
+      console.log(`Pruned chore ID ${chore.id}: "${chore.title}"`);
+      prunedChoreCount++;
+    }
+    results = {
+      ...results,
+      prunedChoresCount: prunedChoreCount,
+      prunedChores: choresToPrune,
+    }
+
+    // bonus chores that persist from day to day should reset to unassigned
+    const choresToReset = db.prepare(`
+      SELECT cs.id,
+        cs.user_id,
+        c.title
+      FROM chore_schedules cs
+      JOIN chores c ON cs.chore_id = c.id
+      WHERE cs.crontab IS NULL
+        AND cs.visible = 1
+        AND cs.user_id IS NOT NULL
+        AND c.clam_value > 0;
+    `).all();
+    console.log(`Found ${choresToReset.length} bonus chores to reset`);
+    let resetScheduleCount = 0;
+    for (const schedule of choresToReset) {
+      db.prepare('UPDATE chore_schedules set user_id = NULL WHERE id = ?').run(schedule.id);
+      console.log(`Reset schedule ID ${schedule.id}: "${schedule.title}" (user_id: ${schedule.user_id})`);
+      resetScheduleCount++;
+    }
+    results = {
+      ...results,
+      resetSchedulesCount: resetScheduleCount,
+      resetSchedules: choresToReset,
+    }
+
+
+    // Handle until-completed schedules: create one-time schedules for until-completed chores that trigger today
+    // ensure there are no existing one-time schedules for the chore with an until-completed enabled schedule
+    const untilCompletedSchedules = db.prepare(`
+      SELECT id, chore_id, user_id, crontab FROM chore_schedules cs
+      WHERE crontab IS NOT NULL
+      AND duration = 'until-completed'
+      AND visible = 1
+      AND NOT EXISTS (
+        SELECT 1 FROM chore_schedules
+        WHERE crontab IS NULL
+        AND chore_id = cs.chore_id
+      )
+    `).all();
+    console.log(`Found ${untilCompletedSchedules.length} until-completed schedules to check`);
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const justBeforeToday = new Date(startOfToday.getTime() - 1);
+    let options = {
+      currentDate: justBeforeToday,
+      utc: false,
+    }
+    let untilCompletedCreated = 0;
+    let triggeredSchedules = []
+    for (const schedule of untilCompletedSchedules) {
+      const interval = parser.parseExpression(schedule.crontab, options);
+      // console.log(Object.getOwnPropertyNames(Object.getPrototypeOf(interval)));
+      const next = interval.next().toISOString().split('T')[0];
+      console.log(`-------------- Next date for ${schedule.id} is ${next}`);
+
+      // We need to add a one-time task because today is the trigger!
+      if (today === next) {
+        console.log(`-------------- Add ${schedule.id} to today's chores!`);
+
+        const scheduleResult = db.prepare(`
+          INSERT INTO chore_schedules (chore_id, user_id)
+          VALUES (?, ?)
+          RETURNING *
+          `).all(schedule.chore_id, schedule.user_id)
+        console.log(`-------------- Added ${scheduleResult} to today's chores!`);
+        triggeredSchedules.push(scheduleResult);
+        untilCompletedCreated++;
+      }
+    }
+    results = {
+      ...results,
+      triggeredSchedulesCount: untilCompletedCreated,
+      triggeredSchedules: triggeredSchedules,
+    }
+
+
+    console.log(`=== Daily background processing completed ===`);
+    console.log(`  - Day-of schedules pruned: ${prunedScheduleCount}`);
+    console.log(`  - Orphaned chores deleted: ${prunedChoreCount}`);
+    console.log(`  - Bonus chores reset: ${resetScheduleCount}`);
+    console.log(`  - Until-completed chores triggered: ${untilCompletedCreated}`);
+    console.log(`Total: ${prunedScheduleCount + prunedChoreCount + resetScheduleCount} operations performed`);
+    return results;
+  } catch (error) {
+    console.error('Error during daily background processing:', error);
+    throw error;
+  }
+}
+
+function startNightlyCronJob() {
+  cron.schedule('0 0 * * *', async () => {
+    console.log('Running daily background processing at midnight');
+    await dailyBackgroundProcessing();
+  }, {
+    timezone: APP_TIMEZONE
+  });
+  console.log('Daily background processing cron job scheduled for midnight');
+}
+
+
+// Chore routes (updated for new schema)
 fastify.get('/api/chores', async (request, reply) => {
   try {
-    const rows = db.prepare('SELECT * FROM chores').all(); // Use the global db instance
+    const rows = db.prepare('SELECT * FROM chores').all();
     return rows;
   } catch (error) {
     console.error('Error fetching chores:', error);
@@ -786,12 +1241,11 @@ fastify.get('/api/chores', async (request, reply) => {
 });
 
 fastify.post('/api/chores', async (request, reply) => {
-  const { user_id, title, description, time_period, assigned_day_of_week, repeat_type, completed, clam_value, expiration_date } = request.body;
+  const { title, description, clam_value } = request.body;
   try {
-    const completedInt = completed ? 1 : 0;
-    const stmt = db.prepare('INSERT INTO chores (user_id, title, description, time_period, assigned_day_of_week, repeat_type, completed, clam_value, expiration_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
-    const info = stmt.run(user_id, title, description, time_period, assigned_day_of_week, repeat_type, completedInt, clam_value, expiration_date);
-    return { id: info.lastInsertRowid };
+    const stmt = db.prepare('INSERT INTO chores (title, description, clam_value) VALUES (?, ?, ?)');
+    const info = stmt.run(title, description, clam_value || 0);
+    return { id: info.lastInsertRowid, success: true };
   } catch (error) {
     console.error('Error adding chore:', error);
     reply.status(500).send({ error: 'Failed to add chore' });
@@ -800,43 +1254,13 @@ fastify.post('/api/chores', async (request, reply) => {
 
 fastify.patch('/api/chores/:id', async (request, reply) => {
   const { id } = request.params;
-  const { completed } = request.body;
+  const { title, description, clam_value } = request.body;
   try {
-    const completedInt = completed ? 1 : 0;
-    const stmt = db.prepare('UPDATE chores SET completed = ? WHERE id = ?');
-    stmt.run(completedInt, id);
-
-    // --- Clam Reward Logic ---\
-    // Get the chore details to find the user_id and assigned_day_of_week
-    const chore = db.prepare('SELECT user_id, clam_value, assigned_day_of_week FROM chores WHERE id = ?').get(id);
-
-    if (chore) {
-      // 1. Reward for bonus chores
-      if (completed && chore.clam_value > 0) { // Only reward if marked completed and it's a bonus chore
-        const userUpdateStmt = db.prepare('UPDATE users SET clam_total = clam_total + ? WHERE id = ?');
-        userUpdateStmt.run(chore.clam_value, chore.user_id);
-        console.log(`User ${chore.user_id} rewarded ${chore.clam_value} clams for completing bonus chore ID ${id}.`);
-      }
-
-      // 2. Reward for completing all *regular* daily chores
-      // Only apply this if the current chore is NOT a bonus chore (clam_value === 0)
-      if (completed && chore.clam_value === 0) {
-        // Get all *regular* chores for this user and day
-        const usersRegularChoresForDay = db.prepare('SELECT completed FROM chores WHERE user_id = ? AND assigned_day_of_week = ? AND clam_value = 0').all(chore.user_id, chore.assigned_day_of_week);
-
-        // Check if all *regular* chores for this user and day are completed
-        const allRegularChoresCompleted = usersRegularChoresForDay.every(c => c.completed === 1);
-
-        if (allRegularChoresCompleted) {
-          // Reward user with 2 clams
-          const userUpdateStmt = db.prepare('UPDATE users SET clam_total = clam_total + 2 WHERE id = ?');
-          userUpdateStmt.run(chore.user_id);
-          console.log(`User ${chore.user_id} rewarded 2 clams for completing all regular chores on ${chore.assigned_day_of_week}.`);
-        }
-      }
+    const stmt = db.prepare('UPDATE chores SET title = ?, description = ?, clam_value = ? WHERE id = ?');
+    const info = stmt.run(title, description, clam_value, id);
+    if (info.changes === 0) {
+      return reply.status(404).send({ error: 'Chore not found' });
     }
-    // --- End Clam Reward Logic ---\
-
     return { success: true };
   } catch (error) {
     console.error('Error updating chore:', error);
@@ -844,10 +1268,10 @@ fastify.patch('/api/chores/:id', async (request, reply) => {
   }
 });
 
-// NEW: Endpoint to delete a chore
 fastify.delete('/api/chores/:id', async (request, reply) => {
   const { id } = request.params;
   try {
+    db.prepare('DELETE FROM chore_schedules WHERE chore_id = ?').run(id);
     const stmt = db.prepare('DELETE FROM chores WHERE id = ?');
     const info = stmt.run(id);
     if (info.changes === 0) {
@@ -860,48 +1284,503 @@ fastify.delete('/api/chores/:id', async (request, reply) => {
   }
 });
 
-
-// NEW: Endpoint to assign a bonus chore to a user
-fastify.patch('/api/chores/:id/assign', async (request, reply) => {
-  const { id } = request.params;
-  const { user_id } = request.body;
-
+// Chore Schedules routes
+fastify.get('/api/chore-schedules', async (request, reply) => {
   try {
-    // 1. Check if the chore exists and is a bonus chore (assigned to user_id 0)
-    const chore = db.prepare('SELECT id, user_id, completed, clam_value FROM chores WHERE id = ?').get(id);
-    if (!chore) {
-      return reply.status(404).send({ error: 'Chore not found.' });
+    const { user_id, visible, usage, chore_id } = request.query;
+    let query = 'SELECT cs.*, c.title, c.description, c.clam_value FROM chore_schedules cs JOIN chores c ON cs.chore_id = c.id';
+    const conditions = [];
+    const params = [];
+
+    if (user_id !== undefined) {
+      conditions.push('cs.user_id = ?');
+      params.push(user_id);
     }
-    if (chore.user_id !== 0 || chore.clam_value === 0) {
-      return reply.status(400).send({ error: 'This is not an unassigned bonus chore.' });
+    if (visible !== undefined) {
+      conditions.push('cs.visible = ?');
+      params.push(visible === 'true' || visible === '1' ? 1 : 0);
+    }
+    if (usage !== undefined && usage === 'chart') {
+      conditions.push('cs.visible = ?');
+      params.push(1);
+      conditions.push('cs.duration != ?');
+      params.push('until-completed');
+    }
+    if (chore_id !== undefined) {
+      conditions.push('cs.chore_id = ?');
+      params.push(chore_id);
     }
 
-    // 2. Check if the target user already has an uncompleted bonus chore
-    const existingBonusChore = db.prepare('SELECT id FROM chores WHERE user_id = ? AND clam_value > 0 AND completed = 0').get(user_id);
-    if (existingBonusChore) {
-      return reply.status(409).send({ error: 'User already has an uncompleted bonus chore. Complete it first!' });
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
     }
 
-    // 3. Assign the chore to the user and set expiration date (24 hours from now)
-    const expirationDate = new Date();
-    expirationDate.setHours(expirationDate.getHours() + 24);
-
-    const stmt = db.prepare('UPDATE chores SET user_id = ?, completed = 0, expiration_date = ? WHERE id = ?');
-    stmt.run(user_id, expirationDate.toISOString(), id);
-
-    return { success: true, message: 'Bonus chore assigned successfully.' };
+    const rows = db.prepare(query).all(...params);
+    return rows;
   } catch (error) {
-    console.error('Error assigning bonus chore:', error);
-    reply.status(500).send({ error: 'Failed to assign bonus chore.' });
+    console.error('Error fetching chore schedules:', error);
+    reply.status(500).send({ error: 'Failed to fetch chore schedules' });
+  }
+});
+
+fastify.get('/api/chore-schedules/:id', async (request, reply) => {
+  const { id } = request.params;
+  try {
+    const row = db.prepare('SELECT cs.*, c.title, c.description, c.clam_value FROM chore_schedules cs JOIN chores c ON cs.chore_id = c.id WHERE cs.id = ?').get(id);
+    if (!row) {
+      return reply.status(404).send({ error: 'Schedule not found' });
+    }
+    return row;
+  } catch (error) {
+    console.error('Error fetching schedule:', error);
+    reply.status(500).send({ error: 'Failed to fetch schedule' });
+  }
+});
+
+fastify.post('/api/chore-schedules', async (request, reply) => {
+  const { chore_id, user_id, crontab, duration, visible } = request.body;
+  try {
+    if (!chore_id) {
+      return reply.status(400).send({ error: 'chore_id is required' });
+    }
+
+    if (crontab) {
+      try {
+        parser.parseExpression(crontab);
+      } catch (e) {
+        return reply.status(400).send({ error: 'Invalid crontab expression: ' + e.message });
+      }
+    }
+
+    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, visible) VALUES (?, ?, ?, ?, ?)');
+    const info = stmt.run(chore_id, user_id || null, crontab || null, duration || 'day-of', visible !== undefined ? visible : 1);
+    return { id: info.lastInsertRowid, success: true };
+  } catch (error) {
+    console.error('Error adding schedule:', error);
+    reply.status(500).send({ error: 'Failed to add schedule' });
+  }
+});
+
+fastify.post('/api/chore-schedules/bulk', async (request, reply) => {
+  const { chore_id, user_ids, crontab, visible } = request.body;
+  try {
+    if (!chore_id || !user_ids || !Array.isArray(user_ids)) {
+      return reply.status(400).send({ error: 'chore_id and user_ids array are required' });
+    }
+
+    if (crontab) {
+      try {
+        parser.parseExpression(crontab);
+      } catch (e) {
+        return reply.status(400).send({ error: 'Invalid crontab expression: ' + e.message });
+      }
+    }
+
+    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, visible) VALUES (?, ?, ?, ?)');
+    const ids = [];
+
+    for (const user_id of user_ids) {
+      const info = stmt.run(chore_id, user_id, crontab || null, visible !== undefined ? visible : 1);
+      ids.push(info.lastInsertRowid);
+    }
+
+    return { ids, success: true, count: ids.length };
+  } catch (error) {
+    console.error('Error bulk adding schedules:', error);
+    reply.status(500).send({ error: 'Failed to bulk add schedules' });
+  }
+});
+
+fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
+  const { id } = request.params;
+  const { chore_id, user_id, crontab, duration, visible } = request.body;
+  try {
+    if (crontab !== undefined && crontab !== null) {
+      try {
+        parser.parseExpression(crontab);
+      } catch (e) {
+        return reply.status(400).send({ error: 'Invalid crontab expression: ' + e.message });
+      }
+    }
+
+    const updates = [];
+    const params = [];
+
+    if (chore_id !== undefined) { updates.push('chore_id = ?'); params.push(chore_id); }
+    if (user_id !== undefined) { updates.push('user_id = ?'); params.push(user_id || null); }
+    if (crontab !== undefined) { updates.push('crontab = ?'); params.push(crontab || null); }
+    if (duration !== undefined) { updates.push('duration = ?'); params.push(duration); }
+    if (visible !== undefined) { updates.push('visible = ?'); params.push(visible ? 1 : 0); }
+
+    if (updates.length === 0) {
+      return reply.status(400).send({ error: 'No fields to update' });
+    }
+
+    params.push(id);
+    const stmt = db.prepare(`UPDATE chore_schedules SET ${updates.join(', ')} WHERE id = ?`);
+    const info = stmt.run(...params);
+
+    if (info.changes === 0) {
+      return reply.status(404).send({ error: 'Schedule not found' });
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating schedule:', error);
+    reply.status(500).send({ error: 'Failed to update schedule' });
+  }
+});
+
+fastify.delete('/api/chore-schedules/:id', async (request, reply) => {
+  const { id } = request.params;
+  try {
+    const stmt = db.prepare('DELETE FROM chore_schedules WHERE id = ?');
+    const info = stmt.run(id);
+    if (info.changes === 0) {
+      return reply.status(404).send({ error: 'Schedule not found' });
+    }
+    return { success: true, message: 'Schedule deleted successfully' };
+  } catch (error) {
+    console.error('Error deleting schedule:', error);
+    reply.status(500).send({ error: 'Failed to delete schedule' });
+  }
+});
+
+// Chore History routes
+fastify.get('/api/chore-history', async (request, reply) => {
+  try {
+    const { user_id, date, date_from, date_to } = request.query;
+    let query = 'SELECT * FROM chore_history';
+    const conditions = [];
+    const params = [];
+
+    if (user_id !== undefined) {
+      conditions.push('user_id = ?');
+      params.push(user_id);
+    }
+    if (date) {
+      conditions.push('date = ?');
+      params.push(date);
+    }
+    if (date_from) {
+      conditions.push('date >= ?');
+      params.push(date_from);
+    }
+    if (date_to) {
+      conditions.push('date <= ?');
+      params.push(date_to);
+    }
+
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
+    }
+
+    query += ' ORDER BY date DESC, created_at DESC';
+
+    const rows = db.prepare(query).all(...params);
+    return rows;
+  } catch (error) {
+    console.error('Error fetching chore history:', error);
+    reply.status(500).send({ error: 'Failed to fetch chore history' });
+  }
+});
+
+fastify.get('/api/chore-history/user/:userId', async (request, reply) => {
+  const { userId } = request.params;
+  try {
+    const rows = db.prepare('SELECT * FROM chore_history WHERE user_id = ? ORDER BY date DESC, created_at DESC').all(userId);
+    return rows;
+  } catch (error) {
+    console.error('Error fetching user history:', error);
+    reply.status(500).send({ error: 'Failed to fetch user history' });
+  }
+});
+
+fastify.get('/api/chore-history/summary/:userId', async (request, reply) => {
+  const { userId } = request.params;
+  try {
+    const result = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(userId);
+    return { user_id: parseInt(userId), clam_total: result.total };
+  } catch (error) {
+    console.error('Error getting clam summary:', error);
+    reply.status(500).send({ error: 'Failed to get clam summary' });
+  }
+});
+
+fastify.post('/api/chore-history', async (request, reply) => {
+  const { user_id, chore_schedule_id, date, clam_value } = request.body;
+  try {
+    if (!user_id || !date) {
+      return reply.status(400).send({ error: 'user_id and date are required' });
+    }
+
+    const stmt = db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value) VALUES (?, ?, ?, ?)');
+    const info = stmt.run(user_id, chore_schedule_id || null, date, clam_value || 0);
+    return { id: info.lastInsertRowid, success: true };
+  } catch (error) {
+    console.error('Error adding history entry:', error);
+    reply.status(500).send({ error: 'Failed to add history entry' });
+  }
+});
+
+fastify.get('/api/chore-history/recent', async (request, reply) => {
+  try {
+    const days = parseInt(request.query.days || '7', 10);
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+    const sinceStr = `${since.getFullYear()}-${String(since.getMonth() + 1).padStart(2, '0')}-${String(since.getDate()).padStart(2, '0')}`;
+    const rows = db.prepare(`
+      SELECT ch.id, ch.date, ch.clam_value, ch.title, ch.created_at,
+             u.username
+      FROM chore_history ch
+      LEFT JOIN users u ON ch.user_id = u.id
+      WHERE ch.date >= ? AND ch.clam_value != 0
+      ORDER BY ch.date DESC, ch.created_at DESC
+    `).all(sinceStr);
+    return rows;
+  } catch (error) {
+    console.error('Error fetching recent chore history:', error);
+    reply.status(500).send({ error: 'Failed to fetch recent chore history' });
+  }
+});
+
+fastify.delete('/api/chore-history/:id', async (request, reply) => {
+  const { id } = request.params;
+  try {
+    const stmt = db.prepare('DELETE FROM chore_history WHERE id = ?');
+    const info = stmt.run(id);
+    if (info.changes === 0) {
+      return reply.status(404).send({ error: 'History entry not found' });
+    }
+    return { success: true, message: 'History entry deleted successfully' };
+  } catch (error) {
+    console.error('Error deleting history entry:', error);
+    reply.status(500).send({ error: 'Failed to delete history entry' });
+  }
+});
+
+// Chore completion endpoints
+fastify.post('/api/chores/complete', async (request, reply) => {
+  const { chore_schedule_id, user_id, date } = request.body;
+  try {
+    if (!chore_schedule_id || !user_id || !date) {
+      return reply.status(400).send({ error: 'chore_schedule_id, user_id, and date are required' });
+    }
+
+    const schedule = db.prepare('SELECT cs.*, c.clam_value, c.title FROM chore_schedules cs JOIN chores c ON cs.chore_id = c.id WHERE cs.id = ?').get(chore_schedule_id);
+    if (!schedule) {
+      return reply.status(404).send({ error: 'Schedule not found' });
+    }
+
+    if (!schedule.visible) {
+      return reply.status(400).send({ error: 'Schedule is not visible' });
+    }
+
+    const existing = db.prepare('SELECT id FROM chore_history WHERE chore_schedule_id = ? AND user_id = ? AND date = ?').get(chore_schedule_id, user_id, date);
+    if (existing) {
+      return reply.status(409).send({ error: 'Chore already completed for this date' });
+    }
+
+    db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title) VALUES (?, ?, ?, ?, ?)').run(user_id, chore_schedule_id, date, schedule.clam_value, schedule.title);
+
+    const today = getTodayLocalDateString();
+    const allUserSchedules = db.prepare(`
+      SELECT cs.*,
+       c.clam_value,
+       EXISTS (
+           SELECT 1
+           FROM chore_history ch
+           WHERE ch.chore_schedule_id = cs.id
+             AND ch.user_id = cs.user_id
+             AND ch.date = ?
+       ) AS completed_today
+      FROM chore_schedules cs
+      JOIN chores c
+        ON cs.chore_id = c.id
+      WHERE cs.user_id = ?
+        AND cs.visible = 1
+        AND NOT (
+          cs.crontab IS NOT NULL
+          AND cs.duration = 'until-completed'
+        )
+    `).all(today, user_id);
+
+    const regularChores = allUserSchedules.filter(s => s.clam_value === 0);
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const justBeforeToday = new Date(startOfToday.getTime() - 1);
+    let options = {
+      currentDate: justBeforeToday,
+      utc: false,
+    }
+    let todaysChores = []
+    for (const schedule of regularChores) {
+      // schedules without crontab are one-time and always part of today's chores
+      if (!schedule.crontab) {
+        todaysChores.push(schedule);
+        continue;
+      }
+
+      // ensure only chores that are due today are part of today's chores
+      const interval = parser.parseExpression(schedule.crontab, options);
+      const next = interval.next().toISOString().split('T')[0];
+      if (today === next) {
+        todaysChores.push(schedule);
+      }
+    }
+
+    const uncompletedRegularChores = todaysChores.filter(cs => cs.completed_today == 0);
+    if (!uncompletedRegularChores.length) {
+      const dailyRewardSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('daily_completion_clam_reward');
+      const dailyReward = dailyRewardSetting ? parseInt(dailyRewardSetting.value, 10) : 2;
+
+      const bonusAlreadyAwarded = db.prepare(`
+          SELECT id FROM chore_history
+          WHERE user_id = ?
+          AND date = ?
+          AND chore_schedule_id IS NULL
+          AND clam_value = ?
+          AND title = ?
+        `).get(user_id, date, dailyReward, 'Regular chores');
+
+      if (!bonusAlreadyAwarded) {
+        db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title) VALUES (?, NULL, ?, ?, ?)').run(user_id, date, dailyReward, 'Regular chores');
+      }
+    }
+
+    const totalResult = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(user_id);
+
+    return { success: true, clam_total: totalResult.total };
+  } catch (error) {
+    console.error('Error completing chore:', error);
+    reply.status(500).send({ error: 'Failed to complete chore' });
+  }
+});
+
+fastify.post('/api/chores/uncomplete', async (request, reply) => {
+  const { chore_schedule_id, user_id, date } = request.body;
+  try {
+    if (!chore_schedule_id || !user_id || !date) {
+      return reply.status(400).send({ error: 'chore_schedule_id, user_id, and date are required' });
+    }
+
+    const history = db.prepare('SELECT id, clam_value FROM chore_history WHERE chore_schedule_id = ? AND user_id = ? AND date = ?').get(chore_schedule_id, user_id, date);
+    if (!history) {
+      return reply.status(404).send({ error: 'Completion record not found' });
+    }
+
+    db.prepare('DELETE FROM chore_history WHERE id = ?').run(history.id);
+
+    // if the uncompleted chore was a bonus chore (has clam value), don't remove the daily bonus when uncompleting
+    if (!history.clam_value) {
+      const dailyRewardSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('daily_completion_clam_reward');
+      const dailyReward = dailyRewardSetting ? parseInt(dailyRewardSetting.value, 10) : 2;
+
+      const bonusEntry = db.prepare(`
+      SELECT id FROM chore_history
+      WHERE user_id = ?
+      AND date = ?
+      AND chore_schedule_id IS NULL
+      AND clam_value = ?
+      AND title = ?
+    `).get(user_id, date, dailyReward, 'Regular chores');
+
+      if (bonusEntry) {
+        db.prepare('DELETE FROM chore_history WHERE id = ?').run(bonusEntry.id);
+      }
+    }
+
+    const totalResult = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(user_id);
+
+    return { success: true, clam_total: totalResult.total };
+  } catch (error) {
+    console.error('Error uncompleting chore:', error);
+    reply.status(500).send({ error: 'Failed to uncomplete chore' });
+  }
+});
+
+// User clam management endpoints
+fastify.get('/api/users/:id/clams', async (request, reply) => {
+  const { id } = request.params;
+  try {
+    const result = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(id);
+    return { user_id: parseInt(id), clam_total: result.total };
+  } catch (error) {
+    console.error('Error getting user clams:', error);
+    reply.status(500).send({ error: 'Failed to get user clams' });
+  }
+});
+
+fastify.post('/api/users/:id/clams/add', async (request, reply) => {
+  const { id } = request.params;
+  const { amount, date } = request.body;
+  try {
+    if (!amount || amount <= 0) {
+      return reply.status(400).send({ error: 'Valid positive amount is required' });
+    }
+
+    const useDate = date || getTodayLocalDateString();
+    db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title) VALUES (?, NULL, ?, ?, ?)').run(id, useDate, amount, 'Adjustment');
+
+    const result = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(id);
+    return { success: true, clam_total: result.total };
+  } catch (error) {
+    console.error('Error adding clams:', error);
+    reply.status(500).send({ error: 'Failed to add clams' });
+  }
+});
+
+fastify.post('/api/users/:id/clams/reduce', async (request, reply) => {
+  const { id } = request.params;
+  const { amount } = request.body;
+  try {
+    if (!amount || amount <= 0) {
+      return reply.status(400).send({ error: 'Valid positive amount is required' });
+    }
+
+    const currentResult = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(id);
+    if (currentResult.total < amount) {
+      return reply.status(400).send({ error: 'Insufficient clams' });
+    }
+
+    let remaining = amount;
+    const entries = db.prepare('SELECT * FROM chore_history WHERE user_id = ? AND clam_value > 0 ORDER BY created_at ASC').all(id);
+
+    for (const entry of entries) {
+      if (remaining <= 0) break;
+
+      if (entry.clam_value <= remaining) {
+        db.prepare('DELETE FROM chore_history WHERE id = ?').run(entry.id);
+        remaining -= entry.clam_value;
+      } else {
+        db.prepare('UPDATE chore_history SET clam_value = ? WHERE id = ?').run(entry.clam_value - remaining, entry.id);
+        remaining = 0;
+      }
+    }
+
+    const result = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(id);
+    return { success: true, clam_total: result.total };
+  } catch (error) {
+    console.error('Error reducing clams:', error);
+    reply.status(500).send({ error: 'Failed to reduce clams' });
   }
 });
 
 
-// User routes
+// User routes (updated to calculate clam_total from history)
 fastify.get('/api/users', async (request, reply) => {
   try {
-    const rows = db.prepare('SELECT id, username, email, profile_picture, clam_total FROM users').all();
-    return rows;
+    const users = db.prepare('SELECT id, username, email, profile_picture FROM users').all();
+
+    const usersWithClams = users.map(user => {
+      const clamResult = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(user.id);
+      return {
+        ...user,
+        clam_total: clamResult.total
+      };
+    });
+
+    return usersWithClams;
   } catch (error) {
     console.error('Error fetching users:', error);
     reply.status(500).send({ error: 'Failed to fetch users' });
@@ -986,21 +1865,7 @@ fastify.post('/api/users/:id/upload-picture', async (request, reply) => {
   }
 });
 
-// NEW: Endpoint to update user clam total (for manual adjustments or future use)
-fastify.patch('/api/users/:id/clams', async (request, reply) => {
-  const { id } = request.params;
-  const { clam_total } = request.body; // Expecting the new total or a delta
-  try {
-    const stmt = db.prepare('UPDATE users SET clam_total = ? WHERE id = ?');
-    stmt.run(clam_total, id);
-    return { success: true };
-  } catch (error) {
-    console.error('Error updating user clams:', error);
-    reply.status(500).send({ error: 'Failed to update user clams' });
-  }
-});
-
-// NEW: Endpoint to delete a user
+// Endpoint to delete a user
 fastify.delete('/api/users/:id', async (request, reply) => {
   const { id } = request.params;
   try {
@@ -1060,6 +1925,10 @@ fastify.get('/api/calendar/ics', async (request, reply) => {
     console.error('Error generating iCalendar:', error);
     reply.status(500).send('Failed to generate iCalendar');
   }
+});
+
+fastify.get('/api/timezone', async (request, reply) => {
+  return reply.send({ timezone: APP_TIMEZONE });
 });
 
 // NEW: API Endpoints for Settings (including API keys)
@@ -1494,14 +2363,25 @@ fastify.get('/api/calendar-events', async (request, reply) => {
   try {
     const sources = db.prepare('SELECT * FROM calendar_sources WHERE enabled = 1 ORDER BY sort_order, id').all();
 
+    function normalizeAllDayEnd(end) {
+      // iCal all-day event ends are exclusive (DTEND is the day after the last day).
+      // Subtract 1 day so the end represents the actual last day of the event.
+      const d = new Date(end);
+      d.setDate(d.getDate() - 1);
+      return d;
+    }
+
     function makeEvent({ item, source }) {
+      const isAllDay = item.start?.dateOnly ?? item.event?.start?.dateOnly ?? false;
+      const rawEnd = item.end ?? item.event.end;
       return {
         id: item.uid ?? item.event?.uid ?? null,
         title: item.summary ?? item.event?.summary ?? null,
         start: item.start ?? item.event.start,
-        end: item.end ?? item.event.end,
+        end: isAllDay ? normalizeAllDayEnd(rawEnd) : rawEnd,
         description: item.description ?? item.event?.description ?? null,
         location: item.location ?? item.event?.location ?? null,
+        all_day: isAllDay,
         source_id: source.id,
         source_name: source.name,
         source_color: source.color
@@ -1553,13 +2433,16 @@ fastify.get('/api/calendar-events', async (request, reply) => {
 
           return vevents.map(vevent => {
             const event = new ICAL.Event(vevent);
+            const isAllDay = vevent.getFirstPropertyValue('dtstart').isDate || false;
+            const rawEnd = event.endDate.toJSDate();
             return {
               id: event.uid || Math.random().toString(),
               title: event.summary,
               start: event.startDate.toJSDate(),
-              end: event.endDate.toJSDate(),
+              end: isAllDay ? normalizeAllDayEnd(rawEnd) : rawEnd,
               description: event.description,
               location: event.location,
+              all_day: isAllDay,
               source_id: source.id,
               source_name: source.name,
               source_color: source.color
@@ -1838,11 +2721,107 @@ fastify.get('/api/photo-items', async (request, reply) => {
   }
 });
 
+// Admin PIN routes
+fastify.get('/api/admin-pin/exists', async (request, reply) => {
+  try {
+    const pin = db.prepare('SELECT id FROM admin_pin WHERE id = 1').get();
+    return { exists: !!pin };
+  } catch (error) {
+    console.error('Error checking PIN existence:', error);
+    reply.status(500).send({ error: 'Failed to check PIN existence' });
+  }
+});
+
+fastify.post('/api/admin-pin/set', async (request, reply) => {
+  const { pin } = request.body;
+
+  if (!pin || typeof pin !== 'string') {
+    return reply.status(400).send({ error: 'PIN is required and must be a string' });
+  }
+
+  if (pin.length < 4 || pin.length > 8) {
+    return reply.status(400).send({ error: 'PIN must be between 4 and 8 characters' });
+  }
+
+  if (!/^\d+$/.test(pin)) {
+    return reply.status(400).send({ error: 'PIN must contain only numbers' });
+  }
+
+  try {
+    const pinHash = crypto.createHash('sha256').update(pin).digest('hex');
+    const existingPin = db.prepare('SELECT id FROM admin_pin WHERE id = 1').get();
+
+    if (existingPin) {
+      const stmt = db.prepare('UPDATE admin_pin SET pin_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1');
+      stmt.run(pinHash);
+    } else {
+      const stmt = db.prepare('INSERT INTO admin_pin (id, pin_hash) VALUES (1, ?)');
+      stmt.run(pinHash);
+    }
+
+    return { success: true, message: 'PIN set successfully' };
+  } catch (error) {
+    console.error('Error setting PIN:', error);
+    reply.status(500).send({ error: 'Failed to set PIN' });
+  }
+});
+
+fastify.delete('/api/admin-pin', async (request, reply) => {
+  try {
+    db.prepare('DELETE FROM admin_pin WHERE id = 1').run();
+    return { success: true, message: 'PIN cleared successfully' };
+  } catch (error) {
+    console.error('Error clearing PIN:', error);
+    reply.status(500).send({ error: 'Failed to clear PIN' });
+  }
+});
+
+fastify.post('/api/admin-pin/verify', async (request, reply) => {
+  const { pin } = request.body;
+
+  if (!pin || typeof pin !== 'string') {
+    return reply.status(400).send({ error: 'PIN is required' });
+  }
+
+  try {
+    const storedPin = db.prepare('SELECT pin_hash FROM admin_pin WHERE id = 1').get();
+
+    if (!storedPin) {
+      return reply.status(404).send({ error: 'No PIN configured' });
+    }
+
+    const pinHash = crypto.createHash('sha256').update(pin).digest('hex');
+    const isValid = pinHash === storedPin.pin_hash;
+
+    return { valid: isValid };
+  } catch (error) {
+    console.error('Error verifying PIN:', error);
+    reply.status(500).send({ error: 'Failed to verify PIN' });
+  }
+});
+
+fastify.get('/api/system/backgroundTasks', async (request, reply) => {
+  try {
+    const result = await dailyBackgroundProcessing();
+    return {
+      success: true,
+      ...result
+    };
+  } catch (error) {
+    console.error('Error running daily background processing:', error);
+    reply.status(500).send({ error: 'Failed to run daily background processing' });
+  }
+});
 // Start server
 const start = async () => {
   try {
     db = await initializeDatabase(); // Initialize db once here
-    await pruneAndResetChores(); // Call the pruning/reset function on startup
+    await migrateChoresDatabase(); // Run migration if needed
+    await migrateClamsToHistory(); // Migrate clam_total to chore_history
+    await migrateChoreHistoryTitle(); // Add title field to chore_history
+    await migrateToDurationField(); // Add duration field to chore_schedules
+    initializeDefaultSettings(); // Initialize default settings
+    startNightlyCronJob(); // Start the nightly chore pruning job
     await fastify.listen({ port: process.env.PORT || 5000, host: '0.0.0.0' });
     console.log(`Server running on port ${process.env.PORT || 5000}`);
   } catch (err) {

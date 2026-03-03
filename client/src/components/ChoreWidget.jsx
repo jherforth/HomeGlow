@@ -25,20 +25,21 @@ import {
 import { Edit, Save, Cancel, Add, Delete, Check, Undo } from '@mui/icons-material';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
+import { shouldShowChoreToday, getTodayDateString, convertDaysToCrontab } from '../utils/choreHelpers.js';
 
 const ChoreWidget = ({ transparentBackground }) => {
   const [users, setUsers] = useState([]);
   const [chores, setChores] = useState([]);
+  const [schedules, setSchedules] = useState([]);
+  const [history, setHistory] = useState([]);
   const [prizes, setPrizes] = useState([]);
-  const [editingChore, setEditingChore] = useState(null);
   const [newChore, setNewChore] = useState({
     user_id: '',
     title: '',
     description: '',
-    time_period: 'any-time',
     assigned_days_of_week: ['monday'],
-    repeat_type: 'weekly',
-    clam_value: 0
+    clam_value: 0,
+    is_one_time: false
   });
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showPrizesModal, setShowPrizesModal] = useState(false);
@@ -48,40 +49,28 @@ const ChoreWidget = ({ transparentBackground }) => {
     return saved !== null ? JSON.parse(saved) : true;
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [dailyClamReward, setDailyClamReward] = useState(2);
 
   const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-  const timePeriods = ['morning', 'afternoon', 'evening', 'any-time'];
-  const repeatTypes = [
-    { value: 'weekly', label: 'Weekly' },
-    { value: 'daily', label: 'Daily' },
-    { value: 'until-completed', label: 'Until Completed' },
-    { value: 'no-repeat', label: 'No Repeat' }
-  ];
 
   useEffect(() => {
-    fetchUsers();
-    fetchChores();
-    fetchPrizes();
+    fetchData();
   }, []);
 
-  // Save showBonusChores preference to localStorage
   useEffect(() => {
     localStorage.setItem('showBonusChores', JSON.stringify(showBonusChores));
   }, [showBonusChores]);
 
-  // Auto-refresh functionality
   useEffect(() => {
     const widgetSettings = JSON.parse(localStorage.getItem('widgetSettings') || '{}');
     const refreshInterval = widgetSettings.chore?.refreshInterval || 0;
 
     if (refreshInterval > 0) {
       console.log(`ChoreWidget: Auto-refresh enabled (${refreshInterval}ms)`);
-      
+
       const intervalId = setInterval(() => {
         console.log('ChoreWidget: Auto-refreshing data...');
-        fetchUsers();
-        fetchChores();
-        fetchPrizes();
+        fetchData();
       }, refreshInterval);
 
       return () => {
@@ -90,6 +79,34 @@ const ChoreWidget = ({ transparentBackground }) => {
       };
     }
   }, []);
+
+  const fetchData = async () => {
+    try {
+      await Promise.all([
+        fetchUsers(),
+        fetchChores(),
+        fetchSchedules(),
+        fetchHistory(),
+        fetchPrizes(),
+        fetchSettings()
+      ]);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      setLoading(false);
+    }
+  };
+
+  const fetchSettings = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/settings`);
+      if (response.data.daily_completion_clam_reward) {
+        setDailyClamReward(parseInt(response.data.daily_completion_clam_reward, 10));
+      }
+    } catch (error) {
+      console.error('Error fetching settings:', error);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -104,10 +121,27 @@ const ChoreWidget = ({ transparentBackground }) => {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/chores`);
       setChores(response.data);
-      setLoading(false);
     } catch (error) {
       console.error('Error fetching chores:', error);
-      setLoading(false);
+    }
+  };
+
+  const fetchSchedules = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/chore-schedules?usage=chart`);
+      setSchedules(response.data);
+    } catch (error) {
+      console.error('Error fetching schedules:', error);
+    }
+  };
+
+  const fetchHistory = async () => {
+    try {
+      const today = getTodayDateString();
+      const response = await axios.get(`${API_BASE_URL}/api/chore-history?date=${today}`);
+      setHistory(response.data);
+    } catch (error) {
+      console.error('Error fetching history:', error);
     }
   };
 
@@ -120,28 +154,65 @@ const ChoreWidget = ({ transparentBackground }) => {
     }
   };
 
-  const toggleChoreCompletion = async (choreId, currentStatus) => {
+  const toggleChoreCompletion = async (schedule, isCompleted) => {
     try {
       setIsLoading(true);
-      await axios.patch(`${API_BASE_URL}/api/chores/${choreId}`, {
-        completed: !currentStatus
-      });
-      fetchChores();
-      fetchUsers();
+      const today = getTodayDateString();
+
+      if (isCompleted) {
+        await axios.post(`${API_BASE_URL}/api/chores/uncomplete`, {
+          chore_schedule_id: schedule.id,
+          user_id: schedule.user_id,
+          date: today
+        });
+      } else {
+        await axios.post(`${API_BASE_URL}/api/chores/complete`, {
+          chore_schedule_id: schedule.id,
+          user_id: schedule.user_id,
+          date: today
+        });
+      }
+
+      await fetchData();
     } catch (error) {
-      console.error('Error updating chore:', error);
+      console.error('Error toggling chore completion:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const assignBonusChore = async (choreId, userId) => {
+  const assignBonusChore = async (scheduleId, userId) => {
     try {
       setIsLoading(true);
-      await axios.patch(`${API_BASE_URL}/api/chores/${choreId}/assign`, {
-        user_id: userId
+
+      const today = getTodayDateString();
+
+      const userBonusSchedules = schedules.filter(s =>
+        s.user_id === userId &&
+        s.visible === 1 &&
+        s.clam_value > 0
+      );
+
+      const hasUncompletedBonusChoreToday = userBonusSchedules.some(schedule => {
+        const completedToday = history.some(h =>
+          h.chore_schedule_id === schedule.id &&
+          h.user_id === userId &&
+          h.date === today
+        );
+        return !completedToday;
       });
-      fetchChores();
+
+      if (hasUncompletedBonusChoreToday) {
+        alert('User already has an uncompleted bonus chore. Complete it first!');
+        return;
+      }
+
+      await axios.patch(`${API_BASE_URL}/api/chore-schedules/${scheduleId}`, {
+        user_id: userId,
+        visible: 1
+      });
+
+      await fetchData();
     } catch (error) {
       console.error('Error assigning bonus chore:', error);
       alert(error.response?.data?.error || 'Failed to assign bonus chore');
@@ -153,29 +224,33 @@ const ChoreWidget = ({ transparentBackground }) => {
   const saveChore = async () => {
     try {
       setIsLoading(true);
-      if (editingChore) {
-        await axios.patch(`${API_BASE_URL}/api/chores/${editingChore.id}`, editingChore);
-      } else {
-        for (const day of newChore.assigned_days_of_week) {
-          const choreForDay = {
-            ...newChore,
-            assigned_day_of_week: day
-          };
-          await axios.post(`${API_BASE_URL}/api/chores`, choreForDay);
-        }
-        setNewChore({
-          user_id: '',
-          title: '',
-          description: '',
-          time_period: 'any-time',
-          assigned_days_of_week: ['monday'],
-          repeat_type: 'weekly',
-          clam_value: 0
-        });
-        setShowAddDialog(false);
-      }
-      setEditingChore(null);
-      fetchChores();
+
+      const choreResponse = await axios.post(`${API_BASE_URL}/api/chores`, {
+        title: newChore.title,
+        description: newChore.description,
+        clam_value: newChore.clam_value
+      });
+
+      const choreId = choreResponse.data.id;
+      const crontab = newChore.is_one_time ? null : convertDaysToCrontab(newChore.assigned_days_of_week);
+
+      await axios.post(`${API_BASE_URL}/api/chore-schedules`, {
+        chore_id: choreId,
+        user_id: newChore.user_id || null,
+        crontab: crontab,
+        visible: 1
+      });
+
+      setNewChore({
+        user_id: '',
+        title: '',
+        description: '',
+        assigned_days_of_week: ['monday'],
+        clam_value: 0,
+        is_one_time: false
+      });
+      setShowAddDialog(false);
+      await fetchData();
     } catch (error) {
       console.error('Error saving chore:', error);
     } finally {
@@ -183,27 +258,35 @@ const ChoreWidget = ({ transparentBackground }) => {
     }
   };
 
-  const getCurrentDay = () => {
-    return daysOfWeek[new Date().getDay()];
-  };
+  const getUserChoresForToday = (userId) => {
+    return schedules
+      .filter(schedule => {
+        if (schedule.user_id !== userId) return false;
+        if (!schedule.visible) return false;
+        return shouldShowChoreToday(schedule);
+      })
+      .map(schedule => {
+        const today = getTodayDateString();
+        const completed = history.some(h =>
+          h.chore_schedule_id === schedule.id &&
+          h.user_id === userId &&
+          h.date === today
+        );
 
-  const getUserChores = (userId, dayOfWeek = null) => {
-    return chores.filter(chore => 
-      chore.user_id === userId && 
-      (dayOfWeek ? chore.assigned_day_of_week === dayOfWeek : true)
-    );
+        return {
+          ...schedule,
+          completed,
+          id: schedule.id
+        };
+      });
   };
 
   const getBonusChores = () => {
-    return chores.filter(chore => chore.clam_value > 0);
+    return schedules.filter(schedule => schedule.visible);
   };
 
   const getAvailableBonusChores = () => {
-    return getBonusChores().filter(chore => chore.user_id === 0);
-  };
-
-  const getAssignedBonusChores = () => {
-    return getBonusChores().filter(chore => chore.user_id !== 0);
+    return getBonusChores().filter(schedule => schedule.user_id === null || schedule.user_id === 0);
   };
 
   const renderUserAvatar = (user) => {
@@ -267,7 +350,7 @@ const ChoreWidget = ({ transparentBackground }) => {
             {user.username.charAt(0).toUpperCase()}
           </Avatar>
         )}
-        
+
         <Chip
           label={`${user.clam_total || 0} 🥟`}
           size="small"
@@ -288,59 +371,56 @@ const ChoreWidget = ({ transparentBackground }) => {
     );
   };
 
-  const renderChoreItem = (chore, isEditing = false) => {
+  const renderChoreItem = (schedule) => {
     return (
       <Box
-        key={chore.id}
+        key={schedule.id}
         sx={{
           p: 1.5,
           border: '1px solid var(--card-border)',
           borderRadius: 2,
           mb: 1,
-          bgcolor: chore.completed ? 'rgba(0, 255, 0, 0.1)' : 'transparent',
+          bgcolor: schedule.completed ? 'rgba(0, 255, 0, 0.1)' : 'transparent',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center'
         }}
       >
         <Box sx={{ flex: 1 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: chore.completed ? 'normal' : 'bold', fontSize: '0.85rem' }}>
-            {chore.title}
-            {chore.clam_value > 0 && (
+          <Typography variant="subtitle2" sx={{ fontWeight: schedule.completed ? 'normal' : 'bold', fontSize: '0.85rem' }}>
+            {schedule.title}
+            {schedule.clam_value > 0 && (
               <Chip
-                label={`${chore.clam_value} 🥟`}
+                label={`${schedule.clam_value} 🥟`}
                 size="small"
                 sx={{ ml: 1, bgcolor: 'var(--accent)', color: 'white' }}
               />
             )}
           </Typography>
-          {chore.description && (
+          {schedule.description && (
             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-              {chore.description}
+              {schedule.description}
             </Typography>
           )}
-          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-            {chore.time_period.replace('-', ' ')} • {repeatTypes.find(t => t.value === chore.repeat_type)?.label}
-          </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <IconButton
-            color={chore.completed ? "secondary" : "primary"}
-            onClick={() => toggleChoreCompletion(chore.id, chore.completed)}
+            color={schedule.completed ? "secondary" : "primary"}
+            onClick={() => toggleChoreCompletion(schedule, schedule.completed)}
             size="small"
-            sx={{ 
+            sx={{
               minWidth: 'auto',
               width: 32,
               height: 32,
-              bgcolor: chore.completed ? 'transparent' : 'var(--accent)',
-              color: chore.completed ? 'var(--accent)' : 'white',
+              bgcolor: schedule.completed ? 'transparent' : 'var(--accent)',
+              color: schedule.completed ? 'var(--accent)' : 'white',
               '&:hover': {
-                bgcolor: chore.completed ? 'rgba(var(--accent-rgb), 0.1)' : 'var(--accent)',
+                bgcolor: schedule.completed ? 'rgba(var(--accent-rgb), 0.1)' : 'var(--accent)',
                 filter: 'brightness(1.1)'
               }
             }}
           >
-            {chore.completed ? <Undo fontSize="small" /> : <Check fontSize="small" />}
+            {schedule.completed ? <Undo fontSize="small" /> : <Check fontSize="small" />}
           </IconButton>
         </Box>
       </Box>
@@ -371,9 +451,7 @@ const ChoreWidget = ({ transparentBackground }) => {
     );
   }
 
-  const currentDay = getCurrentDay();
   const availableBonusChores = getAvailableBonusChores();
-  const assignedBonusChores = getAssignedBonusChores();
 
   return (
     <>
@@ -416,7 +494,7 @@ const ChoreWidget = ({ transparentBackground }) => {
         </Box>
 
         <Box sx={{ display: 'flex', gap: 2, overflowX: 'auto', pb: 2 }}>
-          <Box sx={{ 
+          <Box sx={{
             display: 'flex',
             gap: 2,
             pb: 2,
@@ -425,7 +503,7 @@ const ChoreWidget = ({ transparentBackground }) => {
             width: '100%'
           }}>
             {users.filter(user => user.id !== 0).map(user => {
-              const userChores = getUserChores(user.id, currentDay);
+              const userChores = getUserChoresForToday(user.id);
               const completedChores = userChores.filter(c => c.completed && c.clam_value === 0).length;
               const totalRegularChores = userChores.filter(c => c.clam_value === 0).length;
               const allRegularChoresCompleted = totalRegularChores > 0 && completedChores === totalRegularChores;
@@ -453,7 +531,7 @@ const ChoreWidget = ({ transparentBackground }) => {
                     </Typography>
                     {allRegularChoresCompleted && (
                       <Chip
-                        label="All Done! +2 🥟"
+                        label={`All Done! +${dailyClamReward} 🥟`}
                         color="success"
                         size="small"
                         sx={{ mt: 1 }}
@@ -461,13 +539,13 @@ const ChoreWidget = ({ transparentBackground }) => {
                     )}
                   </Box>
 
-                  <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+                  <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, width: '100%' }}>
                     {userChores.length === 0 ? (
                       <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
                         No chores for today
                       </Typography>
                     ) : (
-                      userChores.map(chore => renderChoreItem(chore, false))
+                      userChores.map(schedule => renderChoreItem(schedule))
                     )}
                   </Box>
                 </Box>
@@ -496,15 +574,15 @@ const ChoreWidget = ({ transparentBackground }) => {
                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
                   Available:
                 </Typography>
-                <Box sx={{ flex: 1, overflowY: 'auto', mb: 2, minHeight: 0 }}>
+                <Box sx={{ flex: 1, overflowY: 'auto', mb: 2, minHeight: 0, width: '100%' }}>
                   {availableBonusChores.length === 0 ? (
                     <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
                       No bonus chores available
                     </Typography>
                   ) : (
-                    availableBonusChores.map(chore => (
+                    availableBonusChores.map(schedule => (
                       <Box
-                        key={chore.id}
+                        key={schedule.id}
                         sx={{
                           p: 1,
                           border: '1px solid var(--accent)',
@@ -514,16 +592,16 @@ const ChoreWidget = ({ transparentBackground }) => {
                         }}
                       >
                         <Typography variant="subtitle2">
-                          {chore.title}
+                          {schedule.title}
                           <Chip
-                            label={`${chore.clam_value} 🥟`}
+                            label={`${schedule.clam_value} 🥟`}
                             size="small"
                             sx={{ ml: 1, bgcolor: 'var(--accent)', color: 'white' }}
                           />
                         </Typography>
-                        {chore.description && (
+                        {schedule.description && (
                           <Typography variant="caption" color="text.secondary">
-                            {chore.description}
+                            {schedule.description}
                           </Typography>
                         )}
                         <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
@@ -532,7 +610,7 @@ const ChoreWidget = ({ transparentBackground }) => {
                               key={user.id}
                               size="small"
                               variant="outlined"
-                              onClick={() => assignBonusChore(chore.id, user.id)}
+                              onClick={() => assignBonusChore(schedule.id, user.id)}
                               sx={{ fontSize: '0.7rem', minWidth: 'auto', px: 1 }}
                             >
                               {user.username}
@@ -631,56 +709,47 @@ const ChoreWidget = ({ transparentBackground }) => {
                 ))}
               </Select>
             </FormControl>
-            <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-              <FormControl sx={{ flex: 1 }}>
-                <InputLabel>Time Period</InputLabel>
-                <Select
-                  value={newChore.time_period}
-                  onChange={(e) => setNewChore({...newChore, time_period: e.target.value})}
-                >
-                  {timePeriods.map(period => (
-                    <MenuItem key={period} value={period}>
-                      {period.charAt(0).toUpperCase() + period.slice(1).replace('-', ' ')}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Box>
-            
+
             <Box sx={{ mb: 2 }}>
-              <FormLabel component="legend" sx={{ mb: 1, display: 'block' }}>
-                Select Days (choose one or more):
-              </FormLabel>
-              <FormGroup row>
-                {daysOfWeek.map(day => (
-                  <FormControlLabel
-                    key={day}
-                    control={
-                      <Checkbox
-                        checked={newChore.assigned_days_of_week.includes(day)}
-                        onChange={() => handleDayToggle(day)}
-                        color="primary"
-                      />
-                    }
-                    label={day.charAt(0).toUpperCase() + day.slice(1)}
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={newChore.is_one_time}
+                    onChange={(e) => setNewChore({
+                      ...newChore,
+                      is_one_time: e.target.checked,
+                      assigned_days_of_week: e.target.checked ? [] : ['monday']
+                    })}
+                    color="primary"
                   />
-                ))}
-              </FormGroup>
+                }
+                label="One-time chore (no recurrence)"
+              />
             </Box>
-            
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel>Repeat Type</InputLabel>
-              <Select
-                value={newChore.repeat_type}
-                onChange={(e) => setNewChore({...newChore, repeat_type: e.target.value})}
-              >
-                {repeatTypes.map(type => (
-                  <MenuItem key={type.value} value={type.value}>
-                    {type.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+
+            {!newChore.is_one_time && (
+              <Box sx={{ mb: 2 }}>
+                <FormLabel component="legend" sx={{ mb: 1, display: 'block' }}>
+                  Select Days (choose one or more):
+                </FormLabel>
+                <FormGroup row>
+                  {daysOfWeek.map(day => (
+                    <FormControlLabel
+                      key={day}
+                      control={
+                        <Checkbox
+                          checked={newChore.assigned_days_of_week.includes(day)}
+                          onChange={() => handleDayToggle(day)}
+                          color="primary"
+                        />
+                      }
+                      label={day.charAt(0).toUpperCase() + day.slice(1)}
+                    />
+                  ))}
+                </FormGroup>
+              </Box>
+            )}
+
             <TextField
               fullWidth
               type="number"
@@ -691,12 +760,12 @@ const ChoreWidget = ({ transparentBackground }) => {
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setShowAddDialog(false)}>Cancel</Button>
-            <Button 
-              onClick={saveChore} 
+            <Button
+              onClick={saveChore}
               variant="contained"
-              disabled={newChore.assigned_days_of_week.length === 0}
+              disabled={!newChore.is_one_time && newChore.assigned_days_of_week.length === 0}
             >
-              Add Chore{newChore.assigned_days_of_week.length > 1 ? 's' : ''}
+              Add Chore
             </Button>
           </DialogActions>
         </Dialog>
@@ -758,7 +827,7 @@ const ChoreWidget = ({ transparentBackground }) => {
               </Box>
             ))}
           </Box>
-          
+
           <Typography
             variant="h6"
             sx={{
@@ -770,7 +839,7 @@ const ChoreWidget = ({ transparentBackground }) => {
           >
             Processing...
           </Typography>
-          
+
           <CircularProgress
             size={40}
             thickness={2}
