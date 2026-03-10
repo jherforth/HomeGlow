@@ -117,17 +117,31 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
     }
   }, [locked]);
 
-  // Save layout to localStorage and notify parent
-  const handleLayoutChange = (newLayout) => {
-    if (locked) return; // Don't save if locked
+  const layoutRef = useRef(layout);
+  useEffect(() => {
+    layoutRef.current = layout;
+  }, [layout]);
 
-    // Update layout with static property based on locked state
+  const handleLayoutChange = (newLayout) => {
+    if (locked) return;
+
+    const currentLayout = layoutRef.current;
+    const hasChanged = newLayout.some(item => {
+      const existing = currentLayout.find(l => l.i === item.i);
+      if (!existing) return true;
+      return existing.x !== item.x || existing.y !== item.y || existing.w !== item.w || existing.h !== item.h;
+    });
+
+    if (!hasChanged) return;
+
     const updatedLayout = newLayout.map(item => ({
       ...item,
       static: locked
     }));
 
     setLayout(updatedLayout);
+    layoutRef.current = updatedLayout;
+
     newLayout.forEach((item) => {
       const layoutData = {
         x: item.x,
@@ -138,7 +152,6 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
       localStorage.setItem(`widget-layout-${activeTab}-${item.i}`, JSON.stringify(layoutData));
     });
 
-    // Notify parent component of layout change
     if (onLayoutChangeCallback) {
       onLayoutChangeCallback(newLayout);
     }
