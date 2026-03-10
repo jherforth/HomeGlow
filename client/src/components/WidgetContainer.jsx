@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Box, IconButton } from '@mui/material';
 import { DragIndicator } from '@mui/icons-material';
 import GridLayout from 'react-grid-layout';
@@ -6,10 +6,6 @@ import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import CountdownCircle from './CountdownCircle';
 
-/**
- * Container component that manages multiple draggable widgets
- * Provides a responsive grid system for optimal layout
- */
 const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange: onLayoutChangeCallback, activeTab = 1 }) => {
   const [containerWidth, setContainerWidth] = useState(1200);
   const [gridCols, setGridCols] = useState(12);
@@ -17,7 +13,9 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
   const [layout, setLayout] = useState([]);
   const [isLockTransitioning, setIsLockTransitioning] = useState(false);
   const [refreshKeys, setRefreshKeys] = useState({});
-  const containerRef = React.useRef(null);
+  const containerRef = useRef(null);
+  const prevWidgetIdsRef = useRef('');
+  const lockedRef = useRef(locked);
 
   // Update container width and grid columns based on screen size
   useEffect(() => {
@@ -43,21 +41,28 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
 
-  // Initialize layout from localStorage or defaults (only on mount or when widgets change)
   useEffect(() => {
+    lockedRef.current = locked;
+  }, [locked]);
+
+  useEffect(() => {
+    const currentWidgetIds = widgets.map(w => w.id).sort().join(',');
+    if (currentWidgetIds === prevWidgetIdsRef.current) return;
+    prevWidgetIdsRef.current = currentWidgetIds;
+
     const initialLayout = widgets.map((widget) => {
       const savedLayout = localStorage.getItem(`widget-layout-${activeTab}-${widget.id}`);
       if (savedLayout) {
         const parsed = JSON.parse(savedLayout);
         return {
           i: widget.id,
-          x: parsed.x || widget.defaultPosition.x,
-          y: parsed.y || widget.defaultPosition.y,
+          x: parsed.x ?? widget.defaultPosition.x,
+          y: parsed.y ?? widget.defaultPosition.y,
           w: parsed.w || widget.defaultSize.width,
           h: parsed.h || widget.defaultSize.height,
           minW: widget.minWidth || 3,
           minH: widget.minHeight || 2,
-          static: locked,
+          static: lockedRef.current,
         };
       }
       return {
@@ -68,30 +73,42 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
         h: widget.defaultSize.height,
         minW: widget.minWidth || 3,
         minH: widget.minHeight || 2,
-        static: locked,
+        static: lockedRef.current,
       };
     });
     setLayout(initialLayout);
   }, [widgets, activeTab]);
 
-  // Update static property when lock state changes (without recreating entire layout)
   useEffect(() => {
     setIsLockTransitioning(true);
 
-    setLayout((currentLayout) =>
-      currentLayout.map(item => ({
+    setLayout((currentLayout) => {
+      const updatedLayout = currentLayout.map(item => ({
         ...item,
         static: locked
-      }))
-    );
+      }));
 
-    // Re-enable transitions after a short delay
+      if (locked) {
+        updatedLayout.forEach((item) => {
+          const layoutData = {
+            x: item.x,
+            y: item.y,
+            w: item.w,
+            h: item.h,
+          };
+          localStorage.setItem(`widget-layout-${activeTab}-${item.i}`, JSON.stringify(layoutData));
+        });
+      }
+
+      return updatedLayout;
+    });
+
     const timer = setTimeout(() => {
       setIsLockTransitioning(false);
     }, 50);
 
     return () => clearTimeout(timer);
-  }, [locked]);
+  }, [locked, activeTab]);
 
   // Deselect widget when locked
   useEffect(() => {

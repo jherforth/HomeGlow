@@ -1,5 +1,5 @@
 // client/src/app.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Container, IconButton, Box, Dialog, DialogContent } from '@mui/material';
 import { Brightness4, Brightness7, Lock, LockOpen, Close } from '@mui/icons-material';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -196,11 +196,11 @@ const App = () => {
     return assignments.includes(tabId);
   };
 
-  const buildWidgetsArray = () => {
-    const widgets = [];
+  const widgets = useMemo(() => {
+    const result = [];
 
     if (widgetSettings.calendar.enabled && isWidgetAssignedToTab('calendar', activeTab)) {
-      widgets.push({
+      result.push({
         id: 'calendar-widget',
         defaultPosition: { x: 0, y: 0 },
         defaultSize: { width: 8, height: 5 },
@@ -214,7 +214,7 @@ const App = () => {
     }
 
     if (widgetSettings.weather.enabled && isWidgetAssignedToTab('weather', activeTab)) {
-      widgets.push({
+      result.push({
         id: 'weather-widget',
         defaultPosition: { x: 8, y: 0 },
         defaultSize: { width: 4, height: 3 },
@@ -228,7 +228,7 @@ const App = () => {
     }
 
     if (widgetSettings.chores.enabled && isWidgetAssignedToTab('chores', activeTab)) {
-      widgets.push({
+      result.push({
         id: 'chores-widget',
         defaultPosition: { x: 0, y: 5 },
         defaultSize: { width: 6, height: 4 },
@@ -239,7 +239,7 @@ const App = () => {
     }
 
     if (widgetSettings.photos.enabled && isWidgetAssignedToTab('photos', activeTab)) {
-      widgets.push({
+      result.push({
         id: 'photos-widget',
         defaultPosition: { x: 6, y: 5 },
         defaultSize: { width: 6, height: 4 },
@@ -249,10 +249,8 @@ const App = () => {
       });
     }
 
-    return widgets;
-  };
-
-  const widgets = buildWidgetsArray();
+    return result;
+  }, [widgetSettings, activeTab, apiKeys, widgetAssignments]);
 
   return (
     <>
