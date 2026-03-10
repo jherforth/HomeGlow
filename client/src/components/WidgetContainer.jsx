@@ -237,11 +237,11 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
         return { ...item, static: locked };
       });
 
-      // Notify parent component of layout change
       if (onLayoutChangeCallback) {
         onLayoutChangeCallback(newLayout);
       }
 
+      layoutRef.current = newLayout;
       return newLayout;
     });
   };
