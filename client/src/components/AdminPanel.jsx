@@ -359,7 +359,6 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
 
     if (isLight) {
       root.style.setProperty('--background', widgetSettings.primary);
-      root.style.setProperty('--gradient', `linear-gradient(135deg, ${widgetSettings.primary} 0%, #ffffff 100%)`);
     }
   };
 

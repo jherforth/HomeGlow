@@ -115,7 +115,6 @@ const App = () => {
         const parsed = JSON.parse(savedSettings);
         const primaryColor = parsed.primary || '#f5f5f5';
         document.documentElement.style.setProperty('--background', primaryColor);
-        document.documentElement.style.setProperty('--gradient', `linear-gradient(135deg, ${primaryColor} 0%, #ffffff 100%)`);
       }
     }
   }, []);
@@ -143,10 +142,8 @@ const App = () => {
       const parsed = savedSettings ? JSON.parse(savedSettings) : {};
       const primaryColor = parsed.primary || '#f5f5f5';
       document.documentElement.style.setProperty('--background', primaryColor);
-      document.documentElement.style.setProperty('--gradient', `linear-gradient(135deg, ${primaryColor} 0%, #ffffff 100%)`);
     } else {
       document.documentElement.style.removeProperty('--background');
-      document.documentElement.style.removeProperty('--gradient');
     }
   };
 
