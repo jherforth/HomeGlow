@@ -7,6 +7,7 @@ import { ChromePicker } from 'react-color';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
+import MonthDayCell from './MonthDayCell.jsx';
 
 const localizer = momentLocalizer(moment);
 
@@ -665,7 +666,6 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                 const dayDate = day.toDate();
                 const isCurrentMonth = day.month() === moment(currentDate).month();
                 const isToday = day.isSame(moment(), 'day');
-                const dayClone = day.clone();
 
                 const dayMultiDay = weekMultiDayEvents.filter(e => eventSpansDay(e, dayDate));
                 const multiDaySlottedRows = Array(multiDaySlotCount).fill(null).map((_, slotIdx) =>
@@ -679,141 +679,26 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                   !e.all_day && !isMultiDaySpanning(e) && eventSpansDay(e, dayDate)
                 ).sort((a, b) => a.start - b.start);
 
-                const maxItems = 3;
                 const pillHeight = `${displaySettings.textSize * 1.5}px`;
-
-                // Count total events for this day
                 const totalEventCount = multiDaySlottedRows.filter(e => e !== null).length + dayAllDaySingle.length + dayTimed.length;
-                let shownCount = 0;
-
-                const renderMonthPill = (event, key, clickHandler) => {
-                  if (!event) {
-                    return null;
-                  }
-                  if (shownCount >= maxItems) {
-                    return null;
-                  }
-                  shownCount++;
-                  const { isStart, isEnd } = getMultiDayPosition(event, dayDate);
-                  const color = event.source_color || eventColors.backgroundColor;
-                  const isContinuing = !isStart;
-                  return (
-                    <Box
-                      key={key}
-                      onClick={clickHandler}
-                      sx={{ mb: 0.25, height: pillHeight, minHeight: pillHeight, display: 'flex', alignItems: 'stretch', cursor: 'pointer' }}
-                    >
-                      <Box sx={{
-                        flex: 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        backgroundColor: color,
-                        borderTopLeftRadius: isStart ? '10px' : '0px',
-                        borderBottomLeftRadius: isStart ? '10px' : '0px',
-                        borderTopRightRadius: isEnd ? '10px' : '0px',
-                        borderBottomRightRadius: isEnd ? '10px' : '0px',
-                        px: 0.75,
-                        py: 0.125,
-                        border: '1px solid rgba(0,0,0,0.2)',
-                        borderLeft: !isStart ? 'none' : '1px solid rgba(0,0,0,0.2)',
-                        borderRight: !isEnd ? 'none' : '1px solid rgba(0,0,0,0.2)',
-                        overflow: 'hidden',
-                        '&:hover': { filter: 'brightness(1.1)' }
-                      }}>
-                        <Typography variant="caption" sx={{
-                          fontSize: `${displaySettings.textSize}px`,
-                          color: '#fff',
-                          fontWeight: 500,
-                          fontStyle: 'italic',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          opacity: isContinuing ? 0.85 : 1,
-                        }}>
-                          {isContinuing ? `← ${event.title}` : event.title}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  );
-                };
 
                 allWeekCells.push(
-                  <Box
+                  <MonthDayCell
                     key={day.format('YYYY-MM-DD')}
-                    onClick={() => handleSelectSlot({ start: dayClone.toDate() })}
-                    sx={{
-                      border: '1px solid var(--card-border)',
-                      borderRadius: 1,
-                      p: 0.75,
-                      cursor: 'pointer',
-                      bgcolor: isToday ? 'rgba(var(--accent-rgb), 0.1)' : 'transparent',
-                      opacity: isCurrentMonth ? 1 : 0.4,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      minHeight: 0,
-                      overflow: 'hidden',
-                      '&:hover': {
-                        bgcolor: isToday ? 'rgba(var(--accent-rgb), 0.15)' : 'rgba(0,0,0,0.05)'
-                      }
-                    }}
-                  >
-                    <Typography variant="caption" sx={{ fontWeight: 'bold', color: isToday ? 'var(--accent)' : 'inherit', fontSize: '0.8rem', mb: 0.5 }}>
-                      {day.format('D')}
-                    </Typography>
-
-                    <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-                      {multiDaySlottedRows.map((event, slotIdx) => {
-                        const result = renderMonthPill(event, `multi-${slotIdx}`, (e) => { e.stopPropagation(); handleSelectEvent(event); });
-                        return result;
-                      })}
-
-                      {dayAllDaySingle.map((event, evIdx) => {
-                        if (shownCount >= maxItems) { return null; }
-                        shownCount++;
-                        const color = event.source_color || eventColors.backgroundColor;
-                        return (
-                          <Box key={`allday-${evIdx}`} onClick={(e) => { e.stopPropagation(); handleSelectEvent(event); }}
-                            sx={{ mb: 0.25, height: pillHeight, minHeight: pillHeight, display: 'flex', alignItems: 'stretch', cursor: 'pointer' }}>
-                            <Box sx={{
-                              flex: 1, display: 'flex', alignItems: 'center',
-                              backgroundColor: color, borderRadius: '10px', px: 0.75, py: 0.125,
-                              border: '1px solid rgba(0,0,0,0.2)', overflow: 'hidden',
-                              '&:hover': { filter: 'brightness(1.1)' }
-                            }}>
-                              <Typography variant="caption" sx={{
-                                fontSize: `${displaySettings.textSize}px`, color: '#fff',
-                                fontWeight: 500, fontStyle: 'italic',
-                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
-                              }}>
-                                {event.title}
-                              </Typography>
-                            </Box>
-                          </Box>
-                        );
-                      })}
-
-                      {dayTimed.map((event, evIdx) => {
-                        if (shownCount >= maxItems) { return null; }
-                        shownCount++;
-                        const color = event.source_color || eventColors.backgroundColor;
-                        return (
-                          <Box key={`timed-${evIdx}`} onClick={(e) => { e.stopPropagation(); handleSelectEvent(event); }}
-                            sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25, cursor: 'pointer', borderRadius: 0.5, px: 0.25, '&:hover': { bgcolor: 'rgba(0,0,0,0.05)' } }}>
-                            <Box sx={{ width: displaySettings.bulletSize, height: displaySettings.bulletSize, minWidth: displaySettings.bulletSize, borderRadius: '50%', backgroundColor: color, flexShrink: 0 }} />
-                            <Typography variant="caption" sx={{ fontSize: `${displaySettings.textSize}px`, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {event.title}
-                            </Typography>
-                          </Box>
-                        );
-                      })}
-
-                      {totalEventCount > maxItems && (
-                        <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'text.secondary', display: 'block', mt: 0.25 }}>
-                          +{totalEventCount - maxItems} more
-                        </Typography>
-                      )}
-                    </Box>
-                  </Box>
+                    day={day}
+                    isCurrentMonth={isCurrentMonth}
+                    isToday={isToday}
+                    multiDaySlottedRows={multiDaySlottedRows}
+                    dayAllDaySingle={dayAllDaySingle}
+                    dayTimed={dayTimed}
+                    totalEventCount={totalEventCount}
+                    pillHeight={pillHeight}
+                    displaySettings={displaySettings}
+                    eventColors={eventColors}
+                    getMultiDayPosition={getMultiDayPosition}
+                    onSlotClick={handleSelectSlot}
+                    onEventClick={handleSelectEvent}
+                  />
                 );
               });
             });
