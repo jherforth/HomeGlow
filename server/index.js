@@ -1851,15 +1851,21 @@ fastify.patch('/api/users/:id', async (request, reply) => {
 fastify.post('/api/users/:id/upload-picture', async (request, reply) => {
   try {
     const { id } = request.params;
+    console.log(`Upload picture request for user ${id}`);
+
     const data = await request.file();
-    
+
     if (!data) {
+      console.log('No file uploaded');
       return reply.status(400).send({ error: 'No file uploaded' });
     }
+
+    console.log('File received:', data.filename, 'Type:', data.mimetype);
 
     // Validate file type
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
     if (!allowedTypes.includes(data.mimetype)) {
+      console.log('Invalid file type:', data.mimetype);
       return reply.status(400).send({ error: 'Only image files (JPEG, PNG, GIF) are allowed' });
     }
 
@@ -1872,23 +1878,31 @@ fastify.post('/api/users/:id/upload-picture', async (request, reply) => {
     const filename = `user_${id}_${Date.now()}.${fileExtension}`;
     const filepath = path.join(usersDir, filename);
 
+    console.log('Saving file to:', filepath);
+
     // Save file
     await fs.writeFile(filepath, await data.toBuffer());
+    console.log('File saved successfully');
 
     // Update user record
     const stmt = db.prepare('UPDATE users SET profile_picture = ? WHERE id = ?');
     const info = stmt.run(filename, id);
-    
+
+    console.log('Database update:', info);
+
     if (info.changes === 0) {
       // Clean up uploaded file if user doesn't exist
       await fs.unlink(filepath);
+      console.log('User not found, file deleted');
       return reply.status(404).send({ error: 'User not found' });
     }
 
-    return { 
-      success: true, 
+    console.log('Profile picture uploaded successfully:', filename);
+
+    return {
+      success: true,
       message: 'Profile picture uploaded successfully',
-      filename: filename 
+      filename: filename
     };
   } catch (error) {
     console.error('Error uploading profile picture:', error);
@@ -3014,6 +3028,13 @@ const start = async () => {
     await migrateToDurationField(); // Add duration field to chore_schedules
     initializeDefaultSettings(); // Initialize default settings
     startNightlyCronJob(); // Start the nightly chore pruning job
+
+    // Create uploads directories
+    const uploadsDir = path.join(__dirname, 'uploads');
+    const usersDir = path.join(uploadsDir, 'users');
+    await fs.mkdir(usersDir, { recursive: true });
+    console.log('Uploads directories created');
+
     await fastify.listen({ port: process.env.PORT || 5000, host: '0.0.0.0' });
     console.log(`Server running on port ${process.env.PORT || 5000}`);
   } catch (err) {

@@ -598,28 +598,43 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
 
   const handleProfilePictureUpload = async (userId, event) => {
     const file = event.target.files[0];
-    if (!file) return;
+    if (!file) {
+      console.log('No file selected');
+      return;
+    }
+
+    console.log('File selected:', file.name, 'Size:', file.size, 'Type:', file.type);
 
     const formData = new FormData();
     formData.append('file', file);
 
     try {
       setIsLoading(true);
+      console.log(`Uploading picture for user ${userId}...`);
+
       const response = await axios.post(
         `${API_BASE_URL}/api/users/${userId}/upload-picture`,
         formData,
         { headers: { 'Content-Type': 'multipart/form-data' } }
       );
-      fetchUsers();
+
+      console.log('Upload response:', response.data);
+
+      await fetchUsers();
+      console.log('Users fetched after upload');
     } catch (error) {
       console.error('Error uploading profile picture:', error);
+      console.error('Error details:', error.response?.data);
       alert('Failed to upload profile picture. Please try again.');
     } finally {
       setIsLoading(false);
+      event.target.value = '';
     }
   };
 
-  const renderUserAvatar = (user) => {
+  const UserAvatar = ({ user }) => {
+    const [imageError, setImageError] = useState(false);
+
     let imageUrl = null;
     if (user.profile_picture) {
       if (user.profile_picture.startsWith('data:')) {
@@ -629,23 +644,27 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       }
     }
 
-    return imageUrl ? (
-      <img
-        src={imageUrl}
-        alt={user.username}
-        style={{
-          width: 40,
-          height: 40,
-          borderRadius: '50%',
-          objectFit: 'cover',
-          border: '2px solid var(--accent)'
-        }}
-        onError={(e) => {
-          e.target.style.display = 'none';
-          e.target.nextSibling.style.display = 'flex';
-        }}
-      />
-    ) : (
+    if (imageUrl && !imageError) {
+      return (
+        <img
+          src={imageUrl}
+          alt={user.username}
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: '50%',
+            objectFit: 'cover',
+            border: '2px solid var(--accent)'
+          }}
+          onError={() => {
+            console.error('Failed to load image:', imageUrl);
+            setImageError(true);
+          }}
+        />
+      );
+    }
+
+    return (
       <Avatar sx={{ width: 40, height: 40, bgcolor: 'var(--accent)' }}>
         {user.username.charAt(0).toUpperCase()}
       </Avatar>
@@ -1324,7 +1343,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
                     <TableRow key={user.id}>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          {renderUserAvatar(user)}
+                          <UserAvatar key={`${user.id}-${user.profile_picture}`} user={user} />
                           <Button
                             component="label"
                             size="small"
