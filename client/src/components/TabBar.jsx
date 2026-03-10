@@ -25,7 +25,11 @@ import {
   Image,
   Star,
   Add,
-  Close
+  Close,
+  Construction,
+  Delete,
+  LocalDrink,
+  Cloud
 } from '@mui/icons-material';
 
 const iconMap = {
@@ -52,6 +56,10 @@ const iconMap = {
   lightbulb: Lightbulb,
   image: Image,
   star: Star,
+  shovel: Construction,
+  trashcan: Delete,
+  bucket: LocalDrink,
+  clouds: Cloud,
 };
 
 const TabBar = ({ tabs, activeTab, onTabChange, widgetsLocked, onAddTab, onDeleteTab }) => {
@@ -95,11 +103,12 @@ const TabBar = ({ tabs, activeTab, onTabChange, widgetsLocked, onAddTab, onDelet
                 px: 1.5,
                 py: 0.5,
                 cursor: 'pointer',
-                backgroundColor: isActive ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
-                borderRadius: '4px',
+                backgroundColor: isActive ? 'rgba(158, 127, 255, 0.25)' : 'transparent',
+                borderRadius: '6px',
                 transition: 'all 0.2s ease',
+                border: isActive ? '1px solid var(--accent)' : '1px solid transparent',
                 '&:hover': {
-                  backgroundColor: isActive ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.05)',
+                  backgroundColor: isActive ? 'rgba(158, 127, 255, 0.25)' : 'rgba(255, 255, 255, 0.08)',
                 },
               }}
               onClick={() => onTabChange(tab.id)}
@@ -143,7 +152,12 @@ const TabBar = ({ tabs, activeTab, onTabChange, widgetsLocked, onAddTab, onDelet
                 />
               ) : (
                 <>
-                  <IconComponent sx={{ fontSize: 20 }} />
+                  <IconComponent
+                    sx={{
+                      fontSize: 20,
+                      color: isActive ? 'var(--accent)' : 'inherit',
+                    }}
+                  />
                   {tab.show_label && (
                     <Box
                       component="span"
@@ -151,6 +165,7 @@ const TabBar = ({ tabs, activeTab, onTabChange, widgetsLocked, onAddTab, onDelet
                         fontSize: '0.875rem',
                         fontWeight: isActive ? 600 : 400,
                         whiteSpace: 'nowrap',
+                        color: isActive ? 'var(--accent)' : 'inherit',
                       }}
                     >
                       {tab.label}
@@ -163,10 +178,11 @@ const TabBar = ({ tabs, activeTab, onTabChange, widgetsLocked, onAddTab, onDelet
             {index < tabs.length - 1 && (
               <Box
                 sx={{
-                  width: '1px',
-                  height: '24px',
-                  backgroundColor: 'var(--card-border)',
-                  opacity: 0.5,
+                  width: '2px',
+                  height: '28px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.3)',
+                  mx: 0.5,
+                  borderRadius: '1px',
                 }}
               />
             )}
@@ -178,11 +194,11 @@ const TabBar = ({ tabs, activeTab, onTabChange, widgetsLocked, onAddTab, onDelet
         <>
           <Box
             sx={{
-              width: '1px',
-              height: '24px',
-              backgroundColor: 'var(--card-border)',
-              opacity: 0.5,
-              ml: 0.5,
+              width: '2px',
+              height: '28px',
+              backgroundColor: 'rgba(255, 255, 255, 0.3)',
+              mx: 0.5,
+              borderRadius: '1px',
             }}
           />
           <Tooltip title="Add new tab">
