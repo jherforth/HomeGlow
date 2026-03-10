@@ -115,17 +115,17 @@ fastify.register(require('@fastify/static'), {
 fastify.get('/widgets/:filename', async (request, reply) => {
   const { filename } = request.params;
   const filePath = path.join(__dirname, 'widgets', filename);
-  
+
   console.log(`Widget request for: ${filename}`);
   console.log(`Looking for file at: ${filePath}`);
-  
+
   try {
     const stats = await fs.stat(filePath);
     console.log(`File exists, size: ${stats.size} bytes`);
-    
+
     const content = await fs.readFile(filePath, 'utf-8');
     console.log(`File content preview: ${content.substring(0, 100)}...`);
-    
+
     reply.header('Content-Type', 'text/html');
     return content;
   } catch (error) {
@@ -136,8 +136,8 @@ fastify.get('/widgets/:filename', async (request, reply) => {
 
 // Add a simple test endpoint
 fastify.get('/api/test', async (request, reply) => {
-  return { 
-    message: 'Server is working!', 
+  return {
+    message: 'Server is working!',
     timestamp: new Date().toISOString(),
     widgetsDir: path.join(__dirname, 'widgets')
   };
@@ -153,14 +153,14 @@ fastify.get('/index.css', async (request, reply) => {
       '/app/client/src/index.css',
       path.join(process.cwd(), 'client', 'src', 'index.css')
     ];
-    
+
     console.log('Looking for CSS file in paths:', possiblePaths);
     console.log('Current working directory:', process.cwd());
     console.log('__dirname:', __dirname);
-    
+
     let cssContent = null;
     let successPath = null;
-    
+
     for (const cssPath of possiblePaths) {
       try {
         cssContent = await fs.readFile(cssPath, 'utf-8');
@@ -171,17 +171,17 @@ fastify.get('/index.css', async (request, reply) => {
         console.log('Failed to read CSS from:', cssPath, pathError.message);
       }
     }
-    
+
     if (cssContent) {
       reply.header('Content-Type', 'text/css');
       reply.header('Access-Control-Allow-Origin', '*');
       return cssContent;
     }
-    
+
     throw new Error('CSS file not found in any expected location');
   } catch (error) {
     console.error('Error serving index.css:', error);
-    
+
     // Fallback: serve minimal CSS for widgets
     const fallbackCSS = `
       :root {
@@ -208,7 +208,7 @@ fastify.get('/index.css', async (request, reply) => {
         --dark-button-gradient-end: #620808;
         --gradient: linear-gradient(45deg, var(--light-gradient-start), var(--light-gradient-end));
       }
-      
+
       [data-theme="dark"] {
         --background: #0a0a1a;
         --card-bg: rgba(30, 30, 50, 0.7);
@@ -220,7 +220,7 @@ fastify.get('/index.css', async (request, reply) => {
         --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
         --gradient: linear-gradient(45deg, var(--dark-gradient-start), var(--dark-gradient-end));
       }
-      
+
       html, body {
         margin: 0;
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -234,7 +234,7 @@ fastify.get('/index.css', async (request, reply) => {
         overflow-y: auto;
         font-size: var(--dynamic-text-size);
       }
-      
+
       .card {
         background: var(--card-bg);
         border: 1px solid var(--card-border);
@@ -247,18 +247,18 @@ fastify.get('/index.css', async (request, reply) => {
         max-width: var(--dynamic-card-width);
         touch-action: manipulation;
       }
-      
+
       .card:hover {
         transform: translateY(-5px);
         box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
       }
-      
+
       h1, h2, h3, h4, h5, h6 {
         font-weight: 700;
         letter-spacing: 0.5px;
         color: var(--text-color);
       }
-      
+
       button {
         background: linear-gradient(45deg, var(--light-button-gradient-start), var(--light-button-gradient-end));
         color: var(--text-color);
@@ -271,16 +271,16 @@ fastify.get('/index.css', async (request, reply) => {
         transition: background 0.3s ease;
         touch-action: manipulation;
       }
-      
+
       [data-theme="dark"] button {
         background: linear-gradient(45deg, var(--dark-button-gradient-start), var(--dark-button-gradient-end));
       }
-      
+
       button:hover {
         filter: brightness(1.1);
       }
     `;
-    
+
     console.log('Serving fallback CSS');
     reply.header('Content-Type', 'text/css');
     reply.header('Access-Control-Allow-Origin', '*');
@@ -370,10 +370,10 @@ fastify.get('/api/widgets/debug', async (request, reply) => {
   try {
     const widgetsDir = path.join(__dirname, 'widgets');
     console.log(`Checking widgets directory: ${widgetsDir}`);
-    
+
     const files = await fs.readdir(widgetsDir);
     console.log(`Files in widgets directory:`, files);
-    
+
     const fileDetails = [];
     for (const file of files) {
       const filePath = path.join(widgetsDir, file);
@@ -392,7 +392,7 @@ fastify.get('/api/widgets/debug', async (request, reply) => {
         });
       }
     }
-    
+
     return {
       directory: widgetsDir,
       files: fileDetails,
@@ -408,7 +408,7 @@ fastify.get('/api/widgets/debug', async (request, reply) => {
 fastify.get('/api/widgets/github', async (request, reply) => {
   try {
     console.log('Fetching widgets from GitHub repository...');
-    
+
     // Get repository contents
     const repoUrl = `${GITHUB_API_BASE}/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/contents`;
     const response = await axios.get(repoUrl, {
@@ -420,13 +420,13 @@ fastify.get('/api/widgets/github', async (request, reply) => {
     });
 
     // Filter for HTML files and directories
-    const items = response.data.filter(item => 
+    const items = response.data.filter(item =>
       item.type === 'file' && item.name.endsWith('.html') ||
       item.type === 'dir'
     );
 
     const widgets = [];
-    
+
     for (const item of items) {
       if (item.type === 'file' && item.name.endsWith('.html')) {
         // Direct HTML file in root
@@ -450,11 +450,11 @@ fastify.get('/api/widgets/github', async (request, reply) => {
             },
             timeout: 5000
           });
-          
-          const htmlFiles = dirResponse.data.filter(file => 
+
+          const htmlFiles = dirResponse.data.filter(file =>
             file.type === 'file' && file.name.endsWith('.html')
           );
-          
+
           for (const htmlFile of htmlFiles) {
             widgets.push({
               name: `${item.name}/${htmlFile.name.replace('.html', '')}`,
@@ -475,18 +475,18 @@ fastify.get('/api/widgets/github', async (request, reply) => {
 
     console.log(`Found ${widgets.length} widgets in GitHub repository`);
     return widgets;
-    
+
   } catch (error) {
     console.error('Error fetching GitHub widgets:', error);
     if (error.response) {
-      return reply.status(error.response.status).send({ 
+      return reply.status(error.response.status).send({
         error: `GitHub API error: ${error.response.status} ${error.response.statusText}`,
-        details: error.response.data 
+        details: error.response.data
       });
     }
-    return reply.status(500).send({ 
+    return reply.status(500).send({
       error: 'Failed to fetch widgets from GitHub repository',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -495,13 +495,13 @@ fastify.get('/api/widgets/github', async (request, reply) => {
 fastify.post('/api/widgets/github/install', async (request, reply) => {
   try {
     const { download_url, filename, name } = request.body;
-    
+
     if (!download_url || !filename) {
       return reply.status(400).send({ error: 'download_url and filename are required' });
     }
 
     console.log(`Installing widget ${filename} from GitHub...`);
-    
+
     // Download the widget file
     const response = await axios.get(download_url, {
       headers: {
@@ -510,18 +510,18 @@ fastify.post('/api/widgets/github/install', async (request, reply) => {
       },
       timeout: 15000
     });
-    
+
     // Sanitize filename
     const sanitizedFilename = filename.replace(/[^a-zA-Z0-9-._]/g, '_');
     const savePath = path.join(__dirname, 'widgets', sanitizedFilename);
-    
+
     // Save the widget file
     await fs.writeFile(savePath, response.data, 'utf-8');
-    
+
     // Update registry
     const registry = await loadWidgetRegistry();
     const existingWidget = registry.find(w => w.filename === sanitizedFilename);
-    
+
     if (!existingWidget) {
       registry.push({
         name: name || sanitizedFilename.replace('.html', ''),
@@ -532,25 +532,25 @@ fastify.post('/api/widgets/github/install', async (request, reply) => {
       });
       await saveWidgetRegistry(registry);
     }
-    
+
     console.log(`Successfully installed widget: ${sanitizedFilename}`);
-    return { 
-      success: true, 
-      message: 'Widget installed successfully!', 
-      widget: sanitizedFilename 
+    return {
+      success: true,
+      message: 'Widget installed successfully!',
+      widget: sanitizedFilename
     };
-    
+
   } catch (error) {
     console.error('Error installing GitHub widget:', error);
     if (error.response) {
-      return reply.status(error.response.status).send({ 
+      return reply.status(error.response.status).send({
         error: `Failed to download widget: ${error.response.status} ${error.response.statusText}`,
-        details: error.response.data 
+        details: error.response.data
       });
     }
-    return reply.status(500).send({ 
+    return reply.status(500).send({
       error: 'Failed to install widget from GitHub',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -671,31 +671,31 @@ async function initializeDatabase() {
     } catch (error) {
       console.error('Error creating default home tab:', error);
     }
-    
+
     // Migration: Add repeat_type column if it doesn't exist and remove old repeats column
     try {
       // Check if repeat_type column exists
       const columns = newDb.prepare("PRAGMA table_info(chores)").all();
       const hasRepeatType = columns.some(col => col.name === 'repeat_type');
       const hasRepeats = columns.some(col => col.name === 'repeats');
-      
+
       if (!hasRepeatType) {
         console.log('Adding repeat_type column to chores table...');
         newDb.exec('ALTER TABLE chores ADD COLUMN repeat_type TEXT DEFAULT "no-repeat"');
-        
+
         // If old repeats column exists, migrate data
         if (hasRepeats) {
           console.log('Migrating data from repeats to repeat_type...');
           newDb.exec(`
-            UPDATE chores 
-            SET repeat_type = CASE 
+            UPDATE chores
+            SET repeat_type = CASE
               WHEN repeats = 1 OR repeats = 'true' THEN 'weekly'
               ELSE 'no-repeat'
             END
           `);
         }
       }
-      
+
       // Remove old repeats column if it exists
       if (hasRepeats) {
         console.log('Removing old repeats column...');
@@ -713,17 +713,17 @@ async function initializeDatabase() {
             clam_value INTEGER DEFAULT 0,
             expiration_date TEXT
           );
-          
+
           INSERT INTO chores_new (id, user_id, title, description, time_period, assigned_day_of_week, repeat_type, completed, clam_value, expiration_date)
           SELECT id, user_id, title, description, time_period, assigned_day_of_week, repeat_type, completed, clam_value, expiration_date
           FROM chores;
-          
+
           DROP TABLE chores;
           ALTER TABLE chores_new RENAME TO chores;
         `);
         console.log('Migration completed successfully!');
       }
-      
+
     } catch (migrationError) {
       console.error('Migration error:', migrationError);
       // Continue anyway - the app might still work with the new schema
@@ -1081,7 +1081,7 @@ async function pruneAndResetChores() {
             }
           }
         }
-        
+
         // Handle "until-completed" chores that need to appear on new days
         if (!chore.completed && chore.repeat_type === "until-completed") {
           // For "until-completed" chores that aren't completed, check if they should repeat daily
@@ -1661,7 +1661,7 @@ fastify.post('/api/chores/complete', async (request, reply) => {
     }
 
     const uncompletedRegularChores = todaysChores.filter(cs => cs.completed_today == 0);
-    if (!uncompletedRegularChores.length) {
+    if (todaysChores.length && !uncompletedRegularChores.length) {
       const dailyRewardSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('daily_completion_clam_reward');
       const dailyReward = dailyRewardSetting ? parseInt(dailyRewardSetting.value, 10) : 2;
 
@@ -1934,7 +1934,7 @@ fastify.get('/api/calendar', async (request, reply) => {
   try {
     const rows = db.prepare('SELECT * FROM events').all();
     return rows;
-  }  catch (error) {
+  } catch (error) {
     console.error('Error fetching events:', error);
     reply.status(500).send({ error: 'Failed to fetch events' });
   }
@@ -2002,7 +2002,7 @@ fastify.post('/api/settings', async (request, reply) => {
   console.log('Value:', value);
   console.log('Value type:', typeof value);
   console.log('Value length:', value ? value.length : 'null/undefined');
-  
+
   // Special logging for weather API key
   if (key === 'WEATHER_API_KEY') {
     console.log('=== WEATHER API KEY SPECIFIC LOGGING ===');
@@ -2011,7 +2011,7 @@ fastify.post('/api/settings', async (request, reply) => {
     console.log('Is null?', value === null);
     console.log('Is undefined?', value === undefined);
   }
-  
+
   if (!key || value === undefined) {
     console.log('ERROR: Missing key or value');
     return reply.status(400).send({ error: 'Key and value are required.' });
@@ -2021,18 +2021,18 @@ fastify.post('/api/settings', async (request, reply) => {
     const stmt = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
     const result = stmt.run(key, value);
     console.log('Database insert result:', result);
-    
+
     // Verify the setting was saved
     const verification = db.prepare('SELECT key, value FROM settings WHERE key = ?').get(key);
     console.log('Verification query result:', verification);
-    
+
     // Special verification for weather API key
     if (key === 'WEATHER_API_KEY') {
       console.log('=== WEATHER API KEY VERIFICATION ===');
       console.log('Saved value in DB:', verification ? verification.value : 'NOT FOUND');
       console.log('Value matches input?', verification && verification.value === value);
     }
-    
+
     return { success: true, message: `Setting '${key}' saved successfully.` };
   } catch (error) {
     console.error(`Error saving setting '${key}':`, error);
@@ -2208,21 +2208,21 @@ fastify.post('/api/test-api-key', async (request, reply) => {
   console.log('Received API key:', apiKey);
   console.log('API key type:', typeof apiKey);
   console.log('API key length:', apiKey ? apiKey.length : 'null/undefined');
-  
+
   try {
     // Test direct database insertion
     const stmt = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
     const result = stmt.run('WEATHER_API_KEY', apiKey);
     console.log('Direct insert result:', result);
-    
+
     // Verify it was saved
     const verification = db.prepare('SELECT key, value FROM settings WHERE key = ?').get('WEATHER_API_KEY');
     console.log('Verification result:', verification);
-    
-    return { 
-      success: true, 
+
+    return {
+      success: true,
       message: 'API key test completed',
-      saved: verification 
+      saved: verification
     };
   } catch (error) {
     console.error('Test API key save error:', error);
@@ -2235,7 +2235,7 @@ fastify.get('/api/proxy', async (request, reply) => {
   console.log('=== PROXY REQUEST RECEIVED ===');
   console.log('Query params:', request.query);
   console.log('Headers:', request.headers);
-  
+
   const { targetUrl } = request.query;
 
   if (!targetUrl) {
@@ -2276,7 +2276,7 @@ fastify.get('/api/proxy', async (request, reply) => {
     }
 
     console.log(`Proxying request to whitelisted domain: ${targetUrl}`);
-    
+
     // Configure axios for both HTTP and HTTPS
     const axiosConfig = {
       timeout: 15000, // 15 second timeout
@@ -2311,12 +2311,12 @@ fastify.get('/api/proxy', async (request, reply) => {
     if (response.headers['content-type']) {
       reply.header('Content-Type', response.headers['content-type']);
     }
-    
+
     // Add CORS headers
     reply.header('Access-Control-Allow-Origin', '*');
     reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    
+
     console.log('Sending successful response');
     return reply.status(response.status).send(response.data);
 
@@ -2340,7 +2340,7 @@ fastify.get('/api/proxy', async (request, reply) => {
         data: error.response.data
       } : 'No response'
     });
-    
+
     if (error.response) {
       // Forward the error from the target server
       console.log(`Target server responded with ${error.response.status}: ${error.response.statusText}`);
@@ -2350,7 +2350,7 @@ fastify.get('/api/proxy', async (request, reply) => {
       });
     } else if (error.code === 'ECONNREFUSED') {
       console.log(`Connection refused to ${error.address}:${error.port}`);
-      return reply.status(503).send({ 
+      return reply.status(503).send({
         error: 'Unable to connect to the target server. The server may be down or unreachable.',
         details: `Connection refused to ${error.address}:${error.port}`
       });
@@ -2361,11 +2361,11 @@ fastify.get('/api/proxy', async (request, reply) => {
     } else if (error.code === 'ECONNRESET') {
       return reply.status(503).send({ error: 'Connection was reset by the target server.' });
     }
-    
+
     // Handle other errors (e.g., network, invalid URL)
-    return reply.status(500).send({ 
+    return reply.status(500).send({
       error: 'Failed to proxy request.',
-      details: error.message 
+      details: error.message
     });
   }
 });
