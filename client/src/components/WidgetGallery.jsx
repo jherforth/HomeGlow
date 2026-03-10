@@ -136,10 +136,11 @@ const WidgetGallery = ({ theme, transparentBackground = false }) => {
                 title={plugin.name}
                 style={{
                   width: '100%',
-                  height: '400px',
+                  height: '600px',
                   border: 'none',
                   display: 'block',
                   background: 'transparent',
+                  overflow: 'hidden',
                 }}
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
                 onLoad={(e) => {
