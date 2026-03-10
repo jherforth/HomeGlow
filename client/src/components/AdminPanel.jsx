@@ -58,7 +58,7 @@ import {
   ViewQuilt,
   Lock
 } from '@mui/icons-material';
-import { ChromePicker } from 'react-color';
+import ColorPickerPopover from './ColorPickerPopover';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import PinModal from './PinModal';
@@ -94,7 +94,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const [uploadedWidgets, setUploadedWidgets] = useState([]);
   const [githubWidgets, setGithubWidgets] = useState([]);
   const [loadingGithub, setLoadingGithub] = useState(false);
-  const [showColorPicker, setShowColorPicker] = useState({});
+  const [colorPickerAnchor, setColorPickerAnchor] = useState({ key: null, el: null });
   const [deleteUserDialog, setDeleteUserDialog] = useState({ open: false, user: null });
   const [choreModal, setChoreModal] = useState({ open: false, user: null, userChores: [] });
   const [isLoading, setIsLoading] = useState(false);
@@ -752,7 +752,13 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
               boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
             }
           }}
-          onClick={() => setShowColorPicker(prev => ({ ...prev, [key]: !prev[key] }))}
+          onClick={(e) => {
+            if (colorPickerAnchor.key === key) {
+              setColorPickerAnchor({ key: null, el: null });
+            } else {
+              setColorPickerAnchor({ key, el: e.currentTarget });
+            }
+          }}
         />
         <TextField
           size="medium"
@@ -762,27 +768,12 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
           placeholder="#000000"
         />
       </Box>
-      {showColorPicker[key] && (
-        <Box sx={{ position: 'relative', mt: 2 }}>
-          <Box
-            sx={{ 
-              position: 'fixed', 
-              top: 0, 
-              right: 0, 
-              bottom: 0, 
-              left: 0,
-              zIndex: 999
-            }}
-            onClick={() => setShowColorPicker(prev => ({ ...prev, [key]: false }))}
-          />
-          <Box sx={{ position: 'absolute', zIndex: 1000 }}>
-            <ChromePicker
-              color={widgetSettings[key]}
-              onChange={(color) => handleColorChange(key, color)}
-            />
-          </Box>
-        </Box>
-      )}
+      <ColorPickerPopover
+        anchorEl={colorPickerAnchor.key === key ? colorPickerAnchor.el : null}
+        color={widgetSettings[key]}
+        onChange={(color) => handleColorChange(key, color)}
+        onClose={() => setColorPickerAnchor({ key: null, el: null })}
+      />
     </Box>
   );
 
