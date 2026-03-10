@@ -68,6 +68,16 @@ const TabBar = ({ tabs, activeTab, onTabChange, widgetsLocked, onAddTab, onDelet
     return IconComponent;
   };
 
+  const defaultHomeTab = {
+    id: 1,
+    label: 'Home',
+    icon: 'home',
+    show_label: 1,
+    order_position: 0
+  };
+
+  const displayTabs = tabs && tabs.length > 0 ? tabs : [defaultHomeTab];
+
   return (
     <Box
       sx={{
@@ -87,7 +97,7 @@ const TabBar = ({ tabs, activeTab, onTabChange, widgetsLocked, onAddTab, onDelet
         },
       }}
     >
-      {tabs.map((tab, index) => {
+      {displayTabs.map((tab, index) => {
         const IconComponent = getIconComponent(tab.icon);
         const isActive = activeTab === tab.id;
         const isHomeTab = tab.id === 1;
@@ -175,7 +185,7 @@ const TabBar = ({ tabs, activeTab, onTabChange, widgetsLocked, onAddTab, onDelet
               )}
             </Box>
 
-            {index < tabs.length - 1 && (
+            {index < displayTabs.length - 1 && (
               <Box
                 sx={{
                   width: '2px',
