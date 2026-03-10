@@ -1,0 +1,209 @@
+import React from 'react';
+import { Box, IconButton, Tooltip } from '@mui/material';
+import {
+  Home,
+  Notifications,
+  Bookmark,
+  Business,
+  CalendarToday,
+  CameraAlt,
+  BarChart,
+  Schedule,
+  ChatBubble,
+  Assignment,
+  Explore,
+  Email,
+  InsertDriveFile,
+  Folder,
+  Flag,
+  Diamond,
+  PanTool,
+  Favorite,
+  AttachMoney,
+  Map,
+  Lightbulb,
+  Image,
+  Star,
+  Add,
+  Close
+} from '@mui/icons-material';
+
+const iconMap = {
+  home: Home,
+  bell: Notifications,
+  bookmark: Bookmark,
+  building: Business,
+  calendar: CalendarToday,
+  camera: CameraAlt,
+  chart: BarChart,
+  clock: Schedule,
+  chat: ChatBubble,
+  clipboard: Assignment,
+  compass: Explore,
+  envelope: Email,
+  file: InsertDriveFile,
+  folder: Folder,
+  flag: Flag,
+  gem: Diamond,
+  hand: PanTool,
+  heart: Favorite,
+  money: AttachMoney,
+  map: Map,
+  lightbulb: Lightbulb,
+  image: Image,
+  star: Star,
+};
+
+const TabBar = ({ tabs, activeTab, onTabChange, widgetsLocked, onAddTab, onDeleteTab }) => {
+  const getIconComponent = (iconName) => {
+    const IconComponent = iconMap[iconName] || Home;
+    return IconComponent;
+  };
+
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        height: '100%',
+        gap: 0,
+        flexWrap: 'nowrap',
+        overflow: 'auto',
+        maxWidth: '60%',
+        '&::-webkit-scrollbar': {
+          height: '4px',
+        },
+        '&::-webkit-scrollbar-thumb': {
+          backgroundColor: 'var(--card-border)',
+          borderRadius: '2px',
+        },
+      }}
+    >
+      {tabs.map((tab, index) => {
+        const IconComponent = getIconComponent(tab.icon);
+        const isActive = activeTab === tab.id;
+        const isHomeTab = tab.id === 1;
+
+        return (
+          <React.Fragment key={tab.id}>
+            <Box
+              sx={{
+                position: 'relative',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.5,
+                px: 1.5,
+                py: 0.5,
+                cursor: 'pointer',
+                backgroundColor: isActive ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+                borderRadius: '4px',
+                transition: 'all 0.2s ease',
+                '&:hover': {
+                  backgroundColor: isActive ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.05)',
+                },
+              }}
+              onClick={() => onTabChange(tab.id)}
+            >
+              {!widgetsLocked && !isHomeTab && (
+                <IconButton
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteTab(tab.id);
+                  }}
+                  sx={{
+                    position: 'absolute',
+                    top: -8,
+                    right: -8,
+                    width: 20,
+                    height: 20,
+                    minWidth: 0,
+                    padding: 0,
+                    backgroundColor: '#ff4444',
+                    color: 'white',
+                    zIndex: 10,
+                    '&:hover': {
+                      backgroundColor: '#cc0000',
+                    },
+                  }}
+                >
+                  <Close sx={{ fontSize: 14 }} />
+                </IconButton>
+              )}
+
+              {isHomeTab ? (
+                <img
+                  src="/HomeGlowLogo.png"
+                  alt="Home"
+                  style={{
+                    height: '30px',
+                    width: 'auto',
+                    objectFit: 'contain'
+                  }}
+                />
+              ) : (
+                <>
+                  <IconComponent sx={{ fontSize: 20 }} />
+                  {tab.show_label && (
+                    <Box
+                      component="span"
+                      sx={{
+                        fontSize: '0.875rem',
+                        fontWeight: isActive ? 600 : 400,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {tab.label}
+                    </Box>
+                  )}
+                </>
+              )}
+            </Box>
+
+            {index < tabs.length - 1 && (
+              <Box
+                sx={{
+                  width: '1px',
+                  height: '24px',
+                  backgroundColor: 'var(--card-border)',
+                  opacity: 0.5,
+                }}
+              />
+            )}
+          </React.Fragment>
+        );
+      })}
+
+      {!widgetsLocked && (
+        <>
+          <Box
+            sx={{
+              width: '1px',
+              height: '24px',
+              backgroundColor: 'var(--card-border)',
+              opacity: 0.5,
+              ml: 0.5,
+            }}
+          />
+          <Tooltip title="Add new tab">
+            <IconButton
+              size="small"
+              onClick={onAddTab}
+              sx={{
+                ml: 0.5,
+                color: 'var(--accent)',
+                '&:hover': {
+                  backgroundColor: 'rgba(158, 127, 255, 0.1)',
+                },
+              }}
+            >
+              <Add sx={{ fontSize: 20 }} />
+            </IconButton>
+          </Tooltip>
+        </>
+      )}
+    </Box>
+  );
+};
+
+export default TabBar;

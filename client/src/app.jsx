@@ -1,7 +1,7 @@
 // client/src/app.jsx
 import React, { useState, useEffect } from 'react';
 import { Container, IconButton, Box, Dialog, DialogContent } from '@mui/material';
-import { Brightness4, Brightness7, Lock, LockOpen } from '@mui/icons-material';
+import { Brightness4, Brightness7, Lock, LockOpen, Close } from '@mui/icons-material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RefreshIcon from '@mui/icons-material/Refresh';
 
@@ -13,6 +13,8 @@ import WeatherWidget from './components/WeatherWidget.jsx';
 import ChoreWidget from './components/ChoreWidget.jsx';
 import WidgetGallery from './components/WidgetGallery.jsx';
 import WidgetContainer from './components/WidgetContainer.jsx';
+import TabBar from './components/TabBar.jsx';
+import TabIconModal from './components/TabIconModal.jsx';
 import { API_BASE_URL } from './utils/apiConfig.js';
 import './index.css';
 
@@ -48,6 +50,10 @@ const App = () => {
     ICS_CALENDAR_URL: '',
   });
   const [widgetGalleryKey, setWidgetGalleryKey] = useState(0);
+  const [activeTab, setActiveTab] = useState(1);
+  const [tabs, setTabs] = useState([]);
+  const [widgetAssignments, setWidgetAssignments] = useState({});
+  const [showTabIconModal, setShowTabIconModal] = useState(false);
 
   const refreshWidgetGallery = () => {
     setWidgetGalleryKey(prev => prev + 1);
@@ -63,7 +69,39 @@ const App = () => {
       }
     };
     fetchApiKeys();
+    fetchTabs();
+    fetchWidgetAssignments();
   }, []);
+
+  const fetchTabs = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/tabs`);
+      setTabs(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Error fetching tabs:', error);
+      setTabs([]);
+    }
+  };
+
+  const fetchWidgetAssignments = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/widget-assignments`);
+      const assignments = Array.isArray(response.data) ? response.data : [];
+
+      const groupedAssignments = {};
+      assignments.forEach(assignment => {
+        if (!groupedAssignments[assignment.widget_name]) {
+          groupedAssignments[assignment.widget_name] = [];
+        }
+        groupedAssignments[assignment.widget_name].push(assignment.tab_id);
+      });
+
+      setWidgetAssignments(groupedAssignments);
+    } catch (error) {
+      console.error('Error fetching widget assignments:', error);
+      setWidgetAssignments({});
+    }
+  };
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
@@ -112,10 +150,56 @@ const App = () => {
     window.location.reload();
   };
 
+  const handleTabChange = (tabId) => {
+    setActiveTab(tabId);
+  };
+
+  const handleAddTab = () => {
+    setShowTabIconModal(true);
+  };
+
+  const handleSaveTab = async (tabData) => {
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/tabs`, tabData);
+      await fetchTabs();
+      setShowTabIconModal(false);
+    } catch (error) {
+      console.error('Error creating tab:', error);
+      alert('Failed to create tab. Please try again.');
+    }
+  };
+
+  const handleDeleteTab = async (tabId) => {
+    if (!window.confirm('Are you sure you want to delete this tab? Widgets will be moved to the Home tab.')) {
+      return;
+    }
+
+    try {
+      await axios.delete(`${API_BASE_URL}/api/tabs/${tabId}`);
+      await fetchTabs();
+      await fetchWidgetAssignments();
+
+      if (activeTab === tabId) {
+        setActiveTab(1);
+      }
+    } catch (error) {
+      console.error('Error deleting tab:', error);
+      alert('Failed to delete tab. Please try again.');
+    }
+  };
+
+  const isWidgetAssignedToTab = (widgetName, tabId) => {
+    const assignments = widgetAssignments[widgetName];
+    if (!assignments || assignments.length === 0) {
+      return tabId === 1;
+    }
+    return assignments.includes(tabId);
+  };
+
   const buildWidgetsArray = () => {
     const widgets = [];
 
-    if (widgetSettings.calendar.enabled) {
+    if (widgetSettings.calendar.enabled && isWidgetAssignedToTab('calendar', activeTab)) {
       widgets.push({
         id: 'calendar-widget',
         defaultPosition: { x: 0, y: 0 },
@@ -129,7 +213,7 @@ const App = () => {
       });
     }
 
-    if (widgetSettings.weather.enabled) {
+    if (widgetSettings.weather.enabled && isWidgetAssignedToTab('weather', activeTab)) {
       widgets.push({
         id: 'weather-widget',
         defaultPosition: { x: 8, y: 0 },
@@ -143,7 +227,7 @@ const App = () => {
       });
     }
 
-    if (widgetSettings.chores.enabled) {
+    if (widgetSettings.chores.enabled && isWidgetAssignedToTab('chores', activeTab)) {
       widgets.push({
         id: 'chores-widget',
         defaultPosition: { x: 0, y: 5 },
@@ -154,7 +238,7 @@ const App = () => {
       });
     }
 
-    if (widgetSettings.photos.enabled) {
+    if (widgetSettings.photos.enabled && isWidgetAssignedToTab('photos', activeTab)) {
       widgets.push({
         id: 'photos-widget',
         defaultPosition: { x: 6, y: 5 },
@@ -173,9 +257,9 @@ const App = () => {
   return (
     <>
       <Box sx={{ width: '100%', minHeight: '100vh', position: 'relative', pb: '60px' }}>
-        {widgets.length > 0 && <WidgetContainer widgets={widgets} locked={widgetsLocked} />}
+        {widgets.length > 0 && <WidgetContainer widgets={widgets} locked={widgetsLocked} activeTab={activeTab} />}
 
-        {widgetSettings.widgetGallery?.enabled && (
+        {widgetSettings.widgetGallery?.enabled && activeTab === 1 && (
           <Container className="container" sx={{ mt: widgets.length > 0 ? 1 : 0 }}>
             <WidgetGallery
               key={widgetGalleryKey}
@@ -187,7 +271,22 @@ const App = () => {
       </Box>
 
       <Dialog open={showAdminPanel} onClose={toggleAdminPanel} maxWidth="lg">
-        <DialogContent>
+        <DialogContent sx={{ position: 'relative' }}>
+          <IconButton
+            onClick={toggleAdminPanel}
+            sx={{
+              position: 'absolute',
+              right: 8,
+              top: 8,
+              color: 'text.secondary',
+              zIndex: 1,
+              '&:hover': {
+                color: 'error.main',
+              },
+            }}
+          >
+            <Close />
+          </IconButton>
           <AdminPanel setWidgetSettings={setWidgetSettings} onWidgetUploaded={refreshWidgetGallery} />
         </DialogContent>
       </Dialog>
@@ -212,18 +311,15 @@ const App = () => {
           zIndex: 1000,
         }}
       >
-        {/* Left: Logo */}
-        <Box sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
-          <img 
-            src="/HomeGlowLogo.png" 
-            alt="HomeGlow Logo" 
-            style={{ 
-              height: '40px',
-              width: 'auto',
-              objectFit: 'contain'
-            }} 
-          />
-        </Box>
+        {/* Left: TabBar */}
+        <TabBar
+          tabs={tabs}
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          widgetsLocked={widgetsLocked}
+          onAddTab={handleAddTab}
+          onDeleteTab={handleDeleteTab}
+        />
 
         {/* Center: Control Buttons */}
         <Box sx={{ 
@@ -281,6 +377,12 @@ const App = () => {
         {/* Right: Empty space for balance */}
         <Box sx={{ width: '50px' }} />
       </Box>
+
+      <TabIconModal
+        open={showTabIconModal}
+        onClose={() => setShowTabIconModal(false)}
+        onSave={handleSaveTab}
+      />
     </>
   );
 };

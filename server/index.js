@@ -639,7 +639,38 @@ async function initializeDatabase() {
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
+      CREATE TABLE IF NOT EXISTS tabs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        label TEXT NOT NULL,
+        icon TEXT NOT NULL,
+        show_label INTEGER DEFAULT 1,
+        order_position INTEGER NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE TABLE IF NOT EXISTS widget_tab_assignments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        widget_name TEXT NOT NULL,
+        tab_id INTEGER NOT NULL,
+        layout_x INTEGER,
+        layout_y INTEGER,
+        layout_w INTEGER,
+        layout_h INTEGER,
+        FOREIGN KEY (tab_id) REFERENCES tabs(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_widget_tab_assignments_widget ON widget_tab_assignments(widget_name);
+      CREATE INDEX IF NOT EXISTS idx_widget_tab_assignments_tab ON widget_tab_assignments(tab_id);
     `);
+
+    // Insert default home tab if it doesn't exist
+    try {
+      const homeTab = newDb.prepare('SELECT id FROM tabs WHERE id = 1').get();
+      if (!homeTab) {
+        newDb.prepare('INSERT INTO tabs (id, label, icon, show_label, order_position) VALUES (?, ?, ?, ?, ?)').run(1, 'Home', 'home', 1, 0);
+        console.log('Default home tab created');
+      }
+    } catch (error) {
+      console.error('Error creating default home tab:', error);
+    }
     
     // Migration: Add repeat_type column if it doesn't exist and remove old repeats column
     try {
@@ -1992,6 +2023,167 @@ fastify.post('/api/settings', async (request, reply) => {
   } catch (error) {
     console.error(`Error saving setting '${key}':`, error);
     reply.status(500).send({ error: `Failed to save setting '${key}'` });
+  }
+});
+
+// Tabs API Endpoints
+fastify.get('/api/tabs', async (request, reply) => {
+  try {
+    const tabs = db.prepare('SELECT * FROM tabs ORDER BY order_position ASC').all();
+    return tabs;
+  } catch (error) {
+    console.error('Error fetching tabs:', error);
+    reply.status(500).send({ error: 'Failed to fetch tabs' });
+  }
+});
+
+fastify.post('/api/tabs', async (request, reply) => {
+  const { label, icon, show_label } = request.body;
+
+  if (!label || !icon) {
+    return reply.status(400).send({ error: 'Label and icon are required' });
+  }
+
+  try {
+    const maxOrder = db.prepare('SELECT MAX(order_position) as max FROM tabs').get();
+    const orderPosition = (maxOrder.max || 0) + 1;
+
+    const stmt = db.prepare('INSERT INTO tabs (label, icon, show_label, order_position) VALUES (?, ?, ?, ?)');
+    const result = stmt.run(label, icon, show_label ? 1 : 0, orderPosition);
+
+    const newTab = db.prepare('SELECT * FROM tabs WHERE id = ?').get(result.lastInsertRowid);
+    return newTab;
+  } catch (error) {
+    console.error('Error creating tab:', error);
+    reply.status(500).send({ error: 'Failed to create tab' });
+  }
+});
+
+fastify.patch('/api/tabs/:id', async (request, reply) => {
+  const { id } = request.params;
+  const { label, icon, show_label } = request.body;
+
+  if (parseInt(id) === 1) {
+    return reply.status(400).send({ error: 'Cannot modify home tab' });
+  }
+
+  try {
+    const updates = [];
+    const values = [];
+
+    if (label !== undefined) {
+      updates.push('label = ?');
+      values.push(label);
+    }
+    if (icon !== undefined) {
+      updates.push('icon = ?');
+      values.push(icon);
+    }
+    if (show_label !== undefined) {
+      updates.push('show_label = ?');
+      values.push(show_label ? 1 : 0);
+    }
+
+    if (updates.length === 0) {
+      return reply.status(400).send({ error: 'No fields to update' });
+    }
+
+    values.push(id);
+    const stmt = db.prepare(`UPDATE tabs SET ${updates.join(', ')} WHERE id = ?`);
+    stmt.run(...values);
+
+    const updatedTab = db.prepare('SELECT * FROM tabs WHERE id = ?').get(id);
+    return updatedTab;
+  } catch (error) {
+    console.error('Error updating tab:', error);
+    reply.status(500).send({ error: 'Failed to update tab' });
+  }
+});
+
+fastify.delete('/api/tabs/:id', async (request, reply) => {
+  const { id } = request.params;
+
+  if (parseInt(id) === 1) {
+    return reply.status(400).send({ error: 'Cannot delete home tab' });
+  }
+
+  try {
+    const widgetAssignments = db.prepare('SELECT * FROM widget_tab_assignments WHERE tab_id = ?').all(id);
+
+    if (widgetAssignments.length > 0) {
+      const updateStmt = db.prepare('UPDATE widget_tab_assignments SET tab_id = 1 WHERE tab_id = ?');
+      updateStmt.run(id);
+    }
+
+    const deleteStmt = db.prepare('DELETE FROM tabs WHERE id = ?');
+    deleteStmt.run(id);
+
+    return { success: true, message: 'Tab deleted successfully' };
+  } catch (error) {
+    console.error('Error deleting tab:', error);
+    reply.status(500).send({ error: 'Failed to delete tab' });
+  }
+});
+
+// Widget Tab Assignments API Endpoints
+fastify.get('/api/widget-assignments', async (request, reply) => {
+  try {
+    const assignments = db.prepare('SELECT * FROM widget_tab_assignments').all();
+    return assignments;
+  } catch (error) {
+    console.error('Error fetching widget assignments:', error);
+    reply.status(500).send({ error: 'Failed to fetch widget assignments' });
+  }
+});
+
+fastify.post('/api/widget-assignments', async (request, reply) => {
+  const { widget_name, tab_id } = request.body;
+
+  if (!widget_name || !tab_id) {
+    return reply.status(400).send({ error: 'widget_name and tab_id are required' });
+  }
+
+  try {
+    const existing = db.prepare('SELECT id FROM widget_tab_assignments WHERE widget_name = ? AND tab_id = ?').get(widget_name, tab_id);
+
+    if (existing) {
+      return reply.status(400).send({ error: 'Assignment already exists' });
+    }
+
+    const stmt = db.prepare('INSERT INTO widget_tab_assignments (widget_name, tab_id) VALUES (?, ?)');
+    const result = stmt.run(widget_name, tab_id);
+
+    const newAssignment = db.prepare('SELECT * FROM widget_tab_assignments WHERE id = ?').get(result.lastInsertRowid);
+    return newAssignment;
+  } catch (error) {
+    console.error('Error creating widget assignment:', error);
+    reply.status(500).send({ error: 'Failed to create widget assignment' });
+  }
+});
+
+fastify.delete('/api/widget-assignments/:id', async (request, reply) => {
+  const { id } = request.params;
+
+  try {
+    const stmt = db.prepare('DELETE FROM widget_tab_assignments WHERE id = ?');
+    stmt.run(id);
+    return { success: true, message: 'Assignment deleted successfully' };
+  } catch (error) {
+    console.error('Error deleting widget assignment:', error);
+    reply.status(500).send({ error: 'Failed to delete widget assignment' });
+  }
+});
+
+fastify.delete('/api/widget-assignments/widget/:widgetName', async (request, reply) => {
+  const { widgetName } = request.params;
+
+  try {
+    const stmt = db.prepare('DELETE FROM widget_tab_assignments WHERE widget_name = ?');
+    stmt.run(widgetName);
+    return { success: true, message: 'Widget assignments deleted successfully' };
+  } catch (error) {
+    console.error('Error deleting widget assignments:', error);
+    reply.status(500).send({ error: 'Failed to delete widget assignments' });
   }
 });
 

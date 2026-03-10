@@ -10,7 +10,7 @@ import CountdownCircle from './CountdownCircle';
  * Container component that manages multiple draggable widgets
  * Provides a responsive grid system for optimal layout
  */
-const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange: onLayoutChangeCallback }) => {
+const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange: onLayoutChangeCallback, activeTab = 1 }) => {
   const [containerWidth, setContainerWidth] = useState(1200);
   const [gridCols, setGridCols] = useState(12);
   const [selectedWidget, setSelectedWidget] = useState(null);
@@ -46,7 +46,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
   // Initialize layout from localStorage or defaults (only on mount or when widgets change)
   useEffect(() => {
     const initialLayout = widgets.map((widget) => {
-      const savedLayout = localStorage.getItem(`widget-layout-${widget.id}`);
+      const savedLayout = localStorage.getItem(`widget-layout-${activeTab}-${widget.id}`);
       if (savedLayout) {
         const parsed = JSON.parse(savedLayout);
         return {
@@ -72,7 +72,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
       };
     });
     setLayout(initialLayout);
-  }, [widgets]);
+  }, [widgets, activeTab]);
 
   // Update static property when lock state changes (without recreating entire layout)
   useEffect(() => {
@@ -118,7 +118,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
         w: item.w,
         h: item.h,
       };
-      localStorage.setItem(`widget-layout-${item.i}`, JSON.stringify(layoutData));
+      localStorage.setItem(`widget-layout-${activeTab}-${item.i}`, JSON.stringify(layoutData));
     });
 
     // Notify parent component of layout change
@@ -200,7 +200,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
             w: updatedItem.w,
             h: updatedItem.h,
           };
-          localStorage.setItem(`widget-layout-${item.i}`, JSON.stringify(layoutData));
+          localStorage.setItem(`widget-layout-${activeTab}-${item.i}`, JSON.stringify(layoutData));
 
           return updatedItem;
         }

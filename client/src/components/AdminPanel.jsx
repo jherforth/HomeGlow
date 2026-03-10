@@ -38,7 +38,8 @@ import {
   Paper,
   Backdrop,
   RadioGroup,
-  Radio
+  Radio,
+  Autocomplete
 } from '@mui/material';
 import {
   Delete,
@@ -102,6 +103,8 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const [pinModal, setPinModal] = useState({ open: false, mode: 'verify', title: '' });
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [checkingPin, setCheckingPin] = useState(true);
+  const [tabs, setTabs] = useState([]);
+  const [widgetAssignments, setWidgetAssignments] = useState({});
 
   // Refresh interval options in milliseconds
   const refreshIntervalOptions = [
@@ -149,6 +152,8 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       fetchChores();
       fetchPrizes();
       fetchUploadedWidgets();
+      fetchTabs();
+      fetchWidgetAssignments();
     }
   }, [isAuthenticated]);
 
@@ -219,6 +224,36 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     }
   };
 
+  const fetchTabs = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/tabs`);
+      setTabs(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Error fetching tabs:', error);
+      setTabs([]);
+    }
+  };
+
+  const fetchWidgetAssignments = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/widget-assignments`);
+      const assignments = Array.isArray(response.data) ? response.data : [];
+
+      const groupedAssignments = {};
+      assignments.forEach(assignment => {
+        if (!groupedAssignments[assignment.widget_name]) {
+          groupedAssignments[assignment.widget_name] = [];
+        }
+        groupedAssignments[assignment.widget_name].push(assignment.tab_id);
+      });
+
+      setWidgetAssignments(groupedAssignments);
+    } catch (error) {
+      console.error('Error fetching widget assignments:', error);
+      setWidgetAssignments({});
+    }
+  };
+
   const fetchGithubWidgets = async () => {
     setLoadingGithub(true);
     try {
@@ -269,11 +304,39 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     }
   };
 
-  const saveWidgetSettings = () => {
-    localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
-    setWidgetSettings(widgetSettings);
-    setSaveMessage({ show: true, type: 'success', text: 'Widget settings saved successfully! Refresh page to see changes.' });
-    setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+  const saveWidgetSettings = async () => {
+    setIsLoading(true);
+    try {
+      localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
+      setWidgetSettings(widgetSettings);
+
+      for (const [widgetName, tabIds] of Object.entries(widgetAssignments)) {
+        await axios.delete(`${API_BASE_URL}/api/widget-assignments/widget/${widgetName}`);
+
+        for (const tabId of tabIds) {
+          await axios.post(`${API_BASE_URL}/api/widget-assignments`, {
+            widget_name: widgetName,
+            tab_id: tabId,
+          });
+        }
+      }
+
+      setSaveMessage({ show: true, type: 'success', text: 'Widget settings saved successfully! Refresh page to see changes.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error saving widget settings:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to save widget settings. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleWidgetAssignmentChange = (widgetName, selectedTabIds) => {
+    setWidgetAssignments(prev => ({
+      ...prev,
+      [widgetName]: selectedTabIds
+    }));
   };
 
   const saveInterfaceSettings = () => {
@@ -709,7 +772,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     return option ? option.label : 'Disabled';
   };
 
-  const tabs = [
+  const adminTabs = [
     'APIs',
     'Widgets',
     'Interface',
@@ -749,7 +812,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       </Typography>
 
       <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)} sx={{ mb: 3 }}>
-        {tabs.map((tab, index) => (
+        {adminTabs.map((tab, index) => (
           <Tab key={tab} label={tab} />
         ))}
       </Tabs>
@@ -882,7 +945,36 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
                     </FormControl>
                   </Grid>
                 </Grid>
-                
+
+                <Box sx={{ mt: 2 }}>
+                  <Autocomplete
+                    multiple
+                    options={tabs}
+                    getOptionLabel={(option) => option.label}
+                    value={tabs.filter(tab => widgetAssignments[widget]?.includes(tab.id))}
+                    onChange={(e, newValue) => {
+                      handleWidgetAssignmentChange(widget, newValue.map(tab => tab.id));
+                    }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Show on Tabs"
+                        placeholder="Select tabs..."
+                        helperText="Select which tabs this widget should appear on (defaults to Home tab if none selected)"
+                      />
+                    )}
+                    renderTags={(value, getTagProps) =>
+                      value.map((option, index) => (
+                        <Chip
+                          label={option.label}
+                          {...getTagProps({ index })}
+                          sx={{ backgroundColor: 'var(--accent)', color: 'white' }}
+                        />
+                      ))
+                    }
+                  />
+                </Box>
+
                 {config.refreshInterval > 0 && (
                   <Alert severity="info" sx={{ mt: 2 }} icon={<Timer />}>
                     This widget will automatically refresh every {getRefreshIntervalLabel(config.refreshInterval).toLowerCase()}
@@ -943,6 +1035,35 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
                   </FormControl>
                 </Grid>
               </Grid>
+
+              <Box sx={{ mt: 2 }}>
+                <Autocomplete
+                  multiple
+                  options={tabs}
+                  getOptionLabel={(option) => option.label}
+                  value={tabs.filter(tab => widgetAssignments['weather']?.includes(tab.id))}
+                  onChange={(e, newValue) => {
+                    handleWidgetAssignmentChange('weather', newValue.map(tab => tab.id));
+                  }}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Show on Tabs"
+                      placeholder="Select tabs..."
+                      helperText="Select which tabs this widget should appear on (defaults to Home tab if none selected)"
+                    />
+                  )}
+                  renderTags={(value, getTagProps) =>
+                    value.map((option, index) => (
+                      <Chip
+                        label={option.label}
+                        {...getTagProps({ index })}
+                        sx={{ backgroundColor: 'var(--accent)', color: 'white' }}
+                      />
+                    ))
+                  }
+                />
+              </Box>
 
               {/* Weather Layout Mode Selection */}
               <Box sx={{ mt: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1, bgcolor: 'rgba(255, 255, 255, 0.02)' }}>
@@ -1027,9 +1148,9 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
               <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'bold' }}>
                 🎨 Widget Gallery
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                The Widget Gallery displays custom uploaded widgets below the main dashboard widgets.
-              </Typography>
+              <Alert severity="info" sx={{ mb: 2 }}>
+                The Widget Gallery displays custom uploaded widgets and is only available on the Home tab.
+              </Alert>
               
               <Grid container spacing={2} alignItems="center">
                 <Grid item xs={12} sm={6}>
