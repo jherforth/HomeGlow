@@ -79,8 +79,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     photos: { enabled: false, transparent: false, refreshInterval: 0 },
     weather: { enabled: false, transparent: false, refreshInterval: 0, layoutMode: 'medium' },
     widgetGallery: { enabled: true, transparent: false, refreshInterval: 0 },
-    // Accent colors (shared) - only these are customizable
-    primary: '#9E7FFF',
+    primary: '#f5f5f5',
     secondary: '#38bdf8',
     accent: '#f472b6'
   });
@@ -136,7 +135,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
           ...parsed.weather
         },
         widgetGallery: { enabled: true, transparent: false, refreshInterval: 0, ...parsed.widgetGallery },
-        primary: parsed.primary || '#9E7FFF',
+        primary: parsed.primary || '#f5f5f5',
         secondary: parsed.secondary || '#38bdf8',
         accent: parsed.accent || '#f472b6'
       };
@@ -352,16 +351,21 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
 
   const applyAccentColors = () => {
     const root = document.documentElement;
-    
-    // Apply only accent colors
+    const isLight = root.getAttribute('data-theme') === 'light';
+
     root.style.setProperty('--primary', widgetSettings.primary);
     root.style.setProperty('--secondary', widgetSettings.secondary);
     root.style.setProperty('--accent', widgetSettings.accent);
+
+    if (isLight) {
+      root.style.setProperty('--background', widgetSettings.primary);
+      root.style.setProperty('--gradient', `linear-gradient(135deg, ${widgetSettings.primary} 0%, #ffffff 100%)`);
+    }
   };
 
   const resetToDefaults = () => {
     const defaultSettings = {
-      primary: '#9E7FFF',
+      primary: '#f5f5f5',
       secondary: '#38bdf8',
       accent: '#f472b6'
     };
@@ -1246,11 +1250,11 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
             )}
 
             <Alert severity="info" sx={{ mb: 3 }}>
-              Customize the accent colors used throughout the dashboard. These colors are shared between light and dark themes.
+              Background color applies to light mode only. Accent color is used throughout the dashboard for highlights and interactive elements.
             </Alert>
             
             <Box sx={{ maxWidth: 600, mx: 'auto' }}>
-              {renderColorPicker('primary', '🎨 Primary Color')}
+              {renderColorPicker('primary', '🎨 Background Color (Light Mode)')}
               {renderColorPicker('secondary', '💎 Secondary Color')}
               {renderColorPicker('accent', '✨ Accent Color')}
             </Box>

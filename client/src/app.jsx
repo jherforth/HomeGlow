@@ -108,6 +108,16 @@ const App = () => {
     setTheme(savedTheme);
     document.documentElement.setAttribute('data-theme', savedTheme);
     setCurrentGeoPatternSeed(Math.random().toString());
+
+    if (savedTheme === 'light') {
+      const savedSettings = localStorage.getItem('widgetSettings');
+      if (savedSettings) {
+        const parsed = JSON.parse(savedSettings);
+        const primaryColor = parsed.primary || '#f5f5f5';
+        document.documentElement.style.setProperty('--background', primaryColor);
+        document.documentElement.style.setProperty('--gradient', `linear-gradient(135deg, ${primaryColor} 0%, #ffffff 100%)`);
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -127,6 +137,17 @@ const App = () => {
     setTheme(newTheme);
     document.documentElement.setAttribute('data-theme', newTheme);
     localStorage.setItem('theme', newTheme);
+
+    if (newTheme === 'light') {
+      const savedSettings = localStorage.getItem('widgetSettings');
+      const parsed = savedSettings ? JSON.parse(savedSettings) : {};
+      const primaryColor = parsed.primary || '#f5f5f5';
+      document.documentElement.style.setProperty('--background', primaryColor);
+      document.documentElement.style.setProperty('--gradient', `linear-gradient(135deg, ${primaryColor} 0%, #ffffff 100%)`);
+    } else {
+      document.documentElement.style.removeProperty('--background');
+      document.documentElement.style.removeProperty('--gradient');
+    }
   };
 
   const toggleWidgetsLock = () => {
