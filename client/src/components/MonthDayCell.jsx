@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Box, Typography } from '@mui/material';
 
 const MonthDayCell = ({
@@ -16,31 +16,60 @@ const MonthDayCell = ({
   onSlotClick,
   onEventClick,
 }) => {
-  const eventsRef = useRef(null);
+  const cellRef = useRef(null);
+  const dateLabelRef = useRef(null);
+  const maxItemsRef = useRef(3);
+  const rafRef = useRef(null);
   const [maxItems, setMaxItems] = useState(3);
 
-  useEffect(() => {
-    const el = eventsRef.current;
-    if (!el) return;
+  const computeMax = useCallback(() => {
+    const cellEl = cellRef.current;
+    if (!cellEl) return;
 
-    const computeMax = () => {
-      const availableHeight = el.clientHeight;
-      const itemH = parseFloat(pillHeight) + 2;
-      const moreLineH = 16;
+    const cellHeight = cellEl.getBoundingClientRect().height;
+    const labelHeight = dateLabelRef.current
+      ? dateLabelRef.current.getBoundingClientRect().height
+      : 20;
+    const padding = 12;
+    const availableHeight = cellHeight - labelHeight - padding;
+    const itemH = parseFloat(pillHeight) + 2;
+    const moreLineH = 16;
+
+    let newMax;
+    if (availableHeight <= 0) {
+      newMax = 0;
+    } else {
       const fitAll = Math.floor(availableHeight / itemH);
-      const fitWithMore = Math.max(1, Math.floor((availableHeight - moreLineH) / itemH));
-      setMaxItems(totalEventCount <= fitAll ? fitAll : fitWithMore);
-    };
+      if (totalEventCount <= fitAll) {
+        newMax = fitAll;
+      } else {
+        newMax = Math.max(1, Math.floor((availableHeight - moreLineH) / itemH));
+      }
+    }
+
+    if (newMax !== maxItemsRef.current) {
+      maxItemsRef.current = newMax;
+      setMaxItems(newMax);
+    }
+  }, [pillHeight, totalEventCount]);
+
+  useEffect(() => {
+    const cellEl = cellRef.current;
+    if (!cellEl) return;
 
     computeMax();
 
     const observer = new ResizeObserver(() => {
-      computeMax();
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(computeMax);
     });
 
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [pillHeight, totalEventCount]);
+    observer.observe(cellEl);
+    return () => {
+      observer.disconnect();
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [computeMax]);
 
   let shownCount = 0;
 
@@ -95,6 +124,7 @@ const MonthDayCell = ({
 
   return (
     <Box
+      ref={cellRef}
       onClick={() => onSlotClick({ start: day.toDate() })}
       sx={{
         border: '1px solid var(--card-border)',
@@ -112,11 +142,11 @@ const MonthDayCell = ({
         }
       }}
     >
-      <Typography variant="caption" sx={{ fontWeight: 'bold', color: isToday ? 'var(--accent)' : 'inherit', fontSize: '0.8rem', mb: 0.5 }}>
+      <Typography ref={dateLabelRef} variant="caption" sx={{ fontWeight: 'bold', color: isToday ? 'var(--accent)' : 'inherit', fontSize: '0.8rem', mb: 0.5 }}>
         {day.format('D')}
       </Typography>
 
-      <Box ref={eventsRef} sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+      <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
         {multiDaySlottedRows.map((event, slotIdx) =>
           renderPill(event, `multi-${slotIdx}`, (e) => { e.stopPropagation(); onEventClick(event); })
         )}
@@ -171,4 +201,4 @@ const MonthDayCell = ({
   );
 };
 
-export default MonthDayCell;
+export default React.memo(MonthDayCell);
