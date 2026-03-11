@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Typography, Box, List, ListItem, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, Button, IconButton, Popover, ToggleButton, ToggleButtonGroup, TextField, Switch, FormControlLabel, Select, MenuItem, FormControl, InputLabel, Chip, Divider, CircularProgress, Alert } from '@mui/material';
-import { Settings, ViewModule, ViewWeek, ChevronLeft, ChevronRight, Add, Delete, Edit, Refresh, Remove } from '@mui/icons-material';
+import { Card, Typography, Box, List, ListItem, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, Button, IconButton, Popover, ToggleButton, ToggleButtonGroup, TextField, Switch, FormControlLabel, Select, MenuItem, FormControl, InputLabel, Chip, Divider, CircularProgress, Alert, Tooltip } from '@mui/material';
+import { Settings, ViewModule, ViewWeek, ChevronLeft, ChevronRight, Add, Delete, Edit, Refresh, Remove, Sync, Schedule } from '@mui/icons-material';
 import { Calendar, momentLocalizer } from 'react-big-calendar';
 import moment from 'moment';
 import { SketchPicker } from 'react-color';
@@ -51,11 +51,27 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   const [testingConnection, setTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState(null);
   const [savingCalendar, setSavingCalendar] = useState(false);
+  const [syncStatus, setSyncStatus] = useState({});
+  const [syncIntervals, setSyncIntervals] = useState({});
+  const [isSyncing, setIsSyncing] = useState({});
+
+  const syncIntervalOptions = [
+    { label: 'Disabled', value: 0 },
+    { label: '5 minutes', value: 5 },
+    { label: '15 minutes', value: 15 },
+    { label: '30 minutes', value: 30 },
+    { label: '1 hour', value: 60 },
+    { label: '2 hours', value: 120 },
+    { label: '6 hours', value: 360 },
+    { label: '12 hours', value: 720 },
+    { label: '24 hours', value: 1440 }
+  ];
 
   // Initial data fetch
   useEffect(() => {
     fetchCalendarSources();
     fetchCalendarEvents();
+    fetchSyncStatus();
   }, []);
 
   // Auto-refresh functionality
@@ -132,6 +148,75 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
     } catch (error) {
       console.error('Error fetching calendar sources:', error);
     }
+  };
+
+  const fetchSyncStatus = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/calendar-sync/status`);
+      const statusMap = {};
+      const intervalsMap = {};
+      if (Array.isArray(response.data)) {
+        response.data.forEach(status => {
+          statusMap[status.source_id] = status;
+          intervalsMap[status.source_id] = status.sync_interval_minutes || 15;
+        });
+      }
+      setSyncStatus(statusMap);
+      setSyncIntervals(intervalsMap);
+    } catch (error) {
+      console.error('Error fetching sync status:', error);
+    }
+  };
+
+  const handleSyncSource = async (sourceId) => {
+    setIsSyncing(prev => ({ ...prev, [sourceId]: true }));
+    try {
+      await axios.post(`${API_BASE_URL}/api/calendar-sync/${sourceId}`);
+      await fetchCalendarEvents();
+      await fetchSyncStatus();
+    } catch (error) {
+      console.error('Error syncing calendar source:', error);
+    } finally {
+      setIsSyncing(prev => ({ ...prev, [sourceId]: false }));
+    }
+  };
+
+  const handleSyncAll = async () => {
+    setIsSyncing(prev => ({ ...prev, all: true }));
+    try {
+      await axios.post(`${API_BASE_URL}/api/calendar-sync/all`);
+      await fetchCalendarEvents();
+      await fetchSyncStatus();
+    } catch (error) {
+      console.error('Error syncing all calendar sources:', error);
+    } finally {
+      setIsSyncing(prev => ({ ...prev, all: false }));
+    }
+  };
+
+  const handleSyncIntervalChange = async (sourceId, intervalMinutes) => {
+    try {
+      await axios.patch(`${API_BASE_URL}/api/calendar-sync/${sourceId}/interval`, {
+        interval_minutes: intervalMinutes
+      });
+      setSyncIntervals(prev => ({ ...prev, [sourceId]: intervalMinutes }));
+    } catch (error) {
+      console.error('Error setting sync interval:', error);
+    }
+  };
+
+  const formatLastSync = (timestamp) => {
+    if (!timestamp) return 'Never';
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return moment(date).format('MMM D, h:mm A');
   };
 
   const fetchCalendarEvents = async () => {
@@ -1097,15 +1182,79 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                         </IconButton>
                       </Box>
                     </Box>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
                       <Chip label={calendar.type} size="small" variant="outlined" />
-                      <Typography variant="caption" color="text.secondary" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                         {calendar.url}
                       </Typography>
                     </Box>
+
+                    {calendar.enabled && (
+                      <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px dashed var(--card-border)', width: '100%' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 1 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <Schedule fontSize="small" sx={{ color: 'text.secondary' }} />
+                            <FormControl size="small" sx={{ minWidth: 100 }}>
+                              <Select
+                                value={syncIntervals[calendar.id] || 15}
+                                onChange={(e) => handleSyncIntervalChange(calendar.id, e.target.value)}
+                                sx={{ fontSize: '0.75rem' }}
+                              >
+                                {syncIntervalOptions.map(opt => (
+                                  <MenuItem key={opt.value} value={opt.value} sx={{ fontSize: '0.75rem' }}>
+                                    {opt.label}
+                                  </MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          </Box>
+                          <Tooltip title="Sync now">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleSyncSource(calendar.id)}
+                              disabled={isSyncing[calendar.id]}
+                            >
+                              {isSyncing[calendar.id] ? (
+                                <CircularProgress size={16} />
+                              ) : (
+                                <Sync fontSize="small" />
+                              )}
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <Typography variant="caption" color="text.secondary">
+                            Last sync: {formatLastSync(syncStatus[calendar.id]?.last_sync_at)}
+                          </Typography>
+                          {syncStatus[calendar.id]?.last_sync_status === 'error' && (
+                            <Chip label="Error" size="small" color="error" sx={{ height: 16, fontSize: '0.6rem' }} />
+                          )}
+                          {syncStatus[calendar.id]?.event_count > 0 && (
+                            <Chip
+                              label={`${syncStatus[calendar.id].event_count} events`}
+                              size="small"
+                              sx={{ height: 16, fontSize: '0.6rem' }}
+                            />
+                          )}
+                        </Box>
+                      </Box>
+                    )}
                   </ListItem>
                 ))}
               </List>
+            )}
+
+            {calendarSources.length > 0 && (
+              <Button
+                variant="outlined"
+                startIcon={isSyncing.all ? <CircularProgress size={16} /> : <Sync />}
+                onClick={handleSyncAll}
+                disabled={isSyncing.all}
+                fullWidth
+                sx={{ mt: 1 }}
+              >
+                {isSyncing.all ? 'Syncing...' : 'Sync All Calendars'}
+              </Button>
             )}
           </Box>
 

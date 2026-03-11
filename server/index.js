@@ -21,6 +21,10 @@ const cron = require('node-cron');
 // For widget upload and registry
 const widgetRegistryPath = path.join(__dirname, 'widgets_registry.json');
 
+// Calendar sync service
+const CalendarSyncService = require('./services/calendarSync');
+let calendarSyncService = null;
+
 // GitHub API configuration
 const GITHUB_REPO_OWNER = 'jherforth';
 const GITHUB_REPO_NAME = 'HomeGlowPlugins';
@@ -2521,6 +2525,11 @@ fastify.post('/api/calendar-sources', async (request, reply) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const info = stmt.run(name, type, url, username || null, encryptedPassword, color || '#6e44ff', 1, nextOrder);
+
+    if (calendarSyncService) {
+      calendarSyncService.onSourceCreated(info.lastInsertRowid);
+    }
+
     return { id: info.lastInsertRowid, success: true };
   } catch (error) {
     console.error('Error adding calendar source:', error);
@@ -2570,6 +2579,15 @@ fastify.patch('/api/calendar-sources/:id', async (request, reply) => {
     if (info.changes === 0) {
       return reply.status(404).send({ error: 'Calendar source not found' });
     }
+
+    if (calendarSyncService) {
+      if (enabled !== undefined) {
+        calendarSyncService.onSourceToggled(parseInt(id), enabled);
+      } else {
+        calendarSyncService.onSourceUpdated(parseInt(id));
+      }
+    }
+
     return { success: true, message: 'Calendar source updated successfully' };
   } catch (error) {
     console.error('Error updating calendar source:', error);
@@ -2580,6 +2598,10 @@ fastify.patch('/api/calendar-sources/:id', async (request, reply) => {
 fastify.delete('/api/calendar-sources/:id', async (request, reply) => {
   const { id } = request.params;
   try {
+    if (calendarSyncService) {
+      calendarSyncService.onSourceDeleted(parseInt(id));
+    }
+
     const stmt = db.prepare('DELETE FROM calendar_sources WHERE id = ?');
     const info = stmt.run(id);
     if (info.changes === 0) {
@@ -2626,110 +2648,115 @@ fastify.post('/api/calendar-sources/:id/test', async (request, reply) => {
 });
 
 
-// Enhanced endpoint to fetch and parse calendar events from multiple sources
+// Get calendar events from cache (fast)
 fastify.get('/api/calendar-events', async (request, reply) => {
   try {
-    const sources = db.prepare('SELECT * FROM calendar_sources WHERE enabled = 1 ORDER BY sort_order, id').all();
+    const { start, end } = request.query;
 
-    function normalizeAllDayEnd(end) {
-      // iCal all-day event ends are exclusive (DTEND is the day after the last day).
-      // Subtract 1 day so the end represents the actual last day of the event.
-      const d = new Date(end);
-      d.setDate(d.getDate() - 1);
-      return d;
+    if (!calendarSyncService) {
+      return reply.status(503).send({ error: 'Calendar sync service not initialized' });
     }
 
-    function makeEvent({ item, source }) {
-      const isAllDay = item.start?.dateOnly ?? item.event?.start?.dateOnly ?? false;
-      const rawEnd = item.end ?? item.event.end;
-      return {
-        id: item.uid ?? item.event?.uid ?? null,
-        title: item.summary ?? item.event?.summary ?? null,
-        start: item.start ?? item.event.start,
-        end: isAllDay ? normalizeAllDayEnd(rawEnd) : rawEnd,
-        description: item.description ?? item.event?.description ?? null,
-        location: item.location ?? item.event?.location ?? null,
-        all_day: isAllDay,
-        source_id: source.id,
-        source_name: source.name,
-        source_color: source.color
-      };
-    }
-
-    if (sources.length === 0) {
-      return [];
-    }
-
-    const fetchPromises = sources.map(async (source) => {
-      try {
-        if (source.type === 'ICS') {
-          const events = await node_ical.async.fromURL(source.url);
-          let out = [];
-          for (const event of Object.values(events)) {
-            if (event.type === "VEVENT") {
-              // doing ~13 months forward and backward
-              const instances = node_ical.expandRecurringEvent(event, {
-                from: new Date(Date.now() - 13 * 30 * 24 * 60 * 60 * 1000),
-                to: new Date(Date.now() + 13 * 30 * 24 * 60 * 60 * 1000)
-              });
-
-              // If solo event, append and go to next event
-              if (!instances) {
-                out.push(makeEvent({ item: event, source }));
-                continue;
-              }
-              instances.forEach(instance => {
-                out.push(makeEvent({ item: instance, source }));
-              });
-            }
-          };
-          return out;
-
-        } else if (source.type === 'CalDAV') {
-          const decryptedPassword = decryptPassword(source.password);
-          const authHeader = 'Basic ' + Buffer.from(`${source.username}:${decryptedPassword}`).toString('base64');
-
-          const response = await axios.get(source.url, {
-            headers: { 'Authorization': authHeader },
-            timeout: 15000
-          });
-
-          const icsData = response.data;
-          const jcalData = ICAL.parse(icsData);
-          const comp = new ICAL.Component(jcalData);
-          const vevents = comp.getAllSubcomponents('vevent');
-
-          return vevents.map(vevent => {
-            const event = new ICAL.Event(vevent);
-            const isAllDay = vevent.getFirstPropertyValue('dtstart').isDate || false;
-            const rawEnd = event.endDate.toJSDate();
-            return {
-              id: event.uid || Math.random().toString(),
-              title: event.summary,
-              start: event.startDate.toJSDate(),
-              end: isAllDay ? normalizeAllDayEnd(rawEnd) : rawEnd,
-              description: event.description,
-              location: event.location,
-              all_day: isAllDay,
-              source_id: source.id,
-              source_name: source.name,
-              source_color: source.color
-            };
-          });
-        }
-      } catch (error) {
-        console.error(`Error fetching calendar from source ${source.name}:`, error.message);
-        return [];
-      }
-    });
-
-    const results = await Promise.all(fetchPromises);
-    const allEvents = results.flat();
-
-    return allEvents.sort((a, b) => new Date(a.start) - new Date(b.start));
+    const events = calendarSyncService.getCachedEvents(start, end);
+    return events;
   } catch (error) {
     console.error('Error fetching calendar events:', error);
     reply.status(500).send({ error: 'Failed to fetch calendar events.' });
+  }
+});
+
+// Get calendar sync status for all sources
+fastify.get('/api/calendar-sync/status', async (request, reply) => {
+  try {
+    if (!calendarSyncService) {
+      return reply.status(503).send({ error: 'Calendar sync service not initialized' });
+    }
+    const status = calendarSyncService.getSyncStatus();
+    return status;
+  } catch (error) {
+    console.error('Error fetching sync status:', error);
+    reply.status(500).send({ error: 'Failed to fetch sync status' });
+  }
+});
+
+// Get sync status for a specific source
+fastify.get('/api/calendar-sync/status/:sourceId', async (request, reply) => {
+  try {
+    const { sourceId } = request.params;
+    if (!calendarSyncService) {
+      return reply.status(503).send({ error: 'Calendar sync service not initialized' });
+    }
+    const status = calendarSyncService.getSyncStatus(parseInt(sourceId));
+    return status || { source_id: sourceId, last_sync_at: null, last_sync_status: 'never' };
+  } catch (error) {
+    console.error('Error fetching sync status:', error);
+    reply.status(500).send({ error: 'Failed to fetch sync status' });
+  }
+});
+
+// Trigger manual sync for a specific source
+fastify.post('/api/calendar-sync/:sourceId', async (request, reply) => {
+  try {
+    const { sourceId } = request.params;
+    if (!calendarSyncService) {
+      return reply.status(503).send({ error: 'Calendar sync service not initialized' });
+    }
+    const result = await calendarSyncService.syncSource(parseInt(sourceId));
+    return result;
+  } catch (error) {
+    console.error('Error syncing calendar source:', error);
+    reply.status(500).send({ error: 'Failed to sync calendar source' });
+  }
+});
+
+// Trigger manual sync for all sources
+fastify.post('/api/calendar-sync/all', async (request, reply) => {
+  try {
+    if (!calendarSyncService) {
+      return reply.status(503).send({ error: 'Calendar sync service not initialized' });
+    }
+    const results = await calendarSyncService.syncAllSources();
+    return results;
+  } catch (error) {
+    console.error('Error syncing all calendar sources:', error);
+    reply.status(500).send({ error: 'Failed to sync calendar sources' });
+  }
+});
+
+// Set sync interval for a specific source
+fastify.patch('/api/calendar-sync/:sourceId/interval', async (request, reply) => {
+  try {
+    const { sourceId } = request.params;
+    const { interval_minutes } = request.body;
+
+    if (interval_minutes === undefined || interval_minutes < 0) {
+      return reply.status(400).send({ error: 'interval_minutes must be a non-negative number' });
+    }
+
+    if (!calendarSyncService) {
+      return reply.status(503).send({ error: 'Calendar sync service not initialized' });
+    }
+
+    calendarSyncService.setSyncInterval(parseInt(sourceId), interval_minutes);
+    return { success: true, message: `Sync interval set to ${interval_minutes} minutes` };
+  } catch (error) {
+    console.error('Error setting sync interval:', error);
+    reply.status(500).send({ error: 'Failed to set sync interval' });
+  }
+});
+
+// Get sync interval for a specific source
+fastify.get('/api/calendar-sync/:sourceId/interval', async (request, reply) => {
+  try {
+    const { sourceId } = request.params;
+    if (!calendarSyncService) {
+      return reply.status(503).send({ error: 'Calendar sync service not initialized' });
+    }
+    const interval = calendarSyncService.getSyncInterval(parseInt(sourceId));
+    return { source_id: parseInt(sourceId), interval_minutes: interval };
+  } catch (error) {
+    console.error('Error getting sync interval:', error);
+    reply.status(500).send({ error: 'Failed to get sync interval' });
   }
 });
 
@@ -3096,6 +3123,11 @@ const start = async () => {
     const usersDir = path.join(uploadsDir, 'users');
     await fs.mkdir(usersDir, { recursive: true });
     console.log('Uploads directories created');
+
+    // Initialize calendar sync service
+    calendarSyncService = new CalendarSyncService(db, decryptPassword);
+    calendarSyncService.initialize();
+    console.log('Calendar sync service started');
 
     await fastify.listen({ port: process.env.PORT || 5000, host: '0.0.0.0' });
     console.log(`Server running on port ${process.env.PORT || 5000}`);
