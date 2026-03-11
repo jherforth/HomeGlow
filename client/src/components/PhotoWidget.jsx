@@ -259,13 +259,13 @@ const PhotoWidget = ({ transparentBackground }) => {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h6">📷 Photos</Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
-          <IconButton onClick={handleTogglePlayback} size="small">
+          <IconButton onClick={handleTogglePlayback} size="small" sx={{ color: 'var(--text-color)' }}>
             {isPlaying ? <Pause /> : <PlayArrow />}
           </IconButton>
-          <IconButton onClick={fetchPhotos} size="small" disabled={loading}>
+          <IconButton onClick={fetchPhotos} size="small" disabled={loading} sx={{ color: 'var(--text-color)' }}>
             <Refresh />
           </IconButton>
-          <IconButton onClick={handleSettingsClick} size="small">
+          <IconButton onClick={handleSettingsClick} size="small" sx={{ color: 'var(--text-color)' }}>
             <Settings />
           </IconButton>
         </Box>
@@ -281,7 +281,7 @@ const PhotoWidget = ({ transparentBackground }) => {
 
       {!loading && !error && photos.length === 0 && (
         <Box sx={{ textAlign: 'center', py: 4 }}>
-          <Typography color="text.secondary">No photos available. Add a photo source in settings.</Typography>
+          <Typography sx={{ color: 'var(--text-color)', opacity: 0.6 }}>No photos available. Add a photo source in settings.</Typography>
         </Box>
       )}
 

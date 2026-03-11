@@ -575,6 +575,10 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
             exclusive
             onChange={handleViewModeChange}
             size="small"
+            sx={{
+              '& .MuiToggleButton-root': { color: 'var(--text-color)', borderColor: 'var(--card-border)' },
+              '& .MuiToggleButton-root.Mui-selected': { color: 'var(--text-color)', backgroundColor: 'rgba(var(--accent-rgb), 0.15)' },
+            }}
           >
             <ToggleButton value="month" aria-label="month view">
               <ViewModule />
