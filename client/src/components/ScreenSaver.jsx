@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Box, IconButton, Typography } from '@mui/material';
 import { Close, ChevronLeft, ChevronRight } from '@mui/icons-material';
 import axios from 'axios';
@@ -9,12 +9,16 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange }) => 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [currentTabIndex, setCurrentTabIndex] = useState(0);
+  const exitTimeoutRef = useRef(null);
 
   useEffect(() => {
     if (mode === 'photos') {
       fetchPhotos();
     } else {
       setLoading(false);
+      if (mode === 'tabs' && tabs.length > 0 && onTabChange) {
+        onTabChange(tabs[0].id);
+      }
     }
   }, [mode]);
 
@@ -82,36 +86,64 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange }) => 
     }
   }, []);
 
-  const handlePrev = useCallback(() => {
-    if (mode === 'photos' && photos.length > 0) {
-      setCurrentIndex(prev => (prev - 1 + photos.length) % photos.length);
-    } else if (mode === 'tabs' && tabs.length > 0) {
-      setCurrentTabIndex(prev => {
-        const nextIndex = (prev - 1 + tabs.length) % tabs.length;
-        if (onTabChange) {
-          onTabChange(tabs[nextIndex].id);
-        }
-        return nextIndex;
-      });
-    }
-  }, [mode, photos.length, tabs, onTabChange]);
+  const handleExit = useCallback(() => {
+    if (exitTimeoutRef.current) return;
+    exitTimeoutRef.current = true;
+    onExit();
+  }, [onExit]);
 
-  const handleNext = useCallback(() => {
-    if (mode === 'photos' && photos.length > 0) {
-      setCurrentIndex(prev => (prev + 1) % photos.length);
-    } else if (mode === 'tabs' && tabs.length > 0) {
-      setCurrentTabIndex(prev => {
-        const nextIndex = (prev + 1) % tabs.length;
-        if (onTabChange) {
-          onTabChange(tabs[nextIndex].id);
-        }
-        return nextIndex;
-      });
-    }
-  }, [mode, photos.length, tabs, onTabChange]);
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        handleExit();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleExit]);
 
   if (mode === 'tabs') {
-    return null;
+    return (
+      <Box
+        onClick={handleExit}
+        onTouchStart={handleExit}
+        sx={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 9999,
+          cursor: 'none',
+        }}
+      >
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: 12,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            color: 'white',
+            px: 2,
+            py: 0.5,
+            borderRadius: 2,
+            fontSize: '0.75rem',
+            opacity: 0,
+            animation: 'fadeInOut 4s ease-in-out',
+            '@keyframes fadeInOut': {
+              '0%': { opacity: 0 },
+              '10%': { opacity: 0.8 },
+              '80%': { opacity: 0.8 },
+              '100%': { opacity: 0 },
+            },
+            pointerEvents: 'none',
+          }}
+        >
+          Tap or click anywhere to exit screensaver
+        </Box>
+      </Box>
+    );
   }
 
   if (loading) {
@@ -129,7 +161,7 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange }) => 
           alignItems: 'center',
           justifyContent: 'center',
         }}
-        onClick={onExit}
+        onClick={handleExit}
       >
         <Typography variant="h4" color="white">
           Loading...
@@ -153,7 +185,7 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange }) => 
           alignItems: 'center',
           justifyContent: 'center',
         }}
-        onClick={onExit}
+        onClick={handleExit}
       >
         <Typography variant="h4" color="white">
           No photos available
@@ -182,7 +214,7 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange }) => 
           opacity: 1,
         },
       }}
-      onClick={onExit}
+      onClick={handleExit}
     >
       <Box
         component="img"
@@ -192,8 +224,8 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange }) => 
           maxWidth: '100%',
           maxHeight: '100%',
           objectFit: 'contain',
-          animation: 'fadeIn 1s ease-in-out',
-          '@keyframes fadeIn': {
+          animation: 'sssFadeIn 1s ease-in-out',
+          '@keyframes sssFadeIn': {
             '0%': { opacity: 0 },
             '100%': { opacity: 1 },
           },
@@ -217,7 +249,7 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange }) => 
         <IconButton
           onClick={(e) => {
             e.stopPropagation();
-            onExit();
+            handleExit();
           }}
           sx={{
             position: 'absolute',
@@ -237,7 +269,7 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange }) => 
         <IconButton
           onClick={(e) => {
             e.stopPropagation();
-            handlePrev();
+            setCurrentIndex(prev => (prev - 1 + photos.length) % photos.length);
           }}
           sx={{
             position: 'absolute',
@@ -258,7 +290,7 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange }) => 
         <IconButton
           onClick={(e) => {
             e.stopPropagation();
-            handleNext();
+            setCurrentIndex(prev => (prev + 1) % photos.length);
           }}
           sx={{
             position: 'absolute',

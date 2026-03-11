@@ -2896,7 +2896,10 @@ fastify.post('/api/photo-sources/:id/test', async (request, reply) => {
 
     if (source.type === 'Immich') {
       const decryptedApiKey = decryptPassword(source.api_key);
-      const response = await axios.post(`${source.url}/api/search/random`,
+      const baseUrl = source.url.replace(/\/+$/, '');
+      const apiBase = baseUrl.includes('/api') ? baseUrl : `${baseUrl}/api`;
+      console.log(`Testing Immich connection to: ${apiBase}/search/random`);
+      const response = await axios.post(`${apiBase}/search/random`,
         { size: 1 },
         {
           headers: {
@@ -2907,16 +2910,31 @@ fastify.post('/api/photo-sources/:id/test', async (request, reply) => {
           timeout: 10000
         }
       );
-      return { success: true, assetCount: response.data.length || 0, message: 'Immich connection successful' };
+      return { success: true, assetCount: response.data.length || 0, message: `Immich connection successful (${response.data.length || 0} assets found)` };
     } else if (source.type === 'GooglePhotos') {
       const decryptedRefreshToken = decryptPassword(source.refresh_token);
       return { success: true, message: 'Google Photos configuration saved (connection test not yet implemented)' };
     }
   } catch (error) {
     console.error('Error testing photo source:', error.message);
+    if (error.code === 'ECONNREFUSED') {
+      return reply.status(400).send({ success: false, error: 'Connection refused. Check that the Immich server URL is correct and the server is running.', details: error.message });
+    }
+    if (error.code === 'ENOTFOUND') {
+      return reply.status(400).send({ success: false, error: 'Host not found. Check the Immich server URL.', details: error.message });
+    }
+    if (error.code === 'ETIMEDOUT' || error.code === 'ECONNABORTED') {
+      return reply.status(400).send({ success: false, error: 'Connection timed out. The server may be unreachable from this network.', details: error.message });
+    }
     if (error.response) {
       console.error(`Response status: ${error.response.status}`);
       console.error(`Response data:`, error.response.data);
+      if (error.response.status === 401) {
+        return reply.status(400).send({ success: false, error: 'Authentication failed. Check your API key.', details: `HTTP ${error.response.status}` });
+      }
+      if (error.response.status === 404) {
+        return reply.status(400).send({ success: false, error: 'API endpoint not found. Check your Immich server URL - it should be the base URL (e.g., https://immich.example.com).', details: `HTTP ${error.response.status}` });
+      }
     }
     return reply.status(400).send({
       success: false,
@@ -2928,7 +2946,6 @@ fastify.post('/api/photo-sources/:id/test', async (request, reply) => {
   }
 });
 
-// Proxy endpoint to serve Immich images with authentication
 fastify.get('/api/photo-proxy/:sourceId/:assetId', async (request, reply) => {
   const { sourceId, assetId } = request.params;
   const { size = 'preview' } = request.query;
@@ -2940,7 +2957,9 @@ fastify.get('/api/photo-proxy/:sourceId/:assetId', async (request, reply) => {
     }
 
     const decryptedApiKey = decryptPassword(source.api_key);
-    const response = await axios.get(`${source.url}/api/assets/${assetId}/thumbnail`, {
+    const baseUrl = source.url.replace(/\/+$/, '');
+    const apiBase = baseUrl.includes('/api') ? baseUrl : `${baseUrl}/api`;
+    const response = await axios.get(`${apiBase}/assets/${assetId}/thumbnail`, {
       headers: {
         'x-api-key': decryptedApiKey
       },
@@ -2962,7 +2981,6 @@ fastify.get('/api/photo-proxy/:sourceId/:assetId', async (request, reply) => {
   }
 });
 
-// Enhanced endpoint to fetch photos from multiple sources
 fastify.get('/api/photo-items', async (request, reply) => {
   try {
     const sources = db.prepare('SELECT * FROM photo_sources WHERE enabled = 1 ORDER BY sort_order, id').all();
@@ -2975,21 +2993,37 @@ fastify.get('/api/photo-items', async (request, reply) => {
       try {
         if (source.type === 'Immich') {
           const decryptedApiKey = decryptPassword(source.api_key);
+          const baseUrl = source.url.replace(/\/+$/, '');
+          const apiBase = baseUrl.includes('/api') ? baseUrl : `${baseUrl}/api`;
+          const immichHeaders = {
+            'x-api-key': decryptedApiKey,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          };
 
-          // Use the search/random endpoint to get random assets
-          const response = await axios.post(`${source.url}/api/search/random`,
-            { size: 100 },
-            {
-              headers: {
-                'x-api-key': decryptedApiKey,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-              },
+          let assets = [];
+
+          if (source.album_id) {
+            const albumResponse = await axios.get(`${apiBase}/albums/${source.album_id}`, {
+              headers: immichHeaders,
               timeout: 15000
+            });
+            assets = albumResponse.data?.assets || [];
+            for (let i = assets.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [assets[i], assets[j]] = [assets[j], assets[i]];
             }
-          );
-
-          const assets = response.data || [];
+            assets = assets.slice(0, 100);
+          } else {
+            const response = await axios.post(`${apiBase}/search/random`,
+              { size: 100 },
+              {
+                headers: immichHeaders,
+                timeout: 15000
+              }
+            );
+            assets = response.data || [];
+          }
 
           return assets.map(asset => ({
             id: asset.id,
@@ -3016,7 +3050,6 @@ fastify.get('/api/photo-items', async (request, reply) => {
     const results = await Promise.all(fetchPromises);
     const allPhotos = results.flat();
 
-    // Shuffle photos
     for (let i = allPhotos.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [allPhotos[i], allPhotos[j]] = [allPhotos[j], allPhotos[i]];

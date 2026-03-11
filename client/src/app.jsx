@@ -16,6 +16,7 @@ import WidgetContainer from './components/WidgetContainer.jsx';
 import TabBar from './components/TabBar.jsx';
 import TabIconModal from './components/TabIconModal.jsx';
 import ScreenSaver from './components/ScreenSaver.jsx';
+import ScreensaverCountdown from './components/ScreensaverCountdown.jsx';
 import { API_BASE_URL } from './utils/apiConfig.js';
 import './index.css';
 
@@ -182,26 +183,33 @@ const App = () => {
     document.documentElement.style.setProperty('--bottom-bar-height', '60px');
   }, [widgetSettings]);
 
-  const resetInactivityTimer = useCallback(() => {
-    lastActivityRef.current = Date.now();
+  const screensaverActiveRef = useRef(false);
+  const screensaverSettingsRef = useRef(screensaverSettings);
+  const showAdminPanelRef = useRef(showAdminPanel);
+  const tabsRef = useRef(tabs);
 
-    if (screensaverActive) {
-      setScreensaverActive(false);
-    }
+  useEffect(() => { screensaverSettingsRef.current = screensaverSettings; }, [screensaverSettings]);
+  useEffect(() => { showAdminPanelRef.current = showAdminPanel; }, [showAdminPanel]);
+  useEffect(() => { tabsRef.current = tabs; }, [tabs]);
 
+  const startInactivityTimer = useCallback(() => {
     if (inactivityTimerRef.current) {
       clearTimeout(inactivityTimerRef.current);
     }
 
-    if (screensaverSettings.enabled && !showAdminPanel) {
-      inactivityTimerRef.current = setTimeout(() => {
-        setScreensaverActive(true);
-        if (screensaverSettings.mode === 'tabs' && tabs.length > 0) {
-          document.documentElement.requestFullscreen?.().catch(() => {});
-        }
-      }, screensaverSettings.timeout * 60 * 1000);
-    }
-  }, [screensaverActive, screensaverSettings, showAdminPanel, tabs.length]);
+    const settings = screensaverSettingsRef.current;
+    if (!settings.enabled || showAdminPanelRef.current) return;
+
+    lastActivityRef.current = Date.now();
+
+    inactivityTimerRef.current = setTimeout(() => {
+      screensaverActiveRef.current = true;
+      setScreensaverActive(true);
+      if (settings.mode === 'tabs' && tabsRef.current.length > 0) {
+        document.documentElement.requestFullscreen?.().catch(() => {});
+      }
+    }, settings.timeout * 60 * 1000);
+  }, []);
 
   useEffect(() => {
     const savedScreensaverSettings = localStorage.getItem('screensaverSettings');
@@ -218,31 +226,38 @@ const App = () => {
       return;
     }
 
-    const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+    const handleActivity = () => {
+      if (screensaverActiveRef.current) return;
+      lastActivityRef.current = Date.now();
+      startInactivityTimer();
+    };
+
+    const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'];
 
     events.forEach(event => {
-      window.addEventListener(event, resetInactivityTimer, { passive: true });
+      window.addEventListener(event, handleActivity, { passive: true });
     });
 
-    resetInactivityTimer();
+    startInactivityTimer();
 
     return () => {
       events.forEach(event => {
-        window.removeEventListener(event, resetInactivityTimer);
+        window.removeEventListener(event, handleActivity);
       });
       if (inactivityTimerRef.current) {
         clearTimeout(inactivityTimerRef.current);
       }
     };
-  }, [screensaverSettings.enabled, resetInactivityTimer]);
+  }, [screensaverSettings.enabled, screensaverSettings.timeout, startInactivityTimer]);
 
   const handleExitScreensaver = useCallback(() => {
+    screensaverActiveRef.current = false;
     setScreensaverActive(false);
     if (document.fullscreenElement) {
       document.exitFullscreen?.().catch(() => {});
     }
-    resetInactivityTimer();
-  }, [resetInactivityTimer]);
+    setTimeout(() => startInactivityTimer(), 500);
+  }, [startInactivityTimer]);
 
   const handleScreensaverTabChange = useCallback((tabId) => {
     setActiveTab(tabId);
@@ -276,6 +291,10 @@ const App = () => {
       if (savedSettings) {
         const parsed = JSON.parse(savedSettings);
         setWidgetSettings(prev => ({ ...prev, ...parsed }));
+      }
+      const savedScreensaver = localStorage.getItem('screensaverSettings');
+      if (savedScreensaver) {
+        setScreensaverSettings(JSON.parse(savedScreensaver));
       }
     }
     setShowAdminPanel(!showAdminPanel);
@@ -538,8 +557,14 @@ const App = () => {
           </IconButton>
         </Box>
 
-        {/* Right: Empty space for balance */}
-        <Box sx={{ width: '50px' }} />
+        <Box sx={{ display: 'flex', alignItems: 'center', minWidth: '50px', justifyContent: 'flex-end' }}>
+          <ScreensaverCountdown
+            enabled={screensaverSettings.enabled}
+            timeoutMinutes={screensaverSettings.timeout}
+            lastActivityRef={lastActivityRef}
+            screensaverActive={screensaverActive}
+          />
+        </Box>
       </Box>
 
       <TabIconModal
