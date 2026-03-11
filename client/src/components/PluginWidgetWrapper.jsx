@@ -4,7 +4,7 @@ import { API_BASE_URL } from '../utils/apiConfig.js';
 
 const PluginWidgetWrapper = ({ filename, name, theme, transparentBackground = false }) => {
   return (
-    <Box sx={{ width: '100%', height: '100%', overflow: 'hidden' }}>
+    <Box sx={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
       <iframe
         src={`${API_BASE_URL}/widgets/${filename}?theme=${theme}`}
         title={name}

@@ -86,48 +86,74 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
     if (currentCacheKey === prevWidgetIdsRef.current) return;
     prevWidgetIdsRef.current = currentCacheKey;
 
+    const cols = gridCols;
+    const placed = [];
+
+    const collides = (x, y, w, h) => {
+      return placed.some(p =>
+        x < p.x + p.w && x + w > p.x && y < p.y + p.h && y + h > p.y
+      );
+    };
+
+    const findFreePosition = (w, h) => {
+      for (let row = 0; row < 200; row++) {
+        for (let col = 0; col <= cols - w; col++) {
+          if (!collides(col, row, w, h)) return { x: col, y: row };
+        }
+      }
+      return { x: 0, y: 0 };
+    };
+
     const initialLayout = widgets.map((widget) => {
+      const w = widget.defaultSize.width;
+      const h = widget.defaultSize.height;
+      let item;
+
       if (widget.savedLayout) {
-        return {
+        item = {
           i: widget.id,
           x: widget.savedLayout.x ?? widget.defaultPosition.x,
           y: widget.savedLayout.y ?? widget.defaultPosition.y,
-          w: widget.savedLayout.w || widget.defaultSize.width,
-          h: widget.savedLayout.h || widget.defaultSize.height,
+          w: widget.savedLayout.w || w,
+          h: widget.savedLayout.h || h,
           minW: widget.minWidth || 3,
           minH: widget.minHeight || 2,
           static: lockedRef.current,
         };
+      } else {
+        const localLayout = localStorage.getItem(`widget-layout-${activeTab}-${widget.id}`);
+        if (localLayout) {
+          const parsed = JSON.parse(localLayout);
+          item = {
+            i: widget.id,
+            x: parsed.x ?? widget.defaultPosition.x,
+            y: parsed.y ?? widget.defaultPosition.y,
+            w: parsed.w || w,
+            h: parsed.h || h,
+            minW: widget.minWidth || 3,
+            minH: widget.minHeight || 2,
+            static: lockedRef.current,
+          };
+        } else {
+          const pos = findFreePosition(w, h);
+          item = {
+            i: widget.id,
+            x: pos.x,
+            y: pos.y,
+            w,
+            h,
+            minW: widget.minWidth || 3,
+            minH: widget.minHeight || 2,
+            static: lockedRef.current,
+          };
+        }
       }
 
-      const localLayout = localStorage.getItem(`widget-layout-${activeTab}-${widget.id}`);
-      if (localLayout) {
-        const parsed = JSON.parse(localLayout);
-        return {
-          i: widget.id,
-          x: parsed.x ?? widget.defaultPosition.x,
-          y: parsed.y ?? widget.defaultPosition.y,
-          w: parsed.w || widget.defaultSize.width,
-          h: parsed.h || widget.defaultSize.height,
-          minW: widget.minWidth || 3,
-          minH: widget.minHeight || 2,
-          static: lockedRef.current,
-        };
-      }
-
-      return {
-        i: widget.id,
-        x: widget.defaultPosition.x,
-        y: widget.defaultPosition.y,
-        w: widget.defaultSize.width,
-        h: widget.defaultSize.height,
-        minW: widget.minWidth || 3,
-        minH: widget.minHeight || 2,
-        static: lockedRef.current,
-      };
+      placed.push({ x: item.x, y: item.y, w: item.w, h: item.h });
+      return item;
     });
     setLayout(initialLayout);
-  }, [widgets, activeTab]);
+  }, [widgets, activeTab, gridCols]);
 
   useEffect(() => {
     setIsLockTransitioning(true);
@@ -829,7 +855,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                     width: '100%',
                     height: '100%',
                     overflow: 'auto',
-                    pointerEvents: isSelected ? 'none' : 'auto',
+                    pointerEvents: locked ? 'auto' : 'none',
                     display: 'flex',
                     flexDirection: 'column',
                   }}

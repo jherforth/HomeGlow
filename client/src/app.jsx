@@ -332,10 +332,10 @@ const App = () => {
       const dbLayout = getWidgetLayoutForTab(pluginWidgetName, activeTab);
       result.push({
         id: `plugin-${plugin.filename}`,
-        defaultPosition: { x: 0, y: 10 + index * 4 },
+        defaultPosition: { x: 0, y: 0 },
         defaultSize: { width: 6, height: 4 },
-        minWidth: 3,
-        minHeight: 3,
+        minWidth: 2,
+        minHeight: 2,
         savedLayout: dbLayout,
         content: <PluginWidgetWrapper
           filename={plugin.filename}
