@@ -3,7 +3,7 @@ import { Card, Typography, Box, List, ListItem, ListItemText, Dialog, DialogTitl
 import { Settings, ViewModule, ViewWeek, ChevronLeft, ChevronRight, Add, Delete, Edit, Refresh, Remove } from '@mui/icons-material';
 import { Calendar, momentLocalizer } from 'react-big-calendar';
 import moment from 'moment';
-import { ChromePicker } from 'react-color';
+import { SketchPicker } from 'react-color';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
@@ -1127,9 +1127,10 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
             </Box>
             {showColorPicker.background && (
               <Box sx={{ mt: 2 }}>
-                <ChromePicker
+                <SketchPicker
                   color={eventColors.backgroundColor}
                   onChange={(color) => handleColorChange('background', color)}
+                  disableAlpha
                 />
               </Box>
             )}
@@ -1153,9 +1154,10 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
             </Box>
             {showColorPicker.text && (
               <Box sx={{ mt: 2 }}>
-                <ChromePicker
+                <SketchPicker
                   color={eventColors.textColor}
                   onChange={(color) => handleColorChange('text', color)}
+                  disableAlpha
                 />
               </Box>
             )}
@@ -1371,9 +1373,10 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                     sx={{ position: 'fixed', top: 0, right: 0, bottom: 0, left: 0 }}
                     onClick={() => setShowColorPicker({ ...showColorPicker, calendar: false })}
                   />
-                  <ChromePicker
+                  <SketchPicker
                     color={calendarForm.color}
                     onChange={(color) => setCalendarForm({ ...calendarForm, color: color.hex })}
+                    disableAlpha
                   />
                 </Box>
               )}

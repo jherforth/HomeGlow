@@ -107,8 +107,6 @@ const ColorPickerInner = ({ hex, hsv, hsl, onChange }) => {
         <Hue hsl={hsl} onChange={onChange} />
       </Box>
 
-      <SaturationSlider hsv={hsv} onChange={handleSaturationChange} />
-
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1.5 }}>
         <Box
           sx={{
@@ -145,14 +143,6 @@ const ColorPickerInner = ({ hex, hsv, hsl, onChange }) => {
         </Typography>
       </Box>
 
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
-        <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: 10 }}>
-          Hue
-        </Typography>
-        <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: 10 }}>
-          Saturation
-        </Typography>
-      </Box>
     </Box>
   );
 };
