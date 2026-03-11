@@ -37,7 +37,8 @@ const PhotoWidget = ({ transparentBackground }) => {
 
   const loadPreferences = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/settings`);
+      // If we make it clear what we are searching for in settings, our db can be happier.
+      const response = await axios.post(`${API_BASE_URL}/api/settings/search`, ['PHOTO_WIDGET_*']);
       const settings = response.data;
 
       if (settings.PHOTO_WIDGET_PHOTOS_PER_VIEW) {

@@ -1995,22 +1995,38 @@ fastify.get('/api/settings', async (request, reply) => {
   }
 });
 
+fastify.post('/api/settings/search', async (request, reply) => {
+  try {
+    console.log('=== SEARCHING SETTINGS ===');
+    // coerce the request body to array of strings to search the settings database by key:
+    const keys = Array.isArray(request.body) ? request.body : [request.body];
+
+    // use parameters to filter settings by key if provided, otherwise return all settings
+    // accept simple wildcards for partial match via * (e.g. WEATHER_* to match all weather related settings)
+    let query = 'SELECT key, value FROM settings';
+    if (keys.length) {
+      const conditions = keys.map(() => 'key LIKE ?').join(' OR ');
+      query += ' WHERE ' + conditions;
+    }
+    const rows = db.prepare(query).all(...keys.map(key => key.replaceAll('*', '%')));
+    console.log('Raw settings from database:', rows);
+    // Convert array of {key, value} objects to a single object {key: value}
+    const settings = rows.reduce((acc, row) => {
+      acc[row.key] = row.value;
+      return acc;
+    }, {});
+    console.log('Processed settings object:', settings);
+    return settings;
+  } catch (error) {
+    console.error('Error fetching settings:', error);
+    reply.status(500).send({ error: 'Failed to fetch settings' });
+  }
+});
+
 fastify.post('/api/settings', async (request, reply) => {
   const { key, value } = request.body;
-  console.log('=== SAVING SETTING ===');
-  console.log('Key:', key);
-  console.log('Value:', value);
-  console.log('Value type:', typeof value);
-  console.log('Value length:', value ? value.length : 'null/undefined');
-
-  // Special logging for weather API key
-  if (key === 'WEATHER_API_KEY') {
-    console.log('=== WEATHER API KEY SPECIFIC LOGGING ===');
-    console.log('Weather API Key received:', value);
-    console.log('Is empty string?', value === '');
-    console.log('Is null?', value === null);
-    console.log('Is undefined?', value === undefined);
-  }
+  // single log message showing the details of the save:
+  console.log(`=== SAVING SETTING === Key: ${key} - Value: ${value} Value type: ${typeof value} Value length: ${value ? value.length : 'null/undefined'}`);
 
   if (!key || value === undefined) {
     console.log('ERROR: Missing key or value');

@@ -108,7 +108,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   useEffect(() => {
     const loadDisplaySettings = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/api/settings`);
+        const response = await axios.post(`${API_BASE_URL}/api/settings/search`, ['CALENDAR_*']);
         const settings = response.data;
 
         if (settings.CALENDAR_TEXT_SIZE || settings.CALENDAR_BULLET_SIZE) {
