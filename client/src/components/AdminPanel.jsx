@@ -39,7 +39,9 @@ import {
   Backdrop,
   RadioGroup,
   Radio,
-  Autocomplete
+  Autocomplete,
+  Tooltip,
+  Slider
 } from '@mui/material';
 import {
   Delete,
@@ -56,7 +58,11 @@ import {
   ViewCompact,
   ViewModule,
   ViewQuilt,
-  Lock
+  Lock,
+  Nightlight,
+  Tab as TabIcon,
+  PhotoLibrary,
+  Info
 } from '@mui/icons-material';
 import ColorPickerPopover from './ColorPickerPopover';
 import axios from 'axios';
@@ -109,6 +115,16 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
     return saved ? JSON.parse(saved) : {};
   });
   const [pluginAssignments, setPluginAssignments] = useState({});
+  const [photoSources, setPhotoSources] = useState([]);
+  const [screensaverSettings, setScreensaverSettings] = useState(() => {
+    const saved = localStorage.getItem('screensaverSettings');
+    return saved ? JSON.parse(saved) : {
+      enabled: false,
+      mode: 'tabs',
+      timeout: 5,
+      slideshowInterval: 10
+    };
+  });
 
   // Refresh interval options in milliseconds
   const refreshIntervalOptions = [
@@ -157,8 +173,19 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
       fetchUploadedWidgets();
       fetchTabs();
       fetchWidgetAssignments();
+      fetchPhotoSources();
     }
   }, [isAuthenticated]);
+
+  const fetchPhotoSources = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/photo-sources`);
+      setPhotoSources(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Error fetching photo sources:', error);
+      setPhotoSources([]);
+    }
+  };
 
   const checkPinStatus = async () => {
     try {
@@ -432,11 +459,20 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
       secondary: '#38bdf8',
       accent: '#f472b6'
     };
-    
+
     setLocalWidgetSettings(prev => ({ ...prev, ...defaultSettings }));
     setSaveMessage({ show: true, type: 'info', text: 'Reset to default colors. Click Save to apply.' });
     setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
   };
+
+  const saveScreensaverSettings = () => {
+    localStorage.setItem('screensaverSettings', JSON.stringify(screensaverSettings));
+    setSaveMessage({ show: true, type: 'success', text: 'Screensaver settings saved!' });
+    setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+  };
+
+  const hasImmichConfigured = photoSources.some(source => source.type === 'Immich' && source.enabled === 1);
+  const hasTabsCreated = tabs.length > 0;
 
   const handleWidgetToggle = (widget, field) => {
     setLocalWidgetSettings(prev => ({
@@ -863,13 +899,13 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
   };
 
   const adminTabs = [
-    'APIs',
     'Widgets',
     'Interface',
     'Users',
     'Chores',
     'Prizes',
-    'Security'
+    'Security',
+    'APIs'
   ];
 
   if (checkingPin) {
@@ -906,65 +942,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
         ))}
       </Tabs>
 
-      {/* APIs Tab */}
-      {activeTab === 0 && (
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>API Configuration</Typography>
-
-            {saveMessage.show && (
-              <Alert severity={saveMessage.type} sx={{ mb: 2 }}>
-                {saveMessage.text}
-              </Alert>
-            )}
-
-            <Box sx={{ maxWidth: 600 }}>
-              <TextField
-                fullWidth
-                label="OpenWeatherMap API Key"
-                type="password"
-                value={settings.WEATHER_API_KEY || ''}
-                onChange={(e) => setSettings(prev => ({ ...prev, WEATHER_API_KEY: e.target.value }))}
-                sx={{ mb: 2 }}
-                helperText="Get your free API key from openweathermap.org/api"
-              />
-
-              <TextField
-                fullWidth
-                label="Proxy Whitelist (comma-separated domains)"
-                value={settings.PROXY_WHITELIST || ''}
-                onChange={(e) => setSettings(prev => ({ ...prev, PROXY_WHITELIST: e.target.value }))}
-                sx={{ mb: 2 }}
-                helperText="Domains allowed for proxy requests (e.g., api.example.com, another-api.com)"
-              />
-
-              <TextField
-                fullWidth
-                label="Daily Completion Clam Reward"
-                type="number"
-                value={settings.daily_completion_clam_reward || '2'}
-                onChange={(e) => setSettings(prev => ({ ...prev, daily_completion_clam_reward: e.target.value }))}
-                sx={{ mb: 2 }}
-                helperText="Number of clams awarded when a user completes all their daily chores"
-                inputProps={{ min: 0, max: 100 }}
-              />
-
-              <Button
-                variant="contained"
-                onClick={saveAllApiSettings}
-                disabled={isLoading}
-                startIcon={<Save />}
-                sx={{ mt: 2 }}
-              >
-                {isLoading ? 'Saving...' : 'Save Settings'}
-              </Button>
-            </Box>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Widgets Tab */}
-      {activeTab === 1 && (
+      {activeTab === 0 && (
         <Card>
           <CardContent>
             <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
@@ -1453,7 +1432,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
       )}
 
       {/* Interface Tab */}
-      {activeTab === 2 && (
+      {activeTab === 1 && (
         <Card>
           <CardContent>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -1485,8 +1464,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
             </Box>
             
             <Box sx={{ mt: 4, display: 'flex', gap: 2, justifyContent: 'center' }}>
-              <Button 
-                variant="contained" 
+              <Button
+                variant="contained"
                 onClick={saveInterfaceSettings}
                 startIcon={<Save />}
                 size="large"
@@ -1502,12 +1481,196 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
                 Refresh Page
               </Button>
             </Box>
+
+            <Divider sx={{ my: 4 }} />
+
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+              <Nightlight />
+              <Typography variant="h6">Screensaver</Typography>
+            </Box>
+
+            <Alert severity="info" sx={{ mb: 3 }}>
+              The screensaver activates after a period of inactivity, cycling through tabs or displaying a photo slideshow.
+            </Alert>
+
+            <Box sx={{ maxWidth: 600, mx: 'auto' }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={screensaverSettings.enabled}
+                    onChange={(e) => setScreensaverSettings(prev => ({ ...prev, enabled: e.target.checked }))}
+                  />
+                }
+                label="Enable Screensaver"
+                sx={{ mb: 3 }}
+              />
+
+              <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold' }}>
+                Screensaver Mode
+              </Typography>
+
+              <RadioGroup
+                value={screensaverSettings.mode}
+                onChange={(e) => setScreensaverSettings(prev => ({ ...prev, mode: e.target.value }))}
+                sx={{ mb: 3 }}
+              >
+                <Tooltip
+                  title={!hasTabsCreated ? "Create tabs in the dashboard to use this mode" : ""}
+                  placement="right"
+                >
+                  <FormControlLabel
+                    value="tabs"
+                    control={<Radio disabled={!hasTabsCreated} />}
+                    label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <TabIcon fontSize="small" />
+                        <Box>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              fontWeight: 'bold',
+                              color: !hasTabsCreated ? 'text.disabled' : 'inherit'
+                            }}
+                          >
+                            Cycle Through Tabs
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            color={!hasTabsCreated ? 'text.disabled' : 'text.secondary'}
+                          >
+                            {hasTabsCreated
+                              ? `Automatically switch between ${tabs.length} tab${tabs.length !== 1 ? 's' : ''}`
+                              : 'No tabs created yet'}
+                          </Typography>
+                        </Box>
+                        {!hasTabsCreated && (
+                          <Tooltip title="Create tabs in the Tab Bar to enable this feature">
+                            <Info fontSize="small" color="disabled" />
+                          </Tooltip>
+                        )}
+                      </Box>
+                    }
+                    sx={{ opacity: !hasTabsCreated ? 0.6 : 1 }}
+                  />
+                </Tooltip>
+
+                <Tooltip
+                  title={!hasImmichConfigured ? "Configure Immich in the Photos widget settings to use this mode" : ""}
+                  placement="right"
+                >
+                  <FormControlLabel
+                    value="photos"
+                    control={<Radio disabled={!hasImmichConfigured} />}
+                    label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <PhotoLibrary fontSize="small" />
+                        <Box>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              fontWeight: 'bold',
+                              color: !hasImmichConfigured ? 'text.disabled' : 'inherit'
+                            }}
+                          >
+                            Immich Photo Slideshow
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            color={!hasImmichConfigured ? 'text.disabled' : 'text.secondary'}
+                          >
+                            {hasImmichConfigured
+                              ? 'Display photos from your Immich library'
+                              : 'Immich not configured'}
+                          </Typography>
+                        </Box>
+                        {!hasImmichConfigured && (
+                          <Tooltip title="Configure an Immich photo source in the Photos widget to enable this feature">
+                            <Info fontSize="small" color="disabled" />
+                          </Tooltip>
+                        )}
+                      </Box>
+                    }
+                    sx={{ opacity: !hasImmichConfigured ? 0.6 : 1 }}
+                  />
+                </Tooltip>
+              </RadioGroup>
+
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                Inactivity Timeout: {screensaverSettings.timeout} minute{screensaverSettings.timeout !== 1 ? 's' : ''}
+              </Typography>
+              <Slider
+                value={screensaverSettings.timeout}
+                onChange={(e, value) => setScreensaverSettings(prev => ({ ...prev, timeout: value }))}
+                min={1}
+                max={30}
+                marks={[
+                  { value: 1, label: '1m' },
+                  { value: 5, label: '5m' },
+                  { value: 10, label: '10m' },
+                  { value: 15, label: '15m' },
+                  { value: 30, label: '30m' }
+                ]}
+                sx={{ mb: 4 }}
+              />
+
+              {screensaverSettings.mode === 'photos' && (
+                <>
+                  <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                    Photo Slideshow Interval: {screensaverSettings.slideshowInterval} second{screensaverSettings.slideshowInterval !== 1 ? 's' : ''}
+                  </Typography>
+                  <Slider
+                    value={screensaverSettings.slideshowInterval}
+                    onChange={(e, value) => setScreensaverSettings(prev => ({ ...prev, slideshowInterval: value }))}
+                    min={3}
+                    max={60}
+                    marks={[
+                      { value: 3, label: '3s' },
+                      { value: 10, label: '10s' },
+                      { value: 30, label: '30s' },
+                      { value: 60, label: '60s' }
+                    ]}
+                    sx={{ mb: 4 }}
+                  />
+                </>
+              )}
+
+              {screensaverSettings.mode === 'tabs' && (
+                <>
+                  <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                    Tab Cycle Interval: {screensaverSettings.slideshowInterval} second{screensaverSettings.slideshowInterval !== 1 ? 's' : ''}
+                  </Typography>
+                  <Slider
+                    value={screensaverSettings.slideshowInterval}
+                    onChange={(e, value) => setScreensaverSettings(prev => ({ ...prev, slideshowInterval: value }))}
+                    min={5}
+                    max={120}
+                    marks={[
+                      { value: 5, label: '5s' },
+                      { value: 30, label: '30s' },
+                      { value: 60, label: '60s' },
+                      { value: 120, label: '2m' }
+                    ]}
+                    sx={{ mb: 4 }}
+                  />
+                </>
+              )}
+
+              <Button
+                variant="contained"
+                onClick={saveScreensaverSettings}
+                startIcon={<Save />}
+                fullWidth
+                sx={{ mt: 2 }}
+              >
+                Save Screensaver Settings
+              </Button>
+            </Box>
           </CardContent>
         </Card>
       )}
 
       {/* Users Tab */}
-      {activeTab === 3 && (
+      {activeTab === 2 && (
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>User Management</Typography>
@@ -1673,7 +1836,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
       )}
 
       {/* Chores Tab */}
-      {activeTab === 4 && (
+      {activeTab === 3 && (
         <Card>
           <CardContent>
             <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
@@ -1693,7 +1856,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
       )}
 
       {/* Prizes Tab */}
-      {activeTab === 5 && (
+      {activeTab === 4 && (
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>Prize Management</Typography>
@@ -1781,7 +1944,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
       )}
 
       {/* Security Tab */}
-      {activeTab === 6 && (
+      {activeTab === 5 && (
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>Security Settings</Typography>
@@ -1878,6 +2041,63 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
                   Changing your PIN will require you to use the new PIN on your next admin panel access.
                 </Alert>
               )}
+            </Box>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* APIs Tab */}
+      {activeTab === 6 && (
+        <Card>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>API Configuration</Typography>
+
+            {saveMessage.show && (
+              <Alert severity={saveMessage.type} sx={{ mb: 2 }}>
+                {saveMessage.text}
+              </Alert>
+            )}
+
+            <Box sx={{ maxWidth: 600 }}>
+              <TextField
+                fullWidth
+                label="OpenWeatherMap API Key"
+                type="password"
+                value={settings.WEATHER_API_KEY || ''}
+                onChange={(e) => setSettings(prev => ({ ...prev, WEATHER_API_KEY: e.target.value }))}
+                sx={{ mb: 2 }}
+                helperText="Get your free API key from openweathermap.org/api"
+              />
+
+              <TextField
+                fullWidth
+                label="Proxy Whitelist (comma-separated domains)"
+                value={settings.PROXY_WHITELIST || ''}
+                onChange={(e) => setSettings(prev => ({ ...prev, PROXY_WHITELIST: e.target.value }))}
+                sx={{ mb: 2 }}
+                helperText="Domains allowed for proxy requests (e.g., api.example.com, another-api.com)"
+              />
+
+              <TextField
+                fullWidth
+                label="Daily Completion Clam Reward"
+                type="number"
+                value={settings.daily_completion_clam_reward || '2'}
+                onChange={(e) => setSettings(prev => ({ ...prev, daily_completion_clam_reward: e.target.value }))}
+                sx={{ mb: 2 }}
+                helperText="Number of clams awarded when a user completes all their daily chores"
+                inputProps={{ min: 0, max: 100 }}
+              />
+
+              <Button
+                variant="contained"
+                onClick={saveAllApiSettings}
+                disabled={isLoading}
+                startIcon={<Save />}
+                sx={{ mt: 2 }}
+              >
+                {isLoading ? 'Saving...' : 'Save Settings'}
+              </Button>
             </Box>
           </CardContent>
         </Card>

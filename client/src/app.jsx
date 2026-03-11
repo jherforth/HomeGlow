@@ -1,5 +1,5 @@
 // client/src/app.jsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { IconButton, Box, Dialog, DialogContent } from '@mui/material';
 import { Brightness4, Brightness7, Lock, LockOpen, Close } from '@mui/icons-material';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -15,6 +15,7 @@ import PluginWidgetWrapper from './components/PluginWidgetWrapper.jsx';
 import WidgetContainer from './components/WidgetContainer.jsx';
 import TabBar from './components/TabBar.jsx';
 import TabIconModal from './components/TabIconModal.jsx';
+import ScreenSaver from './components/ScreenSaver.jsx';
 import { API_BASE_URL } from './utils/apiConfig.js';
 import './index.css';
 
@@ -24,6 +25,18 @@ const App = () => {
     const saved = localStorage.getItem('widgetsLocked');
     return saved !== null ? JSON.parse(saved) : true;
   });
+  const [screensaverActive, setScreensaverActive] = useState(false);
+  const [screensaverSettings, setScreensaverSettings] = useState(() => {
+    const saved = localStorage.getItem('screensaverSettings');
+    return saved ? JSON.parse(saved) : {
+      enabled: false,
+      mode: 'tabs',
+      timeout: 5,
+      slideshowInterval: 10
+    };
+  });
+  const inactivityTimerRef = useRef(null);
+  const lastActivityRef = useRef(Date.now());
   const [widgetSettings, setWidgetSettings] = useState(() => {
     const defaultSettings = {
       chores: { enabled: false, transparent: false },
@@ -168,6 +181,72 @@ const App = () => {
     document.documentElement.style.setProperty('--dark-button-gradient-end', widgetSettings.darkButtonGradientEnd);
     document.documentElement.style.setProperty('--bottom-bar-height', '60px');
   }, [widgetSettings]);
+
+  const resetInactivityTimer = useCallback(() => {
+    lastActivityRef.current = Date.now();
+
+    if (screensaverActive) {
+      setScreensaverActive(false);
+    }
+
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current);
+    }
+
+    if (screensaverSettings.enabled && !showAdminPanel) {
+      inactivityTimerRef.current = setTimeout(() => {
+        setScreensaverActive(true);
+        if (screensaverSettings.mode === 'tabs' && tabs.length > 0) {
+          document.documentElement.requestFullscreen?.().catch(() => {});
+        }
+      }, screensaverSettings.timeout * 60 * 1000);
+    }
+  }, [screensaverActive, screensaverSettings, showAdminPanel, tabs.length]);
+
+  useEffect(() => {
+    const savedScreensaverSettings = localStorage.getItem('screensaverSettings');
+    if (savedScreensaverSettings) {
+      setScreensaverSettings(JSON.parse(savedScreensaverSettings));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!screensaverSettings.enabled) {
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
+      return;
+    }
+
+    const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+
+    events.forEach(event => {
+      window.addEventListener(event, resetInactivityTimer, { passive: true });
+    });
+
+    resetInactivityTimer();
+
+    return () => {
+      events.forEach(event => {
+        window.removeEventListener(event, resetInactivityTimer);
+      });
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
+    };
+  }, [screensaverSettings.enabled, resetInactivityTimer]);
+
+  const handleExitScreensaver = useCallback(() => {
+    setScreensaverActive(false);
+    if (document.fullscreenElement) {
+      document.exitFullscreen?.().catch(() => {});
+    }
+    resetInactivityTimer();
+  }, [resetInactivityTimer]);
+
+  const handleScreensaverTabChange = useCallback((tabId) => {
+    setActiveTab(tabId);
+  }, []);
 
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
@@ -468,6 +547,16 @@ const App = () => {
         onClose={() => setShowTabIconModal(false)}
         onSave={handleSaveTab}
       />
+
+      {screensaverActive && screensaverSettings.enabled && (
+        <ScreenSaver
+          mode={screensaverSettings.mode}
+          slideshowInterval={screensaverSettings.slideshowInterval}
+          tabs={tabs}
+          onExit={handleExitScreensaver}
+          onTabChange={handleScreensaverTabChange}
+        />
+      )}
     </>
   );
 };
