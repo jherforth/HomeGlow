@@ -168,7 +168,7 @@ const TabBar = ({ tabs, activeTab, onTabChange, widgetsLocked, onAddTab, onDelet
                       color: isActive ? 'var(--accent)' : 'inherit',
                     }}
                   />
-                  {tab.show_label && (
+                  {Boolean(tab.show_label) && (
                     <Box
                       component="span"
                       sx={{
