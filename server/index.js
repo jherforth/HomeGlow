@@ -130,6 +130,10 @@ fastify.get('/widgets/:filename', async (request, reply) => {
     let content = await fs.readFile(filePath, 'utf-8');
     console.log(`File content preview: ${content.substring(0, 100)}...`);
 
+    content = content.replace(/window\.location\.origin\.replace\(['"`]:\d+['"`],\s*['"`]:\d+['"`]\)/g, 'window.location.origin');
+    content = content.replace(/\$\{window\.location\.protocol\}\/\/\$\{window\.location\.hostname\}:\d+/g, '${window.location.origin}');
+    content = content.replace(/window\.location\.protocol\s*\+\s*'\/\/'\s*\+\s*window\.location\.hostname\s*\+\s*':\d+'/g, 'window.location.origin');
+
     const overflowFix = `<style>html,body{max-width:100%!important;overflow-x:hidden!important;box-sizing:border-box;}*{box-sizing:border-box;}</style>`;
     if (content.includes('</head>')) {
       content = content.replace('</head>', `${overflowFix}</head>`);
@@ -1818,8 +1822,13 @@ fastify.get('/api/users', async (request, reply) => {
 
     const usersWithClams = users.map(user => {
       const clamResult = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(user.id);
+      let profilePicture = user.profile_picture;
+      if (profilePicture && !profilePicture.startsWith('http') && !profilePicture.startsWith('/')) {
+        profilePicture = `/Uploads/users/${profilePicture}`;
+      }
       return {
         ...user,
+        profile_picture: profilePicture,
         clam_total: clamResult.total
       };
     });
