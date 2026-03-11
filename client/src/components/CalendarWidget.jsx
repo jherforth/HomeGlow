@@ -809,7 +809,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                     <Typography variant="h6" sx={{ fontWeight: 'bold', color: day.isToday ? 'var(--accent)' : 'inherit' }}>
                       {day.dayNumber}
                     </Typography>
-                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                    <Typography variant="caption" sx={{ color: 'var(--text-color)', opacity: 0.6 }}>
                       {day.monthName}
                     </Typography>
                   </Box>
