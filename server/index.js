@@ -127,8 +127,17 @@ fastify.get('/widgets/:filename', async (request, reply) => {
     const stats = await fs.stat(filePath);
     console.log(`File exists, size: ${stats.size} bytes`);
 
-    const content = await fs.readFile(filePath, 'utf-8');
+    let content = await fs.readFile(filePath, 'utf-8');
     console.log(`File content preview: ${content.substring(0, 100)}...`);
+
+    const overflowFix = `<style>html,body{max-width:100%!important;overflow-x:hidden!important;box-sizing:border-box;}*{box-sizing:border-box;}</style>`;
+    if (content.includes('</head>')) {
+      content = content.replace('</head>', `${overflowFix}</head>`);
+    } else if (content.includes('<body')) {
+      content = content.replace('<body', `${overflowFix}<body`);
+    } else {
+      content = overflowFix + content;
+    }
 
     reply.header('Content-Type', 'text/html');
     return content;
