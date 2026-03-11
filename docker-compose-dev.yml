@@ -29,8 +29,8 @@ services:
       - TZ=${TZ:-America/New_York}
     networks:
       - homeglow-test-network
-    dns:
-      - 192.168.68.12
+    extra_hosts:
+      - "immich.herforth.app:192.168.68.42:2283"
     restart: unless-stopped
 
   frontend-test:
