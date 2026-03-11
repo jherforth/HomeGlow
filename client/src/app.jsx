@@ -1,6 +1,6 @@
 // client/src/app.jsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { Container, IconButton, Box, Dialog, DialogContent } from '@mui/material';
+import { IconButton, Box, Dialog, DialogContent } from '@mui/material';
 import { Brightness4, Brightness7, Lock, LockOpen, Close } from '@mui/icons-material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -11,7 +11,7 @@ import PhotoWidget from './components/PhotoWidget.jsx';
 import AdminPanel from './components/AdminPanel.jsx';
 import WeatherWidget from './components/WeatherWidget.jsx';
 import ChoreWidget from './components/ChoreWidget.jsx';
-import WidgetGallery from './components/WidgetGallery.jsx';
+import PluginWidgetWrapper from './components/PluginWidgetWrapper.jsx';
 import WidgetContainer from './components/WidgetContainer.jsx';
 import TabBar from './components/TabBar.jsx';
 import TabIconModal from './components/TabIconModal.jsx';
@@ -22,7 +22,7 @@ const App = () => {
   const [theme, setTheme] = useState('light');
   const [widgetsLocked, setWidgetsLocked] = useState(() => {
     const saved = localStorage.getItem('widgetsLocked');
-    return saved !== null ? JSON.parse(saved) : true; // Default to locked
+    return saved !== null ? JSON.parse(saved) : true;
   });
   const [widgetSettings, setWidgetSettings] = useState(() => {
     const defaultSettings = {
@@ -30,7 +30,6 @@ const App = () => {
       calendar: { enabled: false, transparent: false },
       photos: { enabled: false, transparent: false },
       weather: { enabled: false, transparent: false },
-      widgetGallery: { enabled: true, transparent: false },
       lightGradientStart: '#00ddeb',
       lightGradientEnd: '#ff6b6b',
       darkGradientStart: '#2e2767',
@@ -49,15 +48,47 @@ const App = () => {
     WEATHER_API_KEY: '',
     ICS_CALENDAR_URL: '',
   });
-  const [widgetGalleryKey, setWidgetGalleryKey] = useState(0);
+  const [installedPlugins, setInstalledPlugins] = useState([]);
   const [activeTab, setActiveTab] = useState(1);
   const [tabs, setTabs] = useState([]);
   const [widgetAssignments, setWidgetAssignments] = useState({});
   const [showTabIconModal, setShowTabIconModal] = useState(false);
 
-  const refreshWidgetGallery = () => {
-    setWidgetGalleryKey(prev => prev + 1);
+  const fetchInstalledPlugins = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/widgets`);
+      setInstalledPlugins(Array.isArray(response.data) ? response.data : []);
+    } catch {
+      setInstalledPlugins([]);
+    }
   };
+
+  useEffect(() => {
+    const oldEnabled = localStorage.getItem('enabledWidgets');
+    if (oldEnabled) {
+      try {
+        const parsed = JSON.parse(oldEnabled);
+        const existing = JSON.parse(localStorage.getItem('pluginSettings') || '{}');
+        Object.entries(parsed).forEach(([filename, isEnabled]) => {
+          if (!existing[filename]) {
+            existing[filename] = { enabled: !!isEnabled, transparent: false, refreshInterval: 0 };
+          }
+        });
+        localStorage.setItem('pluginSettings', JSON.stringify(existing));
+      } catch {}
+      localStorage.removeItem('enabledWidgets');
+    }
+    const ws = localStorage.getItem('widgetSettings');
+    if (ws) {
+      try {
+        const parsed = JSON.parse(ws);
+        if (parsed.widgetGallery) {
+          delete parsed.widgetGallery;
+          localStorage.setItem('widgetSettings', JSON.stringify(parsed));
+        }
+      } catch {}
+    }
+  }, []);
 
   useEffect(() => {
     const fetchApiKeys = async () => {
@@ -71,6 +102,7 @@ const App = () => {
     fetchApiKeys();
     fetchTabs();
     fetchWidgetAssignments();
+    fetchInstalledPlugins();
   }, []);
 
   const fetchTabs = async () => {
@@ -289,23 +321,38 @@ const App = () => {
       });
     }
 
+    const pluginSettings = JSON.parse(localStorage.getItem('pluginSettings') || '{}');
+    installedPlugins.forEach((plugin, index) => {
+      const pSettings = pluginSettings[plugin.filename] || {};
+      if (!pSettings.enabled) return;
+
+      const pluginWidgetName = `plugin:${plugin.filename}`;
+      if (!isWidgetAssignedToTab(pluginWidgetName, activeTab)) return;
+
+      const dbLayout = getWidgetLayoutForTab(pluginWidgetName, activeTab);
+      result.push({
+        id: `plugin-${plugin.filename}`,
+        defaultPosition: { x: 0, y: 10 + index * 4 },
+        defaultSize: { width: 6, height: 4 },
+        minWidth: 3,
+        minHeight: 3,
+        savedLayout: dbLayout,
+        content: <PluginWidgetWrapper
+          filename={plugin.filename}
+          name={plugin.name}
+          theme={theme}
+          transparentBackground={pSettings.transparent || false}
+        />,
+      });
+    });
+
     return result;
-  }, [widgetSettings, activeTab, apiKeys, widgetAssignments]);
+  }, [widgetSettings, activeTab, apiKeys, widgetAssignments, installedPlugins, theme]);
 
   return (
     <>
       <Box sx={{ width: '100%', minHeight: '100vh', position: 'relative', pb: '60px' }}>
         {widgets.length > 0 && <WidgetContainer widgets={widgets} locked={widgetsLocked} activeTab={activeTab} />}
-
-        {widgetSettings.widgetGallery?.enabled && activeTab === 1 && (
-          <Container className="container" sx={{ mt: widgets.length > 0 ? 1 : 0 }}>
-            <WidgetGallery
-              key={widgetGalleryKey}
-              theme={theme}
-              transparentBackground={widgetSettings.widgetGallery?.transparent || false}
-            />
-          </Container>
-        )}
       </Box>
 
       <Dialog open={showAdminPanel} onClose={toggleAdminPanel} maxWidth="lg">
@@ -325,7 +372,7 @@ const App = () => {
           >
             <Close />
           </IconButton>
-          <AdminPanel setWidgetSettings={setWidgetSettings} onWidgetUploaded={refreshWidgetGallery} />
+          <AdminPanel setWidgetSettings={setWidgetSettings} onPluginsChanged={fetchInstalledPlugins} />
         </DialogContent>
       </Dialog>
 
@@ -360,8 +407,8 @@ const App = () => {
         />
 
         {/* Center: Control Buttons */}
-        <Box sx={{ 
-          display: 'flex', 
+        <Box sx={{
+          display: 'flex',
           gap: 1,
           alignItems: 'center',
           position: 'absolute',
@@ -382,7 +429,7 @@ const App = () => {
             onClick={toggleWidgetsLock}
             aria-label={widgetsLocked ? "Unlock widgets" : "Lock widgets"}
             sx={{
-              color: widgetsLocked 
+              color: widgetsLocked
                 ? (theme === 'light' ? 'action.active' : 'white')
                 : 'var(--accent)',
               transition: 'color 0.2s ease',

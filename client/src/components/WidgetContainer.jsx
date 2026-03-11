@@ -8,12 +8,17 @@ import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import CountdownCircle from './CountdownCircle';
 
-const WIDGET_ID_TO_NAME = {
+const CORE_WIDGET_ID_TO_NAME = {
   'calendar-widget': 'calendar',
   'chores-widget': 'chores',
   'photos-widget': 'photos',
   'weather-widget': 'weather',
-  'widget-gallery': 'widgetGallery',
+};
+
+const resolveWidgetName = (widgetId) => {
+  if (CORE_WIDGET_ID_TO_NAME[widgetId]) return CORE_WIDGET_ID_TO_NAME[widgetId];
+  if (widgetId.startsWith('plugin-')) return `plugin:${widgetId.slice(7)}`;
+  return null;
 };
 
 const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange: onLayoutChangeCallback, activeTab = 1 }) => {
@@ -32,9 +37,9 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       const layouts = layoutItems
-        .filter(item => WIDGET_ID_TO_NAME[item.i])
+        .filter(item => resolveWidgetName(item.i))
         .map(item => ({
-          widget_name: WIDGET_ID_TO_NAME[item.i],
+          widget_name: resolveWidgetName(item.i),
           tab_id: tabId,
           layout_x: item.x,
           layout_y: item.y,
@@ -335,12 +340,17 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
       'calendar-widget': 'calendar',
       'photos-widget': 'photos',
       'weather-widget': 'weather',
-      'widget-gallery': 'widgetGallery'
     };
 
     const settingsKey = widgetMap[widgetId];
     if (settingsKey && widgetSettings[settingsKey]) {
       return widgetSettings[settingsKey].refreshInterval || 0;
+    }
+
+    if (widgetId.startsWith('plugin-')) {
+      const filename = widgetId.slice(7);
+      const pluginSettings = JSON.parse(localStorage.getItem('pluginSettings') || '{}');
+      return pluginSettings[filename]?.refreshInterval || 0;
     }
 
     return 0;
