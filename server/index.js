@@ -2231,8 +2231,8 @@ fastify.patch('/api/widget-assignments/layout', async (request, reply) => {
       return reply.status(404).send({ error: 'Assignment not found' });
     }
 
-    db.prepare('UPDATE widget_tab_assignments SET layout_x = ?, layout_y = ?, layout_w = ?, layout_h = ? WHERE widget_name = ? AND tab_id = ?')
-      .run(layout_x, layout_y, layout_w, layout_h, widget_name, tab_id);
+    const stmt = db.prepare('UPDATE widget_tab_assignments SET layout_x = ?, layout_y = ?, layout_w = ?, layout_h = ? WHERE widget_name = ? AND tab_id = ?');
+    stmt.run(layout_x, layout_y, layout_w, layout_h, widget_name, tab_id);
 
     const updated = db.prepare('SELECT * FROM widget_tab_assignments WHERE widget_name = ? AND tab_id = ?').get(widget_name, tab_id);
     return updated;
@@ -2250,10 +2250,10 @@ fastify.patch('/api/widget-assignments/layout/bulk', async (request, reply) => {
   }
 
   try {
-    const updateStmt = db.prepare('UPDATE widget_tab_assignments SET layout_x = ?, layout_y = ?, layout_w = ?, layout_h = ? WHERE widget_name = ? AND tab_id = ?');
+    const stmt = db.prepare('UPDATE widget_tab_assignments SET layout_x = ?, layout_y = ?, layout_w = ?, layout_h = ? WHERE widget_name = ? AND tab_id = ?');
 
     for (const item of layouts) {
-      updateStmt.run(item.layout_x, item.layout_y, item.layout_w, item.layout_h, item.widget_name, item.tab_id);
+      stmt.run(item.layout_x, item.layout_y, item.layout_w, item.layout_h, item.widget_name, item.tab_id);
     }
 
     return { success: true, message: 'Layouts updated successfully' };
