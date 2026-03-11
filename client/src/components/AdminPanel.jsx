@@ -309,10 +309,21 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
       setWidgetSettings(widgetSettings);
 
-      for (const [widgetName, tabIds] of Object.entries(widgetAssignments)) {
-        await axios.delete(`${API_BASE_URL}/api/widget-assignments/widget/${widgetName}`);
+      const currentResponse = await axios.get(`${API_BASE_URL}/api/widget-assignments`);
+      const currentAssignments = Array.isArray(currentResponse.data) ? currentResponse.data : [];
 
-        for (const tabId of tabIds) {
+      for (const [widgetName, desiredTabIds] of Object.entries(widgetAssignments)) {
+        const existing = currentAssignments.filter(a => a.widget_name === widgetName);
+        const existingTabIds = existing.map(a => a.tab_id);
+
+        const toRemove = existing.filter(a => !desiredTabIds.includes(a.tab_id));
+        const toAdd = desiredTabIds.filter(id => !existingTabIds.includes(id));
+
+        for (const assignment of toRemove) {
+          await axios.delete(`${API_BASE_URL}/api/widget-assignments/${assignment.id}`);
+        }
+
+        for (const tabId of toAdd) {
           await axios.post(`${API_BASE_URL}/api/widget-assignments`, {
             widget_name: widgetName,
             tab_id: tabId,

@@ -4,7 +4,17 @@ import { DragIndicator } from '@mui/icons-material';
 import GridLayout from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
+import axios from 'axios';
+import { API_BASE_URL } from '../utils/apiConfig.js';
 import CountdownCircle from './CountdownCircle';
+
+const WIDGET_ID_TO_NAME = {
+  'calendar-widget': 'calendar',
+  'chores-widget': 'chores',
+  'photos-widget': 'photos',
+  'weather-widget': 'weather',
+  'widget-gallery': 'widgetGallery',
+};
 
 const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange: onLayoutChangeCallback, activeTab = 1 }) => {
   const [containerWidth, setContainerWidth] = useState(1200);
@@ -16,6 +26,27 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
   const containerRef = useRef(null);
   const prevWidgetIdsRef = useRef('');
   const lockedRef = useRef(locked);
+  const saveTimerRef = useRef(null);
+
+  const saveLayoutsToApi = useCallback((layoutItems, tabId) => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      const layouts = layoutItems
+        .filter(item => WIDGET_ID_TO_NAME[item.i])
+        .map(item => ({
+          widget_name: WIDGET_ID_TO_NAME[item.i],
+          tab_id: tabId,
+          layout_x: item.x,
+          layout_y: item.y,
+          layout_w: item.w,
+          layout_h: item.h,
+        }));
+
+      if (layouts.length > 0) {
+        axios.patch(`${API_BASE_URL}/api/widget-assignments/layout/bulk`, { layouts }).catch(() => {});
+      }
+    }, 500);
+  }, []);
 
   // Update container width and grid columns based on screen size
   useEffect(() => {
@@ -46,14 +77,27 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
   }, [locked]);
 
   useEffect(() => {
-    const currentWidgetIds = widgets.map(w => w.id).sort().join(',');
-    if (currentWidgetIds === prevWidgetIdsRef.current) return;
-    prevWidgetIdsRef.current = currentWidgetIds;
+    const currentCacheKey = `${activeTab}:${widgets.map(w => w.id).sort().join(',')}`;
+    if (currentCacheKey === prevWidgetIdsRef.current) return;
+    prevWidgetIdsRef.current = currentCacheKey;
 
     const initialLayout = widgets.map((widget) => {
-      const savedLayout = localStorage.getItem(`widget-layout-${activeTab}-${widget.id}`);
-      if (savedLayout) {
-        const parsed = JSON.parse(savedLayout);
+      if (widget.savedLayout) {
+        return {
+          i: widget.id,
+          x: widget.savedLayout.x ?? widget.defaultPosition.x,
+          y: widget.savedLayout.y ?? widget.defaultPosition.y,
+          w: widget.savedLayout.w || widget.defaultSize.width,
+          h: widget.savedLayout.h || widget.defaultSize.height,
+          minW: widget.minWidth || 3,
+          minH: widget.minHeight || 2,
+          static: lockedRef.current,
+        };
+      }
+
+      const localLayout = localStorage.getItem(`widget-layout-${activeTab}-${widget.id}`);
+      if (localLayout) {
+        const parsed = JSON.parse(localLayout);
         return {
           i: widget.id,
           x: parsed.x ?? widget.defaultPosition.x,
@@ -65,6 +109,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
           static: lockedRef.current,
         };
       }
+
       return {
         i: widget.id,
         x: widget.defaultPosition.x,
@@ -98,6 +143,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
           };
           localStorage.setItem(`widget-layout-${activeTab}-${item.i}`, JSON.stringify(layoutData));
         });
+        saveLayoutsToApi(updatedLayout, activeTab);
       }
 
       return updatedLayout;
@@ -108,7 +154,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
     }, 50);
 
     return () => clearTimeout(timer);
-  }, [locked, activeTab]);
+  }, [locked, activeTab, saveLayoutsToApi]);
 
   // Deselect widget when locked
   useEffect(() => {
@@ -151,6 +197,8 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
       };
       localStorage.setItem(`widget-layout-${activeTab}-${item.i}`, JSON.stringify(layoutData));
     });
+
+    saveLayoutsToApi(updatedLayout, activeTab);
 
     if (onLayoutChangeCallback) {
       onLayoutChangeCallback(newLayout);
@@ -223,7 +271,6 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
               break;
           }
 
-          // Save to localStorage
           const layoutData = {
             x: updatedItem.x,
             y: updatedItem.y,
@@ -241,6 +288,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
         onLayoutChangeCallback(newLayout);
       }
 
+      saveLayoutsToApi(newLayout, activeTab);
       layoutRef.current = newLayout;
       return newLayout;
     });

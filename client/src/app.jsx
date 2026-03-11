@@ -93,7 +93,13 @@ const App = () => {
         if (!groupedAssignments[assignment.widget_name]) {
           groupedAssignments[assignment.widget_name] = [];
         }
-        groupedAssignments[assignment.widget_name].push(assignment.tab_id);
+        groupedAssignments[assignment.widget_name].push({
+          tab_id: assignment.tab_id,
+          layout_x: assignment.layout_x,
+          layout_y: assignment.layout_y,
+          layout_w: assignment.layout_w,
+          layout_h: assignment.layout_h,
+        });
       });
 
       setWidgetAssignments(groupedAssignments);
@@ -211,19 +217,29 @@ const App = () => {
     if (!assignments || assignments.length === 0) {
       return tabId === 1;
     }
-    return assignments.includes(tabId);
+    return assignments.some(a => a.tab_id === tabId);
+  };
+
+  const getWidgetLayoutForTab = (widgetName, tabId) => {
+    const assignments = widgetAssignments[widgetName];
+    if (!assignments) return null;
+    const match = assignments.find(a => a.tab_id === tabId);
+    if (!match || match.layout_x == null) return null;
+    return { x: match.layout_x, y: match.layout_y, w: match.layout_w, h: match.layout_h };
   };
 
   const widgets = useMemo(() => {
     const result = [];
 
     if (widgetSettings.calendar.enabled && isWidgetAssignedToTab('calendar', activeTab)) {
+      const dbLayout = getWidgetLayoutForTab('calendar', activeTab);
       result.push({
         id: 'calendar-widget',
         defaultPosition: { x: 0, y: 0 },
         defaultSize: { width: 8, height: 5 },
         minWidth: 2,
         minHeight: 2,
+        savedLayout: dbLayout,
         content: <CalendarWidget
           transparentBackground={widgetSettings.calendar.transparent}
           icsCalendarUrl={apiKeys.ICS_CALENDAR_URL}
@@ -232,12 +248,14 @@ const App = () => {
     }
 
     if (widgetSettings.weather.enabled && isWidgetAssignedToTab('weather', activeTab)) {
+      const dbLayout = getWidgetLayoutForTab('weather', activeTab);
       result.push({
         id: 'weather-widget',
         defaultPosition: { x: 8, y: 0 },
         defaultSize: { width: 4, height: 3 },
         minWidth: 2,
         minHeight: 2,
+        savedLayout: dbLayout,
         content: <WeatherWidget
           transparentBackground={widgetSettings.weather.transparent}
           weatherApiKey={apiKeys.WEATHER_API_KEY}
@@ -246,23 +264,27 @@ const App = () => {
     }
 
     if (widgetSettings.chores.enabled && isWidgetAssignedToTab('chores', activeTab)) {
+      const dbLayout = getWidgetLayoutForTab('chores', activeTab);
       result.push({
         id: 'chores-widget',
         defaultPosition: { x: 0, y: 5 },
         defaultSize: { width: 6, height: 4 },
         minWidth: 2,
         minHeight: 2,
+        savedLayout: dbLayout,
         content: <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />,
       });
     }
 
     if (widgetSettings.photos.enabled && isWidgetAssignedToTab('photos', activeTab)) {
+      const dbLayout = getWidgetLayoutForTab('photos', activeTab);
       result.push({
         id: 'photos-widget',
         defaultPosition: { x: 6, y: 5 },
         defaultSize: { width: 6, height: 4 },
         minWidth: 2,
         minHeight: 2,
+        savedLayout: dbLayout,
         content: <PhotoWidget transparentBackground={widgetSettings.photos.transparent} />,
       });
     }

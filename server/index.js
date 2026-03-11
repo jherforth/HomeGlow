@@ -2217,6 +2217,52 @@ fastify.delete('/api/widget-assignments/widget/:widgetName', async (request, rep
   }
 });
 
+fastify.patch('/api/widget-assignments/layout', async (request, reply) => {
+  const { widget_name, tab_id, layout_x, layout_y, layout_w, layout_h } = request.body;
+
+  if (!widget_name || !tab_id) {
+    return reply.status(400).send({ error: 'widget_name and tab_id are required' });
+  }
+
+  try {
+    const existing = db.prepare('SELECT id FROM widget_tab_assignments WHERE widget_name = ? AND tab_id = ?').get(widget_name, tab_id);
+
+    if (!existing) {
+      return reply.status(404).send({ error: 'Assignment not found' });
+    }
+
+    const stmt = db.prepare('UPDATE widget_tab_assignments SET layout_x = ?, layout_y = ?, layout_w = ?, layout_h = ? WHERE widget_name = ? AND tab_id = ?');
+    stmt.run(layout_x, layout_y, layout_w, layout_h, widget_name, tab_id);
+
+    const updated = db.prepare('SELECT * FROM widget_tab_assignments WHERE widget_name = ? AND tab_id = ?').get(widget_name, tab_id);
+    return updated;
+  } catch (error) {
+    console.error('Error updating widget layout:', error);
+    reply.status(500).send({ error: 'Failed to update widget layout' });
+  }
+});
+
+fastify.patch('/api/widget-assignments/layout/bulk', async (request, reply) => {
+  const { layouts } = request.body;
+
+  if (!Array.isArray(layouts) || layouts.length === 0) {
+    return reply.status(400).send({ error: 'layouts array is required' });
+  }
+
+  try {
+    const stmt = db.prepare('UPDATE widget_tab_assignments SET layout_x = ?, layout_y = ?, layout_w = ?, layout_h = ? WHERE widget_name = ? AND tab_id = ?');
+
+    for (const item of layouts) {
+      stmt.run(item.layout_x, item.layout_y, item.layout_w, item.layout_h, item.widget_name, item.tab_id);
+    }
+
+    return { success: true, message: 'Layouts updated successfully' };
+  } catch (error) {
+    console.error('Error updating widget layouts:', error);
+    reply.status(500).send({ error: 'Failed to update widget layouts' });
+  }
+});
+
 // DEBUG: Specific endpoint to test API key saving
 fastify.post('/api/test-api-key', async (request, reply) => {
   const { apiKey } = request.body;
