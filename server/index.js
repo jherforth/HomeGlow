@@ -1822,13 +1822,8 @@ fastify.get('/api/users', async (request, reply) => {
 
     const usersWithClams = users.map(user => {
       const clamResult = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(user.id);
-      let profilePicture = user.profile_picture;
-      if (profilePicture && !profilePicture.startsWith('http') && !profilePicture.startsWith('/')) {
-        profilePicture = `/Uploads/users/${profilePicture}`;
-      }
       return {
         ...user,
-        profile_picture: profilePicture,
         clam_total: clamResult.total
       };
     });
