@@ -2202,9 +2202,13 @@ fastify.delete('/api/devices/:deviceGuid/tabs/:id', async (request, reply) => {
 });
 
 // Widget Tab Assignments API Endpoints
-fastify.get('/api/widget-assignments', async (request, reply) => {
+fastify.get('/api/devices/:deviceGuid/widget-assignments', async (request, reply) => {
+  const { deviceGuid } = request.params;
+  if (!deviceGuid) {
+    return reply.status(400).send({ error: 'deviceGuid is required' });
+  }
   try {
-    const assignments = db.prepare('SELECT * FROM widget_tab_assignments').all();
+    const assignments = db.prepare('SELECT * FROM widget_tab_assignments WHERE deviceGuid = ?').all(deviceGuid);
     return assignments;
   } catch (error) {
     console.error('Error fetching widget assignments:', error);
@@ -2212,24 +2216,29 @@ fastify.get('/api/widget-assignments', async (request, reply) => {
   }
 });
 
-fastify.post('/api/widget-assignments', async (request, reply) => {
+fastify.post('/api/devices/:deviceGuid/widget-assignments', async (request, reply) => {
+  const { deviceGuid } = request.params;
+  if (!deviceGuid) {
+    return reply.status(400).send({ error: 'deviceGuid is required' });
+  }
   const { widget_name, tab_id } = request.body;
-
   if (!widget_name || !tab_id) {
     return reply.status(400).send({ error: 'widget_name and tab_id are required' });
   }
 
   try {
-    const existing = db.prepare('SELECT id FROM widget_tab_assignments WHERE widget_name = ? AND tab_id = ?').get(widget_name, tab_id);
+    ensureDeviceExists(deviceGuid);
+    const existing = db.prepare('SELECT id FROM widget_tab_assignments WHERE widget_name = ? AND tab_id = ? AND deviceGuid = ?').get(widget_name, tab_id, deviceGuid);
 
     if (existing) {
       return reply.status(400).send({ error: 'Assignment already exists' });
     }
 
-    const stmt = db.prepare('INSERT INTO widget_tab_assignments (widget_name, tab_id) VALUES (?, ?)');
-    const result = stmt.run(widget_name, tab_id);
+    const stmt = db.prepare('INSERT INTO widget_tab_assignments (widget_name, tab_id, deviceGuid) VALUES (?, ?, ?)');
+    const result = stmt.run(widget_name, tab_id, deviceGuid);
+    touchDeviceUpdateTime(deviceGuid);
 
-    const newAssignment = db.prepare('SELECT * FROM widget_tab_assignments WHERE id = ?').get(result.lastInsertRowid);
+    const newAssignment = db.prepare('SELECT * FROM widget_tab_assignments WHERE id = ? AND deviceGuid = ?').get(result.lastInsertRowid, deviceGuid);
     return newAssignment;
   } catch (error) {
     console.error('Error creating widget assignment:', error);
@@ -2237,12 +2246,17 @@ fastify.post('/api/widget-assignments', async (request, reply) => {
   }
 });
 
-fastify.delete('/api/widget-assignments/:id', async (request, reply) => {
-  const { id } = request.params;
+fastify.delete('/api/devices/:deviceGuid/widget-assignments/:id', async (request, reply) => {
+  const { id, deviceGuid } = request.params;
+  if (!deviceGuid) {
+    return reply.status(400).send({ error: 'deviceGuid is required' });
+  }
 
   try {
-    const stmt = db.prepare('DELETE FROM widget_tab_assignments WHERE id = ?');
-    stmt.run(id);
+    ensureDeviceExists(deviceGuid);
+    const stmt = db.prepare('DELETE FROM widget_tab_assignments WHERE id = ? AND deviceGuid = ?');
+    stmt.run(id, deviceGuid);
+    touchDeviceUpdateTime(deviceGuid);
     return { success: true, message: 'Assignment deleted successfully' };
   } catch (error) {
     console.error('Error deleting widget assignment:', error);
@@ -2250,12 +2264,17 @@ fastify.delete('/api/widget-assignments/:id', async (request, reply) => {
   }
 });
 
-fastify.delete('/api/widget-assignments/widget/:widgetName', async (request, reply) => {
-  const { widgetName } = request.params;
+fastify.delete('/api/devices/:deviceGuid/widget-assignments/widget/:widgetName', async (request, reply) => {
+  const { widgetName, deviceGuid } = request.params;
+  if (!deviceGuid) {
+    return reply.status(400).send({ error: 'deviceGuid is required' });
+  }
 
   try {
-    const stmt = db.prepare('DELETE FROM widget_tab_assignments WHERE widget_name = ?');
-    stmt.run(widgetName);
+    ensureDeviceExists(deviceGuid);
+    const stmt = db.prepare('DELETE FROM widget_tab_assignments WHERE widget_name = ? AND deviceGuid = ?');
+    stmt.run(widgetName, deviceGuid);
+    touchDeviceUpdateTime(deviceGuid);
     return { success: true, message: 'Widget assignments deleted successfully' };
   } catch (error) {
     console.error('Error deleting widget assignments:', error);
@@ -2263,7 +2282,11 @@ fastify.delete('/api/widget-assignments/widget/:widgetName', async (request, rep
   }
 });
 
-fastify.patch('/api/widget-assignments/layout', async (request, reply) => {
+fastify.patch('/api/devices/:deviceGuid/widget-assignments/layout', async (request, reply) => {
+  const { deviceGuid } = request.params;
+  if (!deviceGuid) {
+    return reply.status(400).send({ error: 'deviceGuid is required' });
+  }
   const { widget_name, tab_id, layout_x, layout_y, layout_w, layout_h } = request.body;
 
   if (!widget_name || !tab_id) {
@@ -2271,16 +2294,18 @@ fastify.patch('/api/widget-assignments/layout', async (request, reply) => {
   }
 
   try {
-    const existing = db.prepare('SELECT id FROM widget_tab_assignments WHERE widget_name = ? AND tab_id = ?').get(widget_name, tab_id);
+    ensureDeviceExists(deviceGuid);
+    const existing = db.prepare('SELECT id FROM widget_tab_assignments WHERE widget_name = ? AND tab_id = ? AND deviceGuid = ?').get(widget_name, tab_id, deviceGuid);
 
     if (!existing) {
       return reply.status(404).send({ error: 'Assignment not found' });
     }
 
-    const stmt = db.prepare('UPDATE widget_tab_assignments SET layout_x = ?, layout_y = ?, layout_w = ?, layout_h = ? WHERE widget_name = ? AND tab_id = ?');
-    stmt.run(layout_x, layout_y, layout_w, layout_h, widget_name, tab_id);
+    const stmt = db.prepare('UPDATE widget_tab_assignments SET layout_x = ?, layout_y = ?, layout_w = ?, layout_h = ? WHERE widget_name = ? AND tab_id = ? AND deviceGuid = ?');
+    stmt.run(layout_x, layout_y, layout_w, layout_h, widget_name, tab_id, deviceGuid);
 
-    const updated = db.prepare('SELECT * FROM widget_tab_assignments WHERE widget_name = ? AND tab_id = ?').get(widget_name, tab_id);
+    const updated = db.prepare('SELECT * FROM widget_tab_assignments WHERE widget_name = ? AND tab_id = ? AND deviceGuid = ?').get(widget_name, tab_id, deviceGuid);
+    touchDeviceUpdateTime(deviceGuid);
     return updated;
   } catch (error) {
     console.error('Error updating widget layout:', error);
@@ -2288,20 +2313,24 @@ fastify.patch('/api/widget-assignments/layout', async (request, reply) => {
   }
 });
 
-fastify.patch('/api/widget-assignments/layout/bulk', async (request, reply) => {
+fastify.patch('/api/devices/:deviceGuid/widget-assignments/layout/bulk', async (request, reply) => {
+  const { deviceGuid } = request.params;
+  if (!deviceGuid) {
+    return reply.status(400).send({ error: 'deviceGuid is required' });
+  }
   const { layouts } = request.body;
-
   if (!Array.isArray(layouts) || layouts.length === 0) {
     return reply.status(400).send({ error: 'layouts array is required' });
   }
 
   try {
-    const stmt = db.prepare('UPDATE widget_tab_assignments SET layout_x = ?, layout_y = ?, layout_w = ?, layout_h = ? WHERE widget_name = ? AND tab_id = ?');
+    ensureDeviceExists(deviceGuid);
+    const stmt = db.prepare('UPDATE widget_tab_assignments SET layout_x = ?, layout_y = ?, layout_w = ?, layout_h = ? WHERE widget_name = ? AND tab_id = ? AND deviceGuid = ?');
 
     for (const item of layouts) {
-      stmt.run(item.layout_x, item.layout_y, item.layout_w, item.layout_h, item.widget_name, item.tab_id);
+      stmt.run(item.layout_x, item.layout_y, item.layout_w, item.layout_h, item.widget_name, item.tab_id, deviceGuid);
     }
-
+    touchDeviceUpdateTime(deviceGuid);
     return { success: true, message: 'Layouts updated successfully' };
   } catch (error) {
     console.error('Error updating widget layouts:', error);
