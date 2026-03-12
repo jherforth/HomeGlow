@@ -18,9 +18,11 @@ import TabIconModal from './components/TabIconModal.jsx';
 import ScreenSaver from './components/ScreenSaver.jsx';
 import ScreensaverCountdown from './components/ScreensaverCountdown.jsx';
 import { API_BASE_URL } from './utils/apiConfig.js';
+import { getDeviceApiBase } from './utils/deviceGuid.js';
 import './index.css';
 
 const App = () => {
+  const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [theme, setTheme] = useState('light');
   const [widgetsLocked, setWidgetsLocked] = useState(() => {
     const saved = localStorage.getItem('widgetsLocked');
@@ -121,7 +123,7 @@ const App = () => {
 
   const fetchTabs = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/tabs`);
+      const response = await axios.get(`${API_DEVICE_URL}/tabs`);
       setTabs(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching tabs:', error);
@@ -131,7 +133,7 @@ const App = () => {
 
   const fetchWidgetAssignments = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/widget-assignments`);
+      const response = await axios.get(`${API_DEVICE_URL}/widget-assignments`);
       const assignments = Array.isArray(response.data) ? response.data : [];
 
       const groupedAssignments = {};
@@ -314,7 +316,7 @@ const App = () => {
 
   const handleSaveTab = async (tabData) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/tabs`, tabData);
+      const response = await axios.post(`${API_DEVICE_URL}/tabs`, tabData);
       await fetchTabs();
       setShowTabIconModal(false);
     } catch (error) {
@@ -329,7 +331,7 @@ const App = () => {
     }
 
     try {
-      await axios.delete(`${API_BASE_URL}/api/tabs/${tabId}`);
+      await axios.delete(`${API_DEVICE_URL}/tabs/${tabId}`);
       await fetchTabs();
       await fetchWidgetAssignments();
 

@@ -67,11 +67,13 @@ import {
 import ColorPickerPopover from './ColorPickerPopover';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
+import { getDeviceApiBase} from '../utils/deviceGuid.js';
 import PinModal from './PinModal';
 import ChoreSchedulesTab from './ChoreSchedulesTab';
 import ChoreHistoryTab from './ChoreHistoryTab';
 
 const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
+  const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [activeTab, setActiveTab] = useState(0);
   const [choresSubTab, setChoresSubTab] = useState(0);
   const [widgetsSubTab, setWidgetsSubTab] = useState(0);
@@ -256,7 +258,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
 
   const fetchTabs = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/tabs`);
+      const response = await axios.get(`${API_DEVICE_URL}/tabs`);
       setTabs(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching tabs:', error);
@@ -266,7 +268,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
 
   const fetchWidgetAssignments = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/widget-assignments`);
+      const response = await axios.get(`${API_DEVICE_URL}/widget-assignments`);
       const assignments = Array.isArray(response.data) ? response.data : [];
 
       const coreAssignments = {};
@@ -350,7 +352,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
       localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
       setWidgetSettings(widgetSettings);
 
-      const currentResponse = await axios.get(`${API_BASE_URL}/api/widget-assignments`);
+      const currentResponse = await axios.get(`${API_DEVICE_URL}/widget-assignments`);
       const currentAssignments = Array.isArray(currentResponse.data) ? currentResponse.data : [];
 
       for (const [widgetName, desiredTabIds] of Object.entries(widgetAssignments)) {
@@ -361,11 +363,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
         const toAdd = desiredTabIds.filter(id => !existingTabIds.includes(id));
 
         for (const assignment of toRemove) {
-          await axios.delete(`${API_BASE_URL}/api/widget-assignments/${assignment.id}`);
+          await axios.delete(`${API_DEVICE_URL}/widget-assignments/${assignment.id}`);
         }
 
         for (const tabId of toAdd) {
-          await axios.post(`${API_BASE_URL}/api/widget-assignments`, {
+          await axios.post(`${API_DEVICE_URL}/widget-assignments`, {
             widget_name: widgetName,
             tab_id: tabId,
           });
@@ -388,7 +390,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
     try {
       localStorage.setItem('pluginSettings', JSON.stringify(pluginSettings));
 
-      const currentResponse = await axios.get(`${API_BASE_URL}/api/widget-assignments`);
+      const currentResponse = await axios.get(`${API_DEVICE_URL}/widget-assignments`);
       const currentAssignments = Array.isArray(currentResponse.data) ? currentResponse.data : [];
 
       for (const [pluginWidgetName, desiredTabIds] of Object.entries(pluginAssignments)) {
@@ -399,11 +401,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
         const toAdd = desiredTabIds.filter(id => !existingTabIds.includes(id));
 
         for (const assignment of toRemove) {
-          await axios.delete(`${API_BASE_URL}/api/widget-assignments/${assignment.id}`);
+          await axios.delete(`${API_DEVICE_URL}/widget-assignments/${assignment.id}`);
         }
 
         for (const tabId of toAdd) {
-          await axios.post(`${API_BASE_URL}/api/widget-assignments`, {
+          await axios.post(`${API_DEVICE_URL}/widget-assignments`, {
             widget_name: pluginWidgetName,
             tab_id: tabId,
           });
@@ -641,7 +643,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
         setIsLoading(true);
         await axios.delete(`${API_BASE_URL}/api/widgets/${filename}`);
         const pluginWidgetName = `plugin:${filename}`;
-        await axios.delete(`${API_BASE_URL}/api/widget-assignments/widget/${encodeURIComponent(pluginWidgetName)}`).catch(() => {});
+        await axios.delete(`${API_DEVICE_URL}/widget-assignments/widget/${encodeURIComponent(pluginWidgetName)}`).catch(() => {});
         setPluginSettings(prev => {
           const updated = { ...prev };
           delete updated[filename];

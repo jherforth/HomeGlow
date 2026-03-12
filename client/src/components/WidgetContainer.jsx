@@ -6,6 +6,7 @@ import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
+import { getDeviceApiBase } from '../utils/deviceGuid.js';
 import CountdownCircle from './CountdownCircle';
 
 const CORE_WIDGET_ID_TO_NAME = {
@@ -22,6 +23,7 @@ const resolveWidgetName = (widgetId) => {
 };
 
 const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange: onLayoutChangeCallback, activeTab = 1 }) => {
+  const API_DEVICE_URL = getDeviceApiBase();
   const [containerWidth, setContainerWidth] = useState(1200);
   const [gridCols, setGridCols] = useState(12);
   const [selectedWidget, setSelectedWidget] = useState(null);
@@ -48,7 +50,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
         }));
 
       if (layouts.length > 0) {
-        axios.patch(`${API_BASE_URL}/api/widget-assignments/layout/bulk`, { layouts }).catch(() => {});
+        axios.patch(`${API_DEVICE_URL}/widget-assignments/layout/bulk`, { layouts }).catch(() => {});
       }
     }, 500);
   }, []);
