@@ -62,18 +62,21 @@ import {
   Nightlight,
   Tab as TabIcon,
   PhotoLibrary,
-  Info
+  Info,
+  ArrowForward,
+  ContentCopy
 } from '@mui/icons-material';
 import ColorPickerPopover from './ColorPickerPopover';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
-import { getDeviceApiBase} from '../utils/deviceGuid.js';
+import { getDeviceApiBase, getDeviceGuid } from '../utils/deviceGuid.js';
 import PinModal from './PinModal';
 import ChoreSchedulesTab from './ChoreSchedulesTab';
 import ChoreHistoryTab from './ChoreHistoryTab';
 
 const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
+  const currentClientGuid = getDeviceGuid();
   const [activeTab, setActiveTab] = useState(0);
   const [choresSubTab, setChoresSubTab] = useState(0);
   const [widgetsSubTab, setWidgetsSubTab] = useState(0);
@@ -112,6 +115,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
   const [checkingPin, setCheckingPin] = useState(true);
   const [tabs, setTabs] = useState([]);
   const [widgetAssignments, setWidgetAssignments] = useState({});
+  const [devices, setDevices] = useState([]);
   const [pluginSettings, setPluginSettings] = useState(() => {
     const saved = localStorage.getItem('pluginSettings');
     return saved ? JSON.parse(saved) : {};
@@ -175,6 +179,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
       fetchUploadedWidgets();
       fetchTabs();
       fetchWidgetAssignments();
+      fetchDevices();
       fetchPhotoSources();
     }
   }, [isAuthenticated]);
@@ -293,6 +298,80 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
       console.error('Error fetching widget assignments:', error);
       setWidgetAssignments({});
       setPluginAssignments({});
+    }
+  };
+
+  const fetchDevices = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/devices`);
+      setDevices(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Error fetching devices:', error);
+      setDevices([]);
+    }
+  };
+
+  const handleTakeOverDevice = async (targetGuid) => {
+    const currentDeviceGuid = getDeviceGuid();
+
+    if (targetGuid === currentDeviceGuid) {
+      setSaveMessage({ show: true, type: 'info', text: 'Selected device is already the current device.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await axios.delete(`${API_BASE_URL}/api/devices/${encodeURIComponent(currentDeviceGuid)}`).catch(() => {});
+      await axios.patch(`${API_BASE_URL}/api/devices/${encodeURIComponent(targetGuid)}`, {
+        deviceGuid: currentDeviceGuid,
+      });
+
+      await Promise.all([fetchDevices(), fetchTabs(), fetchWidgetAssignments()]);
+      setSaveMessage({ show: true, type: 'success', text: 'Device takeover completed.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error taking over device:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to take over device.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCopyDevice = async (targetGuid) => {
+    setIsLoading(true);
+    try {
+      await axios.get(`${API_BASE_URL}/api/devices/${encodeURIComponent(targetGuid)}/copy`);
+      await fetchDevices();
+      setSaveMessage({ show: true, type: 'success', text: 'Device copied successfully.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error copying device:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to copy device.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteDevice = async (deviceGuid) => {
+    if (!window.confirm(`Delete device ${deviceGuid}? This will remove its tabs and widget assignments.`)) {
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await axios.delete(`${API_BASE_URL}/api/devices/${encodeURIComponent(deviceGuid)}`);
+      await fetchDevices();
+      setSaveMessage({ show: true, type: 'success', text: 'Device deleted successfully.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error deleting device:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to delete device.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -952,6 +1031,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
               <Tabs value={widgetsSubTab} onChange={(_, v) => setWidgetsSubTab(v)} size="small">
                 <Tab label="Widgets" />
                 <Tab label="Plugins" />
+                <Tab label="Devices" />
               </Tabs>
             </Box>
 
@@ -1427,6 +1507,86 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
                     </Button>
                   </>
                 )}
+              </>
+            )}
+
+            {widgetsSubTab === 2 && (
+              <>
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  Manage device profiles and transfer/copy widget assignment ownership.
+                </Alert>
+
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  Current client GUID: {currentClientGuid}
+                </Alert>
+
+                <TableContainer component={Paper}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Device Guid</TableCell>
+                        <TableCell>Update Time</TableCell>
+                        <TableCell align="right">Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {devices.map((device) => (
+                        <TableRow key={device.deviceGuid}>
+                          <TableCell>{device.deviceGuid}</TableCell>
+                          <TableCell>{device.updateTime}</TableCell>
+                          <TableCell align="right">
+                            <Tooltip title="Take over">
+                              <span>
+                                <IconButton
+                                  aria-label="Take over"
+                                  onClick={() => handleTakeOverDevice(device.deviceGuid)}
+                                  size="small"
+                                  disabled={isLoading}
+                                >
+                                  <ArrowForward fontSize="small" />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+
+                            <Tooltip title="Copy">
+                              <span>
+                                <IconButton
+                                  aria-label="Copy"
+                                  onClick={() => handleCopyDevice(device.deviceGuid)}
+                                  size="small"
+                                  disabled={isLoading}
+                                >
+                                  <ContentCopy fontSize="small" />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+
+                            <Tooltip title="Delete">
+                              <span>
+                                <IconButton
+                                  aria-label="Delete"
+                                  onClick={() => handleDeleteDevice(device.deviceGuid)}
+                                  size="small"
+                                  color="error"
+                                  disabled={isLoading}
+                                >
+                                  <Delete fontSize="small" />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {devices.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={3} align="center">
+                            No devices found.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
               </>
             )}
           </CardContent>

@@ -2206,6 +2206,133 @@ fastify.post('/api/settings', async (request, reply) => {
   }
 });
 
+// Devices management API Endpoints
+fastify.get('/api/devices', async (request, reply) => {
+  try {
+    const devices = db.prepare('SELECT deviceGuid, updateTime FROM devices ORDER BY updateTime DESC').all();
+    return devices;
+  } catch (error) {
+    console.error('Error fetching devices:', error);
+    reply.status(500).send({ error: 'Failed to fetch devices' });
+  }
+});
+
+fastify.delete('/api/devices/:deviceGuid', async (request, reply) => {
+  const { deviceGuid } = request.params;
+
+  if (!deviceGuid) {
+    return reply.status(400).send({ error: 'deviceGuid is required' });
+  }
+
+  try {
+    const existingDevice = db.prepare('SELECT deviceGuid FROM devices WHERE deviceGuid = ?').get(deviceGuid);
+    if (!existingDevice) {
+      return reply.status(404).send({ error: 'Device not found' });
+    }
+
+    db.exec('BEGIN');
+    try {
+      db.prepare('DELETE FROM widget_tab_assignments WHERE deviceGuid = ?').run(deviceGuid);
+      db.prepare('DELETE FROM tabs WHERE deviceGuid = ?').run(deviceGuid);
+      db.prepare('DELETE FROM devices WHERE deviceGuid = ?').run(deviceGuid);
+      db.exec('COMMIT');
+    } catch (deleteError) {
+      db.exec('ROLLBACK');
+      throw deleteError;
+    }
+
+    return { success: true, message: 'Device deleted successfully' };
+  } catch (error) {
+    console.error('Error deleting device:', error);
+    reply.status(500).send({ error: 'Failed to delete device' });
+  }
+});
+
+fastify.patch('/api/devices/:targetGuid', async (request, reply) => {
+  const { targetGuid } = request.params;
+  const { deviceGuid } = request.body || {};
+
+  if (!targetGuid || !deviceGuid) {
+    return reply.status(400).send({ error: 'targetGuid and deviceGuid are required' });
+  }
+
+  try {
+    const targetDevice = db.prepare('SELECT deviceGuid FROM devices WHERE deviceGuid = ?').get(targetGuid);
+    if (!targetDevice) {
+      return reply.status(404).send({ error: 'Target device not found' });
+    }
+
+    const conflictingDevice = db.prepare('SELECT deviceGuid FROM devices WHERE deviceGuid = ?').get(deviceGuid);
+    if (conflictingDevice && deviceGuid !== targetGuid) {
+      return reply.status(409).send({ error: 'Destination deviceGuid already exists' });
+    }
+
+    db.exec('BEGIN');
+    try {
+      if (deviceGuid !== targetGuid) {
+        db.prepare('INSERT OR IGNORE INTO devices (deviceGuid, updateTime) VALUES (?, CURRENT_TIMESTAMP)').run(deviceGuid);
+        db.prepare('UPDATE tabs SET deviceGuid = ? WHERE deviceGuid = ?').run(deviceGuid, targetGuid);
+        db.prepare('UPDATE widget_tab_assignments SET deviceGuid = ? WHERE deviceGuid = ?').run(deviceGuid, targetGuid);
+        db.prepare('DELETE FROM devices WHERE deviceGuid = ?').run(targetGuid);
+      }
+
+      touchDeviceUpdateTime(deviceGuid);
+      db.exec('COMMIT');
+    } catch (patchError) {
+      db.exec('ROLLBACK');
+      throw patchError;
+    }
+
+    const updated = db.prepare('SELECT deviceGuid, updateTime FROM devices WHERE deviceGuid = ?').get(deviceGuid);
+    return updated;
+  } catch (error) {
+    console.error('Error updating device:', error);
+    reply.status(500).send({ error: 'Failed to update device' });
+  }
+});
+
+fastify.get('/api/devices/:targetGuid/copy', async (request, reply) => {
+  const { targetGuid } = request.params;
+
+  if (!targetGuid) {
+    return reply.status(400).send({ error: 'targetGuid is required' });
+  }
+
+  const deviceGuid = targetGuid.replace(/^copy-/, '').replace(/\d{4}-\d{2}-\d{2}.*/, '');
+  const copyGuid = `copy-${deviceGuid}-${new Date().toISOString()}`;
+
+  try {
+    const sourceDevice = db.prepare('SELECT deviceGuid, updateTime FROM devices WHERE deviceGuid = ?').get(targetGuid);
+    if (!sourceDevice) {
+      return reply.status(404).send({ error: 'Target device not found' });
+    }
+
+    db.exec('BEGIN');
+    try {
+      db.prepare('INSERT INTO devices (deviceGuid, updateTime) VALUES (?, ?)').run(copyGuid, sourceDevice.updateTime);
+
+      db.prepare(`
+        INSERT INTO widget_tab_assignments (deviceGuid, widget_name, tab_id, layout_x, layout_y, layout_w, layout_h)
+        SELECT ? as deviceGuid, widget_name, tab_id, layout_x, layout_y, layout_w, layout_h
+        FROM widget_tab_assignments
+        WHERE deviceGuid = ?
+      `).run(copyGuid, targetGuid);
+
+      touchDeviceUpdateTime(copyGuid);
+      db.exec('COMMIT');
+    } catch (copyError) {
+      db.exec('ROLLBACK');
+      throw copyError;
+    }
+
+    const copied = db.prepare('SELECT deviceGuid, updateTime FROM devices WHERE deviceGuid = ?').get(copyGuid);
+    return { success: true, device: copied };
+  } catch (error) {
+    console.error('Error copying device:', error);
+    reply.status(500).send({ error: 'Failed to copy device' });
+  }
+});
+
 // Tabs API Endpoints
 fastify.get('/api/devices/:deviceGuid/tabs', async (request, reply) => {
   const { deviceGuid } = request.params;
