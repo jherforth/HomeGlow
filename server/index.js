@@ -583,6 +583,7 @@ async function initializeDatabase() {
     await fs.mkdir(path.dirname(dbPath), { recursive: true });
     await fs.chmod(path.dirname(dbPath), 0o777); // Ensure directory is writable
     const newDb = new Database(dbPath, { verbose: console.log });
+    newDb.pragma('foreign_keys = ON');
     newDb.exec(`
       CREATE TABLE IF NOT EXISTS chores (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1022,6 +1023,130 @@ async function migrateToDurationField() {
 
   } catch (error) {
     console.error('=== Duration migration failed ===');
+    console.error('Error:', error);
+    throw error;
+  }
+}
+
+async function migrateDeviceSchemaV6() {
+  const targetVersion = 6;
+  const legacyDeviceGuid = 'legacy-default-device';
+  const schemaIdKey = 'SYSTEM_SCHEMA_ID';
+
+  try {
+    console.log(`=== Checking device schema migration (${schemaIdKey}) ===`);
+
+    const schemaVersionRow = db.prepare('SELECT value FROM settings WHERE key = ?').get(schemaIdKey);
+    const currentVersion = schemaVersionRow ? parseInt(schemaVersionRow.value, 10) : 0;
+
+    if (currentVersion >= targetVersion) {
+      console.log(`Device schema migration already completed (version: ${currentVersion})`);
+      return;
+    }
+
+    console.log(`=== Starting device schema migration to version ${targetVersion} ===`);
+
+    db.exec('PRAGMA foreign_keys = OFF');
+    db.exec('BEGIN');
+
+    try {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS devices (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          deviceGuid TEXT NOT NULL UNIQUE,
+          updateTime TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_devices_device_guid ON devices(deviceGuid);
+      `);
+
+      db.prepare('INSERT OR IGNORE INTO devices (deviceGuid, updateTime) VALUES (?, CURRENT_TIMESTAMP)').run(legacyDeviceGuid);
+
+      const tabColumns = db.prepare('PRAGMA table_info(tabs)').all();
+      const hasTabDeviceGuid = tabColumns.some(col => col.name === 'deviceGuid');
+
+      if (!hasTabDeviceGuid) {
+        db.exec(`
+          CREATE TABLE tabs_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            deviceGuid TEXT NOT NULL,
+            label TEXT NOT NULL,
+            icon TEXT NOT NULL,
+            show_label INTEGER DEFAULT 1,
+            order_position INTEGER NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (deviceGuid) REFERENCES devices(deviceGuid) ON DELETE CASCADE ON UPDATE CASCADE
+          );
+
+          INSERT INTO tabs_new (id, deviceGuid, label, icon, show_label, order_position, created_at)
+          SELECT id, '${legacyDeviceGuid}', label, icon, show_label, order_position, created_at
+          FROM tabs;
+
+          DROP TABLE tabs;
+          ALTER TABLE tabs_new RENAME TO tabs;
+        `);
+      } else {
+        db.prepare('UPDATE tabs SET deviceGuid = ? WHERE deviceGuid IS NULL OR deviceGuid = ?').run(legacyDeviceGuid, '');
+      }
+
+      db.exec('CREATE INDEX IF NOT EXISTS idx_tabs_device_guid ON tabs(deviceGuid);');
+
+      const homeTabForLegacy = db.prepare('SELECT id FROM tabs WHERE deviceGuid = ? AND order_position = 0 LIMIT 1').get(legacyDeviceGuid);
+      if (!homeTabForLegacy) {
+        db.prepare('INSERT INTO tabs (deviceGuid, label, icon, show_label, order_position) VALUES (?, ?, ?, ?, ?)').run(legacyDeviceGuid, 'Home', 'home', 1, 0);
+      }
+
+      const assignmentColumns = db.prepare('PRAGMA table_info(widget_tab_assignments)').all();
+      const hasAssignmentDeviceGuid = assignmentColumns.some(col => col.name === 'deviceGuid');
+
+      if (!hasAssignmentDeviceGuid) {
+        db.exec(`
+          CREATE TABLE widget_tab_assignments_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            deviceGuid TEXT NOT NULL,
+            widget_name TEXT NOT NULL,
+            tab_id INTEGER NOT NULL,
+            layout_x INTEGER,
+            layout_y INTEGER,
+            layout_w INTEGER,
+            layout_h INTEGER,
+            FOREIGN KEY (deviceGuid) REFERENCES devices(deviceGuid) ON DELETE CASCADE ON UPDATE CASCADE,
+            FOREIGN KEY (tab_id) REFERENCES tabs(id) ON DELETE CASCADE
+          );
+
+          INSERT INTO widget_tab_assignments_new (id, deviceGuid, widget_name, tab_id, layout_x, layout_y, layout_w, layout_h)
+          SELECT w.id, COALESCE(t.deviceGuid, '${legacyDeviceGuid}'), w.widget_name, w.tab_id, w.layout_x, w.layout_y, w.layout_w, w.layout_h
+          FROM widget_tab_assignments w
+          LEFT JOIN tabs t ON t.id = w.tab_id;
+
+          DROP TABLE widget_tab_assignments;
+          ALTER TABLE widget_tab_assignments_new RENAME TO widget_tab_assignments;
+        `);
+      } else {
+        db.prepare(`
+          UPDATE widget_tab_assignments
+          SET deviceGuid = COALESCE((SELECT t.deviceGuid FROM tabs t WHERE t.id = widget_tab_assignments.tab_id), ?)
+          WHERE deviceGuid IS NULL OR deviceGuid = ?
+        `).run(legacyDeviceGuid, '');
+      }
+
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_widget_tab_assignments_widget ON widget_tab_assignments(widget_name);
+        CREATE INDEX IF NOT EXISTS idx_widget_tab_assignments_tab ON widget_tab_assignments(tab_id);
+        CREATE INDEX IF NOT EXISTS idx_widget_tab_assignments_device_guid ON widget_tab_assignments(deviceGuid);
+      `);
+
+      db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(schemaIdKey, String(targetVersion));
+
+      db.exec('COMMIT');
+      console.log(`=== Device schema migration completed successfully (version ${targetVersion}) ===`);
+    } catch (migrationError) {
+      db.exec('ROLLBACK');
+      throw migrationError;
+    } finally {
+      db.exec('PRAGMA foreign_keys = ON');
+    }
+  } catch (error) {
+    console.error('=== Device schema migration failed ===');
     console.error('Error:', error);
     throw error;
   }
@@ -3219,6 +3344,7 @@ const start = async () => {
     await migrateClamsToHistory(); // Migrate clam_total to chore_history
     await migrateChoreHistoryTitle(); // Add title field to chore_history
     await migrateToDurationField(); // Add duration field to chore_schedules
+    await migrateDeviceSchemaV6(); // Migrate tabs/widget assignments to device schema
     initializeDefaultSettings(); // Initialize default settings
     startNightlyCronJob(); // Start the nightly chore pruning job
 
