@@ -23,7 +23,7 @@ const resolveWidgetName = (widgetId) => {
 };
 
 const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange: onLayoutChangeCallback, activeTab = 1 }) => {
-  const API_DEVICE_URL = getDeviceApiBase();
+  const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [containerWidth, setContainerWidth] = useState(1200);
   const [gridCols, setGridCols] = useState(12);
   const [selectedWidget, setSelectedWidget] = useState(null);
