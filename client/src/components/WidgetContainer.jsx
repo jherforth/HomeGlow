@@ -50,7 +50,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
         }));
 
       if (layouts.length > 0) {
-        axios.patch(`${API_DEVICE_URL}/widget-assignments/layout/bulk`, { layouts }).catch(() => {});
+        //axios.patch(`${API_DEVICE_URL}/widget-assignments/layout/bulk`, { layouts }).catch(() => {});
       }
     }, 500);
   }, []);
