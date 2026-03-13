@@ -142,7 +142,7 @@ const App = () => {
           groupedAssignments[assignment.widget_name] = [];
         }
         groupedAssignments[assignment.widget_name].push({
-          tab_id: assignment.tab_id,
+          tabIndex: assignment.tab_index,
           layout_x: assignment.layout_x,
           layout_y: assignment.layout_y,
           layout_w: assignment.layout_w,
@@ -261,8 +261,8 @@ const App = () => {
     setTimeout(() => startInactivityTimer(), 500);
   }, [startInactivityTimer]);
 
-  const handleScreensaverTabChange = useCallback((tabId) => {
-    setActiveTab(tabId);
+  const handleScreensaverTabChange = useCallback((tabIndex) => {
+    setActiveTab(tabIndex);
   }, []);
 
   const toggleTheme = () => {
@@ -306,8 +306,8 @@ const App = () => {
     window.location.reload();
   };
 
-  const handleTabChange = (tabId) => {
-    setActiveTab(tabId);
+  const handleTabChange = (tabIndex) => {
+    setActiveTab(tabIndex);
   };
 
   const handleAddTab = () => {
@@ -325,17 +325,17 @@ const App = () => {
     }
   };
 
-  const handleDeleteTab = async (tabId) => {
+  const handleDeleteTab = async (tabIndex) => {
     if (!window.confirm('Are you sure you want to delete this tab? Widgets will be moved to the Home tab.')) {
       return;
     }
 
     try {
-      await axios.delete(`${API_DEVICE_URL}/tabs/${tabId}`);
+      await axios.delete(`${API_DEVICE_URL}/tabs/${tabIndex}`);
       await fetchTabs();
       await fetchWidgetAssignments();
 
-      if (activeTab === tabId) {
+      if (activeTab === tabIndex) {
         setActiveTab(1);
       }
     } catch (error) {
@@ -344,18 +344,18 @@ const App = () => {
     }
   };
 
-  const isWidgetAssignedToTab = (widgetName, tabId) => {
+  const isWidgetAssignedToTab = (widgetName, tabIndex) => {
     const assignments = widgetAssignments[widgetName];
     if (!assignments || assignments.length === 0) {
-      return tabId === 1;
+      return tabIndex === 1;
     }
-    return assignments.some(a => a.tab_id === tabId);
+    return assignments.some(a => a.tabIndex === tabIndex);
   };
 
-  const getWidgetLayoutForTab = (widgetName, tabId) => {
+  const getWidgetLayoutForTab = (widgetName, tabIndex) => {
     const assignments = widgetAssignments[widgetName];
     if (!assignments) return null;
-    const match = assignments.find(a => a.tab_id === tabId);
+    const match = assignments.find(a => a.tabIndex === tabIndex);
     if (!match || match.layout_x == null) return null;
     return { x: match.layout_x, y: match.layout_y, w: match.layout_w, h: match.layout_h };
   };

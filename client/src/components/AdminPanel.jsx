@@ -278,12 +278,12 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
           if (!pluginAssign[assignment.widget_name]) {
             pluginAssign[assignment.widget_name] = [];
           }
-          pluginAssign[assignment.widget_name].push(assignment.tab_id);
+          pluginAssign[assignment.widget_name].push(assignment.tab_index);
         } else {
           if (!coreAssignments[assignment.widget_name]) {
             coreAssignments[assignment.widget_name] = [];
           }
-          coreAssignments[assignment.widget_name].push(assignment.tab_id);
+          coreAssignments[assignment.widget_name].push(assignment.tab_index);
         }
       });
 
@@ -355,21 +355,21 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
       const currentResponse = await axios.get(`${API_DEVICE_URL}/widget-assignments`);
       const currentAssignments = Array.isArray(currentResponse.data) ? currentResponse.data : [];
 
-      for (const [widgetName, desiredTabIds] of Object.entries(widgetAssignments)) {
+      for (const [widgetName, desiredTabIndexes] of Object.entries(widgetAssignments)) {
         const existing = currentAssignments.filter(a => a.widget_name === widgetName);
-        const existingTabIds = existing.map(a => a.tab_id);
+        const existingTabIndexes = existing.map(a => a.tab_index);
 
-        const toRemove = existing.filter(a => !desiredTabIds.includes(a.tab_id));
-        const toAdd = desiredTabIds.filter(id => !existingTabIds.includes(id));
+        const toRemove = existing.filter(a => !desiredTabIndexes.includes(a.tab_index));
+        const toAdd = desiredTabIndexes.filter(id => !existingTabIndexes.includes(id));
 
         for (const assignment of toRemove) {
           await axios.delete(`${API_DEVICE_URL}/widget-assignments/${assignment.id}`);
         }
 
-        for (const tabId of toAdd) {
+        for (const tabIndex of toAdd) {
           await axios.post(`${API_DEVICE_URL}/widget-assignments`, {
             widget_name: widgetName,
-            tab_id: tabId,
+            tabIndex: tabIndex,
           });
         }
       }
@@ -393,21 +393,21 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
       const currentResponse = await axios.get(`${API_DEVICE_URL}/widget-assignments`);
       const currentAssignments = Array.isArray(currentResponse.data) ? currentResponse.data : [];
 
-      for (const [pluginWidgetName, desiredTabIds] of Object.entries(pluginAssignments)) {
+      for (const [pluginWidgetName, desiredTabIndexes] of Object.entries(pluginAssignments)) {
         const existing = currentAssignments.filter(a => a.widget_name === pluginWidgetName);
-        const existingTabIds = existing.map(a => a.tab_id);
+        const existingTabIndexes = existing.map(a => a.tab_index);
 
-        const toRemove = existing.filter(a => !desiredTabIds.includes(a.tab_id));
-        const toAdd = desiredTabIds.filter(id => !existingTabIds.includes(id));
+        const toRemove = existing.filter(a => !desiredTabIndexes.includes(a.tab_index));
+        const toAdd = desiredTabIndexes.filter(id => !existingTabIndexes.includes(id));
 
         for (const assignment of toRemove) {
           await axios.delete(`${API_DEVICE_URL}/widget-assignments/${assignment.id}`);
         }
 
-        for (const tabId of toAdd) {
+        for (const tabIndex of toAdd) {
           await axios.post(`${API_DEVICE_URL}/widget-assignments`, {
             widget_name: pluginWidgetName,
-            tab_id: tabId,
+            tabIndex: tabIndex,
           });
         }
       }
@@ -424,10 +424,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
     }
   };
 
-  const handleWidgetAssignmentChange = (widgetName, selectedTabIds) => {
+  const handleWidgetAssignmentChange = (widgetName, selectedTabIndexes) => {
     setWidgetAssignments(prev => ({
       ...prev,
-      [widgetName]: selectedTabIds
+      [widgetName]: selectedTabIndexes
     }));
   };
 

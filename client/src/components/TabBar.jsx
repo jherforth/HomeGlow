@@ -73,7 +73,7 @@ const TabBar = ({ tabs, activeTab, onTabChange, widgetsLocked, onAddTab, onDelet
     label: 'Home',
     icon: 'home',
     show_label: 1,
-    order_position: 0
+    index: 0
   };
 
   const displayTabs = tabs && tabs.length > 0 ? tabs : [defaultHomeTab];
