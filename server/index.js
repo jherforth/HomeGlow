@@ -675,8 +675,6 @@ async function initializeDatabase() {
         layout_h INTEGER,
         FOREIGN KEY (tab_id) REFERENCES tabs(id) ON DELETE CASCADE
       );
-      CREATE INDEX IF NOT EXISTS idx_widget_tab_assignments_widget ON widget_tab_assignments(widget_name);
-      CREATE INDEX IF NOT EXISTS idx_widget_tab_assignments_tab ON widget_tab_assignments(tab_id);
     `);
 
     // Migration: Add repeat_type column if it doesn't exist and remove old repeats column
