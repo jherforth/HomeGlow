@@ -2250,6 +2250,67 @@ fastify.patch('/api/devices/:deviceGuid/tabs/:tabNumber', async (request, reply)
   }
 });
 
+fastify.patch('/api/devices/:deviceGuid/tabs/reorder', async (request, reply) => {
+  const { deviceGuid } = request.params;
+  const { orderedTabNumbers } = request.body;
+
+  if (!deviceGuid) {
+    return reply.status(400).send({ error: 'deviceGuid is required' });
+  }
+  ensureDeviceExists(deviceGuid);
+
+  if (!Array.isArray(orderedTabNumbers)) {
+    return reply.status(400).send({ error: 'orderedTabNumbers array is required' });
+  }
+
+  try {
+    const nonHomeTabs = db
+      .prepare('SELECT id, number FROM tabs WHERE device_guid = ? AND number != 1 ORDER BY number ASC')
+      .all(deviceGuid);
+
+    if (orderedTabNumbers.length !== nonHomeTabs.length) {
+      return reply.status(400).send({ error: 'orderedTabNumbers length does not match current tab count' });
+    }
+
+    const existingNumbers = new Set(nonHomeTabs.map(tab => tab.number));
+    const requestedNumbers = new Set(orderedTabNumbers);
+    if (existingNumbers.size !== requestedNumbers.size) {
+      return reply.status(400).send({ error: 'orderedTabNumbers contains duplicates' });
+    }
+    for (const number of requestedNumbers) {
+      if (!existingNumbers.has(number)) {
+        return reply.status(400).send({ error: 'orderedTabNumbers contains unknown tab numbers' });
+      }
+    }
+
+    const tabsByNumber = new Map(nonHomeTabs.map(tab => [tab.number, tab]));
+    const orderedTabIds = orderedTabNumbers.map(number => tabsByNumber.get(number).id);
+
+    const reorderTransaction = db.transaction((ids) => {
+      const tempStmt = db.prepare('UPDATE tabs SET number = ? WHERE id = ? AND device_guid = ?');
+      const finalStmt = db.prepare('UPDATE tabs SET number = ? WHERE id = ? AND device_guid = ?');
+
+      ids.forEach((id, index) => {
+        // Move to temporary values to avoid UNIQUE(device_guid, number) collisions.
+        tempStmt.run(-1000 - index, id, deviceGuid);
+      });
+
+      ids.forEach((id, index) => {
+        finalStmt.run(index + 2, id, deviceGuid);
+      });
+    });
+
+    reorderTransaction(orderedTabIds);
+    touchDeviceUpdateTime(deviceGuid);
+
+    const updatedTabs = db.prepare('SELECT * FROM tabs WHERE device_guid = ? ORDER BY number ASC').all(deviceGuid);
+    return updatedTabs;
+  } catch (error) {
+    console.error('Error reordering tabs:', error);
+    reply.status(500).send({ error: 'Failed to reorder tabs' });
+  }
+});
+
 fastify.delete('/api/devices/:deviceGuid/tabs/:tabNumber', async (request, reply) => {
   const { deviceGuid, tabNumber } = request.params;
   if (!deviceGuid) {
@@ -2271,6 +2332,25 @@ fastify.delete('/api/devices/:deviceGuid/tabs/:tabNumber', async (request, reply
 
     const deleteStmt = db.prepare('DELETE FROM tabs WHERE number = ? AND device_guid = ?');
     deleteStmt.run(tabNumber, deviceGuid);
+
+    const remainingTabs = db
+      .prepare('SELECT id FROM tabs WHERE device_guid = ? AND number != 1 ORDER BY number ASC')
+      .all(deviceGuid);
+
+    const renumberTransaction = db.transaction((tabRows) => {
+      const tempStmt = db.prepare('UPDATE tabs SET number = ? WHERE id = ? AND device_guid = ?');
+      const finalStmt = db.prepare('UPDATE tabs SET number = ? WHERE id = ? AND device_guid = ?');
+
+      tabRows.forEach((row, index) => {
+        tempStmt.run(-2000 - index, row.id, deviceGuid);
+      });
+
+      tabRows.forEach((row, index) => {
+        finalStmt.run(index + 2, row.id, deviceGuid);
+      });
+    });
+
+    renumberTransaction(remainingTabs);
     touchDeviceUpdateTime(deviceGuid);
 
     return { success: true, message: 'Tab deleted successfully' };

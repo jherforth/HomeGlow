@@ -61,13 +61,14 @@ import {
   Lock,
   Nightlight,
   Tab as TabIcon,
+  DragIndicator,
   PhotoLibrary,
   Info
 } from '@mui/icons-material';
 import ColorPickerPopover from './ColorPickerPopover';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
-import { getDeviceApiBase} from '../utils/deviceGuid.js';
+import { getDeviceApiBase } from '../utils/deviceGuid.js';
 import PinModal from './PinModal';
 import ChoreSchedulesTab from './ChoreSchedulesTab';
 import ChoreHistoryTab from './ChoreHistoryTab';
@@ -127,6 +128,48 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
       slideshowInterval: 10
     };
   });
+  const [tabEditorDialog, setTabEditorDialog] = useState({
+    open: false,
+    mode: 'create',
+    originalNumber: null,
+    form: {
+      label: '',
+      icon: 'star',
+      show_label: true,
+    },
+  });
+  const [deleteTabDialog, setDeleteTabDialog] = useState({ open: false, tab: null });
+  const [draggingTabNumber, setDraggingTabNumber] = useState(null);
+
+  const availableTabIcons = [
+    'home',
+    'bell',
+    'bookmark',
+    'building',
+    'bucket',
+    'calendar',
+    'camera',
+    'chart',
+    'chat',
+    'clipboard',
+    'clock',
+    'clouds',
+    'compass',
+    'envelope',
+    'file',
+    'flag',
+    'folder',
+    'gem',
+    'hand',
+    'heart',
+    'image',
+    'lightbulb',
+    'map',
+    'money',
+    'shovel',
+    'star',
+    'trashcan',
+  ];
 
   // Refresh interval options in milliseconds
   const refreshIntervalOptions = [
@@ -431,13 +474,152 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
     }));
   };
 
+  const openCreateTabDialog = () => {
+    setTabEditorDialog({
+      open: true,
+      mode: 'create',
+      originalNumber: null,
+      form: {
+        label: '',
+        icon: 'star',
+        show_label: true,
+      },
+    });
+  };
+
+  const openEditTabDialog = (tab) => {
+    setTabEditorDialog({
+      open: true,
+      mode: 'edit',
+      originalNumber: tab.number,
+      form: {
+        label: tab.label || '',
+        icon: tab.icon || 'star',
+        show_label: Boolean(tab.show_label),
+      },
+    });
+  };
+
+  const closeTabEditorDialog = () => {
+    setTabEditorDialog(prev => ({ ...prev, open: false }));
+  };
+
+  const saveTabDefinition = async () => {
+    const trimmedLabel = (tabEditorDialog.form.label || '').trim();
+    if (!trimmedLabel) {
+      setSaveMessage({ show: true, type: 'error', text: 'Tab label is required.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      if (tabEditorDialog.mode === 'edit') {
+        await axios.patch(`${API_DEVICE_URL}/tabs/${tabEditorDialog.originalNumber}`, {
+          label: trimmedLabel,
+          icon: tabEditorDialog.form.icon,
+          show_label: tabEditorDialog.form.show_label,
+        });
+      } else {
+        await axios.post(`${API_DEVICE_URL}/tabs`, {
+          label: trimmedLabel,
+          icon: tabEditorDialog.form.icon,
+          show_label: tabEditorDialog.form.show_label,
+        });
+      }
+
+      closeTabEditorDialog();
+      await fetchTabs();
+      setSaveMessage({ show: true, type: 'success', text: `Tab ${tabEditorDialog.mode === 'edit' ? 'updated' : 'created'} successfully.` });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error saving tab:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to save tab. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const requestDeleteTab = (tab) => {
+    setDeleteTabDialog({ open: true, tab });
+  };
+
+  const confirmDeleteTab = async () => {
+    if (!deleteTabDialog.tab) {
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      await axios.delete(`${API_DEVICE_URL}/tabs/${deleteTabDialog.tab.number}`);
+      setDeleteTabDialog({ open: false, tab: null });
+      await fetchTabs();
+      await fetchWidgetAssignments();
+      setSaveMessage({ show: true, type: 'success', text: 'Tab deleted successfully.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error deleting tab:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to delete tab. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const saveTabOrder = async (orderedTabNumbers) => {
+    try {
+      setIsLoading(true);
+      await axios.patch(`${API_DEVICE_URL}/tabs/reorder`, { orderedTabNumbers });
+      await fetchTabs();
+      await fetchWidgetAssignments();
+    } catch (error) {
+      console.error('Error reordering tabs:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to reorder tabs. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleTabDragStart = (tabNumber) => {
+    setDraggingTabNumber(tabNumber);
+  };
+
+  const handleTabDrop = async (targetTabNumber) => {
+    if (draggingTabNumber == null || draggingTabNumber === targetTabNumber) {
+      setDraggingTabNumber(null);
+      return;
+    }
+
+    const draggableTabs = tabs
+      .filter(tab => tab.number !== 1)
+      .sort((a, b) => a.number - b.number);
+
+    const fromIndex = draggableTabs.findIndex(tab => tab.number === draggingTabNumber);
+    const toIndex = draggableTabs.findIndex(tab => tab.number === targetTabNumber);
+
+    if (fromIndex === -1 || toIndex === -1) {
+      setDraggingTabNumber(null);
+      return;
+    }
+
+    const next = [...draggableTabs];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    const orderedTabNumbers = next.map(tab => tab.number);
+
+    setDraggingTabNumber(null);
+    await saveTabOrder(orderedTabNumbers);
+  };
+
   const saveInterfaceSettings = () => {
     localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
     setWidgetSettings(widgetSettings);
-    
+
     // Apply CSS variables immediately
     applyAccentColors();
-    
+
     setSaveMessage({ show: true, type: 'success', text: 'Accent colors saved! Refresh page to see all changes.' });
     setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
   };
@@ -643,7 +825,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
         setIsLoading(true);
         await axios.delete(`${API_BASE_URL}/api/widgets/${filename}`);
         const pluginWidgetName = `plugin:${filename}`;
-        await axios.delete(`${API_DEVICE_URL}/widget-assignments/widget/${encodeURIComponent(pluginWidgetName)}`).catch(() => {});
+        await axios.delete(`${API_DEVICE_URL}/widget-assignments/widget/${encodeURIComponent(pluginWidgetName)}`).catch(() => { });
         setPluginSettings(prev => {
           const updated = { ...prev };
           delete updated[filename];
@@ -952,6 +1134,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
               <Tabs value={widgetsSubTab} onChange={(_, v) => setWidgetsSubTab(v)} size="small">
                 <Tab label="Widgets" />
                 <Tab label="Plugins" />
+                <Tab label="Tabs" />
               </Tabs>
             </Box>
 
@@ -1027,9 +1210,9 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
                         multiple
                         options={tabs}
                         getOptionLabel={(option) => option.label}
-                        value={tabs.filter(tab => widgetAssignments[widget]?.includes(tab.id))}
+                        value={tabs.filter(tab => widgetAssignments[widget]?.includes(tab.number))}
                         onChange={(e, newValue) => {
-                          handleWidgetAssignmentChange(widget, newValue.map(tab => tab.id));
+                          handleWidgetAssignmentChange(widget, newValue.map(tab => tab.number));
                         }}
                         renderInput={(params) => (
                           <TextField
@@ -1063,160 +1246,160 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
                   <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>
                     Weather Widget
                   </Typography>
-              
-              <Grid container spacing={2} alignItems="center">
-                <Grid item xs={12} sm={6}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={widgetSettings.weather?.enabled || false}
-                        onChange={() => handleWidgetToggle('weather', 'enabled')}
-                      />
-                    }
-                    label="Enabled"
-                  />
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={widgetSettings.weather?.transparent || false}
-                        onChange={() => handleWidgetToggle('weather', 'transparent')}
-                      />
-                    }
-                    label="Transparent Background"
-                    sx={{ ml: 2 }}
-                  />
-                </Grid>
-                
-                <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel id="weather-refresh-label">
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Timer fontSize="small" />
-                        Auto-Refresh Interval
-                      </Box>
-                    </InputLabel>
-                    <Select
-                      labelId="weather-refresh-label"
-                      value={widgetSettings.weather?.refreshInterval || 0}
-                      onChange={(e) => handleRefreshIntervalChange('weather', e.target.value)}
-                      label="Auto-Refresh Interval"
-                    >
-                      {refreshIntervalOptions.map((option) => (
-                        <MenuItem key={option.value} value={option.value}>
-                          {option.label}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-              </Grid>
 
-              <Box sx={{ mt: 2 }}>
-                <Autocomplete
-                  multiple
-                  options={tabs}
-                  getOptionLabel={(option) => option.label}
-                  value={tabs.filter(tab => widgetAssignments['weather']?.includes(tab.id))}
-                  onChange={(e, newValue) => {
-                    handleWidgetAssignmentChange('weather', newValue.map(tab => tab.id));
-                  }}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Show on Tabs"
-                      placeholder="Select tabs..."
-                      helperText="Select which tabs this widget should appear on (defaults to Home tab if none selected)"
+                  <Grid container spacing={2} alignItems="center">
+                    <Grid item xs={12} sm={6}>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={widgetSettings.weather?.enabled || false}
+                            onChange={() => handleWidgetToggle('weather', 'enabled')}
+                          />
+                        }
+                        label="Enabled"
+                      />
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={widgetSettings.weather?.transparent || false}
+                            onChange={() => handleWidgetToggle('weather', 'transparent')}
+                          />
+                        }
+                        label="Transparent Background"
+                        sx={{ ml: 2 }}
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} sm={6}>
+                      <FormControl fullWidth size="small">
+                        <InputLabel id="weather-refresh-label">
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Timer fontSize="small" />
+                            Auto-Refresh Interval
+                          </Box>
+                        </InputLabel>
+                        <Select
+                          labelId="weather-refresh-label"
+                          value={widgetSettings.weather?.refreshInterval || 0}
+                          onChange={(e) => handleRefreshIntervalChange('weather', e.target.value)}
+                          label="Auto-Refresh Interval"
+                        >
+                          {refreshIntervalOptions.map((option) => (
+                            <MenuItem key={option.value} value={option.value}>
+                              {option.label}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                  </Grid>
+
+                  <Box sx={{ mt: 2 }}>
+                    <Autocomplete
+                      multiple
+                      options={tabs}
+                      getOptionLabel={(option) => option.label}
+                      value={tabs.filter(tab => widgetAssignments['weather']?.includes(tab.number))}
+                      onChange={(e, newValue) => {
+                        handleWidgetAssignmentChange('weather', newValue.map(tab => tab.number));
+                      }}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Show on Tabs"
+                          placeholder="Select tabs..."
+                          helperText="Select which tabs this widget should appear on (defaults to Home tab if none selected)"
+                        />
+                      )}
+                      renderTags={(value, getTagProps) =>
+                        value.map((option, index) => (
+                          <Chip
+                            label={option.label}
+                            {...getTagProps({ index })}
+                            sx={{ backgroundColor: 'var(--accent)', color: 'white' }}
+                          />
+                        ))
+                      }
                     />
-                  )}
-                  renderTags={(value, getTagProps) =>
-                    value.map((option, index) => (
-                      <Chip
-                        label={option.label}
-                        {...getTagProps({ index })}
-                        sx={{ backgroundColor: 'var(--accent)', color: 'white' }}
+                  </Box>
+
+                  {/* Weather Layout Mode Selection */}
+                  <Box sx={{ mt: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1, bgcolor: 'rgba(255, 255, 255, 0.02)' }}>
+                    <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <ViewModule />
+                      Layout Mode
+                    </Typography>
+
+                    <RadioGroup
+                      value={widgetSettings.weather?.layoutMode || 'medium'}
+                      onChange={(e) => handleWeatherLayoutModeChange(e.target.value)}
+                    >
+                      <FormControlLabel
+                        value="compact"
+                        control={<Radio />}
+                        label={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <ViewCompact />
+                            <Box>
+                              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                Compact
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                Current weather only (minimal space)
+                              </Typography>
+                            </Box>
+                          </Box>
+                        }
                       />
-                    ))
-                  }
-                />
-              </Box>
 
-              {/* Weather Layout Mode Selection */}
-              <Box sx={{ mt: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1, bgcolor: 'rgba(255, 255, 255, 0.02)' }}>
-                <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <ViewModule />
-                  Layout Mode
-                </Typography>
-                
-                <RadioGroup
-                  value={widgetSettings.weather?.layoutMode || 'medium'}
-                  onChange={(e) => handleWeatherLayoutModeChange(e.target.value)}
-                >
-                  <FormControlLabel
-                    value="compact"
-                    control={<Radio />}
-                    label={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <ViewCompact />
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                            Compact
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            Current weather only (minimal space)
-                          </Typography>
-                        </Box>
-                      </Box>
-                    }
-                  />
-                  
-                  <FormControlLabel
-                    value="medium"
-                    control={<Radio />}
-                    label={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <ViewModule />
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                            Medium
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            Current weather + 3-day forecast
-                          </Typography>
-                        </Box>
-                      </Box>
-                    }
-                  />
-                  
-                  <FormControlLabel
-                    value="full"
-                    control={<Radio />}
-                    label={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <ViewQuilt />
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                            Full
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            All information with charts and air quality
-                          </Typography>
-                        </Box>
-                      </Box>
-                    }
-                  />
-                </RadioGroup>
+                      <FormControlLabel
+                        value="medium"
+                        control={<Radio />}
+                        label={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <ViewModule />
+                            <Box>
+                              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                Medium
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                Current weather + 3-day forecast
+                              </Typography>
+                            </Box>
+                          </Box>
+                        }
+                      />
 
-                <Alert severity="info" sx={{ mt: 2 }}>
-                  The selected layout mode will be used regardless of widget size. Resize the widget to fit your preferred layout.
-                </Alert>
-              </Box>
-              
-              {widgetSettings.weather?.refreshInterval > 0 && (
-                <Alert severity="info" sx={{ mt: 2 }} icon={<Timer />}>
-                  Weather widget will automatically refresh every {getRefreshIntervalLabel(widgetSettings.weather.refreshInterval).toLowerCase()}
-                </Alert>
-              )}
-            </Box>
+                      <FormControlLabel
+                        value="full"
+                        control={<Radio />}
+                        label={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <ViewQuilt />
+                            <Box>
+                              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                Full
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                All information with charts and air quality
+                              </Typography>
+                            </Box>
+                          </Box>
+                        }
+                      />
+                    </RadioGroup>
+
+                    <Alert severity="info" sx={{ mt: 2 }}>
+                      The selected layout mode will be used regardless of widget size. Resize the widget to fit your preferred layout.
+                    </Alert>
+                  </Box>
+
+                  {widgetSettings.weather?.refreshInterval > 0 && (
+                    <Alert severity="info" sx={{ mt: 2 }} icon={<Timer />}>
+                      Weather widget will automatically refresh every {getRefreshIntervalLabel(widgetSettings.weather.refreshInterval).toLowerCase()}
+                    </Alert>
+                  )}
+                </Box>
 
                 <Button variant="contained" onClick={saveWidgetSettings} sx={{ mt: 2 }} startIcon={<Save />}>
                   Save Widget Settings
@@ -1392,11 +1575,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
                               multiple
                               options={tabs}
                               getOptionLabel={(option) => option.label}
-                              value={tabs.filter(tab => pluginAssignments[pluginWidgetName]?.includes(tab.id))}
+                              value={tabs.filter(tab => pluginAssignments[pluginWidgetName]?.includes(tab.number))}
                               onChange={(e, newValue) => {
                                 setPluginAssignments(prev => ({
                                   ...prev,
-                                  [pluginWidgetName]: newValue.map(tab => tab.id)
+                                  [pluginWidgetName]: newValue.map(tab => tab.number)
                                 }));
                               }}
                               renderInput={(params) => (
@@ -1429,6 +1612,100 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
                 )}
               </>
             )}
+
+            {widgetsSubTab === 2 && (
+              <>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Alert severity="info" sx={{ mb: 0, flex: 1, mr: 2 }}>
+                    Manage dashboard tabs. Drag rows to reorder tabs. Home tab cannot be edited or deleted.
+                  </Alert>
+                  <Button variant="contained" startIcon={<Add />} onClick={openCreateTabDialog}>
+                    Add Tab
+                  </Button>
+                </Box>
+
+                <TableContainer component={Paper}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell width={60}>Order</TableCell>
+                        <TableCell>Label</TableCell>
+                        <TableCell>Icon</TableCell>
+                        <TableCell>Show Label</TableCell>
+                        <TableCell width={120}>Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {[...tabs].sort((a, b) => a.number - b.number).map((tab) => {
+                        const isHome = tab.number === 1;
+                        return (
+                          <TableRow
+                            key={tab.id}
+                            draggable={!isHome}
+                            onDragStart={() => handleTabDragStart(tab.number)}
+                            onDragOver={(e) => {
+                              if (!isHome) {
+                                e.preventDefault();
+                              }
+                            }}
+                            onDrop={() => {
+                              if (!isHome) {
+                                handleTabDrop(tab.number);
+                              }
+                            }}
+                            sx={{
+                              cursor: isHome ? 'default' : 'grab',
+                              opacity: draggingTabNumber === tab.number ? 0.65 : 1,
+                            }}
+                          >
+                            <TableCell>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                {!isHome && <DragIndicator fontSize="small" />}
+                                <Chip label={tab.number} size="small" />
+                              </Box>
+                            </TableCell>
+                            <TableCell>
+                              {tab.label}
+                              {isHome && (
+                                <Chip size="small" label="Home" color="primary" sx={{ ml: 1 }} />
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Chip size="small" label={tab.icon} />
+                            </TableCell>
+                            <TableCell>
+                              <Chip
+                                size="small"
+                                label={Boolean(tab.show_label) ? 'Shown' : 'Hidden'}
+                                color={Boolean(tab.show_label) ? 'success' : 'default'}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <IconButton
+                                onClick={() => openEditTabDialog(tab)}
+                                color="primary"
+                                size="small"
+                                disabled={isHome}
+                              >
+                                <Edit />
+                              </IconButton>
+                              <IconButton
+                                onClick={() => requestDeleteTab(tab)}
+                                color="error"
+                                size="small"
+                                disabled={isHome}
+                              >
+                                <Delete />
+                              </IconButton>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </>
+            )}
           </CardContent>
         </Card>
       )}
@@ -1458,13 +1735,13 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
             <Alert severity="info" sx={{ mb: 3 }}>
               Background color applies to light mode only. Accent color is used throughout the dashboard for highlights and interactive elements.
             </Alert>
-            
+
             <Box sx={{ maxWidth: 600, mx: 'auto' }}>
               {renderColorPicker('primary', '🎨 Background Color (Light Mode)')}
               {renderColorPicker('secondary', '💎 Secondary Color')}
               {renderColorPicker('accent', '✨ Accent Color')}
             </Box>
-            
+
             <Box sx={{ mt: 4, display: 'flex', gap: 2, justifyContent: 'center' }}>
               <Button
                 variant="contained"
@@ -1676,7 +1953,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>User Management</Typography>
-            
+
             <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
               <Typography variant="subtitle1" sx={{ mb: 2 }}>Add New User</Typography>
               <Grid container spacing={2}>
@@ -1862,7 +2139,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>Prize Management</Typography>
-            
+
             <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
               <Typography variant="subtitle1" sx={{ mb: 2 }}>Add New Prize</Typography>
               <Grid container spacing={2}>
@@ -2107,6 +2384,107 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
 
       {/* User Delete Confirmation Dialog */}
       <Dialog
+        open={tabEditorDialog.open}
+        onClose={closeTabEditorDialog}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>{tabEditorDialog.mode === 'edit' ? 'Edit Tab' : 'Create Tab'}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 1, display: 'grid', gap: 2 }}>
+            <TextField
+              label="Tab Label"
+              value={tabEditorDialog.form.label}
+              onChange={(e) => setTabEditorDialog(prev => ({
+                ...prev,
+                form: {
+                  ...prev.form,
+                  label: e.target.value,
+                },
+              }))}
+              fullWidth
+              autoFocus
+              inputProps={{ maxLength: 20 }}
+              helperText={`${tabEditorDialog.form.label.length}/20 characters`}
+            />
+
+            <FormControl fullWidth>
+              <InputLabel id="admin-tab-icon-label">Icon</InputLabel>
+              <Select
+                labelId="admin-tab-icon-label"
+                value={tabEditorDialog.form.icon}
+                label="Icon"
+                onChange={(e) => setTabEditorDialog(prev => ({
+                  ...prev,
+                  form: {
+                    ...prev.form,
+                    icon: e.target.value,
+                  },
+                }))}
+              >
+                {availableTabIcons.map((iconName) => (
+                  <MenuItem key={iconName} value={iconName}>{iconName}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={tabEditorDialog.form.show_label}
+                  onChange={(e) => setTabEditorDialog(prev => ({
+                    ...prev,
+                    form: {
+                      ...prev.form,
+                      show_label: e.target.checked,
+                    },
+                  }))}
+                />
+              }
+              label="Show label on tab"
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeTabEditorDialog} variant="outlined">Cancel</Button>
+          <Button onClick={saveTabDefinition} variant="contained" startIcon={<Save />}>
+            {tabEditorDialog.mode === 'edit' ? 'Save Changes' : 'Create Tab'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={deleteTabDialog.open}
+        onClose={() => setDeleteTabDialog({ open: false, tab: null })}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Warning color="error" />
+            <Typography variant="h6">Delete Tab</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            Widgets assigned to this tab will be moved by the server rules for deleted tabs.
+          </Alert>
+          <Typography>
+            Are you sure you want to delete <strong>{deleteTabDialog.tab?.label}</strong>?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteTabDialog({ open: false, tab: null })} variant="outlined">
+            Cancel
+          </Button>
+          <Button onClick={confirmDeleteTab} variant="contained" color="error" startIcon={<Delete />}>
+            Delete Tab
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* User Delete Confirmation Dialog */}
+      <Dialog
         open={deleteUserDialog.open}
         onClose={() => setDeleteUserDialog({ open: false, user: null })}
         maxWidth="sm"
@@ -2303,7 +2681,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
               </Box>
             ))}
           </Box>
-          
+
           <Typography
             variant="h6"
             sx={{
@@ -2315,7 +2693,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
           >
             Processing...
           </Typography>
-          
+
           <CircularProgress
             size={40}
             thickness={2}
