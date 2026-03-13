@@ -35,14 +35,14 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
   const lockedRef = useRef(locked);
   const saveTimerRef = useRef(null);
 
-  const saveLayoutsToApi = useCallback((layoutItems, tabIndex) => {
+  const saveLayoutsToApi = useCallback((layoutItems, tabNumber) => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       const layouts = layoutItems
         .filter(item => resolveWidgetName(item.i))
         .map(item => ({
           widget_name: resolveWidgetName(item.i),
-          tabIndex: tabIndex,
+          tabNumber: tabNumber,
           layout_x: item.x,
           layout_y: item.y,
           layout_w: item.w,

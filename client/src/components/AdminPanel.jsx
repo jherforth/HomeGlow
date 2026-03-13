@@ -278,12 +278,12 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
           if (!pluginAssign[assignment.widget_name]) {
             pluginAssign[assignment.widget_name] = [];
           }
-          pluginAssign[assignment.widget_name].push(assignment.tab_index);
+          pluginAssign[assignment.widget_name].push(assignment.tab_number);
         } else {
           if (!coreAssignments[assignment.widget_name]) {
             coreAssignments[assignment.widget_name] = [];
           }
-          coreAssignments[assignment.widget_name].push(assignment.tab_index);
+          coreAssignments[assignment.widget_name].push(assignment.tab_number);
         }
       });
 
@@ -355,21 +355,21 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
       const currentResponse = await axios.get(`${API_DEVICE_URL}/widget-assignments`);
       const currentAssignments = Array.isArray(currentResponse.data) ? currentResponse.data : [];
 
-      for (const [widgetName, desiredTabIndexes] of Object.entries(widgetAssignments)) {
+      for (const [widgetName, desiredTabNumbers] of Object.entries(widgetAssignments)) {
         const existing = currentAssignments.filter(a => a.widget_name === widgetName);
-        const existingTabIndexes = existing.map(a => a.tab_index);
+        const existingTabNumbers = existing.map(a => a.tab_number);
 
-        const toRemove = existing.filter(a => !desiredTabIndexes.includes(a.tab_index));
-        const toAdd = desiredTabIndexes.filter(id => !existingTabIndexes.includes(id));
+        const toRemove = existing.filter(a => !desiredTabNumbers.includes(a.tab_number));
+        const toAdd = desiredTabNumbers.filter(number => !existingTabNumbers.includes(number));
 
         for (const assignment of toRemove) {
           await axios.delete(`${API_DEVICE_URL}/widget-assignments/${assignment.id}`);
         }
 
-        for (const tabIndex of toAdd) {
+        for (const tabNumber of toAdd) {
           await axios.post(`${API_DEVICE_URL}/widget-assignments`, {
             widget_name: widgetName,
-            tabIndex: tabIndex,
+            tabNumber: tabNumber,
           });
         }
       }
@@ -393,21 +393,21 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
       const currentResponse = await axios.get(`${API_DEVICE_URL}/widget-assignments`);
       const currentAssignments = Array.isArray(currentResponse.data) ? currentResponse.data : [];
 
-      for (const [pluginWidgetName, desiredTabIndexes] of Object.entries(pluginAssignments)) {
+      for (const [pluginWidgetName, desiredTabNumbers] of Object.entries(pluginAssignments)) {
         const existing = currentAssignments.filter(a => a.widget_name === pluginWidgetName);
-        const existingTabIndexes = existing.map(a => a.tab_index);
+        const existingTabNumbers = existing.map(a => a.tab_number);
 
-        const toRemove = existing.filter(a => !desiredTabIndexes.includes(a.tab_index));
-        const toAdd = desiredTabIndexes.filter(id => !existingTabIndexes.includes(id));
+        const toRemove = existing.filter(a => !desiredTabNumbers.includes(a.tab_number));
+        const toAdd = desiredTabNumbers.filter(number => !existingTabNumbers.includes(number));
 
         for (const assignment of toRemove) {
           await axios.delete(`${API_DEVICE_URL}/widget-assignments/${assignment.id}`);
         }
 
-        for (const tabIndex of toAdd) {
+        for (const tabNumber of toAdd) {
           await axios.post(`${API_DEVICE_URL}/widget-assignments`, {
             widget_name: pluginWidgetName,
-            tabIndex: tabIndex,
+            tabNumber: tabNumber,
           });
         }
       }
@@ -424,10 +424,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
     }
   };
 
-  const handleWidgetAssignmentChange = (widgetName, selectedTabIndexes) => {
+  const handleWidgetAssignmentChange = (widgetName, selectedTabNumbers) => {
     setWidgetAssignments(prev => ({
       ...prev,
-      [widgetName]: selectedTabIndexes
+      [widgetName]: selectedTabNumbers
     }));
   };
 
