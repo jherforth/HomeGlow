@@ -22,7 +22,7 @@ const resolveWidgetName = (widgetId) => {
   return null;
 };
 
-const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange: onLayoutChangeCallback, activeTab = 1 }) => {
+const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange: onLayoutChangeCallback, activeTab = 1, activeTabId = 1 }) => {
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [containerWidth, setContainerWidth] = useState(1200);
   const [gridCols, setGridCols] = useState(12);
@@ -34,6 +34,10 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
   const prevWidgetIdsRef = useRef('');
   const lockedRef = useRef(locked);
   const saveTimerRef = useRef(null);
+
+  const getTabLayoutCacheKey = useCallback((widgetId) => {
+    return `widget-layout-id-${activeTabId}-${widgetId}`;
+  }, [activeTabId]);
 
   const saveLayoutsToApi = useCallback((layoutItems, tabNumber) => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -123,9 +127,11 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
           static: lockedRef.current,
         };
       } else {
-        const localLayout = localStorage.getItem(`widget-layout-${activeTab}-${widget.id}`);
+        const localKey = getTabLayoutCacheKey(widget.id);
+        const localLayout = localStorage.getItem(localKey);
         if (localLayout) {
           const parsed = JSON.parse(localLayout);
+
           item = {
             i: widget.id,
             x: parsed.x ?? widget.defaultPosition.x,
@@ -155,7 +161,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
       return item;
     });
     setLayout(initialLayout);
-  }, [widgets, activeTab, gridCols]);
+  }, [widgets, activeTab, gridCols, getTabLayoutCacheKey]);
 
   useEffect(() => {
     setIsLockTransitioning(true);
@@ -174,7 +180,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
             w: item.w,
             h: item.h,
           };
-          localStorage.setItem(`widget-layout-${activeTab}-${item.i}`, JSON.stringify(layoutData));
+          localStorage.setItem(getTabLayoutCacheKey(item.i), JSON.stringify(layoutData));
         });
         saveLayoutsToApi(updatedLayout, activeTab);
       }
@@ -187,7 +193,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
     }, 50);
 
     return () => clearTimeout(timer);
-  }, [locked, activeTab, saveLayoutsToApi]);
+  }, [locked, activeTab, saveLayoutsToApi, getTabLayoutCacheKey]);
 
   // Deselect widget when locked
   useEffect(() => {
@@ -228,7 +234,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
         w: item.w,
         h: item.h,
       };
-      localStorage.setItem(`widget-layout-${activeTab}-${item.i}`, JSON.stringify(layoutData));
+      localStorage.setItem(getTabLayoutCacheKey(item.i), JSON.stringify(layoutData));
     });
 
     saveLayoutsToApi(updatedLayout, activeTab);
@@ -310,7 +316,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
             w: updatedItem.w,
             h: updatedItem.h,
           };
-          localStorage.setItem(`widget-layout-${activeTab}-${item.i}`, JSON.stringify(layoutData));
+          localStorage.setItem(getTabLayoutCacheKey(item.i), JSON.stringify(layoutData));
 
           return updatedItem;
         }

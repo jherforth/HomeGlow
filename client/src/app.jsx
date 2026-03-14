@@ -449,10 +449,15 @@ const App = () => {
     return result;
   }, [widgetSettings, activeTab, apiKeys, widgetAssignments, installedPlugins, theme]);
 
+  const activeTabId = useMemo(() => {
+    const active = tabs.find(tab => tab.number === activeTab);
+    return active?.id ?? 1;
+  }, [tabs, activeTab]);
+
   return (
     <>
       <Box sx={{ width: '100%', minHeight: '100vh', position: 'relative', pb: '60px' }}>
-        {widgets.length > 0 && <WidgetContainer widgets={widgets} locked={widgetsLocked} activeTab={activeTab} />}
+        {widgets.length > 0 && <WidgetContainer widgets={widgets} locked={widgetsLocked} activeTab={activeTab} activeTabId={activeTabId} />}
       </Box>
 
       <Dialog open={showAdminPanel} onClose={toggleAdminPanel} maxWidth="lg">
