@@ -34,12 +34,7 @@ const migrateToDurationField = require('./migrations/migrateToDurationField');
 const SYSTEM_SCHEMA_ID_KEY = 'SYSTEM_SCHEMA_ID';
 
 const schemaMigrations = [
-  {
-    schemaId: 6,
-    name: 'migrateDeviceSchemaV6',
-    modulePath: './migrations/migrateDeviceSchemaV6',
-    exportName: 'migrateDeviceSchemaV6',
-  },
+  { schemaId: 6, migrationPath: './migrations/migrateDeviceSchemaV6', },
 ];
 
 // GitHub API configuration
@@ -628,15 +623,19 @@ function getCurrentSchemaVersion() {
   return row ? parseInt(row.value, 10) || 0 : 0;
 }
 
-function loadMigrationRunner(migration) {
-  const migrationModule = require(migration.modulePath);
-  const runner = migration.exportName ? migrationModule[migration.exportName] : migrationModule;
+function runSchemaMigrationModule(migration) {
+  globalThis.__HOMEGLOW_SCHEMA_MIGRATION_CONTEXT = {
+    db,
+    schemaIdKey: SYSTEM_SCHEMA_ID_KEY,
+    targetSchemaId: migration.schemaId,
+  };
 
-  if (typeof runner !== 'function') {
-    throw new Error(`Migration ${migration.name} did not resolve to a function`);
+  try {
+    delete require.cache[require.resolve(migration.migrationPath)];
+    require(migration.migrationPath);
+  } finally {
+    delete globalThis.__HOMEGLOW_SCHEMA_MIGRATION_CONTEXT;
   }
-
-  return runner;
 }
 
 async function applySchemaMigrations(currentSchemaId) {
@@ -650,9 +649,8 @@ async function applySchemaMigrations(currentSchemaId) {
   }
 
   for (const migration of pendingMigrations) {
-    console.log(`Running schema migration ${migration.name} (target schema ID: ${migration.schemaId})`);
-    const runMigration = loadMigrationRunner(migration);
-    await runMigration(db);
+    console.log(`Running schema migration path ${migration.migrationPath} (target schema ID: ${migration.schemaId})`);
+    runSchemaMigrationModule(migration);
   }
 }
 
