@@ -25,6 +25,17 @@ const widgetRegistryPath = path.join(__dirname, 'widgets_registry.json');
 const CalendarSyncService = require('./services/calendarSync');
 let calendarSyncService = null;
 
+const initializeDatabaseMigration = require('./migrations/initializeDatabase');
+const migrateChoresDatabase = require('./migrations/migrateChoresDatabase');
+const migrateClamsToHistory = require('./migrations/migrateClamsToHistory');
+const migrateChoreHistoryTitle = require('./migrations/migrateChoreHistoryTitle');
+const migrateToDurationField = require('./migrations/migrateToDurationField');
+const {
+  SYSTEM_SCHEMA_ID_KEY,
+  TARGET_SCHEMA_ID,
+  migrateDeviceSchemaV6,
+} = require('./migrations/migrateDeviceSchemaV6');
+
 // GitHub API configuration
 const GITHUB_REPO_OWNER = 'jherforth';
 const GITHUB_REPO_NAME = 'HomeGlowPlugins';
@@ -578,531 +589,72 @@ console.log('Database path:', dbPath);
 let db; // Declare db variable outside to hold the single instance
 
 async function initializeDatabase() {
+  return initializeDatabaseMigration(db);
+}
+
+async function ConnectOrCreateDb() {
   try {
-    // Ensure the 'data' directory exists and is writable
     await fs.mkdir(path.dirname(dbPath), { recursive: true });
-    await fs.chmod(path.dirname(dbPath), 0o777); // Ensure directory is writable
+    await fs.chmod(path.dirname(dbPath), 0o777);
+
     const newDb = new Database(dbPath, { verbose: console.log });
     newDb.pragma('foreign_keys = ON');
-    newDb.exec(`
-      CREATE TABLE IF NOT EXISTS chores (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        title TEXT,\
-        description TEXT,\
-        time_period TEXT,\
-        assigned_day_of_week TEXT,\
-        repeat_type TEXT,\
-        completed BOOLEAN,
-        clam_value INTEGER DEFAULT 0,
-        expiration_date TEXT
-      );\
-      CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,\
-        username TEXT,\
-        email TEXT,\
-        profile_picture TEXT
-      );
-      INSERT OR IGNORE INTO users (id, username, email, profile_picture) VALUES (0, 'bonus', 'bonus@example.com', '');\
-      CREATE TABLE IF NOT EXISTS events (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,\
-        user_id INTEGER,\
-        summary TEXT,\
-        start TEXT,\
-        end TEXT,\
-        description TEXT
-      );\
-      CREATE TABLE IF NOT EXISTS settings (
-        key TEXT PRIMARY KEY,
-        value TEXT
-      );
-      CREATE TABLE IF NOT EXISTS prizes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        clam_cost INTEGER NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS calendar_sources (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        type TEXT NOT NULL,
-        url TEXT NOT NULL,
-        username TEXT,
-        password TEXT,
-        color TEXT NOT NULL DEFAULT '#6e44ff',
-        enabled INTEGER NOT NULL DEFAULT 1,
-        sort_order INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE INDEX IF NOT EXISTS idx_calendar_sources_enabled ON calendar_sources(enabled);
-      CREATE INDEX IF NOT EXISTS idx_calendar_sources_sort_order ON calendar_sources(sort_order);
-      CREATE TABLE IF NOT EXISTS photo_sources (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        type TEXT NOT NULL,
-        url TEXT,
-        api_key TEXT,
-        username TEXT,
-        password TEXT,
-        album_id TEXT,
-        refresh_token TEXT,
-        enabled INTEGER NOT NULL DEFAULT 1,
-        sort_order INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE INDEX IF NOT EXISTS idx_photo_sources_enabled ON photo_sources(enabled);
-      CREATE INDEX IF NOT EXISTS idx_photo_sources_sort_order ON photo_sources(sort_order);
-      CREATE TABLE IF NOT EXISTS admin_pin (
-        id INTEGER PRIMARY KEY CHECK (id = 1),
-        pin_hash TEXT NOT NULL,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE TABLE IF NOT EXISTS tabs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        label TEXT NOT NULL,
-        icon TEXT NOT NULL,
-        show_label INTEGER DEFAULT 1,
-        order_position INTEGER NOT NULL,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE TABLE IF NOT EXISTS widget_tab_assignments (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        widget_name TEXT NOT NULL,
-        tab_id INTEGER NOT NULL,
-        layout_x INTEGER,
-        layout_y INTEGER,
-        layout_w INTEGER,
-        layout_h INTEGER,
-        FOREIGN KEY (tab_id) REFERENCES tabs(id) ON DELETE CASCADE
-      );
-    `);
-
-    // Migration: Add repeat_type column if it doesn't exist and remove old repeats column
-    try {
-      // Check if repeat_type column exists
-      const columns = newDb.prepare("PRAGMA table_info(chores)").all();
-      const hasRepeatType = columns.some(col => col.name === 'repeat_type');
-      const hasRepeats = columns.some(col => col.name === 'repeats');
-
-      if (!hasRepeatType) {
-        console.log('Adding repeat_type column to chores table...');
-        newDb.exec('ALTER TABLE chores ADD COLUMN repeat_type TEXT DEFAULT "no-repeat"');
-
-        // If old repeats column exists, migrate data
-        if (hasRepeats) {
-          console.log('Migrating data from repeats to repeat_type...');
-          newDb.exec(`
-            UPDATE chores
-            SET repeat_type = CASE
-              WHEN repeats = 1 OR repeats = 'true' THEN 'weekly'
-              ELSE 'no-repeat'
-            END
-          `);
-        }
-      }
-
-      // Remove old repeats column if it exists
-      if (hasRepeats) {
-        console.log('Removing old repeats column...');
-        // SQLite doesn't support DROP COLUMN directly, so we need to recreate the table
-        newDb.exec(`
-          CREATE TABLE chores_new (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            title TEXT,
-            description TEXT,
-            time_period TEXT,
-            assigned_day_of_week TEXT,
-            repeat_type TEXT,
-            completed BOOLEAN,
-            clam_value INTEGER DEFAULT 0,
-            expiration_date TEXT
-          );
-
-          INSERT INTO chores_new (id, user_id, title, description, time_period, assigned_day_of_week, repeat_type, completed, clam_value, expiration_date)
-          SELECT id, user_id, title, description, time_period, assigned_day_of_week, repeat_type, completed, clam_value, expiration_date
-          FROM chores;
-
-          DROP TABLE chores;
-          ALTER TABLE chores_new RENAME TO chores;
-        `);
-        console.log('Migration completed successfully!');
-      }
-
-    } catch (migrationError) {
-      console.error('Migration error:', migrationError);
-      // Continue anyway - the app might still work with the new schema
-    }
-
-    // Migration: Move existing ICS_CALENDAR_URL to calendar_sources table
-    try {
-      const existingCalendars = newDb.prepare('SELECT COUNT(*) as count FROM calendar_sources').get();
-      if (existingCalendars.count === 0) {
-        const icsUrlSetting = newDb.prepare('SELECT value FROM settings WHERE key = ?').get('ICS_CALENDAR_URL');
-        if (icsUrlSetting && icsUrlSetting.value) {
-          console.log('Migrating existing ICS_CALENDAR_URL to calendar_sources table...');
-          newDb.prepare(`
-            INSERT INTO calendar_sources (name, type, url, color, enabled, sort_order)
-            VALUES (?, ?, ?, ?, ?, ?)
-          `).run('Default Calendar', 'ICS', icsUrlSetting.value, '#6e44ff', 1, 0);
-          console.log('ICS calendar migrated successfully!');
-        }
-      }
-    } catch (calendarMigrationError) {
-      console.error('Calendar migration error:', calendarMigrationError);
-    }
-
-    return newDb; // Return the new database instance
+    return newDb;
   } catch (error) {
-    console.error('Failed to initialize database:', error);
+    console.error('Failed to connect or create database:', error);
     throw error;
   }
 }
 
-// Helper function to convert old repeat_type to crontab expression
-function convertRepeatTypeToCrontab(repeat_type, assigned_day_of_week) {
-  const dayMap = {
-    'sunday': '0',
-    'monday': '1',
-    'tuesday': '2',
-    'wednesday': '3',
-    'thursday': '4',
-    'friday': '5',
-    'saturday': '6'
-  };
-
-  switch (repeat_type) {
-    case 'daily':
-      return '0 0 * * *';
-    case 'weekly':
-      const dayNum = dayMap[assigned_day_of_week.toLowerCase()] || '1';
-      return `0 0 * * ${dayNum}`;
-    case 'until-completed':
-      return '0 0 * * *';
-    case 'no-repeat':
-      return null;
-    default:
-      return '0 0 * * *';
-  }
+function doesTableExist(tableName) {
+  const table = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+    .get(tableName);
+  return !!table;
 }
 
-// Database migration function
-async function migrateChoresDatabase() {
-  try {
-    console.log('=== Checking for database migration ===');
-
-    const migrationVersionRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('chores_migration_version');
-    const currentVersion = migrationVersionRow ? parseInt(migrationVersionRow.value) : 0;
-
-    if (currentVersion >= 1) {
-      console.log('Migration already completed (version:', currentVersion, ')');
-      return;
-    }
-
-    console.log('=== Starting chores database migration ===');
-
-    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('migration_in_progress', '1');
-
-    console.log('Step 1: Creating new tables...');
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS chore_schedules (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        chore_id INTEGER NOT NULL,
-        user_id INTEGER NULL,
-        crontab TEXT NULL,
-        visible INTEGER NOT NULL DEFAULT 1,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (chore_id) REFERENCES chores(id) ON DELETE CASCADE
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_chore_schedules_chore_id ON chore_schedules(chore_id);
-      CREATE INDEX IF NOT EXISTS idx_chore_schedules_user_id ON chore_schedules(user_id);
-      CREATE INDEX IF NOT EXISTS idx_chore_schedules_visible ON chore_schedules(visible);
-
-      CREATE TABLE IF NOT EXISTS chore_history (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        chore_schedule_id INTEGER NULL,
-        date TEXT NOT NULL,
-        clam_value INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (chore_schedule_id) REFERENCES chore_schedules(id) ON DELETE SET NULL
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_chore_history_user_id ON chore_history(user_id);
-      CREATE INDEX IF NOT EXISTS idx_chore_history_date ON chore_history(date);
-      CREATE INDEX IF NOT EXISTS idx_chore_history_user_date ON chore_history(user_id, date);
-    `);
-    console.log('New tables created successfully');
-
-    console.log('Step 2: Backing up existing chores...');
-    const existingChores = db.prepare('SELECT * FROM chores').all();
-    console.log(`Found ${existingChores.length} existing chores to migrate`);
-
-    console.log('Step 3: Creating backup table...');
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS chores_backup AS SELECT * FROM chores;
-    `);
-
-    console.log('Step 4: Creating new chores table structure...');
-    db.exec(`
-      CREATE TABLE chores_new (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT NOT NULL,
-        description TEXT,
-        clam_value INTEGER DEFAULT 0
-      );
-    `);
-
-    console.log('Step 5: Migrating chore data...');
-    const today = getTodayLocalDateString();
-    const processedChores = new Map();
-
-    for (const oldChore of existingChores) {
-      let choreId;
-
-      const key = `${oldChore.title}-${oldChore.description || ''}-${oldChore.clam_value}`;
-
-      if (processedChores.has(key)) {
-        choreId = processedChores.get(key);
-      } else {
-        const insertResult = db.prepare(`
-          INSERT INTO chores_new (title, description, clam_value)
-          VALUES (?, ?, ?)
-        `).run(oldChore.title, oldChore.description, oldChore.clam_value || 0);
-
-        choreId = insertResult.lastInsertRowid;
-        processedChores.set(key, choreId);
-      }
-
-      const crontab = convertRepeatTypeToCrontab(
-        oldChore.repeat_type || 'weekly',
-        oldChore.assigned_day_of_week || 'monday'
-      );
-
-      const visible = (oldChore.repeat_type === 'no-repeat' && oldChore.completed) ? 0 : 1;
-
-      const scheduleResult = db.prepare(`
-        INSERT INTO chore_schedules (chore_id, user_id, crontab, visible)
-        VALUES (?, ?, ?, ?)
-      `).run(choreId, oldChore.user_id, crontab, visible);
-
-      if (oldChore.completed && oldChore.completed === 1) {
-        db.prepare(`
-          INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value)
-          VALUES (?, ?, ?, ?)
-        `).run(oldChore.user_id, scheduleResult.lastInsertRowid, today, oldChore.clam_value || 0);
-      }
-    }
-
-    console.log('Step 6: Replacing old chores table...');
-    db.exec(`
-      DROP TABLE chores;
-      ALTER TABLE chores_new RENAME TO chores;
-    `);
-
-    console.log('Step 7: Updating migration version...');
-    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('chores_migration_version', '1');
-    db.prepare('DELETE FROM settings WHERE key = ?').run('migration_in_progress');
-
-    console.log('=== Migration completed successfully ===');
-    console.log(`Migrated ${existingChores.length} chores, created ${processedChores.size} unique chore definitions`);
-
-  } catch (error) {
-    console.error('=== Migration failed ===');
-    console.error('Error:', error);
-    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('migration_error', error.message);
-    throw error;
+async function runInitialMigrationsIfNeeded() {
+  if (doesTableExist('settings')) {
+    return;
   }
+
+  console.log('settings table not found; running initial bootstrap migrations');
+  await initializeDatabase();
+  await migrateChoresDatabase(db, getTodayLocalDateString);
+  await migrateClamsToHistory(db, getTodayLocalDateString);
+  await migrateChoreHistoryTitle(db);
+  await migrateToDurationField(db);
 }
 
-async function migrateClamsToHistory() {
-  try {
-    console.log('=== Checking for clam_total migration ===');
-
-    const migrationVersionRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('clam_migration_version');
-    const currentVersion = migrationVersionRow ? parseInt(migrationVersionRow.value) : 0;
-
-    if (currentVersion >= 1) {
-      console.log('Clam migration already completed (version:', currentVersion, ')');
-      return;
-    }
-
-    const columns = db.prepare("PRAGMA table_info(users)").all();
-    const hasClaimTotal = columns.some(col => col.name === 'clam_total');
-
-    if (!hasClaimTotal) {
-      console.log('clam_total column does not exist, skipping migration');
-      db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('clam_migration_version', '1');
-      return;
-    }
-
-    console.log('=== Starting clam_total to chore_history migration ===');
-
-    const today = getTodayLocalDateString();
-
-    const usersWithClams = db.prepare('SELECT id, username, clam_total FROM users WHERE clam_total > 0 AND id != 0').all();
-    console.log(`Found ${usersWithClams.length} users with clam_total > 0`);
-
-    for (const user of usersWithClams) {
-      db.prepare(`
-        INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value)
-        VALUES (?, NULL, ?, ?)
-      `).run(user.id, today, user.clam_total);
-      console.log(`Migrated ${user.clam_total} clams for user "${user.username}" (ID: ${user.id})`);
-    }
-
-    console.log('Removing clam_total column from users table...');
-    db.exec(`
-      CREATE TABLE users_new (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT,
-        email TEXT,
-        profile_picture TEXT
-      );
-      INSERT INTO users_new (id, username, email, profile_picture)
-      SELECT id, username, email, profile_picture FROM users;
-      DROP TABLE users;
-      ALTER TABLE users_new RENAME TO users;
-    `);
-
-    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('clam_migration_version', '1');
-
-    console.log('=== Clam migration completed successfully ===');
-    console.log(`Migrated clams for ${usersWithClams.length} users`);
-
-  } catch (error) {
-    console.error('=== Clam migration failed ===');
-    console.error('Error:', error);
-    throw error;
-  }
+function getCurrentSystemSchemaId() {
+  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(SYSTEM_SCHEMA_ID_KEY);
+  return row ? parseInt(row.value, 10) || 0 : 0;
 }
 
-async function migrateChoreHistoryTitle() {
-  try {
-    const columns = db.prepare("PRAGMA table_info(chore_history)").all();
-    const hasTitle = columns.some(col => col.name === 'title');
-    if (!hasTitle) {
-      db.exec("ALTER TABLE chore_history ADD COLUMN title TEXT DEFAULT NULL");
-      console.log('Added title column to chore_history');
-    }
-  } catch (error) {
-    console.error('Error migrating chore_history title:', error);
-    throw error;
-  }
+function getPendingSchemaMigrations(currentSchemaId) {
+  const schemaMigrations = [
+    {
+      schemaId: TARGET_SCHEMA_ID,
+      name: 'migrateDeviceSchemaV6',
+      run: migrateDeviceSchemaV6,
+    },
+  ];
+
+  return schemaMigrations.filter(migration => migration.schemaId > currentSchemaId);
 }
 
-async function migrateToDurationField() {
-  try {
-    console.log('=== Checking for duration field migration ===');
+async function runPendingSchemaMigrations() {
+  const currentSchemaId = getCurrentSystemSchemaId();
+  const pendingMigrations = getPendingSchemaMigrations(currentSchemaId);
 
-    const migrationVersionRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('duration_migration_version');
-    const currentVersion = migrationVersionRow ? parseInt(migrationVersionRow.value) : 0;
-
-    if (currentVersion >= 1) {
-      console.log('Duration migration already completed (version:', currentVersion, ')');
-      return;
-    }
-
-    console.log('=== Starting duration field migration ===');
-
-    const columns = db.prepare("PRAGMA table_info(chore_schedules)").all();
-    const hasDuration = columns.some(col => col.name === 'duration');
-
-    if (!hasDuration) {
-      console.log('Adding duration column to chore_schedules table...');
-      db.exec('ALTER TABLE chore_schedules ADD COLUMN duration TEXT DEFAULT "day-of"');
-      console.log('Duration column added successfully');
-    }
-
-    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('duration_migration_version', '1');
-
-    console.log('=== Duration migration completed successfully ===');
-
-  } catch (error) {
-    console.error('=== Duration migration failed ===');
-    console.error('Error:', error);
-    throw error;
+  if (pendingMigrations.length === 0) {
+    console.log(`No pending schema migrations. Current schema ID: ${currentSchemaId}`);
+    return;
   }
-}
 
-async function migrateDeviceSchemaV6() {
-  const targetVersion = 6;
-  const schemaIdKey = 'SYSTEM_SCHEMA_ID';
-
-  try {
-    console.log(`=== Checking device schema migration (${schemaIdKey}) ===`);
-
-    const schemaVersionRow = db.prepare('SELECT value FROM settings WHERE key = ?').get(schemaIdKey);
-    const currentVersion = schemaVersionRow ? parseInt(schemaVersionRow.value, 10) : 0;
-
-    if (currentVersion >= targetVersion) {
-      console.log(`Device schema migration already completed (version: ${currentVersion})`);
-      return;
-    }
-
-    console.log(`=== Starting device schema migration to version ${targetVersion} ===`);
-
-    db.exec('PRAGMA foreign_keys = OFF');
-    db.exec('BEGIN');
-
-    try {
-      db.exec(`
-        DROP TABLE IF EXISTS devices;
-        CREATE TABLE devices (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          name TEXT NOT NULL UNIQUE,
-          updateTime TEXT DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE INDEX IF NOT EXISTS idx_devices_device_name ON devices(name);
-
-        DROP TABLE IF EXISTS tabs;
-        CREATE TABLE tabs (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          device_name TEXT NOT NULL,
-          number INTEGER NOT NULL,
-          label TEXT NOT NULL,
-          icon TEXT NOT NULL,
-          show_label INTEGER DEFAULT 1,
-          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (device_name) REFERENCES devices(name) ON DELETE CASCADE ON UPDATE CASCADE,
-          UNIQUE(device_name, number)
-        );
-        CREATE INDEX IF NOT EXISTS idx_tabs_device_name ON tabs(device_name);
-
-        DROP TABLE IF EXISTS widget_tab_assignments;
-        CREATE TABLE widget_tab_assignments (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          device_name TEXT NOT NULL,
-          tab_number INTEGER NOT NULL,
-          widget_name TEXT NOT NULL,
-          layout_x INTEGER,
-          layout_y INTEGER,
-          layout_w INTEGER,
-          layout_h INTEGER,
-          FOREIGN KEY (device_name) REFERENCES devices(name) ON DELETE CASCADE ON UPDATE CASCADE,
-          FOREIGN KEY("device_name","tab_number") REFERENCES "tabs"("device_name","number") ON DELETE CASCADE ON UPDATE CASCADE
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_widget_tab_assignments_widget ON widget_tab_assignments(widget_name);
-        CREATE INDEX IF NOT EXISTS idx_widget_tab_assignments_tab_number ON widget_tab_assignments(tab_number);
-        CREATE INDEX IF NOT EXISTS idx_widget_tab_assignments_device_name_tab_number ON widget_tab_assignments(device_name, tab_number);
-      `);
-
-      db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(schemaIdKey, String(targetVersion));
-
-      db.exec('COMMIT');
-      console.log(`=== Device schema migration completed successfully (version ${targetVersion}) ===`);
-    } catch (migrationError) {
-      db.exec('ROLLBACK');
-      throw migrationError;
-    } finally {
-      db.exec('PRAGMA foreign_keys = ON');
-    }
-  } catch (error) {
-    console.error('=== Device schema migration failed ===');
-    console.error('Error:', error);
-    throw error;
+  for (const migration of pendingMigrations) {
+    console.log(`Running schema migration ${migration.name} (target schema ID: ${migration.schemaId})`);
+    await migration.run(db);
   }
 }
 
@@ -3515,12 +3067,9 @@ fastify.get('/api/system/backgroundTasks', async (request, reply) => {
 // Start server
 const start = async () => {
   try {
-    db = await initializeDatabase(); // Initialize db once here
-    await migrateChoresDatabase(); // Run migration if needed
-    await migrateClamsToHistory(); // Migrate clam_total to chore_history
-    await migrateChoreHistoryTitle(); // Add title field to chore_history
-    await migrateToDurationField(); // Add duration field to chore_schedules
-    await migrateDeviceSchemaV6(); // Migrate tabs/widget assignments to device schema
+    db = await ConnectOrCreateDb();
+    await runInitialMigrationsIfNeeded();
+    await runPendingSchemaMigrations();
     initializeDefaultSettings(); // Initialize default settings
     startNightlyCronJob(); // Start the nightly chore pruning job
 
