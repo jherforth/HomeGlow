@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -71,11 +71,26 @@ const availableIcons = [
   { name: 'trashcan', icon: Delete, label: 'Trashcan' },
 ];
 
-const TabIconModal = ({ open, onClose, onSave }) => {
+const TabIconModal = ({
+  open,
+  onClose,
+  onSave,
+  title = 'Create New Tab',
+  saveButtonText = 'Create Tab',
+  initialData = null,
+}) => {
   const [label, setLabel] = useState('');
   const [selectedIcon, setSelectedIcon] = useState('star');
   const [showLabel, setShowLabel] = useState(true);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!open) return;
+    setLabel(initialData?.label || '');
+    setSelectedIcon(initialData?.icon || 'star');
+    setShowLabel(initialData?.show_label ?? true);
+    setError('');
+  }, [open, initialData]);
 
   const handleSave = () => {
     if (!label.trim()) {
@@ -101,9 +116,6 @@ const TabIconModal = ({ open, onClose, onSave }) => {
   };
 
   const handleClose = () => {
-    setLabel('');
-    setSelectedIcon('star');
-    setShowLabel(true);
     setError('');
     onClose();
   };
@@ -112,7 +124,7 @@ const TabIconModal = ({ open, onClose, onSave }) => {
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
       <DialogTitle>
         <Typography variant="h6" component="div">
-          Create New Tab
+          {title}
         </Typography>
       </DialogTitle>
       <DialogContent>
@@ -190,7 +202,7 @@ const TabIconModal = ({ open, onClose, onSave }) => {
           Cancel
         </Button>
         <Button onClick={handleSave} variant="contained" disabled={!label.trim()}>
-          Create Tab
+          {saveButtonText}
         </Button>
       </DialogActions>
     </Dialog>

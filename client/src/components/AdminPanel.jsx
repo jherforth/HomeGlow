@@ -72,8 +72,9 @@ import { getDeviceApiBase } from '../utils/deviceGuid.js';
 import PinModal from './PinModal';
 import ChoreSchedulesTab from './ChoreSchedulesTab';
 import ChoreHistoryTab from './ChoreHistoryTab';
+import TabIconModal from './TabIconModal';
 
-const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
+const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [activeTab, setActiveTab] = useState(0);
   const [choresSubTab, setChoresSubTab] = useState(0);
@@ -128,48 +129,14 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
       slideshowInterval: 10
     };
   });
-  const [tabEditorDialog, setTabEditorDialog] = useState({
+  const [tabIconModalState, setTabIconModalState] = useState({
     open: false,
     mode: 'create',
     originalNumber: null,
-    form: {
-      label: '',
-      icon: 'star',
-      show_label: true,
-    },
+    initialData: null,
   });
   const [deleteTabDialog, setDeleteTabDialog] = useState({ open: false, tab: null });
   const [draggingTabNumber, setDraggingTabNumber] = useState(null);
-
-  const availableTabIcons = [
-    'home',
-    'bell',
-    'bookmark',
-    'building',
-    'bucket',
-    'calendar',
-    'camera',
-    'chart',
-    'chat',
-    'clipboard',
-    'clock',
-    'clouds',
-    'compass',
-    'envelope',
-    'file',
-    'flag',
-    'folder',
-    'gem',
-    'hand',
-    'heart',
-    'image',
-    'lightbulb',
-    'map',
-    'money',
-    'shovel',
-    'star',
-    'trashcan',
-  ];
 
   // Refresh interval options in milliseconds
   const refreshIntervalOptions = [
@@ -475,24 +442,20 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
   };
 
   const openCreateTabDialog = () => {
-    setTabEditorDialog({
+    setTabIconModalState({
       open: true,
       mode: 'create',
       originalNumber: null,
-      form: {
-        label: '',
-        icon: 'star',
-        show_label: true,
-      },
+      initialData: null,
     });
   };
 
   const openEditTabDialog = (tab) => {
-    setTabEditorDialog({
+    setTabIconModalState({
       open: true,
       mode: 'edit',
       originalNumber: tab.number,
-      form: {
+      initialData: {
         label: tab.label || '',
         icon: tab.icon || 'star',
         show_label: Boolean(tab.show_label),
@@ -501,11 +464,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
   };
 
   const closeTabEditorDialog = () => {
-    setTabEditorDialog(prev => ({ ...prev, open: false }));
+    setTabIconModalState(prev => ({ ...prev, open: false }));
   };
 
-  const saveTabDefinition = async () => {
-    const trimmedLabel = (tabEditorDialog.form.label || '').trim();
+  const saveTabDefinition = async (tabData) => {
+    const trimmedLabel = (tabData.label || '').trim();
     if (!trimmedLabel) {
       setSaveMessage({ show: true, type: 'error', text: 'Tab label is required.' });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
@@ -514,23 +477,26 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
 
     try {
       setIsLoading(true);
-      if (tabEditorDialog.mode === 'edit') {
-        await axios.patch(`${API_DEVICE_URL}/tabs/${tabEditorDialog.originalNumber}`, {
+      if (tabIconModalState.mode === 'edit') {
+        await axios.patch(`${API_DEVICE_URL}/tabs/${tabIconModalState.originalNumber}`, {
           label: trimmedLabel,
-          icon: tabEditorDialog.form.icon,
-          show_label: tabEditorDialog.form.show_label,
+          icon: tabData.icon,
+          show_label: tabData.show_label,
         });
       } else {
         await axios.post(`${API_DEVICE_URL}/tabs`, {
           label: trimmedLabel,
-          icon: tabEditorDialog.form.icon,
-          show_label: tabEditorDialog.form.show_label,
+          icon: tabData.icon,
+          show_label: tabData.show_label,
         });
       }
 
       closeTabEditorDialog();
       await fetchTabs();
-      setSaveMessage({ show: true, type: 'success', text: `Tab ${tabEditorDialog.mode === 'edit' ? 'updated' : 'created'} successfully.` });
+      if (onTabsChanged) {
+        await onTabsChanged();
+      }
+      setSaveMessage({ show: true, type: 'success', text: `Tab ${tabIconModalState.mode === 'edit' ? 'updated' : 'created'} successfully.` });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } catch (error) {
       console.error('Error saving tab:', error);
@@ -556,6 +522,9 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
       setDeleteTabDialog({ open: false, tab: null });
       await fetchTabs();
       await fetchWidgetAssignments();
+      if (onTabsChanged) {
+        await onTabsChanged();
+      }
       setSaveMessage({ show: true, type: 'success', text: 'Tab deleted successfully.' });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } catch (error) {
@@ -573,9 +542,37 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
       await axios.patch(`${API_DEVICE_URL}/tabs/reorder`, { orderedTabNumbers });
       await fetchTabs();
       await fetchWidgetAssignments();
+      if (onTabsChanged) {
+        await onTabsChanged();
+      }
     } catch (error) {
       console.error('Error reordering tabs:', error);
       setSaveMessage({ show: true, type: 'error', text: 'Failed to reorder tabs. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const toggleTabShowLabel = async (tab) => {
+    try {
+      setIsLoading(true);
+      await axios.patch(`${API_DEVICE_URL}/tabs/${tab.number}`, {
+        label: tab.label,
+        icon: tab.icon,
+        show_label: !Boolean(tab.show_label),
+      });
+
+      await fetchTabs();
+      if (onTabsChanged) {
+        await onTabsChanged();
+      }
+
+      setSaveMessage({ show: true, type: 'success', text: 'Tab label visibility updated.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error updating tab label visibility:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to update tab label visibility.' });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } finally {
       setIsLoading(false);
@@ -1674,10 +1671,12 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
                               <Chip size="small" label={tab.icon} />
                             </TableCell>
                             <TableCell>
-                              <Chip
-                                size="small"
-                                label={Boolean(tab.show_label) ? 'Shown' : 'Hidden'}
-                                color={Boolean(tab.show_label) ? 'success' : 'default'}
+                              <Switch
+                                checked={Boolean(tab.show_label)}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={() => toggleTabShowLabel(tab)}
+                                disabled={isLoading}
+                                inputProps={{ 'aria-label': `Toggle show label for ${tab.label}` }}
                               />
                             </TableCell>
                             <TableCell>
@@ -2383,75 +2382,14 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
       )}
 
       {/* User Delete Confirmation Dialog */}
-      <Dialog
-        open={tabEditorDialog.open}
+      <TabIconModal
+        open={tabIconModalState.open}
         onClose={closeTabEditorDialog}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>{tabEditorDialog.mode === 'edit' ? 'Edit Tab' : 'Create Tab'}</DialogTitle>
-        <DialogContent>
-          <Box sx={{ pt: 1, display: 'grid', gap: 2 }}>
-            <TextField
-              label="Tab Label"
-              value={tabEditorDialog.form.label}
-              onChange={(e) => setTabEditorDialog(prev => ({
-                ...prev,
-                form: {
-                  ...prev.form,
-                  label: e.target.value,
-                },
-              }))}
-              fullWidth
-              autoFocus
-              inputProps={{ maxLength: 20 }}
-              helperText={`${tabEditorDialog.form.label.length}/20 characters`}
+        onSave={saveTabDefinition}
+        title={tabIconModalState.mode === 'edit' ? 'Edit Tab' : 'Create New Tab'}
+        saveButtonText={tabIconModalState.mode === 'edit' ? 'Save Changes' : 'Create Tab'}
+        initialData={tabIconModalState.initialData}
             />
-
-            <FormControl fullWidth>
-              <InputLabel id="admin-tab-icon-label">Icon</InputLabel>
-              <Select
-                labelId="admin-tab-icon-label"
-                value={tabEditorDialog.form.icon}
-                label="Icon"
-                onChange={(e) => setTabEditorDialog(prev => ({
-                  ...prev,
-                  form: {
-                    ...prev.form,
-                    icon: e.target.value,
-                  },
-                }))}
-              >
-                {availableTabIcons.map((iconName) => (
-                  <MenuItem key={iconName} value={iconName}>{iconName}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={tabEditorDialog.form.show_label}
-                  onChange={(e) => setTabEditorDialog(prev => ({
-                    ...prev,
-                    form: {
-                      ...prev.form,
-                      show_label: e.target.checked,
-                    },
-                  }))}
-                />
-              }
-              label="Show label on tab"
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={closeTabEditorDialog} variant="outlined">Cancel</Button>
-          <Button onClick={saveTabDefinition} variant="contained" startIcon={<Save />}>
-            {tabEditorDialog.mode === 'edit' ? 'Save Changes' : 'Create Tab'}
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       <Dialog
         open={deleteTabDialog.open}

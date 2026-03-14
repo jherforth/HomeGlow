@@ -477,7 +477,14 @@ const App = () => {
           >
             <Close />
           </IconButton>
-          <AdminPanel setWidgetSettings={setWidgetSettings} onPluginsChanged={fetchInstalledPlugins} />
+          <AdminPanel
+            setWidgetSettings={setWidgetSettings}
+            onPluginsChanged={fetchInstalledPlugins}
+            onTabsChanged={async () => {
+              await fetchTabs();
+              await fetchWidgetAssignments();
+            }}
+          />
         </DialogContent>
       </Dialog>
 
