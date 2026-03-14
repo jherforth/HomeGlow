@@ -45,6 +45,7 @@ import {
 } from '@mui/material';
 import {
   Delete,
+  ContentCopy,
   Edit,
   Save,
   Cancel,
@@ -68,7 +69,7 @@ import {
 import ColorPickerPopover from './ColorPickerPopover';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
-import { getDeviceApiBase } from '../utils/deviceGuid.js';
+import { getDeviceApiBase, getDeviceGuid } from '../utils/deviceGuid.js';
 import PinModal from './PinModal';
 import ChoreSchedulesTab from './ChoreSchedulesTab';
 import ChoreHistoryTab from './ChoreHistoryTab';
@@ -76,6 +77,7 @@ import TabIconModal from './TabIconModal';
 
 const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
+  const currentDeviceGuid = getDeviceGuid();
   const CORE_WIDGET_DEFAULT_SIZES = {
     calendar: { w: 8, h: 5 },
     weather: { w: 4, h: 3 },
@@ -143,6 +145,9 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   });
   const [deleteTabDialog, setDeleteTabDialog] = useState({ open: false, tab: null });
   const [draggingTabNumber, setDraggingTabNumber] = useState(null);
+  const [devices, setDevices] = useState([]);
+  const [copyDeviceDialog, setCopyDeviceDialog] = useState({ open: false, device: null });
+  const [deleteDeviceDialog, setDeleteDeviceDialog] = useState({ open: false, device: null });
 
   // Refresh interval options in milliseconds
   const refreshIntervalOptions = [
@@ -192,8 +197,19 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       fetchTabs();
       fetchWidgetAssignments();
       fetchPhotoSources();
+      fetchDevices();
     }
   }, [isAuthenticated]);
+
+  const fetchDevices = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/devices`);
+      setDevices(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Error fetching devices:', error);
+      setDevices([]);
+    }
+  };
 
   const fetchPhotoSources = async () => {
     try {
@@ -792,6 +808,71 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     await saveTabOrder(orderedTabNumbers);
   };
 
+  const openCopyDeviceDialog = (device) => {
+    setCopyDeviceDialog({ open: true, device });
+  };
+
+  const confirmCopyDeviceToCurrent = async () => {
+    if (!copyDeviceDialog.device?.guid) {
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      await axios.post(`${API_DEVICE_URL}/copy-from/${encodeURIComponent(copyDeviceDialog.device.guid)}`);
+
+      setCopyDeviceDialog({ open: false, device: null });
+      await fetchTabs();
+      await fetchWidgetAssignments();
+      await fetchDevices();
+      if (onTabsChanged) {
+        await onTabsChanged();
+      }
+
+      setSaveMessage({ show: true, type: 'success', text: 'Device tabs and widget settings copied successfully.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error copying device settings:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to copy device settings. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const openDeleteDeviceDialog = (device) => {
+    setDeleteDeviceDialog({ open: true, device });
+  };
+
+  const confirmDeleteDevice = async () => {
+    const deviceGuid = deleteDeviceDialog.device?.guid;
+    if (!deviceGuid) {
+      return;
+    }
+
+    if (deviceGuid === currentDeviceGuid) {
+      setSaveMessage({ show: true, type: 'error', text: 'You cannot delete the current device.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+      setDeleteDeviceDialog({ open: false, device: null });
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      await axios.delete(`${API_BASE_URL}/api/devices/${encodeURIComponent(deviceGuid)}`);
+      setDeleteDeviceDialog({ open: false, device: null });
+      await fetchDevices();
+      setSaveMessage({ show: true, type: 'success', text: 'Device deleted successfully.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error deleting device:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to delete device. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const saveInterfaceSettings = () => {
     localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
     setWidgetSettings(widgetSettings);
@@ -1314,6 +1395,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 <Tab label="Widgets" />
                 <Tab label="Plugins" />
                 <Tab label="Tabs" />
+                <Tab label="Devices" />
               </Tabs>
             </Box>
 
@@ -1875,6 +1957,82 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                                 color="error"
                                 size="small"
                                 disabled={isHome}
+                              >
+                                <Delete />
+                              </IconButton>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </>
+            )}
+
+            {widgetsSubTab === 3 && (
+              <>
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  Manage devices and copy tabs/widget settings between them. Copying will overwrite the current device tabs and widget assignments.
+                </Alert>
+
+                <Box sx={{ mb: 2, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
+                  <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
+                    Current Device GUID
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                    <Chip label="Current" color="primary" size="small" />
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                      {currentDeviceGuid}
+                    </Typography>
+                  </Box>
+                </Box>
+
+                <TableContainer component={Paper}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>GUID</TableCell>
+                        <TableCell>Update</TableCell>
+                        <TableCell>Widgets</TableCell>
+                        <TableCell width={120}>Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {devices.map((device) => {
+                        const isCurrent = device.guid === currentDeviceGuid;
+                        return (
+                          <TableRow key={device.guid}>
+                            <TableCell>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                                {isCurrent && <Chip label="Current" color="primary" size="small" />}
+                                <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                                  {device.guid}
+                                </Typography>
+                              </Box>
+                            </TableCell>
+                            <TableCell>
+                              {device.updateTime ? new Date(device.updateTime).toLocaleString() : 'Unknown'}
+                            </TableCell>
+                            <TableCell>
+                              <Chip label={Number(device.widgets) || 0} size="small" />
+                            </TableCell>
+                            <TableCell>
+                              <IconButton
+                                onClick={() => openCopyDeviceDialog(device)}
+                                color="primary"
+                                size="small"
+                                title="Copy this device to current"
+                                disabled={isCurrent}
+                              >
+                                <ContentCopy />
+                              </IconButton>
+                              <IconButton
+                                onClick={() => openDeleteDeviceDialog(device)}
+                                color="error"
+                                size="small"
+                                title="Delete device"
+                                disabled={isCurrent}
                               >
                                 <Delete />
                               </IconButton>
@@ -2599,6 +2757,72 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
           </Button>
           <Button onClick={confirmDeleteTab} variant="contained" color="error" startIcon={<Delete />}>
             Delete Tab
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={copyDeviceDialog.open}
+        onClose={() => setCopyDeviceDialog({ open: false, device: null })}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Warning color="warning" />
+            <Typography variant="h6">Copy Device Settings</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            This action will COPY all tabs and widget settings from the selected device to this current client.
+          </Alert>
+          <Typography sx={{ mb: 2 }}>
+            This will overwrite all current tabs and widget assignments.
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Source device: <strong>{copyDeviceDialog.device?.guid}</strong>
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Destination device: <strong>{currentDeviceGuid}</strong>
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCopyDeviceDialog({ open: false, device: null })} variant="outlined">
+            Cancel
+          </Button>
+          <Button onClick={confirmCopyDeviceToCurrent} variant="contained" color="warning" startIcon={<ContentCopy />}>
+            Confirm Copy
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={deleteDeviceDialog.open}
+        onClose={() => setDeleteDeviceDialog({ open: false, device: null })}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Warning color="error" />
+            <Typography variant="h6">Delete Device</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            This action cannot be undone.
+          </Alert>
+          <Typography>
+            Are you sure you want to delete device <strong>{deleteDeviceDialog.device?.guid}</strong>?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDeviceDialog({ open: false, device: null })} variant="outlined">
+            Cancel
+          </Button>
+          <Button onClick={confirmDeleteDevice} variant="contained" color="error" startIcon={<Delete />}>
+            Delete Device
           </Button>
         </DialogActions>
       </Dialog>

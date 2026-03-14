@@ -1364,6 +1364,114 @@ function touchDeviceUpdateTime(deviceGuid) {
   db.prepare('UPDATE devices SET updateTime = CURRENT_TIMESTAMP WHERE guid = ?').run(deviceGuid);
 }
 
+// Devices API Endpoints
+fastify.get('/api/devices', async (request, reply) => {
+  try {
+    const devices = db.prepare(`
+      SELECT
+        d.guid,
+        d.updateTime,
+        COUNT(wta.id) AS widgets
+      FROM devices d
+      LEFT JOIN widget_tab_assignments wta ON wta.device_guid = d.guid
+      GROUP BY d.guid, d.updateTime
+      ORDER BY d.updateTime DESC
+    `).all();
+
+    return devices;
+  } catch (error) {
+    console.error('Error fetching devices:', error);
+    reply.status(500).send({ error: 'Failed to fetch devices' });
+  }
+});
+
+fastify.post('/api/devices/:deviceGuid/copy-from/:sourceDeviceGuid', async (request, reply) => {
+  const { deviceGuid, sourceDeviceGuid } = request.params;
+
+  if (!deviceGuid || !sourceDeviceGuid) {
+    return reply.status(400).send({ error: 'deviceGuid and sourceDeviceGuid are required' });
+  }
+
+  if (deviceGuid === sourceDeviceGuid) {
+    return reply.status(400).send({ error: 'Source and destination devices must be different' });
+  }
+
+  try {
+    const sourceExists = db.prepare('SELECT guid FROM devices WHERE guid = ?').get(sourceDeviceGuid);
+    if (!sourceExists) {
+      return reply.status(404).send({ error: 'Source device not found' });
+    }
+
+    ensureDeviceExists(deviceGuid);
+
+    const copyTransaction = db.transaction(() => {
+      db.prepare('DELETE FROM widget_tab_assignments WHERE device_guid = ?').run(deviceGuid);
+      db.prepare('DELETE FROM tabs WHERE device_guid = ?').run(deviceGuid);
+
+      db.prepare(`
+        INSERT INTO tabs (device_guid, label, icon, show_label, number)
+        SELECT ?, label, icon, show_label, number
+        FROM tabs
+        WHERE device_guid = ?
+        ORDER BY number ASC
+      `).run(deviceGuid, sourceDeviceGuid);
+
+      db.prepare(`
+        INSERT INTO widget_tab_assignments (
+          widget_name,
+          tab_number,
+          layout_x,
+          layout_y,
+          layout_w,
+          layout_h,
+          device_guid
+        )
+        SELECT
+          widget_name,
+          tab_number,
+          layout_x,
+          layout_y,
+          layout_w,
+          layout_h,
+          ?
+        FROM widget_tab_assignments
+        WHERE device_guid = ?
+      `).run(deviceGuid, sourceDeviceGuid);
+
+      ensureHomeTabExists(deviceGuid);
+      touchDeviceUpdateTime(deviceGuid);
+    });
+
+    copyTransaction();
+    return { success: true, message: 'Device tabs and widget settings copied successfully' };
+  } catch (error) {
+    console.error('Error copying device data:', error);
+    reply.status(500).send({ error: 'Failed to copy device data' });
+  }
+});
+
+fastify.delete('/api/devices/:deviceGuid', async (request, reply) => {
+  const { deviceGuid } = request.params;
+
+  if (!deviceGuid) {
+    return reply.status(400).send({ error: 'deviceGuid is required' });
+  }
+
+  try {
+    const stmt = db.prepare('DELETE FROM devices WHERE guid = ?');
+    const result = stmt.run(deviceGuid);
+
+    if (result.changes === 0) {
+      return reply.status(404).send({ error: 'Device not found' });
+    }
+
+    return { success: true, message: 'Device deleted successfully' };
+  } catch (error) {
+    console.error('Error deleting device:', error);
+    reply.status(500).send({ error: 'Failed to delete device' });
+  }
+});
+
 // Chore routes (updated for new schema)
 fastify.get('/api/chores', async (request, reply) => {
   try {
