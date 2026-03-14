@@ -25,16 +25,22 @@ const widgetRegistryPath = path.join(__dirname, 'widgets_registry.json');
 const CalendarSyncService = require('./services/calendarSync');
 let calendarSyncService = null;
 
-const initializeDatabaseMigration = require('./migrations/initializeDatabase');
+const initializeDatabase = require('./migrations/initializeDatabase');
 const migrateChoresDatabase = require('./migrations/migrateChoresDatabase');
 const migrateClamsToHistory = require('./migrations/migrateClamsToHistory');
 const migrateChoreHistoryTitle = require('./migrations/migrateChoreHistoryTitle');
 const migrateToDurationField = require('./migrations/migrateToDurationField');
 const {
-  SYSTEM_SCHEMA_ID_KEY,
-  TARGET_SCHEMA_ID,
   migrateDeviceSchemaV6,
 } = require('./migrations/migrateDeviceSchemaV6');
+
+const schemaMigrations = [
+  {
+    schemaId: 6,
+    name: 'migrateDeviceSchemaV6',
+    run: migrateDeviceSchemaV6,
+  },
+];
 
 // GitHub API configuration
 const GITHUB_REPO_OWNER = 'jherforth';
@@ -588,10 +594,6 @@ const dbPath = path.resolve(__dirname, 'data', 'tasks.db');
 console.log('Database path:', dbPath);
 let db; // Declare db variable outside to hold the single instance
 
-async function initializeDatabase() {
-  return initializeDatabaseMigration(db);
-}
-
 async function ConnectOrCreateDb() {
   try {
     await fs.mkdir(path.dirname(dbPath), { recursive: true });
@@ -613,39 +615,17 @@ function doesTableExist(tableName) {
   return !!table;
 }
 
-async function runInitialMigrationsIfNeeded() {
-  if (doesTableExist('settings')) {
-    return;
-  }
-
-  console.log('settings table not found; running initial bootstrap migrations');
-  await initializeDatabase();
+async function runLegacyMigrations() {
+  await initializeDatabase(db);
   await migrateChoresDatabase(db, getTodayLocalDateString);
   await migrateClamsToHistory(db, getTodayLocalDateString);
   await migrateChoreHistoryTitle(db);
   await migrateToDurationField(db);
 }
 
-function getCurrentSystemSchemaId() {
-  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(SYSTEM_SCHEMA_ID_KEY);
-  return row ? parseInt(row.value, 10) || 0 : 0;
-}
 
-function getPendingSchemaMigrations(currentSchemaId) {
-  const schemaMigrations = [
-    {
-      schemaId: TARGET_SCHEMA_ID,
-      name: 'migrateDeviceSchemaV6',
-      run: migrateDeviceSchemaV6,
-    },
-  ];
-
-  return schemaMigrations.filter(migration => migration.schemaId > currentSchemaId);
-}
-
-async function runPendingSchemaMigrations() {
-  const currentSchemaId = getCurrentSystemSchemaId();
-  const pendingMigrations = getPendingSchemaMigrations(currentSchemaId);
+async function runPendingSchemaMigrations(currentSchemaId) {
+  const pendingMigrations = schemaMigrations.filter(migration => migration.schemaId > currentSchemaId);
 
   if (pendingMigrations.length === 0) {
     console.log(`No pending schema migrations. Current schema ID: ${currentSchemaId}`);
@@ -655,88 +635,6 @@ async function runPendingSchemaMigrations() {
   for (const migration of pendingMigrations) {
     console.log(`Running schema migration ${migration.name} (target schema ID: ${migration.schemaId})`);
     await migration.run(db);
-  }
-}
-
-// Initialize default settings
-function initializeDefaultSettings() {
-  try {
-    const existingSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('daily_completion_clam_reward');
-    if (!existingSetting) {
-      db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('daily_completion_clam_reward', '2');
-      console.log('Initialized default daily completion clam reward setting to 2');
-    }
-  } catch (error) {
-    console.error('Error initializing default settings:', error);
-  }
-}
-
-// Function to prune and reset chores based on the day
-async function pruneAndResetChores() {
-  try {
-    const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    const currentDay = days[new Date().getDay()];
-    const now = new Date();
-
-    // Select all chores to process
-    const allChores = db.prepare('SELECT id, user_id, assigned_day_of_week, repeat_type, completed, clam_value, expiration_date FROM chores').all();
-
-    for (const chore of allChores) {
-      // Handle bonus chores
-      if (chore.clam_value > 0) {
-        // If bonus chore is completed, delete it
-        if (chore.completed) {
-          db.prepare('DELETE FROM chores WHERE id = ?').run(chore.id);
-          console.log(`Deleted completed bonus chore ID ${chore.id}.`);
-        } else if (chore.expiration_date) {
-          // If bonus chore is not completed and has an expiration date
-          const expirationDate = new Date(chore.expiration_date);
-          if (now > expirationDate) {
-            // Reassign to bonus user (ID 0) and reset completed status
-            db.prepare('UPDATE chores SET user_id = 0, completed = 0, expiration_date = NULL WHERE id = ?').run(chore.id);
-            console.log(`Reassigned expired bonus chore ID ${chore.id} back to bonus user.`);
-          }
-        }
-      } else {
-        // Handle regular chores (existing logic)
-        if (chore.completed) {
-          if (chore.repeat_type === "no-repeat") {
-            // Only delete non-repeating chores if they're not for today
-            if (chore.assigned_day_of_week !== currentDay) {
-              db.prepare('DELETE FROM chores WHERE id = ?').run(chore.id);
-              console.log(`Deleted non-repeating chore ID ${chore.id}.`);
-            }
-          } else if (chore.repeat_type === "until-completed") {
-            // Delete "until-completed" chores once they're completed
-            db.prepare('DELETE FROM chores WHERE id = ?').run(chore.id);
-            console.log(`Deleted "until-completed" chore ID ${chore.id} after completion.`);
-          } else if (chore.repeat_type === "weekly" || chore.repeat_type === "daily") {
-            // For daily chores, reset every day. For weekly chores, reset when it's their assigned day again
-            if (chore.repeat_type === "daily" || chore.assigned_day_of_week === currentDay) {
-              db.prepare('UPDATE chores SET completed = 0 WHERE id = ?').run(chore.id);
-              console.log(`Reset repeating chore ID ${chore.id} to uncompleted.`);
-            }
-          }
-        }
-
-        // Handle "until-completed" chores that need to appear on new days
-        if (!chore.completed && chore.repeat_type === "until-completed") {
-          // For "until-completed" chores that aren't completed, check if they should repeat daily
-          if (chore.assigned_day_of_week !== currentDay) {
-            // Create a new instance for today if it doesn't exist
-            const existingTodayChore = db.prepare('SELECT id FROM chores WHERE user_id = ? AND title = ? AND assigned_day_of_week = ? AND repeat_type = "until-completed"').get(chore.user_id, chore.title, currentDay);
-            if (!existingTodayChore) {
-              db.prepare('INSERT INTO chores (user_id, title, description, time_period, assigned_day_of_week, repeat_type, completed, clam_value, expiration_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
-                chore.user_id, chore.title, chore.description || '', chore.time_period || 'any-time', currentDay, 'until-completed', 0, 0, null
-              );
-              console.log(`Created new "until-completed" chore instance for today: ${chore.title}`);
-            }
-          }
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Error during chore pruning and reset:', error);
   }
 }
 
@@ -3068,9 +2966,14 @@ fastify.get('/api/system/backgroundTasks', async (request, reply) => {
 const start = async () => {
   try {
     db = await ConnectOrCreateDb();
-    await runInitialMigrationsIfNeeded();
-    await runPendingSchemaMigrations();
-    initializeDefaultSettings(); // Initialize default settings
+    if (!doesTableExist('settings')) {
+      console.log('settings table not found; running initial bootstrap migrations');
+      await runLegacyMigrations();
+    }
+    currentSchemaId = getCurrentSchemaVersion();
+    //if (schemaVersion
+    await runPendingSchemaMigrations(currentSchemaId);
+
     startNightlyCronJob(); // Start the nightly chore pruning job
 
     // Create uploads directories

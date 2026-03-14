@@ -1,9 +1,6 @@
-const SYSTEM_SCHEMA_ID_KEY = 'SYSTEM_SCHEMA_ID';
-const TARGET_SCHEMA_ID = 6;
-
 async function migrateDeviceSchemaV6(db) {
     try {
-        console.log(`=== Starting device schema migration to version ${TARGET_SCHEMA_ID} ===`);
+        console.log(`=== Starting device schema migration to version 6 ===`);
 
         db.exec('PRAGMA foreign_keys = OFF');
         db.exec('BEGIN');
@@ -52,12 +49,12 @@ async function migrateDeviceSchemaV6(db) {
             `);
 
             db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(
-                SYSTEM_SCHEMA_ID_KEY,
-                String(TARGET_SCHEMA_ID)
+                'SYSTEM_SCHEMA_ID',
+                '6'
             );
 
             db.exec('COMMIT');
-            console.log(`=== Device schema migration completed successfully (version ${TARGET_SCHEMA_ID}) ===`);
+            console.log(`=== Device schema migration completed successfully (version 6) ===`);
         } catch (migrationError) {
             db.exec('ROLLBACK');
             throw migrationError;
@@ -72,7 +69,5 @@ async function migrateDeviceSchemaV6(db) {
 }
 
 module.exports = {
-    SYSTEM_SCHEMA_ID_KEY,
-    TARGET_SCHEMA_ID,
     migrateDeviceSchemaV6,
 };
