@@ -19,6 +19,10 @@ export const getDeviceGuid = () => {
     return deviceGuid;
 };
 
+export const setDeviceGuid = (deviceGuid) => {
+    localStorage.setItem(DEVICE_GUID_STORAGE_KEY, deviceGuid);
+};
+
 export const getDeviceApiBase = (apiBaseUrl) => {
     const deviceGuid = getDeviceGuid();
     return `${apiBaseUrl}/api/devices/${encodeURIComponent(deviceGuid)}`;

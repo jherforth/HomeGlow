@@ -69,15 +69,15 @@ import {
 import ColorPickerPopover from './ColorPickerPopover';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
-import { getDeviceApiBase, getDeviceGuid } from '../utils/deviceGuid.js';
+import { getDeviceApiBase, getDeviceGuid, setDeviceGuid } from '../utils/deviceGuid.js';
 import PinModal from './PinModal';
 import ChoreSchedulesTab from './ChoreSchedulesTab';
 import ChoreHistoryTab from './ChoreHistoryTab';
 import TabIconModal from './TabIconModal';
 
 const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
+  const [currentDeviceGuid, setCurrentDeviceGuid] = useState(() => getDeviceGuid());
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
-  const currentDeviceGuid = getDeviceGuid();
   const CORE_WIDGET_DEFAULT_SIZES = {
     calendar: { w: 8, h: 5 },
     weather: { w: 4, h: 3 },
@@ -148,6 +148,12 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const [devices, setDevices] = useState([]);
   const [copyDeviceDialog, setCopyDeviceDialog] = useState({ open: false, device: null });
   const [deleteDeviceDialog, setDeleteDeviceDialog] = useState({ open: false, device: null });
+  const [renameDeviceDialog, setRenameDeviceDialog] = useState({
+    open: false,
+    currentGuid: '',
+    newGuid: '',
+    error: '',
+  });
 
   // Refresh interval options in milliseconds
   const refreshIntervalOptions = [
@@ -842,6 +848,50 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
   const openDeleteDeviceDialog = (device) => {
     setDeleteDeviceDialog({ open: true, device });
+  };
+
+  const openRenameDeviceDialog = () => {
+    setRenameDeviceDialog({
+      open: true,
+      currentGuid: currentDeviceGuid,
+      newGuid: currentDeviceGuid,
+      error: '',
+    });
+  };
+
+  const confirmRenameDevice = async () => {
+    const nextGuid = (renameDeviceDialog.newGuid || '').trim();
+    if (!nextGuid) {
+      setRenameDeviceDialog(prev => ({ ...prev, error: 'Device GUID is required.' }));
+      return;
+    }
+
+    if (nextGuid === renameDeviceDialog.currentGuid) {
+      setRenameDeviceDialog(prev => ({ ...prev, open: false, error: '' }));
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      await axios.patch(`${API_BASE_URL}/api/devices/${encodeURIComponent(renameDeviceDialog.currentGuid)}`, {
+        guid: nextGuid,
+      });
+
+      setDeviceGuid(nextGuid);
+      setCurrentDeviceGuid(nextGuid);
+      setRenameDeviceDialog({ open: false, currentGuid: '', newGuid: '', error: '' });
+      await fetchDevices();
+      setSaveMessage({ show: true, type: 'success', text: 'Device GUID updated. Reloading to apply changes.' });
+      setTimeout(() => {
+        window.location.reload();
+      }, 400);
+    } catch (error) {
+      console.error('Error renaming device:', error);
+      const errorMessage = error?.response?.data?.error || 'Failed to update device GUID. Please try again.';
+      setRenameDeviceDialog(prev => ({ ...prev, error: errorMessage }));
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const confirmDeleteDevice = async () => {
@@ -2018,15 +2068,25 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                               <Chip label={Number(device.widgets) || 0} size="small" />
                             </TableCell>
                             <TableCell>
-                              <IconButton
-                                onClick={() => openCopyDeviceDialog(device)}
-                                color="primary"
-                                size="small"
-                                title="Copy this device to current"
-                                disabled={isCurrent}
-                              >
-                                <ContentCopy />
-                              </IconButton>
+                              {isCurrent ? (
+                                <IconButton
+                                  onClick={openRenameDeviceDialog}
+                                  color="primary"
+                                  size="small"
+                                  title="Rename current device"
+                                >
+                                  <Edit />
+                                </IconButton>
+                              ) : (
+                                <IconButton
+                                  onClick={() => openCopyDeviceDialog(device)}
+                                  color="primary"
+                                  size="small"
+                                  title="Copy this device to current"
+                                >
+                                  <ContentCopy />
+                                </IconButton>
+                              )}
                               <IconButton
                                 onClick={() => openDeleteDeviceDialog(device)}
                                 color="error"
@@ -2793,6 +2853,40 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
           </Button>
           <Button onClick={confirmCopyDeviceToCurrent} variant="contained" color="warning" startIcon={<ContentCopy />}>
             Confirm Copy
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={renameDeviceDialog.open}
+        onClose={() => setRenameDeviceDialog({ open: false, currentGuid: '', newGuid: '', error: '' })}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Edit color="primary" />
+            <Typography variant="h6">Rename Current Device</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            label="New Device GUID"
+            value={renameDeviceDialog.newGuid}
+            onChange={(e) => setRenameDeviceDialog(prev => ({ ...prev, newGuid: e.target.value, error: '' }))}
+            error={Boolean(renameDeviceDialog.error)}
+            helperText={renameDeviceDialog.error || 'This updates the current device GUID in both server and local storage.'}
+            sx={{ mt: 1 }}
+            autoFocus
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRenameDeviceDialog({ open: false, currentGuid: '', newGuid: '', error: '' })} variant="outlined">
+            Cancel
+          </Button>
+          <Button onClick={confirmRenameDevice} variant="contained" startIcon={<Save />}>
+            Save GUID
           </Button>
         </DialogActions>
       </Dialog>

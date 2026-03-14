@@ -1385,6 +1385,44 @@ fastify.get('/api/devices', async (request, reply) => {
   }
 });
 
+
+fastify.patch('/api/devices/:deviceGuid', async (request, reply) => {
+  const { deviceGuid } = request.params;
+  const { guid: newGuid } = request.body || {};
+
+  if (!deviceGuid) {
+    return reply.status(400).send({ error: 'deviceGuid is required' });
+  }
+
+  if (!newGuid || typeof newGuid !== 'string' || !newGuid.trim()) {
+    return reply.status(400).send({ error: 'guid is required' });
+  }
+
+  const trimmedNewGuid = newGuid.trim();
+
+  if (trimmedNewGuid === deviceGuid) {
+    return { success: true, guid: trimmedNewGuid, message: 'Device guid unchanged' };
+  }
+
+  try {
+    const existingDevice = db.prepare('SELECT guid FROM devices WHERE guid = ?').get(deviceGuid);
+    if (!existingDevice) {
+      return reply.status(404).send({ error: 'Device not found' });
+    }
+
+    const alreadyUsed = db.prepare('SELECT guid FROM devices WHERE guid = ?').get(trimmedNewGuid);
+    if (alreadyUsed) {
+      return reply.status(409).send({ error: 'A device with that guid already exists' });
+    }
+
+    db.prepare('UPDATE devices SET guid = ?, updateTime = CURRENT_TIMESTAMP WHERE guid = ?').run(trimmedNewGuid, deviceGuid);
+    return { success: true, guid: trimmedNewGuid, message: 'Device guid updated successfully' };
+  } catch (error) {
+    console.error('Error updating device guid:', error);
+    reply.status(500).send({ error: 'Failed to update device guid' });
+  }
+});
+
 fastify.post('/api/devices/:deviceGuid/copy-from/:sourceDeviceGuid', async (request, reply) => {
   const { deviceGuid, sourceDeviceGuid } = request.params;
 
