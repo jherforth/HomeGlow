@@ -35,6 +35,7 @@ const SYSTEM_SCHEMA_ID_KEY = 'SYSTEM_SCHEMA_ID';
 
 const schemaMigrations = [
   { schemaId: 6, migrationPath: './migrations/migrateDeviceSchemaV6', },
+  { schemaId: 7, migrationPath: './migrations/schema7-proveMigrations', },
 ];
 
 // GitHub API configuration
