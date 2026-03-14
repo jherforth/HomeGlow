@@ -30,15 +30,15 @@ const migrateChoresDatabase = require('./migrations/migrateChoresDatabase');
 const migrateClamsToHistory = require('./migrations/migrateClamsToHistory');
 const migrateChoreHistoryTitle = require('./migrations/migrateChoreHistoryTitle');
 const migrateToDurationField = require('./migrations/migrateToDurationField');
-const {
-  migrateDeviceSchemaV6,
-} = require('./migrations/migrateDeviceSchemaV6');
+
+const SYSTEM_SCHEMA_ID_KEY = 'SYSTEM_SCHEMA_ID';
 
 const schemaMigrations = [
   {
     schemaId: 6,
     name: 'migrateDeviceSchemaV6',
-    run: migrateDeviceSchemaV6,
+    modulePath: './migrations/migrateDeviceSchemaV6',
+    exportName: 'migrateDeviceSchemaV6',
   },
 ];
 
@@ -623,9 +623,26 @@ async function runLegacyMigrations() {
   await migrateToDurationField(db);
 }
 
+function getCurrentSchemaVersion() {
+  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(SYSTEM_SCHEMA_ID_KEY);
+  return row ? parseInt(row.value, 10) || 0 : 0;
+}
 
-async function runPendingSchemaMigrations(currentSchemaId) {
-  const pendingMigrations = schemaMigrations.filter(migration => migration.schemaId > currentSchemaId);
+function loadMigrationRunner(migration) {
+  const migrationModule = require(migration.modulePath);
+  const runner = migration.exportName ? migrationModule[migration.exportName] : migrationModule;
+
+  if (typeof runner !== 'function') {
+    throw new Error(`Migration ${migration.name} did not resolve to a function`);
+  }
+
+  return runner;
+}
+
+async function applySchemaMigrations(currentSchemaId) {
+  const pendingMigrations = schemaMigrations
+    .filter(migration => migration.schemaId > currentSchemaId)
+    .sort((a, b) => a.schemaId - b.schemaId);
 
   if (pendingMigrations.length === 0) {
     console.log(`No pending schema migrations. Current schema ID: ${currentSchemaId}`);
@@ -634,7 +651,8 @@ async function runPendingSchemaMigrations(currentSchemaId) {
 
   for (const migration of pendingMigrations) {
     console.log(`Running schema migration ${migration.name} (target schema ID: ${migration.schemaId})`);
-    await migration.run(db);
+    const runMigration = loadMigrationRunner(migration);
+    await runMigration(db);
   }
 }
 
@@ -2970,9 +2988,8 @@ const start = async () => {
       console.log('settings table not found; running initial bootstrap migrations');
       await runLegacyMigrations();
     }
-    currentSchemaId = getCurrentSchemaVersion();
-    //if (schemaVersion
-    await runPendingSchemaMigrations(currentSchemaId);
+    const currentSchemaId = getCurrentSchemaVersion();
+    await applySchemaMigrations(currentSchemaId);
 
     startNightlyCronJob(); // Start the nightly chore pruning job
 
