@@ -18,9 +18,11 @@ import TabIconModal from './components/TabIconModal.jsx';
 import ScreenSaver from './components/ScreenSaver.jsx';
 import ScreensaverCountdown from './components/ScreensaverCountdown.jsx';
 import { API_BASE_URL } from './utils/apiConfig.js';
+import { getDeviceApiBase } from './utils/deviceGuid.js';
 import './index.css';
 
 const App = () => {
+  const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [theme, setTheme] = useState('light');
   const [widgetsLocked, setWidgetsLocked] = useState(() => {
     const saved = localStorage.getItem('widgetsLocked');
@@ -121,7 +123,7 @@ const App = () => {
 
   const fetchTabs = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/tabs`);
+      const response = await axios.get(`${API_DEVICE_URL}/tabs`);
       setTabs(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching tabs:', error);
@@ -131,7 +133,7 @@ const App = () => {
 
   const fetchWidgetAssignments = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/widget-assignments`);
+      const response = await axios.get(`${API_DEVICE_URL}/widget-assignments`);
       const assignments = Array.isArray(response.data) ? response.data : [];
 
       const groupedAssignments = {};
@@ -140,7 +142,7 @@ const App = () => {
           groupedAssignments[assignment.widget_name] = [];
         }
         groupedAssignments[assignment.widget_name].push({
-          tab_id: assignment.tab_id,
+          tabNumber: assignment.tab_number,
           layout_x: assignment.layout_x,
           layout_y: assignment.layout_y,
           layout_w: assignment.layout_w,
@@ -259,8 +261,8 @@ const App = () => {
     setTimeout(() => startInactivityTimer(), 500);
   }, [startInactivityTimer]);
 
-  const handleScreensaverTabChange = useCallback((tabId) => {
-    setActiveTab(tabId);
+  const handleScreensaverTabChange = useCallback((tabNumber) => {
+    setActiveTab(tabNumber);
   }, []);
 
   const toggleTheme = () => {
@@ -304,8 +306,8 @@ const App = () => {
     window.location.reload();
   };
 
-  const handleTabChange = (tabId) => {
-    setActiveTab(tabId);
+  const handleTabChange = (tabNumber) => {
+    setActiveTab(tabNumber);
   };
 
   const handleAddTab = () => {
@@ -314,7 +316,7 @@ const App = () => {
 
   const handleSaveTab = async (tabData) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/tabs`, tabData);
+      const response = await axios.post(`${API_DEVICE_URL}/tabs`, tabData);
       await fetchTabs();
       setShowTabIconModal(false);
     } catch (error) {
@@ -323,17 +325,17 @@ const App = () => {
     }
   };
 
-  const handleDeleteTab = async (tabId) => {
+  const handleDeleteTab = async (tabNumber) => {
     if (!window.confirm('Are you sure you want to delete this tab? Widgets will be moved to the Home tab.')) {
       return;
     }
 
     try {
-      await axios.delete(`${API_BASE_URL}/api/tabs/${tabId}`);
+      await axios.delete(`${API_DEVICE_URL}/tabs/${tabNumber}`);
       await fetchTabs();
       await fetchWidgetAssignments();
 
-      if (activeTab === tabId) {
+      if (activeTab === tabNumber) {
         setActiveTab(1);
       }
     } catch (error) {
@@ -342,18 +344,18 @@ const App = () => {
     }
   };
 
-  const isWidgetAssignedToTab = (widgetName, tabId) => {
+  const isWidgetAssignedToTab = (widgetName, tabNumber) => {
     const assignments = widgetAssignments[widgetName];
     if (!assignments || assignments.length === 0) {
-      return tabId === 1;
+      return tabNumber === 1;
     }
-    return assignments.some(a => a.tab_id === tabId);
+    return assignments.some(a => a.tabNumber === tabNumber);
   };
 
-  const getWidgetLayoutForTab = (widgetName, tabId) => {
+  const getWidgetLayoutForTab = (widgetName, tabNumber) => {
     const assignments = widgetAssignments[widgetName];
     if (!assignments) return null;
-    const match = assignments.find(a => a.tab_id === tabId);
+    const match = assignments.find(a => a.tabNumber === tabNumber);
     if (!match || match.layout_x == null) return null;
     return { x: match.layout_x, y: match.layout_y, w: match.layout_w, h: match.layout_h };
   };
@@ -447,10 +449,15 @@ const App = () => {
     return result;
   }, [widgetSettings, activeTab, apiKeys, widgetAssignments, installedPlugins, theme]);
 
+  const activeTabId = useMemo(() => {
+    const active = tabs.find(tab => tab.number === activeTab);
+    return active?.id ?? 1;
+  }, [tabs, activeTab]);
+
   return (
     <>
       <Box sx={{ width: '100%', minHeight: '100vh', position: 'relative', pb: '60px' }}>
-        {widgets.length > 0 && <WidgetContainer widgets={widgets} locked={widgetsLocked} activeTab={activeTab} />}
+        {widgets.length > 0 && <WidgetContainer widgets={widgets} locked={widgetsLocked} activeTab={activeTab} activeTabId={activeTabId} />}
       </Box>
 
       <Dialog open={showAdminPanel} onClose={toggleAdminPanel} maxWidth="lg">
@@ -470,7 +477,14 @@ const App = () => {
           >
             <Close />
           </IconButton>
-          <AdminPanel setWidgetSettings={setWidgetSettings} onPluginsChanged={fetchInstalledPlugins} />
+          <AdminPanel
+            setWidgetSettings={setWidgetSettings}
+            onPluginsChanged={fetchInstalledPlugins}
+            onTabsChanged={async () => {
+              await fetchTabs();
+              await fetchWidgetAssignments();
+            }}
+          />
         </DialogContent>
       </Dialog>
 

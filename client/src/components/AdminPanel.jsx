@@ -45,6 +45,7 @@ import {
 } from '@mui/material';
 import {
   Delete,
+  ContentCopy,
   Edit,
   Save,
   Cancel,
@@ -61,17 +62,28 @@ import {
   Lock,
   Nightlight,
   Tab as TabIcon,
+  DragIndicator,
   PhotoLibrary,
   Info
 } from '@mui/icons-material';
 import ColorPickerPopover from './ColorPickerPopover';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
+import { getDeviceApiBase, getDeviceGuid } from '../utils/deviceGuid.js';
 import PinModal from './PinModal';
 import ChoreSchedulesTab from './ChoreSchedulesTab';
 import ChoreHistoryTab from './ChoreHistoryTab';
+import TabIconModal from './TabIconModal';
 
-const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
+const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
+  const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
+  const currentDeviceGuid = getDeviceGuid();
+  const CORE_WIDGET_DEFAULT_SIZES = {
+    calendar: { w: 8, h: 5 },
+    weather: { w: 4, h: 3 },
+    chores: { w: 6, h: 4 },
+    photos: { w: 6, h: 4 },
+  };
   const [activeTab, setActiveTab] = useState(0);
   const [choresSubTab, setChoresSubTab] = useState(0);
   const [widgetsSubTab, setWidgetsSubTab] = useState(0);
@@ -125,6 +137,17 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
       slideshowInterval: 10
     };
   });
+  const [tabIconModalState, setTabIconModalState] = useState({
+    open: false,
+    mode: 'create',
+    originalNumber: null,
+    initialData: null,
+  });
+  const [deleteTabDialog, setDeleteTabDialog] = useState({ open: false, tab: null });
+  const [draggingTabNumber, setDraggingTabNumber] = useState(null);
+  const [devices, setDevices] = useState([]);
+  const [copyDeviceDialog, setCopyDeviceDialog] = useState({ open: false, device: null });
+  const [deleteDeviceDialog, setDeleteDeviceDialog] = useState({ open: false, device: null });
 
   // Refresh interval options in milliseconds
   const refreshIntervalOptions = [
@@ -174,8 +197,19 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
       fetchTabs();
       fetchWidgetAssignments();
       fetchPhotoSources();
+      fetchDevices();
     }
   }, [isAuthenticated]);
+
+  const fetchDevices = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/devices`);
+      setDevices(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Error fetching devices:', error);
+      setDevices([]);
+    }
+  };
 
   const fetchPhotoSources = async () => {
     try {
@@ -256,7 +290,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
 
   const fetchTabs = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/tabs`);
+      const response = await axios.get(`${API_DEVICE_URL}/tabs`);
       setTabs(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching tabs:', error);
@@ -266,7 +300,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
 
   const fetchWidgetAssignments = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/widget-assignments`);
+      const response = await axios.get(`${API_DEVICE_URL}/widget-assignments`);
       const assignments = Array.isArray(response.data) ? response.data : [];
 
       const coreAssignments = {};
@@ -276,12 +310,12 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
           if (!pluginAssign[assignment.widget_name]) {
             pluginAssign[assignment.widget_name] = [];
           }
-          pluginAssign[assignment.widget_name].push(assignment.tab_id);
+          pluginAssign[assignment.widget_name].push(assignment.tab_number);
         } else {
           if (!coreAssignments[assignment.widget_name]) {
             coreAssignments[assignment.widget_name] = [];
           }
-          coreAssignments[assignment.widget_name].push(assignment.tab_id);
+          coreAssignments[assignment.widget_name].push(assignment.tab_number);
         }
       });
 
@@ -344,35 +378,188 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
     }
   };
 
+  const getWidgetIdFromWidgetName = (widgetName) => {
+    const coreMap = {
+      calendar: 'calendar-widget',
+      weather: 'weather-widget',
+      chores: 'chores-widget',
+      photos: 'photos-widget',
+    };
+
+    if (coreMap[widgetName]) return coreMap[widgetName];
+    if (widgetName.startsWith('plugin:')) return `plugin-${widgetName.slice(7)}`;
+    return null;
+  };
+
+  const getDefaultSizeForWidgetName = (widgetName) => {
+    if (CORE_WIDGET_DEFAULT_SIZES[widgetName]) return CORE_WIDGET_DEFAULT_SIZES[widgetName];
+    if (widgetName.startsWith('plugin:')) return { w: 6, h: 4 };
+    return null;
+  };
+
+  const ensureLocalLayoutKeyForAssignment = (widgetName, tabNumber) => {
+    const tab = tabs.find(t => t.number === tabNumber);
+    if (!tab?.id) return;
+
+    const widgetId = getWidgetIdFromWidgetName(widgetName);
+    const defaultSize = getDefaultSizeForWidgetName(widgetName);
+    if (!widgetId || !defaultSize) return;
+
+    const localKey = `widget-layout-id-${tab.id}-${widgetId}`;
+    if (localStorage.getItem(localKey)) return;
+
+    // Store only dimensions; WidgetContainer will apply widget default position for x/y.
+    localStorage.setItem(localKey, JSON.stringify({ w: defaultSize.w, h: defaultSize.h }));
+  };
+
+  const collectAffectedTabNumbers = (existingTabNumbers, desiredTabNumbers) => {
+    const affected = new Set([...existingTabNumbers, ...desiredTabNumbers]);
+    if (existingTabNumbers.length === 0 || desiredTabNumbers.length === 0) {
+      affected.add(1);
+    }
+    return Array.from(affected);
+  };
+
+  const recalculateLayoutsForAffectedTabs = (affectedTabNumbers, coreAssignments, pluginAssignmentMap) => {
+    const tabNumbers = Array.from(new Set(affectedTabNumbers.filter(Boolean)));
+    if (tabNumbers.length === 0) return;
+
+    const getAssignedWidgetsForTab = (tabNumber) => {
+      const assigned = [];
+
+      Object.keys(CORE_WIDGET_DEFAULT_SIZES).forEach((widgetName) => {
+        const assignedTabs = coreAssignments[widgetName] || [];
+        if (assignedTabs.length === 0) {
+          if (tabNumber === 1) {
+            assigned.push(widgetName);
+          }
+          return;
+        }
+        if (assignedTabs.includes(tabNumber)) {
+          assigned.push(widgetName);
+        }
+      });
+
+      Object.entries(pluginAssignmentMap || {}).forEach(([widgetName, assignedTabs]) => {
+        const tabsForWidget = Array.isArray(assignedTabs) ? assignedTabs : [];
+        if (tabsForWidget.length === 0) {
+          if (tabNumber === 1) {
+            assigned.push(widgetName);
+          }
+          return;
+        }
+        if (tabsForWidget.includes(tabNumber)) {
+          assigned.push(widgetName);
+        }
+      });
+
+      return assigned
+        .map((widgetName) => {
+          const widgetId = getWidgetIdFromWidgetName(widgetName);
+          const defaultSize = getDefaultSizeForWidgetName(widgetName);
+          if (!widgetId || !defaultSize) return null;
+          return { widgetId, defaultSize };
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.widgetId.localeCompare(b.widgetId));
+    };
+
+    const findFreePosition = (placed, w, h, cols = 12) => {
+      const collides = (x, y) => placed.some((p) => (
+        x < p.x + p.w && x + w > p.x && y < p.y + p.h && y + h > p.y
+      ));
+
+      for (let row = 0; row < 200; row += 1) {
+        for (let col = 0; col <= cols - w; col += 1) {
+          if (!collides(col, row)) {
+            return { x: col, y: row };
+          }
+        }
+      }
+
+      return { x: 0, y: 0 };
+    };
+
+    tabNumbers.forEach((tabNumber) => {
+      const tab = tabs.find(t => t.number === tabNumber);
+      if (!tab?.id) return;
+
+      const widgetsForTab = getAssignedWidgetsForTab(tabNumber);
+      if (widgetsForTab.length === 0) return;
+
+      const placed = [];
+      widgetsForTab.forEach(({ widgetId, defaultSize }) => {
+        const key = `widget-layout-id-${tab.id}-${widgetId}`;
+        let parsed = null;
+        try {
+          parsed = JSON.parse(localStorage.getItem(key) || 'null');
+        } catch {
+          parsed = null;
+        }
+
+        const w = Math.max(Number(parsed?.w) || defaultSize.w, 1);
+        const h = Math.max(Number(parsed?.h) || defaultSize.h, 1);
+        const pos = findFreePosition(placed, w, h, 12);
+        const layoutData = { x: pos.x, y: pos.y, w, h };
+
+        placed.push(layoutData);
+        localStorage.setItem(key, JSON.stringify(layoutData));
+      });
+    });
+  };
+
   const saveWidgetSettings = async () => {
     setIsLoading(true);
     try {
       localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
       setWidgetSettings(widgetSettings);
 
-      const currentResponse = await axios.get(`${API_BASE_URL}/api/widget-assignments`);
+      const currentResponse = await axios.get(`${API_DEVICE_URL}/widget-assignments`);
       const currentAssignments = Array.isArray(currentResponse.data) ? currentResponse.data : [];
+      const affectedTabs = new Set();
+      const nextCoreAssignments = {};
 
-      for (const [widgetName, desiredTabIds] of Object.entries(widgetAssignments)) {
+      for (const [widgetName, desiredTabNumbers] of Object.entries(widgetAssignments)) {
         const existing = currentAssignments.filter(a => a.widget_name === widgetName);
-        const existingTabIds = existing.map(a => a.tab_id);
+        const existingTabNumbers = existing.map(a => a.tab_number);
+        desiredTabNumbers.forEach(number => {
+          if (Number.isFinite(number)) {
+            nextCoreAssignments[widgetName] = nextCoreAssignments[widgetName] || [];
+            nextCoreAssignments[widgetName].push(number);
+          }
+        });
 
-        const toRemove = existing.filter(a => !desiredTabIds.includes(a.tab_id));
-        const toAdd = desiredTabIds.filter(id => !existingTabIds.includes(id));
+        collectAffectedTabNumbers(existingTabNumbers, desiredTabNumbers).forEach((tabNumber) => affectedTabs.add(tabNumber));
+
+        const toRemove = existing.filter(a => !desiredTabNumbers.includes(a.tab_number));
+        const toAdd = desiredTabNumbers.filter(number => !existingTabNumbers.includes(number));
 
         for (const assignment of toRemove) {
-          await axios.delete(`${API_BASE_URL}/api/widget-assignments/${assignment.id}`);
+          await axios.delete(`${API_DEVICE_URL}/widget-assignments/${assignment.id}`);
         }
 
-        for (const tabId of toAdd) {
-          await axios.post(`${API_BASE_URL}/api/widget-assignments`, {
+        for (const tabNumber of toAdd) {
+          await axios.post(`${API_DEVICE_URL}/widget-assignments`, {
             widget_name: widgetName,
-            tab_id: tabId,
+            tabNumber: tabNumber,
           });
+          ensureLocalLayoutKeyForAssignment(widgetName, tabNumber);
         }
       }
 
-      setSaveMessage({ show: true, type: 'success', text: 'Widget settings saved successfully! Refresh page to see changes.' });
+      Object.keys(CORE_WIDGET_DEFAULT_SIZES).forEach((widgetName) => {
+        if (!nextCoreAssignments[widgetName]) {
+          nextCoreAssignments[widgetName] = [];
+        }
+      });
+
+      recalculateLayoutsForAffectedTabs(Array.from(affectedTabs), nextCoreAssignments, pluginAssignments);
+
+      if (onTabsChanged) {
+        await onTabsChanged();
+      }
+
+      setSaveMessage({ show: true, type: 'success', text: 'Widget settings saved successfully.' });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } catch (error) {
       console.error('Error saving widget settings:', error);
@@ -388,30 +575,53 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
     try {
       localStorage.setItem('pluginSettings', JSON.stringify(pluginSettings));
 
-      const currentResponse = await axios.get(`${API_BASE_URL}/api/widget-assignments`);
+      const currentResponse = await axios.get(`${API_DEVICE_URL}/widget-assignments`);
       const currentAssignments = Array.isArray(currentResponse.data) ? currentResponse.data : [];
+      const affectedTabs = new Set();
+      const nextPluginAssignments = {};
 
-      for (const [pluginWidgetName, desiredTabIds] of Object.entries(pluginAssignments)) {
+      for (const [pluginWidgetName, desiredTabNumbers] of Object.entries(pluginAssignments)) {
         const existing = currentAssignments.filter(a => a.widget_name === pluginWidgetName);
-        const existingTabIds = existing.map(a => a.tab_id);
+        const existingTabNumbers = existing.map(a => a.tab_number);
+        desiredTabNumbers.forEach(number => {
+          if (Number.isFinite(number)) {
+            nextPluginAssignments[pluginWidgetName] = nextPluginAssignments[pluginWidgetName] || [];
+            nextPluginAssignments[pluginWidgetName].push(number);
+          }
+        });
 
-        const toRemove = existing.filter(a => !desiredTabIds.includes(a.tab_id));
-        const toAdd = desiredTabIds.filter(id => !existingTabIds.includes(id));
+        collectAffectedTabNumbers(existingTabNumbers, desiredTabNumbers).forEach((tabNumber) => affectedTabs.add(tabNumber));
+
+        const toRemove = existing.filter(a => !desiredTabNumbers.includes(a.tab_number));
+        const toAdd = desiredTabNumbers.filter(number => !existingTabNumbers.includes(number));
 
         for (const assignment of toRemove) {
-          await axios.delete(`${API_BASE_URL}/api/widget-assignments/${assignment.id}`);
+          await axios.delete(`${API_DEVICE_URL}/widget-assignments/${assignment.id}`);
         }
 
-        for (const tabId of toAdd) {
-          await axios.post(`${API_BASE_URL}/api/widget-assignments`, {
+        for (const tabNumber of toAdd) {
+          await axios.post(`${API_DEVICE_URL}/widget-assignments`, {
             widget_name: pluginWidgetName,
-            tab_id: tabId,
+            tabNumber: tabNumber,
           });
+          ensureLocalLayoutKeyForAssignment(pluginWidgetName, tabNumber);
         }
       }
 
+      Object.keys(pluginAssignments).forEach((pluginWidgetName) => {
+        if (!nextPluginAssignments[pluginWidgetName]) {
+          nextPluginAssignments[pluginWidgetName] = [];
+        }
+      });
+
+      recalculateLayoutsForAffectedTabs(Array.from(affectedTabs), widgetAssignments, nextPluginAssignments);
+
+      if (onTabsChanged) {
+        await onTabsChanged();
+      }
+
       if (onPluginsChanged) onPluginsChanged();
-      setSaveMessage({ show: true, type: 'success', text: 'Plugin settings saved successfully! Refresh page to see changes.' });
+      setSaveMessage({ show: true, type: 'success', text: 'Plugin settings saved successfully.' });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } catch (error) {
       console.error('Error saving plugin settings:', error);
@@ -422,20 +632,254 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
     }
   };
 
-  const handleWidgetAssignmentChange = (widgetName, selectedTabIds) => {
+  const handleWidgetAssignmentChange = (widgetName, selectedTabNumbers) => {
     setWidgetAssignments(prev => ({
       ...prev,
-      [widgetName]: selectedTabIds
+      [widgetName]: selectedTabNumbers
     }));
+  };
+
+  const openCreateTabDialog = () => {
+    setTabIconModalState({
+      open: true,
+      mode: 'create',
+      originalNumber: null,
+      initialData: null,
+    });
+  };
+
+  const openEditTabDialog = (tab) => {
+    setTabIconModalState({
+      open: true,
+      mode: 'edit',
+      originalNumber: tab.number,
+      initialData: {
+        label: tab.label || '',
+        icon: tab.icon || 'star',
+        show_label: Boolean(tab.show_label),
+      },
+    });
+  };
+
+  const closeTabEditorDialog = () => {
+    setTabIconModalState(prev => ({ ...prev, open: false }));
+  };
+
+  const saveTabDefinition = async (tabData) => {
+    const trimmedLabel = (tabData.label || '').trim();
+    if (!trimmedLabel) {
+      setSaveMessage({ show: true, type: 'error', text: 'Tab label is required.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      if (tabIconModalState.mode === 'edit') {
+        await axios.patch(`${API_DEVICE_URL}/tabs/${tabIconModalState.originalNumber}`, {
+          label: trimmedLabel,
+          icon: tabData.icon,
+          show_label: tabData.show_label,
+        });
+      } else {
+        await axios.post(`${API_DEVICE_URL}/tabs`, {
+          label: trimmedLabel,
+          icon: tabData.icon,
+          show_label: tabData.show_label,
+        });
+      }
+
+      closeTabEditorDialog();
+      await fetchTabs();
+      if (onTabsChanged) {
+        await onTabsChanged();
+      }
+      setSaveMessage({ show: true, type: 'success', text: `Tab ${tabIconModalState.mode === 'edit' ? 'updated' : 'created'} successfully.` });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error saving tab:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to save tab. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const requestDeleteTab = (tab) => {
+    setDeleteTabDialog({ open: true, tab });
+  };
+
+  const confirmDeleteTab = async () => {
+    if (!deleteTabDialog.tab) {
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      await axios.delete(`${API_DEVICE_URL}/tabs/${deleteTabDialog.tab.number}`);
+      setDeleteTabDialog({ open: false, tab: null });
+      await fetchTabs();
+      await fetchWidgetAssignments();
+      if (onTabsChanged) {
+        await onTabsChanged();
+      }
+      setSaveMessage({ show: true, type: 'success', text: 'Tab deleted successfully.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error deleting tab:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to delete tab. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const saveTabOrder = async (orderedTabNumbers) => {
+    try {
+      setIsLoading(true);
+      await axios.patch(`${API_DEVICE_URL}/tabs/reorder`, { orderedTabNumbers });
+      await fetchTabs();
+      await fetchWidgetAssignments();
+      if (onTabsChanged) {
+        await onTabsChanged();
+      }
+    } catch (error) {
+      console.error('Error reordering tabs:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to reorder tabs. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const toggleTabShowLabel = async (tab) => {
+    try {
+      setIsLoading(true);
+      await axios.patch(`${API_DEVICE_URL}/tabs/${tab.number}`, {
+        label: tab.label,
+        icon: tab.icon,
+        show_label: !Boolean(tab.show_label),
+      });
+
+      await fetchTabs();
+      if (onTabsChanged) {
+        await onTabsChanged();
+      }
+
+      setSaveMessage({ show: true, type: 'success', text: 'Tab label visibility updated.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error updating tab label visibility:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to update tab label visibility.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleTabDragStart = (tabNumber) => {
+    setDraggingTabNumber(tabNumber);
+  };
+
+  const handleTabDrop = async (targetTabNumber) => {
+    if (draggingTabNumber == null || draggingTabNumber === targetTabNumber) {
+      setDraggingTabNumber(null);
+      return;
+    }
+
+    const draggableTabs = tabs
+      .filter(tab => tab.number !== 1)
+      .sort((a, b) => a.number - b.number);
+
+    const fromIndex = draggableTabs.findIndex(tab => tab.number === draggingTabNumber);
+    const toIndex = draggableTabs.findIndex(tab => tab.number === targetTabNumber);
+
+    if (fromIndex === -1 || toIndex === -1) {
+      setDraggingTabNumber(null);
+      return;
+    }
+
+    const next = [...draggableTabs];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    const orderedTabNumbers = next.map(tab => tab.number);
+
+    setDraggingTabNumber(null);
+    await saveTabOrder(orderedTabNumbers);
+  };
+
+  const openCopyDeviceDialog = (device) => {
+    setCopyDeviceDialog({ open: true, device });
+  };
+
+  const confirmCopyDeviceToCurrent = async () => {
+    if (!copyDeviceDialog.device?.guid) {
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      await axios.post(`${API_DEVICE_URL}/copy-from/${encodeURIComponent(copyDeviceDialog.device.guid)}`);
+
+      setCopyDeviceDialog({ open: false, device: null });
+      await fetchTabs();
+      await fetchWidgetAssignments();
+      await fetchDevices();
+      if (onTabsChanged) {
+        await onTabsChanged();
+      }
+
+      setSaveMessage({ show: true, type: 'success', text: 'Device tabs and widget settings copied successfully.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error copying device settings:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to copy device settings. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const openDeleteDeviceDialog = (device) => {
+    setDeleteDeviceDialog({ open: true, device });
+  };
+
+  const confirmDeleteDevice = async () => {
+    const deviceGuid = deleteDeviceDialog.device?.guid;
+    if (!deviceGuid) {
+      return;
+    }
+
+    if (deviceGuid === currentDeviceGuid) {
+      setSaveMessage({ show: true, type: 'error', text: 'You cannot delete the current device.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+      setDeleteDeviceDialog({ open: false, device: null });
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      await axios.delete(`${API_BASE_URL}/api/devices/${encodeURIComponent(deviceGuid)}`);
+      setDeleteDeviceDialog({ open: false, device: null });
+      await fetchDevices();
+      setSaveMessage({ show: true, type: 'success', text: 'Device deleted successfully.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error deleting device:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to delete device. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const saveInterfaceSettings = () => {
     localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
     setWidgetSettings(widgetSettings);
-    
+
     // Apply CSS variables immediately
     applyAccentColors();
-    
+
     setSaveMessage({ show: true, type: 'success', text: 'Accent colors saved! Refresh page to see all changes.' });
     setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
   };
@@ -641,7 +1085,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
         setIsLoading(true);
         await axios.delete(`${API_BASE_URL}/api/widgets/${filename}`);
         const pluginWidgetName = `plugin:${filename}`;
-        await axios.delete(`${API_BASE_URL}/api/widget-assignments/widget/${encodeURIComponent(pluginWidgetName)}`).catch(() => {});
+        await axios.delete(`${API_DEVICE_URL}/widget-assignments/widget/${encodeURIComponent(pluginWidgetName)}`).catch(() => { });
         setPluginSettings(prev => {
           const updated = { ...prev };
           delete updated[filename];
@@ -950,6 +1394,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
               <Tabs value={widgetsSubTab} onChange={(_, v) => setWidgetsSubTab(v)} size="small">
                 <Tab label="Widgets" />
                 <Tab label="Plugins" />
+                <Tab label="Tabs" />
+                <Tab label="Devices" />
               </Tabs>
             </Box>
 
@@ -1025,9 +1471,9 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
                         multiple
                         options={tabs}
                         getOptionLabel={(option) => option.label}
-                        value={tabs.filter(tab => widgetAssignments[widget]?.includes(tab.id))}
+                        value={tabs.filter(tab => widgetAssignments[widget]?.includes(tab.number))}
                         onChange={(e, newValue) => {
-                          handleWidgetAssignmentChange(widget, newValue.map(tab => tab.id));
+                          handleWidgetAssignmentChange(widget, newValue.map(tab => tab.number));
                         }}
                         renderInput={(params) => (
                           <TextField
@@ -1061,160 +1507,160 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
                   <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>
                     Weather Widget
                   </Typography>
-              
-              <Grid container spacing={2} alignItems="center">
-                <Grid item xs={12} sm={6}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={widgetSettings.weather?.enabled || false}
-                        onChange={() => handleWidgetToggle('weather', 'enabled')}
-                      />
-                    }
-                    label="Enabled"
-                  />
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={widgetSettings.weather?.transparent || false}
-                        onChange={() => handleWidgetToggle('weather', 'transparent')}
-                      />
-                    }
-                    label="Transparent Background"
-                    sx={{ ml: 2 }}
-                  />
-                </Grid>
-                
-                <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel id="weather-refresh-label">
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Timer fontSize="small" />
-                        Auto-Refresh Interval
-                      </Box>
-                    </InputLabel>
-                    <Select
-                      labelId="weather-refresh-label"
-                      value={widgetSettings.weather?.refreshInterval || 0}
-                      onChange={(e) => handleRefreshIntervalChange('weather', e.target.value)}
-                      label="Auto-Refresh Interval"
-                    >
-                      {refreshIntervalOptions.map((option) => (
-                        <MenuItem key={option.value} value={option.value}>
-                          {option.label}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-              </Grid>
 
-              <Box sx={{ mt: 2 }}>
-                <Autocomplete
-                  multiple
-                  options={tabs}
-                  getOptionLabel={(option) => option.label}
-                  value={tabs.filter(tab => widgetAssignments['weather']?.includes(tab.id))}
-                  onChange={(e, newValue) => {
-                    handleWidgetAssignmentChange('weather', newValue.map(tab => tab.id));
-                  }}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Show on Tabs"
-                      placeholder="Select tabs..."
-                      helperText="Select which tabs this widget should appear on (defaults to Home tab if none selected)"
+                  <Grid container spacing={2} alignItems="center">
+                    <Grid item xs={12} sm={6}>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={widgetSettings.weather?.enabled || false}
+                            onChange={() => handleWidgetToggle('weather', 'enabled')}
+                          />
+                        }
+                        label="Enabled"
+                      />
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={widgetSettings.weather?.transparent || false}
+                            onChange={() => handleWidgetToggle('weather', 'transparent')}
+                          />
+                        }
+                        label="Transparent Background"
+                        sx={{ ml: 2 }}
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} sm={6}>
+                      <FormControl fullWidth size="small">
+                        <InputLabel id="weather-refresh-label">
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Timer fontSize="small" />
+                            Auto-Refresh Interval
+                          </Box>
+                        </InputLabel>
+                        <Select
+                          labelId="weather-refresh-label"
+                          value={widgetSettings.weather?.refreshInterval || 0}
+                          onChange={(e) => handleRefreshIntervalChange('weather', e.target.value)}
+                          label="Auto-Refresh Interval"
+                        >
+                          {refreshIntervalOptions.map((option) => (
+                            <MenuItem key={option.value} value={option.value}>
+                              {option.label}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                  </Grid>
+
+                  <Box sx={{ mt: 2 }}>
+                    <Autocomplete
+                      multiple
+                      options={tabs}
+                      getOptionLabel={(option) => option.label}
+                      value={tabs.filter(tab => widgetAssignments['weather']?.includes(tab.number))}
+                      onChange={(e, newValue) => {
+                        handleWidgetAssignmentChange('weather', newValue.map(tab => tab.number));
+                      }}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Show on Tabs"
+                          placeholder="Select tabs..."
+                          helperText="Select which tabs this widget should appear on (defaults to Home tab if none selected)"
+                        />
+                      )}
+                      renderTags={(value, getTagProps) =>
+                        value.map((option, index) => (
+                          <Chip
+                            label={option.label}
+                            {...getTagProps({ index })}
+                            sx={{ backgroundColor: 'var(--accent)', color: 'white' }}
+                          />
+                        ))
+                      }
                     />
-                  )}
-                  renderTags={(value, getTagProps) =>
-                    value.map((option, index) => (
-                      <Chip
-                        label={option.label}
-                        {...getTagProps({ index })}
-                        sx={{ backgroundColor: 'var(--accent)', color: 'white' }}
+                  </Box>
+
+                  {/* Weather Layout Mode Selection */}
+                  <Box sx={{ mt: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1, bgcolor: 'rgba(255, 255, 255, 0.02)' }}>
+                    <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <ViewModule />
+                      Layout Mode
+                    </Typography>
+
+                    <RadioGroup
+                      value={widgetSettings.weather?.layoutMode || 'medium'}
+                      onChange={(e) => handleWeatherLayoutModeChange(e.target.value)}
+                    >
+                      <FormControlLabel
+                        value="compact"
+                        control={<Radio />}
+                        label={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <ViewCompact />
+                            <Box>
+                              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                Compact
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                Current weather only (minimal space)
+                              </Typography>
+                            </Box>
+                          </Box>
+                        }
                       />
-                    ))
-                  }
-                />
-              </Box>
 
-              {/* Weather Layout Mode Selection */}
-              <Box sx={{ mt: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1, bgcolor: 'rgba(255, 255, 255, 0.02)' }}>
-                <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <ViewModule />
-                  Layout Mode
-                </Typography>
-                
-                <RadioGroup
-                  value={widgetSettings.weather?.layoutMode || 'medium'}
-                  onChange={(e) => handleWeatherLayoutModeChange(e.target.value)}
-                >
-                  <FormControlLabel
-                    value="compact"
-                    control={<Radio />}
-                    label={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <ViewCompact />
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                            Compact
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            Current weather only (minimal space)
-                          </Typography>
-                        </Box>
-                      </Box>
-                    }
-                  />
-                  
-                  <FormControlLabel
-                    value="medium"
-                    control={<Radio />}
-                    label={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <ViewModule />
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                            Medium
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            Current weather + 3-day forecast
-                          </Typography>
-                        </Box>
-                      </Box>
-                    }
-                  />
-                  
-                  <FormControlLabel
-                    value="full"
-                    control={<Radio />}
-                    label={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <ViewQuilt />
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                            Full
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            All information with charts and air quality
-                          </Typography>
-                        </Box>
-                      </Box>
-                    }
-                  />
-                </RadioGroup>
+                      <FormControlLabel
+                        value="medium"
+                        control={<Radio />}
+                        label={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <ViewModule />
+                            <Box>
+                              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                Medium
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                Current weather + 3-day forecast
+                              </Typography>
+                            </Box>
+                          </Box>
+                        }
+                      />
 
-                <Alert severity="info" sx={{ mt: 2 }}>
-                  The selected layout mode will be used regardless of widget size. Resize the widget to fit your preferred layout.
-                </Alert>
-              </Box>
-              
-              {widgetSettings.weather?.refreshInterval > 0 && (
-                <Alert severity="info" sx={{ mt: 2 }} icon={<Timer />}>
-                  Weather widget will automatically refresh every {getRefreshIntervalLabel(widgetSettings.weather.refreshInterval).toLowerCase()}
-                </Alert>
-              )}
-            </Box>
+                      <FormControlLabel
+                        value="full"
+                        control={<Radio />}
+                        label={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <ViewQuilt />
+                            <Box>
+                              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                Full
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                All information with charts and air quality
+                              </Typography>
+                            </Box>
+                          </Box>
+                        }
+                      />
+                    </RadioGroup>
+
+                    <Alert severity="info" sx={{ mt: 2 }}>
+                      The selected layout mode will be used regardless of widget size. Resize the widget to fit your preferred layout.
+                    </Alert>
+                  </Box>
+
+                  {widgetSettings.weather?.refreshInterval > 0 && (
+                    <Alert severity="info" sx={{ mt: 2 }} icon={<Timer />}>
+                      Weather widget will automatically refresh every {getRefreshIntervalLabel(widgetSettings.weather.refreshInterval).toLowerCase()}
+                    </Alert>
+                  )}
+                </Box>
 
                 <Button variant="contained" onClick={saveWidgetSettings} sx={{ mt: 2 }} startIcon={<Save />}>
                   Save Widget Settings
@@ -1390,11 +1836,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
                               multiple
                               options={tabs}
                               getOptionLabel={(option) => option.label}
-                              value={tabs.filter(tab => pluginAssignments[pluginWidgetName]?.includes(tab.id))}
+                              value={tabs.filter(tab => pluginAssignments[pluginWidgetName]?.includes(tab.number))}
                               onChange={(e, newValue) => {
                                 setPluginAssignments(prev => ({
                                   ...prev,
-                                  [pluginWidgetName]: newValue.map(tab => tab.id)
+                                  [pluginWidgetName]: newValue.map(tab => tab.number)
                                 }));
                               }}
                               renderInput={(params) => (
@@ -1427,6 +1873,178 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
                 )}
               </>
             )}
+
+            {widgetsSubTab === 2 && (
+              <>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Alert severity="info" sx={{ mb: 0, flex: 1, mr: 2 }}>
+                    Manage dashboard tabs. Drag rows to reorder tabs. Home tab cannot be edited or deleted.
+                  </Alert>
+                  <Button variant="contained" startIcon={<Add />} onClick={openCreateTabDialog}>
+                    Add Tab
+                  </Button>
+                </Box>
+
+                <TableContainer component={Paper}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell width={60}>Order</TableCell>
+                        <TableCell>Label</TableCell>
+                        <TableCell>Icon</TableCell>
+                        <TableCell>Show Label</TableCell>
+                        <TableCell width={120}>Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {[...tabs].sort((a, b) => a.number - b.number).map((tab) => {
+                        const isHome = tab.number === 1;
+                        return (
+                          <TableRow
+                            key={tab.id}
+                            draggable={!isHome}
+                            onDragStart={() => handleTabDragStart(tab.number)}
+                            onDragOver={(e) => {
+                              if (!isHome) {
+                                e.preventDefault();
+                              }
+                            }}
+                            onDrop={() => {
+                              if (!isHome) {
+                                handleTabDrop(tab.number);
+                              }
+                            }}
+                            sx={{
+                              cursor: isHome ? 'default' : 'grab',
+                              opacity: draggingTabNumber === tab.number ? 0.65 : 1,
+                            }}
+                          >
+                            <TableCell>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                {!isHome && <DragIndicator fontSize="small" />}
+                                <Chip label={tab.number} size="small" />
+                              </Box>
+                            </TableCell>
+                            <TableCell>
+                              {tab.label}
+                              {isHome && (
+                                <Chip size="small" label="Home" color="primary" sx={{ ml: 1 }} />
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Chip size="small" label={tab.icon} />
+                            </TableCell>
+                            <TableCell>
+                              <Switch
+                                checked={Boolean(tab.show_label)}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={() => toggleTabShowLabel(tab)}
+                                disabled={isLoading}
+                                inputProps={{ 'aria-label': `Toggle show label for ${tab.label}` }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <IconButton
+                                onClick={() => openEditTabDialog(tab)}
+                                color="primary"
+                                size="small"
+                                disabled={isHome}
+                              >
+                                <Edit />
+                              </IconButton>
+                              <IconButton
+                                onClick={() => requestDeleteTab(tab)}
+                                color="error"
+                                size="small"
+                                disabled={isHome}
+                              >
+                                <Delete />
+                              </IconButton>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </>
+            )}
+
+            {widgetsSubTab === 3 && (
+              <>
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  Manage devices and copy tabs/widget settings between them. Copying will overwrite the current device tabs and widget assignments.
+                </Alert>
+
+                <Box sx={{ mb: 2, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
+                  <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
+                    Current Device GUID
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                    <Chip label="Current" color="primary" size="small" />
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                      {currentDeviceGuid}
+                    </Typography>
+                  </Box>
+                </Box>
+
+                <TableContainer component={Paper}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>GUID</TableCell>
+                        <TableCell>Update</TableCell>
+                        <TableCell>Widgets</TableCell>
+                        <TableCell width={120}>Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {devices.map((device) => {
+                        const isCurrent = device.guid === currentDeviceGuid;
+                        return (
+                          <TableRow key={device.guid}>
+                            <TableCell>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                                {isCurrent && <Chip label="Current" color="primary" size="small" />}
+                                <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                                  {device.guid}
+                                </Typography>
+                              </Box>
+                            </TableCell>
+                            <TableCell>
+                              {device.updateTime ? new Date(device.updateTime).toLocaleString() : 'Unknown'}
+                            </TableCell>
+                            <TableCell>
+                              <Chip label={Number(device.widgets) || 0} size="small" />
+                            </TableCell>
+                            <TableCell>
+                              <IconButton
+                                onClick={() => openCopyDeviceDialog(device)}
+                                color="primary"
+                                size="small"
+                                title="Copy this device to current"
+                                disabled={isCurrent}
+                              >
+                                <ContentCopy />
+                              </IconButton>
+                              <IconButton
+                                onClick={() => openDeleteDeviceDialog(device)}
+                                color="error"
+                                size="small"
+                                title="Delete device"
+                                disabled={isCurrent}
+                              >
+                                <Delete />
+                              </IconButton>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </>
+            )}
           </CardContent>
         </Card>
       )}
@@ -1456,13 +2074,13 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
             <Alert severity="info" sx={{ mb: 3 }}>
               Background color applies to light mode only. Accent color is used throughout the dashboard for highlights and interactive elements.
             </Alert>
-            
+
             <Box sx={{ maxWidth: 600, mx: 'auto' }}>
               {renderColorPicker('primary', '🎨 Background Color (Light Mode)')}
               {renderColorPicker('secondary', '💎 Secondary Color')}
               {renderColorPicker('accent', '✨ Accent Color')}
             </Box>
-            
+
             <Box sx={{ mt: 4, display: 'flex', gap: 2, justifyContent: 'center' }}>
               <Button
                 variant="contained"
@@ -1674,7 +2292,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>User Management</Typography>
-            
+
             <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
               <Typography variant="subtitle1" sx={{ mb: 2 }}>Add New User</Typography>
               <Grid container spacing={2}>
@@ -1860,7 +2478,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>Prize Management</Typography>
-            
+
             <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
               <Typography variant="subtitle1" sx={{ mb: 2 }}>Add New Prize</Typography>
               <Grid container spacing={2}>
@@ -2104,6 +2722,112 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
       )}
 
       {/* User Delete Confirmation Dialog */}
+      <TabIconModal
+        open={tabIconModalState.open}
+        onClose={closeTabEditorDialog}
+        onSave={saveTabDefinition}
+        title={tabIconModalState.mode === 'edit' ? 'Edit Tab' : 'Create New Tab'}
+        saveButtonText={tabIconModalState.mode === 'edit' ? 'Save Changes' : 'Create Tab'}
+        initialData={tabIconModalState.initialData}
+      />
+
+      <Dialog
+        open={deleteTabDialog.open}
+        onClose={() => setDeleteTabDialog({ open: false, tab: null })}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Warning color="error" />
+            <Typography variant="h6">Delete Tab</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            Widgets assigned to this tab will be moved by the server rules for deleted tabs.
+          </Alert>
+          <Typography>
+            Are you sure you want to delete <strong>{deleteTabDialog.tab?.label}</strong>?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteTabDialog({ open: false, tab: null })} variant="outlined">
+            Cancel
+          </Button>
+          <Button onClick={confirmDeleteTab} variant="contained" color="error" startIcon={<Delete />}>
+            Delete Tab
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={copyDeviceDialog.open}
+        onClose={() => setCopyDeviceDialog({ open: false, device: null })}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Warning color="warning" />
+            <Typography variant="h6">Copy Device Settings</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            This action will COPY all tabs and widget settings from the selected device to this current client.
+          </Alert>
+          <Typography sx={{ mb: 2 }}>
+            This will overwrite all current tabs and widget assignments.
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Source device: <strong>{copyDeviceDialog.device?.guid}</strong>
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Destination device: <strong>{currentDeviceGuid}</strong>
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCopyDeviceDialog({ open: false, device: null })} variant="outlined">
+            Cancel
+          </Button>
+          <Button onClick={confirmCopyDeviceToCurrent} variant="contained" color="warning" startIcon={<ContentCopy />}>
+            Confirm Copy
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={deleteDeviceDialog.open}
+        onClose={() => setDeleteDeviceDialog({ open: false, device: null })}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Warning color="error" />
+            <Typography variant="h6">Delete Device</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            This action cannot be undone.
+          </Alert>
+          <Typography>
+            Are you sure you want to delete device <strong>{deleteDeviceDialog.device?.guid}</strong>?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDeviceDialog({ open: false, device: null })} variant="outlined">
+            Cancel
+          </Button>
+          <Button onClick={confirmDeleteDevice} variant="contained" color="error" startIcon={<Delete />}>
+            Delete Device
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* User Delete Confirmation Dialog */}
       <Dialog
         open={deleteUserDialog.open}
         onClose={() => setDeleteUserDialog({ open: false, user: null })}
@@ -2301,7 +3025,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
               </Box>
             ))}
           </Box>
-          
+
           <Typography
             variant="h6"
             sx={{
@@ -2313,7 +3037,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged }) => {
           >
             Processing...
           </Typography>
-          
+
           <CircularProgress
             size={40}
             thickness={2}

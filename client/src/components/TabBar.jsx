@@ -70,10 +70,11 @@ const TabBar = ({ tabs, activeTab, onTabChange, widgetsLocked, onAddTab, onDelet
 
   const defaultHomeTab = {
     id: 1,
+    number: 1,
     label: 'Home',
     icon: 'home',
     show_label: 1,
-    order_position: 0
+    index: 0
   };
 
   const displayTabs = tabs && tabs.length > 0 ? tabs : [defaultHomeTab];
@@ -99,11 +100,12 @@ const TabBar = ({ tabs, activeTab, onTabChange, widgetsLocked, onAddTab, onDelet
     >
       {displayTabs.map((tab, index) => {
         const IconComponent = getIconComponent(tab.icon);
-        const isActive = activeTab === tab.id;
-        const isHomeTab = tab.id === 1;
+        const tabNumber = tab.number ?? tab.id;
+        const isActive = activeTab === tabNumber;
+        const isHomeTab = tabNumber === 1;
 
         return (
-          <React.Fragment key={tab.id}>
+          <React.Fragment key={tab.id ?? tabNumber}>
             <Box
               sx={{
                 position: 'relative',
@@ -121,14 +123,14 @@ const TabBar = ({ tabs, activeTab, onTabChange, widgetsLocked, onAddTab, onDelet
                   backgroundColor: isActive ? 'rgba(158, 127, 255, 0.25)' : 'rgba(255, 255, 255, 0.08)',
                 },
               }}
-              onClick={() => onTabChange(tab.id)}
+              onClick={() => onTabChange(tabNumber)}
             >
               {!widgetsLocked && !isHomeTab && (
                 <IconButton
                   size="small"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onDeleteTab(tab.id);
+                    onDeleteTab(tabNumber);
                   }}
                   sx={{
                     position: 'absolute',

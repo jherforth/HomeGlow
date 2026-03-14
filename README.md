@@ -141,20 +141,7 @@ DISCLAIMER: This project uses AI in its development process. While you are right
 
 ## 🤝 Contributing
 
-We welcome contributions! Here's how to get started:
-
-1. **Fork the Repository**
-2. **Create a Feature Branch**: `git checkout -b feature/amazing-feature`
-3. **Make Your Changes**: Follow the existing code style
-4. **Test Thoroughly**: Ensure both light/dark themes work
-5. **Submit a Pull Request**: Describe your changes clearly
-
-### Development Guidelines
-- **Follow existing patterns** for consistency
-- **Test on multiple screen sizes** (mobile, tablet, desktop)
-- **Verify theme compatibility** (light/dark modes)
-- **Update documentation** for new features
-- **Add error handling** for robust operation
+Read our [contributing](CONTRIBUTING.md) guidelines.
 
 ## 📄 License
 
