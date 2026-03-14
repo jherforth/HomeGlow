@@ -18,7 +18,7 @@ import TabIconModal from './components/TabIconModal.jsx';
 import ScreenSaver from './components/ScreenSaver.jsx';
 import ScreensaverCountdown from './components/ScreensaverCountdown.jsx';
 import { API_BASE_URL } from './utils/apiConfig.js';
-import { getDeviceApiBase } from './utils/deviceGuid.js';
+import { getDeviceApiBase } from './utils/deviceName.js';
 import './index.css';
 
 const App = () => {
@@ -91,7 +91,7 @@ const App = () => {
           }
         });
         localStorage.setItem('pluginSettings', JSON.stringify(existing));
-      } catch {}
+      } catch { }
       localStorage.removeItem('enabledWidgets');
     }
     const ws = localStorage.getItem('widgetSettings');
@@ -102,7 +102,7 @@ const App = () => {
           delete parsed.widgetGallery;
           localStorage.setItem('widgetSettings', JSON.stringify(parsed));
         }
-      } catch {}
+      } catch { }
     }
   }, []);
 
@@ -208,7 +208,7 @@ const App = () => {
       screensaverActiveRef.current = true;
       setScreensaverActive(true);
       if (settings.mode === 'tabs' && tabsRef.current.length > 0) {
-        document.documentElement.requestFullscreen?.().catch(() => {});
+        document.documentElement.requestFullscreen?.().catch(() => { });
       }
     }, settings.timeout * 60 * 1000);
   }, []);
@@ -256,7 +256,7 @@ const App = () => {
     screensaverActiveRef.current = false;
     setScreensaverActive(false);
     if (document.fullscreenElement) {
-      document.exitFullscreen?.().catch(() => {});
+      document.exitFullscreen?.().catch(() => { });
     }
     setTimeout(() => startInactivityTimer(), 500);
   }, [startInactivityTimer]);

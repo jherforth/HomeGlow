@@ -6,7 +6,7 @@ import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
-import { getDeviceApiBase } from '../utils/deviceGuid.js';
+import { getDeviceApiBase } from '../utils/deviceName.js';
 import CountdownCircle from './CountdownCircle';
 
 const CORE_WIDGET_ID_TO_NAME = {

@@ -69,14 +69,14 @@ import {
 import ColorPickerPopover from './ColorPickerPopover';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
-import { getDeviceApiBase, getDeviceGuid, setDeviceGuid } from '../utils/deviceGuid.js';
+import { getDeviceApiBase, getDeviceName, setDeviceName } from '../utils/deviceName.js';
 import PinModal from './PinModal';
 import ChoreSchedulesTab from './ChoreSchedulesTab';
 import ChoreHistoryTab from './ChoreHistoryTab';
 import TabIconModal from './TabIconModal';
 
 const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
-  const [currentDeviceGuid, setCurrentDeviceGuid] = useState(() => getDeviceGuid());
+  const [currentDeviceName, setCurrentDeviceName] = useState(() => getDeviceName());
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const CORE_WIDGET_DEFAULT_SIZES = {
     calendar: { w: 8, h: 5 },
@@ -150,8 +150,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const [deleteDeviceDialog, setDeleteDeviceDialog] = useState({ open: false, device: null });
   const [renameDeviceDialog, setRenameDeviceDialog] = useState({
     open: false,
-    currentGuid: '',
-    newGuid: '',
+    currentName: '',
+    newName: '',
     error: '',
   });
 
@@ -819,13 +819,13 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   };
 
   const confirmCopyDeviceToCurrent = async () => {
-    if (!copyDeviceDialog.device?.guid) {
+    if (!copyDeviceDialog.device?.name) {
       return;
     }
 
     try {
       setIsLoading(true);
-      await axios.post(`${API_DEVICE_URL}/copy-from/${encodeURIComponent(copyDeviceDialog.device.guid)}`);
+      await axios.post(`${API_DEVICE_URL}/copy-from/${encodeURIComponent(copyDeviceDialog.device.name)}`);
 
       setCopyDeviceDialog({ open: false, device: null });
       await fetchTabs();
@@ -853,41 +853,41 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const openRenameDeviceDialog = () => {
     setRenameDeviceDialog({
       open: true,
-      currentGuid: currentDeviceGuid,
-      newGuid: currentDeviceGuid,
+      currentName: currentDeviceName,
+      newName: currentDeviceName,
       error: '',
     });
   };
 
   const confirmRenameDevice = async () => {
-    const nextGuid = (renameDeviceDialog.newGuid || '').trim();
-    if (!nextGuid) {
-      setRenameDeviceDialog(prev => ({ ...prev, error: 'Device GUID is required.' }));
+    const nextName = (renameDeviceDialog.newName || '').trim();
+    if (!nextName) {
+      setRenameDeviceDialog(prev => ({ ...prev, error: 'Device Name is required.' }));
       return;
     }
 
-    if (nextGuid === renameDeviceDialog.currentGuid) {
+    if (nextName === renameDeviceDialog.currentName) {
       setRenameDeviceDialog(prev => ({ ...prev, open: false, error: '' }));
       return;
     }
 
     try {
       setIsLoading(true);
-      await axios.patch(`${API_BASE_URL}/api/devices/${encodeURIComponent(renameDeviceDialog.currentGuid)}`, {
-        guid: nextGuid,
+      await axios.patch(`${API_BASE_URL}/api/devices/${encodeURIComponent(renameDeviceDialog.currentName)}`, {
+        name: nextName,
       });
 
-      setDeviceGuid(nextGuid);
-      setCurrentDeviceGuid(nextGuid);
-      setRenameDeviceDialog({ open: false, currentGuid: '', newGuid: '', error: '' });
+      setDeviceName(nextName);
+      setCurrentDeviceName(nextName);
+      setRenameDeviceDialog({ open: false, currentName: '', newName: '', error: '' });
       await fetchDevices();
-      setSaveMessage({ show: true, type: 'success', text: 'Device GUID updated. Reloading to apply changes.' });
+      setSaveMessage({ show: true, type: 'success', text: 'Device Name updated. Reloading to apply changes.' });
       setTimeout(() => {
         window.location.reload();
       }, 400);
     } catch (error) {
       console.error('Error renaming device:', error);
-      const errorMessage = error?.response?.data?.error || 'Failed to update device GUID. Please try again.';
+      const errorMessage = error?.response?.data?.error || 'Failed to update device name. Please try again.';
       setRenameDeviceDialog(prev => ({ ...prev, error: errorMessage }));
     } finally {
       setIsLoading(false);
@@ -895,12 +895,12 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   };
 
   const confirmDeleteDevice = async () => {
-    const deviceGuid = deleteDeviceDialog.device?.guid;
-    if (!deviceGuid) {
+    const deviceName = deleteDeviceDialog.device?.name;
+    if (!deviceName) {
       return;
     }
 
-    if (deviceGuid === currentDeviceGuid) {
+    if (deviceName === currentDeviceName) {
       setSaveMessage({ show: true, type: 'error', text: 'You cannot delete the current device.' });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
       setDeleteDeviceDialog({ open: false, device: null });
@@ -909,7 +909,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
     try {
       setIsLoading(true);
-      await axios.delete(`${API_BASE_URL}/api/devices/${encodeURIComponent(deviceGuid)}`);
+      await axios.delete(`${API_BASE_URL}/api/devices/${encodeURIComponent(deviceName)}`);
       setDeleteDeviceDialog({ open: false, device: null });
       await fetchDevices();
       setSaveMessage({ show: true, type: 'success', text: 'Device deleted successfully.' });
@@ -2028,12 +2028,12 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
                 <Box sx={{ mb: 2, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
                   <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
-                    Current Device GUID
+                    Current Device Name
                   </Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                     <Chip label="Current" color="primary" size="small" />
                     <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                      {currentDeviceGuid}
+                      {currentDeviceName}
                     </Typography>
                   </Box>
                 </Box>
@@ -2042,22 +2042,22 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                   <Table>
                     <TableHead>
                       <TableRow>
-                        <TableCell>GUID</TableCell>
-                        <TableCell>Update</TableCell>
+                        <TableCell>Name</TableCell>
+                        <TableCell>Last Updated</TableCell>
                         <TableCell>Widgets</TableCell>
                         <TableCell width={120}>Actions</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {devices.map((device) => {
-                        const isCurrent = device.guid === currentDeviceGuid;
+                        const isCurrent = device.name === currentDeviceName;
                         return (
-                          <TableRow key={device.guid}>
+                          <TableRow key={device.name}>
                             <TableCell>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                                 {isCurrent && <Chip label="Current" color="primary" size="small" />}
                                 <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                                  {device.guid}
+                                  {device.name}
                                 </Typography>
                               </Box>
                             </TableCell>
@@ -2841,10 +2841,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
             This will overwrite all current tabs and widget assignments.
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Source device: <strong>{copyDeviceDialog.device?.guid}</strong>
+            Source device: <strong>{copyDeviceDialog.device?.name}</strong>
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Destination device: <strong>{currentDeviceGuid}</strong>
+            Destination device: <strong>{currentDeviceName}</strong>
           </Typography>
         </DialogContent>
         <DialogActions>
@@ -2859,34 +2859,34 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
       <Dialog
         open={renameDeviceDialog.open}
-        onClose={() => setRenameDeviceDialog({ open: false, currentGuid: '', newGuid: '', error: '' })}
+        onClose={() => setRenameDeviceDialog({ open: false, currentName: '', newName: '', error: '' })}
         maxWidth="sm"
         fullWidth
       >
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Edit color="primary" />
-            <Typography variant="h6">Rename Current Device</Typography>
+            <Typography variant="h6">Rename Current Device Name</Typography>
           </Box>
         </DialogTitle>
         <DialogContent>
           <TextField
             fullWidth
-            label="New Device GUID"
-            value={renameDeviceDialog.newGuid}
-            onChange={(e) => setRenameDeviceDialog(prev => ({ ...prev, newGuid: e.target.value, error: '' }))}
+            label="New Device Name"
+            value={renameDeviceDialog.newName}
+            onChange={(e) => setRenameDeviceDialog(prev => ({ ...prev, newName: e.target.value, error: '' }))}
             error={Boolean(renameDeviceDialog.error)}
-            helperText={renameDeviceDialog.error || 'This updates the current device GUID in both server and local storage.'}
+            helperText={renameDeviceDialog.error || 'This updates the current device name in both server and local storage.'}
             sx={{ mt: 1 }}
             autoFocus
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setRenameDeviceDialog({ open: false, currentGuid: '', newGuid: '', error: '' })} variant="outlined">
+          <Button onClick={() => setRenameDeviceDialog({ open: false, currentName: '', newName: '', error: '' })} variant="outlined">
             Cancel
           </Button>
           <Button onClick={confirmRenameDevice} variant="contained" startIcon={<Save />}>
-            Save GUID
+            Save Name
           </Button>
         </DialogActions>
       </Dialog>
@@ -2908,7 +2908,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
             This action cannot be undone.
           </Alert>
           <Typography>
-            Are you sure you want to delete device <strong>{deleteDeviceDialog.device?.guid}</strong>?
+            Are you sure you want to delete device <strong>{deleteDeviceDialog.device?.name}</strong>?
           </Typography>
         </DialogContent>
         <DialogActions>

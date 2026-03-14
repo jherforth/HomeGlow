@@ -1051,42 +1051,42 @@ async function migrateDeviceSchemaV6() {
         DROP TABLE IF EXISTS devices;
         CREATE TABLE devices (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          guid TEXT NOT NULL UNIQUE,
+          name TEXT NOT NULL UNIQUE,
           updateTime TEXT DEFAULT CURRENT_TIMESTAMP
         );
-        CREATE INDEX IF NOT EXISTS idx_devices_device_guid ON devices(guid);
+        CREATE INDEX IF NOT EXISTS idx_devices_device_name ON devices(name);
 
         DROP TABLE IF EXISTS tabs;
         CREATE TABLE tabs (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          device_guid TEXT NOT NULL,
+          device_name TEXT NOT NULL,
           number INTEGER NOT NULL,
           label TEXT NOT NULL,
           icon TEXT NOT NULL,
           show_label INTEGER DEFAULT 1,
           created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (device_guid) REFERENCES devices(guid) ON DELETE CASCADE ON UPDATE CASCADE,
-          UNIQUE(device_guid, number)
+          FOREIGN KEY (device_name) REFERENCES devices(name) ON DELETE CASCADE ON UPDATE CASCADE,
+          UNIQUE(device_name, number)
         );
-        CREATE INDEX IF NOT EXISTS idx_tabs_device_guid ON tabs(device_guid);
+        CREATE INDEX IF NOT EXISTS idx_tabs_device_name ON tabs(device_name);
 
         DROP TABLE IF EXISTS widget_tab_assignments;
         CREATE TABLE widget_tab_assignments (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          device_guid TEXT NOT NULL,
+          device_name TEXT NOT NULL,
           tab_number INTEGER NOT NULL,
           widget_name TEXT NOT NULL,
           layout_x INTEGER,
           layout_y INTEGER,
           layout_w INTEGER,
           layout_h INTEGER,
-          FOREIGN KEY (device_guid) REFERENCES devices(guid) ON DELETE CASCADE ON UPDATE CASCADE,
-          FOREIGN KEY("device_guid","tab_number") REFERENCES "tabs"("device_guid","number") ON DELETE CASCADE ON UPDATE CASCADE
+          FOREIGN KEY (device_name) REFERENCES devices(name) ON DELETE CASCADE ON UPDATE CASCADE,
+          FOREIGN KEY("device_name","tab_number") REFERENCES "tabs"("device_name","number") ON DELETE CASCADE ON UPDATE CASCADE
         );
 
         CREATE INDEX IF NOT EXISTS idx_widget_tab_assignments_widget ON widget_tab_assignments(widget_name);
         CREATE INDEX IF NOT EXISTS idx_widget_tab_assignments_tab_number ON widget_tab_assignments(tab_number);
-        CREATE INDEX IF NOT EXISTS idx_widget_tab_assignments_device_guid_tab_number ON widget_tab_assignments(device_guid, tab_number);
+        CREATE INDEX IF NOT EXISTS idx_widget_tab_assignments_device_name_tab_number ON widget_tab_assignments(device_name, tab_number);
       `);
 
       db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(schemaIdKey, String(targetVersion));
@@ -1344,24 +1344,24 @@ function startNightlyCronJob() {
   console.log('Daily background processing cron job scheduled for midnight');
 }
 
-function ensureHomeTabExists(deviceGuid) {
+function ensureHomeTabExists(deviceName) {
   // Insert default home tab if it doesn't exist
   try {
-    const homeTab = db.prepare('SELECT id FROM tabs WHERE number = 1 AND device_guid = ?').get(deviceGuid);
+    const homeTab = db.prepare('SELECT id FROM tabs WHERE number = 1 AND device_name = ?').get(deviceName);
     if (!homeTab) {
-      db.prepare('INSERT INTO tabs (label, icon, show_label, number, device_guid) VALUES (?, ?, ?, ?, ?)').run('Home', 'home', 1, 1, deviceGuid);
+      db.prepare('INSERT INTO tabs (label, icon, show_label, number, device_name) VALUES (?, ?, ?, ?, ?)').run('Home', 'home', 1, 1, deviceName);
       console.log('Default home tab created');
     }
   } catch (error) {
     console.error('Error creating default home tab:', error);
   }
 }
-function ensureDeviceExists(deviceGuid) {
-  db.prepare('INSERT OR IGNORE INTO devices (guid, updateTime) VALUES (?, CURRENT_TIMESTAMP)').run(deviceGuid);
-  ensureHomeTabExists(deviceGuid);
+function ensureDeviceExists(deviceName) {
+  db.prepare('INSERT OR IGNORE INTO devices (name, updateTime) VALUES (?, CURRENT_TIMESTAMP)').run(deviceName);
+  ensureHomeTabExists(deviceName);
 }
-function touchDeviceUpdateTime(deviceGuid) {
-  db.prepare('UPDATE devices SET updateTime = CURRENT_TIMESTAMP WHERE guid = ?').run(deviceGuid);
+function touchDeviceUpdateTime(deviceName) {
+  db.prepare('UPDATE devices SET updateTime = CURRENT_TIMESTAMP WHERE name = ?').run(deviceName);
 }
 
 // Devices API Endpoints
@@ -1369,12 +1369,12 @@ fastify.get('/api/devices', async (request, reply) => {
   try {
     const devices = db.prepare(`
       SELECT
-        d.guid,
+        d.name,
         d.updateTime,
         COUNT(wta.id) AS widgets
       FROM devices d
-      LEFT JOIN widget_tab_assignments wta ON wta.device_guid = d.guid
-      GROUP BY d.guid, d.updateTime
+      LEFT JOIN widget_tab_assignments wta ON wta.device_name = d.name
+      GROUP BY d.name, d.updateTime
       ORDER BY d.updateTime DESC
     `).all();
 
@@ -1386,73 +1386,73 @@ fastify.get('/api/devices', async (request, reply) => {
 });
 
 
-fastify.patch('/api/devices/:deviceGuid', async (request, reply) => {
-  const { deviceGuid } = request.params;
-  const { guid: newGuid } = request.body || {};
+fastify.patch('/api/devices/:deviceName', async (request, reply) => {
+  const { deviceName } = request.params;
+  const { name: newName } = request.body || {};
 
-  if (!deviceGuid) {
-    return reply.status(400).send({ error: 'deviceGuid is required' });
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
   }
 
-  if (!newGuid || typeof newGuid !== 'string' || !newGuid.trim()) {
-    return reply.status(400).send({ error: 'guid is required' });
+  if (!newName || typeof newName !== 'string' || !newName.trim()) {
+    return reply.status(400).send({ error: 'name is required' });
   }
 
-  const trimmedNewGuid = newGuid.trim();
+  const trimmedNewName = newName.trim();
 
-  if (trimmedNewGuid === deviceGuid) {
-    return { success: true, guid: trimmedNewGuid, message: 'Device guid unchanged' };
+  if (trimmedNewName === deviceName) {
+    return { success: true, name: trimmedNewName, message: 'Device name unchanged' };
   }
 
   try {
-    const existingDevice = db.prepare('SELECT guid FROM devices WHERE guid = ?').get(deviceGuid);
+    const existingDevice = db.prepare('SELECT name FROM devices WHERE name = ?').get(deviceName);
     if (!existingDevice) {
       return reply.status(404).send({ error: 'Device not found' });
     }
 
-    const alreadyUsed = db.prepare('SELECT guid FROM devices WHERE guid = ?').get(trimmedNewGuid);
+    const alreadyUsed = db.prepare('SELECT name FROM devices WHERE name = ?').get(trimmedNewName);
     if (alreadyUsed) {
-      return reply.status(409).send({ error: 'A device with that guid already exists' });
+      return reply.status(409).send({ error: 'A device with that name already exists' });
     }
 
-    db.prepare('UPDATE devices SET guid = ?, updateTime = CURRENT_TIMESTAMP WHERE guid = ?').run(trimmedNewGuid, deviceGuid);
-    return { success: true, guid: trimmedNewGuid, message: 'Device guid updated successfully' };
+    db.prepare('UPDATE devices SET name = ?, updateTime = CURRENT_TIMESTAMP WHERE name = ?').run(trimmedNewName, deviceName);
+    return { success: true, name: trimmedNewName, message: 'Device name updated successfully' };
   } catch (error) {
-    console.error('Error updating device guid:', error);
-    reply.status(500).send({ error: 'Failed to update device guid' });
+    console.error('Error updating device name:', error);
+    reply.status(500).send({ error: 'Failed to update device name' });
   }
 });
 
-fastify.post('/api/devices/:deviceGuid/copy-from/:sourceDeviceGuid', async (request, reply) => {
-  const { deviceGuid, sourceDeviceGuid } = request.params;
+fastify.post('/api/devices/:deviceName/copy-from/:sourceDeviceName', async (request, reply) => {
+  const { deviceName, sourceDeviceName } = request.params;
 
-  if (!deviceGuid || !sourceDeviceGuid) {
-    return reply.status(400).send({ error: 'deviceGuid and sourceDeviceGuid are required' });
+  if (!deviceName || !sourceDeviceName) {
+    return reply.status(400).send({ error: 'deviceName and sourceDeviceName are required' });
   }
 
-  if (deviceGuid === sourceDeviceGuid) {
+  if (deviceName === sourceDeviceName) {
     return reply.status(400).send({ error: 'Source and destination devices must be different' });
   }
 
   try {
-    const sourceExists = db.prepare('SELECT guid FROM devices WHERE guid = ?').get(sourceDeviceGuid);
+    const sourceExists = db.prepare('SELECT name FROM devices WHERE name = ?').get(sourceDeviceName);
     if (!sourceExists) {
       return reply.status(404).send({ error: 'Source device not found' });
     }
 
-    ensureDeviceExists(deviceGuid);
+    ensureDeviceExists(deviceName);
 
     const copyTransaction = db.transaction(() => {
-      db.prepare('DELETE FROM widget_tab_assignments WHERE device_guid = ?').run(deviceGuid);
-      db.prepare('DELETE FROM tabs WHERE device_guid = ?').run(deviceGuid);
+      db.prepare('DELETE FROM widget_tab_assignments WHERE device_name = ?').run(deviceName);
+      db.prepare('DELETE FROM tabs WHERE device_name = ?').run(deviceName);
 
       db.prepare(`
-        INSERT INTO tabs (device_guid, label, icon, show_label, number)
+        INSERT INTO tabs (device_name, label, icon, show_label, number)
         SELECT ?, label, icon, show_label, number
         FROM tabs
-        WHERE device_guid = ?
+        WHERE device_name = ?
         ORDER BY number ASC
-      `).run(deviceGuid, sourceDeviceGuid);
+      `).run(deviceName, sourceDeviceName);
 
       db.prepare(`
         INSERT INTO widget_tab_assignments (
@@ -1462,7 +1462,7 @@ fastify.post('/api/devices/:deviceGuid/copy-from/:sourceDeviceGuid', async (requ
           layout_y,
           layout_w,
           layout_h,
-          device_guid
+          device_name
         )
         SELECT
           widget_name,
@@ -1473,11 +1473,11 @@ fastify.post('/api/devices/:deviceGuid/copy-from/:sourceDeviceGuid', async (requ
           layout_h,
           ?
         FROM widget_tab_assignments
-        WHERE device_guid = ?
-      `).run(deviceGuid, sourceDeviceGuid);
+        WHERE device_name = ?
+      `).run(deviceName, sourceDeviceName);
 
-      ensureHomeTabExists(deviceGuid);
-      touchDeviceUpdateTime(deviceGuid);
+      ensureHomeTabExists(deviceName);
+      touchDeviceUpdateTime(deviceName);
     });
 
     copyTransaction();
@@ -1488,16 +1488,16 @@ fastify.post('/api/devices/:deviceGuid/copy-from/:sourceDeviceGuid', async (requ
   }
 });
 
-fastify.delete('/api/devices/:deviceGuid', async (request, reply) => {
-  const { deviceGuid } = request.params;
+fastify.delete('/api/devices/:deviceName', async (request, reply) => {
+  const { deviceName } = request.params;
 
-  if (!deviceGuid) {
-    return reply.status(400).send({ error: 'deviceGuid is required' });
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
   }
 
   try {
-    const stmt = db.prepare('DELETE FROM devices WHERE guid = ?');
-    const result = stmt.run(deviceGuid);
+    const stmt = db.prepare('DELETE FROM devices WHERE name = ?');
+    const result = stmt.run(deviceName);
 
     if (result.changes === 0) {
       return reply.status(404).send({ error: 'Device not found' });
@@ -2307,14 +2307,14 @@ fastify.post('/api/settings', async (request, reply) => {
 });
 
 // Tabs API Endpoints
-fastify.get('/api/devices/:deviceGuid/tabs', async (request, reply) => {
-  const { deviceGuid } = request.params;
-  if (!deviceGuid) {
-    return reply.status(400).send({ error: 'deviceGuid is required' });
+fastify.get('/api/devices/:deviceName/tabs', async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
   }
 
   try {
-    const tabs = db.prepare('SELECT * FROM tabs WHERE device_guid = ? ORDER BY number ASC').all(deviceGuid);
+    const tabs = db.prepare('SELECT * FROM tabs WHERE device_name = ? ORDER BY number ASC').all(deviceName);
     return tabs;
   } catch (error) {
     console.error('Error fetching tabs:', error);
@@ -2322,12 +2322,12 @@ fastify.get('/api/devices/:deviceGuid/tabs', async (request, reply) => {
   }
 });
 
-fastify.post('/api/devices/:deviceGuid/tabs', async (request, reply) => {
-  const { deviceGuid } = request.params;
-  if (!deviceGuid) {
-    return reply.status(400).send({ error: 'deviceGuid is required' });
+fastify.post('/api/devices/:deviceName/tabs', async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
   }
-  ensureDeviceExists(deviceGuid);
+  ensureDeviceExists(deviceName);
   const { label, icon, show_label } = request.body;
 
   if (!label || !icon) {
@@ -2335,12 +2335,12 @@ fastify.post('/api/devices/:deviceGuid/tabs', async (request, reply) => {
   }
 
   try {
-    const maxOrder = db.prepare('SELECT MAX(number) as max FROM tabs WHERE device_guid = ?').get(deviceGuid);
+    const maxOrder = db.prepare('SELECT MAX(number) as max FROM tabs WHERE device_name = ?').get(deviceName);
     const nextTabNumber = (maxOrder.max || 0) + 1;
 
-    const stmt = db.prepare('INSERT INTO tabs (device_guid, label, icon, show_label, number) VALUES (?, ?, ?, ?, ?) RETURNING *');
-    const row = stmt.get(deviceGuid, label, icon, show_label ? 1 : 0, nextTabNumber);
-    touchDeviceUpdateTime(deviceGuid);
+    const stmt = db.prepare('INSERT INTO tabs (device_name, label, icon, show_label, number) VALUES (?, ?, ?, ?, ?) RETURNING *');
+    const row = stmt.get(deviceName, label, icon, show_label ? 1 : 0, nextTabNumber);
+    touchDeviceUpdateTime(deviceName);
 
     return row;
   } catch (error) {
@@ -2349,13 +2349,13 @@ fastify.post('/api/devices/:deviceGuid/tabs', async (request, reply) => {
   }
 });
 
-fastify.patch('/api/devices/:deviceGuid/tabs/:tabNumber', async (request, reply) => {
-  const { deviceGuid, tabNumber } = request.params;
+fastify.patch('/api/devices/:deviceName/tabs/:tabNumber', async (request, reply) => {
+  const { deviceName, tabNumber } = request.params;
   const { label, icon, show_label } = request.body;
-  if (!deviceGuid) {
-    return reply.status(400).send({ error: 'deviceGuid is required' });
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
   }
-  ensureDeviceExists(deviceGuid);
+  ensureDeviceExists(deviceName);
   if (parseInt(tabNumber) === 1) {
     return reply.status(400).send({ error: 'Cannot modify home tab' });
   }
@@ -2382,10 +2382,10 @@ fastify.patch('/api/devices/:deviceGuid/tabs/:tabNumber', async (request, reply)
     }
 
     values.push(tabNumber);
-    values.push(deviceGuid);
-    const stmt = db.prepare(`UPDATE tabs SET ${updates.join(', ')} WHERE number = ? AND device_guid = ? RETURNING *`);
+    values.push(deviceName);
+    const stmt = db.prepare(`UPDATE tabs SET ${updates.join(', ')} WHERE number = ? AND device_name = ? RETURNING *`);
     const row = stmt.get(...values);
-    touchDeviceUpdateTime(deviceGuid);
+    touchDeviceUpdateTime(deviceName);
 
     return row;
   } catch (error) {
@@ -2394,14 +2394,14 @@ fastify.patch('/api/devices/:deviceGuid/tabs/:tabNumber', async (request, reply)
   }
 });
 
-fastify.patch('/api/devices/:deviceGuid/tabs/reorder', async (request, reply) => {
-  const { deviceGuid } = request.params;
+fastify.patch('/api/devices/:deviceName/tabs/reorder', async (request, reply) => {
+  const { deviceName } = request.params;
   const { orderedTabNumbers } = request.body;
 
-  if (!deviceGuid) {
-    return reply.status(400).send({ error: 'deviceGuid is required' });
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
   }
-  ensureDeviceExists(deviceGuid);
+  ensureDeviceExists(deviceName);
 
   if (!Array.isArray(orderedTabNumbers)) {
     return reply.status(400).send({ error: 'orderedTabNumbers array is required' });
@@ -2409,8 +2409,8 @@ fastify.patch('/api/devices/:deviceGuid/tabs/reorder', async (request, reply) =>
 
   try {
     const nonHomeTabs = db
-      .prepare('SELECT id, number FROM tabs WHERE device_guid = ? AND number != 1 ORDER BY number ASC')
-      .all(deviceGuid);
+      .prepare('SELECT id, number FROM tabs WHERE device_name = ? AND number != 1 ORDER BY number ASC')
+      .all(deviceName);
 
     if (orderedTabNumbers.length !== nonHomeTabs.length) {
       return reply.status(400).send({ error: 'orderedTabNumbers length does not match current tab count' });
@@ -2431,23 +2431,23 @@ fastify.patch('/api/devices/:deviceGuid/tabs/reorder', async (request, reply) =>
     const orderedTabIds = orderedTabNumbers.map(number => tabsByNumber.get(number).id);
 
     const reorderTransaction = db.transaction((ids) => {
-      const tempStmt = db.prepare('UPDATE tabs SET number = ? WHERE id = ? AND device_guid = ?');
-      const finalStmt = db.prepare('UPDATE tabs SET number = ? WHERE id = ? AND device_guid = ?');
+      const tempStmt = db.prepare('UPDATE tabs SET number = ? WHERE id = ? AND device_name = ?');
+      const finalStmt = db.prepare('UPDATE tabs SET number = ? WHERE id = ? AND device_name = ?');
 
       ids.forEach((id, index) => {
-        // Move to temporary values to avoid UNIQUE(device_guid, number) collisions.
-        tempStmt.run(-1000 - index, id, deviceGuid);
+        // Move to temporary values to avoid UNIQUE(device_name, number) collisions.
+        tempStmt.run(-1000 - index, id, deviceName);
       });
 
       ids.forEach((id, index) => {
-        finalStmt.run(index + 2, id, deviceGuid);
+        finalStmt.run(index + 2, id, deviceName);
       });
     });
 
     reorderTransaction(orderedTabIds);
-    touchDeviceUpdateTime(deviceGuid);
+    touchDeviceUpdateTime(deviceName);
 
-    const updatedTabs = db.prepare('SELECT * FROM tabs WHERE device_guid = ? ORDER BY number ASC').all(deviceGuid);
+    const updatedTabs = db.prepare('SELECT * FROM tabs WHERE device_name = ? ORDER BY number ASC').all(deviceName);
     return updatedTabs;
   } catch (error) {
     console.error('Error reordering tabs:', error);
@@ -2455,47 +2455,47 @@ fastify.patch('/api/devices/:deviceGuid/tabs/reorder', async (request, reply) =>
   }
 });
 
-fastify.delete('/api/devices/:deviceGuid/tabs/:tabNumber', async (request, reply) => {
-  const { deviceGuid, tabNumber } = request.params;
-  if (!deviceGuid) {
-    return reply.status(400).send({ error: 'deviceGuid is required' });
+fastify.delete('/api/devices/:deviceName/tabs/:tabNumber', async (request, reply) => {
+  const { deviceName, tabNumber } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
   }
-  ensureDeviceExists(deviceGuid);
+  ensureDeviceExists(deviceName);
 
   if (parseInt(tabNumber) === 1) {
     return reply.status(400).send({ error: 'Cannot delete home tab' });
   }
 
   try {
-    // const widgetAssignments = db.prepare('SELECT * FROM widget_tab_assignments WHERE tab_number in (0,?) AND device_guid = ?').all(tabNumber, deviceGuid);
+    // const widgetAssignments = db.prepare('SELECT * FROM widget_tab_assignments WHERE tab_number in (0,?) AND device_name = ?').all(tabNumber, deviceName);
 
     // if (widgetAssignments.length > 0) {
-    //   const updateStmt = db.prepare('UPDATE widget_tab_assignments SET tab_number = 0 WHERE tab_number = ? AND device_guid = ?');
-    //   updateStmt.run(tabNumber, deviceGuid);
+    //   const updateStmt = db.prepare('UPDATE widget_tab_assignments SET tab_number = 0 WHERE tab_number = ? AND device_name = ?');
+    //   updateStmt.run(tabNumber, deviceName);
     // }
 
-    const deleteStmt = db.prepare('DELETE FROM tabs WHERE number = ? AND device_guid = ?');
-    deleteStmt.run(tabNumber, deviceGuid);
+    const deleteStmt = db.prepare('DELETE FROM tabs WHERE number = ? AND device_name = ?');
+    deleteStmt.run(tabNumber, deviceName);
 
     const remainingTabs = db
-      .prepare('SELECT id FROM tabs WHERE device_guid = ? AND number != 1 ORDER BY number ASC')
-      .all(deviceGuid);
+      .prepare('SELECT id FROM tabs WHERE device_name = ? AND number != 1 ORDER BY number ASC')
+      .all(deviceName);
 
     const renumberTransaction = db.transaction((tabRows) => {
-      const tempStmt = db.prepare('UPDATE tabs SET number = ? WHERE id = ? AND device_guid = ?');
-      const finalStmt = db.prepare('UPDATE tabs SET number = ? WHERE id = ? AND device_guid = ?');
+      const tempStmt = db.prepare('UPDATE tabs SET number = ? WHERE id = ? AND device_name = ?');
+      const finalStmt = db.prepare('UPDATE tabs SET number = ? WHERE id = ? AND device_name = ?');
 
       tabRows.forEach((row, index) => {
-        tempStmt.run(-2000 - index, row.id, deviceGuid);
+        tempStmt.run(-2000 - index, row.id, deviceName);
       });
 
       tabRows.forEach((row, index) => {
-        finalStmt.run(index + 2, row.id, deviceGuid);
+        finalStmt.run(index + 2, row.id, deviceName);
       });
     });
 
     renumberTransaction(remainingTabs);
-    touchDeviceUpdateTime(deviceGuid);
+    touchDeviceUpdateTime(deviceName);
 
     return { success: true, message: 'Tab deleted successfully' };
   } catch (error) {
@@ -2505,13 +2505,13 @@ fastify.delete('/api/devices/:deviceGuid/tabs/:tabNumber', async (request, reply
 });
 
 // Widget Tab Assignments API Endpoints
-fastify.get('/api/devices/:deviceGuid/widget-assignments', async (request, reply) => {
-  const { deviceGuid } = request.params;
-  if (!deviceGuid) {
-    return reply.status(400).send({ error: 'deviceGuid is required' });
+fastify.get('/api/devices/:deviceName/widget-assignments', async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
   }
   try {
-    const assignments = db.prepare('SELECT * FROM widget_tab_assignments WHERE device_guid = ?').all(deviceGuid);
+    const assignments = db.prepare('SELECT * FROM widget_tab_assignments WHERE device_name = ?').all(deviceName);
     return assignments;
   } catch (error) {
     console.error('Error fetching widget assignments:', error);
@@ -2519,10 +2519,10 @@ fastify.get('/api/devices/:deviceGuid/widget-assignments', async (request, reply
   }
 });
 
-fastify.post('/api/devices/:deviceGuid/widget-assignments', async (request, reply) => {
-  const { deviceGuid } = request.params;
-  if (!deviceGuid) {
-    return reply.status(400).send({ error: 'deviceGuid is required' });
+fastify.post('/api/devices/:deviceName/widget-assignments', async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
   }
   const { widget_name, tabNumber } = request.body;
   if (!widget_name || !tabNumber) {
@@ -2530,16 +2530,16 @@ fastify.post('/api/devices/:deviceGuid/widget-assignments', async (request, repl
   }
 
   try {
-    ensureDeviceExists(deviceGuid);
-    const existing = db.prepare('SELECT id FROM widget_tab_assignments WHERE widget_name = ? AND tab_number = ? AND device_guid = ?').get(widget_name, tabNumber, deviceGuid);
+    ensureDeviceExists(deviceName);
+    const existing = db.prepare('SELECT id FROM widget_tab_assignments WHERE widget_name = ? AND tab_number = ? AND device_name = ?').get(widget_name, tabNumber, deviceName);
 
     if (existing) {
       return reply.status(400).send({ error: 'Assignment already exists' });
     }
 
-    const stmt = db.prepare('INSERT INTO widget_tab_assignments (widget_name, tab_number, device_guid) VALUES (?, ?, ?) RETURNING *');
-    const row = stmt.get(widget_name, tabNumber, deviceGuid);
-    touchDeviceUpdateTime(deviceGuid);
+    const stmt = db.prepare('INSERT INTO widget_tab_assignments (widget_name, tab_number, device_name) VALUES (?, ?, ?) RETURNING *');
+    const row = stmt.get(widget_name, tabNumber, deviceName);
+    touchDeviceUpdateTime(deviceName);
 
     return row;
   } catch (error) {
@@ -2548,17 +2548,17 @@ fastify.post('/api/devices/:deviceGuid/widget-assignments', async (request, repl
   }
 });
 
-fastify.delete('/api/devices/:deviceGuid/widget-assignments/:id', async (request, reply) => {
-  const { id, deviceGuid } = request.params;
-  if (!deviceGuid) {
-    return reply.status(400).send({ error: 'deviceGuid is required' });
+fastify.delete('/api/devices/:deviceName/widget-assignments/:id', async (request, reply) => {
+  const { id, deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
   }
 
   try {
-    ensureDeviceExists(deviceGuid);
-    const stmt = db.prepare('DELETE FROM widget_tab_assignments WHERE id = ? AND device_guid = ?');
-    stmt.run(id, deviceGuid);
-    touchDeviceUpdateTime(deviceGuid);
+    ensureDeviceExists(deviceName);
+    const stmt = db.prepare('DELETE FROM widget_tab_assignments WHERE id = ? AND device_name = ?');
+    stmt.run(id, deviceName);
+    touchDeviceUpdateTime(deviceName);
     return { success: true, message: 'Assignment deleted successfully' };
   } catch (error) {
     console.error('Error deleting widget assignment:', error);
@@ -2566,17 +2566,17 @@ fastify.delete('/api/devices/:deviceGuid/widget-assignments/:id', async (request
   }
 });
 
-fastify.delete('/api/devices/:deviceGuid/widget-assignments/widget/:widgetName', async (request, reply) => {
-  const { widgetName, deviceGuid } = request.params;
-  if (!deviceGuid) {
-    return reply.status(400).send({ error: 'deviceGuid is required' });
+fastify.delete('/api/devices/:deviceName/widget-assignments/widget/:widgetName', async (request, reply) => {
+  const { widgetName, deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
   }
 
   try {
-    ensureDeviceExists(deviceGuid);
-    const stmt = db.prepare('DELETE FROM widget_tab_assignments WHERE widget_name = ? AND device_guid = ?');
-    stmt.run(widgetName, deviceGuid);
-    touchDeviceUpdateTime(deviceGuid);
+    ensureDeviceExists(deviceName);
+    const stmt = db.prepare('DELETE FROM widget_tab_assignments WHERE widget_name = ? AND device_name = ?');
+    stmt.run(widgetName, deviceName);
+    touchDeviceUpdateTime(deviceName);
     return { success: true, message: 'Widget assignments deleted successfully' };
   } catch (error) {
     console.error('Error deleting widget assignments:', error);
@@ -2584,10 +2584,10 @@ fastify.delete('/api/devices/:deviceGuid/widget-assignments/widget/:widgetName',
   }
 });
 
-fastify.patch('/api/devices/:deviceGuid/widget-assignments/layout', async (request, reply) => {
-  const { deviceGuid } = request.params;
-  if (!deviceGuid) {
-    return reply.status(400).send({ error: 'deviceGuid is required' });
+fastify.patch('/api/devices/:deviceName/widget-assignments/layout', async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
   }
   const { widget_name, tabNumber, layout_x, layout_y, layout_w, layout_h } = request.body;
 
@@ -2596,17 +2596,17 @@ fastify.patch('/api/devices/:deviceGuid/widget-assignments/layout', async (reque
   }
 
   try {
-    ensureDeviceExists(deviceGuid);
-    const existing = db.prepare('SELECT id FROM widget_tab_assignments WHERE widget_name = ? AND tab_number = ? AND device_guid = ?').get(widget_name, tabNumber, deviceGuid);
+    ensureDeviceExists(deviceName);
+    const existing = db.prepare('SELECT id FROM widget_tab_assignments WHERE widget_name = ? AND tab_number = ? AND device_name = ?').get(widget_name, tabNumber, deviceName);
 
     if (!existing) {
       return reply.status(404).send({ error: 'Assignment not found' });
     }
 
-    const stmt = db.prepare('UPDATE widget_tab_assignments SET layout_x = ?, layout_y = ?, layout_w = ?, layout_h = ? WHERE widget_name = ? AND tab_number = ? AND device_guid = ? RETURNING *');
-    const row = stmt.get(layout_x, layout_y, layout_w, layout_h, widget_name, tabNumber, deviceGuid);
+    const stmt = db.prepare('UPDATE widget_tab_assignments SET layout_x = ?, layout_y = ?, layout_w = ?, layout_h = ? WHERE widget_name = ? AND tab_number = ? AND device_name = ? RETURNING *');
+    const row = stmt.get(layout_x, layout_y, layout_w, layout_h, widget_name, tabNumber, deviceName);
 
-    touchDeviceUpdateTime(deviceGuid);
+    touchDeviceUpdateTime(deviceName);
     return row;
   } catch (error) {
     console.error('Error updating widget layout:', error);
@@ -2614,10 +2614,10 @@ fastify.patch('/api/devices/:deviceGuid/widget-assignments/layout', async (reque
   }
 });
 
-fastify.patch('/api/devices/:deviceGuid/widget-assignments/layout/bulk', async (request, reply) => {
-  const { deviceGuid } = request.params;
-  if (!deviceGuid) {
-    return reply.status(400).send({ error: 'deviceGuid is required' });
+fastify.patch('/api/devices/:deviceName/widget-assignments/layout/bulk', async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
   }
   const { layouts } = request.body;
   if (!Array.isArray(layouts) || layouts.length === 0) {
@@ -2625,13 +2625,13 @@ fastify.patch('/api/devices/:deviceGuid/widget-assignments/layout/bulk', async (
   }
 
   try {
-    ensureDeviceExists(deviceGuid);
-    const stmt = db.prepare('UPDATE widget_tab_assignments SET layout_x = ?, layout_y = ?, layout_w = ?, layout_h = ? WHERE widget_name = ? AND tab_number = ? AND device_guid = ?');
+    ensureDeviceExists(deviceName);
+    const stmt = db.prepare('UPDATE widget_tab_assignments SET layout_x = ?, layout_y = ?, layout_w = ?, layout_h = ? WHERE widget_name = ? AND tab_number = ? AND device_name = ?');
 
     for (const item of layouts) {
-      stmt.run(item.layout_x, item.layout_y, item.layout_w, item.layout_h, item.widget_name, item.tabNumber, deviceGuid);
+      stmt.run(item.layout_x, item.layout_y, item.layout_w, item.layout_h, item.widget_name, item.tabNumber, deviceName);
     }
-    touchDeviceUpdateTime(deviceGuid);
+    touchDeviceUpdateTime(deviceName);
     return { success: true, message: 'Layouts updated successfully' };
   } catch (error) {
     console.error('Error updating widget layouts:', error);
