@@ -384,7 +384,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         }
       }
 
-      setSaveMessage({ show: true, type: 'success', text: 'Widget settings saved successfully! Refresh page to see changes.' });
+      if (onTabsChanged) {
+        await onTabsChanged();
+      }
+
+      setSaveMessage({ show: true, type: 'success', text: 'Widget settings saved successfully.' });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } catch (error) {
       console.error('Error saving widget settings:', error);
@@ -422,8 +426,12 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         }
       }
 
+      if (onTabsChanged) {
+        await onTabsChanged();
+      }
+
       if (onPluginsChanged) onPluginsChanged();
-      setSaveMessage({ show: true, type: 'success', text: 'Plugin settings saved successfully! Refresh page to see changes.' });
+      setSaveMessage({ show: true, type: 'success', text: 'Plugin settings saved successfully.' });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } catch (error) {
       console.error('Error saving plugin settings:', error);
@@ -2389,7 +2397,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         title={tabIconModalState.mode === 'edit' ? 'Edit Tab' : 'Create New Tab'}
         saveButtonText={tabIconModalState.mode === 'edit' ? 'Save Changes' : 'Create Tab'}
         initialData={tabIconModalState.initialData}
-            />
+      />
 
       <Dialog
         open={deleteTabDialog.open}
