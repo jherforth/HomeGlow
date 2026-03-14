@@ -76,6 +76,12 @@ import TabIconModal from './TabIconModal';
 
 const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
+  const CORE_WIDGET_DEFAULT_SIZES = {
+    calendar: { w: 8, h: 5 },
+    weather: { w: 4, h: 3 },
+    chores: { w: 6, h: 4 },
+    photos: { w: 6, h: 4 },
+  };
   const [activeTab, setActiveTab] = useState(0);
   const [choresSubTab, setChoresSubTab] = useState(0);
   const [widgetsSubTab, setWidgetsSubTab] = useState(0);
@@ -356,6 +362,136 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     }
   };
 
+  const getWidgetIdFromWidgetName = (widgetName) => {
+    const coreMap = {
+      calendar: 'calendar-widget',
+      weather: 'weather-widget',
+      chores: 'chores-widget',
+      photos: 'photos-widget',
+    };
+
+    if (coreMap[widgetName]) return coreMap[widgetName];
+    if (widgetName.startsWith('plugin:')) return `plugin-${widgetName.slice(7)}`;
+    return null;
+  };
+
+  const getDefaultSizeForWidgetName = (widgetName) => {
+    if (CORE_WIDGET_DEFAULT_SIZES[widgetName]) return CORE_WIDGET_DEFAULT_SIZES[widgetName];
+    if (widgetName.startsWith('plugin:')) return { w: 6, h: 4 };
+    return null;
+  };
+
+  const ensureLocalLayoutKeyForAssignment = (widgetName, tabNumber) => {
+    const tab = tabs.find(t => t.number === tabNumber);
+    if (!tab?.id) return;
+
+    const widgetId = getWidgetIdFromWidgetName(widgetName);
+    const defaultSize = getDefaultSizeForWidgetName(widgetName);
+    if (!widgetId || !defaultSize) return;
+
+    const localKey = `widget-layout-id-${tab.id}-${widgetId}`;
+    if (localStorage.getItem(localKey)) return;
+
+    // Store only dimensions; WidgetContainer will apply widget default position for x/y.
+    localStorage.setItem(localKey, JSON.stringify({ w: defaultSize.w, h: defaultSize.h }));
+  };
+
+  const collectAffectedTabNumbers = (existingTabNumbers, desiredTabNumbers) => {
+    const affected = new Set([...existingTabNumbers, ...desiredTabNumbers]);
+    if (existingTabNumbers.length === 0 || desiredTabNumbers.length === 0) {
+      affected.add(1);
+    }
+    return Array.from(affected);
+  };
+
+  const recalculateLayoutsForAffectedTabs = (affectedTabNumbers, coreAssignments, pluginAssignmentMap) => {
+    const tabNumbers = Array.from(new Set(affectedTabNumbers.filter(Boolean)));
+    if (tabNumbers.length === 0) return;
+
+    const getAssignedWidgetsForTab = (tabNumber) => {
+      const assigned = [];
+
+      Object.keys(CORE_WIDGET_DEFAULT_SIZES).forEach((widgetName) => {
+        const assignedTabs = coreAssignments[widgetName] || [];
+        if (assignedTabs.length === 0) {
+          if (tabNumber === 1) {
+            assigned.push(widgetName);
+          }
+          return;
+        }
+        if (assignedTabs.includes(tabNumber)) {
+          assigned.push(widgetName);
+        }
+      });
+
+      Object.entries(pluginAssignmentMap || {}).forEach(([widgetName, assignedTabs]) => {
+        const tabsForWidget = Array.isArray(assignedTabs) ? assignedTabs : [];
+        if (tabsForWidget.length === 0) {
+          if (tabNumber === 1) {
+            assigned.push(widgetName);
+          }
+          return;
+        }
+        if (tabsForWidget.includes(tabNumber)) {
+          assigned.push(widgetName);
+        }
+      });
+
+      return assigned
+        .map((widgetName) => {
+          const widgetId = getWidgetIdFromWidgetName(widgetName);
+          const defaultSize = getDefaultSizeForWidgetName(widgetName);
+          if (!widgetId || !defaultSize) return null;
+          return { widgetId, defaultSize };
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.widgetId.localeCompare(b.widgetId));
+    };
+
+    const findFreePosition = (placed, w, h, cols = 12) => {
+      const collides = (x, y) => placed.some((p) => (
+        x < p.x + p.w && x + w > p.x && y < p.y + p.h && y + h > p.y
+      ));
+
+      for (let row = 0; row < 200; row += 1) {
+        for (let col = 0; col <= cols - w; col += 1) {
+          if (!collides(col, row)) {
+            return { x: col, y: row };
+          }
+        }
+      }
+
+      return { x: 0, y: 0 };
+    };
+
+    tabNumbers.forEach((tabNumber) => {
+      const tab = tabs.find(t => t.number === tabNumber);
+      if (!tab?.id) return;
+
+      const widgetsForTab = getAssignedWidgetsForTab(tabNumber);
+      if (widgetsForTab.length === 0) return;
+
+      const placed = [];
+      widgetsForTab.forEach(({ widgetId, defaultSize }) => {
+        const key = `widget-layout-id-${tab.id}-${widgetId}`;
+        let parsed = null;
+        try {
+          parsed = JSON.parse(localStorage.getItem(key) || 'null');
+        } catch {
+          parsed = null;
+        }
+
+        const w = Math.max(Number(parsed?.w) || defaultSize.w, 1);
+        const h = Math.max(Number(parsed?.h) || defaultSize.h, 1);
+        const pos = findFreePosition(placed, w, h, 12);
+        const layoutData = { x: pos.x, y: pos.y, w, h };
+
+        placed.push(layoutData);
+        localStorage.setItem(key, JSON.stringify(layoutData));
+      });
+    });
+  };
+
   const saveWidgetSettings = async () => {
     setIsLoading(true);
     try {
@@ -364,10 +500,20 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
       const currentResponse = await axios.get(`${API_DEVICE_URL}/widget-assignments`);
       const currentAssignments = Array.isArray(currentResponse.data) ? currentResponse.data : [];
+      const affectedTabs = new Set();
+      const nextCoreAssignments = {};
 
       for (const [widgetName, desiredTabNumbers] of Object.entries(widgetAssignments)) {
         const existing = currentAssignments.filter(a => a.widget_name === widgetName);
         const existingTabNumbers = existing.map(a => a.tab_number);
+        desiredTabNumbers.forEach(number => {
+          if (Number.isFinite(number)) {
+            nextCoreAssignments[widgetName] = nextCoreAssignments[widgetName] || [];
+            nextCoreAssignments[widgetName].push(number);
+          }
+        });
+
+        collectAffectedTabNumbers(existingTabNumbers, desiredTabNumbers).forEach((tabNumber) => affectedTabs.add(tabNumber));
 
         const toRemove = existing.filter(a => !desiredTabNumbers.includes(a.tab_number));
         const toAdd = desiredTabNumbers.filter(number => !existingTabNumbers.includes(number));
@@ -381,8 +527,17 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
             widget_name: widgetName,
             tabNumber: tabNumber,
           });
+          ensureLocalLayoutKeyForAssignment(widgetName, tabNumber);
         }
       }
+
+      Object.keys(CORE_WIDGET_DEFAULT_SIZES).forEach((widgetName) => {
+        if (!nextCoreAssignments[widgetName]) {
+          nextCoreAssignments[widgetName] = [];
+        }
+      });
+
+      recalculateLayoutsForAffectedTabs(Array.from(affectedTabs), nextCoreAssignments, pluginAssignments);
 
       if (onTabsChanged) {
         await onTabsChanged();
@@ -406,10 +561,20 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
       const currentResponse = await axios.get(`${API_DEVICE_URL}/widget-assignments`);
       const currentAssignments = Array.isArray(currentResponse.data) ? currentResponse.data : [];
+      const affectedTabs = new Set();
+      const nextPluginAssignments = {};
 
       for (const [pluginWidgetName, desiredTabNumbers] of Object.entries(pluginAssignments)) {
         const existing = currentAssignments.filter(a => a.widget_name === pluginWidgetName);
         const existingTabNumbers = existing.map(a => a.tab_number);
+        desiredTabNumbers.forEach(number => {
+          if (Number.isFinite(number)) {
+            nextPluginAssignments[pluginWidgetName] = nextPluginAssignments[pluginWidgetName] || [];
+            nextPluginAssignments[pluginWidgetName].push(number);
+          }
+        });
+
+        collectAffectedTabNumbers(existingTabNumbers, desiredTabNumbers).forEach((tabNumber) => affectedTabs.add(tabNumber));
 
         const toRemove = existing.filter(a => !desiredTabNumbers.includes(a.tab_number));
         const toAdd = desiredTabNumbers.filter(number => !existingTabNumbers.includes(number));
@@ -423,8 +588,17 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
             widget_name: pluginWidgetName,
             tabNumber: tabNumber,
           });
+          ensureLocalLayoutKeyForAssignment(pluginWidgetName, tabNumber);
         }
       }
+
+      Object.keys(pluginAssignments).forEach((pluginWidgetName) => {
+        if (!nextPluginAssignments[pluginWidgetName]) {
+          nextPluginAssignments[pluginWidgetName] = [];
+        }
+      });
+
+      recalculateLayoutsForAffectedTabs(Array.from(affectedTabs), widgetAssignments, nextPluginAssignments);
 
       if (onTabsChanged) {
         await onTabsChanged();

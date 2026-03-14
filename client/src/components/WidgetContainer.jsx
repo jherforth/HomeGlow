@@ -54,7 +54,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
         }));
 
       if (layouts.length > 0) {
-        //axios.patch(`${API_DEVICE_URL}/widget-assignments/layout/bulk`, { layouts }).catch(() => {});
+        axios.patch(`${API_DEVICE_URL}/widget-assignments/layout/bulk`, { layouts }).catch(() => { });
       }
     }, 500);
   }, []);
@@ -211,7 +211,21 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
     if (locked) return;
 
     const currentLayout = layoutRef.current;
-    const hasChanged = newLayout.some(item => {
+    const currentLayoutById = new Map(currentLayout.map(item => [item.i, item]));
+    const safeLayout = newLayout.map((item) => {
+      const existing = currentLayoutById.get(item.i);
+      const minW = existing?.minW ?? item.minW ?? 2;
+      const minH = existing?.minH ?? item.minH ?? 2;
+      return {
+        ...item,
+        minW,
+        minH,
+        w: Math.max(item.w, minW),
+        h: Math.max(item.h, minH),
+      };
+    });
+
+    const hasChanged = safeLayout.some(item => {
       const existing = currentLayout.find(l => l.i === item.i);
       if (!existing) return true;
       return existing.x !== item.x || existing.y !== item.y || existing.w !== item.w || existing.h !== item.h;
@@ -219,7 +233,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
 
     if (!hasChanged) return;
 
-    const updatedLayout = newLayout.map(item => ({
+    const updatedLayout = safeLayout.map(item => ({
       ...item,
       static: locked
     }));
@@ -227,7 +241,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
     setLayout(updatedLayout);
     layoutRef.current = updatedLayout;
 
-    newLayout.forEach((item) => {
+    updatedLayout.forEach((item) => {
       const layoutData = {
         x: item.x,
         y: item.y,
@@ -240,7 +254,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
     saveLayoutsToApi(updatedLayout, activeTab);
 
     if (onLayoutChangeCallback) {
-      onLayoutChangeCallback(newLayout);
+      onLayoutChangeCallback(updatedLayout);
     }
   };
 
@@ -455,6 +469,17 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
           {widgets.map((widget) => {
             const isSelected = !locked && selectedWidget === widget.id;
             const currentLayout = layout.find(l => l.i === widget.id);
+            const fallbackLayout = {
+              i: widget.id,
+              x: widget.defaultPosition.x,
+              y: widget.defaultPosition.y,
+              w: widget.defaultSize.width,
+              h: widget.defaultSize.height,
+              minW: widget.minWidth || 3,
+              minH: widget.minHeight || 2,
+              static: locked,
+            };
+            const effectiveLayout = currentLayout || fallbackLayout;
             const canDecreaseWidth = currentLayout && currentLayout.w > currentLayout.minW;
             const canDecreaseHeight = currentLayout && currentLayout.h > currentLayout.minH;
             const canIncreaseWidth = currentLayout && (currentLayout.x + currentLayout.w < gridCols);
@@ -465,7 +490,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
               <Box
                 key={widget.id}
                 className={`widget-wrapper ${isSelected ? 'selected' : ''}`}
-                data-grid={{ ...currentLayout }}
+                data-grid={{ ...effectiveLayout }}
                 onClick={(e) => {
                   if (!locked && !isSelected && !e.target.closest('.drag-handle') && !e.target.closest('.resize-button')) {
                     e.stopPropagation();
