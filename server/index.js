@@ -36,6 +36,7 @@ const SYSTEM_SCHEMA_ID_KEY = 'SYSTEM_SCHEMA_ID';
 const schemaMigrations = [
   { schemaId: 6, migrationPath: './migrations/migrateDeviceSchemaV6', },
   { schemaId: 7, migrationPath: './migrations/schema7-proveMigrations', },
+  { schemaId: 8, migrationPath: './migrations/schema8-calendarCacheTables', },
 ];
 
 // GitHub API configuration
