@@ -1,4 +1,5 @@
 import React from 'react';
+import homeGlowLogo from '../../public/HomeGlowLogo.png';
 import { Box, IconButton, Tooltip } from '@mui/material';
 import {
   Home,
@@ -154,7 +155,7 @@ const TabBar = ({ tabs, activeTab, onTabChange, widgetsLocked, onAddTab, onDelet
 
               {isHomeTab ? (
                 <img
-                  src="/HomeGlowLogo.png"
+                  src={homeGlowLogo}
                   alt="Home"
                   style={{
                     height: '30px',
