@@ -15,6 +15,16 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [chartType, setChartType] = useState('temperature');
+  const [tempUnit, setTempUnit] = useState(() => localStorage.getItem('weatherTempUnit') || 'F');
+
+  const unitParam = tempUnit === 'F' ? 'imperial' : 'metric';
+  const unitSymbol = `°${tempUnit}`;
+
+  const toggleTempUnit = () => {
+    const newUnit = tempUnit === 'F' ? 'C' : 'F';
+    setTempUnit(newUnit);
+    localStorage.setItem('weatherTempUnit', newUnit);
+  };
 
   // Determine layout based on widget size OR manual override
   const getLayoutType = () => {
@@ -60,7 +70,7 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
     if (zipCode && weatherApiKey) {
       fetchWeatherData();
     }
-  }, [zipCode, weatherApiKey]);
+  }, [zipCode, weatherApiKey, tempUnit]);
 
   useEffect(() => {
     const widgetSettings = JSON.parse(localStorage.getItem('widgetSettings') || '{}');
@@ -94,7 +104,7 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
     setError(null);
 
     try {
-      const currentWeatherUrl = `https://api.openweathermap.org/data/2.5/weather?zip=${zipCode},US&appid=${weatherApiKey}&units=imperial`;
+      const currentWeatherUrl = `https://api.openweathermap.org/data/2.5/weather?zip=${zipCode},US&appid=${weatherApiKey}&units=${unitParam}`;
       const currentResponse = await axios.get(currentWeatherUrl);
       setWeatherData(currentResponse.data);
 
@@ -110,7 +120,7 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
         }
       }
 
-      const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?zip=${zipCode},US&appid=${weatherApiKey}&units=imperial`;
+      const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?zip=${zipCode},US&appid=${weatherApiKey}&units=${unitParam}`;
       const forecastResponse = await axios.get(forecastUrl);
 
       const dailyForecasts = [];
@@ -243,7 +253,7 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
           {getWeatherIcon(weatherData.weather[0].icon)}
         </Typography>
         <Typography variant="h3" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-          {Math.round(weatherData.main.temp)}°F
+          {Math.round(weatherData.main.temp)}{unitSymbol}
         </Typography>
         <Typography variant="body1" sx={{ textAlign: 'center', textTransform: 'capitalize', mb: 0.5 }}>
           {weatherData.weather[0].description}
@@ -272,13 +282,13 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
           </Typography>
           <Box sx={{ flex: 1 }}>
             <Typography variant="h3" sx={{ fontWeight: 'bold' }}>
-              {Math.round(weatherData.main.temp)}°F
+              {Math.round(weatherData.main.temp)}{unitSymbol}
             </Typography>
             <Typography variant="body1" sx={{ textTransform: 'capitalize' }}>
               {weatherData.weather[0].description}
             </Typography>
             <Typography variant="body2" sx={{ opacity: 0.7 }}>
-              Feels like {Math.round(weatherData.main.feels_like)}°F
+              Feels like {Math.round(weatherData.main.feels_like)}{unitSymbol}
             </Typography>
           </Box>
         </Box>
@@ -339,7 +349,7 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
               {getWeatherIcon(weatherData.weather[0].icon)}
             </Typography>
             <Typography variant="h3" sx={{ fontWeight: 'bold', mb: 1 }}>
-              {Math.round(weatherData.main.temp)}°F
+              {Math.round(weatherData.main.temp)}{unitSymbol}
             </Typography>
             <Typography variant="h6" sx={{ mb: 1, textAlign: 'center' }}>
               {weatherData.name}
@@ -350,7 +360,7 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
             
             <Box sx={{ textAlign: 'center' }}>
               <Typography variant="body2">
-                Feels like {Math.round(weatherData.main.feels_like)}°F
+                Feels like {Math.round(weatherData.main.feels_like)}{unitSymbol}
               </Typography>
               <Typography variant="body2">
                 Humidity: {weatherData.main.humidity}%
@@ -441,10 +451,10 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
                 >
                   <Box sx={{ textAlign: 'right' }}>
                     <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#ff6b6b' }}>
-                      {day.tempHigh}°F
+                      {day.tempHigh}{unitSymbol}
                     </Typography>
                     <Typography variant="body2" sx={{ color: '#00ddeb' }}>
-                      {day.tempLow}°F
+                      {day.tempLow}{unitSymbol}
                     </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -607,6 +617,21 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
           <Typography variant="h6">🌤️ Weather</Typography>
           
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={toggleTempUnit}
+              sx={{
+                minWidth: 42,
+                px: 0.75,
+                py: 0.25,
+                fontSize: '0.75rem',
+                fontWeight: 'bold',
+                lineHeight: 1.5
+              }}
+            >
+              °{tempUnit === 'F' ? 'C' : 'F'}
+            </Button>
             {editingZip ? (
               <>
                 <TextField
