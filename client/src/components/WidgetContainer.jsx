@@ -33,6 +33,8 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
   const containerRef = useRef(null);
   const prevWidgetIdsRef = useRef('');
   const lockedRef = useRef(locked);
+  const prevLockedRef = useRef(locked);
+  const hasInitializedLockEffectRef = useRef(false);
   const saveTimerRef = useRef(null);
   const resizeTapGuardRef = useRef(new Map());
 
@@ -116,7 +118,27 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
       const h = widget.defaultSize.height;
       let item;
 
-      if (widget.savedLayout) {
+      const localKey = getTabLayoutCacheKey(widget.id);
+      const localLayout = localStorage.getItem(localKey);
+      if (localLayout) {
+        let parsed = null;
+        try {
+          parsed = JSON.parse(localLayout);
+        } catch {
+          parsed = null;
+        }
+
+        item = {
+          i: widget.id,
+          x: parsed?.x ?? widget.defaultPosition.x,
+          y: parsed?.y ?? widget.defaultPosition.y,
+          w: parsed?.w || w,
+          h: parsed?.h || h,
+          minW: widget.minWidth || 3,
+          minH: widget.minHeight || 2,
+          static: lockedRef.current,
+        };
+      } else if (widget.savedLayout) {
         item = {
           i: widget.id,
           x: widget.savedLayout.x ?? widget.defaultPosition.x,
@@ -128,34 +150,17 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
           static: lockedRef.current,
         };
       } else {
-        const localKey = getTabLayoutCacheKey(widget.id);
-        const localLayout = localStorage.getItem(localKey);
-        if (localLayout) {
-          const parsed = JSON.parse(localLayout);
-
-          item = {
-            i: widget.id,
-            x: parsed.x ?? widget.defaultPosition.x,
-            y: parsed.y ?? widget.defaultPosition.y,
-            w: parsed.w || w,
-            h: parsed.h || h,
-            minW: widget.minWidth || 3,
-            minH: widget.minHeight || 2,
-            static: lockedRef.current,
-          };
-        } else {
-          const pos = findFreePosition(w, h);
-          item = {
-            i: widget.id,
-            x: pos.x,
-            y: pos.y,
-            w,
-            h,
-            minW: widget.minWidth || 3,
-            minH: widget.minHeight || 2,
-            static: lockedRef.current,
-          };
-        }
+        const pos = findFreePosition(w, h);
+        item = {
+          i: widget.id,
+          x: pos.x,
+          y: pos.y,
+          w,
+          h,
+          minW: widget.minWidth || 3,
+          minH: widget.minHeight || 2,
+          static: lockedRef.current,
+        };
       }
 
       placed.push({ x: item.x, y: item.y, w: item.w, h: item.h });
@@ -165,6 +170,9 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
   }, [widgets, activeTab, gridCols, getTabLayoutCacheKey]);
 
   useEffect(() => {
+    const wasLocked = prevLockedRef.current;
+    prevLockedRef.current = locked;
+
     setIsLockTransitioning(true);
 
     setLayout((currentLayout) => {
@@ -173,7 +181,8 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
         static: locked
       }));
 
-      if (locked) {
+      const shouldPersistLockedLayouts = hasInitializedLockEffectRef.current && !wasLocked && locked;
+      if (shouldPersistLockedLayouts) {
         updatedLayout.forEach((item) => {
           const layoutData = {
             x: item.x,
@@ -189,12 +198,16 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
       return updatedLayout;
     });
 
+    if (!hasInitializedLockEffectRef.current) {
+      hasInitializedLockEffectRef.current = true;
+    }
+
     const timer = setTimeout(() => {
       setIsLockTransitioning(false);
     }, 50);
 
     return () => clearTimeout(timer);
-  }, [locked, activeTab, saveLayoutsToApi, getTabLayoutCacheKey]);
+  }, [locked, saveLayoutsToApi, getTabLayoutCacheKey, activeTab]);
 
   // Deselect widget when locked
   useEffect(() => {
