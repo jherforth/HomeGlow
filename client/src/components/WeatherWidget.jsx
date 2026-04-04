@@ -500,11 +500,11 @@ const WeatherWidget = ({
         <Typography variant="h3" sx={{ fontWeight: 'bold', mb: 0.5 }}>
           {Math.round(weatherData.main.temp)}{unitSymbol}
         </Typography>
+        <Typography variant="h6" sx={{ mb: 1, textAlign: 'center' }}>
+          {weatherData.name}
+        </Typography>
         <Typography variant="body1" sx={{ textAlign: 'center', textTransform: 'capitalize', mb: 0.5 }}>
           {weatherData.weather[0].description}
-        </Typography>
-        <Typography variant="body2" sx={{ opacity: 0.7 }}>
-          {weatherData.name}
         </Typography>
       </Box>
     );
@@ -528,6 +528,9 @@ const WeatherWidget = ({
           <Box sx={{ flex: 1 }}>
             <Typography variant="h3" sx={{ fontWeight: 'bold' }}>
               {Math.round(weatherData.main.temp)}{unitSymbol}
+            </Typography>
+            <Typography variant="h6" sx={{ mb: 1 }}>
+              {weatherData.name}
             </Typography>
             <Typography variant="body1" sx={{ textTransform: 'capitalize' }}>
               {weatherData.weather[0].description}
@@ -873,9 +876,6 @@ const WeatherWidget = ({
         {layoutType !== 'compact' && (
           <Box sx={{ p: 2, pb: 0 }}>
             <Typography variant="h6">🌤️ Weather</Typography>
-            <Typography variant="caption" sx={{ opacity: 0.7 }}>
-              {zipCode} | {unitSymbol}
-            </Typography>
           </Box>
         )}
 
