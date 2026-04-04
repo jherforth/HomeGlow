@@ -34,6 +34,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
   const prevWidgetIdsRef = useRef('');
   const lockedRef = useRef(locked);
   const saveTimerRef = useRef(null);
+  const resizeTapGuardRef = useRef(new Map());
 
   const getTabLayoutCacheKey = useCallback((widgetId) => {
     return `widget-layout-id-${activeTabId}-${widgetId}`;
@@ -347,6 +348,24 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
     });
   };
 
+  const handleResizePointerDown = (widgetId, direction, isDecrement = false) => (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Guard against duplicate touch-generated activation bursts on some Android devices.
+    const pointerType = e.pointerType || 'unknown';
+    const guardKey = `${widgetId}:${direction}:${isDecrement ? 'dec' : 'inc'}:${pointerType}`;
+    const now = Date.now();
+    const lastTap = resizeTapGuardRef.current.get(guardKey) || 0;
+
+    if (now - lastTap < 160) {
+      return;
+    }
+
+    resizeTapGuardRef.current.set(guardKey, now);
+    handleResize(widgetId, direction, isDecrement, e);
+  };
+
   const handleWidgetClick = (widgetId, e) => {
     if (locked) return;
     if (e.target.closest('.drag-handle')) return;
@@ -554,21 +573,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                     >
                       <Box
                         className="resize-button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'top', true, e);
-                        }}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'top', true, e);
-                        }}
-                        onTouchStart={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'top', true, e);
-                        }}
+                        onPointerDown={handleResizePointerDown(widget.id, 'top', true)}
                         sx={{
                           ...resizeButtonBaseStyle,
                           cursor: canDecreaseHeight ? 'pointer' : 'not-allowed',
@@ -586,21 +591,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       </Box>
                       <Box
                         className="resize-button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'top', false, e);
-                        }}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'top', false, e);
-                        }}
-                        onTouchStart={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'top', false, e);
-                        }}
+                        onPointerDown={handleResizePointerDown(widget.id, 'top', false)}
                         sx={{
                           ...resizeButtonBaseStyle,
                           cursor: canIncreaseTop ? 'pointer' : 'not-allowed',
@@ -634,21 +625,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                     >
                       <Box
                         className="resize-button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'right', true, e);
-                        }}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'right', true, e);
-                        }}
-                        onTouchStart={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'right', true, e);
-                        }}
+                        onPointerDown={handleResizePointerDown(widget.id, 'right', true)}
                         sx={{
                           ...resizeButtonBaseStyle,
                           cursor: canDecreaseWidth ? 'pointer' : 'not-allowed',
@@ -666,21 +643,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       </Box>
                       <Box
                         className="resize-button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'right', false, e);
-                        }}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'right', false, e);
-                        }}
-                        onTouchStart={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'right', false, e);
-                        }}
+                        onPointerDown={handleResizePointerDown(widget.id, 'right', false)}
                         sx={{
                           ...resizeButtonBaseStyle,
                           cursor: canIncreaseWidth ? 'pointer' : 'not-allowed',
@@ -713,21 +676,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                     >
                       <Box
                         className="resize-button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'bottom', true, e);
-                        }}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'bottom', true, e);
-                        }}
-                        onTouchStart={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'bottom', true, e);
-                        }}
+                        onPointerDown={handleResizePointerDown(widget.id, 'bottom', true)}
                         sx={{
                           ...resizeButtonBaseStyle,
                           cursor: canDecreaseHeight ? 'pointer' : 'not-allowed',
@@ -745,21 +694,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       </Box>
                       <Box
                         className="resize-button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'bottom', false, e);
-                        }}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'bottom', false, e);
-                        }}
-                        onTouchStart={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'bottom', false, e);
-                        }}
+                        onPointerDown={handleResizePointerDown(widget.id, 'bottom', false)}
                         sx={{
                           ...resizeButtonBaseStyle,
                           cursor: 'pointer',
@@ -792,21 +727,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                     >
                       <Box
                         className="resize-button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'left', true, e);
-                        }}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'left', true, e);
-                        }}
-                        onTouchStart={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'left', true, e);
-                        }}
+                        onPointerDown={handleResizePointerDown(widget.id, 'left', true)}
                         sx={{
                           ...resizeButtonBaseStyle,
                           cursor: canDecreaseWidth ? 'pointer' : 'not-allowed',
@@ -824,21 +745,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       </Box>
                       <Box
                         className="resize-button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'left', false, e);
-                        }}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'left', false, e);
-                        }}
-                        onTouchStart={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'left', false, e);
-                        }}
+                        onPointerDown={handleResizePointerDown(widget.id, 'left', false)}
                         sx={{
                           ...resizeButtonBaseStyle,
                           cursor: canIncreaseLeft ? 'pointer' : 'not-allowed',
