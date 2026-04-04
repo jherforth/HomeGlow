@@ -56,9 +56,6 @@ import {
   Warning,
   RestartAlt,
   Timer,
-  ViewCompact,
-  ViewModule,
-  ViewQuilt,
   Lock,
   Nightlight,
   Tab as TabIcon,
@@ -96,7 +93,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     chores: { enabled: false, transparent: false, refreshInterval: 0 },
     calendar: { enabled: false, transparent: false, refreshInterval: 0 },
     photos: { enabled: false, transparent: false, refreshInterval: 0 },
-    weather: { enabled: false, transparent: false, refreshInterval: 0, layoutMode: 'medium' },
+    weather: { enabled: false, transparent: false, refreshInterval: 0 },
     primary: '#f5f5f5',
     secondary: '#38bdf8',
     accent: '#f472b6'
@@ -172,7 +169,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     const savedSettings = localStorage.getItem('widgetSettings');
     if (savedSettings) {
       const parsed = JSON.parse(savedSettings);
-      // Ensure refresh intervals and layout mode are included, default to 'medium' if 'auto' or not set
+      // Ensure refresh intervals are included for all widgets.
       const settingsWithDefaults = {
         chores: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.chores },
         calendar: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.calendar },
@@ -181,7 +178,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
           enabled: false,
           transparent: false,
           refreshInterval: 0,
-          layoutMode: (parsed.weather?.layoutMode === 'auto' || !parsed.weather?.layoutMode) ? 'medium' : parsed.weather.layoutMode,
           ...parsed.weather
         },
         primary: parsed.primary || '#f5f5f5',
@@ -988,16 +984,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     }));
   };
 
-  const handleWeatherLayoutModeChange = (mode) => {
-    setLocalWidgetSettings(prev => ({
-      ...prev,
-      weather: {
-        ...prev.weather,
-        layoutMode: mode
-      }
-    }));
-  };
-
   const handleSettingChange = (setting, value) => {
     setLocalWidgetSettings(prev => ({
       ...prev,
@@ -1632,77 +1618,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                         ))
                       }
                     />
-                  </Box>
-
-                  {/* Weather Layout Mode Selection */}
-                  <Box sx={{ mt: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1, bgcolor: 'rgba(255, 255, 255, 0.02)' }}>
-                    <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <ViewModule />
-                      Layout Mode
-                    </Typography>
-
-                    <RadioGroup
-                      value={widgetSettings.weather?.layoutMode || 'medium'}
-                      onChange={(e) => handleWeatherLayoutModeChange(e.target.value)}
-                    >
-                      <FormControlLabel
-                        value="compact"
-                        control={<Radio />}
-                        label={
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <ViewCompact />
-                            <Box>
-                              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                                Compact
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                Current weather only (minimal space)
-                              </Typography>
-                            </Box>
-                          </Box>
-                        }
-                      />
-
-                      <FormControlLabel
-                        value="medium"
-                        control={<Radio />}
-                        label={
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <ViewModule />
-                            <Box>
-                              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                                Medium
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                Current weather + 3-day forecast
-                              </Typography>
-                            </Box>
-                          </Box>
-                        }
-                      />
-
-                      <FormControlLabel
-                        value="full"
-                        control={<Radio />}
-                        label={
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <ViewQuilt />
-                            <Box>
-                              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                                Full
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                All information with charts and air quality
-                              </Typography>
-                            </Box>
-                          </Box>
-                        }
-                      />
-                    </RadioGroup>
-
-                    <Alert severity="info" sx={{ mt: 2 }}>
-                      The selected layout mode will be used regardless of widget size. Resize the widget to fit your preferred layout.
-                    </Alert>
                   </Box>
 
                   {widgetSettings.weather?.refreshInterval > 0 && (
