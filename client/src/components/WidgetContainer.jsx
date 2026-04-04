@@ -382,6 +382,15 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
     setSelectedWidget(widgetId);
   };
 
+  const isInteractiveTarget = (target) => {
+    if (!target?.closest) return false;
+    return Boolean(
+      target.closest(
+        'button, a, input, textarea, select, [role="button"], [contenteditable="true"], .MuiButtonBase-root, .MuiInputBase-root, .MuiSwitch-root, .MuiToggleButton-root'
+      )
+    );
+  };
+
   // Click/Touch outside to deselect
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -391,13 +400,32 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
         }
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('touchstart', handleClickOutside);
+
+    document.addEventListener('pointerdown', handleClickOutside);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('touchstart', handleClickOutside);
+      document.removeEventListener('pointerdown', handleClickOutside);
     };
   }, [selectedWidget]);
+
+  // Safety net: if selection state and rendered controls drift out of sync, clear selection.
+  useEffect(() => {
+    if (locked || !selectedWidget) return;
+
+    const rafId = window.requestAnimationFrame(() => {
+      const selectedElement = containerRef.current?.querySelector('.widget-wrapper.selected');
+      if (!selectedElement) {
+        setSelectedWidget(null);
+        return;
+      }
+
+      const hasResizeControls = selectedElement.querySelector('.resize-button');
+      if (!hasResizeControls) {
+        setSelectedWidget(null);
+      }
+    });
+
+    return () => window.cancelAnimationFrame(rafId);
+  }, [locked, selectedWidget, layout]);
 
   const getWidgetRefreshInterval = (widgetId) => {
     const widgetSettings = JSON.parse(localStorage.getItem('widgetSettings') || '{}');
@@ -510,20 +538,16 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                 key={widget.id}
                 className={`widget-wrapper ${isSelected ? 'selected' : ''}`}
                 data-grid={{ ...effectiveLayout }}
-                onClick={(e) => {
+                onPointerDown={(e) => {
                   if (!locked && !isSelected && !e.target.closest('.drag-handle') && !e.target.closest('.resize-button')) {
+                    if (isInteractiveTarget(e.target)) {
+                      if (selectedWidget) {
+                        setSelectedWidget(null);
+                      }
+                      return;
+                    }
+
                     e.stopPropagation();
-                    handleWidgetClick(widget.id, e);
-                  }
-                }}
-                onMouseDown={(e) => {
-                  if (!locked && !isSelected && !e.target.closest('.drag-handle') && !e.target.closest('.resize-button')) {
-                    e.stopPropagation();
-                    handleWidgetClick(widget.id, e);
-                  }
-                }}
-                onTouchStart={(e) => {
-                  if (!locked && !isSelected && !e.target.closest('.drag-handle') && !e.target.closest('.resize-button')) {
                     handleWidgetTouch(widget.id, e);
                   }
                 }}
@@ -540,18 +564,20 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                   backgroundColor: 'var(--card-bg)',
                   overflow: 'hidden',
                   cursor: locked ? 'default' : (isSelected ? 'move' : 'pointer'),
-                  touchAction: locked ? 'auto' : 'none',
-                  '&:hover': {
-                    border: locked
-                      ? '3px solid transparent'
-                      : (isSelected
-                        ? '3px solid var(--accent)'
-                        : '3px solid rgba(244, 114, 182, 0.3)'),
-                    boxShadow: locked
-                      ? '0 2px 8px rgba(0, 0, 0, 0.1)'
-                      : (isSelected
-                        ? '0 8px 32px rgba(244, 114, 182, 0.3)'
-                        : '0 4px 16px rgba(0, 0, 0, 0.15)'),
+                  touchAction: locked ? 'auto' : (isSelected ? 'none' : 'manipulation'),
+                  '@media (hover: hover) and (pointer: fine)': {
+                    '&:hover': {
+                      border: locked
+                        ? '3px solid transparent'
+                        : (isSelected
+                          ? '3px solid var(--accent)'
+                          : '3px solid rgba(244, 114, 182, 0.3)'),
+                      boxShadow: locked
+                        ? '0 2px 8px rgba(0, 0, 0, 0.1)'
+                        : (isSelected
+                          ? '0 8px 32px rgba(244, 114, 182, 0.3)'
+                          : '0 4px 16px rgba(0, 0, 0, 0.15)'),
+                    }
                   }
                 }}
               >
@@ -795,7 +821,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                     width: '100%',
                     height: '100%',
                     overflow: 'auto',
-                    pointerEvents: locked ? 'auto' : 'none',
+                    pointerEvents: (locked || !isSelected) ? 'auto' : 'none',
                     display: 'flex',
                     flexDirection: 'column',
                   }}
