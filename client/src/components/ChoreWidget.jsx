@@ -541,7 +541,7 @@ const ChoreWidget = ({ transparentBackground }) => {
 
                   <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, width: '100%' }}>
                     {userChores.length === 0 ? (
-                      <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
+                      <Typography variant="body2" sx={{ textAlign: 'center', py: 1, color: 'var(--text-color)', opacity: 0.6 }}>
                         No chores for today
                       </Typography>
                     ) : (

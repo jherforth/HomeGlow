@@ -1,49 +1,296 @@
 import React, { useState, useEffect } from 'react';
-import { Typography, Box, TextField, IconButton, Button } from '@mui/material';
-import { Edit, Save, Cancel } from '@mui/icons-material';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import {
+  Typography,
+  Box,
+  TextField,
+  IconButton,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+} from '@mui/material';
+import { Settings } from '@mui/icons-material';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import axios from 'axios';
 
-const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { width: 4, height: 4 } }) => {
+const DEFAULT_ZIP_CODE = '14818';
+const VALID_LAYOUT_MODES = new Set(['auto', 'compact', 'medium', 'full']);
+const WEATHER_SETTINGS_STORAGE_PREFIX = 'weatherWidgetSettings:';
+const WEATHER_CACHE_STORAGE_PREFIX = 'weatherWidgetCache:';
+
+const WeatherWidget = ({
+  transparentBackground,
+  weatherApiKey,
+  widgetSize = { width: 4, height: 4 },
+  activeTabId = 1,
+  widgetId = 'weather-widget',
+}) => {
+  const weatherSettingsStorageKey = `${WEATHER_SETTINGS_STORAGE_PREFIX}${activeTabId}:${widgetId}`;
+  const weatherCacheStorageKey = `${WEATHER_CACHE_STORAGE_PREFIX}${activeTabId}:${widgetId}`;
   const [weatherData, setWeatherData] = useState(null);
   const [forecastData, setForecastData] = useState([]);
   const [airQualityData, setAirQualityData] = useState(null);
   const [chartData, setChartData] = useState([]);
-  const [zipCode, setZipCode] = useState('');
-  const [editingZip, setEditingZip] = useState(false);
-  const [tempZipCode, setTempZipCode] = useState('');
+  const [zipCode, setZipCode] = useState(DEFAULT_ZIP_CODE);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [chartType, setChartType] = useState('temperature');
+  const [tempUnit, setTempUnit] = useState('F');
+  const [layoutMode, setLayoutMode] = useState('auto');
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [shouldFetchNow, setShouldFetchNow] = useState(false);
+  const [draftZipCode, setDraftZipCode] = useState(DEFAULT_ZIP_CODE);
+  const [draftTempUnit, setDraftTempUnit] = useState('F');
+  const [draftLayoutMode, setDraftLayoutMode] = useState('auto');
+
+  const unitSymbol = `°${tempUnit}`;
+
+  const persistInstanceSettings = (nextSettings) => {
+    localStorage.setItem(weatherSettingsStorageKey, JSON.stringify(nextSettings));
+  };
+
+  const persistWeatherCacheForKey = (cacheKey, payload) => {
+    localStorage.setItem(cacheKey, JSON.stringify({
+      ...payload,
+      cachedAt: Date.now(),
+    }));
+  };
+
+  const persistWeatherCache = (payload) => {
+    persistWeatherCacheForKey(weatherCacheStorageKey, payload);
+  };
+
+  const normalizeTempUnit = (candidateUnit, fallbackUnit = 'F') => {
+    if (candidateUnit === 'C' || candidateUnit === 'F') {
+      return candidateUnit;
+    }
+    if (fallbackUnit === 'C' || fallbackUnit === 'F') {
+      return fallbackUnit;
+    }
+    return 'F';
+  };
+
+  const resolveInstanceConfig = (rawSettings = {}, fallbackZipCode = DEFAULT_ZIP_CODE, fallbackTempUnit = 'F') => {
+    const resolvedZipCode = (rawSettings.zipCode || fallbackZipCode || '').trim();
+    const resolvedTempUnit = normalizeTempUnit(rawSettings.tempUnit, fallbackTempUnit);
+    return { resolvedZipCode, resolvedTempUnit };
+  };
+
+  const applyWeatherPayloadToState = (payload) => {
+    setWeatherData(payload.weatherData || null);
+    setForecastData(Array.isArray(payload.forecastData) ? payload.forecastData : []);
+    setAirQualityData(payload.airQualityData || null);
+    setChartData(Array.isArray(payload.chartData) ? payload.chartData : []);
+  };
+
+  const getWeatherErrorMessage = (requestError) => {
+    if (requestError?.response) {
+      if (requestError.response.status === 401) {
+        return 'Invalid API key. Please check your OpenWeatherMap API key in the Admin Panel.';
+      }
+      if (requestError.response.status === 404) {
+        return 'Invalid zip code. Please enter a valid US zip code.';
+      }
+      return `Weather service error: ${requestError.response.status} ${requestError.response.statusText}`;
+    }
+
+    if (requestError?.code === 'ECONNREFUSED' || requestError?.message?.includes('Network Error')) {
+      return 'Unable to connect to weather service. Please check your internet connection.';
+    }
+
+    return 'Failed to fetch weather data. Please try again later.';
+  };
+
+  const fetchWeatherPayload = async (targetZipCode, targetTempUnit) => {
+    const targetUnitParam = targetTempUnit === 'F' ? 'imperial' : 'metric';
+
+    const currentWeatherUrl = `https://api.openweathermap.org/data/2.5/weather?zip=${targetZipCode},US&appid=${weatherApiKey}&units=${targetUnitParam}`;
+    const currentResponse = await axios.get(currentWeatherUrl);
+    const nextWeatherData = currentResponse.data;
+    let nextAirQualityData = null;
+    let nextForecastData = [];
+    let nextChartData = [];
+
+    if (currentResponse.data.coord) {
+      const { lat, lon } = currentResponse.data.coord;
+      const airQualityUrl = `https://api.openweathermap.org/data/2.5/air_pollution?lat=${lat}&lon=${lon}&appid=${weatherApiKey}`;
+
+      try {
+        const airQualityResponse = await axios.get(airQualityUrl);
+        nextAirQualityData = airQualityResponse.data;
+      } catch {
+        nextAirQualityData = null;
+      }
+    }
+
+    const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?zip=${targetZipCode},US&appid=${weatherApiKey}&units=${targetUnitParam}`;
+    const forecastResponse = await axios.get(forecastUrl);
+    const chartDataPoints = [];
+
+    if (forecastResponse.data && forecastResponse.data.list) {
+      const forecastByDay = {};
+
+      forecastResponse.data.list.slice(0, 24).forEach((item, index) => {
+        const date = new Date(item.dt * 1000);
+        const dayKey = date.toDateString();
+
+        if (!forecastByDay[dayKey]) {
+          forecastByDay[dayKey] = {
+            date,
+            temps: {
+              min: item.main.temp_min,
+              max: item.main.temp_max,
+              all: [],
+            },
+            weather: item.weather[0],
+            precipitation: item.rain ? item.rain['3h'] || 0 : 0,
+          };
+        } else {
+          forecastByDay[dayKey].temps.min = Math.min(forecastByDay[dayKey].temps.min, item.main.temp_min);
+          forecastByDay[dayKey].temps.max = Math.max(forecastByDay[dayKey].temps.max, item.main.temp_max);
+        }
+
+        forecastByDay[dayKey].temps.all.push(item.main.temp);
+
+        if (index < 8) {
+          chartDataPoints.push({
+            time: date.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true }),
+            temperature: Math.round(item.main.temp),
+            precipitation: item.rain ? item.rain['3h'] || 0 : 0,
+          });
+        }
+      });
+
+      nextForecastData = Object.values(forecastByDay).slice(0, 3).map(day => ({
+        date: day.date,
+        dayName: day.date.toLocaleDateString('en-US', { weekday: 'short' }),
+        tempHigh: Math.round(day.temps.max),
+        tempLow: Math.round(day.temps.min),
+        tempAvg: Math.round(day.temps.all.reduce((a, b) => a + b, 0) / day.temps.all.length),
+        weather: day.weather,
+        precipitation: day.precipitation,
+      }));
+
+      nextChartData = chartDataPoints;
+    }
+
+    return {
+      zipCode: targetZipCode,
+      tempUnit: targetTempUnit,
+      weatherData: nextWeatherData,
+      airQualityData: nextAirQualityData,
+      forecastData: nextForecastData,
+      chartData: nextChartData,
+    };
+  };
+
+  const refreshAllConfiguredWeatherCaches = async () => {
+    if (!weatherApiKey) {
+      return;
+    }
+
+    const legacyZipCode = localStorage.getItem('weatherZipCode') || DEFAULT_ZIP_CODE;
+    const legacyTempUnit = localStorage.getItem('weatherTempUnit') === 'C' ? 'C' : 'F';
+    const settingsKeys = Object.keys(localStorage).filter((key) => key.startsWith(WEATHER_SETTINGS_STORAGE_PREFIX));
+
+    if (!settingsKeys.includes(weatherSettingsStorageKey)) {
+      settingsKeys.push(weatherSettingsStorageKey);
+    }
+
+    const refreshTargets = settingsKeys
+      .map((settingsKey) => {
+        let parsedSettings = {};
+        try {
+          parsedSettings = JSON.parse(localStorage.getItem(settingsKey) || '{}');
+        } catch {
+          parsedSettings = {};
+        }
+
+        const currentTargetFallbackZip = settingsKey === weatherSettingsStorageKey ? zipCode : legacyZipCode;
+        const currentTargetFallbackTemp = settingsKey === weatherSettingsStorageKey ? tempUnit : legacyTempUnit;
+        const { resolvedZipCode, resolvedTempUnit } = resolveInstanceConfig(
+          parsedSettings,
+          currentTargetFallbackZip,
+          currentTargetFallbackTemp
+        );
+
+        if (!resolvedZipCode) {
+          return null;
+        }
+
+        return {
+          cacheKey: settingsKey.replace(WEATHER_SETTINGS_STORAGE_PREFIX, WEATHER_CACHE_STORAGE_PREFIX),
+          zipCode: resolvedZipCode,
+          tempUnit: resolvedTempUnit,
+        };
+      })
+      .filter(Boolean);
+
+    if (refreshTargets.length === 0) {
+      return;
+    }
+
+    const queryGroups = new Map();
+    refreshTargets.forEach((target) => {
+      const queryKey = `${target.zipCode}|${target.tempUnit}`;
+      if (!queryGroups.has(queryKey)) {
+        queryGroups.set(queryKey, []);
+      }
+      queryGroups.get(queryKey).push(target);
+    });
+
+    for (const targets of queryGroups.values()) {
+      const { zipCode: targetZipCode, tempUnit: targetTempUnit } = targets[0];
+
+      try {
+        const payload = await fetchWeatherPayload(targetZipCode, targetTempUnit);
+
+        targets.forEach((target) => {
+          persistWeatherCacheForKey(target.cacheKey, payload);
+        });
+
+        if (targetZipCode === zipCode && targetTempUnit === tempUnit) {
+          applyWeatherPayloadToState(payload);
+          setError(null);
+        }
+      } catch (requestError) {
+        if (targetZipCode === zipCode && targetTempUnit === tempUnit) {
+          setError(getWeatherErrorMessage(requestError));
+        }
+      }
+    }
+  };
 
   // Determine layout based on widget size OR manual override
   const getLayoutType = () => {
-    // Check for manual layout mode override
-    const widgetSettings = JSON.parse(localStorage.getItem('widgetSettings') || '{}');
-    const layoutMode = widgetSettings.weather?.layoutMode;
-    
     if (layoutMode && layoutMode !== 'auto') {
       return layoutMode;
     }
-    
+
     // Auto-calculate based on size
     const { width: w, height: h } = widgetSize;
-    
+
     // Compact: Small widgets (2 cols or less, 2 rows or less)
     if (w <= 2 || h <= 2) {
       return 'compact';
     }
-    
+
     // Medium: Medium-sized widgets (3 cols, 2-4 rows OR 4 cols, 2-3 rows)
     if ((w === 3 && h >= 2 && h <= 4) || (w === 4 && h >= 2 && h <= 3)) {
       return 'medium';
     }
-    
+
     // Full: Large widgets (4+ cols and 4+ rows)
     if (w >= 4 && h >= 4) {
       return 'full';
     }
-    
+
     // Default to medium for edge cases
     return 'medium';
   };
@@ -51,33 +298,100 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
   const layoutType = getLayoutType();
 
   useEffect(() => {
-    const savedZipCode = localStorage.getItem('weatherZipCode') || '14818';
+    setSettingsLoaded(false);
+    setError(null);
+
+    let parsedSettings = {};
+    let legacyWidgetSettings = {};
+
+    try {
+      parsedSettings = JSON.parse(localStorage.getItem(weatherSettingsStorageKey) || '{}');
+    } catch {
+      parsedSettings = {};
+    }
+
+    try {
+      legacyWidgetSettings = JSON.parse(localStorage.getItem('widgetSettings') || '{}');
+    } catch {
+      legacyWidgetSettings = {};
+    }
+
+    let parsedCache = null;
+    try {
+      parsedCache = JSON.parse(localStorage.getItem(weatherCacheStorageKey) || 'null');
+    } catch {
+      parsedCache = null;
+    }
+
+    const legacyZipCode = localStorage.getItem('weatherZipCode') || DEFAULT_ZIP_CODE;
+    const legacyTempUnit = localStorage.getItem('weatherTempUnit') === 'C' ? 'C' : 'F';
+    const { resolvedZipCode: savedZipCode, resolvedTempUnit: savedTempUnit } = resolveInstanceConfig(
+      parsedSettings,
+      legacyZipCode,
+      legacyTempUnit
+    );
+    const candidateLayoutMode = parsedSettings.layoutMode || legacyWidgetSettings.weather?.layoutMode || 'auto';
+    const savedLayoutMode = VALID_LAYOUT_MODES.has(candidateLayoutMode) ? candidateLayoutMode : 'auto';
+
+    const hasMatchingCache = Boolean(
+      parsedCache
+      && parsedCache.zipCode === savedZipCode
+      && parsedCache.tempUnit === savedTempUnit
+      && parsedCache.weatherData
+    );
+
+    if (hasMatchingCache) {
+      setWeatherData(parsedCache.weatherData || null);
+      setForecastData(Array.isArray(parsedCache.forecastData) ? parsedCache.forecastData : []);
+      setAirQualityData(parsedCache.airQualityData || null);
+      setChartData(Array.isArray(parsedCache.chartData) ? parsedCache.chartData : []);
+      setShouldFetchNow(false);
+    } else {
+      setWeatherData(null);
+      setForecastData([]);
+      setAirQualityData(null);
+      setChartData([]);
+      setShouldFetchNow(true);
+    }
+
     setZipCode(savedZipCode);
-    setTempZipCode(savedZipCode);
-  }, []);
+    setTempUnit(savedTempUnit);
+    setLayoutMode(savedLayoutMode);
+    setDraftZipCode(savedZipCode);
+    setDraftTempUnit(savedTempUnit);
+    setDraftLayoutMode(savedLayoutMode);
+    setSettingsLoaded(true);
+  }, [weatherSettingsStorageKey, weatherCacheStorageKey]);
 
   useEffect(() => {
+    if (!settingsLoaded || !shouldFetchNow) {
+      return;
+    }
+
     if (zipCode && weatherApiKey) {
       fetchWeatherData();
+      setShouldFetchNow(false);
     }
-  }, [zipCode, weatherApiKey]);
+  }, [zipCode, weatherApiKey, tempUnit, settingsLoaded, shouldFetchNow]);
 
   useEffect(() => {
+    if (!settingsLoaded) {
+      return;
+    }
+
     const widgetSettings = JSON.parse(localStorage.getItem('widgetSettings') || '{}');
     const refreshInterval = widgetSettings.weather?.refreshInterval || 0;
 
     if (refreshInterval > 0) {
       const intervalId = setInterval(() => {
-        if (zipCode && weatherApiKey) {
-          fetchWeatherData();
-        }
+        void refreshAllConfiguredWeatherCaches();
       }, refreshInterval);
 
       return () => {
         clearInterval(intervalId);
       };
     }
-  }, [zipCode, weatherApiKey]);
+  }, [zipCode, weatherApiKey, tempUnit, settingsLoaded]);
 
   const fetchWeatherData = async () => {
     if (!weatherApiKey) {
@@ -94,90 +408,11 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
     setError(null);
 
     try {
-      const currentWeatherUrl = `https://api.openweathermap.org/data/2.5/weather?zip=${zipCode},US&appid=${weatherApiKey}&units=imperial`;
-      const currentResponse = await axios.get(currentWeatherUrl);
-      setWeatherData(currentResponse.data);
-
-      if (currentResponse.data.coord) {
-        const { lat, lon } = currentResponse.data.coord;
-        const airQualityUrl = `https://api.openweathermap.org/data/2.5/air_pollution?lat=${lat}&lon=${lon}&appid=${weatherApiKey}`;
-        
-        try {
-          const airQualityResponse = await axios.get(airQualityUrl);
-          setAirQualityData(airQualityResponse.data);
-        } catch (airError) {
-          setAirQualityData(null);
-        }
-      }
-
-      const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?zip=${zipCode},US&appid=${weatherApiKey}&units=imperial`;
-      const forecastResponse = await axios.get(forecastUrl);
-
-      const dailyForecasts = [];
-      const chartDataPoints = [];
-      
-      if (forecastResponse.data && forecastResponse.data.list) {
-        const forecastByDay = {};
-        
-        forecastResponse.data.list.slice(0, 24).forEach((item, index) => {
-          const date = new Date(item.dt * 1000);
-          const dayKey = date.toDateString();
-          
-          if (!forecastByDay[dayKey]) {
-            forecastByDay[dayKey] = {
-              date: date,
-              temps: {
-                min: item.main.temp_min,
-                max: item.main.temp_max,
-                all: []
-              },
-              weather: item.weather[0],
-              precipitation: item.rain ? item.rain['3h'] || 0 : 0
-            };
-          } else {
-            forecastByDay[dayKey].temps.min = Math.min(forecastByDay[dayKey].temps.min, item.main.temp_min);
-            forecastByDay[dayKey].temps.max = Math.max(forecastByDay[dayKey].temps.max, item.main.temp_max);
-          }
-          
-          forecastByDay[dayKey].temps.all.push(item.main.temp);
-          
-          if (index < 8) {
-            chartDataPoints.push({
-              time: date.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true }),
-              temperature: Math.round(item.main.temp),
-              precipitation: item.rain ? item.rain['3h'] || 0 : 0
-            });
-          }
-        });
-
-        const dailyForecastArray = Object.values(forecastByDay).slice(0, 3).map(day => ({
-          date: day.date,
-          dayName: day.date.toLocaleDateString('en-US', { weekday: 'short' }),
-          tempHigh: Math.round(day.temps.max),
-          tempLow: Math.round(day.temps.min),
-          tempAvg: Math.round(day.temps.all.reduce((a, b) => a + b, 0) / day.temps.all.length),
-          weather: day.weather,
-          precipitation: day.precipitation
-        }));
-        
-        setForecastData(dailyForecastArray);
-        setChartData(chartDataPoints);
-      }
-
+      const payload = await fetchWeatherPayload(zipCode, tempUnit);
+      applyWeatherPayloadToState(payload);
+      persistWeatherCache(payload);
     } catch (error) {
-      if (error.response) {
-        if (error.response.status === 401) {
-          setError('Invalid API key. Please check your OpenWeatherMap API key in the Admin Panel.');
-        } else if (error.response.status === 404) {
-          setError('Invalid zip code. Please enter a valid US zip code.');
-        } else {
-          setError(`Weather service error: ${error.response.status} ${error.response.statusText}`);
-        }
-      } else if (error.code === 'ECONNREFUSED' || error.message.includes('Network Error')) {
-        setError('Unable to connect to weather service. Please check your internet connection.');
-      } else {
-        setError('Failed to fetch weather data. Please try again later.');
-      }
+      setError(getWeatherErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -194,23 +429,43 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
     return levels[aqi] || { label: 'Unknown', color: '#gray', emoji: '❓' };
   };
 
-  const handleZipCodeSave = () => {
-    setZipCode(tempZipCode);
-    localStorage.setItem('weatherZipCode', tempZipCode);
-    setEditingZip(false);
+  const handleOpenSettingsModal = () => {
+    setDraftZipCode(zipCode || DEFAULT_ZIP_CODE);
+    setDraftTempUnit(tempUnit);
+    setDraftLayoutMode(layoutMode);
+    setSettingsModalOpen(true);
   };
 
-  const handleZipCodeCancel = () => {
-    setTempZipCode(zipCode);
-    setEditingZip(false);
+  const handleCloseSettingsModal = () => {
+    setSettingsModalOpen(false);
   };
 
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter') {
-      handleZipCodeSave();
-    } else if (e.key === 'Escape') {
-      handleZipCodeCancel();
+  const handleSaveSettingsModal = () => {
+    const normalizedZip = (draftZipCode || '').trim();
+    if (!normalizedZip) {
+      setError('Please enter a zip code.');
+      return;
     }
+
+    const normalizedTempUnit = draftTempUnit === 'C' ? 'C' : 'F';
+    const normalizedLayoutMode = VALID_LAYOUT_MODES.has(draftLayoutMode) ? draftLayoutMode : 'auto';
+    const shouldRefreshForDataChange = normalizedZip !== zipCode || normalizedTempUnit !== tempUnit;
+
+    setZipCode(normalizedZip);
+    setTempUnit(normalizedTempUnit);
+    setLayoutMode(normalizedLayoutMode);
+
+    if (shouldRefreshForDataChange) {
+      setShouldFetchNow(true);
+    }
+
+    persistInstanceSettings({
+      zipCode: normalizedZip,
+      tempUnit: normalizedTempUnit,
+      layoutMode: normalizedLayoutMode,
+    });
+
+    setSettingsModalOpen(false);
   };
 
   const getWeatherIcon = (iconCode) => {
@@ -243,13 +498,13 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
           {getWeatherIcon(weatherData.weather[0].icon)}
         </Typography>
         <Typography variant="h3" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-          {Math.round(weatherData.main.temp)}°F
+          {Math.round(weatherData.main.temp)}{unitSymbol}
+        </Typography>
+        <Typography variant="h6" sx={{ mb: 1, textAlign: 'center' }}>
+          {weatherData.name}
         </Typography>
         <Typography variant="body1" sx={{ textAlign: 'center', textTransform: 'capitalize', mb: 0.5 }}>
           {weatherData.weather[0].description}
-        </Typography>
-        <Typography variant="body2" sx={{ opacity: 0.7 }}>
-          {weatherData.name}
         </Typography>
       </Box>
     );
@@ -272,13 +527,16 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
           </Typography>
           <Box sx={{ flex: 1 }}>
             <Typography variant="h3" sx={{ fontWeight: 'bold' }}>
-              {Math.round(weatherData.main.temp)}°F
+              {Math.round(weatherData.main.temp)}{unitSymbol}
+            </Typography>
+            <Typography variant="h6" sx={{ mb: 1 }}>
+              {weatherData.name}
             </Typography>
             <Typography variant="body1" sx={{ textTransform: 'capitalize' }}>
               {weatherData.weather[0].description}
             </Typography>
             <Typography variant="body2" sx={{ opacity: 0.7 }}>
-              Feels like {Math.round(weatherData.main.feels_like)}°F
+              Feels like {Math.round(weatherData.main.feels_like)}{unitSymbol}
             </Typography>
           </Box>
         </Box>
@@ -339,7 +597,7 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
               {getWeatherIcon(weatherData.weather[0].icon)}
             </Typography>
             <Typography variant="h3" sx={{ fontWeight: 'bold', mb: 1 }}>
-              {Math.round(weatherData.main.temp)}°F
+              {Math.round(weatherData.main.temp)}{unitSymbol}
             </Typography>
             <Typography variant="h6" sx={{ mb: 1, textAlign: 'center' }}>
               {weatherData.name}
@@ -347,10 +605,10 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
             <Typography variant="body1" sx={{ mb: 2, textAlign: 'center', textTransform: 'capitalize' }}>
               {weatherData.weather[0].description}
             </Typography>
-            
+
             <Box sx={{ textAlign: 'center' }}>
               <Typography variant="body2">
-                Feels like {Math.round(weatherData.main.feels_like)}°F
+                Feels like {Math.round(weatherData.main.feels_like)}{unitSymbol}
               </Typography>
               <Typography variant="body2">
                 Humidity: {weatherData.main.humidity}%
@@ -362,8 +620,8 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
 
             {/* Air Quality Box */}
             {airQualityData && (
-              <Box 
-                sx={{ 
+              <Box
+                sx={{
                   mt: 3,
                   p: 2,
                   width: '90%',
@@ -387,10 +645,10 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
                           <Typography variant="h6" sx={{ fontSize: '1.5rem', mb: 0.5 }}>
                             {aqiInfo.emoji}
                           </Typography>
-                          <Typography 
-                            variant="body1" 
-                            sx={{ 
-                              fontWeight: 'bold', 
+                          <Typography
+                            variant="body1"
+                            sx={{
+                              fontWeight: 'bold',
                               color: aqiInfo.color,
                               mb: 0.5
                             }}
@@ -441,10 +699,10 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
                 >
                   <Box sx={{ textAlign: 'right' }}>
                     <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#ff6b6b' }}>
-                      {day.tempHigh}°F
+                      {day.tempHigh}{unitSymbol}
                     </Typography>
                     <Typography variant="body2" sx={{ color: '#00ddeb' }}>
-                      {day.tempLow}°F
+                      {day.tempLow}{unitSymbol}
                     </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -486,10 +744,10 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
                     <XAxis dataKey="time" axisLine={false} tickLine={false} />
                     <YAxis axisLine={false} tickLine={false} width={30} />
                     <Tooltip />
-                    <Line 
-                      type="monotone" 
-                      dataKey="temperature" 
-                      stroke="var(--accent)" 
+                    <Line
+                      type="monotone"
+                      dataKey="temperature"
+                      stroke="var(--accent)"
                       strokeWidth={2}
                       dot={{ fill: 'var(--accent)' }}
                     />
@@ -510,8 +768,61 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
     );
   };
 
-  if (loading) {
-    return (
+  const settingsModal = (
+    <Dialog open={settingsModalOpen} onClose={handleCloseSettingsModal} maxWidth="xs" fullWidth>
+      <DialogTitle>Weather Widget Settings</DialogTitle>
+      <DialogContent>
+        <Typography variant="caption" sx={{ display: 'block', mb: 2, opacity: 0.8 }}>
+          These settings apply only to this tab's weather widget instance.
+        </Typography>
+
+        <TextField
+          fullWidth
+          label="Zip Code"
+          value={draftZipCode}
+          onChange={(e) => setDraftZipCode(e.target.value)}
+          sx={{ mb: 2 }}
+        />
+
+        <FormControl fullWidth sx={{ mb: 2 }}>
+          <InputLabel id="weather-temp-unit-label">Temperature Unit</InputLabel>
+          <Select
+            labelId="weather-temp-unit-label"
+            label="Temperature Unit"
+            value={draftTempUnit}
+            onChange={(e) => setDraftTempUnit(e.target.value)}
+          >
+            <MenuItem value="F">Fahrenheit (°F)</MenuItem>
+            <MenuItem value="C">Celsius (°C)</MenuItem>
+          </Select>
+        </FormControl>
+
+        <FormControl fullWidth>
+          <InputLabel id="weather-layout-mode-label">Layout Mode</InputLabel>
+          <Select
+            labelId="weather-layout-mode-label"
+            label="Layout Mode"
+            value={draftLayoutMode}
+            onChange={(e) => setDraftLayoutMode(e.target.value)}
+          >
+            <MenuItem value="auto">Auto (based on widget size)</MenuItem>
+            <MenuItem value="compact">Compact</MenuItem>
+            <MenuItem value="medium">Medium</MenuItem>
+            <MenuItem value="full">Full</MenuItem>
+          </Select>
+        </FormControl>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={handleCloseSettingsModal}>Cancel</Button>
+        <Button variant="contained" onClick={handleSaveSettingsModal}>Save</Button>
+      </DialogActions>
+    </Dialog>
+  );
+
+  let content = null;
+
+  if (!settingsLoaded || loading) {
+    content = (
       <Box sx={{
         height: '100%',
         display: 'flex',
@@ -521,13 +832,11 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
         p: 2
       }}>
         <Typography variant="h6">🌤️ Weather</Typography>
-        <Typography>Loading weather data...</Typography>
+        <Typography>{settingsLoaded ? 'Loading weather data...' : 'Loading weather settings...'}</Typography>
       </Box>
     );
-  }
-
-  if (error) {
-    return (
+  } else if (error) {
+    content = (
       <Box sx={{
         height: '100%',
         display: 'flex',
@@ -542,44 +851,13 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
             {error}
           </Typography>
         </Box>
-        {layoutType !== 'compact' && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {editingZip ? (
-              <>
-                <TextField
-                  size="small"
-                  value={tempZipCode}
-                  onChange={(e) => setTempZipCode(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="Enter zip code"
-                  sx={{ width: 120 }}
-                  autoFocus
-                />
-                <IconButton size="small" onClick={handleZipCodeSave}>
-                  <Save />
-                </IconButton>
-                <IconButton size="small" onClick={handleZipCodeCancel}>
-                  <Cancel />
-                </IconButton>
-              </>
-            ) : (
-              <>
-                <Typography variant="body2" sx={{ cursor: 'pointer' }} onClick={() => setEditingZip(true)}>
-                  {zipCode || 'Set zip code'}
-                </Typography>
-                <IconButton size="small" onClick={() => setEditingZip(true)}>
-                  <Edit />
-                </IconButton>
-              </>
-            )}
-          </Box>
-        )}
+        <Button size="small" variant="outlined" onClick={handleOpenSettingsModal}>
+          Open Settings
+        </Button>
       </Box>
     );
-  }
-
-  if (!weatherData) {
-    return (
+  } else if (!weatherData) {
+    content = (
       <Box sx={{
         height: '100%',
         display: 'flex',
@@ -592,6 +870,23 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
         <Typography>No weather data available</Typography>
       </Box>
     );
+  } else {
+    content = (
+      <>
+        {layoutType !== 'compact' && (
+          <Box sx={{ p: 2, pb: 0 }}>
+            <Typography variant="h6">🌤️ Weather</Typography>
+          </Box>
+        )}
+
+        {/* Dynamic Content Based on Layout */}
+        <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+          {layoutType === 'compact' && renderCompactLayout()}
+          {layoutType === 'medium' && renderMediumLayout()}
+          {layoutType === 'full' && renderFullLayout()}
+        </Box>
+      </>
+    );
   }
 
   return (
@@ -599,52 +894,26 @@ const WeatherWidget = ({ transparentBackground, weatherApiKey, widgetSize = { wi
       height: '100%',
       display: 'flex',
       flexDirection: 'column',
-      overflow: 'hidden'
+      overflow: 'hidden',
+      position: 'relative'
     }}>
-      {/* Header with Zip Code Editor - Only show in medium/full layouts */}
-      {layoutType !== 'compact' && (
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2, pb: 0 }}>
-          <Typography variant="h6">🌤️ Weather</Typography>
-          
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {editingZip ? (
-              <>
-                <TextField
-                  size="small"
-                  value={tempZipCode}
-                  onChange={(e) => setTempZipCode(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="Enter zip code"
-                  sx={{ width: 120 }}
-                  autoFocus
-                />
-                <IconButton size="small" onClick={handleZipCodeSave}>
-                  <Save />
-                </IconButton>
-                <IconButton size="small" onClick={handleZipCodeCancel}>
-                  <Cancel />
-                </IconButton>
-              </>
-            ) : (
-              <>
-                <Typography variant="body2" sx={{ cursor: 'pointer' }} onClick={() => setEditingZip(true)}>
-                  {zipCode || 'Set zip code'}
-                </Typography>
-                <IconButton size="small" onClick={() => setEditingZip(true)}>
-                  <Edit />
-                </IconButton>
-              </>
-            )}
-          </Box>
-        </Box>
-      )}
+      <IconButton
+        size="small"
+        onClick={handleOpenSettingsModal}
+        aria-label="Open weather widget settings"
+        sx={{
+          position: 'absolute',
+          top: 8,
+          right: 8,
+          zIndex: 10,
+          color: 'var(--text-color)',
+        }}
+      >
+        <Settings />
+      </IconButton>
 
-      {/* Dynamic Content Based on Layout */}
-      <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-        {layoutType === 'compact' && renderCompactLayout()}
-        {layoutType === 'medium' && renderMediumLayout()}
-        {layoutType === 'full' && renderFullLayout()}
-      </Box>
+      {content}
+      {settingsModal}
     </Box>
   );
 };

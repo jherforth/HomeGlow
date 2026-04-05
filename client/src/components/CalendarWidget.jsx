@@ -1,14 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Typography, Box, List, ListItem, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, Button, IconButton, Popover, ToggleButton, ToggleButtonGroup, TextField, Switch, FormControlLabel, Select, MenuItem, FormControl, InputLabel, Chip, Divider, CircularProgress, Alert } from '@mui/material';
-import { Settings, ViewModule, ViewWeek, ChevronLeft, ChevronRight, Add, Delete, Edit, Refresh, Remove } from '@mui/icons-material';
+import { Card, Typography, Box, List, ListItem, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, Button, IconButton, Popover, ToggleButton, ToggleButtonGroup, TextField, Switch, FormControlLabel, Select, MenuItem, FormControl, InputLabel, Chip, Divider, CircularProgress, Alert, Tooltip } from '@mui/material';
+import { Settings, ViewModule, ViewWeek, ChevronLeft, ChevronRight, Add, Delete, Edit, Refresh, Remove, Sync, Schedule } from '@mui/icons-material';
 import { Calendar, momentLocalizer } from 'react-big-calendar';
 import moment from 'moment';
-import { ChromePicker } from 'react-color';
+import { SketchPicker } from 'react-color';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
+import MonthDayCell from './MonthDayCell.jsx';
 
 const localizer = momentLocalizer(moment);
+
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const WEEKDAY_OPTIONS = [
+  { label: 'Sunday', value: 'sunday' },
+  { label: 'Monday', value: 'monday' },
+  { label: 'Tuesday', value: 'tuesday' },
+  { label: 'Wednesday', value: 'wednesday' },
+  { label: 'Thursday', value: 'thursday' },
+  { label: 'Friday', value: 'friday' },
+  { label: 'Saturday', value: 'saturday' },
+];
+const WEEKDAY_INDEX = {
+  sunday: 0,
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
+};
 
 const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   const [events, setEvents] = useState([]);
@@ -35,6 +56,28 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
       bulletSize: 10
     };
   });
+  const [dayOfWeekSettings, setDayOfWeekSettings] = useState(() => {
+    const saved = localStorage.getItem('calendarDayOfWeekSettings');
+    if (!saved) {
+      return {
+        weekViewStart: 'today',
+        monthViewStart: 'sunday'
+      };
+    }
+
+    try {
+      const parsed = JSON.parse(saved);
+      return {
+        weekViewStart: parsed.weekViewStart || 'today',
+        monthViewStart: parsed.monthViewStart || 'sunday'
+      };
+    } catch {
+      return {
+        weekViewStart: 'today',
+        monthViewStart: 'sunday'
+      };
+    }
+  });
   const [showColorPicker, setShowColorPicker] = useState({ background: false, text: false });
   const [calendarSources, setCalendarSources] = useState([]);
   const [showCalendarDialog, setShowCalendarDialog] = useState(false);
@@ -50,11 +93,27 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   const [testingConnection, setTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState(null);
   const [savingCalendar, setSavingCalendar] = useState(false);
+  const [syncStatus, setSyncStatus] = useState({});
+  const [syncIntervals, setSyncIntervals] = useState({});
+  const [isSyncing, setIsSyncing] = useState({});
+
+  const syncIntervalOptions = [
+    { label: 'Disabled', value: 0 },
+    { label: '5 minutes', value: 5 },
+    { label: '15 minutes', value: 15 },
+    { label: '30 minutes', value: 30 },
+    { label: '1 hour', value: 60 },
+    { label: '2 hours', value: 120 },
+    { label: '6 hours', value: 360 },
+    { label: '12 hours', value: 720 },
+    { label: '24 hours', value: 1440 }
+  ];
 
   // Initial data fetch
   useEffect(() => {
     fetchCalendarSources();
     fetchCalendarEvents();
+    fetchSyncStatus();
   }, []);
 
   // Auto-refresh functionality
@@ -64,7 +123,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
     if (refreshInterval > 0) {
       console.log(`CalendarWidget: Auto-refresh enabled (${refreshInterval}ms)`);
-      
+
       const intervalId = setInterval(() => {
         console.log('CalendarWidget: Auto-refreshing data...');
         fetchCalendarSources();
@@ -105,9 +164,13 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   }, [displaySettings]);
 
   useEffect(() => {
+    localStorage.setItem('calendarDayOfWeekSettings', JSON.stringify(dayOfWeekSettings));
+  }, [dayOfWeekSettings]);
+
+  useEffect(() => {
     const loadDisplaySettings = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/api/settings`);
+        const response = await axios.post(`${API_BASE_URL}/api/settings/search`, ['CALENDAR_*']);
         const settings = response.data;
 
         if (settings.CALENDAR_TEXT_SIZE || settings.CALENDAR_BULLET_SIZE) {
@@ -131,6 +194,75 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
     } catch (error) {
       console.error('Error fetching calendar sources:', error);
     }
+  };
+
+  const fetchSyncStatus = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/calendar-sync/status`);
+      const statusMap = {};
+      const intervalsMap = {};
+      if (Array.isArray(response.data)) {
+        response.data.forEach(status => {
+          statusMap[status.source_id] = status;
+          intervalsMap[status.source_id] = status.sync_interval_minutes || 15;
+        });
+      }
+      setSyncStatus(statusMap);
+      setSyncIntervals(intervalsMap);
+    } catch (error) {
+      console.error('Error fetching sync status:', error);
+    }
+  };
+
+  const handleSyncSource = async (sourceId) => {
+    setIsSyncing(prev => ({ ...prev, [sourceId]: true }));
+    try {
+      await axios.post(`${API_BASE_URL}/api/calendar-sync/${sourceId}`);
+      await fetchCalendarEvents();
+      await fetchSyncStatus();
+    } catch (error) {
+      console.error('Error syncing calendar source:', error);
+    } finally {
+      setIsSyncing(prev => ({ ...prev, [sourceId]: false }));
+    }
+  };
+
+  const handleSyncAll = async () => {
+    setIsSyncing(prev => ({ ...prev, all: true }));
+    try {
+      await axios.post(`${API_BASE_URL}/api/calendar-sync/all`);
+      await fetchCalendarEvents();
+      await fetchSyncStatus();
+    } catch (error) {
+      console.error('Error syncing all calendar sources:', error);
+    } finally {
+      setIsSyncing(prev => ({ ...prev, all: false }));
+    }
+  };
+
+  const handleSyncIntervalChange = async (sourceId, intervalMinutes) => {
+    try {
+      await axios.patch(`${API_BASE_URL}/api/calendar-sync/${sourceId}/interval`, {
+        interval_minutes: intervalMinutes
+      });
+      setSyncIntervals(prev => ({ ...prev, [sourceId]: intervalMinutes }));
+    } catch (error) {
+      console.error('Error setting sync interval:', error);
+    }
+  };
+
+  const formatLastSync = (timestamp) => {
+    if (!timestamp) return 'Never';
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return moment(date).format('MMM D, h:mm A');
   };
 
   const fetchCalendarEvents = async () => {
@@ -352,13 +484,28 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
     return { isStart, isEnd };
   };
 
+  const getWeekStartDate = () => {
+    const baseDate = moment(currentDate).startOf('day');
+    let startDate = baseDate.clone();
+
+    if (dayOfWeekSettings.weekViewStart === 'yesterday') {
+      startDate = baseDate.clone().subtract(1, 'day');
+    } else if (dayOfWeekSettings.weekViewStart !== 'today') {
+      const targetDay = WEEKDAY_INDEX[dayOfWeekSettings.weekViewStart];
+      if (typeof targetDay === 'number') {
+        startDate = baseDate.clone().startOf('week').add(targetDay, 'days');
+      }
+    }
+
+    return startDate;
+  };
+
   const getNext7Days = () => {
-    const startDate = new Date(currentDate);
+    const startDate = getWeekStartDate();
+
     const dates = [];
     for (let i = 0; i < 7; i++) {
-      const date = new Date(startDate);
-      date.setDate(startDate.getDate() + i);
-      dates.push(date);
+      dates.push(startDate.clone().add(i, 'days').toDate());
     }
 
     const weekStart = moment(dates[0]).startOf('day');
@@ -391,7 +538,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
       for (let s = 0; s < slots.length; s++) {
         const overlaps = slots[s].some(slotEvent => {
           return moment(event.start).isBefore(moment(slotEvent.end)) &&
-                 moment(event.end).isAfter(moment(slotEvent.start));
+            moment(event.end).isAfter(moment(slotEvent.start));
         });
         if (!overlaps) {
           slots[s].push(event);
@@ -496,9 +643,9 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
     if (viewMode === 'month') {
       return moment(currentDate).format('MMMM YYYY');
     } else {
-      const startOfWeek = moment(currentDate);
-      const endOfWeek = moment(currentDate).add(6, 'days');
-      
+      const startOfWeek = getWeekStartDate();
+      const endOfWeek = startOfWeek.clone().add(6, 'days');
+
       if (startOfWeek.month() === endOfWeek.month()) {
         return `${startOfWeek.format('MMM D')}-${endOfWeek.format('D, YYYY')}`;
       } else {
@@ -523,9 +670,9 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
   if (loading) {
     return (
-      <Box sx={{ 
-        height: '100%', 
-        display: 'flex', 
+      <Box sx={{
+        height: '100%',
+        display: 'flex',
         flexDirection: 'column',
         justifyContent: 'center',
         alignItems: 'center',
@@ -539,9 +686,9 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   }
 
   return (
-    <Box sx={{ 
-      height: '100%', 
-      display: 'flex', 
+    <Box sx={{
+      height: '100%',
+      display: 'flex',
       flexDirection: 'column',
       overflow: 'hidden',
       p: 2
@@ -574,6 +721,10 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
             exclusive
             onChange={handleViewModeChange}
             size="small"
+            sx={{
+              '& .MuiToggleButton-root': { color: 'var(--text-color)', borderColor: 'var(--card-border)' },
+              '& .MuiToggleButton-root.Mui-selected': { color: 'var(--text-color)', backgroundColor: 'rgba(var(--accent-rgb), 0.15)' },
+            }}
           >
             <ToggleButton value="month" aria-label="month view">
               <ViewModule />
@@ -591,7 +742,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
           </IconButton>
         </Box>
       </Box>
-      
+
       {error && (
         <Box sx={{ mb: 2, p: 2, bgcolor: 'rgba(255, 0, 0, 0.1)', borderRadius: 1 }}>
           <Typography color="error" variant="body2">
@@ -603,7 +754,15 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
       {viewMode === 'month' ? (
         <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, mb: 1 }}>
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+            {(() => {
+              if (dayOfWeekSettings.monthViewStart === 'first-day-of-month') {
+                const monthStart = moment(currentDate).startOf('month');
+                return Array.from({ length: 7 }, (_, idx) => monthStart.clone().add(idx, 'days').format('ddd'));
+              }
+
+              const firstDayIndex = WEEKDAY_INDEX[dayOfWeekSettings.monthViewStart] ?? 0;
+              return Array.from({ length: 7 }, (_, idx) => WEEKDAY_LABELS[(firstDayIndex + idx) % 7]);
+            })().map((day) => (
               <Box key={day} sx={{ textAlign: 'center', fontWeight: 'bold', py: 1 }}>
                 <Typography variant="caption">{day}</Typography>
               </Box>
@@ -613,8 +772,29 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
           {(() => {
             const monthStart = moment(currentDate).startOf('month');
             const monthEnd = moment(currentDate).endOf('month');
-            const startDate = moment(monthStart).startOf('week');
-            const endDate = moment(monthEnd).endOf('week');
+            const isFirstDayOfMonthMode = dayOfWeekSettings.monthViewStart === 'first-day-of-month';
+
+            const startDate = (() => {
+              if (isFirstDayOfMonthMode) {
+                return monthStart.clone();
+              }
+
+              const firstDayIndex = WEEKDAY_INDEX[dayOfWeekSettings.monthViewStart] ?? 0;
+              const offset = (monthStart.day() - firstDayIndex + 7) % 7;
+              return monthStart.clone().subtract(offset, 'days');
+            })();
+
+            const endDate = (() => {
+              if (isFirstDayOfMonthMode) {
+                return monthEnd.clone();
+              }
+
+              const firstDayIndex = WEEKDAY_INDEX[dayOfWeekSettings.monthViewStart] ?? 0;
+              const lastColumnDay = (firstDayIndex + 6) % 7;
+              const trailing = (lastColumnDay - monthEnd.day() + 7) % 7;
+              return monthEnd.clone().add(trailing, 'days');
+            })();
+
             const numWeeks = Math.ceil((endDate.diff(startDate, 'days') + 1) / 7);
 
             const isMultiDaySpanning = (event) => {
@@ -627,10 +807,16 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
             for (let w = 0; w < numWeeks; w++) {
               const weekDates = [];
               for (let d = 0; d < 7; d++) {
-                weekDates.push(startDate.clone().add(w * 7 + d, 'days'));
+                const day = startDate.clone().add(w * 7 + d, 'days');
+                if (isFirstDayOfMonthMode && day.isAfter(monthEnd, 'day')) {
+                  weekDates.push(null);
+                } else {
+                  weekDates.push(day);
+                }
               }
-              const weekStart = weekDates[0];
-              const weekEnd = weekDates[6];
+              const validWeekDates = weekDates.filter(Boolean);
+              const weekStart = validWeekDates[0] || startDate;
+              const weekEnd = validWeekDates[validWeekDates.length - 1] || weekStart;
 
               const weekMultiDayEvents = events
                 .filter(e => isMultiDaySpanning(e) && moment(e.start).isSameOrBefore(weekEnd.clone().endOf('day')) && moment(e.end).isSameOrAfter(weekStart.clone().startOf('day')))
@@ -656,16 +842,36 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
               const multiDaySlotCount = slots.length;
               const getSlot = (event) => { for (let s = 0; s < slots.length; s++) if (slots[s].includes(event)) return s; return -1; };
 
-              weeks.push({ weekDates, weekMultiDayEvents, slots, multiDaySlotCount, getSlot });
+              weeks.push({
+                weekDates,
+                weekMultiDayEvents,
+                slots,
+                multiDaySlotCount,
+                getSlot,
+                weekKey: weekStart.format('YYYY-MM-DD')
+              });
             }
 
             const allWeekCells = [];
-            weeks.forEach(({ weekDates, weekMultiDayEvents, multiDaySlotCount, getSlot }) => {
-              weekDates.forEach(day => {
+            weeks.forEach(({ weekDates, weekMultiDayEvents, multiDaySlotCount, getSlot, weekKey }) => {
+              weekDates.forEach((day, dayIdx) => {
+                if (!day) {
+                  allWeekCells.push(
+                    <Box
+                      key={`empty-${weekKey}-${dayIdx}`}
+                      sx={{
+                        border: '1px solid var(--card-border)',
+                        borderRadius: 1,
+                        backgroundColor: 'transparent',
+                      }}
+                    />
+                  );
+                  return;
+                }
+
                 const dayDate = day.toDate();
                 const isCurrentMonth = day.month() === moment(currentDate).month();
                 const isToday = day.isSame(moment(), 'day');
-                const dayClone = day.clone();
 
                 const dayMultiDay = weekMultiDayEvents.filter(e => eventSpansDay(e, dayDate));
                 const multiDaySlottedRows = Array(multiDaySlotCount).fill(null).map((_, slotIdx) =>
@@ -679,141 +885,26 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                   !e.all_day && !isMultiDaySpanning(e) && eventSpansDay(e, dayDate)
                 ).sort((a, b) => a.start - b.start);
 
-                const maxItems = 3;
                 const pillHeight = `${displaySettings.textSize * 1.5}px`;
-
-                // Count total events for this day
                 const totalEventCount = multiDaySlottedRows.filter(e => e !== null).length + dayAllDaySingle.length + dayTimed.length;
-                let shownCount = 0;
-
-                const renderMonthPill = (event, key, clickHandler) => {
-                  if (!event) {
-                    return null;
-                  }
-                  if (shownCount >= maxItems) {
-                    return null;
-                  }
-                  shownCount++;
-                  const { isStart, isEnd } = getMultiDayPosition(event, dayDate);
-                  const color = event.source_color || eventColors.backgroundColor;
-                  const isContinuing = !isStart;
-                  return (
-                    <Box
-                      key={key}
-                      onClick={clickHandler}
-                      sx={{ mb: 0.25, height: pillHeight, minHeight: pillHeight, display: 'flex', alignItems: 'stretch', cursor: 'pointer' }}
-                    >
-                      <Box sx={{
-                        flex: 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        backgroundColor: color,
-                        borderTopLeftRadius: isStart ? '10px' : '0px',
-                        borderBottomLeftRadius: isStart ? '10px' : '0px',
-                        borderTopRightRadius: isEnd ? '10px' : '0px',
-                        borderBottomRightRadius: isEnd ? '10px' : '0px',
-                        px: 0.75,
-                        py: 0.125,
-                        border: '1px solid rgba(0,0,0,0.2)',
-                        borderLeft: !isStart ? 'none' : '1px solid rgba(0,0,0,0.2)',
-                        borderRight: !isEnd ? 'none' : '1px solid rgba(0,0,0,0.2)',
-                        overflow: 'hidden',
-                        '&:hover': { filter: 'brightness(1.1)' }
-                      }}>
-                        <Typography variant="caption" sx={{
-                          fontSize: `${displaySettings.textSize}px`,
-                          color: '#fff',
-                          fontWeight: 500,
-                          fontStyle: 'italic',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          opacity: isContinuing ? 0.85 : 1,
-                        }}>
-                          {isContinuing ? `← ${event.title}` : event.title}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  );
-                };
 
                 allWeekCells.push(
-                  <Box
+                  <MonthDayCell
                     key={day.format('YYYY-MM-DD')}
-                    onClick={() => handleSelectSlot({ start: dayClone.toDate() })}
-                    sx={{
-                      border: '1px solid var(--card-border)',
-                      borderRadius: 1,
-                      p: 0.75,
-                      cursor: 'pointer',
-                      bgcolor: isToday ? 'rgba(var(--accent-rgb), 0.1)' : 'transparent',
-                      opacity: isCurrentMonth ? 1 : 0.4,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      minHeight: 0,
-                      overflow: 'hidden',
-                      '&:hover': {
-                        bgcolor: isToday ? 'rgba(var(--accent-rgb), 0.15)' : 'rgba(0,0,0,0.05)'
-                      }
-                    }}
-                  >
-                    <Typography variant="caption" sx={{ fontWeight: 'bold', color: isToday ? 'var(--accent)' : 'inherit', fontSize: '0.8rem', mb: 0.5 }}>
-                      {day.format('D')}
-                    </Typography>
-
-                    <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-                      {multiDaySlottedRows.map((event, slotIdx) => {
-                        const result = renderMonthPill(event, `multi-${slotIdx}`, (e) => { e.stopPropagation(); handleSelectEvent(event); });
-                        return result;
-                      })}
-
-                      {dayAllDaySingle.map((event, evIdx) => {
-                        if (shownCount >= maxItems) { return null; }
-                        shownCount++;
-                        const color = event.source_color || eventColors.backgroundColor;
-                        return (
-                          <Box key={`allday-${evIdx}`} onClick={(e) => { e.stopPropagation(); handleSelectEvent(event); }}
-                            sx={{ mb: 0.25, height: pillHeight, minHeight: pillHeight, display: 'flex', alignItems: 'stretch', cursor: 'pointer' }}>
-                            <Box sx={{
-                              flex: 1, display: 'flex', alignItems: 'center',
-                              backgroundColor: color, borderRadius: '10px', px: 0.75, py: 0.125,
-                              border: '1px solid rgba(0,0,0,0.2)', overflow: 'hidden',
-                              '&:hover': { filter: 'brightness(1.1)' }
-                            }}>
-                              <Typography variant="caption" sx={{
-                                fontSize: `${displaySettings.textSize}px`, color: '#fff',
-                                fontWeight: 500, fontStyle: 'italic',
-                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
-                              }}>
-                                {event.title}
-                              </Typography>
-                            </Box>
-                          </Box>
-                        );
-                      })}
-
-                      {dayTimed.map((event, evIdx) => {
-                        if (shownCount >= maxItems) { return null; }
-                        shownCount++;
-                        const color = event.source_color || eventColors.backgroundColor;
-                        return (
-                          <Box key={`timed-${evIdx}`} onClick={(e) => { e.stopPropagation(); handleSelectEvent(event); }}
-                            sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25, cursor: 'pointer', borderRadius: 0.5, px: 0.25, '&:hover': { bgcolor: 'rgba(0,0,0,0.05)' } }}>
-                            <Box sx={{ width: displaySettings.bulletSize, height: displaySettings.bulletSize, minWidth: displaySettings.bulletSize, borderRadius: '50%', backgroundColor: color, flexShrink: 0 }} />
-                            <Typography variant="caption" sx={{ fontSize: `${displaySettings.textSize}px`, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {event.title}
-                            </Typography>
-                          </Box>
-                        );
-                      })}
-
-                      {totalEventCount > maxItems && (
-                        <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'text.secondary', display: 'block', mt: 0.25 }}>
-                          +{totalEventCount - maxItems} more
-                        </Typography>
-                      )}
-                    </Box>
-                  </Box>
+                    day={day}
+                    isCurrentMonth={isCurrentMonth}
+                    isToday={isToday}
+                    multiDaySlottedRows={multiDaySlottedRows}
+                    dayAllDaySingle={dayAllDaySingle}
+                    dayTimed={dayTimed}
+                    totalEventCount={totalEventCount}
+                    pillHeight={pillHeight}
+                    displaySettings={displaySettings}
+                    eventColors={eventColors}
+                    getMultiDayPosition={getMultiDayPosition}
+                    onSlotClick={handleSelectSlot}
+                    onEventClick={handleSelectEvent}
+                  />
                 );
               });
             });
@@ -924,7 +1015,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                     <Typography variant="h6" sx={{ fontWeight: 'bold', color: day.isToday ? 'var(--accent)' : 'inherit' }}>
                       {day.dayNumber}
                     </Typography>
-                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                    <Typography variant="caption" sx={{ color: 'var(--text-color)', opacity: 0.6 }}>
                       {day.monthName}
                     </Typography>
                   </Box>
@@ -1037,8 +1128,8 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
         </Box>
       )}
 
-      <Dialog 
-        open={showDayModal} 
+      <Dialog
+        open={showDayModal}
         onClose={() => setShowDayModal(false)}
         maxWidth="md"
         fullWidth
@@ -1080,8 +1171,8 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                         flexShrink: 0
                       }}
                     />
-                    <Chip 
-                      label={event.source_name || 'Unknown Calendar'} 
+                    <Chip
+                      label={event.source_name || 'Unknown Calendar'}
                       size="small"
                       sx={{
                         backgroundColor: event.source_color || eventColors.backgroundColor,
@@ -1208,22 +1299,121 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                         </IconButton>
                       </Box>
                     </Box>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
                       <Chip label={calendar.type} size="small" variant="outlined" />
-                      <Typography variant="caption" color="text.secondary" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                         {calendar.url}
                       </Typography>
                     </Box>
+
+                    {calendar.enabled && (
+                      <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px dashed var(--card-border)', width: '100%' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 1 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <Schedule fontSize="small" sx={{ color: 'text.secondary' }} />
+                            <FormControl size="small" sx={{ minWidth: 100 }}>
+                              <Select
+                                value={syncIntervals[calendar.id] || 15}
+                                onChange={(e) => handleSyncIntervalChange(calendar.id, e.target.value)}
+                                sx={{ fontSize: '0.75rem' }}
+                              >
+                                {syncIntervalOptions.map(opt => (
+                                  <MenuItem key={opt.value} value={opt.value} sx={{ fontSize: '0.75rem' }}>
+                                    {opt.label}
+                                  </MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          </Box>
+                          <Tooltip title="Sync now">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleSyncSource(calendar.id)}
+                              disabled={isSyncing[calendar.id]}
+                            >
+                              {isSyncing[calendar.id] ? (
+                                <CircularProgress size={16} />
+                              ) : (
+                                <Sync fontSize="small" />
+                              )}
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <Typography variant="caption" color="text.secondary">
+                            Last sync: {formatLastSync(syncStatus[calendar.id]?.last_sync_at)}
+                          </Typography>
+                          {syncStatus[calendar.id]?.last_sync_status === 'error' && (
+                            <Chip label="Error" size="small" color="error" sx={{ height: 16, fontSize: '0.6rem' }} />
+                          )}
+                          {syncStatus[calendar.id]?.event_count > 0 && (
+                            <Chip
+                              label={`${syncStatus[calendar.id].event_count} events`}
+                              size="small"
+                              sx={{ height: 16, fontSize: '0.6rem' }}
+                            />
+                          )}
+                        </Box>
+                      </Box>
+                    )}
                   </ListItem>
                 ))}
               </List>
+            )}
+
+            {calendarSources.length > 0 && (
+              <Button
+                variant="outlined"
+                startIcon={isSyncing.all ? <CircularProgress size={16} /> : <Sync />}
+                onClick={handleSyncAll}
+                disabled={isSyncing.all}
+                fullWidth
+                sx={{ mt: 1 }}
+              >
+                {isSyncing.all ? 'Syncing...' : 'Sync All Calendars'}
+              </Button>
             )}
           </Box>
 
           <Divider sx={{ my: 2 }} />
 
+          <Typography variant="h6" sx={{ mb: 2 }}>Days of the week</Typography>
+
+          <Box sx={{ mb: 2 }}>
+            <FormControl fullWidth size="small" sx={{ mb: 1 }}>
+              <InputLabel>Week View Start</InputLabel>
+              <Select
+                label="Week View Start"
+                value={dayOfWeekSettings.weekViewStart}
+                onChange={(e) => setDayOfWeekSettings(prev => ({ ...prev, weekViewStart: e.target.value }))}
+              >
+                <MenuItem value="today">Today</MenuItem>
+                <MenuItem value="yesterday">Yesterday</MenuItem>
+                {WEEKDAY_OPTIONS.map(opt => (
+                  <MenuItem key={`week-${opt.value}`} value={opt.value}>{opt.label}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <FormControl fullWidth size="small">
+              <InputLabel>Month View Start</InputLabel>
+              <Select
+                label="Month View Start"
+                value={dayOfWeekSettings.monthViewStart}
+                onChange={(e) => setDayOfWeekSettings(prev => ({ ...prev, monthViewStart: e.target.value }))}
+              >
+                {WEEKDAY_OPTIONS.map(opt => (
+                  <MenuItem key={`month-${opt.value}`} value={opt.value}>{opt.label}</MenuItem>
+                ))}
+                <MenuItem value="first-day-of-month">1st day of month</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+
+          <Divider sx={{ my: 2 }} />
+
           <Typography variant="h6" sx={{ mb: 2 }}>Default Event Colors</Typography>
-          
+
           <Box sx={{ mb: 3 }}>
             <Typography variant="subtitle2" sx={{ mb: 1 }}>Event Background Color</Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1242,9 +1432,10 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
             </Box>
             {showColorPicker.background && (
               <Box sx={{ mt: 2 }}>
-                <ChromePicker
+                <SketchPicker
                   color={eventColors.backgroundColor}
                   onChange={(color) => handleColorChange('background', color)}
+                  disableAlpha
                 />
               </Box>
             )}
@@ -1268,9 +1459,10 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
             </Box>
             {showColorPicker.text && (
               <Box sx={{ mt: 2 }}>
-                <ChromePicker
+                <SketchPicker
                   color={eventColors.textColor}
                   onChange={(color) => handleColorChange('text', color)}
+                  disableAlpha
                 />
               </Box>
             )}
@@ -1486,9 +1678,10 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                     sx={{ position: 'fixed', top: 0, right: 0, bottom: 0, left: 0 }}
                     onClick={() => setShowColorPicker({ ...showColorPicker, calendar: false })}
                   />
-                  <ChromePicker
+                  <SketchPicker
                     color={calendarForm.color}
                     onChange={(color) => setCalendarForm({ ...calendarForm, color: color.hex })}
+                    disableAlpha
                   />
                 </Box>
               )}

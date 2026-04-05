@@ -1,23 +1,66 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Box, IconButton } from '@mui/material';
 import { DragIndicator } from '@mui/icons-material';
 import GridLayout from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
+import axios from 'axios';
+import { API_BASE_URL } from '../utils/apiConfig.js';
+import { getDeviceApiBase } from '../utils/deviceName.js';
 import CountdownCircle from './CountdownCircle';
 
-/**
- * Container component that manages multiple draggable widgets
- * Provides a responsive grid system for optimal layout
- */
-const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange: onLayoutChangeCallback }) => {
+const CORE_WIDGET_ID_TO_NAME = {
+  'calendar-widget': 'calendar',
+  'chores-widget': 'chores',
+  'photos-widget': 'photos',
+  'weather-widget': 'weather',
+};
+
+const resolveWidgetName = (widgetId) => {
+  if (CORE_WIDGET_ID_TO_NAME[widgetId]) return CORE_WIDGET_ID_TO_NAME[widgetId];
+  if (widgetId.startsWith('plugin-')) return `plugin:${widgetId.slice(7)}`;
+  return null;
+};
+
+const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange: onLayoutChangeCallback, activeTab = 1, activeTabId = 1 }) => {
+  const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [containerWidth, setContainerWidth] = useState(1200);
   const [gridCols, setGridCols] = useState(12);
   const [selectedWidget, setSelectedWidget] = useState(null);
   const [layout, setLayout] = useState([]);
   const [isLockTransitioning, setIsLockTransitioning] = useState(false);
   const [refreshKeys, setRefreshKeys] = useState({});
-  const containerRef = React.useRef(null);
+  const containerRef = useRef(null);
+  const prevWidgetIdsRef = useRef('');
+  const lockedRef = useRef(locked);
+  const prevLockedRef = useRef(locked);
+  const hasInitializedLockEffectRef = useRef(false);
+  const saveTimerRef = useRef(null);
+  const resizeTapGuardRef = useRef(new Map());
+
+  const getTabLayoutCacheKey = useCallback((widgetId) => {
+    return `widget-layout-id-${activeTabId}-${widgetId}`;
+  }, [activeTabId]);
+
+  const saveLayoutsToApi = useCallback((layoutItems, tabNumber) => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      const layouts = layoutItems
+        .filter(item => resolveWidgetName(item.i))
+        .map(item => ({
+          widget_name: resolveWidgetName(item.i),
+          tabNumber: tabNumber,
+          layout_x: item.x,
+          layout_y: item.y,
+          layout_w: item.w,
+          layout_h: item.h,
+        }));
+
+      if (layouts.length > 0) {
+        axios.patch(`${API_DEVICE_URL}/widget-assignments/layout/bulk`, { layouts }).catch(() => { });
+      }
+    }, 500);
+  }, []);
 
   // Update container width and grid columns based on screen size
   useEffect(() => {
@@ -43,55 +86,128 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
 
-  // Initialize layout from localStorage or defaults (only on mount or when widgets change)
   useEffect(() => {
+    lockedRef.current = locked;
+  }, [locked]);
+
+  useEffect(() => {
+    const currentCacheKey = `${activeTab}:${widgets.map(w => w.id).sort().join(',')}`;
+    if (currentCacheKey === prevWidgetIdsRef.current) return;
+    prevWidgetIdsRef.current = currentCacheKey;
+
+    const cols = gridCols;
+    const placed = [];
+
+    const collides = (x, y, w, h) => {
+      return placed.some(p =>
+        x < p.x + p.w && x + w > p.x && y < p.y + p.h && y + h > p.y
+      );
+    };
+
+    const findFreePosition = (w, h) => {
+      for (let row = 0; row < 200; row++) {
+        for (let col = 0; col <= cols - w; col++) {
+          if (!collides(col, row, w, h)) return { x: col, y: row };
+        }
+      }
+      return { x: 0, y: 0 };
+    };
+
     const initialLayout = widgets.map((widget) => {
-      const savedLayout = localStorage.getItem(`widget-layout-${widget.id}`);
-      if (savedLayout) {
-        const parsed = JSON.parse(savedLayout);
-        return {
+      const w = widget.defaultSize.width;
+      const h = widget.defaultSize.height;
+      let item;
+
+      const localKey = getTabLayoutCacheKey(widget.id);
+      const localLayout = localStorage.getItem(localKey);
+      if (localLayout) {
+        let parsed = null;
+        try {
+          parsed = JSON.parse(localLayout);
+        } catch {
+          parsed = null;
+        }
+
+        item = {
           i: widget.id,
-          x: parsed.x || widget.defaultPosition.x,
-          y: parsed.y || widget.defaultPosition.y,
-          w: parsed.w || widget.defaultSize.width,
-          h: parsed.h || widget.defaultSize.height,
+          x: parsed?.x ?? widget.defaultPosition.x,
+          y: parsed?.y ?? widget.defaultPosition.y,
+          w: parsed?.w || w,
+          h: parsed?.h || h,
           minW: widget.minWidth || 3,
           minH: widget.minHeight || 2,
-          static: locked,
+          static: lockedRef.current,
+        };
+      } else if (widget.savedLayout) {
+        item = {
+          i: widget.id,
+          x: widget.savedLayout.x ?? widget.defaultPosition.x,
+          y: widget.savedLayout.y ?? widget.defaultPosition.y,
+          w: widget.savedLayout.w || w,
+          h: widget.savedLayout.h || h,
+          minW: widget.minWidth || 3,
+          minH: widget.minHeight || 2,
+          static: lockedRef.current,
+        };
+      } else {
+        const pos = findFreePosition(w, h);
+        item = {
+          i: widget.id,
+          x: pos.x,
+          y: pos.y,
+          w,
+          h,
+          minW: widget.minWidth || 3,
+          minH: widget.minHeight || 2,
+          static: lockedRef.current,
         };
       }
-      return {
-        i: widget.id,
-        x: widget.defaultPosition.x,
-        y: widget.defaultPosition.y,
-        w: widget.defaultSize.width,
-        h: widget.defaultSize.height,
-        minW: widget.minWidth || 3,
-        minH: widget.minHeight || 2,
-        static: locked,
-      };
+
+      placed.push({ x: item.x, y: item.y, w: item.w, h: item.h });
+      return item;
     });
     setLayout(initialLayout);
-  }, [widgets]);
+  }, [widgets, activeTab, gridCols, getTabLayoutCacheKey]);
 
-  // Update static property when lock state changes (without recreating entire layout)
   useEffect(() => {
+    const wasLocked = prevLockedRef.current;
+    prevLockedRef.current = locked;
+
     setIsLockTransitioning(true);
 
-    setLayout((currentLayout) =>
-      currentLayout.map(item => ({
+    setLayout((currentLayout) => {
+      const updatedLayout = currentLayout.map(item => ({
         ...item,
         static: locked
-      }))
-    );
+      }));
 
-    // Re-enable transitions after a short delay
+      const shouldPersistLockedLayouts = hasInitializedLockEffectRef.current && !wasLocked && locked;
+      if (shouldPersistLockedLayouts) {
+        updatedLayout.forEach((item) => {
+          const layoutData = {
+            x: item.x,
+            y: item.y,
+            w: item.w,
+            h: item.h,
+          };
+          localStorage.setItem(getTabLayoutCacheKey(item.i), JSON.stringify(layoutData));
+        });
+        saveLayoutsToApi(updatedLayout, activeTab);
+      }
+
+      return updatedLayout;
+    });
+
+    if (!hasInitializedLockEffectRef.current) {
+      hasInitializedLockEffectRef.current = true;
+    }
+
     const timer = setTimeout(() => {
       setIsLockTransitioning(false);
     }, 50);
 
     return () => clearTimeout(timer);
-  }, [locked]);
+  }, [locked, saveLayoutsToApi, getTabLayoutCacheKey, activeTab]);
 
   // Deselect widget when locked
   useEffect(() => {
@@ -100,30 +216,59 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
     }
   }, [locked]);
 
-  // Save layout to localStorage and notify parent
-  const handleLayoutChange = (newLayout) => {
-    if (locked) return; // Don't save if locked
+  const layoutRef = useRef(layout);
+  useEffect(() => {
+    layoutRef.current = layout;
+  }, [layout]);
 
-    // Update layout with static property based on locked state
-    const updatedLayout = newLayout.map(item => ({
+  const handleLayoutChange = (newLayout) => {
+    if (locked) return;
+
+    const currentLayout = layoutRef.current;
+    const currentLayoutById = new Map(currentLayout.map(item => [item.i, item]));
+    const safeLayout = newLayout.map((item) => {
+      const existing = currentLayoutById.get(item.i);
+      const minW = existing?.minW ?? item.minW ?? 2;
+      const minH = existing?.minH ?? item.minH ?? 2;
+      return {
+        ...item,
+        minW,
+        minH,
+        w: Math.max(item.w, minW),
+        h: Math.max(item.h, minH),
+      };
+    });
+
+    const hasChanged = safeLayout.some(item => {
+      const existing = currentLayout.find(l => l.i === item.i);
+      if (!existing) return true;
+      return existing.x !== item.x || existing.y !== item.y || existing.w !== item.w || existing.h !== item.h;
+    });
+
+    if (!hasChanged) return;
+
+    const updatedLayout = safeLayout.map(item => ({
       ...item,
       static: locked
     }));
 
     setLayout(updatedLayout);
-    newLayout.forEach((item) => {
+    layoutRef.current = updatedLayout;
+
+    updatedLayout.forEach((item) => {
       const layoutData = {
         x: item.x,
         y: item.y,
         w: item.w,
         h: item.h,
       };
-      localStorage.setItem(`widget-layout-${item.i}`, JSON.stringify(layoutData));
+      localStorage.setItem(getTabLayoutCacheKey(item.i), JSON.stringify(layoutData));
     });
 
-    // Notify parent component of layout change
+    saveLayoutsToApi(updatedLayout, activeTab);
+
     if (onLayoutChangeCallback) {
-      onLayoutChangeCallback(newLayout);
+      onLayoutChangeCallback(updatedLayout);
     }
   };
 
@@ -193,27 +338,45 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
               break;
           }
 
-          // Save to localStorage
           const layoutData = {
             x: updatedItem.x,
             y: updatedItem.y,
             w: updatedItem.w,
             h: updatedItem.h,
           };
-          localStorage.setItem(`widget-layout-${item.i}`, JSON.stringify(layoutData));
+          localStorage.setItem(getTabLayoutCacheKey(item.i), JSON.stringify(layoutData));
 
           return updatedItem;
         }
         return { ...item, static: locked };
       });
 
-      // Notify parent component of layout change
       if (onLayoutChangeCallback) {
         onLayoutChangeCallback(newLayout);
       }
 
+      saveLayoutsToApi(newLayout, activeTab);
+      layoutRef.current = newLayout;
       return newLayout;
     });
+  };
+
+  const handleResizePointerDown = (widgetId, direction, isDecrement = false) => (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Guard against duplicate touch-generated activation bursts on some Android devices.
+    const pointerType = e.pointerType || 'unknown';
+    const guardKey = `${widgetId}:${direction}:${isDecrement ? 'dec' : 'inc'}:${pointerType}`;
+    const now = Date.now();
+    const lastTap = resizeTapGuardRef.current.get(guardKey) || 0;
+
+    if (now - lastTap < 160) {
+      return;
+    }
+
+    resizeTapGuardRef.current.set(guardKey, now);
+    handleResize(widgetId, direction, isDecrement, e);
   };
 
   const handleWidgetClick = (widgetId, e) => {
@@ -232,6 +395,15 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
     setSelectedWidget(widgetId);
   };
 
+  const isInteractiveTarget = (target) => {
+    if (!target?.closest) return false;
+    return Boolean(
+      target.closest(
+        'button, a, input, textarea, select, [role="button"], [contenteditable="true"], .MuiButtonBase-root, .MuiInputBase-root, .MuiSwitch-root, .MuiToggleButton-root'
+      )
+    );
+  };
+
   // Click/Touch outside to deselect
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -241,13 +413,32 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
         }
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('touchstart', handleClickOutside);
+
+    document.addEventListener('pointerdown', handleClickOutside);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('touchstart', handleClickOutside);
+      document.removeEventListener('pointerdown', handleClickOutside);
     };
   }, [selectedWidget]);
+
+  // Safety net: if selection state and rendered controls drift out of sync, clear selection.
+  useEffect(() => {
+    if (locked || !selectedWidget) return;
+
+    const rafId = window.requestAnimationFrame(() => {
+      const selectedElement = containerRef.current?.querySelector('.widget-wrapper.selected');
+      if (!selectedElement) {
+        setSelectedWidget(null);
+        return;
+      }
+
+      const hasResizeControls = selectedElement.querySelector('.resize-button');
+      if (!hasResizeControls) {
+        setSelectedWidget(null);
+      }
+    });
+
+    return () => window.cancelAnimationFrame(rafId);
+  }, [locked, selectedWidget, layout]);
 
   const getWidgetRefreshInterval = (widgetId) => {
     const widgetSettings = JSON.parse(localStorage.getItem('widgetSettings') || '{}');
@@ -257,12 +448,17 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
       'calendar-widget': 'calendar',
       'photos-widget': 'photos',
       'weather-widget': 'weather',
-      'widget-gallery': 'widgetGallery'
     };
 
     const settingsKey = widgetMap[widgetId];
     if (settingsKey && widgetSettings[settingsKey]) {
       return widgetSettings[settingsKey].refreshInterval || 0;
+    }
+
+    if (widgetId.startsWith('plugin-')) {
+      const filename = widgetId.slice(7);
+      const pluginSettings = JSON.parse(localStorage.getItem('pluginSettings') || '{}');
+      return pluginSettings[filename]?.refreshInterval || 0;
     }
 
     return 0;
@@ -333,6 +529,17 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
           {widgets.map((widget) => {
             const isSelected = !locked && selectedWidget === widget.id;
             const currentLayout = layout.find(l => l.i === widget.id);
+            const fallbackLayout = {
+              i: widget.id,
+              x: widget.defaultPosition.x,
+              y: widget.defaultPosition.y,
+              w: widget.defaultSize.width,
+              h: widget.defaultSize.height,
+              minW: widget.minWidth || 3,
+              minH: widget.minHeight || 2,
+              static: locked,
+            };
+            const effectiveLayout = currentLayout || fallbackLayout;
             const canDecreaseWidth = currentLayout && currentLayout.w > currentLayout.minW;
             const canDecreaseHeight = currentLayout && currentLayout.h > currentLayout.minH;
             const canIncreaseWidth = currentLayout && (currentLayout.x + currentLayout.w < gridCols);
@@ -343,21 +550,17 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
               <Box
                 key={widget.id}
                 className={`widget-wrapper ${isSelected ? 'selected' : ''}`}
-                data-grid={{ ...currentLayout }}
-                onClick={(e) => {
+                data-grid={{ ...effectiveLayout }}
+                onPointerDown={(e) => {
                   if (!locked && !isSelected && !e.target.closest('.drag-handle') && !e.target.closest('.resize-button')) {
+                    if (isInteractiveTarget(e.target)) {
+                      if (selectedWidget) {
+                        setSelectedWidget(null);
+                      }
+                      return;
+                    }
+
                     e.stopPropagation();
-                    handleWidgetClick(widget.id, e);
-                  }
-                }}
-                onMouseDown={(e) => {
-                  if (!locked && !isSelected && !e.target.closest('.drag-handle') && !e.target.closest('.resize-button')) {
-                    e.stopPropagation();
-                    handleWidgetClick(widget.id, e);
-                  }
-                }}
-                onTouchStart={(e) => {
-                  if (!locked && !isSelected && !e.target.closest('.drag-handle') && !e.target.closest('.resize-button')) {
                     handleWidgetTouch(widget.id, e);
                   }
                 }}
@@ -374,18 +577,20 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                   backgroundColor: 'var(--card-bg)',
                   overflow: 'hidden',
                   cursor: locked ? 'default' : (isSelected ? 'move' : 'pointer'),
-                  touchAction: locked ? 'auto' : 'none',
-                  '&:hover': {
-                    border: locked
-                      ? '3px solid transparent'
-                      : (isSelected
-                        ? '3px solid var(--accent)'
-                        : '3px solid rgba(244, 114, 182, 0.3)'),
-                    boxShadow: locked
-                      ? '0 2px 8px rgba(0, 0, 0, 0.1)'
-                      : (isSelected
-                        ? '0 8px 32px rgba(244, 114, 182, 0.3)'
-                        : '0 4px 16px rgba(0, 0, 0, 0.15)'),
+                  touchAction: locked ? 'auto' : (isSelected ? 'none' : 'manipulation'),
+                  '@media (hover: hover) and (pointer: fine)': {
+                    '&:hover': {
+                      border: locked
+                        ? '3px solid transparent'
+                        : (isSelected
+                          ? '3px solid var(--accent)'
+                          : '3px solid rgba(244, 114, 182, 0.3)'),
+                      boxShadow: locked
+                        ? '0 2px 8px rgba(0, 0, 0, 0.1)'
+                        : (isSelected
+                          ? '0 8px 32px rgba(244, 114, 182, 0.3)'
+                          : '0 4px 16px rgba(0, 0, 0, 0.15)'),
+                    }
                   }
                 }}
               >
@@ -407,21 +612,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                     >
                       <Box
                         className="resize-button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'top', true, e);
-                        }}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'top', true, e);
-                        }}
-                        onTouchStart={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'top', true, e);
-                        }}
+                        onPointerDown={handleResizePointerDown(widget.id, 'top', true)}
                         sx={{
                           ...resizeButtonBaseStyle,
                           cursor: canDecreaseHeight ? 'pointer' : 'not-allowed',
@@ -439,21 +630,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       </Box>
                       <Box
                         className="resize-button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'top', false, e);
-                        }}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'top', false, e);
-                        }}
-                        onTouchStart={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'top', false, e);
-                        }}
+                        onPointerDown={handleResizePointerDown(widget.id, 'top', false)}
                         sx={{
                           ...resizeButtonBaseStyle,
                           cursor: canIncreaseTop ? 'pointer' : 'not-allowed',
@@ -487,21 +664,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                     >
                       <Box
                         className="resize-button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'right', true, e);
-                        }}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'right', true, e);
-                        }}
-                        onTouchStart={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'right', true, e);
-                        }}
+                        onPointerDown={handleResizePointerDown(widget.id, 'right', true)}
                         sx={{
                           ...resizeButtonBaseStyle,
                           cursor: canDecreaseWidth ? 'pointer' : 'not-allowed',
@@ -519,21 +682,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       </Box>
                       <Box
                         className="resize-button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'right', false, e);
-                        }}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'right', false, e);
-                        }}
-                        onTouchStart={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'right', false, e);
-                        }}
+                        onPointerDown={handleResizePointerDown(widget.id, 'right', false)}
                         sx={{
                           ...resizeButtonBaseStyle,
                           cursor: canIncreaseWidth ? 'pointer' : 'not-allowed',
@@ -566,21 +715,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                     >
                       <Box
                         className="resize-button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'bottom', true, e);
-                        }}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'bottom', true, e);
-                        }}
-                        onTouchStart={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'bottom', true, e);
-                        }}
+                        onPointerDown={handleResizePointerDown(widget.id, 'bottom', true)}
                         sx={{
                           ...resizeButtonBaseStyle,
                           cursor: canDecreaseHeight ? 'pointer' : 'not-allowed',
@@ -598,21 +733,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       </Box>
                       <Box
                         className="resize-button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'bottom', false, e);
-                        }}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'bottom', false, e);
-                        }}
-                        onTouchStart={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'bottom', false, e);
-                        }}
+                        onPointerDown={handleResizePointerDown(widget.id, 'bottom', false)}
                         sx={{
                           ...resizeButtonBaseStyle,
                           cursor: 'pointer',
@@ -645,21 +766,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                     >
                       <Box
                         className="resize-button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'left', true, e);
-                        }}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'left', true, e);
-                        }}
-                        onTouchStart={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'left', true, e);
-                        }}
+                        onPointerDown={handleResizePointerDown(widget.id, 'left', true)}
                         sx={{
                           ...resizeButtonBaseStyle,
                           cursor: canDecreaseWidth ? 'pointer' : 'not-allowed',
@@ -677,21 +784,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                       </Box>
                       <Box
                         className="resize-button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'left', false, e);
-                        }}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'left', false, e);
-                        }}
-                        onTouchStart={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleResize(widget.id, 'left', false, e);
-                        }}
+                        onPointerDown={handleResizePointerDown(widget.id, 'left', false)}
                         sx={{
                           ...resizeButtonBaseStyle,
                           cursor: canIncreaseLeft ? 'pointer' : 'not-allowed',
@@ -741,13 +834,19 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                     width: '100%',
                     height: '100%',
                     overflow: 'auto',
-                    pointerEvents: isSelected ? 'none' : 'auto',
+                    pointerEvents: (locked || !isSelected) ? 'auto' : 'none',
                     display: 'flex',
                     flexDirection: 'column',
                   }}
                 >
                   {React.cloneElement(widget.content, {
-                    key: refreshKeys[widget.id] || 0
+                    key: refreshKeys[widget.id] || 0,
+                    widgetId: widget.id,
+                    activeTabId,
+                    widgetSize: {
+                      width: effectiveLayout.w,
+                      height: effectiveLayout.h,
+                    },
                   })}
                 </Box>
               </Box>

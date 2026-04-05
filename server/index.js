@@ -21,6 +21,24 @@ const cron = require('node-cron');
 // For widget upload and registry
 const widgetRegistryPath = path.join(__dirname, 'widgets_registry.json');
 
+// Calendar sync service
+const CalendarSyncService = require('./services/calendarSync');
+let calendarSyncService = null;
+
+const initializeDatabase = require('./migrations/initializeDatabase');
+const migrateChoresDatabase = require('./migrations/migrateChoresDatabase');
+const migrateClamsToHistory = require('./migrations/migrateClamsToHistory');
+const migrateChoreHistoryTitle = require('./migrations/migrateChoreHistoryTitle');
+const migrateToDurationField = require('./migrations/migrateToDurationField');
+
+const SYSTEM_SCHEMA_ID_KEY = 'SYSTEM_SCHEMA_ID';
+
+const schemaMigrations = [
+  { schemaId: 6, migrationPath: './migrations/migrateDeviceSchemaV6', },
+  { schemaId: 7, migrationPath: './migrations/schema7-proveMigrations', },
+  { schemaId: 8, migrationPath: './migrations/schema8-calendarCacheTables', },
+];
+
 // GitHub API configuration
 const GITHUB_REPO_OWNER = 'jherforth';
 const GITHUB_REPO_NAME = 'HomeGlowPlugins';
@@ -115,17 +133,30 @@ fastify.register(require('@fastify/static'), {
 fastify.get('/widgets/:filename', async (request, reply) => {
   const { filename } = request.params;
   const filePath = path.join(__dirname, 'widgets', filename);
-  
+
   console.log(`Widget request for: ${filename}`);
   console.log(`Looking for file at: ${filePath}`);
-  
+
   try {
     const stats = await fs.stat(filePath);
     console.log(`File exists, size: ${stats.size} bytes`);
-    
-    const content = await fs.readFile(filePath, 'utf-8');
+
+    let content = await fs.readFile(filePath, 'utf-8');
     console.log(`File content preview: ${content.substring(0, 100)}...`);
-    
+
+    content = content.replace(/window\.location\.origin\.replace\(['"`]:\d+['"`],\s*['"`]:\d+['"`]\)/g, 'window.location.origin');
+    content = content.replace(/\$\{window\.location\.protocol\}\/\/\$\{window\.location\.hostname\}:\d+/g, '${window.location.origin}');
+    content = content.replace(/window\.location\.protocol\s*\+\s*'\/\/'\s*\+\s*window\.location\.hostname\s*\+\s*':\d+'/g, 'window.location.origin');
+
+    const overflowFix = `<style>html,body{max-width:100%!important;overflow-x:hidden!important;box-sizing:border-box;}*{box-sizing:border-box;}</style>`;
+    if (content.includes('</head>')) {
+      content = content.replace('</head>', `${overflowFix}</head>`);
+    } else if (content.includes('<body')) {
+      content = content.replace('<body', `${overflowFix}<body`);
+    } else {
+      content = overflowFix + content;
+    }
+
     reply.header('Content-Type', 'text/html');
     return content;
   } catch (error) {
@@ -136,8 +167,8 @@ fastify.get('/widgets/:filename', async (request, reply) => {
 
 // Add a simple test endpoint
 fastify.get('/api/test', async (request, reply) => {
-  return { 
-    message: 'Server is working!', 
+  return {
+    message: 'Server is working!',
     timestamp: new Date().toISOString(),
     widgetsDir: path.join(__dirname, 'widgets')
   };
@@ -153,14 +184,14 @@ fastify.get('/index.css', async (request, reply) => {
       '/app/client/src/index.css',
       path.join(process.cwd(), 'client', 'src', 'index.css')
     ];
-    
+
     console.log('Looking for CSS file in paths:', possiblePaths);
     console.log('Current working directory:', process.cwd());
     console.log('__dirname:', __dirname);
-    
+
     let cssContent = null;
     let successPath = null;
-    
+
     for (const cssPath of possiblePaths) {
       try {
         cssContent = await fs.readFile(cssPath, 'utf-8');
@@ -171,17 +202,17 @@ fastify.get('/index.css', async (request, reply) => {
         console.log('Failed to read CSS from:', cssPath, pathError.message);
       }
     }
-    
+
     if (cssContent) {
       reply.header('Content-Type', 'text/css');
       reply.header('Access-Control-Allow-Origin', '*');
       return cssContent;
     }
-    
+
     throw new Error('CSS file not found in any expected location');
   } catch (error) {
     console.error('Error serving index.css:', error);
-    
+
     // Fallback: serve minimal CSS for widgets
     const fallbackCSS = `
       :root {
@@ -208,7 +239,7 @@ fastify.get('/index.css', async (request, reply) => {
         --dark-button-gradient-end: #620808;
         --gradient: linear-gradient(45deg, var(--light-gradient-start), var(--light-gradient-end));
       }
-      
+
       [data-theme="dark"] {
         --background: #0a0a1a;
         --card-bg: rgba(30, 30, 50, 0.7);
@@ -220,7 +251,7 @@ fastify.get('/index.css', async (request, reply) => {
         --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
         --gradient: linear-gradient(45deg, var(--dark-gradient-start), var(--dark-gradient-end));
       }
-      
+
       html, body {
         margin: 0;
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -234,7 +265,7 @@ fastify.get('/index.css', async (request, reply) => {
         overflow-y: auto;
         font-size: var(--dynamic-text-size);
       }
-      
+
       .card {
         background: var(--card-bg);
         border: 1px solid var(--card-border);
@@ -247,18 +278,18 @@ fastify.get('/index.css', async (request, reply) => {
         max-width: var(--dynamic-card-width);
         touch-action: manipulation;
       }
-      
+
       .card:hover {
         transform: translateY(-5px);
         box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
       }
-      
+
       h1, h2, h3, h4, h5, h6 {
         font-weight: 700;
         letter-spacing: 0.5px;
         color: var(--text-color);
       }
-      
+
       button {
         background: linear-gradient(45deg, var(--light-button-gradient-start), var(--light-button-gradient-end));
         color: var(--text-color);
@@ -271,16 +302,16 @@ fastify.get('/index.css', async (request, reply) => {
         transition: background 0.3s ease;
         touch-action: manipulation;
       }
-      
+
       [data-theme="dark"] button {
         background: linear-gradient(45deg, var(--dark-button-gradient-start), var(--dark-button-gradient-end));
       }
-      
+
       button:hover {
         filter: brightness(1.1);
       }
     `;
-    
+
     console.log('Serving fallback CSS');
     reply.header('Content-Type', 'text/css');
     reply.header('Access-Control-Allow-Origin', '*');
@@ -370,10 +401,10 @@ fastify.get('/api/widgets/debug', async (request, reply) => {
   try {
     const widgetsDir = path.join(__dirname, 'widgets');
     console.log(`Checking widgets directory: ${widgetsDir}`);
-    
+
     const files = await fs.readdir(widgetsDir);
     console.log(`Files in widgets directory:`, files);
-    
+
     const fileDetails = [];
     for (const file of files) {
       const filePath = path.join(widgetsDir, file);
@@ -392,7 +423,7 @@ fastify.get('/api/widgets/debug', async (request, reply) => {
         });
       }
     }
-    
+
     return {
       directory: widgetsDir,
       files: fileDetails,
@@ -408,7 +439,7 @@ fastify.get('/api/widgets/debug', async (request, reply) => {
 fastify.get('/api/widgets/github', async (request, reply) => {
   try {
     console.log('Fetching widgets from GitHub repository...');
-    
+
     // Get repository contents
     const repoUrl = `${GITHUB_API_BASE}/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/contents`;
     const response = await axios.get(repoUrl, {
@@ -420,13 +451,13 @@ fastify.get('/api/widgets/github', async (request, reply) => {
     });
 
     // Filter for HTML files and directories
-    const items = response.data.filter(item => 
+    const items = response.data.filter(item =>
       item.type === 'file' && item.name.endsWith('.html') ||
       item.type === 'dir'
     );
 
     const widgets = [];
-    
+
     for (const item of items) {
       if (item.type === 'file' && item.name.endsWith('.html')) {
         // Direct HTML file in root
@@ -450,11 +481,11 @@ fastify.get('/api/widgets/github', async (request, reply) => {
             },
             timeout: 5000
           });
-          
-          const htmlFiles = dirResponse.data.filter(file => 
+
+          const htmlFiles = dirResponse.data.filter(file =>
             file.type === 'file' && file.name.endsWith('.html')
           );
-          
+
           for (const htmlFile of htmlFiles) {
             widgets.push({
               name: `${item.name}/${htmlFile.name.replace('.html', '')}`,
@@ -475,18 +506,18 @@ fastify.get('/api/widgets/github', async (request, reply) => {
 
     console.log(`Found ${widgets.length} widgets in GitHub repository`);
     return widgets;
-    
+
   } catch (error) {
     console.error('Error fetching GitHub widgets:', error);
     if (error.response) {
-      return reply.status(error.response.status).send({ 
+      return reply.status(error.response.status).send({
         error: `GitHub API error: ${error.response.status} ${error.response.statusText}`,
-        details: error.response.data 
+        details: error.response.data
       });
     }
-    return reply.status(500).send({ 
+    return reply.status(500).send({
       error: 'Failed to fetch widgets from GitHub repository',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -495,13 +526,13 @@ fastify.get('/api/widgets/github', async (request, reply) => {
 fastify.post('/api/widgets/github/install', async (request, reply) => {
   try {
     const { download_url, filename, name } = request.body;
-    
+
     if (!download_url || !filename) {
       return reply.status(400).send({ error: 'download_url and filename are required' });
     }
 
     console.log(`Installing widget ${filename} from GitHub...`);
-    
+
     // Download the widget file
     const response = await axios.get(download_url, {
       headers: {
@@ -510,18 +541,18 @@ fastify.post('/api/widgets/github/install', async (request, reply) => {
       },
       timeout: 15000
     });
-    
+
     // Sanitize filename
     const sanitizedFilename = filename.replace(/[^a-zA-Z0-9-._]/g, '_');
     const savePath = path.join(__dirname, 'widgets', sanitizedFilename);
-    
+
     // Save the widget file
     await fs.writeFile(savePath, response.data, 'utf-8');
-    
+
     // Update registry
     const registry = await loadWidgetRegistry();
     const existingWidget = registry.find(w => w.filename === sanitizedFilename);
-    
+
     if (!existingWidget) {
       registry.push({
         name: name || sanitizedFilename.replace('.html', ''),
@@ -532,25 +563,25 @@ fastify.post('/api/widgets/github/install', async (request, reply) => {
       });
       await saveWidgetRegistry(registry);
     }
-    
+
     console.log(`Successfully installed widget: ${sanitizedFilename}`);
-    return { 
-      success: true, 
-      message: 'Widget installed successfully!', 
-      widget: sanitizedFilename 
+    return {
+      success: true,
+      message: 'Widget installed successfully!',
+      widget: sanitizedFilename
     };
-    
+
   } catch (error) {
     console.error('Error installing GitHub widget:', error);
     if (error.response) {
-      return reply.status(error.response.status).send({ 
+      return reply.status(error.response.status).send({
         error: `Failed to download widget: ${error.response.status} ${error.response.statusText}`,
-        details: error.response.data 
+        details: error.response.data
       });
     }
-    return reply.status(500).send({ 
+    return reply.status(500).send({
       error: 'Failed to install widget from GitHub',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -560,515 +591,68 @@ const dbPath = path.resolve(__dirname, 'data', 'tasks.db');
 console.log('Database path:', dbPath);
 let db; // Declare db variable outside to hold the single instance
 
-async function initializeDatabase() {
+async function ConnectOrCreateDb() {
   try {
-    // Ensure the 'data' directory exists and is writable
     await fs.mkdir(path.dirname(dbPath), { recursive: true });
-    await fs.chmod(path.dirname(dbPath), 0o777); // Ensure directory is writable
+    await fs.chmod(path.dirname(dbPath), 0o777);
+
     const newDb = new Database(dbPath, { verbose: console.log });
-    newDb.exec(`
-      CREATE TABLE IF NOT EXISTS chores (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        title TEXT,\
-        description TEXT,\
-        time_period TEXT,\
-        assigned_day_of_week TEXT,\
-        repeat_type TEXT,\
-        completed BOOLEAN,
-        clam_value INTEGER DEFAULT 0,
-        expiration_date TEXT
-      );\
-      CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,\
-        username TEXT,\
-        email TEXT,\
-        profile_picture TEXT
-      );
-      INSERT OR IGNORE INTO users (id, username, email, profile_picture) VALUES (0, 'bonus', 'bonus@example.com', '');\
-      CREATE TABLE IF NOT EXISTS events (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,\
-        user_id INTEGER,\
-        summary TEXT,\
-        start TEXT,\
-        end TEXT,\
-        description TEXT
-      );\
-      CREATE TABLE IF NOT EXISTS settings (
-        key TEXT PRIMARY KEY,
-        value TEXT
-      );
-      CREATE TABLE IF NOT EXISTS prizes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        clam_cost INTEGER NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS calendar_sources (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        type TEXT NOT NULL,
-        url TEXT NOT NULL,
-        username TEXT,
-        password TEXT,
-        color TEXT NOT NULL DEFAULT '#6e44ff',
-        enabled INTEGER NOT NULL DEFAULT 1,
-        sort_order INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE INDEX IF NOT EXISTS idx_calendar_sources_enabled ON calendar_sources(enabled);
-      CREATE INDEX IF NOT EXISTS idx_calendar_sources_sort_order ON calendar_sources(sort_order);
-      CREATE TABLE IF NOT EXISTS photo_sources (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        type TEXT NOT NULL,
-        url TEXT,
-        api_key TEXT,
-        username TEXT,
-        password TEXT,
-        album_id TEXT,
-        refresh_token TEXT,
-        enabled INTEGER NOT NULL DEFAULT 1,
-        sort_order INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE INDEX IF NOT EXISTS idx_photo_sources_enabled ON photo_sources(enabled);
-      CREATE INDEX IF NOT EXISTS idx_photo_sources_sort_order ON photo_sources(sort_order);
-      CREATE TABLE IF NOT EXISTS admin_pin (
-        id INTEGER PRIMARY KEY CHECK (id = 1),
-        pin_hash TEXT NOT NULL,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-    
-    // Migration: Add repeat_type column if it doesn't exist and remove old repeats column
-    try {
-      // Check if repeat_type column exists
-      const columns = newDb.prepare("PRAGMA table_info(chores)").all();
-      const hasRepeatType = columns.some(col => col.name === 'repeat_type');
-      const hasRepeats = columns.some(col => col.name === 'repeats');
-      
-      if (!hasRepeatType) {
-        console.log('Adding repeat_type column to chores table...');
-        newDb.exec('ALTER TABLE chores ADD COLUMN repeat_type TEXT DEFAULT "no-repeat"');
-        
-        // If old repeats column exists, migrate data
-        if (hasRepeats) {
-          console.log('Migrating data from repeats to repeat_type...');
-          newDb.exec(`
-            UPDATE chores 
-            SET repeat_type = CASE 
-              WHEN repeats = 1 OR repeats = 'true' THEN 'weekly'
-              ELSE 'no-repeat'
-            END
-          `);
-        }
-      }
-      
-      // Remove old repeats column if it exists
-      if (hasRepeats) {
-        console.log('Removing old repeats column...');
-        // SQLite doesn't support DROP COLUMN directly, so we need to recreate the table
-        newDb.exec(`
-          CREATE TABLE chores_new (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            title TEXT,
-            description TEXT,
-            time_period TEXT,
-            assigned_day_of_week TEXT,
-            repeat_type TEXT,
-            completed BOOLEAN,
-            clam_value INTEGER DEFAULT 0,
-            expiration_date TEXT
-          );
-          
-          INSERT INTO chores_new (id, user_id, title, description, time_period, assigned_day_of_week, repeat_type, completed, clam_value, expiration_date)
-          SELECT id, user_id, title, description, time_period, assigned_day_of_week, repeat_type, completed, clam_value, expiration_date
-          FROM chores;
-          
-          DROP TABLE chores;
-          ALTER TABLE chores_new RENAME TO chores;
-        `);
-        console.log('Migration completed successfully!');
-      }
-      
-    } catch (migrationError) {
-      console.error('Migration error:', migrationError);
-      // Continue anyway - the app might still work with the new schema
-    }
-
-    // Migration: Move existing ICS_CALENDAR_URL to calendar_sources table
-    try {
-      const existingCalendars = newDb.prepare('SELECT COUNT(*) as count FROM calendar_sources').get();
-      if (existingCalendars.count === 0) {
-        const icsUrlSetting = newDb.prepare('SELECT value FROM settings WHERE key = ?').get('ICS_CALENDAR_URL');
-        if (icsUrlSetting && icsUrlSetting.value) {
-          console.log('Migrating existing ICS_CALENDAR_URL to calendar_sources table...');
-          newDb.prepare(`
-            INSERT INTO calendar_sources (name, type, url, color, enabled, sort_order)
-            VALUES (?, ?, ?, ?, ?, ?)
-          `).run('Default Calendar', 'ICS', icsUrlSetting.value, '#6e44ff', 1, 0);
-          console.log('ICS calendar migrated successfully!');
-        }
-      }
-    } catch (calendarMigrationError) {
-      console.error('Calendar migration error:', calendarMigrationError);
-    }
-
-    return newDb; // Return the new database instance
+    newDb.pragma('foreign_keys = ON');
+    return newDb;
   } catch (error) {
-    console.error('Failed to initialize database:', error);
+    console.error('Failed to connect or create database:', error);
     throw error;
   }
 }
 
-// Helper function to convert old repeat_type to crontab expression
-function convertRepeatTypeToCrontab(repeat_type, assigned_day_of_week) {
-  const dayMap = {
-    'sunday': '0',
-    'monday': '1',
-    'tuesday': '2',
-    'wednesday': '3',
-    'thursday': '4',
-    'friday': '5',
-    'saturday': '6'
+function doesTableExist(tableName) {
+  const table = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+    .get(tableName);
+  return !!table;
+}
+
+async function runLegacyMigrations() {
+  await initializeDatabase(db);
+  await migrateChoresDatabase(db, getTodayLocalDateString);
+  await migrateClamsToHistory(db, getTodayLocalDateString);
+  await migrateChoreHistoryTitle(db);
+  await migrateToDurationField(db);
+}
+
+function getCurrentSchemaVersion() {
+  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(SYSTEM_SCHEMA_ID_KEY);
+  return row ? parseInt(row.value, 10) || 0 : 0;
+}
+
+function runSchemaMigrationModule(migration) {
+  globalThis.__HOMEGLOW_SCHEMA_MIGRATION_CONTEXT = {
+    db,
+    schemaIdKey: SYSTEM_SCHEMA_ID_KEY,
+    targetSchemaId: migration.schemaId,
   };
 
-  switch (repeat_type) {
-    case 'daily':
-      return '0 0 * * *';
-    case 'weekly':
-      const dayNum = dayMap[assigned_day_of_week.toLowerCase()] || '1';
-      return `0 0 * * ${dayNum}`;
-    case 'until-completed':
-      return '0 0 * * *';
-    case 'no-repeat':
-      return null;
-    default:
-      return '0 0 * * *';
+  try {
+    delete require.cache[require.resolve(migration.migrationPath)];
+    require(migration.migrationPath);
+  } finally {
+    delete globalThis.__HOMEGLOW_SCHEMA_MIGRATION_CONTEXT;
   }
 }
 
-// Database migration function
-async function migrateChoresDatabase() {
-  try {
-    console.log('=== Checking for database migration ===');
+async function applySchemaMigrations(currentSchemaId) {
+  const pendingMigrations = schemaMigrations
+    .filter(migration => migration.schemaId > currentSchemaId)
+    .sort((a, b) => a.schemaId - b.schemaId);
 
-    const migrationVersionRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('chores_migration_version');
-    const currentVersion = migrationVersionRow ? parseInt(migrationVersionRow.value) : 0;
-
-    if (currentVersion >= 1) {
-      console.log('Migration already completed (version:', currentVersion, ')');
-      return;
-    }
-
-    console.log('=== Starting chores database migration ===');
-
-    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('migration_in_progress', '1');
-
-    console.log('Step 1: Creating new tables...');
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS chore_schedules (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        chore_id INTEGER NOT NULL,
-        user_id INTEGER NULL,
-        crontab TEXT NULL,
-        visible INTEGER NOT NULL DEFAULT 1,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (chore_id) REFERENCES chores(id) ON DELETE CASCADE
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_chore_schedules_chore_id ON chore_schedules(chore_id);
-      CREATE INDEX IF NOT EXISTS idx_chore_schedules_user_id ON chore_schedules(user_id);
-      CREATE INDEX IF NOT EXISTS idx_chore_schedules_visible ON chore_schedules(visible);
-
-      CREATE TABLE IF NOT EXISTS chore_history (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        chore_schedule_id INTEGER NULL,
-        date TEXT NOT NULL,
-        clam_value INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (chore_schedule_id) REFERENCES chore_schedules(id) ON DELETE SET NULL
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_chore_history_user_id ON chore_history(user_id);
-      CREATE INDEX IF NOT EXISTS idx_chore_history_date ON chore_history(date);
-      CREATE INDEX IF NOT EXISTS idx_chore_history_user_date ON chore_history(user_id, date);
-    `);
-    console.log('New tables created successfully');
-
-    console.log('Step 2: Backing up existing chores...');
-    const existingChores = db.prepare('SELECT * FROM chores').all();
-    console.log(`Found ${existingChores.length} existing chores to migrate`);
-
-    console.log('Step 3: Creating backup table...');
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS chores_backup AS SELECT * FROM chores;
-    `);
-
-    console.log('Step 4: Creating new chores table structure...');
-    db.exec(`
-      CREATE TABLE chores_new (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT NOT NULL,
-        description TEXT,
-        clam_value INTEGER DEFAULT 0
-      );
-    `);
-
-    console.log('Step 5: Migrating chore data...');
-    const today = getTodayLocalDateString();
-    const processedChores = new Map();
-
-    for (const oldChore of existingChores) {
-      let choreId;
-
-      const key = `${oldChore.title}-${oldChore.description || ''}-${oldChore.clam_value}`;
-
-      if (processedChores.has(key)) {
-        choreId = processedChores.get(key);
-      } else {
-        const insertResult = db.prepare(`
-          INSERT INTO chores_new (title, description, clam_value)
-          VALUES (?, ?, ?)
-        `).run(oldChore.title, oldChore.description, oldChore.clam_value || 0);
-
-        choreId = insertResult.lastInsertRowid;
-        processedChores.set(key, choreId);
-      }
-
-      const crontab = convertRepeatTypeToCrontab(
-        oldChore.repeat_type || 'weekly',
-        oldChore.assigned_day_of_week || 'monday'
-      );
-
-      const visible = (oldChore.repeat_type === 'no-repeat' && oldChore.completed) ? 0 : 1;
-
-      const scheduleResult = db.prepare(`
-        INSERT INTO chore_schedules (chore_id, user_id, crontab, visible)
-        VALUES (?, ?, ?, ?)
-      `).run(choreId, oldChore.user_id, crontab, visible);
-
-      if (oldChore.completed && oldChore.completed === 1) {
-        db.prepare(`
-          INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value)
-          VALUES (?, ?, ?, ?)
-        `).run(oldChore.user_id, scheduleResult.lastInsertRowid, today, oldChore.clam_value || 0);
-      }
-    }
-
-    console.log('Step 6: Replacing old chores table...');
-    db.exec(`
-      DROP TABLE chores;
-      ALTER TABLE chores_new RENAME TO chores;
-    `);
-
-    console.log('Step 7: Updating migration version...');
-    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('chores_migration_version', '1');
-    db.prepare('DELETE FROM settings WHERE key = ?').run('migration_in_progress');
-
-    console.log('=== Migration completed successfully ===');
-    console.log(`Migrated ${existingChores.length} chores, created ${processedChores.size} unique chore definitions`);
-
-  } catch (error) {
-    console.error('=== Migration failed ===');
-    console.error('Error:', error);
-    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('migration_error', error.message);
-    throw error;
+  if (pendingMigrations.length === 0) {
+    console.log(`No pending schema migrations. Current schema ID: ${currentSchemaId}`);
+    return;
   }
-}
 
-async function migrateClamsToHistory() {
-  try {
-    console.log('=== Checking for clam_total migration ===');
-
-    const migrationVersionRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('clam_migration_version');
-    const currentVersion = migrationVersionRow ? parseInt(migrationVersionRow.value) : 0;
-
-    if (currentVersion >= 1) {
-      console.log('Clam migration already completed (version:', currentVersion, ')');
-      return;
-    }
-
-    const columns = db.prepare("PRAGMA table_info(users)").all();
-    const hasClaimTotal = columns.some(col => col.name === 'clam_total');
-
-    if (!hasClaimTotal) {
-      console.log('clam_total column does not exist, skipping migration');
-      db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('clam_migration_version', '1');
-      return;
-    }
-
-    console.log('=== Starting clam_total to chore_history migration ===');
-
-    const today = getTodayLocalDateString();
-
-    const usersWithClams = db.prepare('SELECT id, username, clam_total FROM users WHERE clam_total > 0 AND id != 0').all();
-    console.log(`Found ${usersWithClams.length} users with clam_total > 0`);
-
-    for (const user of usersWithClams) {
-      db.prepare(`
-        INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value)
-        VALUES (?, NULL, ?, ?)
-      `).run(user.id, today, user.clam_total);
-      console.log(`Migrated ${user.clam_total} clams for user "${user.username}" (ID: ${user.id})`);
-    }
-
-    console.log('Removing clam_total column from users table...');
-    db.exec(`
-      CREATE TABLE users_new (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT,
-        email TEXT,
-        profile_picture TEXT
-      );
-      INSERT INTO users_new (id, username, email, profile_picture)
-      SELECT id, username, email, profile_picture FROM users;
-      DROP TABLE users;
-      ALTER TABLE users_new RENAME TO users;
-    `);
-
-    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('clam_migration_version', '1');
-
-    console.log('=== Clam migration completed successfully ===');
-    console.log(`Migrated clams for ${usersWithClams.length} users`);
-
-  } catch (error) {
-    console.error('=== Clam migration failed ===');
-    console.error('Error:', error);
-    throw error;
-  }
-}
-
-async function migrateChoreHistoryTitle() {
-  try {
-    const columns = db.prepare("PRAGMA table_info(chore_history)").all();
-    const hasTitle = columns.some(col => col.name === 'title');
-    if (!hasTitle) {
-      db.exec("ALTER TABLE chore_history ADD COLUMN title TEXT DEFAULT NULL");
-      console.log('Added title column to chore_history');
-    }
-  } catch (error) {
-    console.error('Error migrating chore_history title:', error);
-    throw error;
-  }
-}
-
-async function migrateToDurationField() {
-  try {
-    console.log('=== Checking for duration field migration ===');
-
-    const migrationVersionRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('duration_migration_version');
-    const currentVersion = migrationVersionRow ? parseInt(migrationVersionRow.value) : 0;
-
-    if (currentVersion >= 1) {
-      console.log('Duration migration already completed (version:', currentVersion, ')');
-      return;
-    }
-
-    console.log('=== Starting duration field migration ===');
-
-    const columns = db.prepare("PRAGMA table_info(chore_schedules)").all();
-    const hasDuration = columns.some(col => col.name === 'duration');
-
-    if (!hasDuration) {
-      console.log('Adding duration column to chore_schedules table...');
-      db.exec('ALTER TABLE chore_schedules ADD COLUMN duration TEXT DEFAULT "day-of"');
-      console.log('Duration column added successfully');
-    }
-
-    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('duration_migration_version', '1');
-
-    console.log('=== Duration migration completed successfully ===');
-
-  } catch (error) {
-    console.error('=== Duration migration failed ===');
-    console.error('Error:', error);
-    throw error;
-  }
-}
-
-// Initialize default settings
-function initializeDefaultSettings() {
-  try {
-    const existingSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('daily_completion_clam_reward');
-    if (!existingSetting) {
-      db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('daily_completion_clam_reward', '2');
-      console.log('Initialized default daily completion clam reward setting to 2');
-    }
-  } catch (error) {
-    console.error('Error initializing default settings:', error);
-  }
-}
-
-// Function to prune and reset chores based on the day
-async function pruneAndResetChores() {
-  try {
-    const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    const currentDay = days[new Date().getDay()];
-    const now = new Date();
-
-    // Select all chores to process
-    const allChores = db.prepare('SELECT id, user_id, assigned_day_of_week, repeat_type, completed, clam_value, expiration_date FROM chores').all();
-
-    for (const chore of allChores) {
-      // Handle bonus chores
-      if (chore.clam_value > 0) {
-        // If bonus chore is completed, delete it
-        if (chore.completed) {
-          db.prepare('DELETE FROM chores WHERE id = ?').run(chore.id);
-          console.log(`Deleted completed bonus chore ID ${chore.id}.`);
-        } else if (chore.expiration_date) {
-          // If bonus chore is not completed and has an expiration date
-          const expirationDate = new Date(chore.expiration_date);
-          if (now > expirationDate) {
-            // Reassign to bonus user (ID 0) and reset completed status
-            db.prepare('UPDATE chores SET user_id = 0, completed = 0, expiration_date = NULL WHERE id = ?').run(chore.id);
-            console.log(`Reassigned expired bonus chore ID ${chore.id} back to bonus user.`);
-          }
-        }
-      } else {
-        // Handle regular chores (existing logic)
-        if (chore.completed) {
-          if (chore.repeat_type === "no-repeat") {
-            // Only delete non-repeating chores if they're not for today
-            if (chore.assigned_day_of_week !== currentDay) {
-              db.prepare('DELETE FROM chores WHERE id = ?').run(chore.id);
-              console.log(`Deleted non-repeating chore ID ${chore.id}.`);
-            }
-          } else if (chore.repeat_type === "until-completed") {
-            // Delete "until-completed" chores once they're completed
-            db.prepare('DELETE FROM chores WHERE id = ?').run(chore.id);
-            console.log(`Deleted "until-completed" chore ID ${chore.id} after completion.`);
-          } else if (chore.repeat_type === "weekly" || chore.repeat_type === "daily") {
-            // For daily chores, reset every day. For weekly chores, reset when it's their assigned day again
-            if (chore.repeat_type === "daily" || chore.assigned_day_of_week === currentDay) {
-              db.prepare('UPDATE chores SET completed = 0 WHERE id = ?').run(chore.id);
-              console.log(`Reset repeating chore ID ${chore.id} to uncompleted.`);
-            }
-          }
-        }
-        
-        // Handle "until-completed" chores that need to appear on new days
-        if (!chore.completed && chore.repeat_type === "until-completed") {
-          // For "until-completed" chores that aren't completed, check if they should repeat daily
-          if (chore.assigned_day_of_week !== currentDay) {
-            // Create a new instance for today if it doesn't exist
-            const existingTodayChore = db.prepare('SELECT id FROM chores WHERE user_id = ? AND title = ? AND assigned_day_of_week = ? AND repeat_type = "until-completed"').get(chore.user_id, chore.title, currentDay);
-            if (!existingTodayChore) {
-              db.prepare('INSERT INTO chores (user_id, title, description, time_period, assigned_day_of_week, repeat_type, completed, clam_value, expiration_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
-                chore.user_id, chore.title, chore.description || '', chore.time_period || 'any-time', currentDay, 'until-completed', 0, 0, null
-              );
-              console.log(`Created new "until-completed" chore instance for today: ${chore.title}`);
-            }
-          }
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Error during chore pruning and reset:', error);
+  for (const migration of pendingMigrations) {
+    console.log(`Running schema migration path ${migration.migrationPath} (target schema ID: ${migration.schemaId})`);
+    runSchemaMigrationModule(migration);
   }
 }
 
@@ -1228,6 +812,171 @@ function startNightlyCronJob() {
   console.log('Daily background processing cron job scheduled for midnight');
 }
 
+function ensureHomeTabExists(deviceName) {
+  // Insert default home tab if it doesn't exist
+  try {
+    const homeTab = db.prepare('SELECT id FROM tabs WHERE number = 1 AND device_name = ?').get(deviceName);
+    if (!homeTab) {
+      db.prepare('INSERT INTO tabs (label, icon, show_label, number, device_name) VALUES (?, ?, ?, ?, ?)').run('Home', 'home', 1, 1, deviceName);
+      console.log('Default home tab created');
+    }
+  } catch (error) {
+    console.error('Error creating default home tab:', error);
+  }
+}
+function ensureDeviceExists(deviceName) {
+  db.prepare('INSERT OR IGNORE INTO devices (name, updateTime) VALUES (?, CURRENT_TIMESTAMP)').run(deviceName);
+  ensureHomeTabExists(deviceName);
+}
+function touchDeviceUpdateTime(deviceName) {
+  db.prepare('UPDATE devices SET updateTime = CURRENT_TIMESTAMP WHERE name = ?').run(deviceName);
+}
+
+// Devices API Endpoints
+fastify.get('/api/devices', async (request, reply) => {
+  try {
+    const devices = db.prepare(`
+      SELECT
+        d.name,
+        d.updateTime,
+        COUNT(wta.id) AS widgets
+      FROM devices d
+      LEFT JOIN widget_tab_assignments wta ON wta.device_name = d.name
+      GROUP BY d.name, d.updateTime
+      ORDER BY d.updateTime DESC
+    `).all();
+
+    return devices;
+  } catch (error) {
+    console.error('Error fetching devices:', error);
+    reply.status(500).send({ error: 'Failed to fetch devices' });
+  }
+});
+
+
+fastify.patch('/api/devices/:deviceName', async (request, reply) => {
+  const { deviceName } = request.params;
+  const { name: newName } = request.body || {};
+
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+
+  if (!newName || typeof newName !== 'string' || !newName.trim()) {
+    return reply.status(400).send({ error: 'name is required' });
+  }
+
+  const trimmedNewName = newName.trim();
+
+  if (trimmedNewName === deviceName) {
+    return { success: true, name: trimmedNewName, message: 'Device name unchanged' };
+  }
+
+  try {
+    const existingDevice = db.prepare('SELECT name FROM devices WHERE name = ?').get(deviceName);
+    if (!existingDevice) {
+      return reply.status(404).send({ error: 'Device not found' });
+    }
+
+    const alreadyUsed = db.prepare('SELECT name FROM devices WHERE name = ?').get(trimmedNewName);
+    if (alreadyUsed) {
+      return reply.status(409).send({ error: 'A device with that name already exists' });
+    }
+
+    db.prepare('UPDATE devices SET name = ?, updateTime = CURRENT_TIMESTAMP WHERE name = ?').run(trimmedNewName, deviceName);
+    return { success: true, name: trimmedNewName, message: 'Device name updated successfully' };
+  } catch (error) {
+    console.error('Error updating device name:', error);
+    reply.status(500).send({ error: 'Failed to update device name' });
+  }
+});
+
+fastify.post('/api/devices/:deviceName/copy-from/:sourceDeviceName', async (request, reply) => {
+  const { deviceName, sourceDeviceName } = request.params;
+
+  if (!deviceName || !sourceDeviceName) {
+    return reply.status(400).send({ error: 'deviceName and sourceDeviceName are required' });
+  }
+
+  if (deviceName === sourceDeviceName) {
+    return reply.status(400).send({ error: 'Source and destination devices must be different' });
+  }
+
+  try {
+    const sourceExists = db.prepare('SELECT name FROM devices WHERE name = ?').get(sourceDeviceName);
+    if (!sourceExists) {
+      return reply.status(404).send({ error: 'Source device not found' });
+    }
+
+    ensureDeviceExists(deviceName);
+
+    const copyTransaction = db.transaction(() => {
+      db.prepare('DELETE FROM widget_tab_assignments WHERE device_name = ?').run(deviceName);
+      db.prepare('DELETE FROM tabs WHERE device_name = ?').run(deviceName);
+
+      db.prepare(`
+        INSERT INTO tabs (device_name, label, icon, show_label, number)
+        SELECT ?, label, icon, show_label, number
+        FROM tabs
+        WHERE device_name = ?
+        ORDER BY number ASC
+      `).run(deviceName, sourceDeviceName);
+
+      db.prepare(`
+        INSERT INTO widget_tab_assignments (
+          widget_name,
+          tab_number,
+          layout_x,
+          layout_y,
+          layout_w,
+          layout_h,
+          device_name
+        )
+        SELECT
+          widget_name,
+          tab_number,
+          layout_x,
+          layout_y,
+          layout_w,
+          layout_h,
+          ?
+        FROM widget_tab_assignments
+        WHERE device_name = ?
+      `).run(deviceName, sourceDeviceName);
+
+      ensureHomeTabExists(deviceName);
+      touchDeviceUpdateTime(deviceName);
+    });
+
+    copyTransaction();
+    return { success: true, message: 'Device tabs and widget settings copied successfully' };
+  } catch (error) {
+    console.error('Error copying device data:', error);
+    reply.status(500).send({ error: 'Failed to copy device data' });
+  }
+});
+
+fastify.delete('/api/devices/:deviceName', async (request, reply) => {
+  const { deviceName } = request.params;
+
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+
+  try {
+    const stmt = db.prepare('DELETE FROM devices WHERE name = ?');
+    const result = stmt.run(deviceName);
+
+    if (result.changes === 0) {
+      return reply.status(404).send({ error: 'Device not found' });
+    }
+
+    return { success: true, message: 'Device deleted successfully' };
+  } catch (error) {
+    console.error('Error deleting device:', error);
+    reply.status(500).send({ error: 'Failed to delete device' });
+  }
+});
 
 // Chore routes (updated for new schema)
 fastify.get('/api/chores', async (request, reply) => {
@@ -1630,7 +1379,7 @@ fastify.post('/api/chores/complete', async (request, reply) => {
     }
 
     const uncompletedRegularChores = todaysChores.filter(cs => cs.completed_today == 0);
-    if (!uncompletedRegularChores.length) {
+    if (todaysChores.length && !uncompletedRegularChores.length) {
       const dailyRewardSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('daily_completion_clam_reward');
       const dailyReward = dailyRewardSetting ? parseInt(dailyRewardSetting.value, 10) : 2;
 
@@ -1820,15 +1569,21 @@ fastify.patch('/api/users/:id', async (request, reply) => {
 fastify.post('/api/users/:id/upload-picture', async (request, reply) => {
   try {
     const { id } = request.params;
+    console.log(`Upload picture request for user ${id}`);
+
     const data = await request.file();
-    
+
     if (!data) {
+      console.log('No file uploaded');
       return reply.status(400).send({ error: 'No file uploaded' });
     }
+
+    console.log('File received:', data.filename, 'Type:', data.mimetype);
 
     // Validate file type
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
     if (!allowedTypes.includes(data.mimetype)) {
+      console.log('Invalid file type:', data.mimetype);
       return reply.status(400).send({ error: 'Only image files (JPEG, PNG, GIF) are allowed' });
     }
 
@@ -1841,23 +1596,31 @@ fastify.post('/api/users/:id/upload-picture', async (request, reply) => {
     const filename = `user_${id}_${Date.now()}.${fileExtension}`;
     const filepath = path.join(usersDir, filename);
 
+    console.log('Saving file to:', filepath);
+
     // Save file
     await fs.writeFile(filepath, await data.toBuffer());
+    console.log('File saved successfully');
 
     // Update user record
     const stmt = db.prepare('UPDATE users SET profile_picture = ? WHERE id = ?');
     const info = stmt.run(filename, id);
-    
+
+    console.log('Database update:', info);
+
     if (info.changes === 0) {
       // Clean up uploaded file if user doesn't exist
       await fs.unlink(filepath);
+      console.log('User not found, file deleted');
       return reply.status(404).send({ error: 'User not found' });
     }
 
-    return { 
-      success: true, 
+    console.log('Profile picture uploaded successfully:', filename);
+
+    return {
+      success: true,
       message: 'Profile picture uploaded successfully',
-      filename: filename 
+      filename: filename
     };
   } catch (error) {
     console.error('Error uploading profile picture:', error);
@@ -1889,7 +1652,7 @@ fastify.get('/api/calendar', async (request, reply) => {
   try {
     const rows = db.prepare('SELECT * FROM events').all();
     return rows;
-  }  catch (error) {
+  } catch (error) {
     console.error('Error fetching events:', error);
     reply.status(500).send({ error: 'Failed to fetch events' });
   }
@@ -1950,23 +1713,39 @@ fastify.get('/api/settings', async (request, reply) => {
   }
 });
 
+fastify.post('/api/settings/search', async (request, reply) => {
+  try {
+    console.log('=== SEARCHING SETTINGS ===');
+    // coerce the request body to array of strings to search the settings database by key:
+    const keys = Array.isArray(request.body) ? request.body : [request.body];
+
+    // use parameters to filter settings by key if provided, otherwise return all settings
+    // accept simple wildcards for partial match via * (e.g. WEATHER_* to match all weather related settings)
+    let query = 'SELECT key, value FROM settings';
+    if (keys.length) {
+      const conditions = keys.map(() => 'key LIKE ?').join(' OR ');
+      query += ' WHERE ' + conditions;
+    }
+    const rows = db.prepare(query).all(...keys.map(key => key.replaceAll('*', '%')));
+    console.log('Raw settings from database:', rows);
+    // Convert array of {key, value} objects to a single object {key: value}
+    const settings = rows.reduce((acc, row) => {
+      acc[row.key] = row.value;
+      return acc;
+    }, {});
+    console.log('Processed settings object:', settings);
+    return settings;
+  } catch (error) {
+    console.error('Error fetching settings:', error);
+    reply.status(500).send({ error: 'Failed to fetch settings' });
+  }
+});
+
 fastify.post('/api/settings', async (request, reply) => {
   const { key, value } = request.body;
-  console.log('=== SAVING SETTING ===');
-  console.log('Key:', key);
-  console.log('Value:', value);
-  console.log('Value type:', typeof value);
-  console.log('Value length:', value ? value.length : 'null/undefined');
-  
-  // Special logging for weather API key
-  if (key === 'WEATHER_API_KEY') {
-    console.log('=== WEATHER API KEY SPECIFIC LOGGING ===');
-    console.log('Weather API Key received:', value);
-    console.log('Is empty string?', value === '');
-    console.log('Is null?', value === null);
-    console.log('Is undefined?', value === undefined);
-  }
-  
+  // single log message showing the details of the save:
+  console.log(`=== SAVING SETTING === Key: ${key} - Value: ${value} Value type: ${typeof value} Value length: ${value ? value.length : 'null/undefined'}`);
+
   if (!key || value === undefined) {
     console.log('ERROR: Missing key or value');
     return reply.status(400).send({ error: 'Key and value are required.' });
@@ -1976,22 +1755,355 @@ fastify.post('/api/settings', async (request, reply) => {
     const stmt = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
     const result = stmt.run(key, value);
     console.log('Database insert result:', result);
-    
+
     // Verify the setting was saved
     const verification = db.prepare('SELECT key, value FROM settings WHERE key = ?').get(key);
     console.log('Verification query result:', verification);
-    
+
     // Special verification for weather API key
     if (key === 'WEATHER_API_KEY') {
       console.log('=== WEATHER API KEY VERIFICATION ===');
       console.log('Saved value in DB:', verification ? verification.value : 'NOT FOUND');
       console.log('Value matches input?', verification && verification.value === value);
     }
-    
+
     return { success: true, message: `Setting '${key}' saved successfully.` };
   } catch (error) {
     console.error(`Error saving setting '${key}':`, error);
     reply.status(500).send({ error: `Failed to save setting '${key}'` });
+  }
+});
+
+// Tabs API Endpoints
+fastify.get('/api/devices/:deviceName/tabs', async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+
+  try {
+    const tabs = db.prepare('SELECT * FROM tabs WHERE device_name = ? ORDER BY number ASC').all(deviceName);
+    return tabs;
+  } catch (error) {
+    console.error('Error fetching tabs:', error);
+    reply.status(500).send({ error: 'Failed to fetch tabs' });
+  }
+});
+
+fastify.post('/api/devices/:deviceName/tabs', async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+  ensureDeviceExists(deviceName);
+  const { label, icon, show_label } = request.body;
+
+  if (!label || !icon) {
+    return reply.status(400).send({ error: 'Label and icon are required' });
+  }
+
+  try {
+    const maxOrder = db.prepare('SELECT MAX(number) as max FROM tabs WHERE device_name = ?').get(deviceName);
+    const nextTabNumber = (maxOrder.max || 0) + 1;
+
+    const stmt = db.prepare('INSERT INTO tabs (device_name, label, icon, show_label, number) VALUES (?, ?, ?, ?, ?) RETURNING *');
+    const row = stmt.get(deviceName, label, icon, show_label ? 1 : 0, nextTabNumber);
+    touchDeviceUpdateTime(deviceName);
+
+    return row;
+  } catch (error) {
+    console.error('Error creating tab:', error);
+    reply.status(500).send({ error: 'Failed to create tab' });
+  }
+});
+
+fastify.patch('/api/devices/:deviceName/tabs/:tabNumber', async (request, reply) => {
+  const { deviceName, tabNumber } = request.params;
+  const { label, icon, show_label } = request.body;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+  ensureDeviceExists(deviceName);
+  if (parseInt(tabNumber) === 1) {
+    return reply.status(400).send({ error: 'Cannot modify home tab' });
+  }
+
+  try {
+    const updates = [];
+    const values = [];
+
+    if (label !== undefined) {
+      updates.push('label = ?');
+      values.push(label);
+    }
+    if (icon !== undefined) {
+      updates.push('icon = ?');
+      values.push(icon);
+    }
+    if (show_label !== undefined) {
+      updates.push('show_label = ?');
+      values.push(show_label ? 1 : 0);
+    }
+
+    if (updates.length === 0) {
+      return reply.status(400).send({ error: 'No fields to update' });
+    }
+
+    values.push(tabNumber);
+    values.push(deviceName);
+    const stmt = db.prepare(`UPDATE tabs SET ${updates.join(', ')} WHERE number = ? AND device_name = ? RETURNING *`);
+    const row = stmt.get(...values);
+    touchDeviceUpdateTime(deviceName);
+
+    return row;
+  } catch (error) {
+    console.error('Error updating tab:', error);
+    reply.status(500).send({ error: 'Failed to update tab' });
+  }
+});
+
+fastify.patch('/api/devices/:deviceName/tabs/reorder', async (request, reply) => {
+  const { deviceName } = request.params;
+  const { orderedTabNumbers } = request.body;
+
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+  ensureDeviceExists(deviceName);
+
+  if (!Array.isArray(orderedTabNumbers)) {
+    return reply.status(400).send({ error: 'orderedTabNumbers array is required' });
+  }
+
+  try {
+    const nonHomeTabs = db
+      .prepare('SELECT id, number FROM tabs WHERE device_name = ? AND number != 1 ORDER BY number ASC')
+      .all(deviceName);
+
+    if (orderedTabNumbers.length !== nonHomeTabs.length) {
+      return reply.status(400).send({ error: 'orderedTabNumbers length does not match current tab count' });
+    }
+
+    const existingNumbers = new Set(nonHomeTabs.map(tab => tab.number));
+    const requestedNumbers = new Set(orderedTabNumbers);
+    if (existingNumbers.size !== requestedNumbers.size) {
+      return reply.status(400).send({ error: 'orderedTabNumbers contains duplicates' });
+    }
+    for (const number of requestedNumbers) {
+      if (!existingNumbers.has(number)) {
+        return reply.status(400).send({ error: 'orderedTabNumbers contains unknown tab numbers' });
+      }
+    }
+
+    const tabsByNumber = new Map(nonHomeTabs.map(tab => [tab.number, tab]));
+    const orderedTabIds = orderedTabNumbers.map(number => tabsByNumber.get(number).id);
+
+    const reorderTransaction = db.transaction((ids) => {
+      const tempStmt = db.prepare('UPDATE tabs SET number = ? WHERE id = ? AND device_name = ?');
+      const finalStmt = db.prepare('UPDATE tabs SET number = ? WHERE id = ? AND device_name = ?');
+
+      ids.forEach((id, index) => {
+        // Move to temporary values to avoid UNIQUE(device_name, number) collisions.
+        tempStmt.run(-1000 - index, id, deviceName);
+      });
+
+      ids.forEach((id, index) => {
+        finalStmt.run(index + 2, id, deviceName);
+      });
+    });
+
+    reorderTransaction(orderedTabIds);
+    touchDeviceUpdateTime(deviceName);
+
+    const updatedTabs = db.prepare('SELECT * FROM tabs WHERE device_name = ? ORDER BY number ASC').all(deviceName);
+    return updatedTabs;
+  } catch (error) {
+    console.error('Error reordering tabs:', error);
+    reply.status(500).send({ error: 'Failed to reorder tabs' });
+  }
+});
+
+fastify.delete('/api/devices/:deviceName/tabs/:tabNumber', async (request, reply) => {
+  const { deviceName, tabNumber } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+  ensureDeviceExists(deviceName);
+
+  if (parseInt(tabNumber) === 1) {
+    return reply.status(400).send({ error: 'Cannot delete home tab' });
+  }
+
+  try {
+    // const widgetAssignments = db.prepare('SELECT * FROM widget_tab_assignments WHERE tab_number in (0,?) AND device_name = ?').all(tabNumber, deviceName);
+
+    // if (widgetAssignments.length > 0) {
+    //   const updateStmt = db.prepare('UPDATE widget_tab_assignments SET tab_number = 0 WHERE tab_number = ? AND device_name = ?');
+    //   updateStmt.run(tabNumber, deviceName);
+    // }
+
+    const deleteStmt = db.prepare('DELETE FROM tabs WHERE number = ? AND device_name = ?');
+    deleteStmt.run(tabNumber, deviceName);
+
+    const remainingTabs = db
+      .prepare('SELECT id FROM tabs WHERE device_name = ? AND number != 1 ORDER BY number ASC')
+      .all(deviceName);
+
+    const renumberTransaction = db.transaction((tabRows) => {
+      const tempStmt = db.prepare('UPDATE tabs SET number = ? WHERE id = ? AND device_name = ?');
+      const finalStmt = db.prepare('UPDATE tabs SET number = ? WHERE id = ? AND device_name = ?');
+
+      tabRows.forEach((row, index) => {
+        tempStmt.run(-2000 - index, row.id, deviceName);
+      });
+
+      tabRows.forEach((row, index) => {
+        finalStmt.run(index + 2, row.id, deviceName);
+      });
+    });
+
+    renumberTransaction(remainingTabs);
+    touchDeviceUpdateTime(deviceName);
+
+    return { success: true, message: 'Tab deleted successfully' };
+  } catch (error) {
+    console.error('Error deleting tab:', error);
+    reply.status(500).send({ error: 'Failed to delete tab' });
+  }
+});
+
+// Widget Tab Assignments API Endpoints
+fastify.get('/api/devices/:deviceName/widget-assignments', async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+  try {
+    const assignments = db.prepare('SELECT * FROM widget_tab_assignments WHERE device_name = ?').all(deviceName);
+    return assignments;
+  } catch (error) {
+    console.error('Error fetching widget assignments:', error);
+    reply.status(500).send({ error: 'Failed to fetch widget assignments' });
+  }
+});
+
+fastify.post('/api/devices/:deviceName/widget-assignments', async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+  const { widget_name, tabNumber } = request.body;
+  if (!widget_name || !tabNumber) {
+    return reply.status(400).send({ error: 'widget_name and tabNumber are required' });
+  }
+
+  try {
+    ensureDeviceExists(deviceName);
+    const existing = db.prepare('SELECT id FROM widget_tab_assignments WHERE widget_name = ? AND tab_number = ? AND device_name = ?').get(widget_name, tabNumber, deviceName);
+
+    if (existing) {
+      return reply.status(400).send({ error: 'Assignment already exists' });
+    }
+
+    const stmt = db.prepare('INSERT INTO widget_tab_assignments (widget_name, tab_number, device_name) VALUES (?, ?, ?) RETURNING *');
+    const row = stmt.get(widget_name, tabNumber, deviceName);
+    touchDeviceUpdateTime(deviceName);
+
+    return row;
+  } catch (error) {
+    console.error('Error creating widget assignment:', error);
+    reply.status(500).send({ error: 'Failed to create widget assignment' });
+  }
+});
+
+fastify.delete('/api/devices/:deviceName/widget-assignments/:id', async (request, reply) => {
+  const { id, deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+
+  try {
+    ensureDeviceExists(deviceName);
+    const stmt = db.prepare('DELETE FROM widget_tab_assignments WHERE id = ? AND device_name = ?');
+    stmt.run(id, deviceName);
+    touchDeviceUpdateTime(deviceName);
+    return { success: true, message: 'Assignment deleted successfully' };
+  } catch (error) {
+    console.error('Error deleting widget assignment:', error);
+    reply.status(500).send({ error: 'Failed to delete widget assignment' });
+  }
+});
+
+fastify.delete('/api/devices/:deviceName/widget-assignments/widget/:widgetName', async (request, reply) => {
+  const { widgetName, deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+
+  try {
+    ensureDeviceExists(deviceName);
+    const stmt = db.prepare('DELETE FROM widget_tab_assignments WHERE widget_name = ? AND device_name = ?');
+    stmt.run(widgetName, deviceName);
+    touchDeviceUpdateTime(deviceName);
+    return { success: true, message: 'Widget assignments deleted successfully' };
+  } catch (error) {
+    console.error('Error deleting widget assignments:', error);
+    reply.status(500).send({ error: 'Failed to delete widget assignments' });
+  }
+});
+
+fastify.patch('/api/devices/:deviceName/widget-assignments/layout', async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+  const { widget_name, tabNumber, layout_x, layout_y, layout_w, layout_h } = request.body;
+
+  if (!widget_name || !tabNumber) {
+    return reply.status(400).send({ error: 'widget_name and tabNumber are required' });
+  }
+
+  try {
+    ensureDeviceExists(deviceName);
+    const existing = db.prepare('SELECT id FROM widget_tab_assignments WHERE widget_name = ? AND tab_number = ? AND device_name = ?').get(widget_name, tabNumber, deviceName);
+
+    if (!existing) {
+      return reply.status(404).send({ error: 'Assignment not found' });
+    }
+
+    const stmt = db.prepare('UPDATE widget_tab_assignments SET layout_x = ?, layout_y = ?, layout_w = ?, layout_h = ? WHERE widget_name = ? AND tab_number = ? AND device_name = ? RETURNING *');
+    const row = stmt.get(layout_x, layout_y, layout_w, layout_h, widget_name, tabNumber, deviceName);
+
+    touchDeviceUpdateTime(deviceName);
+    return row;
+  } catch (error) {
+    console.error('Error updating widget layout:', error);
+    reply.status(500).send({ error: 'Failed to update widget layout' });
+  }
+});
+
+fastify.patch('/api/devices/:deviceName/widget-assignments/layout/bulk', async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+  const { layouts } = request.body;
+  if (!Array.isArray(layouts) || layouts.length === 0) {
+    return reply.status(400).send({ error: 'layouts array is required' });
+  }
+
+  try {
+    ensureDeviceExists(deviceName);
+    const stmt = db.prepare('UPDATE widget_tab_assignments SET layout_x = ?, layout_y = ?, layout_w = ?, layout_h = ? WHERE widget_name = ? AND tab_number = ? AND device_name = ?');
+
+    for (const item of layouts) {
+      stmt.run(item.layout_x, item.layout_y, item.layout_w, item.layout_h, item.widget_name, item.tabNumber, deviceName);
+    }
+    touchDeviceUpdateTime(deviceName);
+    return { success: true, message: 'Layouts updated successfully' };
+  } catch (error) {
+    console.error('Error updating widget layouts:', error);
+    reply.status(500).send({ error: 'Failed to update widget layouts' });
   }
 });
 
@@ -2002,21 +2114,21 @@ fastify.post('/api/test-api-key', async (request, reply) => {
   console.log('Received API key:', apiKey);
   console.log('API key type:', typeof apiKey);
   console.log('API key length:', apiKey ? apiKey.length : 'null/undefined');
-  
+
   try {
     // Test direct database insertion
     const stmt = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
     const result = stmt.run('WEATHER_API_KEY', apiKey);
     console.log('Direct insert result:', result);
-    
+
     // Verify it was saved
     const verification = db.prepare('SELECT key, value FROM settings WHERE key = ?').get('WEATHER_API_KEY');
     console.log('Verification result:', verification);
-    
-    return { 
-      success: true, 
+
+    return {
+      success: true,
       message: 'API key test completed',
-      saved: verification 
+      saved: verification
     };
   } catch (error) {
     console.error('Test API key save error:', error);
@@ -2029,7 +2141,7 @@ fastify.get('/api/proxy', async (request, reply) => {
   console.log('=== PROXY REQUEST RECEIVED ===');
   console.log('Query params:', request.query);
   console.log('Headers:', request.headers);
-  
+
   const { targetUrl } = request.query;
 
   if (!targetUrl) {
@@ -2070,7 +2182,7 @@ fastify.get('/api/proxy', async (request, reply) => {
     }
 
     console.log(`Proxying request to whitelisted domain: ${targetUrl}`);
-    
+
     // Configure axios for both HTTP and HTTPS
     const axiosConfig = {
       timeout: 15000, // 15 second timeout
@@ -2105,12 +2217,12 @@ fastify.get('/api/proxy', async (request, reply) => {
     if (response.headers['content-type']) {
       reply.header('Content-Type', response.headers['content-type']);
     }
-    
+
     // Add CORS headers
     reply.header('Access-Control-Allow-Origin', '*');
     reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    
+
     console.log('Sending successful response');
     return reply.status(response.status).send(response.data);
 
@@ -2134,7 +2246,7 @@ fastify.get('/api/proxy', async (request, reply) => {
         data: error.response.data
       } : 'No response'
     });
-    
+
     if (error.response) {
       // Forward the error from the target server
       console.log(`Target server responded with ${error.response.status}: ${error.response.statusText}`);
@@ -2144,7 +2256,7 @@ fastify.get('/api/proxy', async (request, reply) => {
       });
     } else if (error.code === 'ECONNREFUSED') {
       console.log(`Connection refused to ${error.address}:${error.port}`);
-      return reply.status(503).send({ 
+      return reply.status(503).send({
         error: 'Unable to connect to the target server. The server may be down or unreachable.',
         details: `Connection refused to ${error.address}:${error.port}`
       });
@@ -2155,11 +2267,11 @@ fastify.get('/api/proxy', async (request, reply) => {
     } else if (error.code === 'ECONNRESET') {
       return reply.status(503).send({ error: 'Connection was reset by the target server.' });
     }
-    
+
     // Handle other errors (e.g., network, invalid URL)
-    return reply.status(500).send({ 
+    return reply.status(500).send({
       error: 'Failed to proxy request.',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -2253,6 +2365,11 @@ fastify.post('/api/calendar-sources', async (request, reply) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const info = stmt.run(name, type, url, username || null, encryptedPassword, color || '#6e44ff', 1, nextOrder);
+
+    if (calendarSyncService) {
+      calendarSyncService.onSourceCreated(info.lastInsertRowid);
+    }
+
     return { id: info.lastInsertRowid, success: true };
   } catch (error) {
     console.error('Error adding calendar source:', error);
@@ -2302,6 +2419,15 @@ fastify.patch('/api/calendar-sources/:id', async (request, reply) => {
     if (info.changes === 0) {
       return reply.status(404).send({ error: 'Calendar source not found' });
     }
+
+    if (calendarSyncService) {
+      if (enabled !== undefined) {
+        calendarSyncService.onSourceToggled(parseInt(id), enabled);
+      } else {
+        calendarSyncService.onSourceUpdated(parseInt(id));
+      }
+    }
+
     return { success: true, message: 'Calendar source updated successfully' };
   } catch (error) {
     console.error('Error updating calendar source:', error);
@@ -2312,6 +2438,10 @@ fastify.patch('/api/calendar-sources/:id', async (request, reply) => {
 fastify.delete('/api/calendar-sources/:id', async (request, reply) => {
   const { id } = request.params;
   try {
+    if (calendarSyncService) {
+      calendarSyncService.onSourceDeleted(parseInt(id));
+    }
+
     const stmt = db.prepare('DELETE FROM calendar_sources WHERE id = ?');
     const info = stmt.run(id);
     if (info.changes === 0) {
@@ -2358,110 +2488,115 @@ fastify.post('/api/calendar-sources/:id/test', async (request, reply) => {
 });
 
 
-// Enhanced endpoint to fetch and parse calendar events from multiple sources
+// Get calendar events from cache (fast)
 fastify.get('/api/calendar-events', async (request, reply) => {
   try {
-    const sources = db.prepare('SELECT * FROM calendar_sources WHERE enabled = 1 ORDER BY sort_order, id').all();
+    const { start, end } = request.query;
 
-    function normalizeAllDayEnd(end) {
-      // iCal all-day event ends are exclusive (DTEND is the day after the last day).
-      // Subtract 1 day so the end represents the actual last day of the event.
-      const d = new Date(end);
-      d.setDate(d.getDate() - 1);
-      return d;
+    if (!calendarSyncService) {
+      return reply.status(503).send({ error: 'Calendar sync service not initialized' });
     }
 
-    function makeEvent({ item, source }) {
-      const isAllDay = item.start?.dateOnly ?? item.event?.start?.dateOnly ?? false;
-      const rawEnd = item.end ?? item.event.end;
-      return {
-        id: item.uid ?? item.event?.uid ?? null,
-        title: item.summary ?? item.event?.summary ?? null,
-        start: item.start ?? item.event.start,
-        end: isAllDay ? normalizeAllDayEnd(rawEnd) : rawEnd,
-        description: item.description ?? item.event?.description ?? null,
-        location: item.location ?? item.event?.location ?? null,
-        all_day: isAllDay,
-        source_id: source.id,
-        source_name: source.name,
-        source_color: source.color
-      };
-    }
-
-    if (sources.length === 0) {
-      return [];
-    }
-
-    const fetchPromises = sources.map(async (source) => {
-      try {
-        if (source.type === 'ICS') {
-          const events = await node_ical.async.fromURL(source.url);
-          let out = [];
-          for (const event of Object.values(events)) {
-            if (event.type === "VEVENT") {
-              // doing ~13 months forward and backward
-              const instances = node_ical.expandRecurringEvent(event, {
-                from: new Date(Date.now() - 13 * 30 * 24 * 60 * 60 * 1000),
-                to: new Date(Date.now() + 13 * 30 * 24 * 60 * 60 * 1000)
-              });
-
-              // If solo event, append and go to next event
-              if (!instances) {
-                out.push(makeEvent({ item: event, source }));
-                continue;
-              }
-              instances.forEach(instance => {
-                out.push(makeEvent({ item: instance, source }));
-              });
-            }
-          };
-          return out;
-
-        } else if (source.type === 'CalDAV') {
-          const decryptedPassword = decryptPassword(source.password);
-          const authHeader = 'Basic ' + Buffer.from(`${source.username}:${decryptedPassword}`).toString('base64');
-
-          const response = await axios.get(source.url, {
-            headers: { 'Authorization': authHeader },
-            timeout: 15000
-          });
-
-          const icsData = response.data;
-          const jcalData = ICAL.parse(icsData);
-          const comp = new ICAL.Component(jcalData);
-          const vevents = comp.getAllSubcomponents('vevent');
-
-          return vevents.map(vevent => {
-            const event = new ICAL.Event(vevent);
-            const isAllDay = vevent.getFirstPropertyValue('dtstart').isDate || false;
-            const rawEnd = event.endDate.toJSDate();
-            return {
-              id: event.uid || Math.random().toString(),
-              title: event.summary,
-              start: event.startDate.toJSDate(),
-              end: isAllDay ? normalizeAllDayEnd(rawEnd) : rawEnd,
-              description: event.description,
-              location: event.location,
-              all_day: isAllDay,
-              source_id: source.id,
-              source_name: source.name,
-              source_color: source.color
-            };
-          });
-        }
-      } catch (error) {
-        console.error(`Error fetching calendar from source ${source.name}:`, error.message);
-        return [];
-      }
-    });
-
-    const results = await Promise.all(fetchPromises);
-    const allEvents = results.flat();
-
-    return allEvents.sort((a, b) => new Date(a.start) - new Date(b.start));
+    const events = calendarSyncService.getCachedEvents(start, end);
+    return events;
   } catch (error) {
     console.error('Error fetching calendar events:', error);
     reply.status(500).send({ error: 'Failed to fetch calendar events.' });
+  }
+});
+
+// Get calendar sync status for all sources
+fastify.get('/api/calendar-sync/status', async (request, reply) => {
+  try {
+    if (!calendarSyncService) {
+      return reply.status(503).send({ error: 'Calendar sync service not initialized' });
+    }
+    const status = calendarSyncService.getSyncStatus();
+    return status;
+  } catch (error) {
+    console.error('Error fetching sync status:', error);
+    reply.status(500).send({ error: 'Failed to fetch sync status' });
+  }
+});
+
+// Get sync status for a specific source
+fastify.get('/api/calendar-sync/status/:sourceId', async (request, reply) => {
+  try {
+    const { sourceId } = request.params;
+    if (!calendarSyncService) {
+      return reply.status(503).send({ error: 'Calendar sync service not initialized' });
+    }
+    const status = calendarSyncService.getSyncStatus(parseInt(sourceId));
+    return status || { source_id: sourceId, last_sync_at: null, last_sync_status: 'never' };
+  } catch (error) {
+    console.error('Error fetching sync status:', error);
+    reply.status(500).send({ error: 'Failed to fetch sync status' });
+  }
+});
+
+// Trigger manual sync for a specific source
+fastify.post('/api/calendar-sync/:sourceId', async (request, reply) => {
+  try {
+    const { sourceId } = request.params;
+    if (!calendarSyncService) {
+      return reply.status(503).send({ error: 'Calendar sync service not initialized' });
+    }
+    const result = await calendarSyncService.syncSource(parseInt(sourceId));
+    return result;
+  } catch (error) {
+    console.error('Error syncing calendar source:', error);
+    reply.status(500).send({ error: 'Failed to sync calendar source' });
+  }
+});
+
+// Trigger manual sync for all sources
+fastify.post('/api/calendar-sync/all', async (request, reply) => {
+  try {
+    if (!calendarSyncService) {
+      return reply.status(503).send({ error: 'Calendar sync service not initialized' });
+    }
+    const results = await calendarSyncService.syncAllSources();
+    return results;
+  } catch (error) {
+    console.error('Error syncing all calendar sources:', error);
+    reply.status(500).send({ error: 'Failed to sync calendar sources' });
+  }
+});
+
+// Set sync interval for a specific source
+fastify.patch('/api/calendar-sync/:sourceId/interval', async (request, reply) => {
+  try {
+    const { sourceId } = request.params;
+    const { interval_minutes } = request.body;
+
+    if (interval_minutes === undefined || interval_minutes < 0) {
+      return reply.status(400).send({ error: 'interval_minutes must be a non-negative number' });
+    }
+
+    if (!calendarSyncService) {
+      return reply.status(503).send({ error: 'Calendar sync service not initialized' });
+    }
+
+    calendarSyncService.setSyncInterval(parseInt(sourceId), interval_minutes);
+    return { success: true, message: `Sync interval set to ${interval_minutes} minutes` };
+  } catch (error) {
+    console.error('Error setting sync interval:', error);
+    reply.status(500).send({ error: 'Failed to set sync interval' });
+  }
+});
+
+// Get sync interval for a specific source
+fastify.get('/api/calendar-sync/:sourceId/interval', async (request, reply) => {
+  try {
+    const { sourceId } = request.params;
+    if (!calendarSyncService) {
+      return reply.status(503).send({ error: 'Calendar sync service not initialized' });
+    }
+    const interval = calendarSyncService.getSyncInterval(parseInt(sourceId));
+    return { source_id: parseInt(sourceId), interval_minutes: interval };
+  } catch (error) {
+    console.error('Error getting sync interval:', error);
+    reply.status(500).send({ error: 'Failed to get sync interval' });
   }
 });
 
@@ -2588,7 +2723,10 @@ fastify.post('/api/photo-sources/:id/test', async (request, reply) => {
 
     if (source.type === 'Immich') {
       const decryptedApiKey = decryptPassword(source.api_key);
-      const response = await axios.post(`${source.url}/api/search/random`,
+      const baseUrl = source.url.replace(/\/+$/, '');
+      const apiBase = baseUrl.includes('/api') ? baseUrl : `${baseUrl}/api`;
+      console.log(`Testing Immich connection to: ${apiBase}/search/random`);
+      const response = await axios.post(`${apiBase}/search/random`,
         { size: 1 },
         {
           headers: {
@@ -2599,16 +2737,31 @@ fastify.post('/api/photo-sources/:id/test', async (request, reply) => {
           timeout: 10000
         }
       );
-      return { success: true, assetCount: response.data.length || 0, message: 'Immich connection successful' };
+      return { success: true, assetCount: response.data.length || 0, message: `Immich connection successful (${response.data.length || 0} assets found)` };
     } else if (source.type === 'GooglePhotos') {
       const decryptedRefreshToken = decryptPassword(source.refresh_token);
       return { success: true, message: 'Google Photos configuration saved (connection test not yet implemented)' };
     }
   } catch (error) {
     console.error('Error testing photo source:', error.message);
+    if (error.code === 'ECONNREFUSED') {
+      return reply.status(400).send({ success: false, error: 'Connection refused. Check that the Immich server URL is correct and the server is running.', details: error.message });
+    }
+    if (error.code === 'ENOTFOUND') {
+      return reply.status(400).send({ success: false, error: 'Host not found. Check the Immich server URL.', details: error.message });
+    }
+    if (error.code === 'ETIMEDOUT' || error.code === 'ECONNABORTED') {
+      return reply.status(400).send({ success: false, error: 'Connection timed out. The server may be unreachable from this network.', details: error.message });
+    }
     if (error.response) {
       console.error(`Response status: ${error.response.status}`);
       console.error(`Response data:`, error.response.data);
+      if (error.response.status === 401) {
+        return reply.status(400).send({ success: false, error: 'Authentication failed. Check your API key.', details: `HTTP ${error.response.status}` });
+      }
+      if (error.response.status === 404) {
+        return reply.status(400).send({ success: false, error: 'API endpoint not found. Check your Immich server URL - it should be the base URL (e.g., https://immich.example.com).', details: `HTTP ${error.response.status}` });
+      }
     }
     return reply.status(400).send({
       success: false,
@@ -2620,7 +2773,6 @@ fastify.post('/api/photo-sources/:id/test', async (request, reply) => {
   }
 });
 
-// Proxy endpoint to serve Immich images with authentication
 fastify.get('/api/photo-proxy/:sourceId/:assetId', async (request, reply) => {
   const { sourceId, assetId } = request.params;
   const { size = 'preview' } = request.query;
@@ -2632,7 +2784,9 @@ fastify.get('/api/photo-proxy/:sourceId/:assetId', async (request, reply) => {
     }
 
     const decryptedApiKey = decryptPassword(source.api_key);
-    const response = await axios.get(`${source.url}/api/assets/${assetId}/thumbnail`, {
+    const baseUrl = source.url.replace(/\/+$/, '');
+    const apiBase = baseUrl.includes('/api') ? baseUrl : `${baseUrl}/api`;
+    const response = await axios.get(`${apiBase}/assets/${assetId}/thumbnail`, {
       headers: {
         'x-api-key': decryptedApiKey
       },
@@ -2654,7 +2808,6 @@ fastify.get('/api/photo-proxy/:sourceId/:assetId', async (request, reply) => {
   }
 });
 
-// Enhanced endpoint to fetch photos from multiple sources
 fastify.get('/api/photo-items', async (request, reply) => {
   try {
     const sources = db.prepare('SELECT * FROM photo_sources WHERE enabled = 1 ORDER BY sort_order, id').all();
@@ -2667,21 +2820,37 @@ fastify.get('/api/photo-items', async (request, reply) => {
       try {
         if (source.type === 'Immich') {
           const decryptedApiKey = decryptPassword(source.api_key);
+          const baseUrl = source.url.replace(/\/+$/, '');
+          const apiBase = baseUrl.includes('/api') ? baseUrl : `${baseUrl}/api`;
+          const immichHeaders = {
+            'x-api-key': decryptedApiKey,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          };
 
-          // Use the search/random endpoint to get random assets
-          const response = await axios.post(`${source.url}/api/search/random`,
-            { size: 100 },
-            {
-              headers: {
-                'x-api-key': decryptedApiKey,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-              },
+          let assets = [];
+
+          if (source.album_id) {
+            const albumResponse = await axios.get(`${apiBase}/albums/${source.album_id}`, {
+              headers: immichHeaders,
               timeout: 15000
+            });
+            assets = albumResponse.data?.assets || [];
+            for (let i = assets.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [assets[i], assets[j]] = [assets[j], assets[i]];
             }
-          );
-
-          const assets = response.data || [];
+            assets = assets.slice(0, 100);
+          } else {
+            const response = await axios.post(`${apiBase}/search/random`,
+              { size: 100 },
+              {
+                headers: immichHeaders,
+                timeout: 15000
+              }
+            );
+            assets = response.data || [];
+          }
 
           return assets.map(asset => ({
             id: asset.id,
@@ -2708,7 +2877,6 @@ fastify.get('/api/photo-items', async (request, reply) => {
     const results = await Promise.all(fetchPromises);
     const allPhotos = results.flat();
 
-    // Shuffle photos
     for (let i = allPhotos.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [allPhotos[i], allPhotos[j]] = [allPhotos[j], allPhotos[i]];
@@ -2815,13 +2983,27 @@ fastify.get('/api/system/backgroundTasks', async (request, reply) => {
 // Start server
 const start = async () => {
   try {
-    db = await initializeDatabase(); // Initialize db once here
-    await migrateChoresDatabase(); // Run migration if needed
-    await migrateClamsToHistory(); // Migrate clam_total to chore_history
-    await migrateChoreHistoryTitle(); // Add title field to chore_history
-    await migrateToDurationField(); // Add duration field to chore_schedules
-    initializeDefaultSettings(); // Initialize default settings
+    db = await ConnectOrCreateDb();
+    if (!doesTableExist('settings')) {
+      console.log('settings table not found; running initial bootstrap migrations');
+      await runLegacyMigrations();
+    }
+    const currentSchemaId = getCurrentSchemaVersion();
+    await applySchemaMigrations(currentSchemaId);
+
     startNightlyCronJob(); // Start the nightly chore pruning job
+
+    // Create uploads directories
+    const uploadsDir = path.join(__dirname, 'uploads');
+    const usersDir = path.join(uploadsDir, 'users');
+    await fs.mkdir(usersDir, { recursive: true });
+    console.log('Uploads directories created');
+
+    // Initialize calendar sync service
+    calendarSyncService = new CalendarSyncService(db, decryptPassword);
+    calendarSyncService.initialize();
+    console.log('Calendar sync service started');
+
     await fastify.listen({ port: process.env.PORT || 5000, host: '0.0.0.0' });
     console.log(`Server running on port ${process.env.PORT || 5000}`);
   } catch (err) {

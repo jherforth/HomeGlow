@@ -38,10 +38,14 @@ import {
   Paper,
   Backdrop,
   RadioGroup,
-  Radio
+  Radio,
+  Autocomplete,
+  Tooltip,
+  Slider
 } from '@mui/material';
 import {
   Delete,
+  ContentCopy,
   Edit,
   Save,
   Cancel,
@@ -52,21 +56,34 @@ import {
   Warning,
   RestartAlt,
   Timer,
-  ViewCompact,
-  ViewModule,
-  ViewQuilt,
-  Lock
+  Lock,
+  Nightlight,
+  Tab as TabIcon,
+  DragIndicator,
+  PhotoLibrary,
+  Info
 } from '@mui/icons-material';
-import { ChromePicker } from 'react-color';
+import ColorPickerPopover from './ColorPickerPopover';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
+import { getDeviceApiBase, getDeviceName, setDeviceName } from '../utils/deviceName.js';
 import PinModal from './PinModal';
 import ChoreSchedulesTab from './ChoreSchedulesTab';
 import ChoreHistoryTab from './ChoreHistoryTab';
+import TabIconModal from './TabIconModal';
 
-const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
+const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
+  const [currentDeviceName, setCurrentDeviceName] = useState(() => getDeviceName());
+  const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
+  const CORE_WIDGET_DEFAULT_SIZES = {
+    calendar: { w: 8, h: 5 },
+    weather: { w: 4, h: 3 },
+    chores: { w: 6, h: 4 },
+    photos: { w: 6, h: 4 },
+  };
   const [activeTab, setActiveTab] = useState(0);
   const [choresSubTab, setChoresSubTab] = useState(0);
+  const [widgetsSubTab, setWidgetsSubTab] = useState(0);
   const [settings, setSettings] = useState({
     WEATHER_API_KEY: '',
     PROXY_WHITELIST: '',
@@ -76,10 +93,8 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     chores: { enabled: false, transparent: false, refreshInterval: 0 },
     calendar: { enabled: false, transparent: false, refreshInterval: 0 },
     photos: { enabled: false, transparent: false, refreshInterval: 0 },
-    weather: { enabled: false, transparent: false, refreshInterval: 0, layoutMode: 'medium' },
-    widgetGallery: { enabled: true, transparent: false, refreshInterval: 0 },
-    // Accent colors (shared) - only these are customizable
-    primary: '#9E7FFF',
+    weather: { enabled: false, transparent: false, refreshInterval: 0 },
+    primary: '#f5f5f5',
     secondary: '#38bdf8',
     accent: '#f472b6'
   });
@@ -93,7 +108,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const [uploadedWidgets, setUploadedWidgets] = useState([]);
   const [githubWidgets, setGithubWidgets] = useState([]);
   const [loadingGithub, setLoadingGithub] = useState(false);
-  const [showColorPicker, setShowColorPicker] = useState({});
+  const [colorPickerAnchor, setColorPickerAnchor] = useState({ key: null, el: null });
   const [deleteUserDialog, setDeleteUserDialog] = useState({ open: false, user: null });
   const [choreModal, setChoreModal] = useState({ open: false, user: null, userChores: [] });
   const [isLoading, setIsLoading] = useState(false);
@@ -102,6 +117,40 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
   const [pinModal, setPinModal] = useState({ open: false, mode: 'verify', title: '' });
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [checkingPin, setCheckingPin] = useState(true);
+  const [tabs, setTabs] = useState([]);
+  const [widgetAssignments, setWidgetAssignments] = useState({});
+  const [pluginSettings, setPluginSettings] = useState(() => {
+    const saved = localStorage.getItem('pluginSettings');
+    return saved ? JSON.parse(saved) : {};
+  });
+  const [pluginAssignments, setPluginAssignments] = useState({});
+  const [photoSources, setPhotoSources] = useState([]);
+  const [screensaverSettings, setScreensaverSettings] = useState(() => {
+    const saved = localStorage.getItem('screensaverSettings');
+    return saved ? JSON.parse(saved) : {
+      enabled: false,
+      mode: 'tabs',
+      timeout: 5,
+      slideshowInterval: 10
+    };
+  });
+  const [tabIconModalState, setTabIconModalState] = useState({
+    open: false,
+    mode: 'create',
+    originalNumber: null,
+    initialData: null,
+  });
+  const [deleteTabDialog, setDeleteTabDialog] = useState({ open: false, tab: null });
+  const [draggingTabNumber, setDraggingTabNumber] = useState(null);
+  const [devices, setDevices] = useState([]);
+  const [copyDeviceDialog, setCopyDeviceDialog] = useState({ open: false, device: null });
+  const [deleteDeviceDialog, setDeleteDeviceDialog] = useState({ open: false, device: null });
+  const [renameDeviceDialog, setRenameDeviceDialog] = useState({
+    open: false,
+    currentName: '',
+    newName: '',
+    error: '',
+  });
 
   // Refresh interval options in milliseconds
   const refreshIntervalOptions = [
@@ -120,7 +169,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     const savedSettings = localStorage.getItem('widgetSettings');
     if (savedSettings) {
       const parsed = JSON.parse(savedSettings);
-      // Ensure refresh intervals and layout mode are included, default to 'medium' if 'auto' or not set
+      // Ensure refresh intervals are included for all widgets.
       const settingsWithDefaults = {
         chores: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.chores },
         calendar: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.calendar },
@@ -129,11 +178,9 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
           enabled: false,
           transparent: false,
           refreshInterval: 0,
-          layoutMode: (parsed.weather?.layoutMode === 'auto' || !parsed.weather?.layoutMode) ? 'medium' : parsed.weather.layoutMode,
           ...parsed.weather
         },
-        widgetGallery: { enabled: true, transparent: false, refreshInterval: 0, ...parsed.widgetGallery },
-        primary: parsed.primary || '#9E7FFF',
+        primary: parsed.primary || '#f5f5f5',
         secondary: parsed.secondary || '#38bdf8',
         accent: parsed.accent || '#f472b6'
       };
@@ -149,8 +196,32 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       fetchChores();
       fetchPrizes();
       fetchUploadedWidgets();
+      fetchTabs();
+      fetchWidgetAssignments();
+      fetchPhotoSources();
+      fetchDevices();
     }
   }, [isAuthenticated]);
+
+  const fetchDevices = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/devices`);
+      setDevices(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Error fetching devices:', error);
+      setDevices([]);
+    }
+  };
+
+  const fetchPhotoSources = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/photo-sources`);
+      setPhotoSources(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Error fetching photo sources:', error);
+      setPhotoSources([]);
+    }
+  };
 
   const checkPinStatus = async () => {
     try {
@@ -172,7 +243,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
 
   const fetchSettings = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/settings`);
+      const response = await axios.post(`${API_BASE_URL}/api/settings/search`, ['*']);
       setSettings(response.data);
     } catch (error) {
       console.error('Error fetching settings:', error);
@@ -216,6 +287,46 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     } catch (error) {
       console.error('Error fetching uploaded widgets:', error);
       setUploadedWidgets([]);
+    }
+  };
+
+  const fetchTabs = async () => {
+    try {
+      const response = await axios.get(`${API_DEVICE_URL}/tabs`);
+      setTabs(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Error fetching tabs:', error);
+      setTabs([]);
+    }
+  };
+
+  const fetchWidgetAssignments = async () => {
+    try {
+      const response = await axios.get(`${API_DEVICE_URL}/widget-assignments`);
+      const assignments = Array.isArray(response.data) ? response.data : [];
+
+      const coreAssignments = {};
+      const pluginAssign = {};
+      assignments.forEach(assignment => {
+        if (assignment.widget_name.startsWith('plugin:')) {
+          if (!pluginAssign[assignment.widget_name]) {
+            pluginAssign[assignment.widget_name] = [];
+          }
+          pluginAssign[assignment.widget_name].push(assignment.tab_number);
+        } else {
+          if (!coreAssignments[assignment.widget_name]) {
+            coreAssignments[assignment.widget_name] = [];
+          }
+          coreAssignments[assignment.widget_name].push(assignment.tab_number);
+        }
+      });
+
+      setWidgetAssignments(coreAssignments);
+      setPluginAssignments(pluginAssign);
+    } catch (error) {
+      console.error('Error fetching widget assignments:', error);
+      setWidgetAssignments({});
+      setPluginAssignments({});
     }
   };
 
@@ -269,44 +380,589 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     }
   };
 
-  const saveWidgetSettings = () => {
-    localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
-    setWidgetSettings(widgetSettings);
-    setSaveMessage({ show: true, type: 'success', text: 'Widget settings saved successfully! Refresh page to see changes.' });
-    setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+  const getWidgetIdFromWidgetName = (widgetName) => {
+    const coreMap = {
+      calendar: 'calendar-widget',
+      weather: 'weather-widget',
+      chores: 'chores-widget',
+      photos: 'photos-widget',
+    };
+
+    if (coreMap[widgetName]) return coreMap[widgetName];
+    if (widgetName.startsWith('plugin:')) return `plugin-${widgetName.slice(7)}`;
+    return null;
+  };
+
+  const getDefaultSizeForWidgetName = (widgetName) => {
+    if (CORE_WIDGET_DEFAULT_SIZES[widgetName]) return CORE_WIDGET_DEFAULT_SIZES[widgetName];
+    if (widgetName.startsWith('plugin:')) return { w: 6, h: 4 };
+    return null;
+  };
+
+  const ensureLocalLayoutKeyForAssignment = (widgetName, tabNumber) => {
+    const tab = tabs.find(t => t.number === tabNumber);
+    if (!tab?.id) return;
+
+    const widgetId = getWidgetIdFromWidgetName(widgetName);
+    const defaultSize = getDefaultSizeForWidgetName(widgetName);
+    if (!widgetId || !defaultSize) return;
+
+    const localKey = `widget-layout-id-${tab.id}-${widgetId}`;
+    if (localStorage.getItem(localKey)) return;
+
+    // Store only dimensions; WidgetContainer will apply widget default position for x/y.
+    localStorage.setItem(localKey, JSON.stringify({ w: defaultSize.w, h: defaultSize.h }));
+  };
+
+  const collectAffectedTabNumbers = (existingTabNumbers, desiredTabNumbers) => {
+    const affected = new Set([...existingTabNumbers, ...desiredTabNumbers]);
+    if (existingTabNumbers.length === 0 || desiredTabNumbers.length === 0) {
+      affected.add(1);
+    }
+    return Array.from(affected);
+  };
+
+  const recalculateLayoutsForAffectedTabs = (affectedTabNumbers, coreAssignments, pluginAssignmentMap) => {
+    const tabNumbers = Array.from(new Set(affectedTabNumbers.filter(Boolean)));
+    if (tabNumbers.length === 0) return;
+
+    const getAssignedWidgetsForTab = (tabNumber) => {
+      const assigned = [];
+
+      Object.keys(CORE_WIDGET_DEFAULT_SIZES).forEach((widgetName) => {
+        const assignedTabs = coreAssignments[widgetName] || [];
+        if (assignedTabs.length === 0) {
+          if (tabNumber === 1) {
+            assigned.push(widgetName);
+          }
+          return;
+        }
+        if (assignedTabs.includes(tabNumber)) {
+          assigned.push(widgetName);
+        }
+      });
+
+      Object.entries(pluginAssignmentMap || {}).forEach(([widgetName, assignedTabs]) => {
+        const tabsForWidget = Array.isArray(assignedTabs) ? assignedTabs : [];
+        if (tabsForWidget.length === 0) {
+          if (tabNumber === 1) {
+            assigned.push(widgetName);
+          }
+          return;
+        }
+        if (tabsForWidget.includes(tabNumber)) {
+          assigned.push(widgetName);
+        }
+      });
+
+      return assigned
+        .map((widgetName) => {
+          const widgetId = getWidgetIdFromWidgetName(widgetName);
+          const defaultSize = getDefaultSizeForWidgetName(widgetName);
+          if (!widgetId || !defaultSize) return null;
+          return { widgetId, defaultSize };
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.widgetId.localeCompare(b.widgetId));
+    };
+
+    const findFreePosition = (placed, w, h, cols = 12) => {
+      const collides = (x, y) => placed.some((p) => (
+        x < p.x + p.w && x + w > p.x && y < p.y + p.h && y + h > p.y
+      ));
+
+      for (let row = 0; row < 200; row += 1) {
+        for (let col = 0; col <= cols - w; col += 1) {
+          if (!collides(col, row)) {
+            return { x: col, y: row };
+          }
+        }
+      }
+
+      return { x: 0, y: 0 };
+    };
+
+    tabNumbers.forEach((tabNumber) => {
+      const tab = tabs.find(t => t.number === tabNumber);
+      if (!tab?.id) return;
+
+      const widgetsForTab = getAssignedWidgetsForTab(tabNumber);
+      if (widgetsForTab.length === 0) return;
+
+      const placed = [];
+      widgetsForTab.forEach(({ widgetId, defaultSize }) => {
+        const key = `widget-layout-id-${tab.id}-${widgetId}`;
+        let parsed = null;
+        try {
+          parsed = JSON.parse(localStorage.getItem(key) || 'null');
+        } catch {
+          parsed = null;
+        }
+
+        const w = Math.max(Number(parsed?.w) || defaultSize.w, 1);
+        const h = Math.max(Number(parsed?.h) || defaultSize.h, 1);
+        const pos = findFreePosition(placed, w, h, 12);
+        const layoutData = { x: pos.x, y: pos.y, w, h };
+
+        placed.push(layoutData);
+        localStorage.setItem(key, JSON.stringify(layoutData));
+      });
+    });
+  };
+
+  const saveWidgetSettings = async () => {
+    setIsLoading(true);
+    try {
+      localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
+      setWidgetSettings(widgetSettings);
+
+      const currentResponse = await axios.get(`${API_DEVICE_URL}/widget-assignments`);
+      const currentAssignments = Array.isArray(currentResponse.data) ? currentResponse.data : [];
+      const affectedTabs = new Set();
+      const nextCoreAssignments = {};
+
+      for (const [widgetName, desiredTabNumbers] of Object.entries(widgetAssignments)) {
+        const existing = currentAssignments.filter(a => a.widget_name === widgetName);
+        const existingTabNumbers = existing.map(a => a.tab_number);
+        desiredTabNumbers.forEach(number => {
+          if (Number.isFinite(number)) {
+            nextCoreAssignments[widgetName] = nextCoreAssignments[widgetName] || [];
+            nextCoreAssignments[widgetName].push(number);
+          }
+        });
+
+        collectAffectedTabNumbers(existingTabNumbers, desiredTabNumbers).forEach((tabNumber) => affectedTabs.add(tabNumber));
+
+        const toRemove = existing.filter(a => !desiredTabNumbers.includes(a.tab_number));
+        const toAdd = desiredTabNumbers.filter(number => !existingTabNumbers.includes(number));
+
+        for (const assignment of toRemove) {
+          await axios.delete(`${API_DEVICE_URL}/widget-assignments/${assignment.id}`);
+        }
+
+        for (const tabNumber of toAdd) {
+          await axios.post(`${API_DEVICE_URL}/widget-assignments`, {
+            widget_name: widgetName,
+            tabNumber: tabNumber,
+          });
+          ensureLocalLayoutKeyForAssignment(widgetName, tabNumber);
+        }
+      }
+
+      Object.keys(CORE_WIDGET_DEFAULT_SIZES).forEach((widgetName) => {
+        if (!nextCoreAssignments[widgetName]) {
+          nextCoreAssignments[widgetName] = [];
+        }
+      });
+
+      recalculateLayoutsForAffectedTabs(Array.from(affectedTabs), nextCoreAssignments, pluginAssignments);
+
+      if (onTabsChanged) {
+        await onTabsChanged();
+      }
+
+      setSaveMessage({ show: true, type: 'success', text: 'Widget settings saved successfully.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error saving widget settings:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to save widget settings. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const savePluginSettings = async () => {
+    setIsLoading(true);
+    try {
+      localStorage.setItem('pluginSettings', JSON.stringify(pluginSettings));
+
+      const currentResponse = await axios.get(`${API_DEVICE_URL}/widget-assignments`);
+      const currentAssignments = Array.isArray(currentResponse.data) ? currentResponse.data : [];
+      const affectedTabs = new Set();
+      const nextPluginAssignments = {};
+
+      for (const [pluginWidgetName, desiredTabNumbers] of Object.entries(pluginAssignments)) {
+        const existing = currentAssignments.filter(a => a.widget_name === pluginWidgetName);
+        const existingTabNumbers = existing.map(a => a.tab_number);
+        desiredTabNumbers.forEach(number => {
+          if (Number.isFinite(number)) {
+            nextPluginAssignments[pluginWidgetName] = nextPluginAssignments[pluginWidgetName] || [];
+            nextPluginAssignments[pluginWidgetName].push(number);
+          }
+        });
+
+        collectAffectedTabNumbers(existingTabNumbers, desiredTabNumbers).forEach((tabNumber) => affectedTabs.add(tabNumber));
+
+        const toRemove = existing.filter(a => !desiredTabNumbers.includes(a.tab_number));
+        const toAdd = desiredTabNumbers.filter(number => !existingTabNumbers.includes(number));
+
+        for (const assignment of toRemove) {
+          await axios.delete(`${API_DEVICE_URL}/widget-assignments/${assignment.id}`);
+        }
+
+        for (const tabNumber of toAdd) {
+          await axios.post(`${API_DEVICE_URL}/widget-assignments`, {
+            widget_name: pluginWidgetName,
+            tabNumber: tabNumber,
+          });
+          ensureLocalLayoutKeyForAssignment(pluginWidgetName, tabNumber);
+        }
+      }
+
+      Object.keys(pluginAssignments).forEach((pluginWidgetName) => {
+        if (!nextPluginAssignments[pluginWidgetName]) {
+          nextPluginAssignments[pluginWidgetName] = [];
+        }
+      });
+
+      recalculateLayoutsForAffectedTabs(Array.from(affectedTabs), widgetAssignments, nextPluginAssignments);
+
+      if (onTabsChanged) {
+        await onTabsChanged();
+      }
+
+      if (onPluginsChanged) onPluginsChanged();
+      setSaveMessage({ show: true, type: 'success', text: 'Plugin settings saved successfully.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error saving plugin settings:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to save plugin settings. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleWidgetAssignmentChange = (widgetName, selectedTabNumbers) => {
+    setWidgetAssignments(prev => ({
+      ...prev,
+      [widgetName]: selectedTabNumbers
+    }));
+  };
+
+  const openCreateTabDialog = () => {
+    setTabIconModalState({
+      open: true,
+      mode: 'create',
+      originalNumber: null,
+      initialData: null,
+    });
+  };
+
+  const openEditTabDialog = (tab) => {
+    setTabIconModalState({
+      open: true,
+      mode: 'edit',
+      originalNumber: tab.number,
+      initialData: {
+        label: tab.label || '',
+        icon: tab.icon || 'star',
+        show_label: Boolean(tab.show_label),
+      },
+    });
+  };
+
+  const closeTabEditorDialog = () => {
+    setTabIconModalState(prev => ({ ...prev, open: false }));
+  };
+
+  const saveTabDefinition = async (tabData) => {
+    const trimmedLabel = (tabData.label || '').trim();
+    if (!trimmedLabel) {
+      setSaveMessage({ show: true, type: 'error', text: 'Tab label is required.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      if (tabIconModalState.mode === 'edit') {
+        await axios.patch(`${API_DEVICE_URL}/tabs/${tabIconModalState.originalNumber}`, {
+          label: trimmedLabel,
+          icon: tabData.icon,
+          show_label: tabData.show_label,
+        });
+      } else {
+        await axios.post(`${API_DEVICE_URL}/tabs`, {
+          label: trimmedLabel,
+          icon: tabData.icon,
+          show_label: tabData.show_label,
+        });
+      }
+
+      closeTabEditorDialog();
+      await fetchTabs();
+      if (onTabsChanged) {
+        await onTabsChanged();
+      }
+      setSaveMessage({ show: true, type: 'success', text: `Tab ${tabIconModalState.mode === 'edit' ? 'updated' : 'created'} successfully.` });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error saving tab:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to save tab. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const requestDeleteTab = (tab) => {
+    setDeleteTabDialog({ open: true, tab });
+  };
+
+  const confirmDeleteTab = async () => {
+    if (!deleteTabDialog.tab) {
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      await axios.delete(`${API_DEVICE_URL}/tabs/${deleteTabDialog.tab.number}`);
+      setDeleteTabDialog({ open: false, tab: null });
+      await fetchTabs();
+      await fetchWidgetAssignments();
+      if (onTabsChanged) {
+        await onTabsChanged();
+      }
+      setSaveMessage({ show: true, type: 'success', text: 'Tab deleted successfully.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error deleting tab:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to delete tab. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const saveTabOrder = async (orderedTabNumbers) => {
+    try {
+      setIsLoading(true);
+      await axios.patch(`${API_DEVICE_URL}/tabs/reorder`, { orderedTabNumbers });
+      await fetchTabs();
+      await fetchWidgetAssignments();
+      if (onTabsChanged) {
+        await onTabsChanged();
+      }
+    } catch (error) {
+      console.error('Error reordering tabs:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to reorder tabs. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const toggleTabShowLabel = async (tab) => {
+    try {
+      setIsLoading(true);
+      await axios.patch(`${API_DEVICE_URL}/tabs/${tab.number}`, {
+        label: tab.label,
+        icon: tab.icon,
+        show_label: !Boolean(tab.show_label),
+      });
+
+      await fetchTabs();
+      if (onTabsChanged) {
+        await onTabsChanged();
+      }
+
+      setSaveMessage({ show: true, type: 'success', text: 'Tab label visibility updated.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error updating tab label visibility:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to update tab label visibility.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleTabDragStart = (tabNumber) => {
+    setDraggingTabNumber(tabNumber);
+  };
+
+  const handleTabDrop = async (targetTabNumber) => {
+    if (draggingTabNumber == null || draggingTabNumber === targetTabNumber) {
+      setDraggingTabNumber(null);
+      return;
+    }
+
+    const draggableTabs = tabs
+      .filter(tab => tab.number !== 1)
+      .sort((a, b) => a.number - b.number);
+
+    const fromIndex = draggableTabs.findIndex(tab => tab.number === draggingTabNumber);
+    const toIndex = draggableTabs.findIndex(tab => tab.number === targetTabNumber);
+
+    if (fromIndex === -1 || toIndex === -1) {
+      setDraggingTabNumber(null);
+      return;
+    }
+
+    const next = [...draggableTabs];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    const orderedTabNumbers = next.map(tab => tab.number);
+
+    setDraggingTabNumber(null);
+    await saveTabOrder(orderedTabNumbers);
+  };
+
+  const openCopyDeviceDialog = (device) => {
+    setCopyDeviceDialog({ open: true, device });
+  };
+
+  const confirmCopyDeviceToCurrent = async () => {
+    if (!copyDeviceDialog.device?.name) {
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      await axios.post(`${API_DEVICE_URL}/copy-from/${encodeURIComponent(copyDeviceDialog.device.name)}`);
+
+      setCopyDeviceDialog({ open: false, device: null });
+      await fetchTabs();
+      await fetchWidgetAssignments();
+      await fetchDevices();
+      if (onTabsChanged) {
+        await onTabsChanged();
+      }
+
+      setSaveMessage({ show: true, type: 'success', text: 'Device tabs and widget settings copied successfully.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error copying device settings:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to copy device settings. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const openDeleteDeviceDialog = (device) => {
+    setDeleteDeviceDialog({ open: true, device });
+  };
+
+  const openRenameDeviceDialog = () => {
+    setRenameDeviceDialog({
+      open: true,
+      currentName: currentDeviceName,
+      newName: currentDeviceName,
+      error: '',
+    });
+  };
+
+  const confirmRenameDevice = async () => {
+    const nextName = (renameDeviceDialog.newName || '').trim();
+    if (!nextName) {
+      setRenameDeviceDialog(prev => ({ ...prev, error: 'Device Name is required.' }));
+      return;
+    }
+
+    if (nextName === renameDeviceDialog.currentName) {
+      setRenameDeviceDialog(prev => ({ ...prev, open: false, error: '' }));
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      await axios.patch(`${API_BASE_URL}/api/devices/${encodeURIComponent(renameDeviceDialog.currentName)}`, {
+        name: nextName,
+      });
+
+      setDeviceName(nextName);
+      setCurrentDeviceName(nextName);
+      setRenameDeviceDialog({ open: false, currentName: '', newName: '', error: '' });
+      await fetchDevices();
+      setSaveMessage({ show: true, type: 'success', text: 'Device Name updated. Reloading to apply changes.' });
+      setTimeout(() => {
+        window.location.reload();
+      }, 400);
+    } catch (error) {
+      console.error('Error renaming device:', error);
+      const errorMessage = error?.response?.data?.error || 'Failed to update device name. Please try again.';
+      setRenameDeviceDialog(prev => ({ ...prev, error: errorMessage }));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const confirmDeleteDevice = async () => {
+    const deviceName = deleteDeviceDialog.device?.name;
+    if (!deviceName) {
+      return;
+    }
+
+    if (deviceName === currentDeviceName) {
+      setSaveMessage({ show: true, type: 'error', text: 'You cannot delete the current device.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+      setDeleteDeviceDialog({ open: false, device: null });
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      await axios.delete(`${API_BASE_URL}/api/devices/${encodeURIComponent(deviceName)}`);
+      setDeleteDeviceDialog({ open: false, device: null });
+      await fetchDevices();
+      setSaveMessage({ show: true, type: 'success', text: 'Device deleted successfully.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error deleting device:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to delete device. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const saveInterfaceSettings = () => {
     localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
     setWidgetSettings(widgetSettings);
-    
+
     // Apply CSS variables immediately
     applyAccentColors();
-    
+
     setSaveMessage({ show: true, type: 'success', text: 'Accent colors saved! Refresh page to see all changes.' });
     setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
   };
 
   const applyAccentColors = () => {
     const root = document.documentElement;
-    
-    // Apply only accent colors
+    const isLight = root.getAttribute('data-theme') === 'light';
+
     root.style.setProperty('--primary', widgetSettings.primary);
     root.style.setProperty('--secondary', widgetSettings.secondary);
     root.style.setProperty('--accent', widgetSettings.accent);
+
+    if (isLight) {
+      root.style.setProperty('--background', widgetSettings.primary);
+    }
   };
 
   const resetToDefaults = () => {
     const defaultSettings = {
-      primary: '#9E7FFF',
+      primary: '#f5f5f5',
       secondary: '#38bdf8',
       accent: '#f472b6'
     };
-    
+
     setLocalWidgetSettings(prev => ({ ...prev, ...defaultSettings }));
     setSaveMessage({ show: true, type: 'info', text: 'Reset to default colors. Click Save to apply.' });
     setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
   };
+
+  const saveScreensaverSettings = () => {
+    localStorage.setItem('screensaverSettings', JSON.stringify(screensaverSettings));
+    setSaveMessage({ show: true, type: 'success', text: 'Screensaver settings saved!' });
+    setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+  };
+
+  const hasImmichConfigured = photoSources.some(source => source.type === 'Immich' && source.enabled === 1);
+  const hasTabsCreated = tabs.length > 0;
 
   const handleWidgetToggle = (widget, field) => {
     setLocalWidgetSettings(prev => ({
@@ -324,16 +980,6 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       [widget]: {
         ...prev[widget],
         refreshInterval: interval
-      }
-    }));
-  };
-
-  const handleWeatherLayoutModeChange = (mode) => {
-    setLocalWidgetSettings(prev => ({
-      ...prev,
-      weather: {
-        ...prev.weather,
-        layoutMode: mode
       }
     }));
   };
@@ -460,7 +1106,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       fetchUploadedWidgets();
-      if (onWidgetUploaded) onWidgetUploaded();
+      if (onPluginsChanged) onPluginsChanged();
     } catch (error) {
       console.error('Error uploading widget:', error);
       alert('Failed to upload widget. Please try again.');
@@ -474,8 +1120,21 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       try {
         setIsLoading(true);
         await axios.delete(`${API_BASE_URL}/api/widgets/${filename}`);
+        const pluginWidgetName = `plugin:${filename}`;
+        await axios.delete(`${API_DEVICE_URL}/widget-assignments/widget/${encodeURIComponent(pluginWidgetName)}`).catch(() => { });
+        setPluginSettings(prev => {
+          const updated = { ...prev };
+          delete updated[filename];
+          localStorage.setItem('pluginSettings', JSON.stringify(updated));
+          return updated;
+        });
+        setPluginAssignments(prev => {
+          const updated = { ...prev };
+          delete updated[pluginWidgetName];
+          return updated;
+        });
         fetchUploadedWidgets();
-        if (onWidgetUploaded) onWidgetUploaded();
+        if (onPluginsChanged) onPluginsChanged();
       } catch (error) {
         console.error('Error deleting widget:', error);
       } finally {
@@ -493,7 +1152,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
         name: widget.name
       });
       fetchUploadedWidgets();
-      if (onWidgetUploaded) onWidgetUploaded();
+      if (onPluginsChanged) onPluginsChanged();
       alert(`Widget "${widget.name}" installed successfully!`);
     } catch (error) {
       console.error('Error installing GitHub widget:', error);
@@ -535,28 +1194,43 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
 
   const handleProfilePictureUpload = async (userId, event) => {
     const file = event.target.files[0];
-    if (!file) return;
+    if (!file) {
+      console.log('No file selected');
+      return;
+    }
+
+    console.log('File selected:', file.name, 'Size:', file.size, 'Type:', file.type);
 
     const formData = new FormData();
     formData.append('file', file);
 
     try {
       setIsLoading(true);
+      console.log(`Uploading picture for user ${userId}...`);
+
       const response = await axios.post(
         `${API_BASE_URL}/api/users/${userId}/upload-picture`,
         formData,
         { headers: { 'Content-Type': 'multipart/form-data' } }
       );
-      fetchUsers();
+
+      console.log('Upload response:', response.data);
+
+      await fetchUsers();
+      console.log('Users fetched after upload');
     } catch (error) {
       console.error('Error uploading profile picture:', error);
+      console.error('Error details:', error.response?.data);
       alert('Failed to upload profile picture. Please try again.');
     } finally {
       setIsLoading(false);
+      event.target.value = '';
     }
   };
 
-  const renderUserAvatar = (user) => {
+  const UserAvatar = ({ user }) => {
+    const [imageError, setImageError] = useState(false);
+
     let imageUrl = null;
     if (user.profile_picture) {
       if (user.profile_picture.startsWith('data:')) {
@@ -566,23 +1240,27 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       }
     }
 
-    return imageUrl ? (
-      <img
-        src={imageUrl}
-        alt={user.username}
-        style={{
-          width: 40,
-          height: 40,
-          borderRadius: '50%',
-          objectFit: 'cover',
-          border: '2px solid var(--accent)'
-        }}
-        onError={(e) => {
-          e.target.style.display = 'none';
-          e.target.nextSibling.style.display = 'flex';
-        }}
-      />
-    ) : (
+    if (imageUrl && !imageError) {
+      return (
+        <img
+          src={imageUrl}
+          alt={user.username}
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: '50%',
+            objectFit: 'cover',
+            border: '2px solid var(--accent)'
+          }}
+          onError={() => {
+            console.error('Failed to load image:', imageUrl);
+            setImageError(true);
+          }}
+        />
+      );
+    }
+
+    return (
       <Avatar sx={{ width: 40, height: 40, bgcolor: 'var(--accent)' }}>
         {user.username.charAt(0).toUpperCase()}
       </Avatar>
@@ -670,7 +1348,13 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
               boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
             }
           }}
-          onClick={() => setShowColorPicker(prev => ({ ...prev, [key]: !prev[key] }))}
+          onClick={(e) => {
+            if (colorPickerAnchor.key === key) {
+              setColorPickerAnchor({ key: null, el: null });
+            } else {
+              setColorPickerAnchor({ key, el: e.currentTarget });
+            }
+          }}
         />
         <TextField
           size="medium"
@@ -680,27 +1364,12 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
           placeholder="#000000"
         />
       </Box>
-      {showColorPicker[key] && (
-        <Box sx={{ position: 'relative', mt: 2 }}>
-          <Box
-            sx={{ 
-              position: 'fixed', 
-              top: 0, 
-              right: 0, 
-              bottom: 0, 
-              left: 0,
-              zIndex: 999
-            }}
-            onClick={() => setShowColorPicker(prev => ({ ...prev, [key]: false }))}
-          />
-          <Box sx={{ position: 'absolute', zIndex: 1000 }}>
-            <ChromePicker
-              color={widgetSettings[key]}
-              onChange={(color) => handleColorChange(key, color)}
-            />
-          </Box>
-        </Box>
-      )}
+      <ColorPickerPopover
+        anchorEl={colorPickerAnchor.key === key ? colorPickerAnchor.el : null}
+        color={widgetSettings[key]}
+        onChange={(color) => handleColorChange(key, color)}
+        onClose={() => setColorPickerAnchor({ key: null, el: null })}
+      />
     </Box>
   );
 
@@ -709,15 +1378,14 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
     return option ? option.label : 'Disabled';
   };
 
-  const tabs = [
-    'APIs',
+  const adminTabs = [
     'Widgets',
     'Interface',
     'Users',
     'Chores',
     'Prizes',
-    'Plugins',
-    'Security'
+    'Security',
+    'APIs'
   ];
 
   if (checkingPin) {
@@ -749,73 +1417,23 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       </Typography>
 
       <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)} sx={{ mb: 3 }}>
-        {tabs.map((tab, index) => (
+        {adminTabs.map((tab, index) => (
           <Tab key={tab} label={tab} />
         ))}
       </Tabs>
 
-      {/* APIs Tab */}
+      {/* Widgets Tab */}
       {activeTab === 0 && (
         <Card>
           <CardContent>
-            <Typography variant="h6" gutterBottom>API Configuration</Typography>
-
-            {saveMessage.show && (
-              <Alert severity={saveMessage.type} sx={{ mb: 2 }}>
-                {saveMessage.text}
-              </Alert>
-            )}
-
-            <Box sx={{ maxWidth: 600 }}>
-              <TextField
-                fullWidth
-                label="OpenWeatherMap API Key"
-                type="password"
-                value={settings.WEATHER_API_KEY || ''}
-                onChange={(e) => setSettings(prev => ({ ...prev, WEATHER_API_KEY: e.target.value }))}
-                sx={{ mb: 2 }}
-                helperText="Get your free API key from openweathermap.org/api"
-              />
-
-              <TextField
-                fullWidth
-                label="Proxy Whitelist (comma-separated domains)"
-                value={settings.PROXY_WHITELIST || ''}
-                onChange={(e) => setSettings(prev => ({ ...prev, PROXY_WHITELIST: e.target.value }))}
-                sx={{ mb: 2 }}
-                helperText="Domains allowed for proxy requests (e.g., api.example.com, another-api.com)"
-              />
-
-              <TextField
-                fullWidth
-                label="Daily Completion Clam Reward"
-                type="number"
-                value={settings.daily_completion_clam_reward || '2'}
-                onChange={(e) => setSettings(prev => ({ ...prev, daily_completion_clam_reward: e.target.value }))}
-                sx={{ mb: 2 }}
-                helperText="Number of clams awarded when a user completes all their daily chores"
-                inputProps={{ min: 0, max: 100 }}
-              />
-
-              <Button
-                variant="contained"
-                onClick={saveAllApiSettings}
-                disabled={isLoading}
-                startIcon={<Save />}
-                sx={{ mt: 2 }}
-              >
-                {isLoading ? 'Saving...' : 'Save Settings'}
-              </Button>
+            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+              <Tabs value={widgetsSubTab} onChange={(_, v) => setWidgetsSubTab(v)} size="small">
+                <Tab label="Widgets" />
+                <Tab label="Plugins" />
+                <Tab label="Tabs" />
+                <Tab label="Devices" />
+              </Tabs>
             </Box>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Widgets Tab */}
-      {activeTab === 1 && (
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>Widget Settings</Typography>
 
             {saveMessage.show && (
               <Alert severity={saveMessage.type} sx={{ mb: 2 }}>
@@ -823,277 +1441,591 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
               </Alert>
             )}
 
-            <Alert severity="info" sx={{ mb: 2 }}>
-              Enable widgets to show them on the dashboard. Click to select a widget, then drag to move or resize from corners.
-            </Alert>
+            {widgetsSubTab === 0 && (
+              <>
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  Enable widgets to show them on the dashboard. Click to select a widget, then drag to move or resize from corners.
+                </Alert>
 
-            {/* Core Widgets */}
-            {Object.entries(widgetSettings).filter(([key]) => 
-              ['chores', 'calendar', 'photos'].includes(key)
-            ).map(([widget, config]) => (
-              <Box key={widget} sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
-                <Typography variant="subtitle1" sx={{ mb: 2, textTransform: 'capitalize', fontWeight: 'bold' }}>
-                  {widget} Widget
-                </Typography>
-                
-                <Grid container spacing={2} alignItems="center">
-                  <Grid item xs={12} sm={6}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={config.enabled}
-                          onChange={() => handleWidgetToggle(widget, 'enabled')}
+                {Object.entries(widgetSettings).filter(([key]) =>
+                  ['chores', 'calendar', 'photos'].includes(key)
+                ).map(([widget, config]) => (
+                  <Box key={widget} sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
+                    <Typography variant="subtitle1" sx={{ mb: 2, textTransform: 'capitalize', fontWeight: 'bold' }}>
+                      {widget} Widget
+                    </Typography>
+
+                    <Grid container spacing={2} alignItems="center">
+                      <Grid item xs={12} sm={6}>
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={config.enabled}
+                              onChange={() => handleWidgetToggle(widget, 'enabled')}
+                            />
+                          }
+                          label="Enabled"
                         />
-                      }
-                      label="Enabled"
-                    />
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={config.transparent}
-                          onChange={() => handleWidgetToggle(widget, 'transparent')}
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={config.transparent}
+                              onChange={() => handleWidgetToggle(widget, 'transparent')}
+                            />
+                          }
+                          label="Transparent Background"
+                          sx={{ ml: 2 }}
                         />
-                      }
-                      label="Transparent Background"
-                      sx={{ ml: 2 }}
-                    />
+                      </Grid>
+
+                      <Grid item xs={12} sm={6}>
+                        <FormControl fullWidth size="small">
+                          <InputLabel id={`${widget}-refresh-label`}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Timer fontSize="small" />
+                              Auto-Refresh Interval
+                            </Box>
+                          </InputLabel>
+                          <Select
+                            labelId={`${widget}-refresh-label`}
+                            value={config.refreshInterval || 0}
+                            onChange={(e) => handleRefreshIntervalChange(widget, e.target.value)}
+                            label="Auto-Refresh Interval"
+                          >
+                            {refreshIntervalOptions.map((option) => (
+                              <MenuItem key={option.value} value={option.value}>
+                                {option.label}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                    </Grid>
+
+                    <Box sx={{ mt: 2 }}>
+                      <Autocomplete
+                        multiple
+                        options={tabs}
+                        getOptionLabel={(option) => option.label}
+                        value={tabs.filter(tab => widgetAssignments[widget]?.includes(tab.number))}
+                        onChange={(e, newValue) => {
+                          handleWidgetAssignmentChange(widget, newValue.map(tab => tab.number));
+                        }}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            label="Show on Tabs"
+                            placeholder="Select tabs..."
+                            helperText="Select which tabs this widget should appear on (defaults to Home tab if none selected)"
+                          />
+                        )}
+                        renderTags={(value, getTagProps) =>
+                          value.map((option, index) => (
+                            <Chip
+                              label={option.label}
+                              {...getTagProps({ index })}
+                              sx={{ backgroundColor: 'var(--accent)', color: 'white' }}
+                            />
+                          ))
+                        }
+                      />
+                    </Box>
+
+                    {config.refreshInterval > 0 && (
+                      <Alert severity="info" sx={{ mt: 2 }} icon={<Timer />}>
+                        This widget will automatically refresh every {getRefreshIntervalLabel(config.refreshInterval).toLowerCase()}
+                      </Alert>
+                    )}
+                  </Box>
+                ))}
+
+                <Box sx={{ mb: 3, p: 2, border: '2px solid var(--accent)', borderRadius: 1, backgroundColor: 'rgba(158, 127, 255, 0.05)' }}>
+                  <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>
+                    Weather Widget
+                  </Typography>
+
+                  <Grid container spacing={2} alignItems="center">
+                    <Grid item xs={12} sm={6}>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={widgetSettings.weather?.enabled || false}
+                            onChange={() => handleWidgetToggle('weather', 'enabled')}
+                          />
+                        }
+                        label="Enabled"
+                      />
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={widgetSettings.weather?.transparent || false}
+                            onChange={() => handleWidgetToggle('weather', 'transparent')}
+                          />
+                        }
+                        label="Transparent Background"
+                        sx={{ ml: 2 }}
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} sm={6}>
+                      <FormControl fullWidth size="small">
+                        <InputLabel id="weather-refresh-label">
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Timer fontSize="small" />
+                            Auto-Refresh Interval
+                          </Box>
+                        </InputLabel>
+                        <Select
+                          labelId="weather-refresh-label"
+                          value={widgetSettings.weather?.refreshInterval || 0}
+                          onChange={(e) => handleRefreshIntervalChange('weather', e.target.value)}
+                          label="Auto-Refresh Interval"
+                        >
+                          {refreshIntervalOptions.map((option) => (
+                            <MenuItem key={option.value} value={option.value}>
+                              {option.label}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Grid>
                   </Grid>
-                  
-                  <Grid item xs={12} sm={6}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel id={`${widget}-refresh-label`}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Timer fontSize="small" />
-                          Auto-Refresh Interval
-                        </Box>
-                      </InputLabel>
-                      <Select
-                        labelId={`${widget}-refresh-label`}
-                        value={config.refreshInterval || 0}
-                        onChange={(e) => handleRefreshIntervalChange(widget, e.target.value)}
-                        label="Auto-Refresh Interval"
+
+                  <Box sx={{ mt: 2 }}>
+                    <Autocomplete
+                      multiple
+                      options={tabs}
+                      getOptionLabel={(option) => option.label}
+                      value={tabs.filter(tab => widgetAssignments['weather']?.includes(tab.number))}
+                      onChange={(e, newValue) => {
+                        handleWidgetAssignmentChange('weather', newValue.map(tab => tab.number));
+                      }}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Show on Tabs"
+                          placeholder="Select tabs..."
+                          helperText="Select which tabs this widget should appear on (defaults to Home tab if none selected)"
+                        />
+                      )}
+                      renderTags={(value, getTagProps) =>
+                        value.map((option, index) => (
+                          <Chip
+                            label={option.label}
+                            {...getTagProps({ index })}
+                            sx={{ backgroundColor: 'var(--accent)', color: 'white' }}
+                          />
+                        ))
+                      }
+                    />
+                  </Box>
+
+                  {widgetSettings.weather?.refreshInterval > 0 && (
+                    <Alert severity="info" sx={{ mt: 2 }} icon={<Timer />}>
+                      Weather widget will automatically refresh every {getRefreshIntervalLabel(widgetSettings.weather.refreshInterval).toLowerCase()}
+                    </Alert>
+                  )}
+                </Box>
+
+                <Button variant="contained" onClick={saveWidgetSettings} sx={{ mt: 2 }} startIcon={<Save />}>
+                  Save Widget Settings
+                </Button>
+              </>
+            )}
+
+            {widgetsSubTab === 1 && (
+              <>
+                <Grid container spacing={3}>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle1" gutterBottom>Upload Custom Widget</Typography>
+                    <Button
+                      variant="contained"
+                      component="label"
+                      startIcon={<Upload />}
+                      fullWidth
+                      sx={{ mb: 2 }}
+                    >
+                      Upload HTML Widget
+                      <input
+                        type="file"
+                        hidden
+                        accept=".html"
+                        onChange={handleWidgetUpload}
+                      />
+                    </Button>
+
+                    <Typography variant="subtitle1" gutterBottom>Uploaded Widgets</Typography>
+                    <List>
+                      {uploadedWidgets.map((widget) => (
+                        <ListItem key={widget.filename} sx={{ border: '1px solid var(--card-border)', borderRadius: 1, mb: 1 }}>
+                          <ListItemText
+                            primary={widget.name}
+                            secondary={`File: ${widget.filename}`}
+                          />
+                          <ListItemSecondaryAction>
+                            <IconButton onClick={() => deleteWidget(widget.filename)} color="error">
+                              <Delete />
+                            </IconButton>
+                          </ListItemSecondaryAction>
+                        </ListItem>
+                      ))}
+                    </List>
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                      <Typography variant="subtitle1">GitHub Widget Repository</Typography>
+                      <Button
+                        onClick={fetchGithubWidgets}
+                        startIcon={loadingGithub ? <CircularProgress size={16} /> : <Refresh />}
+                        disabled={loadingGithub}
                       >
-                        {refreshIntervalOptions.map((option) => (
-                          <MenuItem key={option.value} value={option.value}>
-                            {option.label}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
+                        Refresh
+                      </Button>
+                    </Box>
+
+                    <List sx={{ maxHeight: 400, overflowY: 'auto' }}>
+                      {githubWidgets.map((widget) => (
+                        <ListItem key={widget.path} sx={{ border: '1px solid var(--card-border)', borderRadius: 1, mb: 1 }}>
+                          <ListItemText
+                            primary={widget.name}
+                            secondary={widget.description}
+                          />
+                          <ListItemSecondaryAction>
+                            <Button
+                              onClick={() => installGithubWidget(widget)}
+                              startIcon={<CloudDownload />}
+                              size="small"
+                              variant="outlined"
+                            >
+                              Install
+                            </Button>
+                          </ListItemSecondaryAction>
+                        </ListItem>
+                      ))}
+                    </List>
                   </Grid>
                 </Grid>
-                
-                {config.refreshInterval > 0 && (
-                  <Alert severity="info" sx={{ mt: 2 }} icon={<Timer />}>
-                    This widget will automatically refresh every {getRefreshIntervalLabel(config.refreshInterval).toLowerCase()}
-                  </Alert>
+
+                {uploadedWidgets.length > 0 && (
+                  <>
+                    <Divider sx={{ my: 3 }} />
+                    <Typography variant="h6" gutterBottom>Plugin Settings</Typography>
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                      Configure each installed plugin below. Enable them, set transparency, refresh intervals, and assign to tabs just like core widgets.
+                    </Alert>
+
+                    {uploadedWidgets.map((plugin) => {
+                      const pSettings = pluginSettings[plugin.filename] || {};
+                      const pluginWidgetName = `plugin:${plugin.filename}`;
+                      return (
+                        <Box key={plugin.filename} sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                            <Box>
+                              <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+                                {plugin.name}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {plugin.filename}
+                              </Typography>
+                            </Box>
+                            <IconButton onClick={() => deleteWidget(plugin.filename)} color="error" size="small">
+                              <Delete />
+                            </IconButton>
+                          </Box>
+
+                          <Grid container spacing={2} alignItems="center">
+                            <Grid item xs={12} sm={6}>
+                              <FormControlLabel
+                                control={
+                                  <Switch
+                                    checked={pSettings.enabled || false}
+                                    onChange={() => {
+                                      setPluginSettings(prev => ({
+                                        ...prev,
+                                        [plugin.filename]: { ...prev[plugin.filename], enabled: !(prev[plugin.filename]?.enabled) }
+                                      }));
+                                    }}
+                                  />
+                                }
+                                label="Enabled"
+                              />
+                              <FormControlLabel
+                                control={
+                                  <Switch
+                                    checked={pSettings.transparent || false}
+                                    onChange={() => {
+                                      setPluginSettings(prev => ({
+                                        ...prev,
+                                        [plugin.filename]: { ...prev[plugin.filename], transparent: !(prev[plugin.filename]?.transparent) }
+                                      }));
+                                    }}
+                                  />
+                                }
+                                label="Transparent Background"
+                                sx={{ ml: 2 }}
+                              />
+                            </Grid>
+
+                            <Grid item xs={12} sm={6}>
+                              <FormControl fullWidth size="small">
+                                <InputLabel id={`plugin-${plugin.filename}-refresh-label`}>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Timer fontSize="small" />
+                                    Auto-Refresh Interval
+                                  </Box>
+                                </InputLabel>
+                                <Select
+                                  labelId={`plugin-${plugin.filename}-refresh-label`}
+                                  value={pSettings.refreshInterval || 0}
+                                  onChange={(e) => {
+                                    setPluginSettings(prev => ({
+                                      ...prev,
+                                      [plugin.filename]: { ...prev[plugin.filename], refreshInterval: e.target.value }
+                                    }));
+                                  }}
+                                  label="Auto-Refresh Interval"
+                                >
+                                  {refreshIntervalOptions.map((option) => (
+                                    <MenuItem key={option.value} value={option.value}>
+                                      {option.label}
+                                    </MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
+                            </Grid>
+                          </Grid>
+
+                          <Box sx={{ mt: 2 }}>
+                            <Autocomplete
+                              multiple
+                              options={tabs}
+                              getOptionLabel={(option) => option.label}
+                              value={tabs.filter(tab => pluginAssignments[pluginWidgetName]?.includes(tab.number))}
+                              onChange={(e, newValue) => {
+                                setPluginAssignments(prev => ({
+                                  ...prev,
+                                  [pluginWidgetName]: newValue.map(tab => tab.number)
+                                }));
+                              }}
+                              renderInput={(params) => (
+                                <TextField
+                                  {...params}
+                                  label="Show on Tabs"
+                                  placeholder="Select tabs..."
+                                  helperText="Select which tabs this plugin should appear on (defaults to Home tab if none selected)"
+                                />
+                              )}
+                              renderTags={(value, getTagProps) =>
+                                value.map((option, index) => (
+                                  <Chip
+                                    label={option.label}
+                                    {...getTagProps({ index })}
+                                    sx={{ backgroundColor: 'var(--accent)', color: 'white' }}
+                                  />
+                                ))
+                              }
+                            />
+                          </Box>
+                        </Box>
+                      );
+                    })}
+
+                    <Button variant="contained" onClick={savePluginSettings} sx={{ mt: 2 }} startIcon={<Save />}>
+                      Save Plugin Settings
+                    </Button>
+                  </>
                 )}
-              </Box>
-            ))}
+              </>
+            )}
 
-            {/* Weather Widget with Layout Mode */}
-            <Box sx={{ mb: 3, p: 2, border: '2px solid var(--accent)', borderRadius: 1, backgroundColor: 'rgba(158, 127, 255, 0.05)' }}>
-              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>
-                🌤️ Weather Widget
-              </Typography>
-              
-              <Grid container spacing={2} alignItems="center">
-                <Grid item xs={12} sm={6}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={widgetSettings.weather?.enabled || false}
-                        onChange={() => handleWidgetToggle('weather', 'enabled')}
-                      />
-                    }
-                    label="Enabled"
-                  />
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={widgetSettings.weather?.transparent || false}
-                        onChange={() => handleWidgetToggle('weather', 'transparent')}
-                      />
-                    }
-                    label="Transparent Background"
-                    sx={{ ml: 2 }}
-                  />
-                </Grid>
-                
-                <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel id="weather-refresh-label">
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Timer fontSize="small" />
-                        Auto-Refresh Interval
-                      </Box>
-                    </InputLabel>
-                    <Select
-                      labelId="weather-refresh-label"
-                      value={widgetSettings.weather?.refreshInterval || 0}
-                      onChange={(e) => handleRefreshIntervalChange('weather', e.target.value)}
-                      label="Auto-Refresh Interval"
-                    >
-                      {refreshIntervalOptions.map((option) => (
-                        <MenuItem key={option.value} value={option.value}>
-                          {option.label}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-              </Grid>
+            {widgetsSubTab === 2 && (
+              <>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Alert severity="info" sx={{ mb: 0, flex: 1, mr: 2 }}>
+                    Manage dashboard tabs. Drag rows to reorder tabs. Home tab cannot be edited or deleted.
+                  </Alert>
+                  <Button variant="contained" startIcon={<Add />} onClick={openCreateTabDialog}>
+                    Add Tab
+                  </Button>
+                </Box>
 
-              {/* Weather Layout Mode Selection */}
-              <Box sx={{ mt: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1, bgcolor: 'rgba(255, 255, 255, 0.02)' }}>
-                <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <ViewModule />
-                  Layout Mode
-                </Typography>
-                
-                <RadioGroup
-                  value={widgetSettings.weather?.layoutMode || 'medium'}
-                  onChange={(e) => handleWeatherLayoutModeChange(e.target.value)}
-                >
-                  <FormControlLabel
-                    value="compact"
-                    control={<Radio />}
-                    label={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <ViewCompact />
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                            Compact
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            Current weather only (minimal space)
-                          </Typography>
-                        </Box>
-                      </Box>
-                    }
-                  />
-                  
-                  <FormControlLabel
-                    value="medium"
-                    control={<Radio />}
-                    label={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <ViewModule />
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                            Medium
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            Current weather + 3-day forecast
-                          </Typography>
-                        </Box>
-                      </Box>
-                    }
-                  />
-                  
-                  <FormControlLabel
-                    value="full"
-                    control={<Radio />}
-                    label={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <ViewQuilt />
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                            Full
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            All information with charts and air quality
-                          </Typography>
-                        </Box>
-                      </Box>
-                    }
-                  />
-                </RadioGroup>
+                <TableContainer component={Paper}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell width={60}>Order</TableCell>
+                        <TableCell>Label</TableCell>
+                        <TableCell>Icon</TableCell>
+                        <TableCell>Show Label</TableCell>
+                        <TableCell width={120}>Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {[...tabs].sort((a, b) => a.number - b.number).map((tab) => {
+                        const isHome = tab.number === 1;
+                        return (
+                          <TableRow
+                            key={tab.id}
+                            draggable={!isHome}
+                            onDragStart={() => handleTabDragStart(tab.number)}
+                            onDragOver={(e) => {
+                              if (!isHome) {
+                                e.preventDefault();
+                              }
+                            }}
+                            onDrop={() => {
+                              if (!isHome) {
+                                handleTabDrop(tab.number);
+                              }
+                            }}
+                            sx={{
+                              cursor: isHome ? 'default' : 'grab',
+                              opacity: draggingTabNumber === tab.number ? 0.65 : 1,
+                            }}
+                          >
+                            <TableCell>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                {!isHome && <DragIndicator fontSize="small" />}
+                                <Chip label={tab.number} size="small" />
+                              </Box>
+                            </TableCell>
+                            <TableCell>
+                              {tab.label}
+                              {isHome && (
+                                <Chip size="small" label="Home" color="primary" sx={{ ml: 1 }} />
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Chip size="small" label={tab.icon} />
+                            </TableCell>
+                            <TableCell>
+                              <Switch
+                                checked={Boolean(tab.show_label)}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={() => toggleTabShowLabel(tab)}
+                                disabled={isLoading}
+                                inputProps={{ 'aria-label': `Toggle show label for ${tab.label}` }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <IconButton
+                                onClick={() => openEditTabDialog(tab)}
+                                color="primary"
+                                size="small"
+                                disabled={isHome}
+                              >
+                                <Edit />
+                              </IconButton>
+                              <IconButton
+                                onClick={() => requestDeleteTab(tab)}
+                                color="error"
+                                size="small"
+                                disabled={isHome}
+                              >
+                                <Delete />
+                              </IconButton>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </>
+            )}
 
-                <Alert severity="info" sx={{ mt: 2 }}>
-                  The selected layout mode will be used regardless of widget size. Resize the widget to fit your preferred layout.
+            {widgetsSubTab === 3 && (
+              <>
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  Manage devices and copy tabs/widget settings between them. Copying will overwrite the current device tabs and widget assignments.
                 </Alert>
-              </Box>
-              
-              {widgetSettings.weather?.refreshInterval > 0 && (
-                <Alert severity="info" sx={{ mt: 2 }} icon={<Timer />}>
-                  Weather widget will automatically refresh every {getRefreshIntervalLabel(widgetSettings.weather.refreshInterval).toLowerCase()}
-                </Alert>
-              )}
-            </Box>
 
-            {/* Widget Gallery Settings */}
-            <Box sx={{ mb: 2, p: 2, border: '2px solid var(--accent)', borderRadius: 1, backgroundColor: 'rgba(244, 114, 182, 0.05)' }}>
-              <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'bold' }}>
-                🎨 Widget Gallery
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                The Widget Gallery displays custom uploaded widgets below the main dashboard widgets.
-              </Typography>
-              
-              <Grid container spacing={2} alignItems="center">
-                <Grid item xs={12} sm={6}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={widgetSettings.widgetGallery?.enabled || false}
-                        onChange={() => handleWidgetToggle('widgetGallery', 'enabled')}
-                      />
-                    }
-                    label="Show Widget Gallery"
-                  />
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={widgetSettings.widgetGallery?.transparent || false}
-                        onChange={() => handleWidgetToggle('widgetGallery', 'transparent')}
-                      />
-                    }
-                    label="Transparent Background"
-                    sx={{ ml: 2 }}
-                  />
-                </Grid>
-                
-                <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel id="gallery-refresh-label">
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Timer fontSize="small" />
-                        Auto-Refresh Interval
-                      </Box>
-                    </InputLabel>
-                    <Select
-                      labelId="gallery-refresh-label"
-                      value={widgetSettings.widgetGallery?.refreshInterval || 0}
-                      onChange={(e) => handleRefreshIntervalChange('widgetGallery', e.target.value)}
-                      label="Auto-Refresh Interval"
-                    >
-                      {refreshIntervalOptions.map((option) => (
-                        <MenuItem key={option.value} value={option.value}>
-                          {option.label}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-              </Grid>
-              
-              {widgetSettings.widgetGallery?.refreshInterval > 0 && (
-                <Alert severity="info" sx={{ mt: 2 }} icon={<Timer />}>
-                  Widget Gallery will automatically refresh every {getRefreshIntervalLabel(widgetSettings.widgetGallery.refreshInterval).toLowerCase()}
-                </Alert>
-              )}
-            </Box>
-            
-            <Button variant="contained" onClick={saveWidgetSettings} sx={{ mt: 2 }} startIcon={<Save />}>
-              Save Widget Settings
-            </Button>
+                <Box sx={{ mb: 2, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
+                  <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
+                    Current Device Name
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                    <Chip label="Current" color="primary" size="small" />
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                      {currentDeviceName}
+                    </Typography>
+                  </Box>
+                </Box>
+
+                <TableContainer component={Paper}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Name</TableCell>
+                        <TableCell>Last Updated</TableCell>
+                        <TableCell>Widgets</TableCell>
+                        <TableCell width={120}>Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {devices.map((device) => {
+                        const isCurrent = device.name === currentDeviceName;
+                        return (
+                          <TableRow key={device.name}>
+                            <TableCell>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                                {isCurrent && <Chip label="Current" color="primary" size="small" />}
+                                <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                                  {device.name}
+                                </Typography>
+                              </Box>
+                            </TableCell>
+                            <TableCell>
+                              {device.updateTime ? new Date(device.updateTime).toLocaleString() : 'Unknown'}
+                            </TableCell>
+                            <TableCell>
+                              <Chip label={Number(device.widgets) || 0} size="small" />
+                            </TableCell>
+                            <TableCell>
+                              {isCurrent ? (
+                                <IconButton
+                                  onClick={openRenameDeviceDialog}
+                                  color="primary"
+                                  size="small"
+                                  title="Rename current device"
+                                >
+                                  <Edit />
+                                </IconButton>
+                              ) : (
+                                <IconButton
+                                  onClick={() => openCopyDeviceDialog(device)}
+                                  color="primary"
+                                  size="small"
+                                  title="Copy this device to current"
+                                >
+                                  <ContentCopy />
+                                </IconButton>
+                              )}
+                              <IconButton
+                                onClick={() => openDeleteDeviceDialog(device)}
+                                color="error"
+                                size="small"
+                                title="Delete device"
+                                disabled={isCurrent}
+                              >
+                                <Delete />
+                              </IconButton>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </>
+            )}
           </CardContent>
         </Card>
       )}
 
       {/* Interface Tab */}
-      {activeTab === 2 && (
+      {activeTab === 1 && (
         <Card>
           <CardContent>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -1115,18 +2047,18 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
             )}
 
             <Alert severity="info" sx={{ mb: 3 }}>
-              Customize the accent colors used throughout the dashboard. These colors are shared between light and dark themes.
+              Background color applies to light mode only. Accent color is used throughout the dashboard for highlights and interactive elements.
             </Alert>
-            
+
             <Box sx={{ maxWidth: 600, mx: 'auto' }}>
-              {renderColorPicker('primary', '🎨 Primary Color')}
+              {renderColorPicker('primary', '🎨 Background Color (Light Mode)')}
               {renderColorPicker('secondary', '💎 Secondary Color')}
               {renderColorPicker('accent', '✨ Accent Color')}
             </Box>
-            
+
             <Box sx={{ mt: 4, display: 'flex', gap: 2, justifyContent: 'center' }}>
-              <Button 
-                variant="contained" 
+              <Button
+                variant="contained"
                 onClick={saveInterfaceSettings}
                 startIcon={<Save />}
                 size="large"
@@ -1142,16 +2074,200 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
                 Refresh Page
               </Button>
             </Box>
+
+            <Divider sx={{ my: 4 }} />
+
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+              <Nightlight />
+              <Typography variant="h6">Screensaver</Typography>
+            </Box>
+
+            <Alert severity="info" sx={{ mb: 3 }}>
+              The screensaver activates after a period of inactivity, cycling through tabs or displaying a photo slideshow.
+            </Alert>
+
+            <Box sx={{ maxWidth: 600, mx: 'auto' }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={screensaverSettings.enabled}
+                    onChange={(e) => setScreensaverSettings(prev => ({ ...prev, enabled: e.target.checked }))}
+                  />
+                }
+                label="Enable Screensaver"
+                sx={{ mb: 3 }}
+              />
+
+              <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold' }}>
+                Screensaver Mode
+              </Typography>
+
+              <RadioGroup
+                value={screensaverSettings.mode}
+                onChange={(e) => setScreensaverSettings(prev => ({ ...prev, mode: e.target.value }))}
+                sx={{ mb: 3 }}
+              >
+                <Tooltip
+                  title={!hasTabsCreated ? "Create tabs in the dashboard to use this mode" : ""}
+                  placement="right"
+                >
+                  <FormControlLabel
+                    value="tabs"
+                    control={<Radio disabled={!hasTabsCreated} />}
+                    label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <TabIcon fontSize="small" />
+                        <Box>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              fontWeight: 'bold',
+                              color: !hasTabsCreated ? 'text.disabled' : 'inherit'
+                            }}
+                          >
+                            Cycle Through Tabs
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            color={!hasTabsCreated ? 'text.disabled' : 'text.secondary'}
+                          >
+                            {hasTabsCreated
+                              ? `Automatically switch between ${tabs.length} tab${tabs.length !== 1 ? 's' : ''}`
+                              : 'No tabs created yet'}
+                          </Typography>
+                        </Box>
+                        {!hasTabsCreated && (
+                          <Tooltip title="Create tabs in the Tab Bar to enable this feature">
+                            <Info fontSize="small" color="disabled" />
+                          </Tooltip>
+                        )}
+                      </Box>
+                    }
+                    sx={{ opacity: !hasTabsCreated ? 0.6 : 1 }}
+                  />
+                </Tooltip>
+
+                <Tooltip
+                  title={!hasImmichConfigured ? "Configure Immich in the Photos widget settings to use this mode" : ""}
+                  placement="right"
+                >
+                  <FormControlLabel
+                    value="photos"
+                    control={<Radio disabled={!hasImmichConfigured} />}
+                    label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <PhotoLibrary fontSize="small" />
+                        <Box>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              fontWeight: 'bold',
+                              color: !hasImmichConfigured ? 'text.disabled' : 'inherit'
+                            }}
+                          >
+                            Immich Photo Slideshow
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            color={!hasImmichConfigured ? 'text.disabled' : 'text.secondary'}
+                          >
+                            {hasImmichConfigured
+                              ? 'Display photos from your Immich library'
+                              : 'Immich not configured'}
+                          </Typography>
+                        </Box>
+                        {!hasImmichConfigured && (
+                          <Tooltip title="Configure an Immich photo source in the Photos widget to enable this feature">
+                            <Info fontSize="small" color="disabled" />
+                          </Tooltip>
+                        )}
+                      </Box>
+                    }
+                    sx={{ opacity: !hasImmichConfigured ? 0.6 : 1 }}
+                  />
+                </Tooltip>
+              </RadioGroup>
+
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                Inactivity Timeout: {screensaverSettings.timeout} minute{screensaverSettings.timeout !== 1 ? 's' : ''}
+              </Typography>
+              <Slider
+                value={screensaverSettings.timeout}
+                onChange={(e, value) => setScreensaverSettings(prev => ({ ...prev, timeout: value }))}
+                min={1}
+                max={30}
+                marks={[
+                  { value: 1, label: '1m' },
+                  { value: 5, label: '5m' },
+                  { value: 10, label: '10m' },
+                  { value: 15, label: '15m' },
+                  { value: 30, label: '30m' }
+                ]}
+                sx={{ mb: 4 }}
+              />
+
+              {screensaverSettings.mode === 'photos' && (
+                <>
+                  <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                    Photo Slideshow Interval: {screensaverSettings.slideshowInterval} second{screensaverSettings.slideshowInterval !== 1 ? 's' : ''}
+                  </Typography>
+                  <Slider
+                    value={screensaverSettings.slideshowInterval}
+                    onChange={(e, value) => setScreensaverSettings(prev => ({ ...prev, slideshowInterval: value }))}
+                    min={3}
+                    max={60}
+                    marks={[
+                      { value: 3, label: '3s' },
+                      { value: 10, label: '10s' },
+                      { value: 30, label: '30s' },
+                      { value: 60, label: '60s' }
+                    ]}
+                    sx={{ mb: 4 }}
+                  />
+                </>
+              )}
+
+              {screensaverSettings.mode === 'tabs' && (
+                <>
+                  <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                    Tab Cycle Interval: {screensaverSettings.slideshowInterval} second{screensaverSettings.slideshowInterval !== 1 ? 's' : ''}
+                  </Typography>
+                  <Slider
+                    value={screensaverSettings.slideshowInterval}
+                    onChange={(e, value) => setScreensaverSettings(prev => ({ ...prev, slideshowInterval: value }))}
+                    min={5}
+                    max={120}
+                    marks={[
+                      { value: 5, label: '5s' },
+                      { value: 30, label: '30s' },
+                      { value: 60, label: '60s' },
+                      { value: 120, label: '2m' }
+                    ]}
+                    sx={{ mb: 4 }}
+                  />
+                </>
+              )}
+
+              <Button
+                variant="contained"
+                onClick={saveScreensaverSettings}
+                startIcon={<Save />}
+                fullWidth
+                sx={{ mt: 2 }}
+              >
+                Save Screensaver Settings
+              </Button>
+            </Box>
           </CardContent>
         </Card>
       )}
 
       {/* Users Tab */}
-      {activeTab === 3 && (
+      {activeTab === 2 && (
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>User Management</Typography>
-            
+
             <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
               <Typography variant="subtitle1" sx={{ mb: 2 }}>Add New User</Typography>
               <Grid container spacing={2}>
@@ -1203,7 +2319,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
                     <TableRow key={user.id}>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          {renderUserAvatar(user)}
+                          <UserAvatar key={`${user.id}-${user.profile_picture}`} user={user} />
                           <Button
                             component="label"
                             size="small"
@@ -1313,7 +2429,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       )}
 
       {/* Chores Tab */}
-      {activeTab === 4 && (
+      {activeTab === 3 && (
         <Card>
           <CardContent>
             <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
@@ -1333,11 +2449,11 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
       )}
 
       {/* Prizes Tab */}
-      {activeTab === 5 && (
+      {activeTab === 4 && (
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>Prize Management</Typography>
-            
+
             <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
               <Typography variant="subtitle1" sx={{ mb: 2 }}>Add New Prize</Typography>
               <Grid container spacing={2}>
@@ -1420,89 +2536,8 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
         </Card>
       )}
 
-      {/* Plugins Tab */}
-      {activeTab === 6 && (
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>Plugin Management</Typography>
-            
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle1" gutterBottom>Upload Custom Widget</Typography>
-                <Button
-                  variant="contained"
-                  component="label"
-                  startIcon={<Upload />}
-                  fullWidth
-                  sx={{ mb: 2 }}
-                >
-                  Upload HTML Widget
-                  <input
-                    type="file"
-                    hidden
-                    accept=".html"
-                    onChange={handleWidgetUpload}
-                  />
-                </Button>
-                
-                <Typography variant="subtitle1" gutterBottom>Uploaded Widgets</Typography>
-                <List>
-                  {uploadedWidgets.map((widget) => (
-                    <ListItem key={widget.filename} sx={{ border: '1px solid var(--card-border)', borderRadius: 1, mb: 1 }}>
-                      <ListItemText
-                        primary={widget.name}
-                        secondary={`File: ${widget.filename}`}
-                      />
-                      <ListItemSecondaryAction>
-                        <IconButton onClick={() => deleteWidget(widget.filename)} color="error">
-                          <Delete />
-                        </IconButton>
-                      </ListItemSecondaryAction>
-                    </ListItem>
-                  ))}
-                </List>
-              </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Typography variant="subtitle1">GitHub Widget Repository</Typography>
-                  <Button
-                    onClick={fetchGithubWidgets}
-                    startIcon={loadingGithub ? <CircularProgress size={16} /> : <Refresh />}
-                    disabled={loadingGithub}
-                  >
-                    Refresh
-                  </Button>
-                </Box>
-                
-                <List sx={{ maxHeight: 400, overflowY: 'auto' }}>
-                  {githubWidgets.map((widget) => (
-                    <ListItem key={widget.path} sx={{ border: '1px solid var(--card-border)', borderRadius: 1, mb: 1 }}>
-                      <ListItemText
-                        primary={widget.name}
-                        secondary={widget.description}
-                      />
-                      <ListItemSecondaryAction>
-                        <Button
-                          onClick={() => installGithubWidget(widget)}
-                          startIcon={<CloudDownload />}
-                          size="small"
-                          variant="outlined"
-                        >
-                          Install
-                        </Button>
-                      </ListItemSecondaryAction>
-                    </ListItem>
-                  ))}
-                </List>
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Security Tab */}
-      {activeTab === 7 && (
+      {activeTab === 5 && (
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>Security Settings</Typography>
@@ -1603,6 +2638,203 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
           </CardContent>
         </Card>
       )}
+
+      {/* APIs Tab */}
+      {activeTab === 6 && (
+        <Card>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>API Configuration</Typography>
+
+            {saveMessage.show && (
+              <Alert severity={saveMessage.type} sx={{ mb: 2 }}>
+                {saveMessage.text}
+              </Alert>
+            )}
+
+            <Box sx={{ maxWidth: 600 }}>
+              <TextField
+                fullWidth
+                label="OpenWeatherMap API Key"
+                type="password"
+                value={settings.WEATHER_API_KEY || ''}
+                onChange={(e) => setSettings(prev => ({ ...prev, WEATHER_API_KEY: e.target.value }))}
+                sx={{ mb: 2 }}
+                helperText="Get your free API key from openweathermap.org/api"
+              />
+
+              <TextField
+                fullWidth
+                label="Proxy Whitelist (comma-separated domains)"
+                value={settings.PROXY_WHITELIST || ''}
+                onChange={(e) => setSettings(prev => ({ ...prev, PROXY_WHITELIST: e.target.value }))}
+                sx={{ mb: 2 }}
+                helperText="Domains allowed for proxy requests (e.g., api.example.com, another-api.com)"
+              />
+
+              <TextField
+                fullWidth
+                label="Daily Completion Clam Reward"
+                type="number"
+                value={settings.daily_completion_clam_reward || '2'}
+                onChange={(e) => setSettings(prev => ({ ...prev, daily_completion_clam_reward: e.target.value }))}
+                sx={{ mb: 2 }}
+                helperText="Number of clams awarded when a user completes all their daily chores"
+                inputProps={{ min: 0, max: 100 }}
+              />
+
+              <Button
+                variant="contained"
+                onClick={saveAllApiSettings}
+                disabled={isLoading}
+                startIcon={<Save />}
+                sx={{ mt: 2 }}
+              >
+                {isLoading ? 'Saving...' : 'Save Settings'}
+              </Button>
+            </Box>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* User Delete Confirmation Dialog */}
+      <TabIconModal
+        open={tabIconModalState.open}
+        onClose={closeTabEditorDialog}
+        onSave={saveTabDefinition}
+        title={tabIconModalState.mode === 'edit' ? 'Edit Tab' : 'Create New Tab'}
+        saveButtonText={tabIconModalState.mode === 'edit' ? 'Save Changes' : 'Create Tab'}
+        initialData={tabIconModalState.initialData}
+      />
+
+      <Dialog
+        open={deleteTabDialog.open}
+        onClose={() => setDeleteTabDialog({ open: false, tab: null })}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Warning color="error" />
+            <Typography variant="h6">Delete Tab</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            Widgets assigned to this tab will be moved by the server rules for deleted tabs.
+          </Alert>
+          <Typography>
+            Are you sure you want to delete <strong>{deleteTabDialog.tab?.label}</strong>?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteTabDialog({ open: false, tab: null })} variant="outlined">
+            Cancel
+          </Button>
+          <Button onClick={confirmDeleteTab} variant="contained" color="error" startIcon={<Delete />}>
+            Delete Tab
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={copyDeviceDialog.open}
+        onClose={() => setCopyDeviceDialog({ open: false, device: null })}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Warning color="warning" />
+            <Typography variant="h6">Copy Device Settings</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            This action will COPY all tabs and widget settings from the selected device to this current client.
+          </Alert>
+          <Typography sx={{ mb: 2 }}>
+            This will overwrite all current tabs and widget assignments.
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Source device: <strong>{copyDeviceDialog.device?.name}</strong>
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Destination device: <strong>{currentDeviceName}</strong>
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCopyDeviceDialog({ open: false, device: null })} variant="outlined">
+            Cancel
+          </Button>
+          <Button onClick={confirmCopyDeviceToCurrent} variant="contained" color="warning" startIcon={<ContentCopy />}>
+            Confirm Copy
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={renameDeviceDialog.open}
+        onClose={() => setRenameDeviceDialog({ open: false, currentName: '', newName: '', error: '' })}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Edit color="primary" />
+            <Typography variant="h6">Rename Current Device Name</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            label="New Device Name"
+            value={renameDeviceDialog.newName}
+            onChange={(e) => setRenameDeviceDialog(prev => ({ ...prev, newName: e.target.value, error: '' }))}
+            error={Boolean(renameDeviceDialog.error)}
+            helperText={renameDeviceDialog.error || 'This updates the current device name in both server and local storage.'}
+            sx={{ mt: 1 }}
+            autoFocus
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRenameDeviceDialog({ open: false, currentName: '', newName: '', error: '' })} variant="outlined">
+            Cancel
+          </Button>
+          <Button onClick={confirmRenameDevice} variant="contained" startIcon={<Save />}>
+            Save Name
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={deleteDeviceDialog.open}
+        onClose={() => setDeleteDeviceDialog({ open: false, device: null })}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Warning color="error" />
+            <Typography variant="h6">Delete Device</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            This action cannot be undone.
+          </Alert>
+          <Typography>
+            Are you sure you want to delete device <strong>{deleteDeviceDialog.device?.name}</strong>?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDeviceDialog({ open: false, device: null })} variant="outlined">
+            Cancel
+          </Button>
+          <Button onClick={confirmDeleteDevice} variant="contained" color="error" startIcon={<Delete />}>
+            Delete Device
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* User Delete Confirmation Dialog */}
       <Dialog
@@ -1802,7 +3034,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
               </Box>
             ))}
           </Box>
-          
+
           <Typography
             variant="h6"
             sx={{
@@ -1814,7 +3046,7 @@ const AdminPanel = ({ setWidgetSettings, onWidgetUploaded }) => {
           >
             Processing...
           </Typography>
-          
+
           <CircularProgress
             size={40}
             thickness={2}
