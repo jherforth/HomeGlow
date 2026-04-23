@@ -23,6 +23,8 @@ const widgetRegistryPath = path.join(__dirname, 'widgets_registry.json');
 
 // Calendar sync service
 const CalendarSyncService = require('./services/calendarSync');
+const googleConnection = require('./services/googleConnection');
+const { isEncryptionConfigured, getEncryptionStatus } = require('./utils/encryption');
 let calendarSyncService = null;
 
 const initializeDatabase = require('./migrations/initializeDatabase');
@@ -37,6 +39,7 @@ const schemaMigrations = [
   { schemaId: 6, migrationPath: './migrations/migrateDeviceSchemaV6', },
   { schemaId: 7, migrationPath: './migrations/schema7-proveMigrations', },
   { schemaId: 8, migrationPath: './migrations/schema8-calendarCacheTables', },
+  { schemaId: 9, migrationPath: './migrations/schema9-googleConnection', },
 ];
 
 // GitHub API configuration
@@ -2336,6 +2339,132 @@ fastify.delete('/api/prizes/:id', async (request, reply) => {
   }
 });
 
+// Google Connections routes
+fastify.get('/api/connections/google/status', async (request, reply) => {
+  try {
+    const oauth = googleConnection.getOAuthStatus(db);
+    const account = googleConnection.getConnectedAccount(db);
+    let redirectUri = '';
+    try { redirectUri = googleConnection.deriveRedirectUri(db, request); } catch (_) {}
+    return {
+      encryption: { configured: oauth.encryption_configured, status: getEncryptionStatus() },
+      oauth: {
+        has_client_id: oauth.has_client_id,
+        has_client_secret: oauth.has_client_secret,
+        client_id_preview: oauth.client_id_preview,
+        redirect_uri_override: oauth.redirect_uri_override,
+        redirect_uri: redirectUri,
+      },
+      account: account ? {
+        id: account.id,
+        email: account.email,
+        name: account.name,
+        picture: account.picture,
+        scopes: account.scopes,
+        connected_at: account.created_at,
+        updated_at: account.updated_at,
+      } : null,
+    };
+  } catch (error) {
+    console.error('Error fetching Google connection status:', error);
+    reply.status(500).send({ error: 'Failed to fetch Google connection status' });
+  }
+});
+
+fastify.post('/api/connections/google/config', async (request, reply) => {
+  try {
+    if (!isEncryptionConfigured()) {
+      return reply.status(400).send({ error: 'ENCRYPTION_KEY is not configured on the server.' });
+    }
+    const { client_id, client_secret, redirect_uri_override } = request.body || {};
+    googleConnection.saveOAuthConfig(db, {
+      clientId: client_id,
+      clientSecret: client_secret,
+      redirectUriOverride: redirect_uri_override,
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('Error saving Google OAuth config:', error);
+    reply.status(500).send({ error: error.message || 'Failed to save Google OAuth config' });
+  }
+});
+
+fastify.get('/api/connections/google/authorize', async (request, reply) => {
+  try {
+    if (!isEncryptionConfigured()) {
+      return reply.status(400).send({ error: 'ENCRYPTION_KEY is not configured on the server.' });
+    }
+    const status = googleConnection.getOAuthStatus(db);
+    if (!status.has_client_id || !status.has_client_secret) {
+      return reply.status(400).send({ error: 'Google OAuth credentials are not configured.' });
+    }
+    const redirectUri = googleConnection.deriveRedirectUri(db, request);
+    const returnUrl = request.query && request.query.return_url;
+    const state = googleConnection.createAuthState(db, redirectUri, returnUrl);
+    const url = googleConnection.buildAuthUrl(db, { redirectUri, state });
+    return { url, redirect_uri: redirectUri };
+  } catch (error) {
+    console.error('Error building authorize URL:', error);
+    reply.status(500).send({ error: error.message || 'Failed to build authorize URL' });
+  }
+});
+
+fastify.get('/api/connections/google/callback', async (request, reply) => {
+  const { code, state, error: oauthError } = request.query || {};
+  const renderPage = (title, message, ok) => {
+    reply.header('Content-Type', 'text/html; charset=utf-8');
+    return `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>
+<style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0f172a;color:#f8fafc;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:24px}
+.card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:32px;max-width:480px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.3)}
+h1{margin:0 0 12px;font-size:22px;color:${ok ? '#4ade80' : '#f87171'}}p{margin:0;color:#cbd5e1;line-height:1.5}
+button{margin-top:20px;background:#2563eb;color:#fff;border:0;padding:10px 18px;border-radius:8px;font-size:14px;cursor:pointer}
+button:hover{background:#1d4ed8}</style></head>
+<body><div class="card"><h1>${title}</h1><p>${message}</p>
+<button onclick="window.close()">Close window</button>
+<script>try{window.opener&&window.opener.postMessage({type:'homeglow:google-oauth',ok:${ok ? 'true' : 'false'}},'*');}catch(e){}</script>
+</div></body></html>`;
+  };
+  try {
+    if (oauthError) {
+      return renderPage('Authorization failed', `Google reported: ${oauthError}`, false);
+    }
+    if (!code || !state) {
+      return renderPage('Authorization failed', 'Missing authorization code or state.', false);
+    }
+    const stateRow = googleConnection.consumeAuthState(db, state);
+    if (!stateRow) {
+      return renderPage('Authorization failed', 'Invalid or expired OAuth state.', false);
+    }
+    const tokens = await googleConnection.exchangeCodeForTokens(db, { code, redirectUri: stateRow.redirect_uri });
+    const userInfo = await googleConnection.fetchUserInfo(tokens.access_token);
+    googleConnection.upsertGoogleAccount(db, {
+      sub: userInfo.sub,
+      email: userInfo.email,
+      name: userInfo.name,
+      picture: userInfo.picture,
+      tokens,
+    });
+    return renderPage('Connected to Google', `Signed in as ${userInfo.email || userInfo.name || 'your Google account'}. You can close this window.`, true);
+  } catch (error) {
+    console.error('Google OAuth callback error:', error);
+    return renderPage('Authorization failed', error.message || 'An unexpected error occurred.', false);
+  }
+});
+
+fastify.delete('/api/connections/google/account', async (request, reply) => {
+  try {
+    const account = googleConnection.getConnectedAccount(db);
+    if (!account) {
+      return { success: true, message: 'No Google account connected.' };
+    }
+    await googleConnection.revokeAndDisconnect(db, account.id);
+    return { success: true };
+  } catch (error) {
+    console.error('Error disconnecting Google account:', error);
+    reply.status(500).send({ error: error.message || 'Failed to disconnect Google account' });
+  }
+});
+
 // Calendar sources routes
 fastify.get('/api/calendar-sources', async (request, reply) => {
   try {
@@ -3003,6 +3132,15 @@ const start = async () => {
     calendarSyncService = new CalendarSyncService(db, decryptPassword);
     calendarSyncService.initialize();
     console.log('Calendar sync service started');
+
+    if (!isEncryptionConfigured()) {
+      console.warn('================================================================');
+      console.warn(' WARNING: ENCRYPTION_KEY is not configured.');
+      console.warn(' Third-party connections (Google, etc.) will be disabled until');
+      console.warn(' a 32-byte key is provided via the ENCRYPTION_KEY env variable.');
+      console.warn(' Generate one with:  openssl rand -base64 32');
+      console.warn('================================================================');
+    }
 
     await fastify.listen({ port: process.env.PORT || 5000, host: '0.0.0.0' });
     console.log(`Server running on port ${process.env.PORT || 5000}`);
