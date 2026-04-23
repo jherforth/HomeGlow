@@ -2961,13 +2961,27 @@ fastify.post('/api/photo-sources/:id/test', async (request, reply) => {
       if (!account) {
         return reply.status(400).send({ success: false, error: 'No Google account connected. Connect one in Admin > Connections.' });
       }
-      if (source.album_id) {
-        const items = await googlePhotos.searchAlbumMedia(db, account.id, source.album_id, { limit: 1 });
-        return { success: true, message: `Google Photos album reachable (${items.length > 0 ? 'has photos' : 'empty'}).` };
+      try {
+        if (source.album_id) {
+          const items = await googlePhotos.searchAlbumMedia(db, account.id, source.album_id, { limit: 1 });
+          return { success: true, message: `Google Photos album reachable (${items.length > 0 ? 'has photos' : 'empty'}).` };
+        }
+        const items = await googlePhotos.listRecentMedia(db, account.id, { limit: 1 });
+        return { success: true, message: `Google Photos account reachable (${items.length > 0 ? 'recent media found' : 'no media visible'}).` };
+      } catch (gpErr) {
+        const msg = gpErr.message || 'Google Photos API error';
+        const isScopeIssue = /insufficient|permission|scope|403|ACCESS_DENIED/i.test(msg);
+        const hint = isScopeIssue
+          ? ' Google deprecated the broad photoslibrary scope on 2025-03-31. Disconnect and re-authorize the Google account in Admin > Connections so HomeGlow can request the current photoslibrary.readonly.appcreateddata scope.'
+          : '';
+        return reply.status(gpErr.status === 401 ? 401 : 400).send({
+          success: false,
+          error: msg + hint,
+          details: gpErr.details || null,
+        });
       }
-      const items = await googlePhotos.listRecentMedia(db, account.id, { limit: 1 });
-      return { success: true, message: `Google Photos account reachable (${items.length > 0 ? 'recent media found' : 'no media visible'}).` };
     }
+    return reply.status(400).send({ success: false, error: `Unsupported photo source type: ${source.type}` });
   } catch (error) {
     console.error('Error testing photo source:', error.message);
     if (error.code === 'ECONNREFUSED') {

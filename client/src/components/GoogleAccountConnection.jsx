@@ -287,9 +287,16 @@ const GoogleAccountConnection = ({ onMessage }) => {
               {account.email}
             </Typography>
             {account.connected_at && (
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                 Connected {new Date(account.connected_at).toLocaleString()}
               </Typography>
+            )}
+            {account.scopes && /photoslibrary\.readonly(\s|$)/.test(account.scopes) && !/photoslibrary\.readonly\.appcreateddata/.test(account.scopes) && (
+              <Alert severity="warning" sx={{ mt: 1 }}>
+                This account was authorized with the old Photos scope, which Google deprecated
+                on 2025-03-31. Disconnect and reconnect to grant the current
+                <code>photoslibrary.readonly.appcreateddata</code> scope.
+              </Alert>
             )}
           </Box>
           <Button

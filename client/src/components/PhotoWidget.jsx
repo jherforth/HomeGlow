@@ -675,10 +675,12 @@ const PhotoWidget = ({ transparentBackground }) => {
                 <Alert severity="warning" sx={{ mt: 1 }}>{googleAlbumsError}</Alert>
               )}
               <Alert severity="info" sx={{ mt: 1 }}>
-                Since March 2025, Google restricts third-party access to Photos. Newly-created
-                OAuth clients can typically only see media created by the app itself and albums
-                the user has explicitly shared with it. If an album appears empty, try sharing it
-                to your connected account or creating a new album for HomeGlow.
+                Google deprecated the broad Photos API scope on 2025-03-31. HomeGlow now uses
+                <code> photoslibrary.readonly.appcreateddata</code>, which only returns media
+                created by this app or albums explicitly shared with it. If you connected
+                Google earlier, open Admin &gt; Connections and click Disconnect then
+                Authorize with Google again so the new scope is granted. To populate an album,
+                share it into the connected account or create a new album from HomeGlow.
               </Alert>
             </Box>
           )}
