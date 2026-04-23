@@ -24,6 +24,49 @@ const PhotoWidget = ({ transparentBackground }) => {
   const [testingConnection, setTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState(null);
   const [savingSource, setSavingSource] = useState(false);
+  const [googleAlbums, setGoogleAlbums] = useState([]);
+  const [googleAlbumsLoading, setGoogleAlbumsLoading] = useState(false);
+  const [googleAlbumsError, setGoogleAlbumsError] = useState('');
+  const [googleAccountConnected, setGoogleAccountConnected] = useState(false);
+
+  const loadGoogleAlbums = async () => {
+    setGoogleAlbumsLoading(true);
+    setGoogleAlbumsError('');
+    try {
+      const { data } = await axios.get(`${API_BASE_URL}/api/connections/google/albums`);
+      setGoogleAlbums(Array.isArray(data.albums) ? data.albums : []);
+      setGoogleAccountConnected(true);
+    } catch (err) {
+      setGoogleAlbums([]);
+      if (err?.response?.status === 404) {
+        setGoogleAccountConnected(false);
+        setGoogleAlbumsError('No Google account connected. Add one in Admin > Connections.');
+      } else {
+        setGoogleAlbumsError(err?.response?.data?.error || 'Failed to load Google albums.');
+      }
+    } finally {
+      setGoogleAlbumsLoading(false);
+    }
+  };
+
+  const checkGoogleAccount = async () => {
+    try {
+      const { data } = await axios.get(`${API_BASE_URL}/api/connections/google/status`);
+      setGoogleAccountConnected(!!data?.account);
+    } catch (_) {
+      setGoogleAccountConnected(false);
+    }
+  };
+
+  useEffect(() => {
+    checkGoogleAccount();
+  }, []);
+
+  useEffect(() => {
+    if (showSourceDialog && sourceForm.type === 'GooglePhotos' && googleAlbums.length === 0 && !googleAlbumsLoading) {
+      loadGoogleAlbums();
+    }
+  }, [showSourceDialog, sourceForm.type]);
   const [isPlaying, setIsPlaying] = useState(true);
   const [slideshowInterval, setSlideshowInterval] = useState(5000);
   const [photosPerView, setPhotosPerView] = useState(1);
@@ -553,7 +596,9 @@ const PhotoWidget = ({ transparentBackground }) => {
               label="Type"
             >
               <MenuItem value="Immich">Immich</MenuItem>
-              <MenuItem value="GooglePhotos">Google Photos (Coming Soon)</MenuItem>
+              <MenuItem value="GooglePhotos" disabled={!googleAccountConnected}>
+                Google Photos{googleAccountConnected ? '' : ' (connect in Admin > Connections)'}
+              </MenuItem>
             </Select>
           </FormControl>
 
@@ -589,9 +634,53 @@ const PhotoWidget = ({ transparentBackground }) => {
           )}
 
           {sourceForm.type === 'GooglePhotos' && (
-            <Alert severity="info" sx={{ mt: 2 }}>
-              Google Photos integration coming soon. Stay tuned!
-            </Alert>
+            <Box sx={{ mt: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <FormControl fullWidth>
+                  <InputLabel>Album</InputLabel>
+                  <Select
+                    value={sourceForm.album_id || ''}
+                    label="Album"
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      const album = googleAlbums.find((a) => a.id === value);
+                      setSourceForm({
+                        ...sourceForm,
+                        album_id: value,
+                        name: sourceForm.name || (album ? album.title : ''),
+                      });
+                    }}
+                  >
+                    <MenuItem value="">
+                      <em>All recent photos</em>
+                    </MenuItem>
+                    {googleAlbums.length === 0 && (
+                      <MenuItem value="placeholder" disabled>
+                        {googleAlbumsLoading ? 'Loading albums...' : 'No albums available'}
+                      </MenuItem>
+                    )}
+                    {googleAlbums.map((a) => (
+                      <MenuItem key={a.id} value={a.id}>
+                        {a.title}{a.shared ? ' (shared)' : ''}
+                        {typeof a.mediaItemsCount === 'number' ? ` — ${a.mediaItemsCount} items` : ''}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <IconButton onClick={loadGoogleAlbums} disabled={googleAlbumsLoading}>
+                  {googleAlbumsLoading ? <CircularProgress size={18} /> : <Refresh />}
+                </IconButton>
+              </Box>
+              {googleAlbumsError && (
+                <Alert severity="warning" sx={{ mt: 1 }}>{googleAlbumsError}</Alert>
+              )}
+              <Alert severity="info" sx={{ mt: 1 }}>
+                Since March 2025, Google restricts third-party access to Photos. Newly-created
+                OAuth clients can typically only see media created by the app itself and albums
+                the user has explicitly shared with it. If an album appears empty, try sharing it
+                to your connected account or creating a new album for HomeGlow.
+              </Alert>
+            </Box>
           )}
 
           {testResult && (

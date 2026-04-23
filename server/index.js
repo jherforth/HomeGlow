@@ -25,6 +25,7 @@ const widgetRegistryPath = path.join(__dirname, 'widgets_registry.json');
 const CalendarSyncService = require('./services/calendarSync');
 const googleConnection = require('./services/googleConnection');
 const googleCalendar = require('./services/googleCalendar');
+const googlePhotos = require('./services/googlePhotos');
 const { isEncryptionConfigured, getEncryptionStatus } = require('./utils/encryption');
 let calendarSyncService = null;
 
@@ -2452,6 +2453,18 @@ button:hover{background:#1d4ed8}</style></head>
   }
 });
 
+fastify.get('/api/connections/google/albums', async (request, reply) => {
+  try {
+    const account = googleConnection.getConnectedAccount(db);
+    if (!account) return reply.status(404).send({ error: 'No Google account connected.' });
+    const albums = await googlePhotos.listAlbums(db, account.id);
+    return { albums };
+  } catch (error) {
+    console.error('Error listing Google Photos albums:', error);
+    reply.status(error.status || 500).send({ error: error.message || 'Failed to list Google Photos albums' });
+  }
+});
+
 fastify.get('/api/connections/google/calendars', async (request, reply) => {
   try {
     const account = googleConnection.getConnectedAccount(db);
@@ -2944,8 +2957,16 @@ fastify.post('/api/photo-sources/:id/test', async (request, reply) => {
       );
       return { success: true, assetCount: response.data.length || 0, message: `Immich connection successful (${response.data.length || 0} assets found)` };
     } else if (source.type === 'GooglePhotos') {
-      const decryptedRefreshToken = decryptPassword(source.refresh_token);
-      return { success: true, message: 'Google Photos configuration saved (connection test not yet implemented)' };
+      const account = googleConnection.getConnectedAccount(db);
+      if (!account) {
+        return reply.status(400).send({ success: false, error: 'No Google account connected. Connect one in Admin > Connections.' });
+      }
+      if (source.album_id) {
+        const items = await googlePhotos.searchAlbumMedia(db, account.id, source.album_id, { limit: 1 });
+        return { success: true, message: `Google Photos album reachable (${items.length > 0 ? 'has photos' : 'empty'}).` };
+      }
+      const items = await googlePhotos.listRecentMedia(db, account.id, { limit: 1 });
+      return { success: true, message: `Google Photos account reachable (${items.length > 0 ? 'recent media found' : 'no media visible'}).` };
     }
   } catch (error) {
     console.error('Error testing photo source:', error.message);
@@ -3013,6 +3034,35 @@ fastify.get('/api/photo-proxy/:sourceId/:assetId', async (request, reply) => {
   }
 });
 
+fastify.get('/api/google-photos-proxy/:sourceId/:mediaId', async (request, reply) => {
+  const { sourceId, mediaId } = request.params;
+  const { size = 'large' } = request.query;
+  try {
+    const source = db.prepare('SELECT * FROM photo_sources WHERE id = ?').get(sourceId);
+    if (!source || source.type !== 'GooglePhotos') {
+      return reply.status(404).send({ error: 'Google Photos source not found' });
+    }
+    const account = googleConnection.getConnectedAccount(db);
+    if (!account) return reply.status(400).send({ error: 'No Google account connected.' });
+
+    const item = await googlePhotos.getMediaItem(db, account.id, mediaId);
+    if (!item || !item.baseUrl) {
+      return reply.status(404).send({ error: 'Media item not found' });
+    }
+    const sizeSuffix = size === 'thumb' ? '=w400-h400-c' : '=w1920-h1080';
+    const imgRes = await axios.get(item.baseUrl + sizeSuffix, {
+      responseType: 'arraybuffer',
+      timeout: 20000,
+    });
+    reply.header('Content-Type', imgRes.headers['content-type'] || 'image/jpeg');
+    reply.header('Cache-Control', 'private, max-age=1800');
+    return reply.send(Buffer.from(imgRes.data));
+  } catch (error) {
+    console.error('Error proxying Google Photos media:', error.message);
+    return reply.status(error.status || 500).send({ error: error.message || 'Failed to load media' });
+  }
+});
+
 fastify.get('/api/photo-items', async (request, reply) => {
   try {
     const sources = db.prepare('SELECT * FROM photo_sources WHERE enabled = 1 ORDER BY sort_order, id').all();
@@ -3067,7 +3117,30 @@ fastify.get('/api/photo-items', async (request, reply) => {
             source_type: 'Immich'
           }));
         } else if (source.type === 'GooglePhotos') {
-          return [];
+          const account = googleConnection.getConnectedAccount(db);
+          if (!account) return [];
+          let items = [];
+          if (source.album_id) {
+            items = await googlePhotos.searchAlbumMedia(db, account.id, source.album_id, { limit: 200 });
+          } else {
+            items = await googlePhotos.listRecentMedia(db, account.id, { limit: 200 });
+          }
+          const photos = items
+            .filter((m) => m && (!m.mediaMetadata || !m.mediaMetadata.video))
+            .map((m) => ({
+              id: m.id,
+              url: `/api/google-photos-proxy/${source.id}/${encodeURIComponent(m.id)}?size=large`,
+              thumbnail: `/api/google-photos-proxy/${source.id}/${encodeURIComponent(m.id)}?size=thumb`,
+              type: 'IMAGE',
+              source_id: source.id,
+              source_name: source.name,
+              source_type: 'GooglePhotos',
+            }));
+          for (let i = photos.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [photos[i], photos[j]] = [photos[j], photos[i]];
+          }
+          return photos.slice(0, 100);
         }
       } catch (error) {
         console.error(`Error fetching photos from source ${source.name}:`, error.message);
