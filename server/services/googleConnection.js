@@ -7,6 +7,7 @@ const GOOGLE_SCOPES = [
     'profile',
     'https://www.googleapis.com/auth/calendar',
     'https://www.googleapis.com/auth/photoslibrary.readonly.appcreateddata',
+    'https://www.googleapis.com/auth/photospicker.mediaitems.readonly',
 ];
 
 const AUTH_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';

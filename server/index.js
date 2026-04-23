@@ -10,6 +10,7 @@ const ical = require('ical-generator');
 const node_ical = require('node-ical');
 const path = require('path');
 const fs = require('fs').promises;
+const fsSync = require('fs');
 const multipart = require('@fastify/multipart');
 const crypto = require('crypto');
 
@@ -26,6 +27,7 @@ const CalendarSyncService = require('./services/calendarSync');
 const googleConnection = require('./services/googleConnection');
 const googleCalendar = require('./services/googleCalendar');
 const googlePhotos = require('./services/googlePhotos');
+const googlePhotosPicker = require('./services/googlePhotosPicker');
 const { isEncryptionConfigured, getEncryptionStatus } = require('./utils/encryption');
 let calendarSyncService = null;
 
@@ -42,6 +44,7 @@ const schemaMigrations = [
   { schemaId: 7, migrationPath: './migrations/schema7-proveMigrations', },
   { schemaId: 8, migrationPath: './migrations/schema8-calendarCacheTables', },
   { schemaId: 9, migrationPath: './migrations/schema9-googleConnection', },
+  { schemaId: 10, migrationPath: './migrations/schema10-googlePhotosPicker', },
 ];
 
 // GitHub API configuration
@@ -2919,6 +2922,10 @@ fastify.patch('/api/photo-sources/:id', async (request, reply) => {
 fastify.delete('/api/photo-sources/:id', async (request, reply) => {
   const { id } = request.params;
   try {
+    const picked = db.prepare('SELECT local_path FROM google_picked_media WHERE source_id = ?').all(id);
+    for (const p of picked) googlePhotosPicker.removeLocalFile(p.local_path);
+    db.prepare('DELETE FROM google_picked_media WHERE source_id = ?').run(id);
+
     const stmt = db.prepare('DELETE FROM photo_sources WHERE id = ?');
     const info = stmt.run(id);
     if (info.changes === 0) {
@@ -2961,25 +2968,8 @@ fastify.post('/api/photo-sources/:id/test', async (request, reply) => {
       if (!account) {
         return reply.status(400).send({ success: false, error: 'No Google account connected. Connect one in Admin > Connections.' });
       }
-      try {
-        if (source.album_id) {
-          const items = await googlePhotos.searchAlbumMedia(db, account.id, source.album_id, { limit: 1 });
-          return { success: true, message: `Google Photos album reachable (${items.length > 0 ? 'has photos' : 'empty'}).` };
-        }
-        const items = await googlePhotos.listRecentMedia(db, account.id, { limit: 1 });
-        return { success: true, message: `Google Photos account reachable (${items.length > 0 ? 'recent media found' : 'no media visible'}).` };
-      } catch (gpErr) {
-        const msg = gpErr.message || 'Google Photos API error';
-        const isScopeIssue = /insufficient|permission|scope|403|ACCESS_DENIED/i.test(msg);
-        const hint = isScopeIssue
-          ? ' Google deprecated the broad photoslibrary scope on 2025-03-31. Disconnect and re-authorize the Google account in Admin > Connections so HomeGlow can request the current photoslibrary.readonly.appcreateddata scope.'
-          : '';
-        return reply.status(gpErr.status === 401 ? 401 : 400).send({
-          success: false,
-          error: msg + hint,
-          details: gpErr.details || null,
-        });
-      }
+      const count = db.prepare('SELECT COUNT(*) AS c FROM google_picked_media WHERE source_id = ?').get(source.id).c;
+      return { success: true, message: `${count} picked photo${count === 1 ? '' : 's'} available for this source.` };
     }
     return reply.status(400).send({ success: false, error: `Unsupported photo source type: ${source.type}` });
   } catch (error) {
@@ -3048,9 +3038,58 @@ fastify.get('/api/photo-proxy/:sourceId/:assetId', async (request, reply) => {
   }
 });
 
-fastify.get('/api/google-photos-proxy/:sourceId/:mediaId', async (request, reply) => {
-  const { sourceId, mediaId } = request.params;
-  const { size = 'large' } = request.query;
+fastify.get('/api/photo-sources/:sourceId/picked/:mediaRowId', async (request, reply) => {
+  const { sourceId, mediaRowId } = request.params;
+  try {
+    const row = db.prepare(
+      'SELECT local_path, mime_type FROM google_picked_media WHERE id = ? AND source_id = ?'
+    ).get(mediaRowId, sourceId);
+    if (!row || !fsSync.existsSync(row.local_path)) {
+      return reply.status(404).send({ error: 'Picked media not found' });
+    }
+    reply.header('Content-Type', row.mime_type || 'image/jpeg');
+    reply.header('Cache-Control', 'private, max-age=86400');
+    return reply.send(fsSync.readFileSync(row.local_path));
+  } catch (error) {
+    console.error('Error serving picked media:', error.message);
+    return reply.status(500).send({ error: 'Failed to load picked media' });
+  }
+});
+
+fastify.get('/api/photo-sources/:sourceId/picked', async (request, reply) => {
+  const { sourceId } = request.params;
+  try {
+    const rows = db.prepare(
+      'SELECT id, google_media_id, filename, mime_type, width, height, created_time, downloaded_at FROM google_picked_media WHERE source_id = ? ORDER BY downloaded_at DESC'
+    ).all(sourceId);
+    return rows.map((r) => ({
+      ...r,
+      thumbnail_url: `/api/photo-sources/${sourceId}/picked/${r.id}`,
+    }));
+  } catch (error) {
+    console.error('Error listing picked media:', error);
+    reply.status(500).send({ error: 'Failed to list picked media' });
+  }
+});
+
+fastify.delete('/api/photo-sources/:sourceId/picked/:mediaRowId', async (request, reply) => {
+  const { sourceId, mediaRowId } = request.params;
+  try {
+    const row = db.prepare(
+      'SELECT local_path FROM google_picked_media WHERE id = ? AND source_id = ?'
+    ).get(mediaRowId, sourceId);
+    if (!row) return reply.status(404).send({ error: 'Picked media not found' });
+    googlePhotosPicker.removeLocalFile(row.local_path);
+    db.prepare('DELETE FROM google_picked_media WHERE id = ?').run(mediaRowId);
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting picked media:', error);
+    reply.status(500).send({ error: 'Failed to delete picked media' });
+  }
+});
+
+fastify.post('/api/photo-sources/:sourceId/picker-session', async (request, reply) => {
+  const { sourceId } = request.params;
   try {
     const source = db.prepare('SELECT * FROM photo_sources WHERE id = ?').get(sourceId);
     if (!source || source.type !== 'GooglePhotos') {
@@ -3059,21 +3098,137 @@ fastify.get('/api/google-photos-proxy/:sourceId/:mediaId', async (request, reply
     const account = googleConnection.getConnectedAccount(db);
     if (!account) return reply.status(400).send({ error: 'No Google account connected.' });
 
-    const item = await googlePhotos.getMediaItem(db, account.id, mediaId);
-    if (!item || !item.baseUrl) {
-      return reply.status(404).send({ error: 'Media item not found' });
-    }
-    const sizeSuffix = size === 'thumb' ? '=w400-h400-c' : '=w1920-h1080';
-    const imgRes = await axios.get(item.baseUrl + sizeSuffix, {
-      responseType: 'arraybuffer',
-      timeout: 20000,
-    });
-    reply.header('Content-Type', imgRes.headers['content-type'] || 'image/jpeg');
-    reply.header('Cache-Control', 'private, max-age=1800');
-    return reply.send(Buffer.from(imgRes.data));
+    const session = await googlePhotosPicker.createSession(db, account.id);
+    db.prepare(
+      'UPDATE photo_sources SET picker_session_id = ?, picker_session_expire = ? WHERE id = ?'
+    ).run(session.id || null, session.expireTime || null, sourceId);
+
+    return {
+      sessionId: session.id,
+      pickerUri: session.pickerUri,
+      expireTime: session.expireTime,
+      mediaItemsSet: !!session.mediaItemsSet,
+      pollingConfig: session.pollingConfig || null,
+    };
   } catch (error) {
-    console.error('Error proxying Google Photos media:', error.message);
-    return reply.status(error.status || 500).send({ error: error.message || 'Failed to load media' });
+    console.error('Error creating picker session:', error);
+    reply.status(error.status || 500).send({ error: error.message || 'Failed to create picker session' });
+  }
+});
+
+fastify.get('/api/photo-sources/:sourceId/picker-session', async (request, reply) => {
+  const { sourceId } = request.params;
+  try {
+    const source = db.prepare('SELECT * FROM photo_sources WHERE id = ?').get(sourceId);
+    if (!source || source.type !== 'GooglePhotos') {
+      return reply.status(404).send({ error: 'Google Photos source not found' });
+    }
+    if (!source.picker_session_id) {
+      return { sessionId: null, mediaItemsSet: false };
+    }
+    const account = googleConnection.getConnectedAccount(db);
+    if (!account) return reply.status(400).send({ error: 'No Google account connected.' });
+
+    const session = await googlePhotosPicker.getSession(db, account.id, source.picker_session_id);
+    return {
+      sessionId: session.id,
+      pickerUri: session.pickerUri,
+      expireTime: session.expireTime,
+      mediaItemsSet: !!session.mediaItemsSet,
+      pollingConfig: session.pollingConfig || null,
+    };
+  } catch (error) {
+    console.error('Error polling picker session:', error);
+    if (error.status === 404 || error.status === 400) {
+      db.prepare('UPDATE photo_sources SET picker_session_id = NULL, picker_session_expire = NULL WHERE id = ?').run(sourceId);
+    }
+    reply.status(error.status || 500).send({ error: error.message || 'Failed to poll picker session' });
+  }
+});
+
+fastify.post('/api/photo-sources/:sourceId/picker-session/ingest', async (request, reply) => {
+  const { sourceId } = request.params;
+  try {
+    const source = db.prepare('SELECT * FROM photo_sources WHERE id = ?').get(sourceId);
+    if (!source || source.type !== 'GooglePhotos') {
+      return reply.status(404).send({ error: 'Google Photos source not found' });
+    }
+    if (!source.picker_session_id) {
+      return reply.status(400).send({ error: 'No active picker session' });
+    }
+    const account = googleConnection.getConnectedAccount(db);
+    if (!account) return reply.status(400).send({ error: 'No Google account connected.' });
+
+    const session = await googlePhotosPicker.getSession(db, account.id, source.picker_session_id);
+    if (!session.mediaItemsSet) {
+      return reply.status(400).send({ error: 'Picker session not yet completed by user' });
+    }
+
+    const items = await googlePhotosPicker.listPickedMediaItems(db, account.id, source.picker_session_id);
+    const insert = db.prepare(`
+      INSERT OR IGNORE INTO google_picked_media
+        (source_id, google_media_id, filename, mime_type, local_path, width, height, created_time)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    let added = 0;
+    let skipped = 0;
+    let failed = 0;
+    for (const item of items) {
+      const mediaFile = item.mediaFile || {};
+      const mime = mediaFile.mimeType;
+      if (!googlePhotosPicker.isImageMime(mime)) { skipped++; continue; }
+      const existing = db.prepare('SELECT id FROM google_picked_media WHERE source_id = ? AND google_media_id = ?').get(sourceId, item.id);
+      if (existing) { skipped++; continue; }
+      try {
+        const saved = await googlePhotosPicker.downloadMedia(db, account.id, sourceId, item);
+        insert.run(
+          sourceId,
+          item.id,
+          saved.filename,
+          saved.mimeType,
+          saved.localPath,
+          saved.width,
+          saved.height,
+          item.createTime || null,
+        );
+        added++;
+      } catch (err) {
+        console.error('Failed to ingest picked item', item.id, err.message);
+        failed++;
+      }
+    }
+
+    try {
+      await googlePhotosPicker.deleteSession(db, account.id, source.picker_session_id);
+    } catch (e) {
+      console.warn('Failed to delete picker session (non-fatal):', e.message);
+    }
+    db.prepare('UPDATE photo_sources SET picker_session_id = NULL, picker_session_expire = NULL WHERE id = ?').run(sourceId);
+
+    return { added, skipped, failed, total: items.length };
+  } catch (error) {
+    console.error('Error ingesting picked media:', error);
+    reply.status(error.status || 500).send({ error: error.message || 'Failed to ingest picker session' });
+  }
+});
+
+fastify.delete('/api/photo-sources/:sourceId/picker-session', async (request, reply) => {
+  const { sourceId } = request.params;
+  try {
+    const source = db.prepare('SELECT * FROM photo_sources WHERE id = ?').get(sourceId);
+    if (!source) return reply.status(404).send({ error: 'Source not found' });
+    if (source.picker_session_id) {
+      const account = googleConnection.getConnectedAccount(db);
+      if (account) {
+        try { await googlePhotosPicker.deleteSession(db, account.id, source.picker_session_id); } catch (_) {}
+      }
+    }
+    db.prepare('UPDATE photo_sources SET picker_session_id = NULL, picker_session_expire = NULL WHERE id = ?').run(sourceId);
+    return { success: true };
+  } catch (error) {
+    console.error('Error clearing picker session:', error);
+    reply.status(500).send({ error: 'Failed to clear picker session' });
   }
 });
 
@@ -3131,30 +3286,23 @@ fastify.get('/api/photo-items', async (request, reply) => {
             source_type: 'Immich'
           }));
         } else if (source.type === 'GooglePhotos') {
-          const account = googleConnection.getConnectedAccount(db);
-          if (!account) return [];
-          let items = [];
-          if (source.album_id) {
-            items = await googlePhotos.searchAlbumMedia(db, account.id, source.album_id, { limit: 200 });
-          } else {
-            items = await googlePhotos.listRecentMedia(db, account.id, { limit: 200 });
-          }
-          const photos = items
-            .filter((m) => m && (!m.mediaMetadata || !m.mediaMetadata.video))
-            .map((m) => ({
-              id: m.id,
-              url: `/api/google-photos-proxy/${source.id}/${encodeURIComponent(m.id)}?size=large`,
-              thumbnail: `/api/google-photos-proxy/${source.id}/${encodeURIComponent(m.id)}?size=thumb`,
-              type: 'IMAGE',
-              source_id: source.id,
-              source_name: source.name,
-              source_type: 'GooglePhotos',
-            }));
+          const rows = db.prepare(
+            'SELECT id, google_media_id FROM google_picked_media WHERE source_id = ?'
+          ).all(source.id);
+          const photos = rows.map((r) => ({
+            id: r.google_media_id,
+            url: `/api/photo-sources/${source.id}/picked/${r.id}`,
+            thumbnail: `/api/photo-sources/${source.id}/picked/${r.id}`,
+            type: 'IMAGE',
+            source_id: source.id,
+            source_name: source.name,
+            source_type: 'GooglePhotos',
+          }));
           for (let i = photos.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [photos[i], photos[j]] = [photos[j], photos[i]];
           }
-          return photos.slice(0, 100);
+          return photos;
         }
       } catch (error) {
         console.error(`Error fetching photos from source ${source.name}:`, error.message);

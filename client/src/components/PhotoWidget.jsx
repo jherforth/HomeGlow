@@ -24,30 +24,13 @@ const PhotoWidget = ({ transparentBackground }) => {
   const [testingConnection, setTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState(null);
   const [savingSource, setSavingSource] = useState(false);
-  const [googleAlbums, setGoogleAlbums] = useState([]);
-  const [googleAlbumsLoading, setGoogleAlbumsLoading] = useState(false);
-  const [googleAlbumsError, setGoogleAlbumsError] = useState('');
   const [googleAccountConnected, setGoogleAccountConnected] = useState(false);
-
-  const loadGoogleAlbums = async () => {
-    setGoogleAlbumsLoading(true);
-    setGoogleAlbumsError('');
-    try {
-      const { data } = await axios.get(`${API_BASE_URL}/api/connections/google/albums`);
-      setGoogleAlbums(Array.isArray(data.albums) ? data.albums : []);
-      setGoogleAccountConnected(true);
-    } catch (err) {
-      setGoogleAlbums([]);
-      if (err?.response?.status === 404) {
-        setGoogleAccountConnected(false);
-        setGoogleAlbumsError('No Google account connected. Add one in Admin > Connections.');
-      } else {
-        setGoogleAlbumsError(err?.response?.data?.error || 'Failed to load Google albums.');
-      }
-    } finally {
-      setGoogleAlbumsLoading(false);
-    }
-  };
+  const [pickerSession, setPickerSession] = useState(null);
+  const [pickerError, setPickerError] = useState('');
+  const [pickerBusy, setPickerBusy] = useState(false);
+  const [pickerPolling, setPickerPolling] = useState(false);
+  const [pickedMedia, setPickedMedia] = useState([]);
+  const [ingestResult, setIngestResult] = useState(null);
 
   const checkGoogleAccount = async () => {
     try {
@@ -62,11 +45,111 @@ const PhotoWidget = ({ transparentBackground }) => {
     checkGoogleAccount();
   }, []);
 
-  useEffect(() => {
-    if (showSourceDialog && sourceForm.type === 'GooglePhotos' && googleAlbums.length === 0 && !googleAlbumsLoading) {
-      loadGoogleAlbums();
+  const loadPickedMedia = async (sourceId) => {
+    try {
+      const { data } = await axios.get(`${API_BASE_URL}/api/photo-sources/${sourceId}/picked`);
+      setPickedMedia(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setPickedMedia([]);
     }
-  }, [showSourceDialog, sourceForm.type]);
+  };
+
+  const startPickerSession = async () => {
+    if (!editingSource) return;
+    setPickerBusy(true);
+    setPickerError('');
+    setIngestResult(null);
+    try {
+      const { data } = await axios.post(`${API_BASE_URL}/api/photo-sources/${editingSource.id}/picker-session`);
+      setPickerSession(data);
+      setPickerPolling(true);
+    } catch (err) {
+      setPickerError(err?.response?.data?.error || 'Failed to start picker session.');
+    } finally {
+      setPickerBusy(false);
+    }
+  };
+
+  const cancelPickerSession = async () => {
+    if (!editingSource) return;
+    try {
+      await axios.delete(`${API_BASE_URL}/api/photo-sources/${editingSource.id}/picker-session`);
+    } catch (_) {}
+    setPickerSession(null);
+    setPickerPolling(false);
+  };
+
+  const ingestPickerSession = async () => {
+    if (!editingSource) return;
+    setPickerBusy(true);
+    setPickerError('');
+    try {
+      const { data } = await axios.post(`${API_BASE_URL}/api/photo-sources/${editingSource.id}/picker-session/ingest`);
+      setIngestResult(data);
+      setPickerSession(null);
+      setPickerPolling(false);
+      await loadPickedMedia(editingSource.id);
+      await fetchPhotos();
+    } catch (err) {
+      setPickerError(err?.response?.data?.error || 'Failed to import picked photos.');
+    } finally {
+      setPickerBusy(false);
+    }
+  };
+
+  const removePickedMedia = async (mediaRowId) => {
+    if (!editingSource) return;
+    try {
+      await axios.delete(`${API_BASE_URL}/api/photo-sources/${editingSource.id}/picked/${mediaRowId}`);
+      await loadPickedMedia(editingSource.id);
+      await fetchPhotos();
+    } catch (err) {
+      console.error('Failed to remove picked photo', err);
+    }
+  };
+
+  useEffect(() => {
+    if (!pickerPolling || !editingSource || !pickerSession?.sessionId) return;
+    const intervalMs = (() => {
+      const cfg = pickerSession.pollingConfig?.pollInterval;
+      if (typeof cfg === 'string') {
+        const match = cfg.match(/^([\d.]+)s$/);
+        if (match) return Math.max(1500, Math.round(parseFloat(match[1]) * 1000));
+      }
+      return 3000;
+    })();
+    let active = true;
+    const tick = async () => {
+      try {
+        const { data } = await axios.get(`${API_BASE_URL}/api/photo-sources/${editingSource.id}/picker-session`);
+        if (!active) return;
+        setPickerSession((prev) => ({ ...(prev || {}), ...data }));
+        if (data.mediaItemsSet) {
+          setPickerPolling(false);
+        }
+      } catch (err) {
+        if (!active) return;
+        setPickerError(err?.response?.data?.error || 'Picker polling failed.');
+        setPickerPolling(false);
+      }
+    };
+    const interval = setInterval(tick, intervalMs);
+    return () => { active = false; clearInterval(interval); };
+  }, [pickerPolling, pickerSession?.sessionId, editingSource?.id]);
+
+  useEffect(() => {
+    if (!showSourceDialog) {
+      setPickerSession(null);
+      setPickerPolling(false);
+      setPickerError('');
+      setPickedMedia([]);
+      setIngestResult(null);
+      return;
+    }
+    if (editingSource && editingSource.type === 'GooglePhotos') {
+      loadPickedMedia(editingSource.id);
+    }
+  }, [showSourceDialog, editingSource?.id]);
   const [isPlaying, setIsPlaying] = useState(true);
   const [slideshowInterval, setSlideshowInterval] = useState(5000);
   const [photosPerView, setPhotosPerView] = useState(1);
@@ -635,52 +718,111 @@ const PhotoWidget = ({ transparentBackground }) => {
 
           {sourceForm.type === 'GooglePhotos' && (
             <Box sx={{ mt: 2 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <FormControl fullWidth>
-                  <InputLabel>Album</InputLabel>
-                  <Select
-                    value={sourceForm.album_id || ''}
-                    label="Album"
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      const album = googleAlbums.find((a) => a.id === value);
-                      setSourceForm({
-                        ...sourceForm,
-                        album_id: value,
-                        name: sourceForm.name || (album ? album.title : ''),
-                      });
-                    }}
-                  >
-                    <MenuItem value="">
-                      <em>All recent photos</em>
-                    </MenuItem>
-                    {googleAlbums.length === 0 && (
-                      <MenuItem value="placeholder" disabled>
-                        {googleAlbumsLoading ? 'Loading albums...' : 'No albums available'}
-                      </MenuItem>
-                    )}
-                    {googleAlbums.map((a) => (
-                      <MenuItem key={a.id} value={a.id}>
-                        {a.title}{a.shared ? ' (shared)' : ''}
-                        {typeof a.mediaItemsCount === 'number' ? ` — ${a.mediaItemsCount} items` : ''}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <IconButton onClick={loadGoogleAlbums} disabled={googleAlbumsLoading}>
-                  {googleAlbumsLoading ? <CircularProgress size={18} /> : <Refresh />}
-                </IconButton>
-              </Box>
-              {googleAlbumsError && (
-                <Alert severity="warning" sx={{ mt: 1 }}>{googleAlbumsError}</Alert>
+              {!editingSource && (
+                <Alert severity="info">
+                  Save this source first, then re-open it to pick photos from your Google library.
+                </Alert>
               )}
-              <Alert severity="info" sx={{ mt: 1 }}>
-                Google deprecated the broad Photos API scope on 2025-03-31. HomeGlow now uses
-                <code> photoslibrary.readonly.appcreateddata</code>, which only returns media
-                created by this app or albums explicitly shared with it. If you connected
-                Google earlier, open Admin &gt; Connections and click Disconnect then
-                Authorize with Google again so the new scope is granted. To populate an album,
-                share it into the connected account or create a new album from HomeGlow.
+              {editingSource && !pickerSession && (
+                <Box>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    Pick photos from your Google Photos library. Open the link we generate, select
+                    photos, then tap Done. The selected photos will be downloaded and cached here.
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    onClick={startPickerSession}
+                    disabled={pickerBusy || !googleAccountConnected}
+                    startIcon={pickerBusy ? <CircularProgress size={16} /> : <Add />}
+                  >
+                    {pickedMedia.length > 0 ? 'Pick more photos' : 'Pick photos from Google'}
+                  </Button>
+                  {!googleAccountConnected && (
+                    <Alert severity="warning" sx={{ mt: 1 }}>
+                      Connect a Google account in Admin &gt; Connections first.
+                    </Alert>
+                  )}
+                </Box>
+              )}
+              {editingSource && pickerSession && (
+                <Box sx={{ p: 2, border: '1px solid var(--card-border)', borderRadius: 2 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    Open this link on the device with your Google Photos
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <TextField
+                      value={pickerSession.pickerUri || ''}
+                      size="small"
+                      fullWidth
+                      InputProps={{ readOnly: true }}
+                    />
+                    <Button
+                      variant="outlined"
+                      onClick={() => pickerSession.pickerUri && window.open(pickerSession.pickerUri, '_blank', 'noopener,noreferrer')}
+                    >
+                      Open
+                    </Button>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 2 }}>
+                    {pickerPolling && <CircularProgress size={16} />}
+                    <Typography variant="body2" color="text.secondary">
+                      {pickerSession.mediaItemsSet
+                        ? 'Photos selected. Ready to import.'
+                        : pickerPolling
+                          ? 'Waiting for you to finish picking in Google Photos...'
+                          : 'Polling paused.'}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
+                    <Button
+                      variant="contained"
+                      onClick={ingestPickerSession}
+                      disabled={!pickerSession.mediaItemsSet || pickerBusy}
+                      startIcon={pickerBusy ? <CircularProgress size={16} /> : null}
+                    >
+                      Import selected photos
+                    </Button>
+                    <Button onClick={cancelPickerSession} disabled={pickerBusy}>Cancel</Button>
+                  </Box>
+                </Box>
+              )}
+              {pickerError && <Alert severity="error" sx={{ mt: 1 }}>{pickerError}</Alert>}
+              {ingestResult && (
+                <Alert severity="success" sx={{ mt: 1 }}>
+                  Imported {ingestResult.added} photo{ingestResult.added === 1 ? '' : 's'}
+                  {ingestResult.skipped ? `, skipped ${ingestResult.skipped}` : ''}
+                  {ingestResult.failed ? `, failed ${ingestResult.failed}` : ''}.
+                </Alert>
+              )}
+              {editingSource && pickedMedia.length > 0 && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    Cached photos ({pickedMedia.length})
+                  </Typography>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: 1, maxHeight: 280, overflowY: 'auto' }}>
+                    {pickedMedia.map((m) => (
+                      <Box key={m.id} sx={{ position: 'relative', aspectRatio: '1 / 1', borderRadius: 1, overflow: 'hidden', bgcolor: 'rgba(0,0,0,0.1)' }}>
+                        <img
+                          src={`${API_BASE_URL}${m.thumbnail_url}`}
+                          alt={m.filename || 'photo'}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                        <IconButton
+                          size="small"
+                          onClick={() => removePickedMedia(m.id)}
+                          sx={{ position: 'absolute', top: 2, right: 2, bgcolor: 'rgba(0,0,0,0.6)', color: '#fff', '&:hover': { bgcolor: 'rgba(0,0,0,0.8)' } }}
+                        >
+                          <Delete sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              )}
+              <Alert severity="info" sx={{ mt: 2 }}>
+                HomeGlow uses the Google Photos Picker. You select exactly which photos are
+                displayed, and the images are cached locally so the dashboard keeps working even
+                after Google's short-lived URLs expire. Re-pick any time to add or change photos.
               </Alert>
             </Box>
           )}
