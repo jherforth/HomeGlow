@@ -25,7 +25,7 @@ import {
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 
-const initialDraft = { client_id: '', client_secret: '', redirect_uri_override: '' };
+const initialDraft = { client_id: '', client_secret: '', redirect_uri: '' };
 
 const GoogleAccountConnection = ({ onMessage }) => {
   const [status, setStatus] = useState(null);
@@ -47,7 +47,7 @@ const GoogleAccountConnection = ({ onMessage }) => {
       setStatus(data);
       setDraft((prev) => ({
         ...prev,
-        redirect_uri_override: data?.oauth?.redirect_uri_override || '',
+        redirect_uri: data?.oauth?.redirect_uri_override || data?.oauth?.redirect_uri || '',
       }));
     } catch (err) {
       console.error('Failed to load Google connection status', err);
@@ -88,10 +88,13 @@ const GoogleAccountConnection = ({ onMessage }) => {
     setSaving(true);
     setLocalError('');
     try {
+      const derived = status?.oauth?.redirect_uri || '';
+      const trimmed = (draft.redirect_uri || '').trim();
+      const override = trimmed && trimmed !== derived ? trimmed : '';
       await axios.post(`${API_BASE_URL}/api/connections/google/config`, {
         client_id: draft.client_id || undefined,
         client_secret: draft.client_secret || undefined,
-        redirect_uri_override: draft.redirect_uri_override,
+        redirect_uri_override: override,
       });
       setDraft((prev) => ({ ...prev, client_secret: '' }));
       notify('success', 'Google OAuth credentials saved.');
@@ -222,28 +225,25 @@ const GoogleAccountConnection = ({ onMessage }) => {
 
         <TextField
           label="Redirect URI"
-          value={oauth.redirect_uri || ''}
+          value={draft.redirect_uri}
+          onChange={(e) => setDraft((p) => ({ ...p, redirect_uri: e.target.value }))}
           fullWidth
+          disabled={!encryptionReady}
           InputProps={{
-            readOnly: true,
             endAdornment: (
               <Tooltip title="Copy redirect URI">
-                <IconButton size="small" onClick={() => copy(oauth.redirect_uri)}>
+                <IconButton size="small" onClick={() => copy(draft.redirect_uri)}>
                   <ContentCopy fontSize="small" />
                 </IconButton>
               </Tooltip>
             ),
           }}
-          helperText="Register this exact URL as an Authorized redirect URI in the Google Cloud Console."
-        />
-
-        <TextField
-          label="Redirect URI Override (optional)"
-          value={draft.redirect_uri_override}
-          onChange={(e) => setDraft((p) => ({ ...p, redirect_uri_override: e.target.value }))}
-          placeholder="Leave blank unless you use a custom domain behind a proxy"
-          fullWidth
-          disabled={!encryptionReady}
+          helperText={
+            draft.redirect_uri && draft.redirect_uri.startsWith('http://')
+              ? 'Google requires https:// for production OAuth clients. Change the scheme if you registered an https URL, or use a proxy/tunnel that terminates TLS.'
+              : 'Register this exact URL as an Authorized redirect URI in the Google Cloud Console. Path must end with /api/connections/google/callback.'
+          }
+          error={!!draft.redirect_uri && !/\/api\/connections\/google\/callback$/.test(draft.redirect_uri.trim())}
         />
 
         <Box>
