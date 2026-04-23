@@ -176,18 +176,11 @@ const GoogleAccountConnection = ({ onMessage }) => {
 
       {!encryptionReady && (
         <Alert severity="warning" icon={<Security />} sx={{ mb: 2 }}>
-          <Typography variant="body2" sx={{ mb: 1 }}>
-            A server encryption key is required before Google credentials can be stored safely.
-          </Typography>
-          <Typography variant="body2" component="div">
-            Add an <code>ENCRYPTION_KEY</code> value to the server <code>.env</code> file, then
-            restart the server. Generate a key with:
-            <Box component="pre" sx={{
-              mt: 1, p: 1.5, bgcolor: 'rgba(0,0,0,0.35)', borderRadius: 1,
-              fontFamily: 'monospace', fontSize: 13, overflow: 'auto',
-            }}>
-              openssl rand -base64 32
-            </Box>
+          <Typography variant="body2">
+            The server encryption key is unavailable or invalid. Check the server logs, then
+            either set a valid <code>ENCRYPTION_KEY</code> in your <code>.env</code>, or delete
+            the file at <code>server/data/.encryption-key</code> and restart the server to
+            regenerate one automatically.
           </Typography>
         </Alert>
       )}

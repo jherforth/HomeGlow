@@ -93,6 +93,14 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   const [testingConnection, setTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState(null);
   const [savingCalendar, setSavingCalendar] = useState(false);
+  const [googleCalendars, setGoogleCalendars] = useState([]);
+  const [googleCalendarsLoading, setGoogleCalendarsLoading] = useState(false);
+  const [googleCalendarsError, setGoogleCalendarsError] = useState('');
+  const [googleAccountConnected, setGoogleAccountConnected] = useState(false);
+  const [eventDialog, setEventDialog] = useState({ open: false, mode: 'create', event: null, sourceId: '' });
+  const [eventForm, setEventForm] = useState({ title: '', description: '', location: '', all_day: false, start: '', end: '' });
+  const [eventSaving, setEventSaving] = useState(false);
+  const [eventError, setEventError] = useState('');
   const [syncStatus, setSyncStatus] = useState({});
   const [syncIntervals, setSyncIntervals] = useState({});
   const [isSyncing, setIsSyncing] = useState({});
@@ -312,6 +320,45 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
     }
   };
 
+  const loadGoogleCalendars = async () => {
+    setGoogleCalendarsLoading(true);
+    setGoogleCalendarsError('');
+    try {
+      const { data } = await axios.get(`${API_BASE_URL}/api/connections/google/calendars`);
+      setGoogleCalendars(Array.isArray(data.calendars) ? data.calendars : []);
+      setGoogleAccountConnected(true);
+    } catch (err) {
+      setGoogleCalendars([]);
+      if (err?.response?.status === 404) {
+        setGoogleAccountConnected(false);
+        setGoogleCalendarsError('No Google account connected. Add one in Admin > Connections.');
+      } else {
+        setGoogleCalendarsError(err?.response?.data?.error || 'Failed to load Google calendars.');
+      }
+    } finally {
+      setGoogleCalendarsLoading(false);
+    }
+  };
+
+  const checkGoogleAccount = async () => {
+    try {
+      const { data } = await axios.get(`${API_BASE_URL}/api/connections/google/status`);
+      setGoogleAccountConnected(!!data?.account);
+    } catch (_) {
+      setGoogleAccountConnected(false);
+    }
+  };
+
+  useEffect(() => {
+    checkGoogleAccount();
+  }, []);
+
+  useEffect(() => {
+    if (showCalendarDialog && calendarForm.type === 'Google' && googleCalendars.length === 0 && !googleCalendarsLoading) {
+      loadGoogleCalendars();
+    }
+  }, [showCalendarDialog, calendarForm.type]);
+
   const handleAddCalendar = () => {
     setEditingCalendar(null);
     setCalendarForm({
@@ -401,6 +448,111 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
   const formatEventTime = (date) => {
     return moment(date).format('MMM D, h:mm A');
+  };
+
+  const getGoogleSources = () => calendarSources.filter((s) => s.type === 'Google' && s.enabled);
+
+  const isGoogleEvent = (event) => {
+    if (!event) return false;
+    const src = calendarSources.find((s) => s.id === event.source_id);
+    return !!src && src.type === 'Google';
+  };
+
+  const openCreateEventDialog = () => {
+    const googleSources = getGoogleSources();
+    if (googleSources.length === 0) return;
+    const baseDay = selectedDate ? moment(selectedDate) : moment();
+    const start = baseDay.clone().hour(9).minute(0).second(0);
+    const end = start.clone().add(1, 'hour');
+    setEventForm({
+      title: '',
+      description: '',
+      location: '',
+      all_day: false,
+      start: start.format('YYYY-MM-DDTHH:mm'),
+      end: end.format('YYYY-MM-DDTHH:mm'),
+    });
+    setEventError('');
+    setEventDialog({ open: true, mode: 'create', event: null, sourceId: googleSources[0].id });
+  };
+
+  const openEditEventDialog = (event) => {
+    const allDay = !!event.all_day;
+    const startStr = allDay
+      ? moment(event.start).format('YYYY-MM-DD')
+      : moment(event.start).format('YYYY-MM-DDTHH:mm');
+    const endStr = allDay
+      ? moment(event.end).format('YYYY-MM-DD')
+      : moment(event.end).format('YYYY-MM-DDTHH:mm');
+    setEventForm({
+      title: event.title || '',
+      description: event.description || '',
+      location: event.location || '',
+      all_day: allDay,
+      start: startStr,
+      end: endStr,
+    });
+    setEventError('');
+    setEventDialog({ open: true, mode: 'edit', event, sourceId: event.source_id });
+  };
+
+  const closeEventDialog = () => {
+    setEventDialog({ open: false, mode: 'create', event: null, sourceId: '' });
+    setEventError('');
+  };
+
+  const saveEvent = async () => {
+    if (!eventDialog.sourceId) return;
+    if (!eventForm.title || !eventForm.start || !eventForm.end) {
+      setEventError('Title, start, and end are required.');
+      return;
+    }
+    setEventSaving(true);
+    setEventError('');
+    try {
+      const payload = {
+        title: eventForm.title,
+        description: eventForm.description,
+        location: eventForm.location,
+        all_day: eventForm.all_day,
+        start: eventForm.start,
+        end: eventForm.end,
+      };
+      if (eventDialog.mode === 'create') {
+        await axios.post(`${API_BASE_URL}/api/calendar-sources/${eventDialog.sourceId}/events`, payload);
+      } else {
+        await axios.patch(
+          `${API_BASE_URL}/api/calendar-sources/${eventDialog.sourceId}/events/${encodeURIComponent(eventDialog.event.id)}`,
+          payload,
+        );
+      }
+      closeEventDialog();
+      await fetchCalendarEvents();
+      if (selectedDate) {
+        const dayDate = moment(selectedDate).startOf('day').toDate();
+        setTimeout(() => {
+          setSelectedDateEvents((prev) => prev);
+        }, 0);
+      }
+    } catch (err) {
+      setEventError(err?.response?.data?.error || 'Failed to save event.');
+    } finally {
+      setEventSaving(false);
+    }
+  };
+
+  const deleteEvent = async (event) => {
+    if (!isGoogleEvent(event)) return;
+    if (!window.confirm('Delete this event from Google Calendar?')) return;
+    try {
+      await axios.delete(
+        `${API_BASE_URL}/api/calendar-sources/${event.source_id}/events/${encodeURIComponent(event.id)}`,
+      );
+      await fetchCalendarEvents();
+      setSelectedDateEvents((prev) => prev.filter((e) => e.id !== event.id));
+    } catch (err) {
+      alert(err?.response?.data?.error || 'Failed to delete event.');
+    }
   };
 
   const handleSelectSlot = ({ start }) => {
@@ -1158,7 +1310,8 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                     bgcolor: 'rgba(var(--accent-rgb), 0.05)',
                     flexDirection: 'column',
                     alignItems: 'flex-start',
-                    p: 2
+                    p: 2,
+                    position: 'relative'
                   }}
                 >
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, width: '100%' }}>
@@ -1182,6 +1335,20 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                       }}
                     />
                   </Box>
+                  {isGoogleEvent(event) && (
+                    <Box sx={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 0.5 }}>
+                      <Tooltip title="Edit event">
+                        <IconButton size="small" onClick={() => openEditEventDialog(event)}>
+                          <Edit fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Delete event">
+                        <IconButton size="small" onClick={() => deleteEvent(event)}>
+                          <Delete fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  )}
                   <ListItemText
                     primary={
                       <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1, fontStyle: event.all_day ? 'italic' : 'normal' }}>
@@ -1211,9 +1378,126 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
             </List>
           )}
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ justifyContent: 'space-between' }}>
+          {getGoogleSources().length > 0 ? (
+            <Button
+              onClick={openCreateEventDialog}
+              startIcon={<Add />}
+              variant="outlined"
+            >
+              Add event
+            </Button>
+          ) : <Box />}
           <Button onClick={() => setShowDayModal(false)} variant="contained">
             Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={eventDialog.open} onClose={closeEventDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>{eventDialog.mode === 'create' ? 'New Event' : 'Edit Event'}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 1 }}>
+            {eventError && (
+              <Alert severity="error" sx={{ mb: 2 }}>{eventError}</Alert>
+            )}
+
+            {eventDialog.mode === 'create' && getGoogleSources().length > 1 && (
+              <FormControl fullWidth sx={{ mb: 2 }}>
+                <InputLabel>Calendar</InputLabel>
+                <Select
+                  value={eventDialog.sourceId || ''}
+                  label="Calendar"
+                  onChange={(e) => setEventDialog({ ...eventDialog, sourceId: e.target.value })}
+                >
+                  {getGoogleSources().map((s) => (
+                    <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+
+            <TextField
+              fullWidth
+              label="Title"
+              value={eventForm.title}
+              onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
+              sx={{ mb: 2 }}
+              required
+            />
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={eventForm.all_day}
+                  onChange={(e) => {
+                    const allDay = e.target.checked;
+                    setEventForm((prev) => {
+                      if (allDay) {
+                        return {
+                          ...prev,
+                          all_day: true,
+                          start: moment(prev.start || new Date()).format('YYYY-MM-DD'),
+                          end: moment(prev.end || prev.start || new Date()).format('YYYY-MM-DD'),
+                        };
+                      }
+                      const d = moment(prev.start || new Date());
+                      const e2 = moment(prev.end || prev.start || new Date()).add(1, 'hour');
+                      return {
+                        ...prev,
+                        all_day: false,
+                        start: d.hour(9).minute(0).format('YYYY-MM-DDTHH:mm'),
+                        end: e2.hour(10).minute(0).format('YYYY-MM-DDTHH:mm'),
+                      };
+                    });
+                  }}
+                />
+              }
+              label="All day"
+              sx={{ mb: 2 }}
+            />
+
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 2 }}>
+              <TextField
+                label="Start"
+                type={eventForm.all_day ? 'date' : 'datetime-local'}
+                value={eventForm.start}
+                onChange={(e) => setEventForm({ ...eventForm, start: e.target.value })}
+                InputLabelProps={{ shrink: true }}
+                required
+              />
+              <TextField
+                label="End"
+                type={eventForm.all_day ? 'date' : 'datetime-local'}
+                value={eventForm.end}
+                onChange={(e) => setEventForm({ ...eventForm, end: e.target.value })}
+                InputLabelProps={{ shrink: true }}
+                required
+              />
+            </Box>
+
+            <TextField
+              fullWidth
+              label="Location"
+              value={eventForm.location}
+              onChange={(e) => setEventForm({ ...eventForm, location: e.target.value })}
+              sx={{ mb: 2 }}
+            />
+
+            <TextField
+              fullWidth
+              label="Description"
+              value={eventForm.description}
+              onChange={(e) => setEventForm({ ...eventForm, description: e.target.value })}
+              multiline
+              minRows={3}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeEventDialog}>Cancel</Button>
+          <Button onClick={saveEvent} variant="contained" disabled={eventSaving}>
+            {eventSaving ? <CircularProgress size={18} /> : (eventDialog.mode === 'create' ? 'Create' : 'Save')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1614,18 +1898,70 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
               >
                 <MenuItem value="ICS">ICS (Public Calendar Link)</MenuItem>
                 <MenuItem value="CalDAV">CalDAV (Private Server)</MenuItem>
+                <MenuItem value="Google" disabled={!googleAccountConnected}>
+                  Google Calendar {googleAccountConnected ? '' : '(connect in Admin > Connections)'}
+                </MenuItem>
               </Select>
             </FormControl>
 
-            <TextField
-              fullWidth
-              label="Calendar URL"
-              value={calendarForm.url}
-              onChange={(e) => setCalendarForm({ ...calendarForm, url: e.target.value })}
-              sx={{ mb: 2 }}
-              required
-              placeholder={calendarForm.type === 'CalDAV' ? 'https://caldav.example.com/calendar/' : 'https://calendar.google.com/calendar/ical/...'}
-            />
+            {calendarForm.type === 'Google' ? (
+              <Box sx={{ mb: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <FormControl fullWidth>
+                    <InputLabel>Google Calendar</InputLabel>
+                    <Select
+                      value={calendarForm.url || ''}
+                      label="Google Calendar"
+                      onChange={(e) => {
+                        const cal = googleCalendars.find((c) => c.id === e.target.value);
+                        setCalendarForm({
+                          ...calendarForm,
+                          url: e.target.value,
+                          name: calendarForm.name || (cal ? (cal.summaryOverride || cal.summary) : ''),
+                          color: calendarForm.color && calendarForm.color !== '#6e44ff'
+                            ? calendarForm.color
+                            : (cal && cal.backgroundColor) || calendarForm.color,
+                        });
+                      }}
+                    >
+                      {googleCalendars.length === 0 && (
+                        <MenuItem value="" disabled>
+                          {googleCalendarsLoading ? 'Loading...' : 'Click Refresh to load your calendars'}
+                        </MenuItem>
+                      )}
+                      {googleCalendars.map((c) => (
+                        <MenuItem key={c.id} value={c.id}>
+                          <Box component="span" sx={{
+                            display: 'inline-block', width: 10, height: 10, borderRadius: '50%',
+                            bgcolor: c.backgroundColor || '#888', mr: 1,
+                          }} />
+                          {(c.summaryOverride || c.summary) + (c.primary ? ' (primary)' : '')}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <IconButton onClick={loadGoogleCalendars} disabled={googleCalendarsLoading}>
+                    {googleCalendarsLoading ? <CircularProgress size={18} /> : <Refresh />}
+                  </IconButton>
+                </Box>
+                {googleCalendarsError && (
+                  <Alert severity="warning" sx={{ mb: 1 }}>{googleCalendarsError}</Alert>
+                )}
+                <Typography variant="caption" color="text.secondary">
+                  Events will sync in both directions using your connected Google account.
+                </Typography>
+              </Box>
+            ) : (
+              <TextField
+                fullWidth
+                label="Calendar URL"
+                value={calendarForm.url}
+                onChange={(e) => setCalendarForm({ ...calendarForm, url: e.target.value })}
+                sx={{ mb: 2 }}
+                required
+                placeholder={calendarForm.type === 'CalDAV' ? 'https://caldav.example.com/calendar/' : 'https://calendar.google.com/calendar/ical/...'}
+              />
+            )}
 
             {calendarForm.type === 'CalDAV' && (
               <>

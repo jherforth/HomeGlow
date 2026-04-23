@@ -1,25 +1,66 @@
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 
 const ALGO = 'aes-256-gcm';
 const IV_LENGTH = 12;
 const TAG_LENGTH = 16;
 
+const DEFAULT_KEY_FILE = path.join(__dirname, '..', 'data', '.encryption-key');
+const KEY_FILE = process.env.ENCRYPTION_KEY_FILE || DEFAULT_KEY_FILE;
+
 let cachedKey = null;
 let cachedKeyStatus = null;
+let cachedKeySource = null;
 
 function resetEncryptionKeyCache() {
     cachedKey = null;
     cachedKeyStatus = null;
+    cachedKeySource = null;
+}
+
+function readKeyFromFile() {
+    try {
+        if (!fs.existsSync(KEY_FILE)) return null;
+        const contents = fs.readFileSync(KEY_FILE, 'utf8').trim();
+        return contents || null;
+    } catch (_) {
+        return null;
+    }
+}
+
+function writeKeyToFile(value) {
+    try {
+        fs.mkdirSync(path.dirname(KEY_FILE), { recursive: true });
+        fs.writeFileSync(KEY_FILE, value + '\n', { mode: 0o600 });
+        try { fs.chmodSync(KEY_FILE, 0o600); } catch (_) {}
+        return true;
+    } catch (err) {
+        console.error('Failed to persist encryption key:', err.message);
+        return false;
+    }
 }
 
 function loadKey() {
     if (cachedKey !== null) return cachedKey;
-    if (cachedKeyStatus === 'missing') return null;
+    if (cachedKeyStatus === 'missing' || cachedKeyStatus === 'invalid') return null;
 
-    const raw = process.env.ENCRYPTION_KEY;
+    let raw = process.env.ENCRYPTION_KEY;
+    let source = 'env';
     if (!raw || !raw.trim()) {
-        cachedKeyStatus = 'missing';
-        return null;
+        raw = readKeyFromFile();
+        source = raw ? 'file' : null;
+    }
+    if (!raw || !raw.trim()) {
+        const generated = crypto.randomBytes(32).toString('base64');
+        if (writeKeyToFile(generated)) {
+            raw = generated;
+            source = 'auto';
+            console.log(`Generated new encryption key at ${KEY_FILE}. Back this file up to keep stored secrets recoverable.`);
+        } else {
+            cachedKeyStatus = 'missing';
+            return null;
+        }
     }
 
     let buf;
@@ -44,6 +85,7 @@ function loadKey() {
 
     cachedKey = buf;
     cachedKeyStatus = 'ok';
+    cachedKeySource = source;
     return cachedKey;
 }
 
@@ -55,6 +97,11 @@ function isEncryptionConfigured() {
 function getEncryptionStatus() {
     loadKey();
     return cachedKeyStatus || 'missing';
+}
+
+function getEncryptionSource() {
+    loadKey();
+    return cachedKeySource;
 }
 
 function encrypt(plainText) {
@@ -94,5 +141,6 @@ module.exports = {
     decrypt,
     isEncryptionConfigured,
     getEncryptionStatus,
+    getEncryptionSource,
     resetEncryptionKeyCache,
 };

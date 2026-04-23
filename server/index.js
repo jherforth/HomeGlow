@@ -24,6 +24,7 @@ const widgetRegistryPath = path.join(__dirname, 'widgets_registry.json');
 // Calendar sync service
 const CalendarSyncService = require('./services/calendarSync');
 const googleConnection = require('./services/googleConnection');
+const googleCalendar = require('./services/googleCalendar');
 const { isEncryptionConfigured, getEncryptionStatus } = require('./utils/encryption');
 let calendarSyncService = null;
 
@@ -2451,6 +2452,78 @@ button:hover{background:#1d4ed8}</style></head>
   }
 });
 
+fastify.get('/api/connections/google/calendars', async (request, reply) => {
+  try {
+    const account = googleConnection.getConnectedAccount(db);
+    if (!account) return reply.status(404).send({ error: 'No Google account connected.' });
+    const calendars = await googleCalendar.listCalendars(db, account.id);
+    return { calendars };
+  } catch (error) {
+    console.error('Error listing Google calendars:', error);
+    reply.status(500).send({ error: error.message || 'Failed to list Google calendars' });
+  }
+});
+
+fastify.post('/api/calendar-sources/:id/events', async (request, reply) => {
+  try {
+    const { id } = request.params;
+    const source = db.prepare('SELECT * FROM calendar_sources WHERE id = ?').get(id);
+    if (!source) return reply.status(404).send({ error: 'Calendar source not found' });
+    if (source.type !== 'Google') {
+      return reply.status(400).send({ error: 'This calendar type is read-only.' });
+    }
+    const account = googleConnection.getConnectedAccount(db);
+    if (!account) return reply.status(400).send({ error: 'No Google account connected.' });
+
+    const created = await googleCalendar.createEvent(db, account.id, source.url, request.body || {});
+    if (calendarSyncService) calendarSyncService.syncSource(source.id).catch(() => {});
+    return { success: true, event: created };
+  } catch (error) {
+    console.error('Error creating Google calendar event:', error);
+    reply.status(error.status || 500).send({ error: error.message || 'Failed to create event' });
+  }
+});
+
+fastify.patch('/api/calendar-sources/:id/events/:eventId', async (request, reply) => {
+  try {
+    const { id, eventId } = request.params;
+    const source = db.prepare('SELECT * FROM calendar_sources WHERE id = ?').get(id);
+    if (!source) return reply.status(404).send({ error: 'Calendar source not found' });
+    if (source.type !== 'Google') {
+      return reply.status(400).send({ error: 'This calendar type is read-only.' });
+    }
+    const account = googleConnection.getConnectedAccount(db);
+    if (!account) return reply.status(400).send({ error: 'No Google account connected.' });
+
+    const updated = await googleCalendar.updateEvent(db, account.id, source.url, eventId, request.body || {});
+    if (calendarSyncService) calendarSyncService.syncSource(source.id).catch(() => {});
+    return { success: true, event: updated };
+  } catch (error) {
+    console.error('Error updating Google calendar event:', error);
+    reply.status(error.status || 500).send({ error: error.message || 'Failed to update event' });
+  }
+});
+
+fastify.delete('/api/calendar-sources/:id/events/:eventId', async (request, reply) => {
+  try {
+    const { id, eventId } = request.params;
+    const source = db.prepare('SELECT * FROM calendar_sources WHERE id = ?').get(id);
+    if (!source) return reply.status(404).send({ error: 'Calendar source not found' });
+    if (source.type !== 'Google') {
+      return reply.status(400).send({ error: 'This calendar type is read-only.' });
+    }
+    const account = googleConnection.getConnectedAccount(db);
+    if (!account) return reply.status(400).send({ error: 'No Google account connected.' });
+
+    await googleCalendar.deleteEvent(db, account.id, source.url, eventId);
+    if (calendarSyncService) calendarSyncService.syncSource(source.id).catch(() => {});
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting Google calendar event:', error);
+    reply.status(error.status || 500).send({ error: error.message || 'Failed to delete event' });
+  }
+});
+
 fastify.delete('/api/connections/google/account', async (request, reply) => {
   try {
     const account = googleConnection.getConnectedAccount(db);
@@ -2481,8 +2554,11 @@ fastify.post('/api/calendar-sources', async (request, reply) => {
   if (!name || !type || !url) {
     return reply.status(400).send({ error: 'Name, type, and URL are required.' });
   }
-  if (!['ICS', 'CalDAV'].includes(type)) {
-    return reply.status(400).send({ error: 'Type must be either ICS or CalDAV.' });
+  if (!['ICS', 'CalDAV', 'Google'].includes(type)) {
+    return reply.status(400).send({ error: 'Type must be ICS, CalDAV, or Google.' });
+  }
+  if (type === 'Google' && !googleConnection.getConnectedAccount(db)) {
+    return reply.status(400).send({ error: 'Connect your Google account before adding a Google calendar.' });
   }
   try {
     const encryptedPassword = password ? encryptPassword(password) : null;
@@ -3135,10 +3211,10 @@ const start = async () => {
 
     if (!isEncryptionConfigured()) {
       console.warn('================================================================');
-      console.warn(' WARNING: ENCRYPTION_KEY is not configured.');
-      console.warn(' Third-party connections (Google, etc.) will be disabled until');
-      console.warn(' a 32-byte key is provided via the ENCRYPTION_KEY env variable.');
-      console.warn(' Generate one with:  openssl rand -base64 32');
+      console.warn(' WARNING: Encryption key is unavailable or invalid.');
+      console.warn(' Third-party connections (Google, etc.) will be disabled.');
+      console.warn(' Provide a 32-byte key via ENCRYPTION_KEY or delete');
+      console.warn(' server/data/.encryption-key to regenerate on restart.');
       console.warn('================================================================');
     }
 
