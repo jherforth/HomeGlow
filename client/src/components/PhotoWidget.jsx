@@ -553,7 +553,7 @@ const PhotoWidget = ({ transparentBackground }) => {
               label="Type"
             >
               <MenuItem value="Immich">Immich</MenuItem>
-              <MenuItem value="GooglePhotos">Google Photos (Coming Soon)</MenuItem>
+              {/* <MenuItem value="GooglePhotos">Google Photos (Coming Soon)</MenuItem> */}
             </Select>
           </FormControl>
 
@@ -588,11 +588,11 @@ const PhotoWidget = ({ transparentBackground }) => {
             </>
           )}
 
-          {sourceForm.type === 'GooglePhotos' && (
+          {/* sourceForm.type === 'GooglePhotos' && (
             <Alert severity="info" sx={{ mt: 2 }}>
               Google Photos integration coming soon. Stay tuned!
             </Alert>
-          )}
+          ) */}
 
           {testResult && (
             <Alert severity={testResult.success ? 'success' : 'error'} sx={{ mt: 2 }}>
