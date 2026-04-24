@@ -148,7 +148,7 @@ const PhotosUpload = () => {
       sx={{
         minHeight: '100vh',
         background: 'var(--background, #f4f4f9)',
-        color: 'var(--text-color, #1a1a2e)',
+        : 'var(--text-, #9999af)',
         px: { xs: 2, sm: 3 },
         py: { xs: 2, sm: 3 },
         boxSizing: 'border-box',
