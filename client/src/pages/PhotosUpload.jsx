@@ -323,9 +323,9 @@ const PhotosUpload = () => {
                           position: 'absolute',
                           top: 4,
                           right: 4,
-                          bgcolor: 'rgba(0,0,0,0.55)',
+                          bgcolor: 'rgba(245,245,250,0.55)',
                           color: '#fff',
-                          '&:hover': { bgcolor: 'rgba(0,0,0,0.75)' },
+                          '&:hover': { bgcolor: 'rgba(245,245,250,0.75)' },
                         }}
                       >
                         <Delete fontSize="small" />
