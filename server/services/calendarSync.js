@@ -1,6 +1,8 @@
 const axios = require('axios');
 const ICAL = require('ical.js');
 const node_ical = require('node-ical');
+const googleConnection = require('./googleConnection');
+const googleCalendar = require('./googleCalendar');
 
 class CalendarSyncService {
   constructor(db, decryptPassword) {
@@ -45,6 +47,8 @@ class CalendarSyncService {
         events = await this.fetchICSEvents(source);
       } else if (source.type === 'CalDAV') {
         events = await this.fetchCalDAVEvents(source);
+      } else if (source.type === 'Google') {
+        events = await this.fetchGoogleEvents(source);
       }
 
       this.db.prepare('DELETE FROM calendar_events_cache WHERE source_id = ?').run(sourceId);
@@ -178,6 +182,45 @@ class CalendarSyncService {
         raw: {}
       };
     });
+  }
+
+  async fetchGoogleEvents(source) {
+    const account = googleConnection.getConnectedAccount(this.db);
+    if (!account) {
+      throw new Error('No Google account connected. Authorize Google in Connections.');
+    }
+    const calendarId = source.url;
+    if (!calendarId) {
+      throw new Error('Google calendar source has no calendar selected.');
+    }
+    const now = Date.now();
+    const timeMin = new Date(now - 13 * 30 * 24 * 60 * 60 * 1000);
+    const timeMax = new Date(now + 13 * 30 * 24 * 60 * 60 * 1000);
+    const items = await googleCalendar.listEvents(this.db, account.id, calendarId, { timeMin, timeMax });
+
+    const out = [];
+    for (const item of items) {
+      if (!item || item.status === 'cancelled') continue;
+      const start = googleCalendar.parseEventDate(item.start);
+      const end = googleCalendar.parseEventDate(item.end);
+      if (!start || !end) continue;
+      const startDate = new Date(start.date);
+      let endDate = new Date(end.date);
+      if (start.allDay) {
+        endDate = new Date(endDate.getTime() - 24 * 60 * 60 * 1000);
+      }
+      out.push({
+        uid: item.id,
+        title: item.summary || 'Untitled Event',
+        start: startDate,
+        end: endDate,
+        description: item.description || null,
+        location: item.location || null,
+        all_day: !!start.allDay,
+        raw: { googleEventId: item.id, htmlLink: item.htmlLink, etag: item.etag },
+      });
+    }
+    return out;
   }
 
   async syncAllSources() {

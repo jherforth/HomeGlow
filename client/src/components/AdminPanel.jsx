@@ -71,6 +71,7 @@ import PinModal from './PinModal';
 import ChoreSchedulesTab from './ChoreSchedulesTab';
 import ChoreHistoryTab from './ChoreHistoryTab';
 import TabIconModal from './TabIconModal';
+import GoogleAccountConnection from './GoogleAccountConnection';
 
 const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const [currentDeviceName, setCurrentDeviceName] = useState(() => getDeviceName());
@@ -361,13 +362,30 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     }
   };
 
+  const saveDailyClamReward = async () => {
+    setIsLoading(true);
+    try {
+      await axios.post(`${API_BASE_URL}/api/settings`, {
+        key: 'daily_completion_clam_reward',
+        value: settings.daily_completion_clam_reward || '2',
+      });
+      setSaveMessage({ show: true, type: 'success', text: 'Daily completion clam reward saved.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error saving clam reward:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to save clam reward. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const saveAllApiSettings = async () => {
     setIsLoading(true);
     try {
       await Promise.all([
         axios.post(`${API_BASE_URL}/api/settings`, { key: 'WEATHER_API_KEY', value: settings.WEATHER_API_KEY || '' }),
-        axios.post(`${API_BASE_URL}/api/settings`, { key: 'PROXY_WHITELIST', value: settings.PROXY_WHITELIST || '' }),
-        axios.post(`${API_BASE_URL}/api/settings`, { key: 'daily_completion_clam_reward', value: settings.daily_completion_clam_reward || '2' })
+        axios.post(`${API_BASE_URL}/api/settings`, { key: 'PROXY_WHITELIST', value: settings.PROXY_WHITELIST || '' })
       ]);
       setSaveMessage({ show: true, type: 'success', text: 'All settings saved successfully!' });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
@@ -1385,7 +1403,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     'Chores',
     'Prizes',
     'Security',
-    'APIs'
+    'Connections'
   ];
 
   if (checkingPin) {
@@ -2432,6 +2450,38 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       {activeTab === 3 && (
         <Card>
           <CardContent>
+            {saveMessage.show && (
+              <Alert severity={saveMessage.type} sx={{ mb: 2 }}>
+                {saveMessage.text}
+              </Alert>
+            )}
+
+            <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
+              <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600 }}>
+                Rewards
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, alignItems: { sm: 'flex-start' } }}>
+                <TextField
+                  label="Daily Completion Clam Reward"
+                  type="number"
+                  value={settings.daily_completion_clam_reward || '2'}
+                  onChange={(e) => setSettings(prev => ({ ...prev, daily_completion_clam_reward: e.target.value }))}
+                  helperText="Clams awarded when a user completes all their daily chores"
+                  inputProps={{ min: 0, max: 100 }}
+                  sx={{ maxWidth: 340, flex: 1 }}
+                />
+                <Button
+                  variant="contained"
+                  onClick={saveDailyClamReward}
+                  disabled={isLoading}
+                  startIcon={<Save />}
+                  sx={{ alignSelf: { xs: 'stretch', sm: 'center' }, mt: { xs: 0, sm: 1 } }}
+                >
+                  {isLoading ? 'Saving...' : 'Save'}
+                </Button>
+              </Box>
+            </Box>
+
             <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
               <Tabs value={choresSubTab} onChange={(_, v) => setChoresSubTab(v)} size="small">
                 <Tab label="Chores" />
@@ -2639,11 +2689,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         </Card>
       )}
 
-      {/* APIs Tab */}
+      {/* Connections Tab */}
       {activeTab === 6 && (
         <Card>
           <CardContent>
-            <Typography variant="h6" gutterBottom>API Configuration</Typography>
+            <Typography variant="h6" gutterBottom>Connections</Typography>
 
             {saveMessage.show && (
               <Alert severity={saveMessage.type} sx={{ mb: 2 }}>
@@ -2651,7 +2701,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
               </Alert>
             )}
 
-            <Box sx={{ maxWidth: 600 }}>
+            <Box sx={{ maxWidth: 700 }}>
+              <Typography variant="subtitle1" sx={{ mt: 1, mb: 1.5, fontWeight: 600 }}>
+                API Keys
+              </Typography>
+
               <TextField
                 fullWidth
                 label="OpenWeatherMap API Key"
@@ -2671,26 +2725,24 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 helperText="Domains allowed for proxy requests (e.g., api.example.com, another-api.com)"
               />
 
-              <TextField
-                fullWidth
-                label="Daily Completion Clam Reward"
-                type="number"
-                value={settings.daily_completion_clam_reward || '2'}
-                onChange={(e) => setSettings(prev => ({ ...prev, daily_completion_clam_reward: e.target.value }))}
-                sx={{ mb: 2 }}
-                helperText="Number of clams awarded when a user completes all their daily chores"
-                inputProps={{ min: 0, max: 100 }}
-              />
-
               <Button
                 variant="contained"
                 onClick={saveAllApiSettings}
                 disabled={isLoading}
                 startIcon={<Save />}
-                sx={{ mt: 2 }}
+                sx={{ mt: 1, mb: 4 }}
               >
-                {isLoading ? 'Saving...' : 'Save Settings'}
+                {isLoading ? 'Saving...' : 'Save API Keys'}
               </Button>
+
+              <Divider sx={{ my: 2 }} />
+
+              <GoogleAccountConnection
+                onMessage={({ type, text }) => {
+                  setSaveMessage({ show: true, type, text });
+                  setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+                }}
+              />
             </Box>
           </CardContent>
         </Card>
