@@ -45,6 +45,7 @@ const schemaMigrations = [
   { schemaId: 8, migrationPath: './migrations/schema8-calendarCacheTables', },
   { schemaId: 9, migrationPath: './migrations/schema9-googleConnection', },
   { schemaId: 10, migrationPath: './migrations/schema10-googlePhotosPicker', },
+  { schemaId: 11, migrationPath: './migrations/schema11-homeglowPhotos', },
 ];
 
 // GitHub API configuration
@@ -98,7 +99,12 @@ fastify.register(require('@fastify/cors'), {
   allowedHeaders: ['Content-Type', 'Authorization'], // Add any other headers your client might send
 });
 
-fastify.register(multipart);
+fastify.register(multipart, {
+  limits: {
+    fileSize: 25 * 1024 * 1024, // 25MB per file
+    files: 50,
+  },
+});
 
 // Add a preHandler hook to log all incoming requests
 fastify.addHook('preHandler', (request, reply, done) => {
@@ -2838,8 +2844,8 @@ fastify.post('/api/photo-sources', async (request, reply) => {
   if (!name || !type) {
     return reply.status(400).send({ error: 'Name and type are required.' });
   }
-  if (!['Immich', 'GooglePhotos'].includes(type)) {
-    return reply.status(400).send({ error: 'Type must be either Immich or GooglePhotos.' });
+  if (!['Immich', 'GooglePhotos', 'HomeGlowPhotos'].includes(type)) {
+    return reply.status(400).send({ error: 'Type must be Immich, GooglePhotos, or HomeGlowPhotos.' });
   }
   try {
     const encryptedApiKey = api_key ? encryptPassword(api_key) : null;
@@ -2875,8 +2881,8 @@ fastify.patch('/api/photo-sources/:id', async (request, reply) => {
 
     if (name !== undefined) { updateFields.push('name = ?'); updateValues.push(name); }
     if (type !== undefined) {
-      if (!['Immich', 'GooglePhotos'].includes(type)) {
-        return reply.status(400).send({ error: 'Type must be either Immich or GooglePhotos.' });
+      if (!['Immich', 'GooglePhotos', 'HomeGlowPhotos'].includes(type)) {
+        return reply.status(400).send({ error: 'Type must be Immich, GooglePhotos, or HomeGlowPhotos.' });
       }
       updateFields.push('type = ?');
       updateValues.push(type);
@@ -2926,6 +2932,10 @@ fastify.delete('/api/photo-sources/:id', async (request, reply) => {
     for (const p of picked) googlePhotosPicker.removeLocalFile(p.local_path);
     db.prepare('DELETE FROM google_picked_media WHERE source_id = ?').run(id);
 
+    const homeglowDir = path.join(__dirname, 'uploads', 'homeglow-photos', String(id));
+    try { fsSync.rmSync(homeglowDir, { recursive: true, force: true }); } catch (_) {}
+    db.prepare('DELETE FROM homeglow_photos WHERE source_id = ?').run(id);
+
     const stmt = db.prepare('DELETE FROM photo_sources WHERE id = ?');
     const info = stmt.run(id);
     if (info.changes === 0) {
@@ -2970,6 +2980,9 @@ fastify.post('/api/photo-sources/:id/test', async (request, reply) => {
       }
       const count = db.prepare('SELECT COUNT(*) AS c FROM google_picked_media WHERE source_id = ?').get(source.id).c;
       return { success: true, message: `${count} picked photo${count === 1 ? '' : 's'} available for this source.` };
+    } else if (source.type === 'HomeGlowPhotos') {
+      const count = db.prepare('SELECT COUNT(*) AS c FROM homeglow_photos WHERE source_id = ?').get(source.id).c;
+      return { success: true, message: `${count} uploaded photo${count === 1 ? '' : 's'} available for this source.` };
     }
     return reply.status(400).send({ success: false, error: `Unsupported photo source type: ${source.type}` });
   } catch (error) {
@@ -3035,6 +3048,109 @@ fastify.get('/api/photo-proxy/:sourceId/:assetId', async (request, reply) => {
       console.error(`Immich response data:`, error.response.data);
     }
     return reply.status(500).send({ error: 'Failed to load photo' });
+  }
+});
+
+// HomeGlow Photos - list uploaded photos for a source
+fastify.get('/api/photo-sources/:sourceId/uploaded', async (request, reply) => {
+  const { sourceId } = request.params;
+  try {
+    const source = db.prepare('SELECT id, type FROM photo_sources WHERE id = ?').get(sourceId);
+    if (!source || source.type !== 'HomeGlowPhotos') {
+      return reply.status(404).send({ error: 'HomeGlow Photos source not found' });
+    }
+    const rows = db.prepare(
+      'SELECT id, filename, original_name, mime_type, size, uploaded_at FROM homeglow_photos WHERE source_id = ? ORDER BY uploaded_at DESC'
+    ).all(sourceId);
+    return rows.map((r) => ({
+      ...r,
+      url: `/api/photo-sources/${sourceId}/uploaded/${r.id}/file`,
+      thumbnail_url: `/api/photo-sources/${sourceId}/uploaded/${r.id}/file`,
+    }));
+  } catch (error) {
+    console.error('Error listing uploaded photos:', error);
+    reply.status(500).send({ error: 'Failed to list uploaded photos' });
+  }
+});
+
+// HomeGlow Photos - serve a single uploaded file
+fastify.get('/api/photo-sources/:sourceId/uploaded/:photoId/file', async (request, reply) => {
+  const { sourceId, photoId } = request.params;
+  try {
+    const row = db.prepare(
+      'SELECT filename, mime_type FROM homeglow_photos WHERE id = ? AND source_id = ?'
+    ).get(photoId, sourceId);
+    if (!row) return reply.status(404).send({ error: 'Photo not found' });
+    const filePath = path.join(__dirname, 'uploads', 'homeglow-photos', String(sourceId), row.filename);
+    if (!fsSync.existsSync(filePath)) return reply.status(404).send({ error: 'File missing' });
+    reply.header('Content-Type', row.mime_type || 'image/jpeg');
+    reply.header('Cache-Control', 'private, max-age=86400');
+    return reply.send(fsSync.createReadStream(filePath));
+  } catch (error) {
+    console.error('Error serving uploaded photo:', error);
+    reply.status(500).send({ error: 'Failed to load photo' });
+  }
+});
+
+// HomeGlow Photos - upload one or more photos (multipart)
+fastify.post('/api/photo-sources/:sourceId/uploaded', async (request, reply) => {
+  const { sourceId } = request.params;
+  try {
+    const source = db.prepare('SELECT id, type FROM photo_sources WHERE id = ?').get(sourceId);
+    if (!source || source.type !== 'HomeGlowPhotos') {
+      return reply.status(404).send({ error: 'HomeGlow Photos source not found' });
+    }
+    const uploadDir = path.join(__dirname, 'uploads', 'homeglow-photos', String(sourceId));
+    await fs.mkdir(uploadDir, { recursive: true });
+
+    const parts = request.parts();
+    const added = [];
+    const failed = [];
+    for await (const part of parts) {
+      if (part.type !== 'file') continue;
+      if (!part.mimetype || !part.mimetype.startsWith('image/')) {
+        failed.push({ name: part.filename, reason: 'Not an image' });
+        await part.toBuffer().catch(() => null);
+        continue;
+      }
+      try {
+        const ext = path.extname(part.filename || '') || '.jpg';
+        const safeBase = crypto.randomBytes(12).toString('hex');
+        const filename = `${safeBase}${ext.toLowerCase()}`;
+        const filePath = path.join(uploadDir, filename);
+        const buffer = await part.toBuffer();
+        await fs.writeFile(filePath, buffer);
+        const info = db.prepare(
+          `INSERT INTO homeglow_photos (source_id, filename, original_name, mime_type, size) VALUES (?, ?, ?, ?, ?)`
+        ).run(sourceId, filename, part.filename || null, part.mimetype, buffer.length);
+        added.push({ id: info.lastInsertRowid, filename, original_name: part.filename });
+      } catch (err) {
+        console.error('Upload failure for part:', err);
+        failed.push({ name: part.filename, reason: err.message });
+      }
+    }
+    return { success: true, added: added.length, failed: failed.length, items: added, errors: failed };
+  } catch (error) {
+    console.error('Error uploading photos:', error);
+    reply.status(500).send({ error: 'Failed to upload photos' });
+  }
+});
+
+// HomeGlow Photos - delete an uploaded photo
+fastify.delete('/api/photo-sources/:sourceId/uploaded/:photoId', async (request, reply) => {
+  const { sourceId, photoId } = request.params;
+  try {
+    const row = db.prepare(
+      'SELECT filename FROM homeglow_photos WHERE id = ? AND source_id = ?'
+    ).get(photoId, sourceId);
+    if (!row) return reply.status(404).send({ error: 'Photo not found' });
+    const filePath = path.join(__dirname, 'uploads', 'homeglow-photos', String(sourceId), row.filename);
+    try { await fs.unlink(filePath); } catch (_) {}
+    db.prepare('DELETE FROM homeglow_photos WHERE id = ?').run(photoId);
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting uploaded photo:', error);
+    reply.status(500).send({ error: 'Failed to delete photo' });
   }
 });
 
@@ -3297,6 +3413,24 @@ fastify.get('/api/photo-items', async (request, reply) => {
             source_id: source.id,
             source_name: source.name,
             source_type: 'GooglePhotos',
+          }));
+          for (let i = photos.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [photos[i], photos[j]] = [photos[j], photos[i]];
+          }
+          return photos;
+        } else if (source.type === 'HomeGlowPhotos') {
+          const rows = db.prepare(
+            'SELECT id, filename FROM homeglow_photos WHERE source_id = ? ORDER BY uploaded_at DESC'
+          ).all(source.id);
+          const photos = rows.map((r) => ({
+            id: `homeglow-${r.id}`,
+            url: `/api/photo-sources/${source.id}/uploaded/${r.id}/file`,
+            thumbnail: `/api/photo-sources/${source.id}/uploaded/${r.id}/file`,
+            type: 'IMAGE',
+            source_id: source.id,
+            source_name: source.name,
+            source_type: 'HomeGlowPhotos',
           }));
           for (let i = photos.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));

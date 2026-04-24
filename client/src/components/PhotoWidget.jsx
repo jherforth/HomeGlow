@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Typography, Box, IconButton, Popover, Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Switch, FormControlLabel, Select, MenuItem, FormControl, InputLabel, List, ListItem, ListItemText, ListItemSecondaryAction, CircularProgress, Alert, Chip } from '@mui/material';
-import { Settings, Add, Delete, Edit, Refresh, ChevronLeft, ChevronRight, PlayArrow, Pause } from '@mui/icons-material';
+import { Settings, Add, Delete, Edit, Refresh, ChevronLeft, ChevronRight, PlayArrow, Pause, CloudUpload } from '@mui/icons-material';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 
@@ -24,133 +24,6 @@ const PhotoWidget = ({ transparentBackground }) => {
   const [testingConnection, setTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState(null);
   const [savingSource, setSavingSource] = useState(false);
-  // Google Photos source disabled
-  // const [googleAccountConnected, setGoogleAccountConnected] = useState(false);
-  // const [pickerSession, setPickerSession] = useState(null);
-  // const [pickerError, setPickerError] = useState('');
-  // const [pickerBusy, setPickerBusy] = useState(false);
-  // const [pickerPolling, setPickerPolling] = useState(false);
-  // const [pickedMedia, setPickedMedia] = useState([]);
-  // const [ingestResult, setIngestResult] = useState(null);
-
-  // const checkGoogleAccount = async () => {
-  //   try {
-  //     const { data } = await axios.get(`${API_BASE_URL}/api/connections/google/status`);
-  //     setGoogleAccountConnected(!!data?.account);
-  //   } catch (_) {
-  //     setGoogleAccountConnected(false);
-  //   }
-  // };
-
-  // useEffect(() => {
-  //   checkGoogleAccount();
-  // }, []);
-
-  // const loadPickedMedia = async (sourceId) => {
-  //   try {
-  //     const { data } = await axios.get(`${API_BASE_URL}/api/photo-sources/${sourceId}/picked`);
-  //     setPickedMedia(Array.isArray(data) ? data : []);
-  //   } catch (err) {
-  //     setPickedMedia([]);
-  //   }
-  // };
-
-  // const startPickerSession = async () => {
-  //   if (!editingSource) return;
-  //   setPickerBusy(true);
-  //   setPickerError('');
-  //   setIngestResult(null);
-  //   try {
-  //     const { data } = await axios.post(`${API_BASE_URL}/api/photo-sources/${editingSource.id}/picker-session`);
-  //     setPickerSession(data);
-  //     setPickerPolling(true);
-  //   } catch (err) {
-  //     setPickerError(err?.response?.data?.error || 'Failed to start picker session.');
-  //   } finally {
-  //     setPickerBusy(false);
-  //   }
-  // };
-
-  // const cancelPickerSession = async () => {
-  //   if (!editingSource) return;
-  //   try {
-  //     await axios.delete(`${API_BASE_URL}/api/photo-sources/${editingSource.id}/picker-session`);
-  //   } catch (_) {}
-  //   setPickerSession(null);
-  //   setPickerPolling(false);
-  // };
-
-  // const ingestPickerSession = async () => {
-  //   if (!editingSource) return;
-  //   setPickerBusy(true);
-  //   setPickerError('');
-  //   try {
-  //     const { data } = await axios.post(`${API_BASE_URL}/api/photo-sources/${editingSource.id}/picker-session/ingest`);
-  //     setIngestResult(data);
-  //     setPickerSession(null);
-  //     setPickerPolling(false);
-  //     await loadPickedMedia(editingSource.id);
-  //     await fetchPhotos();
-  //   } catch (err) {
-  //     setPickerError(err?.response?.data?.error || 'Failed to import picked photos.');
-  //   } finally {
-  //     setPickerBusy(false);
-  //   }
-  // };
-
-  // const removePickedMedia = async (mediaRowId) => {
-  //   if (!editingSource) return;
-  //   try {
-  //     await axios.delete(`${API_BASE_URL}/api/photo-sources/${editingSource.id}/picked/${mediaRowId}`);
-  //     await loadPickedMedia(editingSource.id);
-  //     await fetchPhotos();
-  //   } catch (err) {
-  //     console.error('Failed to remove picked photo', err);
-  //   }
-  // };
-
-  // useEffect(() => {
-  //   if (!pickerPolling || !editingSource || !pickerSession?.sessionId) return;
-  //   const intervalMs = (() => {
-  //     const cfg = pickerSession.pollingConfig?.pollInterval;
-  //     if (typeof cfg === 'string') {
-  //       const match = cfg.match(/^([\d.]+)s$/);
-  //       if (match) return Math.max(1500, Math.round(parseFloat(match[1]) * 1000));
-  //     }
-  //     return 3000;
-  //   })();
-  //   let active = true;
-  //   const tick = async () => {
-  //     try {
-  //       const { data } = await axios.get(`${API_BASE_URL}/api/photo-sources/${editingSource.id}/picker-session`);
-  //       if (!active) return;
-  //       setPickerSession((prev) => ({ ...(prev || {}), ...data }));
-  //       if (data.mediaItemsSet) {
-  //         setPickerPolling(false);
-  //       }
-  //     } catch (err) {
-  //       if (!active) return;
-  //       setPickerError(err?.response?.data?.error || 'Picker polling failed.');
-  //       setPickerPolling(false);
-  //     }
-  //   };
-  //   const interval = setInterval(tick, intervalMs);
-  //   return () => { active = false; clearInterval(interval); };
-  // }, [pickerPolling, pickerSession?.sessionId, editingSource?.id]);
-
-  // useEffect(() => {
-  //   if (!showSourceDialog) {
-  //     setPickerSession(null);
-  //     setPickerPolling(false);
-  //     setPickerError('');
-  //     setPickedMedia([]);
-  //     setIngestResult(null);
-  //     return;
-  //   }
-  //   if (editingSource && editingSource.type === 'GooglePhotos') {
-  //     loadPickedMedia(editingSource.id);
-  //   }
-  // }, [showSourceDialog, editingSource?.id]);
   const [isPlaying, setIsPlaying] = useState(true);
   const [slideshowInterval, setSlideshowInterval] = useState(5000);
   const [photosPerView, setPhotosPerView] = useState(1);
@@ -680,10 +553,7 @@ const PhotoWidget = ({ transparentBackground }) => {
               label="Type"
             >
               <MenuItem value="Immich">Immich</MenuItem>
-              {/* Google Photos source disabled */}
-              {/* <MenuItem value="GooglePhotos" disabled={!googleAccountConnected}>
-                Google Photos{googleAccountConnected ? '' : ' (connect in Admin > Connections)'}
-              </MenuItem> */}
+              <MenuItem value="HomeGlowPhotos">HomeGlow Photos</MenuItem>
             </Select>
           </FormControl>
 
@@ -718,12 +588,35 @@ const PhotoWidget = ({ transparentBackground }) => {
             </>
           )}
 
-          {/* Google Photos source disabled */}
-          {/* {sourceForm.type === 'GooglePhotos' && (
+          {sourceForm.type === 'HomeGlowPhotos' && (
             <Box sx={{ mt: 2 }}>
-              ...Google Photos picker UI...
+              {!editingSource ? (
+                <Alert severity="info">
+                  Save this source first, then open the upload page to add photos from your device.
+                </Alert>
+              ) : (
+                <>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    Upload photos directly from your device. They will be stored on your HomeGlow
+                    server and displayed in this widget.
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    startIcon={<CloudUpload />}
+                    onClick={() => {
+                      window.location.href = `/photos?source=${editingSource.id}`;
+                    }}
+                  >
+                    Open upload page
+                  </Button>
+                  <Alert severity="info" sx={{ mt: 2 }}>
+                    The upload page is mobile-friendly—open it on your phone to upload photos
+                    straight from your camera roll.
+                  </Alert>
+                </>
+              )}
             </Box>
-          )} */}
+          )}
 
           {testResult && (
             <Alert severity={testResult.success ? 'success' : 'error'} sx={{ mt: 2 }}>
