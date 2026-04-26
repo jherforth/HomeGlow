@@ -46,7 +46,11 @@ const schemaMigrations = [
   { schemaId: 9, migrationPath: './migrations/schema9-googleConnection', },
   { schemaId: 10, migrationPath: './migrations/schema10-googlePhotosPicker', },
   { schemaId: 11, migrationPath: './migrations/schema11-homeglowPhotos', },
+  { schemaId: 12, migrationPath: './migrations/schema12-onceCompletedScheduling', },
 ];
+
+const ALLOWED_SCHEDULE_DURATIONS = new Set(['day-of', 'until-completed', 'once-completed']);
+const SCHEDULE_INTERVAL_REGEX = /^([1-9]\d*)([dwmy])$/;
 
 // GitHub API configuration
 const GITHUB_REPO_OWNER = 'jherforth';
@@ -59,6 +63,98 @@ function getTodayLocalDateString() {
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const day = String(now.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function normalizeScheduleDuration(duration) {
+  if (duration === undefined || duration === null || duration === '') {
+    return 'day-of';
+  }
+  return String(duration);
+}
+
+function normalizeScheduleInterval(intervalValue) {
+  if (intervalValue === undefined || intervalValue === null) {
+    return null;
+  }
+  const normalized = String(intervalValue).trim().toLowerCase();
+  return normalized || null;
+}
+
+function isValidScheduleInterval(intervalValue) {
+  return typeof intervalValue === 'string' && SCHEDULE_INTERVAL_REGEX.test(intervalValue);
+}
+
+function parseDateOnlyToLocalDate(dateString) {
+  if (typeof dateString !== 'string') {
+    return null;
+  }
+
+  const parts = dateString.split('-').map(Number);
+  if (parts.length !== 3 || parts.some(Number.isNaN)) {
+    return null;
+  }
+
+  const [year, month, day] = parts;
+  if (!year || !month || !day) {
+    return null;
+  }
+
+  return new Date(year, month - 1, day, 0, 0, 0, 0);
+}
+
+function addMonthsCalendarAware(baseDate, monthCount) {
+  const result = new Date(baseDate);
+  const originalDay = result.getDate();
+  result.setDate(1);
+  result.setMonth(result.getMonth() + monthCount);
+  const lastDayOfTargetMonth = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
+  result.setDate(Math.min(originalDay, lastDayOfTargetMonth));
+  return result;
+}
+
+function addYearsCalendarAware(baseDate, yearCount) {
+  return addMonthsCalendarAware(baseDate, yearCount * 12);
+}
+
+function addIntervalToDate(baseDate, intervalValue) {
+  const normalizedInterval = normalizeScheduleInterval(intervalValue);
+  if (!normalizedInterval || !isValidScheduleInterval(normalizedInterval)) {
+    return null;
+  }
+
+  const [, countRaw, unit] = normalizedInterval.match(SCHEDULE_INTERVAL_REGEX);
+  const count = parseInt(countRaw, 10);
+  if (count <= 0) {
+    return null;
+  }
+
+  switch (unit) {
+    case 'd': {
+      const result = new Date(baseDate);
+      result.setDate(result.getDate() + count);
+      return result;
+    }
+    case 'w': {
+      const result = new Date(baseDate);
+      result.setDate(result.getDate() + (count * 7));
+      return result;
+    }
+    case 'm':
+      return addMonthsCalendarAware(baseDate, count);
+    case 'y':
+      return addYearsCalendarAware(baseDate, count);
+    default:
+      return null;
+  }
+}
+
+function buildDateCrontab(dateObj) {
+  if (!(dateObj instanceof Date) || Number.isNaN(dateObj.getTime())) {
+    return null;
+  }
+  const dayOfMonth = dateObj.getDate();
+  const month = dateObj.getMonth() + 1;
+  return `0 0 ${dayOfMonth} ${month} *`;
 }
 
 // Encryption utilities for calendar credentials
@@ -692,6 +788,7 @@ async function dailyBackgroundProcessing() {
 
     let prunedScheduleCount = 0;
     for (const schedule of schedulesToPrune) {
+
       db.prepare('DELETE FROM chore_schedules WHERE id = ?').run(schedule.id);
       console.log(`Pruned schedule ID ${schedule.id}: "${schedule.title}" (user_id: ${schedule.user_id})`);
       prunedScheduleCount++;
@@ -752,20 +849,31 @@ async function dailyBackgroundProcessing() {
     }
 
 
-    // Handle until-completed schedules: create one-time schedules for until-completed chores that trigger today
-    // ensure there are no existing one-time schedules for the chore with an until-completed enabled schedule
-    const untilCompletedSchedules = db.prepare(`
-      SELECT id, chore_id, user_id, crontab FROM chore_schedules cs
-      WHERE crontab IS NOT NULL
-      AND duration = 'until-completed'
-      AND visible = 1
-      AND NOT EXISTS (
-        SELECT 1 FROM chore_schedules
-        WHERE crontab IS NULL
-        AND chore_id = cs.chore_id
-      )
+    // Handle sticky schedules: create one-time children for until-completed and once-completed parents that trigger today.
+    const stickyParentSchedules = db.prepare(`
+      SELECT cs.id, cs.chore_id, cs.user_id, cs.crontab, cs.duration, cs.interval
+      FROM chore_schedules cs
+      WHERE cs.crontab IS NOT NULL
+        AND cs.duration IN ('until-completed', 'once-completed')
+        AND cs.visible = 1
+        AND NOT EXISTS (
+          SELECT 1 FROM chore_schedules child
+          WHERE child.crontab IS NULL
+            AND child.visible = 1
+            AND (
+              child.parent_schedule_id = cs.id
+              OR (
+                child.parent_schedule_id IS NULL
+                AND child.chore_id = cs.chore_id
+                AND (
+                  (child.user_id = cs.user_id)
+                  OR (child.user_id IS NULL AND cs.user_id IS NULL)
+                )
+              )
+            )
+        )
     `).all();
-    console.log(`Found ${untilCompletedSchedules.length} until-completed schedules to check`);
+    console.log(`Found ${stickyParentSchedules.length} sticky schedules to check`);
 
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
@@ -774,31 +882,32 @@ async function dailyBackgroundProcessing() {
       currentDate: justBeforeToday,
       utc: false,
     }
-    let untilCompletedCreated = 0;
-    let triggeredSchedules = []
-    for (const schedule of untilCompletedSchedules) {
-      const interval = parser.parseExpression(schedule.crontab, options);
-      // console.log(Object.getOwnPropertyNames(Object.getPrototypeOf(interval)));
-      const next = interval.next().toISOString().split('T')[0];
-      console.log(`-------------- Next date for ${schedule.id} is ${next}`);
+    let stickySchedulesCreated = 0;
+    const triggeredSchedules = [];
+    for (const schedule of stickyParentSchedules) {
+      let next = null;
+      try {
+        const cronInterval = parser.parseExpression(schedule.crontab, options);
+        next = cronInterval.next().toISOString().split('T')[0];
+      } catch (parseError) {
+        console.warn(`Skipping sticky schedule ${schedule.id} due to invalid crontab: ${schedule.crontab}`);
+        continue;
+      }
 
-      // We need to add a one-time task because today is the trigger!
       if (today === next) {
-        console.log(`-------------- Add ${schedule.id} to today's chores!`);
-
         const scheduleResult = db.prepare(`
-          INSERT INTO chore_schedules (chore_id, user_id)
-          VALUES (?, ?)
+          INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, visible, parent_schedule_id)
+          VALUES (?, ?, NULL, 'day-of', 1, ?)
           RETURNING *
-          `).all(schedule.chore_id, schedule.user_id)
-        console.log(`-------------- Added ${scheduleResult} to today's chores!`);
+        `).get(schedule.chore_id, schedule.user_id, schedule.id);
+
         triggeredSchedules.push(scheduleResult);
-        untilCompletedCreated++;
+        stickySchedulesCreated++;
       }
     }
     results = {
       ...results,
-      triggeredSchedulesCount: untilCompletedCreated,
+      triggeredSchedulesCount: stickySchedulesCreated,
       triggeredSchedules: triggeredSchedules,
     }
 
@@ -807,7 +916,7 @@ async function dailyBackgroundProcessing() {
     console.log(`  - Day-of schedules pruned: ${prunedScheduleCount}`);
     console.log(`  - Orphaned chores deleted: ${prunedChoreCount}`);
     console.log(`  - Bonus chores reset: ${resetScheduleCount}`);
-    console.log(`  - Until-completed chores triggered: ${untilCompletedCreated}`);
+    console.log(`  - Sticky chores triggered: ${stickySchedulesCreated}`);
     console.log(`Total: ${prunedScheduleCount + prunedChoreCount + resetScheduleCount} operations performed`);
     return results;
   } catch (error) {
@@ -1066,8 +1175,8 @@ fastify.get('/api/chore-schedules', async (request, reply) => {
     if (usage !== undefined && usage === 'chart') {
       conditions.push('cs.visible = ?');
       params.push(1);
-      conditions.push('cs.duration != ?');
-      params.push('until-completed');
+      conditions.push('(cs.duration IS NULL OR cs.duration NOT IN (?, ?))');
+      params.push('until-completed', 'once-completed');
     }
     if (chore_id !== undefined) {
       conditions.push('cs.chore_id = ?');
@@ -1101,10 +1210,27 @@ fastify.get('/api/chore-schedules/:id', async (request, reply) => {
 });
 
 fastify.post('/api/chore-schedules', async (request, reply) => {
-  const { chore_id, user_id, crontab, duration, visible } = request.body;
+  const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id } = request.body;
   try {
     if (!chore_id) {
       return reply.status(400).send({ error: 'chore_id is required' });
+    }
+
+    const normalizedDuration = normalizeScheduleDuration(duration);
+    if (!ALLOWED_SCHEDULE_DURATIONS.has(normalizedDuration)) {
+      return reply.status(400).send({ error: `Invalid duration. Expected one of: ${Array.from(ALLOWED_SCHEDULE_DURATIONS).join(', ')}` });
+    }
+
+    const normalizedInterval = normalizeScheduleInterval(interval);
+    if (normalizedDuration === 'once-completed') {
+      if (!crontab) {
+        return reply.status(400).send({ error: 'once-completed schedules require a crontab expression' });
+      }
+      if (!isValidScheduleInterval(normalizedInterval)) {
+        return reply.status(400).send({ error: 'once-completed schedules require a valid interval like 30d, 3w, 2m, or 1y' });
+      }
+    } else if (normalizedInterval !== null) {
+      return reply.status(400).send({ error: 'interval is only allowed for once-completed schedules' });
     }
 
     if (crontab) {
@@ -1115,8 +1241,29 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
       }
     }
 
-    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, visible) VALUES (?, ?, ?, ?, ?)');
-    const info = stmt.run(chore_id, user_id || null, crontab || null, duration || 'day-of', visible !== undefined ? visible : 1);
+    let normalizedParentScheduleId = null;
+    if (parent_schedule_id !== undefined && parent_schedule_id !== null && parent_schedule_id !== '') {
+      const parsedParentScheduleId = parseInt(parent_schedule_id, 10);
+      if (Number.isNaN(parsedParentScheduleId)) {
+        return reply.status(400).send({ error: 'parent_schedule_id must be a number' });
+      }
+      const parentExists = db.prepare('SELECT id FROM chore_schedules WHERE id = ?').get(parsedParentScheduleId);
+      if (!parentExists) {
+        return reply.status(400).send({ error: 'parent_schedule_id must reference an existing schedule' });
+      }
+      normalizedParentScheduleId = parsedParentScheduleId;
+    }
+
+    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    const info = stmt.run(
+      chore_id,
+      user_id || null,
+      crontab || null,
+      normalizedDuration,
+      visible !== undefined ? visible : 1,
+      normalizedDuration === 'once-completed' ? normalizedInterval : null,
+      normalizedParentScheduleId
+    );
     return { id: info.lastInsertRowid, success: true };
   } catch (error) {
     console.error('Error adding schedule:', error);
@@ -1156,7 +1303,7 @@ fastify.post('/api/chore-schedules/bulk', async (request, reply) => {
 
 fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
   const { id } = request.params;
-  const { chore_id, user_id, crontab, duration, visible } = request.body;
+  const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id } = request.body;
   try {
     if (crontab !== undefined && crontab !== null) {
       try {
@@ -1166,13 +1313,59 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
       }
     }
 
+    const existingSchedule = db.prepare('SELECT id, crontab, duration, interval FROM chore_schedules WHERE id = ?').get(id);
+    if (!existingSchedule) {
+      return reply.status(404).send({ error: 'Schedule not found' });
+    }
+
+    const nextDuration = normalizeScheduleDuration(duration !== undefined ? duration : existingSchedule.duration);
+    if (!ALLOWED_SCHEDULE_DURATIONS.has(nextDuration)) {
+      return reply.status(400).send({ error: `Invalid duration. Expected one of: ${Array.from(ALLOWED_SCHEDULE_DURATIONS).join(', ')}` });
+    }
+
+    const nextCrontab = crontab !== undefined ? (crontab || null) : existingSchedule.crontab;
+    const nextInterval = normalizeScheduleInterval(interval !== undefined ? interval : existingSchedule.interval);
+    if (nextDuration === 'once-completed') {
+      if (!nextCrontab) {
+        return reply.status(400).send({ error: 'once-completed schedules require a crontab expression' });
+      }
+      if (!isValidScheduleInterval(nextInterval)) {
+        return reply.status(400).send({ error: 'once-completed schedules require a valid interval like 30d, 3w, 2m, or 1y' });
+      }
+    } else if (interval !== undefined && nextInterval !== null) {
+      return reply.status(400).send({ error: 'interval is only allowed for once-completed schedules' });
+    }
+
     const updates = [];
     const params = [];
 
     if (chore_id !== undefined) { updates.push('chore_id = ?'); params.push(chore_id); }
     if (user_id !== undefined) { updates.push('user_id = ?'); params.push(user_id || null); }
     if (crontab !== undefined) { updates.push('crontab = ?'); params.push(crontab || null); }
-    if (duration !== undefined) { updates.push('duration = ?'); params.push(duration); }
+    if (duration !== undefined) { updates.push('duration = ?'); params.push(nextDuration); }
+    if (interval !== undefined || duration !== undefined) {
+      updates.push('interval = ?');
+      params.push(nextDuration === 'once-completed' ? nextInterval : null);
+    }
+    if (parent_schedule_id !== undefined) {
+      if (parent_schedule_id === null || parent_schedule_id === '') {
+        updates.push('parent_schedule_id = NULL');
+      } else {
+        const parsedParentScheduleId = parseInt(parent_schedule_id, 10);
+        if (Number.isNaN(parsedParentScheduleId)) {
+          return reply.status(400).send({ error: 'parent_schedule_id must be a number' });
+        }
+        if (parsedParentScheduleId === parseInt(id, 10)) {
+          return reply.status(400).send({ error: 'A schedule cannot reference itself as parent_schedule_id' });
+        }
+        const parentExists = db.prepare('SELECT id FROM chore_schedules WHERE id = ?').get(parsedParentScheduleId);
+        if (!parentExists) {
+          return reply.status(400).send({ error: 'parent_schedule_id must reference an existing schedule' });
+        }
+        updates.push('parent_schedule_id = ?');
+        params.push(parsedParentScheduleId);
+      }
+    }
     if (visible !== undefined) { updates.push('visible = ?'); params.push(visible ? 1 : 0); }
 
     if (updates.length === 0) {
@@ -1345,6 +1538,21 @@ fastify.post('/api/chores/complete', async (request, reply) => {
 
     db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title) VALUES (?, ?, ?, ?, ?)').run(user_id, chore_schedule_id, date, schedule.clam_value, schedule.title);
 
+    if (schedule.parent_schedule_id) {
+      const parentSchedule = db.prepare('SELECT id, duration, interval FROM chore_schedules WHERE id = ?').get(schedule.parent_schedule_id);
+      if (parentSchedule && parentSchedule.duration === 'once-completed') {
+        const completionDate = parseDateOnlyToLocalDate(date);
+        const nextDueDate = completionDate ? addIntervalToDate(completionDate, parentSchedule.interval) : null;
+        const nextCrontab = buildDateCrontab(nextDueDate);
+
+        if (nextCrontab) {
+          db.prepare('UPDATE chore_schedules SET crontab = ?, visible = 1 WHERE id = ?').run(nextCrontab, parentSchedule.id);
+        } else {
+          console.warn(`Could not reschedule once-completed parent schedule ${parentSchedule.id}; invalid interval: ${parentSchedule.interval}`);
+        }
+      }
+    }
+
     const today = getTodayLocalDateString();
     const allUserSchedules = db.prepare(`
       SELECT cs.*,
@@ -1363,7 +1571,7 @@ fastify.post('/api/chores/complete', async (request, reply) => {
         AND cs.visible = 1
         AND NOT (
           cs.crontab IS NOT NULL
-          AND cs.duration = 'until-completed'
+          AND cs.duration IN ('until-completed', 'once-completed')
         )
     `).all(today, user_id);
 
@@ -2356,7 +2564,7 @@ fastify.get('/api/connections/google/status', async (request, reply) => {
     const oauth = googleConnection.getOAuthStatus(db);
     const account = googleConnection.getConnectedAccount(db);
     let redirectUri = '';
-    try { redirectUri = googleConnection.deriveRedirectUri(db, request); } catch (_) {}
+    try { redirectUri = googleConnection.deriveRedirectUri(db, request); } catch (_) { }
     return {
       encryption: { configured: oauth.encryption_configured, status: getEncryptionStatus() },
       oauth: {
@@ -2498,7 +2706,7 @@ fastify.post('/api/calendar-sources/:id/events', async (request, reply) => {
     if (!account) return reply.status(400).send({ error: 'No Google account connected.' });
 
     const created = await googleCalendar.createEvent(db, account.id, source.url, request.body || {});
-    if (calendarSyncService) calendarSyncService.syncSource(source.id).catch(() => {});
+    if (calendarSyncService) calendarSyncService.syncSource(source.id).catch(() => { });
     return { success: true, event: created };
   } catch (error) {
     console.error('Error creating Google calendar event:', error);
@@ -2518,7 +2726,7 @@ fastify.patch('/api/calendar-sources/:id/events/:eventId', async (request, reply
     if (!account) return reply.status(400).send({ error: 'No Google account connected.' });
 
     const updated = await googleCalendar.updateEvent(db, account.id, source.url, eventId, request.body || {});
-    if (calendarSyncService) calendarSyncService.syncSource(source.id).catch(() => {});
+    if (calendarSyncService) calendarSyncService.syncSource(source.id).catch(() => { });
     return { success: true, event: updated };
   } catch (error) {
     console.error('Error updating Google calendar event:', error);
@@ -2538,7 +2746,7 @@ fastify.delete('/api/calendar-sources/:id/events/:eventId', async (request, repl
     if (!account) return reply.status(400).send({ error: 'No Google account connected.' });
 
     await googleCalendar.deleteEvent(db, account.id, source.url, eventId);
-    if (calendarSyncService) calendarSyncService.syncSource(source.id).catch(() => {});
+    if (calendarSyncService) calendarSyncService.syncSource(source.id).catch(() => { });
     return { success: true };
   } catch (error) {
     console.error('Error deleting Google calendar event:', error);
@@ -2933,7 +3141,7 @@ fastify.delete('/api/photo-sources/:id', async (request, reply) => {
     db.prepare('DELETE FROM google_picked_media WHERE source_id = ?').run(id);
 
     const homeglowDir = path.join(__dirname, 'uploads', 'homeglow-photos', String(id));
-    try { fsSync.rmSync(homeglowDir, { recursive: true, force: true }); } catch (_) {}
+    try { fsSync.rmSync(homeglowDir, { recursive: true, force: true }); } catch (_) { }
     db.prepare('DELETE FROM homeglow_photos WHERE source_id = ?').run(id);
 
     const stmt = db.prepare('DELETE FROM photo_sources WHERE id = ?');
@@ -3145,7 +3353,7 @@ fastify.delete('/api/photo-sources/:sourceId/uploaded/:photoId', async (request,
     ).get(photoId, sourceId);
     if (!row) return reply.status(404).send({ error: 'Photo not found' });
     const filePath = path.join(__dirname, 'uploads', 'homeglow-photos', String(sourceId), row.filename);
-    try { await fs.unlink(filePath); } catch (_) {}
+    try { await fs.unlink(filePath); } catch (_) { }
     db.prepare('DELETE FROM homeglow_photos WHERE id = ?').run(photoId);
     return { success: true };
   } catch (error) {
@@ -3337,7 +3545,7 @@ fastify.delete('/api/photo-sources/:sourceId/picker-session', async (request, re
     if (source.picker_session_id) {
       const account = googleConnection.getConnectedAccount(db);
       if (account) {
-        try { await googlePhotosPicker.deleteSession(db, account.id, source.picker_session_id); } catch (_) {}
+        try { await googlePhotosPicker.deleteSession(db, account.id, source.picker_session_id); } catch (_) { }
       }
     }
     db.prepare('UPDATE photo_sources SET picker_session_id = NULL, picker_session_expire = NULL WHERE id = ?').run(sourceId);
