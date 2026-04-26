@@ -73,6 +73,8 @@ import ChoreHistoryTab from './ChoreHistoryTab';
 import TabIconModal from './TabIconModal';
 import GoogleAccountConnection from './GoogleAccountConnection';
 
+const USERS_UPDATED_EVENT = 'homeglow:users-updated';
+
 const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const [currentDeviceName, setCurrentDeviceName] = useState(() => getDeviceName());
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
@@ -1019,6 +1021,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const saveUser = async () => {
     try {
       setIsLoading(true);
+      const isCreatingUser = !editingUser;
       if (editingUser) {
         await axios.patch(`${API_BASE_URL}/api/users/${editingUser.id}`, editingUser);
       } else {
@@ -1027,6 +1030,9 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       }
       setEditingUser(null);
       fetchUsers();
+      if (isCreatingUser) {
+        window.dispatchEvent(new Event(USERS_UPDATED_EVENT));
+      }
     } catch (error) {
       console.error('Error saving user:', error);
     } finally {
@@ -1046,6 +1052,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
       fetchUsers();
       fetchChores();
+      window.dispatchEvent(new Event(USERS_UPDATED_EVENT));
       setDeleteUserDialog({ open: false, user: null });
     } catch (error) {
       console.error('Error deleting user:', error);

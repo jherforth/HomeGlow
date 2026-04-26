@@ -27,6 +27,8 @@ import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { shouldShowChoreToday, getTodayDateString, convertDaysToCrontab } from '../utils/choreHelpers.js';
 
+const USERS_UPDATED_EVENT = 'homeglow:users-updated';
+
 const ChoreWidget = ({ transparentBackground }) => {
   const [users, setUsers] = useState([]);
   const [chores, setChores] = useState([]);
@@ -78,6 +80,17 @@ const ChoreWidget = ({ transparentBackground }) => {
         clearInterval(intervalId);
       };
     }
+  }, []);
+
+  useEffect(() => {
+    const onUsersUpdated = () => {
+      fetchUsers();
+    };
+
+    window.addEventListener(USERS_UPDATED_EVENT, onUsersUpdated);
+    return () => {
+      window.removeEventListener(USERS_UPDATED_EVENT, onUsersUpdated);
+    };
   }, []);
 
   const fetchData = async () => {
