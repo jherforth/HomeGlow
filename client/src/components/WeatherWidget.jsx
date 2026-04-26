@@ -29,6 +29,7 @@ const WeatherWidget = ({
   widgetSize = { width: 4, height: 4 },
   activeTabId = 1,
   widgetId = 'weather-widget',
+  refreshNonce = 0,
 }) => {
   const weatherSettingsStorageKey = `${WEATHER_SETTINGS_STORAGE_PREFIX}${activeTabId}:${widgetId}`;
   const weatherCacheStorageKey = `${WEATHER_CACHE_STORAGE_PREFIX}${activeTabId}:${widgetId}`;
@@ -345,7 +346,8 @@ const WeatherWidget = ({
       setForecastData(Array.isArray(parsedCache.forecastData) ? parsedCache.forecastData : []);
       setAirQualityData(parsedCache.airQualityData || null);
       setChartData(Array.isArray(parsedCache.chartData) ? parsedCache.chartData : []);
-      setShouldFetchNow(false);
+      // Force fresh API lookup when widget refresh was explicitly requested.
+      setShouldFetchNow(refreshNonce > 0);
     } else {
       setWeatherData(null);
       setForecastData([]);
@@ -361,7 +363,7 @@ const WeatherWidget = ({
     setDraftTempUnit(savedTempUnit);
     setDraftLayoutMode(savedLayoutMode);
     setSettingsLoaded(true);
-  }, [weatherSettingsStorageKey, weatherCacheStorageKey]);
+  }, [weatherSettingsStorageKey, weatherCacheStorageKey, refreshNonce]);
 
   useEffect(() => {
     if (!settingsLoaded || !shouldFetchNow) {

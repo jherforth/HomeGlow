@@ -842,6 +842,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                   {React.cloneElement(widget.content, {
                     key: refreshKeys[widget.id] || 0,
                     widgetId: widget.id,
+                    refreshNonce: refreshKeys[widget.id] || 0,
                     activeTabId,
                     widgetSize: {
                       width: effectiveLayout.w,
