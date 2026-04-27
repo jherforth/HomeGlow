@@ -121,7 +121,19 @@ const TabIconModal = ({
   };
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+    <Dialog
+      open={open}
+      onClose={handleClose}
+      maxWidth="sm"
+      fullWidth
+      PaperProps={{
+        component: 'form',
+        onSubmit: (event) => {
+          event.preventDefault();
+          handleSave();
+        },
+      }}
+    >
       <DialogTitle>
         <Typography variant="h6" component="div">
           {title}
@@ -198,10 +210,10 @@ const TabIconModal = ({
         </Box>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={handleClose} variant="outlined">
+        <Button type="button" onClick={handleClose} variant="outlined">
           Cancel
         </Button>
-        <Button onClick={handleSave} variant="contained" disabled={!label.trim()}>
+        <Button type="submit" variant="contained" disabled={!label.trim()}>
           {saveButtonText}
         </Button>
       </DialogActions>

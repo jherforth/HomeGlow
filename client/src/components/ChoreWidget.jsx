@@ -691,28 +691,40 @@ const ChoreWidget = ({ transparentBackground }) => {
           </DialogActions>
         </Dialog>
 
-        <Dialog open={showAddDialog} onClose={() => setShowAddDialog(false)} maxWidth="sm" fullWidth>
+        <Dialog
+          open={showAddDialog}
+          onClose={() => setShowAddDialog(false)}
+          maxWidth="sm"
+          fullWidth
+          PaperProps={{
+            component: 'form',
+            onSubmit: (event) => {
+              event.preventDefault();
+              saveChore();
+            },
+          }}
+        >
           <DialogTitle>Add New Chore</DialogTitle>
           <DialogContent>
             <TextField
               fullWidth
               label="Title"
               value={newChore.title}
-              onChange={(e) => setNewChore({...newChore, title: e.target.value})}
+              onChange={(e) => setNewChore({ ...newChore, title: e.target.value })}
               sx={{ mb: 2, mt: 1 }}
             />
             <TextField
               fullWidth
               label="Description"
               value={newChore.description}
-              onChange={(e) => setNewChore({...newChore, description: e.target.value})}
+              onChange={(e) => setNewChore({ ...newChore, description: e.target.value })}
               sx={{ mb: 2 }}
             />
             <FormControl fullWidth sx={{ mb: 2 }}>
               <InputLabel>Assign to User</InputLabel>
               <Select
                 value={newChore.user_id}
-                onChange={(e) => setNewChore({...newChore, user_id: e.target.value})}
+                onChange={(e) => setNewChore({ ...newChore, user_id: e.target.value })}
               >
                 <MenuItem value={0}>Bonus Chore (Unassigned)</MenuItem>
                 {users.map(user => (
@@ -768,13 +780,13 @@ const ChoreWidget = ({ transparentBackground }) => {
               type="number"
               label="🥟 Clam Value (0 for regular chore)"
               value={newChore.clam_value}
-              onChange={(e) => setNewChore({...newChore, clam_value: parseInt(e.target.value) || 0})}
+              onChange={(e) => setNewChore({ ...newChore, clam_value: parseInt(e.target.value) || 0 })}
             />
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setShowAddDialog(false)}>Cancel</Button>
+            <Button type="button" onClick={() => setShowAddDialog(false)}>Cancel</Button>
             <Button
-              onClick={saveChore}
+              type="submit"
               variant="contained"
               disabled={!newChore.is_one_time && newChore.assigned_days_of_week.length === 0}
             >

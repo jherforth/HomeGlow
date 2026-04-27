@@ -1394,7 +1394,19 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={eventDialog.open} onClose={closeEventDialog} maxWidth="sm" fullWidth>
+      <Dialog
+        open={eventDialog.open}
+        onClose={closeEventDialog}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          component: 'form',
+          onSubmit: (event) => {
+            event.preventDefault();
+            saveEvent();
+          },
+        }}
+      >
         <DialogTitle>{eventDialog.mode === 'create' ? 'New Event' : 'Edit Event'}</DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 1 }}>
@@ -1495,8 +1507,8 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={closeEventDialog}>Cancel</Button>
-          <Button onClick={saveEvent} variant="contained" disabled={eventSaving}>
+          <Button type="button" onClick={closeEventDialog}>Cancel</Button>
+          <Button type="submit" variant="contained" disabled={eventSaving}>
             {eventSaving ? <CircularProgress size={18} /> : (eventDialog.mode === 'create' ? 'Create' : 'Save')}
           </Button>
         </DialogActions>
@@ -1874,6 +1886,13 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
         onClose={() => setShowCalendarDialog(false)}
         maxWidth="sm"
         fullWidth
+        PaperProps={{
+          component: 'form',
+          onSubmit: (event) => {
+            event.preventDefault();
+            handleSaveCalendar();
+          },
+        }}
       >
         <DialogTitle>
           {editingCalendar ? 'Edit Calendar' : 'Add Calendar'}
@@ -1940,7 +1959,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                       ))}
                     </Select>
                   </FormControl>
-                  <IconButton onClick={loadGoogleCalendars} disabled={googleCalendarsLoading}>
+                  <IconButton type="button" onClick={loadGoogleCalendars} disabled={googleCalendarsLoading}>
                     {googleCalendarsLoading ? <CircularProgress size={18} /> : <Refresh />}
                   </IconButton>
                 </Box>
@@ -2025,6 +2044,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
             {editingCalendar && (
               <Button
+                type="button"
                 variant="outlined"
                 onClick={handleTestConnection}
                 disabled={testingConnection}
@@ -2043,10 +2063,10 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setShowCalendarDialog(false)}>Cancel</Button>
+          <Button type="button" onClick={() => setShowCalendarDialog(false)}>Cancel</Button>
           <Button
+            type="submit"
             variant="contained"
-            onClick={handleSaveCalendar}
             disabled={!calendarForm.name || !calendarForm.url || savingCalendar}
           >
             {savingCalendar ? <CircularProgress size={20} /> : 'Save'}

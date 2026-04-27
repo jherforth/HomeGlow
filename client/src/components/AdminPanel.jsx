@@ -1467,7 +1467,13 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
             )}
 
             {widgetsSubTab === 0 && (
-              <>
+              <Box
+                component="form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  saveWidgetSettings();
+                }}
+              >
                 <Alert severity="info" sx={{ mb: 2 }}>
                   Enable widgets to show them on the dashboard. Click to select a widget, then drag to move or resize from corners.
                 </Alert>
@@ -1652,10 +1658,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                   )}
                 </Box>
 
-                <Button variant="contained" onClick={saveWidgetSettings} sx={{ mt: 2 }} startIcon={<Save />}>
+                <Button type="submit" variant="contained" sx={{ mt: 2 }} startIcon={<Save />}>
                   Save Widget Settings
                 </Button>
-              </>
+              </Box>
             )}
 
             {widgetsSubTab === 1 && (
@@ -1733,7 +1739,13 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 </Grid>
 
                 {uploadedWidgets.length > 0 && (
-                  <>
+                  <Box
+                    component="form"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      savePluginSettings();
+                    }}
+                  >
                     <Divider sx={{ my: 3 }} />
                     <Typography variant="h6" gutterBottom>Plugin Settings</Typography>
                     <Alert severity="info" sx={{ mb: 2 }}>
@@ -1856,10 +1868,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                       );
                     })}
 
-                    <Button variant="contained" onClick={savePluginSettings} sx={{ mt: 2 }} startIcon={<Save />}>
+                    <Button type="submit" variant="contained" sx={{ mt: 2 }} startIcon={<Save />}>
                       Save Plugin Settings
                     </Button>
-                  </>
+                  </Box>
                 )}
               </>
             )}
@@ -2295,7 +2307,14 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
             <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
               <Typography variant="subtitle1" sx={{ mb: 2 }}>Add New User</Typography>
-              <Grid container spacing={2}>
+              <Box
+                component="form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  saveUser();
+                }}
+              >
+                <Grid container spacing={2}>
                 <Grid item xs={12} sm={4}>
                   <TextField
                     fullWidth
@@ -2315,8 +2334,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 </Grid>
                 <Grid item xs={12} sm={4}>
                   <Button
+                    type="submit"
                     variant="contained"
-                    onClick={saveUser}
                     disabled={!newUser.username || !newUser.email}
                     fullWidth
                     sx={{ height: '56px' }}
@@ -2324,7 +2343,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                     Add User
                   </Button>
                 </Grid>
-              </Grid>
+                </Grid>
+              </Box>
             </Box>
 
             <TableContainer component={Paper}>
@@ -2513,7 +2533,14 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
             <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
               <Typography variant="subtitle1" sx={{ mb: 2 }}>Add New Prize</Typography>
-              <Grid container spacing={2}>
+              <Box
+                component="form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  savePrize();
+                }}
+              >
+                <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
                   <TextField
                     fullWidth
@@ -2533,8 +2560,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 </Grid>
                 <Grid item xs={12} sm={3}>
                   <Button
+                    type="submit"
                     variant="contained"
-                    onClick={savePrize}
                     disabled={!newPrize.name || newPrize.clam_cost <= 0}
                     fullWidth
                     sx={{ height: '56px' }}
@@ -2542,7 +2569,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                     Add Prize
                   </Button>
                 </Grid>
-              </Grid>
+                </Grid>
+              </Box>
             </Box>
 
             <List>
@@ -2713,34 +2741,42 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 API Keys
               </Typography>
 
-              <TextField
-                fullWidth
-                label="OpenWeatherMap API Key"
-                type="password"
-                value={settings.WEATHER_API_KEY || ''}
-                onChange={(e) => setSettings(prev => ({ ...prev, WEATHER_API_KEY: e.target.value }))}
-                sx={{ mb: 2 }}
-                helperText="Get your free API key from openweathermap.org/api"
-              />
-
-              <TextField
-                fullWidth
-                label="Proxy Whitelist (comma-separated domains)"
-                value={settings.PROXY_WHITELIST || ''}
-                onChange={(e) => setSettings(prev => ({ ...prev, PROXY_WHITELIST: e.target.value }))}
-                sx={{ mb: 2 }}
-                helperText="Domains allowed for proxy requests (e.g., api.example.com, another-api.com)"
-              />
-
-              <Button
-                variant="contained"
-                onClick={saveAllApiSettings}
-                disabled={isLoading}
-                startIcon={<Save />}
-                sx={{ mt: 1, mb: 4 }}
+              <Box
+                component="form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  saveAllApiSettings();
+                }}
               >
-                {isLoading ? 'Saving...' : 'Save API Keys'}
-              </Button>
+                <TextField
+                  fullWidth
+                  label="OpenWeatherMap API Key"
+                  type="password"
+                  value={settings.WEATHER_API_KEY || ''}
+                  onChange={(e) => setSettings(prev => ({ ...prev, WEATHER_API_KEY: e.target.value }))}
+                  sx={{ mb: 2 }}
+                  helperText="Get your free API key from openweathermap.org/api"
+                />
+
+                <TextField
+                  fullWidth
+                  label="Proxy Whitelist (comma-separated domains)"
+                  value={settings.PROXY_WHITELIST || ''}
+                  onChange={(e) => setSettings(prev => ({ ...prev, PROXY_WHITELIST: e.target.value }))}
+                  sx={{ mb: 2 }}
+                  helperText="Domains allowed for proxy requests (e.g., api.example.com, another-api.com)"
+                />
+
+                <Button
+                  type="submit"
+                  variant="contained"
+                  disabled={isLoading}
+                  startIcon={<Save />}
+                  sx={{ mt: 1, mb: 4 }}
+                >
+                  {isLoading ? 'Saving...' : 'Save API Keys'}
+                </Button>
+              </Box>
 
               <Divider sx={{ my: 2 }} />
 

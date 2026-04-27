@@ -194,7 +194,15 @@ const GoogleAccountConnection = ({ onMessage }) => {
         </Alert>
       )}
 
-      <Stack spacing={2} sx={{ mb: 3 }}>
+      <Stack
+        component="form"
+        spacing={2}
+        sx={{ mb: 3 }}
+        onSubmit={(event) => {
+          event.preventDefault();
+          saveCredentials();
+        }}
+      >
         <Typography variant="body2" color="text.secondary">
           Create OAuth 2.0 credentials in the{' '}
           <Link href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer">
@@ -232,7 +240,7 @@ const GoogleAccountConnection = ({ onMessage }) => {
           InputProps={{
             endAdornment: (
               <Tooltip title="Copy redirect URI">
-                <IconButton size="small" onClick={() => copy(draft.redirect_uri)}>
+                <IconButton type="button" size="small" onClick={() => copy(draft.redirect_uri)}>
                   <ContentCopy fontSize="small" />
                 </IconButton>
               </Tooltip>
@@ -248,8 +256,8 @@ const GoogleAccountConnection = ({ onMessage }) => {
 
         <Box>
           <Button
+            type="submit"
             variant="contained"
-            onClick={saveCredentials}
             disabled={saving || !encryptionReady}
             startIcon={<Save />}
           >

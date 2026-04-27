@@ -532,6 +532,13 @@ const PhotoWidget = ({ transparentBackground }) => {
         onClose={() => setShowSourceDialog(false)}
         maxWidth="sm"
         fullWidth
+        PaperProps={{
+          component: 'form',
+          onSubmit: (event) => {
+            event.preventDefault();
+            handleSaveSource();
+          },
+        }}
       >
         <DialogTitle>
           {editingSource ? 'Edit Photo Source' : 'Add Photo Source'}
@@ -601,6 +608,7 @@ const PhotoWidget = ({ transparentBackground }) => {
                     server and displayed in this widget.
                   </Typography>
                   <Button
+                    type="button"
                     variant="contained"
                     startIcon={<CloudUpload />}
                     onClick={() => {
@@ -627,6 +635,7 @@ const PhotoWidget = ({ transparentBackground }) => {
         <DialogActions>
           {editingSource && (
             <Button
+              type="button"
               onClick={handleTestConnection}
               disabled={testingConnection}
               startIcon={testingConnection ? <CircularProgress size={16} /> : <Refresh />}
@@ -634,9 +643,9 @@ const PhotoWidget = ({ transparentBackground }) => {
               Test Connection
             </Button>
           )}
-          <Button onClick={() => setShowSourceDialog(false)}>Cancel</Button>
+          <Button type="button" onClick={() => setShowSourceDialog(false)}>Cancel</Button>
           <Button
-            onClick={handleSaveSource}
+            type="submit"
             variant="contained"
             disabled={savingSource || !sourceForm.name || !sourceForm.type}
           >

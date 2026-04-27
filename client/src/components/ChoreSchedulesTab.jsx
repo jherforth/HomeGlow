@@ -608,7 +608,19 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
       </TableContainer>
 
       {/* ── CHORE DIALOG ─────────────────────────────────── */}
-      <Dialog open={choreDialogOpen} onClose={() => setChoreDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={choreDialogOpen}
+        onClose={() => setChoreDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          component: 'form',
+          onSubmit: (event) => {
+            event.preventDefault();
+            handleSaveChore();
+          },
+        }}
+      >
         <DialogTitle>{editingChore ? 'Edit Chore' : 'New Chore'}</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
@@ -641,9 +653,9 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setChoreDialogOpen(false)} startIcon={<Cancel />}>Cancel</Button>
+          <Button type="button" onClick={() => setChoreDialogOpen(false)} startIcon={<Cancel />}>Cancel</Button>
           <Button
-            onClick={handleSaveChore}
+            type="submit"
             variant="contained"
             startIcon={savingChore ? <CircularProgress size={16} /> : <Save />}
             disabled={savingChore || !choreForm.title.trim()}
@@ -678,7 +690,19 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
       </Dialog>
 
       {/* ── SCHEDULE DIALOG ───────────────────────────────── */}
-      <Dialog open={scheduleDialogOpen} onClose={() => setScheduleDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={scheduleDialogOpen}
+        onClose={() => setScheduleDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          component: 'form',
+          onSubmit: (event) => {
+            event.preventDefault();
+            handleSaveSchedule();
+          },
+        }}
+      >
         <DialogTitle>{editingSchedule ? 'Edit Schedule' : 'New Schedule'}</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
@@ -895,9 +919,9 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setScheduleDialogOpen(false)} startIcon={<Cancel />}>Cancel</Button>
+          <Button type="button" onClick={() => setScheduleDialogOpen(false)} startIcon={<Cancel />}>Cancel</Button>
           <Button
-            onClick={handleSaveSchedule}
+            type="submit"
             variant="contained"
             startIcon={savingSchedule ? <CircularProgress size={16} /> : <Save />}
             disabled={isScheduleSaveDisabled}

@@ -938,7 +938,19 @@ const WeatherWidget = ({
   };
 
   const settingsModal = (
-    <Dialog open={settingsModalOpen} onClose={handleCloseSettingsModal} maxWidth="xs" fullWidth>
+    <Dialog
+      open={settingsModalOpen}
+      onClose={handleCloseSettingsModal}
+      maxWidth="xs"
+      fullWidth
+      PaperProps={{
+        component: 'form',
+        onSubmit: (event) => {
+          event.preventDefault();
+          handleSaveSettingsModal();
+        },
+      }}
+    >
       <DialogTitle>Weather Widget Settings</DialogTitle>
       <DialogContent>
         <Typography variant="caption" sx={{ display: 'block', mb: 2, opacity: 0.8 }}>
@@ -983,8 +995,8 @@ const WeatherWidget = ({
         </FormControl>
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleCloseSettingsModal}>Cancel</Button>
-        <Button variant="contained" onClick={handleSaveSettingsModal}>Save</Button>
+        <Button type="button" onClick={handleCloseSettingsModal}>Cancel</Button>
+        <Button type="submit" variant="contained">Save</Button>
       </DialogActions>
     </Dialog>
   );
