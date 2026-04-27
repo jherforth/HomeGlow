@@ -18,10 +18,11 @@ import { Settings } from '@mui/icons-material';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import axios from 'axios';
 
-const DEFAULT_ZIP_CODE = '14818';
+const DEFAULT_LOCATION_QUERY = '14818';
 const VALID_LAYOUT_MODES = new Set(['auto', 'compact', 'medium', 'full']);
 const WEATHER_SETTINGS_STORAGE_PREFIX = 'weatherWidgetSettings:';
 const WEATHER_CACHE_STORAGE_PREFIX = 'weatherWidgetCache:';
+const WEATHER_GEOCODE_CACHE_STORAGE_KEY = 'weatherLocationGeocodeCache';
 
 const WeatherWidget = ({
   transparentBackground,
@@ -37,7 +38,7 @@ const WeatherWidget = ({
   const [forecastData, setForecastData] = useState([]);
   const [airQualityData, setAirQualityData] = useState(null);
   const [chartData, setChartData] = useState([]);
-  const [zipCode, setZipCode] = useState(DEFAULT_ZIP_CODE);
+  const [locationQuery, setLocationQuery] = useState(DEFAULT_LOCATION_QUERY);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [chartType, setChartType] = useState('temperature');
@@ -46,7 +47,7 @@ const WeatherWidget = ({
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [shouldFetchNow, setShouldFetchNow] = useState(false);
-  const [draftZipCode, setDraftZipCode] = useState(DEFAULT_ZIP_CODE);
+  const [draftLocationQuery, setDraftLocationQuery] = useState(DEFAULT_LOCATION_QUERY);
   const [draftTempUnit, setDraftTempUnit] = useState('F');
   const [draftLayoutMode, setDraftLayoutMode] = useState('auto');
 
@@ -77,10 +78,70 @@ const WeatherWidget = ({
     return 'F';
   };
 
-  const resolveInstanceConfig = (rawSettings = {}, fallbackZipCode = DEFAULT_ZIP_CODE, fallbackTempUnit = 'F') => {
-    const resolvedZipCode = (rawSettings.zipCode || fallbackZipCode || '').trim();
+  const normalizeLocationKey = (rawLocation) => {
+    return String(rawLocation || '').replace(/\s+/g, '').toLowerCase();
+  };
+
+  const loadGeocodeCache = () => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(WEATHER_GEOCODE_CACHE_STORAGE_KEY) || '{}');
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  };
+
+  const saveGeocodeCache = (cacheObject) => {
+    localStorage.setItem(WEATHER_GEOCODE_CACHE_STORAGE_KEY, JSON.stringify(cacheObject));
+  };
+
+  const getCachedCoordinates = (rawLocation) => {
+    const locationKey = normalizeLocationKey(rawLocation);
+    if (!locationKey) {
+      return null;
+    }
+
+    const geocodeCache = loadGeocodeCache();
+    const cached = geocodeCache[locationKey];
+    if (!cached) {
+      return null;
+    }
+
+    if (typeof cached.lat !== 'number' || typeof cached.lon !== 'number') {
+      return null;
+    }
+
+    return cached;
+  };
+
+  const cacheCoordinates = (rawLocation, coordinates) => {
+    const locationKey = normalizeLocationKey(rawLocation);
+    if (!locationKey) {
+      return;
+    }
+
+    const geocodeCache = loadGeocodeCache();
+    geocodeCache[locationKey] = {
+      ...coordinates,
+      key: locationKey,
+      cachedAt: Date.now(),
+    };
+    saveGeocodeCache(geocodeCache);
+  };
+
+  const buildNotFoundError = () => {
+    const notFoundError = new Error('Location not found');
+    notFoundError.response = {
+      status: 404,
+      statusText: 'Not Found',
+    };
+    return notFoundError;
+  };
+
+  const resolveInstanceConfig = (rawSettings = {}, fallbackLocationQuery = DEFAULT_LOCATION_QUERY, fallbackTempUnit = 'F') => {
+    const resolvedLocationQuery = (rawSettings.locationQuery || rawSettings.zipCode || fallbackLocationQuery || '').trim();
     const resolvedTempUnit = normalizeTempUnit(rawSettings.tempUnit, fallbackTempUnit);
-    return { resolvedZipCode, resolvedTempUnit };
+    return { resolvedLocationQuery, resolvedTempUnit };
   };
 
   const applyWeatherPayloadToState = (payload) => {
@@ -96,7 +157,7 @@ const WeatherWidget = ({
         return 'Invalid API key. Please check your OpenWeatherMap API key in the Admin Panel.';
       }
       if (requestError.response.status === 404) {
-        return 'Invalid zip code. Please enter a valid US zip code.';
+        return 'Invalid location. Try a city and country code like "Sydney,AU" or a postal code like "14818,US".';
       }
       return `Weather service error: ${requestError.response.status} ${requestError.response.statusText}`;
     }
@@ -108,10 +169,102 @@ const WeatherWidget = ({
     return 'Failed to fetch weather data. Please try again later.';
   };
 
-  const fetchWeatherPayload = async (targetZipCode, targetTempUnit) => {
+  const shouldTryZipFallback = (candidateLocation) => {
+    const normalizedCandidate = String(candidateLocation || '').trim();
+    if (!normalizedCandidate) {
+      return false;
+    }
+
+    // Treat as postal/zip style when the query has no alphabetic characters.
+    return !/[a-z]/i.test(normalizedCandidate);
+  };
+
+  const getDirectGeocodeCandidates = (targetLocationQuery) => {
+    const baseQuery = String(targetLocationQuery || '').trim();
+    if (!baseQuery) {
+      return [];
+    }
+
+    const candidates = [baseQuery];
+    const alreadyUsQualified = /,\s*us\s*$/i.test(baseQuery) || /,\s*usa\s*$/i.test(baseQuery);
+    const hasExplicitCountrySegment = baseQuery.split(',').length >= 3;
+
+    if (!alreadyUsQualified && !hasExplicitCountrySegment) {
+      candidates.push(`${baseQuery},US`);
+    }
+
+    return candidates;
+  };
+
+  const resolveCoordinatesForLocation = async (targetLocationQuery) => {
+    const cachedCoordinates = getCachedCoordinates(targetLocationQuery);
+    if (cachedCoordinates) {
+      return cachedCoordinates;
+    }
+
+    const directCandidates = getDirectGeocodeCandidates(targetLocationQuery);
+    for (const directCandidate of directCandidates) {
+      const encodedLocation = encodeURIComponent(directCandidate);
+      const directGeocodeUrl = `https://api.openweathermap.org/geo/1.0/direct?q=${encodedLocation}&limit=1&appid=${weatherApiKey}`;
+
+      try {
+        const directResponse = await axios.get(directGeocodeUrl);
+        if (Array.isArray(directResponse.data) && directResponse.data.length > 0) {
+          const bestMatch = directResponse.data[0];
+          const resolvedCoordinates = {
+            lat: bestMatch.lat,
+            lon: bestMatch.lon,
+            name: bestMatch.name,
+            country: bestMatch.country,
+            state: bestMatch.state || null,
+            source: 'direct',
+          };
+          cacheCoordinates(targetLocationQuery, resolvedCoordinates);
+          return resolvedCoordinates;
+        }
+      } catch (requestError) {
+        if (requestError?.response?.status !== 404) {
+          throw requestError;
+        }
+      }
+    }
+
+    if (shouldTryZipFallback(targetLocationQuery)) {
+      const normalizedZip = targetLocationQuery.includes(',') ? targetLocationQuery : `${targetLocationQuery},US`;
+      const encodedZip = encodeURIComponent(normalizedZip);
+      const zipGeocodeUrl = `https://api.openweathermap.org/geo/1.0/zip?zip=${encodedZip}&appid=${weatherApiKey}`;
+
+      try {
+        const zipResponse = await axios.get(zipGeocodeUrl);
+        if (zipResponse?.data && typeof zipResponse.data.lat === 'number' && typeof zipResponse.data.lon === 'number') {
+          const resolvedCoordinates = {
+            lat: zipResponse.data.lat,
+            lon: zipResponse.data.lon,
+            name: zipResponse.data.name || null,
+            country: zipResponse.data.country || null,
+            state: null,
+            source: 'zip',
+          };
+          cacheCoordinates(targetLocationQuery, resolvedCoordinates);
+          return resolvedCoordinates;
+        }
+      } catch (requestError) {
+        if (requestError?.response?.status !== 404) {
+          throw requestError;
+        }
+      }
+    }
+
+    throw buildNotFoundError();
+  };
+
+  const fetchWeatherPayload = async (targetLocationQuery, targetTempUnit) => {
     const targetUnitParam = targetTempUnit === 'F' ? 'imperial' : 'metric';
 
-    const currentWeatherUrl = `https://api.openweathermap.org/data/2.5/weather?zip=${targetZipCode},US&appid=${weatherApiKey}&units=${targetUnitParam}`;
+    const coordinates = await resolveCoordinatesForLocation(targetLocationQuery);
+    const { lat, lon } = coordinates;
+
+    const currentWeatherUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${weatherApiKey}&units=${targetUnitParam}`;
     const currentResponse = await axios.get(currentWeatherUrl);
     const nextWeatherData = currentResponse.data;
     let nextAirQualityData = null;
@@ -130,7 +283,7 @@ const WeatherWidget = ({
       }
     }
 
-    const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?zip=${targetZipCode},US&appid=${weatherApiKey}&units=${targetUnitParam}`;
+    const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${weatherApiKey}&units=${targetUnitParam}`;
     const forecastResponse = await axios.get(forecastUrl);
     const chartDataPoints = [];
 
@@ -182,7 +335,12 @@ const WeatherWidget = ({
     }
 
     return {
-      zipCode: targetZipCode,
+      locationQuery: targetLocationQuery,
+      locationKey: normalizeLocationKey(targetLocationQuery),
+      lat,
+      lon,
+      // Keep zipCode for backward compatibility with older cache readers.
+      zipCode: targetLocationQuery,
       tempUnit: targetTempUnit,
       weatherData: nextWeatherData,
       airQualityData: nextAirQualityData,
@@ -196,7 +354,7 @@ const WeatherWidget = ({
       return;
     }
 
-    const legacyZipCode = localStorage.getItem('weatherZipCode') || DEFAULT_ZIP_CODE;
+    const legacyLocationQuery = localStorage.getItem('weatherZipCode') || DEFAULT_LOCATION_QUERY;
     const legacyTempUnit = localStorage.getItem('weatherTempUnit') === 'C' ? 'C' : 'F';
     const settingsKeys = Object.keys(localStorage).filter((key) => key.startsWith(WEATHER_SETTINGS_STORAGE_PREFIX));
 
@@ -213,21 +371,22 @@ const WeatherWidget = ({
           parsedSettings = {};
         }
 
-        const currentTargetFallbackZip = settingsKey === weatherSettingsStorageKey ? zipCode : legacyZipCode;
+        const currentTargetFallbackLocation = settingsKey === weatherSettingsStorageKey ? locationQuery : legacyLocationQuery;
         const currentTargetFallbackTemp = settingsKey === weatherSettingsStorageKey ? tempUnit : legacyTempUnit;
-        const { resolvedZipCode, resolvedTempUnit } = resolveInstanceConfig(
+        const { resolvedLocationQuery, resolvedTempUnit } = resolveInstanceConfig(
           parsedSettings,
-          currentTargetFallbackZip,
+          currentTargetFallbackLocation,
           currentTargetFallbackTemp
         );
 
-        if (!resolvedZipCode) {
+        if (!resolvedLocationQuery) {
           return null;
         }
 
         return {
           cacheKey: settingsKey.replace(WEATHER_SETTINGS_STORAGE_PREFIX, WEATHER_CACHE_STORAGE_PREFIX),
-          zipCode: resolvedZipCode,
+          locationQuery: resolvedLocationQuery,
+          locationKey: normalizeLocationKey(resolvedLocationQuery),
           tempUnit: resolvedTempUnit,
         };
       })
@@ -239,29 +398,30 @@ const WeatherWidget = ({
 
     const queryGroups = new Map();
     refreshTargets.forEach((target) => {
-      const queryKey = `${target.zipCode}|${target.tempUnit}`;
+      const queryKey = `${target.locationKey}|${target.tempUnit}`;
       if (!queryGroups.has(queryKey)) {
         queryGroups.set(queryKey, []);
       }
       queryGroups.get(queryKey).push(target);
     });
 
+    const activeLocationKey = normalizeLocationKey(locationQuery);
     for (const targets of queryGroups.values()) {
-      const { zipCode: targetZipCode, tempUnit: targetTempUnit } = targets[0];
+      const { locationQuery: targetLocationQuery, locationKey: targetLocationKey, tempUnit: targetTempUnit } = targets[0];
 
       try {
-        const payload = await fetchWeatherPayload(targetZipCode, targetTempUnit);
+        const payload = await fetchWeatherPayload(targetLocationQuery, targetTempUnit);
 
         targets.forEach((target) => {
           persistWeatherCacheForKey(target.cacheKey, payload);
         });
 
-        if (targetZipCode === zipCode && targetTempUnit === tempUnit) {
+        if (targetLocationKey === activeLocationKey && targetTempUnit === tempUnit) {
           applyWeatherPayloadToState(payload);
           setError(null);
         }
       } catch (requestError) {
-        if (targetZipCode === zipCode && targetTempUnit === tempUnit) {
+        if (targetLocationKey === activeLocationKey && targetTempUnit === tempUnit) {
           setError(getWeatherErrorMessage(requestError));
         }
       }
@@ -324,19 +484,24 @@ const WeatherWidget = ({
       parsedCache = null;
     }
 
-    const legacyZipCode = localStorage.getItem('weatherZipCode') || DEFAULT_ZIP_CODE;
+    const legacyLocationQuery = localStorage.getItem('weatherZipCode') || DEFAULT_LOCATION_QUERY;
     const legacyTempUnit = localStorage.getItem('weatherTempUnit') === 'C' ? 'C' : 'F';
-    const { resolvedZipCode: savedZipCode, resolvedTempUnit: savedTempUnit } = resolveInstanceConfig(
+    const { resolvedLocationQuery: savedLocationQuery, resolvedTempUnit: savedTempUnit } = resolveInstanceConfig(
       parsedSettings,
-      legacyZipCode,
+      legacyLocationQuery,
       legacyTempUnit
     );
+    const savedLocationKey = normalizeLocationKey(savedLocationQuery);
     const candidateLayoutMode = parsedSettings.layoutMode || legacyWidgetSettings.weather?.layoutMode || 'auto';
     const savedLayoutMode = VALID_LAYOUT_MODES.has(candidateLayoutMode) ? candidateLayoutMode : 'auto';
 
     const hasMatchingCache = Boolean(
       parsedCache
-      && parsedCache.zipCode === savedZipCode
+      && (
+        parsedCache.locationKey === savedLocationKey
+        || parsedCache.locationQuery === savedLocationQuery
+        || parsedCache.zipCode === savedLocationQuery
+      )
       && parsedCache.tempUnit === savedTempUnit
       && parsedCache.weatherData
     );
@@ -356,10 +521,10 @@ const WeatherWidget = ({
       setShouldFetchNow(true);
     }
 
-    setZipCode(savedZipCode);
+    setLocationQuery(savedLocationQuery);
     setTempUnit(savedTempUnit);
     setLayoutMode(savedLayoutMode);
-    setDraftZipCode(savedZipCode);
+    setDraftLocationQuery(savedLocationQuery);
     setDraftTempUnit(savedTempUnit);
     setDraftLayoutMode(savedLayoutMode);
     setSettingsLoaded(true);
@@ -370,11 +535,11 @@ const WeatherWidget = ({
       return;
     }
 
-    if (zipCode && weatherApiKey) {
+    if (locationQuery && weatherApiKey) {
       fetchWeatherData();
       setShouldFetchNow(false);
     }
-  }, [zipCode, weatherApiKey, tempUnit, settingsLoaded, shouldFetchNow]);
+  }, [locationQuery, weatherApiKey, tempUnit, settingsLoaded, shouldFetchNow]);
 
   useEffect(() => {
     if (!settingsLoaded) {
@@ -393,7 +558,7 @@ const WeatherWidget = ({
         clearInterval(intervalId);
       };
     }
-  }, [zipCode, weatherApiKey, tempUnit, settingsLoaded]);
+  }, [locationQuery, weatherApiKey, tempUnit, settingsLoaded]);
 
   const fetchWeatherData = async () => {
     if (!weatherApiKey) {
@@ -401,8 +566,8 @@ const WeatherWidget = ({
       return;
     }
 
-    if (!zipCode) {
-      setError('Please enter a zip code.');
+    if (!locationQuery) {
+      setError('Please enter a location.');
       return;
     }
 
@@ -410,7 +575,7 @@ const WeatherWidget = ({
     setError(null);
 
     try {
-      const payload = await fetchWeatherPayload(zipCode, tempUnit);
+      const payload = await fetchWeatherPayload(locationQuery, tempUnit);
       applyWeatherPayloadToState(payload);
       persistWeatherCache(payload);
     } catch (error) {
@@ -432,7 +597,7 @@ const WeatherWidget = ({
   };
 
   const handleOpenSettingsModal = () => {
-    setDraftZipCode(zipCode || DEFAULT_ZIP_CODE);
+    setDraftLocationQuery(locationQuery || DEFAULT_LOCATION_QUERY);
     setDraftTempUnit(tempUnit);
     setDraftLayoutMode(layoutMode);
     setSettingsModalOpen(true);
@@ -443,17 +608,17 @@ const WeatherWidget = ({
   };
 
   const handleSaveSettingsModal = () => {
-    const normalizedZip = (draftZipCode || '').trim();
-    if (!normalizedZip) {
-      setError('Please enter a zip code.');
+    const normalizedLocationQuery = (draftLocationQuery || '').trim();
+    if (!normalizedLocationQuery) {
+      setError('Please enter a location.');
       return;
     }
 
     const normalizedTempUnit = draftTempUnit === 'C' ? 'C' : 'F';
     const normalizedLayoutMode = VALID_LAYOUT_MODES.has(draftLayoutMode) ? draftLayoutMode : 'auto';
-    const shouldRefreshForDataChange = normalizedZip !== zipCode || normalizedTempUnit !== tempUnit;
+    const shouldRefreshForDataChange = normalizedLocationQuery !== locationQuery || normalizedTempUnit !== tempUnit;
 
-    setZipCode(normalizedZip);
+    setLocationQuery(normalizedLocationQuery);
     setTempUnit(normalizedTempUnit);
     setLayoutMode(normalizedLayoutMode);
 
@@ -462,7 +627,9 @@ const WeatherWidget = ({
     }
 
     persistInstanceSettings({
-      zipCode: normalizedZip,
+      locationQuery: normalizedLocationQuery,
+      // Keep zipCode for backward compatibility with legacy settings readers.
+      zipCode: normalizedLocationQuery,
       tempUnit: normalizedTempUnit,
       layoutMode: normalizedLayoutMode,
     });
@@ -780,10 +947,11 @@ const WeatherWidget = ({
 
         <TextField
           fullWidth
-          label="Zip Code"
-          value={draftZipCode}
-          onChange={(e) => setDraftZipCode(e.target.value)}
+          label="Location"
+          value={draftLocationQuery}
+          onChange={(e) => setDraftLocationQuery(e.target.value)}
           sx={{ mb: 2 }}
+          helperText="Examples: Sydney,AU or 14818,US"
         />
 
         <FormControl fullWidth sx={{ mb: 2 }}>
