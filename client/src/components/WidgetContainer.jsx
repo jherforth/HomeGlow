@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Box, IconButton } from '@mui/material';
-import { DragIndicator } from '@mui/icons-material';
 import GridLayout from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
@@ -551,12 +550,11 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                 key={widget.id}
                 className={`widget-wrapper ${isSelected ? 'selected' : ''}`}
                 data-grid={{ ...effectiveLayout }}
-                onPointerDown={(e) => {
+                onPointerDownCapture={(e) => {
                   if (!locked && !isSelected && !e.target.closest('.drag-handle') && !e.target.closest('.resize-button')) {
                     if (isInteractiveTarget(e.target)) {
-                      if (selectedWidget) {
-                        setSelectedWidget(null);
-                      }
+                      // Select on interactive taps too so edit affordances (drag/resize) remain reachable.
+                      setSelectedWidget(widget.id);
                       return;
                     }
 
@@ -594,6 +592,29 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                   }
                 }}
               >
+                {!locked && !isSelected && (
+                  <Box
+                    className="selection-overlay"
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setSelectedWidget(widget.id);
+                    }}
+                    sx={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      cursor: 'pointer',
+                      zIndex: 1000,
+                      pointerEvents: 'auto',
+                      touchAction: 'manipulation',
+                      userSelect: 'none',
+                    }}
+                  />
+                )}
+
                 {/* Resize Buttons - Only visible when selected and unlocked */}
                 {isSelected && !locked && (
                   <>
@@ -817,6 +838,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                         pointerEvents: locked ? 'none' : 'auto',
                       }}
                     />
+
                   </>
                 )}
 
