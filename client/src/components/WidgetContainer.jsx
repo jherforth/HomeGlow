@@ -65,7 +65,10 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
   useEffect(() => {
     const updateDimensions = () => {
       if (containerRef.current) {
-        const width = containerRef.current.offsetWidth;
+        const computed = window.getComputedStyle(containerRef.current);
+        const paddingLeft = parseFloat(computed.paddingLeft) || 0;
+        const paddingRight = parseFloat(computed.paddingRight) || 0;
+        const width = Math.max(0, containerRef.current.clientWidth - paddingLeft - paddingRight);
         setContainerWidth(width);
 
         // Responsive grid columns
