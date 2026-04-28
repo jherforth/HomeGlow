@@ -1916,6 +1916,24 @@ fastify.get('/api/timezone', async (request, reply) => {
   return reply.send({ timezone: APP_TIMEZONE });
 });
 
+function deserializeSettingValue(value) {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed || (trimmed[0] !== '{' && trimmed[0] !== '[')) {
+    return value;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    return parsed !== null && typeof parsed === 'object' ? parsed : value;
+  } catch {
+    return value;
+  }
+}
+
 // NEW: API Endpoints for Settings (including API keys)
 fastify.get('/api/settings', async (request, reply) => {
   try {
@@ -1924,7 +1942,7 @@ fastify.get('/api/settings', async (request, reply) => {
     console.log('Raw settings from database:', rows);
     // Convert array of {key, value} objects to a single object {key: value}
     const settings = rows.reduce((acc, row) => {
-      acc[row.key] = row.value;
+      acc[row.key] = deserializeSettingValue(row.value);
       return acc;
     }, {});
     console.log('Processed settings object:', settings);
@@ -1952,7 +1970,7 @@ fastify.post('/api/settings/search', async (request, reply) => {
     console.log('Raw settings from database:', rows);
     // Convert array of {key, value} objects to a single object {key: value}
     const settings = rows.reduce((acc, row) => {
-      acc[row.key] = row.value;
+      acc[row.key] = deserializeSettingValue(row.value);
       return acc;
     }, {});
     console.log('Processed settings object:', settings);
