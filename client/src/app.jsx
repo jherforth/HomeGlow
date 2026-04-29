@@ -1,6 +1,6 @@
 // client/src/app.jsx
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { IconButton, Box, Dialog, DialogContent } from '@mui/material';
+import { IconButton, Box, Dialog, DialogContent, Typography } from '@mui/material';
 import { Brightness4, Brightness7, Lock, LockOpen, Close } from '@mui/icons-material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -454,10 +454,52 @@ const App = () => {
     return active?.id ?? 1;
   }, [tabs, activeTab]);
 
+  const isFirstRunClient = useMemo(() => {
+    return localStorage.getItem('widgetSettings') === null;
+  }, []);
+
   return (
     <>
       <Box sx={{ width: '100%', minHeight: '100vh', position: 'relative', pb: '60px' }}>
         {widgets.length > 0 && <WidgetContainer widgets={widgets} locked={widgetsLocked} activeTab={activeTab} activeTabId={activeTabId} />}
+        {widgets.length === 0 && isFirstRunClient && (
+          <Box
+            sx={{
+              minHeight: 'calc(100vh - 60px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              px: 3,
+              background: 'radial-gradient(circle at 50% 20%, rgba(var(--accent-rgb), 0.16), transparent 55%)',
+            }}
+          >
+            <Box
+              sx={{
+                width: '100%',
+                maxWidth: 620,
+                borderRadius: 3,
+                border: '1px solid var(--card-border)',
+                backgroundColor: 'var(--card-bg)',
+                boxShadow: 'var(--shadow)',
+                backdropFilter: 'var(--backdrop-blur)',
+                textAlign: 'center',
+                px: { xs: 3, sm: 5 },
+                py: { xs: 3, sm: 4 },
+              }}
+            >
+              <SettingsIcon sx={{ fontSize: 48, color: 'var(--accent)', mb: 1 }} />
+              <Typography variant="h5" sx={{ color: 'var(--text)', fontWeight: 700, mb: 1 }}>
+                Welcome to HomeGlow
+              </Typography>
+              <Typography variant="body1" sx={{ color: 'var(--text-secondary)', mb: 1 }}>
+                Use the settings gear in the bottom bar to choose which widgets you want to see.
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'var(--text-secondary)' }}>
+                Once you enable widgets, this dashboard will fill in automatically.
+              </Typography>
+            </Box>
+          </Box>
+        )}
       </Box>
 
       <Dialog open={showAdminPanel} onClose={toggleAdminPanel} maxWidth="lg">
