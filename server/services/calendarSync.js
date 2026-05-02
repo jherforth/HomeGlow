@@ -23,6 +23,23 @@ class CalendarSyncService {
     return d;
   }
 
+  normalizeIcsTextValue(value) {
+    if (value === undefined || value === null) {
+      return null;
+    }
+
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    // node-ical returns { val, params } when ICS properties include parameters like LANGUAGE.
+    if (typeof value === 'object' && typeof value.val === 'string') {
+      return value.val;
+    }
+
+    return String(value);
+  }
+
   async syncSource(sourceId) {
     if (this.isSyncing.get(sourceId)) {
       console.log(`Sync already in progress for source ${sourceId}, skipping`);
@@ -121,11 +138,11 @@ class CalendarSyncService {
         const rawEnd = event.end;
         out.push({
           uid: event.uid || `${source.id}-${Date.now()}-${Math.random()}`,
-          title: event.summary || 'Untitled Event',
+          title: this.normalizeIcsTextValue(event.summary) || 'Untitled Event',
           start: new Date(event.start),
           end: isAllDay ? this.normalizeAllDayEnd(rawEnd) : new Date(rawEnd),
-          description: event.description,
-          location: event.location,
+          description: this.normalizeIcsTextValue(event.description),
+          location: this.normalizeIcsTextValue(event.location),
           all_day: isAllDay,
           raw: { rrule: event.rrule }
         });
@@ -137,11 +154,11 @@ class CalendarSyncService {
         const rawEnd = instance.end ?? instance.event?.end;
         out.push({
           uid: `${instance.uid ?? instance.event?.uid ?? source.id}-${new Date(instance.start ?? instance.event?.start).getTime()}`,
-          title: instance.summary ?? instance.event?.summary ?? 'Untitled Event',
+          title: this.normalizeIcsTextValue(instance.summary ?? instance.event?.summary) || 'Untitled Event',
           start: new Date(instance.start ?? instance.event?.start),
           end: isAllDay ? this.normalizeAllDayEnd(rawEnd) : new Date(rawEnd),
-          description: instance.description ?? instance.event?.description,
-          location: instance.location ?? instance.event?.location,
+          description: this.normalizeIcsTextValue(instance.description ?? instance.event?.description),
+          location: this.normalizeIcsTextValue(instance.location ?? instance.event?.location),
           all_day: isAllDay,
           raw: { recurring: true }
         });
