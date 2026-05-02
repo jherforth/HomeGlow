@@ -1,6 +1,15 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const inPackage = (id, pkgName) => {
+  const normalized = id.replace(/\\/g, '/');
+  const pkg = escapeRegex(pkgName);
+  const pattern = new RegExp(`/node_modules/(?:\\.pnpm/[^/]+/node_modules/)?${pkg}(?:/|$)`);
+  return pattern.test(normalized);
+};
+
 export default defineConfig({
   plugins: [react()],
   build: {
@@ -8,30 +17,40 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return;
+
           if (
-            id.includes('/node_modules/react/') ||
-            id.includes('\\node_modules\\react\\') ||
-            id.includes('/node_modules/react-dom/') ||
-            id.includes('\\node_modules\\react-dom\\') ||
-            id.includes('/node_modules/scheduler/') ||
-            id.includes('\\node_modules\\scheduler\\')
+            inPackage(id, 'react') ||
+            inPackage(id, 'react-dom') ||
+            inPackage(id, 'scheduler')
           ) {
-            return 'react';
+            return 'react-core';
           }
-          if (id.includes('@mui') || id.includes('@emotion')) return 'mui';
-          if (id.includes('recharts')) return 'charts';
+
           if (
-            id.includes('react-grid-layout') ||
-            id.includes('react-rnd') ||
-            id.includes('react-color') ||
-            id.includes('hammerjs')
+            inPackage(id, '@mui/material') ||
+            inPackage(id, '@mui/icons-material') ||
+            inPackage(id, '@mui/system') ||
+            inPackage(id, '@mui/utils') ||
+            inPackage(id, '@mui/private-theming') ||
+            inPackage(id, '@emotion/react') ||
+            inPackage(id, '@emotion/styled') ||
+            inPackage(id, '@popperjs/core')
+          ) {
+            return 'mui';
+          }
+
+          if (
+            inPackage(id, 'react-grid-layout') ||
+            inPackage(id, 'react-rnd') ||
+            inPackage(id, 'react-resizable') ||
+            inPackage(id, 'react-draggable') ||
+            inPackage(id, 'react-color') ||
+            inPackage(id, 'hammerjs')
           ) {
             return 'layout';
           }
-          if (id.includes('react-big-calendar') || id.includes('moment') || id.includes('cron-parser')) {
-            return 'calendar';
-          }
-          if (id.includes('axios')) return 'api';
+
+          if (inPackage(id, 'axios')) return 'api';
         },
       },
     },

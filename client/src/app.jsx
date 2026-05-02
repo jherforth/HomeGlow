@@ -14,13 +14,50 @@ import { API_BASE_URL } from './utils/apiConfig.js';
 import { getDeviceApiBase } from './utils/deviceName.js';
 import './index.css';
 
-const AdminPanel = lazy(() => import('./components/AdminPanel.jsx'));
-const CalendarWidget = lazy(() => import('./components/CalendarWidget.jsx'));
-const PhotoWidget = lazy(() => import('./components/PhotoWidget.jsx'));
-const WeatherWidget = lazy(() => import('./components/WeatherWidget.jsx'));
-const ChoreWidget = lazy(() => import('./components/ChoreWidget.jsx'));
-const TabIconModal = lazy(() => import('./components/TabIconModal.jsx'));
-const ScreenSaver = lazy(() => import('./components/ScreenSaver.jsx'));
+const loadAdminPanel = () => import('./components/AdminPanel.jsx');
+const loadCalendarWidget = () => import('./components/CalendarWidget.jsx');
+const loadPhotoWidget = () => import('./components/PhotoWidget.jsx');
+const loadWeatherWidget = () => import('./components/WeatherWidget.jsx');
+const loadChoreWidget = () => import('./components/ChoreWidget.jsx');
+const loadTabIconModal = () => import('./components/TabIconModal.jsx');
+const loadScreenSaver = () => import('./components/ScreenSaver.jsx');
+
+const MAX_IDLE_WARM_IMPORTS = 3;
+
+const shouldSkipWarmupForConnection = () => {
+  if (typeof navigator === 'undefined') return false;
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  if (!connection) return false;
+
+  if (connection.saveData) return true;
+
+  const effectiveType = connection.effectiveType;
+  if (effectiveType === 'slow-2g' || effectiveType === '2g') return true;
+
+  if (typeof connection.downlink === 'number' && connection.downlink > 0 && connection.downlink < 1.2) {
+    return true;
+  }
+
+  return false;
+};
+
+const scheduleIdleWarmup = (work) => {
+  if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+    const idleId = window.requestIdleCallback(work, { timeout: 1500 });
+    return () => window.cancelIdleCallback(idleId);
+  }
+
+  const timeoutId = setTimeout(work, 400);
+  return () => clearTimeout(timeoutId);
+};
+
+const AdminPanel = lazy(loadAdminPanel);
+const CalendarWidget = lazy(loadCalendarWidget);
+const PhotoWidget = lazy(loadPhotoWidget);
+const WeatherWidget = lazy(loadWeatherWidget);
+const ChoreWidget = lazy(loadChoreWidget);
+const TabIconModal = lazy(loadTabIconModal);
+const ScreenSaver = lazy(loadScreenSaver);
 
 const WidgetLoadingFallback = ({ label }) => (
   <Box
@@ -199,6 +236,34 @@ const App = () => {
     document.documentElement.style.setProperty('--dark-button-gradient-end', widgetSettings.darkButtonGradientEnd);
     document.documentElement.style.setProperty('--bottom-bar-height', '60px');
   }, [widgetSettings]);
+
+  useEffect(() => {
+    if (shouldSkipWarmupForConnection()) return;
+
+    const warmLoaders = [
+      !!widgetSettings?.calendar?.enabled && loadCalendarWidget,
+      !!widgetSettings?.chores?.enabled && loadChoreWidget,
+      !!widgetSettings?.weather?.enabled && loadWeatherWidget,
+      !!widgetSettings?.photos?.enabled && loadPhotoWidget,
+      !!screensaverSettings?.enabled && loadScreenSaver,
+    ]
+      .filter(Boolean)
+      .slice(0, MAX_IDLE_WARM_IMPORTS);
+
+    if (warmLoaders.length === 0) return;
+
+    return scheduleIdleWarmup(() => {
+      warmLoaders.forEach((loadWidget) => {
+        void loadWidget();
+      });
+    });
+  }, [
+    widgetSettings?.calendar?.enabled,
+    widgetSettings?.chores?.enabled,
+    widgetSettings?.weather?.enabled,
+    widgetSettings?.photos?.enabled,
+    screensaverSettings?.enabled,
+  ]);
 
   const screensaverActiveRef = useRef(false);
   const screensaverSettingsRef = useRef(screensaverSettings);
