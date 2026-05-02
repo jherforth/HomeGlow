@@ -44,7 +44,7 @@ import {
 } from '@mui/icons-material';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
-import { parseExpression } from 'cron-parser';
+import { CronExpressionParser } from 'cron-parser';
 import { getServerTimezoneSync } from '../utils/timezone.js';
 
 const DAY_OPTIONS = [
@@ -68,7 +68,7 @@ function getNextOccurrence(crontab) {
   if (!crontab) return 'One-time';
   try {
     const tz = getServerTimezoneSync();
-    const interval = parseExpression(crontab, { tz });
+    const interval = CronExpressionParser.parse(crontab, { tz });
     const next = interval.next().toDate();
     return next.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });
   } catch {
@@ -79,7 +79,7 @@ function getNextOccurrence(crontab) {
 function validateCrontab(crontab) {
   if (!crontab) return null;
   try {
-    parseExpression(crontab);
+    CronExpressionParser.parse(crontab);
     return null;
   } catch (e) {
     return e.message;

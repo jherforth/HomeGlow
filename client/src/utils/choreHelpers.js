@@ -1,4 +1,4 @@
-import parser from 'cron-parser';
+import { CronExpressionParser } from 'cron-parser';
 import { getServerTimezoneSync } from './timezone.js';
 
 export function shouldShowChoreToday(schedule) {
@@ -15,7 +15,7 @@ export function shouldShowChoreToday(schedule) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const interval = parser.parseExpression(schedule.crontab, {
+    const interval = CronExpressionParser.parse(schedule.crontab, {
       currentDate: new Date(today.getTime() + 24 * 60 * 60 * 1000),
       tz
     });

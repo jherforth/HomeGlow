@@ -3,6 +3,39 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return;
+          if (
+            id.includes('/node_modules/react/') ||
+            id.includes('\\node_modules\\react\\') ||
+            id.includes('/node_modules/react-dom/') ||
+            id.includes('\\node_modules\\react-dom\\') ||
+            id.includes('/node_modules/scheduler/') ||
+            id.includes('\\node_modules\\scheduler\\')
+          ) {
+            return 'react';
+          }
+          if (id.includes('@mui') || id.includes('@emotion')) return 'mui';
+          if (id.includes('recharts')) return 'charts';
+          if (
+            id.includes('react-grid-layout') ||
+            id.includes('react-rnd') ||
+            id.includes('react-color') ||
+            id.includes('hammerjs')
+          ) {
+            return 'layout';
+          }
+          if (id.includes('react-big-calendar') || id.includes('moment') || id.includes('cron-parser')) {
+            return 'calendar';
+          }
+          if (id.includes('axios')) return 'api';
+        },
+      },
+    },
+  },
   test: {
     environment: 'node',
     include: ['src/**/*.test.js'],

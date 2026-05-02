@@ -17,7 +17,7 @@ const crypto = require('crypto');
 // NEW: Import axios for HTTP requests and ical.js for parsing
 const axios = require('axios');
 const ICAL = require('ical.js');
-const parser = require('cron-parser');
+const { CronExpressionParser } = require('cron-parser');
 const cron = require('node-cron');
 // For widget upload and registry
 const widgetRegistryPath = path.join(__dirname, 'widgets_registry.json');
@@ -889,7 +889,7 @@ async function dailyBackgroundProcessing() {
     for (const schedule of stickyParentSchedules) {
       let next = null;
       try {
-        const cronInterval = parser.parseExpression(schedule.crontab, options);
+        const cronInterval = CronExpressionParser.parse(schedule.crontab, options);
         next = cronInterval.next().toISOString().split('T')[0];
       } catch (parseError) {
         console.warn(`Skipping sticky schedule ${schedule.id} due to invalid crontab: ${schedule.crontab}`);
@@ -1237,7 +1237,7 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
 
     if (crontab) {
       try {
-        parser.parseExpression(crontab);
+        CronExpressionParser.parse(crontab);
       } catch (e) {
         return reply.status(400).send({ error: 'Invalid crontab expression: ' + e.message });
       }
@@ -1282,7 +1282,7 @@ fastify.post('/api/chore-schedules/bulk', async (request, reply) => {
 
     if (crontab) {
       try {
-        parser.parseExpression(crontab);
+        CronExpressionParser.parse(crontab);
       } catch (e) {
         return reply.status(400).send({ error: 'Invalid crontab expression: ' + e.message });
       }
@@ -1309,7 +1309,7 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
   try {
     if (crontab !== undefined && crontab !== null) {
       try {
-        parser.parseExpression(crontab);
+        CronExpressionParser.parse(crontab);
       } catch (e) {
         return reply.status(400).send({ error: 'Invalid crontab expression: ' + e.message });
       }
@@ -1595,7 +1595,7 @@ fastify.post('/api/chores/complete', async (request, reply) => {
       }
 
       // ensure only chores that are due today are part of today's chores
-      const interval = parser.parseExpression(schedule.crontab, options);
+      const interval = CronExpressionParser.parse(schedule.crontab, options);
       const next = interval.next().toISOString().split('T')[0];
       if (today === next) {
         todaysChores.push(schedule);

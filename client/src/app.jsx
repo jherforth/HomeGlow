@@ -1,25 +1,42 @@
 // client/src/app.jsx
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
 import { IconButton, Box, Dialog, DialogContent, Typography } from '@mui/material';
 import { Brightness4, Brightness7, Lock, LockOpen, Close } from '@mui/icons-material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RefreshIcon from '@mui/icons-material/Refresh';
 
 import axios from 'axios';
-import CalendarWidget from './components/CalendarWidget.jsx';
-import PhotoWidget from './components/PhotoWidget.jsx';
-import AdminPanel from './components/AdminPanel.jsx';
-import WeatherWidget from './components/WeatherWidget.jsx';
-import ChoreWidget from './components/ChoreWidget.jsx';
 import PluginWidgetWrapper from './components/PluginWidgetWrapper.jsx';
 import WidgetContainer from './components/WidgetContainer.jsx';
 import TabBar from './components/TabBar.jsx';
-import TabIconModal from './components/TabIconModal.jsx';
-import ScreenSaver from './components/ScreenSaver.jsx';
 import ScreensaverCountdown from './components/ScreensaverCountdown.jsx';
 import { API_BASE_URL } from './utils/apiConfig.js';
 import { getDeviceApiBase } from './utils/deviceName.js';
 import './index.css';
+
+const AdminPanel = lazy(() => import('./components/AdminPanel.jsx'));
+const CalendarWidget = lazy(() => import('./components/CalendarWidget.jsx'));
+const PhotoWidget = lazy(() => import('./components/PhotoWidget.jsx'));
+const WeatherWidget = lazy(() => import('./components/WeatherWidget.jsx'));
+const ChoreWidget = lazy(() => import('./components/ChoreWidget.jsx'));
+const TabIconModal = lazy(() => import('./components/TabIconModal.jsx'));
+const ScreenSaver = lazy(() => import('./components/ScreenSaver.jsx'));
+
+const WidgetLoadingFallback = ({ label }) => (
+  <Box
+    sx={{
+      height: '100%',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      p: 2,
+    }}
+  >
+    <Typography variant="body2" sx={{ color: 'var(--text-secondary)' }}>
+      Loading {label}...
+    </Typography>
+  </Box>
+);
 
 const App = () => {
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
@@ -370,10 +387,14 @@ const App = () => {
         minWidth: 2,
         minHeight: 2,
         savedLayout: dbLayout,
-        content: <CalendarWidget
-          transparentBackground={widgetSettings.calendar.transparent}
-          icsCalendarUrl={apiKeys.ICS_CALENDAR_URL}
-        />,
+        content: (
+          <Suspense fallback={<WidgetLoadingFallback label="calendar" />}>
+            <CalendarWidget
+              transparentBackground={widgetSettings.calendar.transparent}
+              icsCalendarUrl={apiKeys.ICS_CALENDAR_URL}
+            />
+          </Suspense>
+        ),
       });
     }
 
@@ -386,10 +407,14 @@ const App = () => {
         minWidth: 2,
         minHeight: 2,
         savedLayout: dbLayout,
-        content: <WeatherWidget
-          transparentBackground={widgetSettings.weather.transparent}
-          weatherApiKey={apiKeys.WEATHER_API_KEY}
-        />,
+        content: (
+          <Suspense fallback={<WidgetLoadingFallback label="weather" />}>
+            <WeatherWidget
+              transparentBackground={widgetSettings.weather.transparent}
+              weatherApiKey={apiKeys.WEATHER_API_KEY}
+            />
+          </Suspense>
+        ),
       });
     }
 
@@ -402,7 +427,11 @@ const App = () => {
         minWidth: 2,
         minHeight: 2,
         savedLayout: dbLayout,
-        content: <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />,
+        content: (
+          <Suspense fallback={<WidgetLoadingFallback label="chores" />}>
+            <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />
+          </Suspense>
+        ),
       });
     }
 
@@ -415,7 +444,11 @@ const App = () => {
         minWidth: 2,
         minHeight: 2,
         savedLayout: dbLayout,
-        content: <PhotoWidget transparentBackground={widgetSettings.photos.transparent} />,
+        content: (
+          <Suspense fallback={<WidgetLoadingFallback label="photos" />}>
+            <PhotoWidget transparentBackground={widgetSettings.photos.transparent} />
+          </Suspense>
+        ),
       });
     }
 
@@ -517,14 +550,16 @@ const App = () => {
           >
             <Close />
           </IconButton>
-          <AdminPanel
-            setWidgetSettings={setWidgetSettings}
-            onPluginsChanged={fetchInstalledPlugins}
-            onTabsChanged={async () => {
-              await fetchTabs();
-              await fetchWidgetAssignments();
-            }}
-          />
+          <Suspense fallback={<Typography sx={{ py: 2 }}>Loading settings...</Typography>}>
+            <AdminPanel
+              setWidgetSettings={setWidgetSettings}
+              onPluginsChanged={fetchInstalledPlugins}
+              onTabsChanged={async () => {
+                await fetchTabs();
+                await fetchWidgetAssignments();
+              }}
+            />
+          </Suspense>
         </DialogContent>
       </Dialog>
 
@@ -621,20 +656,24 @@ const App = () => {
         </Box>
       </Box>
 
-      <TabIconModal
-        open={showTabIconModal}
-        onClose={() => setShowTabIconModal(false)}
-        onSave={handleSaveTab}
-      />
+      <Suspense fallback={null}>
+        <TabIconModal
+          open={showTabIconModal}
+          onClose={() => setShowTabIconModal(false)}
+          onSave={handleSaveTab}
+        />
+      </Suspense>
 
       {screensaverActive && screensaverSettings.enabled && (
-        <ScreenSaver
-          mode={screensaverSettings.mode}
-          slideshowInterval={screensaverSettings.slideshowInterval}
-          tabs={tabs}
-          onExit={handleExitScreensaver}
-          onTabChange={handleScreensaverTabChange}
-        />
+        <Suspense fallback={null}>
+          <ScreenSaver
+            mode={screensaverSettings.mode}
+            slideshowInterval={screensaverSettings.slideshowInterval}
+            tabs={tabs}
+            onExit={handleExitScreensaver}
+            onTabChange={handleScreensaverTabChange}
+          />
+        </Suspense>
       )}
     </>
   );
