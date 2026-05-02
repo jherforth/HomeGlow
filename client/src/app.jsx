@@ -59,7 +59,6 @@ const App = () => {
     return savedSettings ? { ...defaultSettings, ...JSON.parse(savedSettings) } : defaultSettings;
   });
   const [showAdminPanel, setShowAdminPanel] = useState(false);
-  const [currentGeoPatternSeed, setCurrentGeoPatternSeed] = useState('');
   const [apiKeys, setApiKeys] = useState({
     WEATHER_API_KEY: '',
     ICS_CALENDAR_URL: '',
@@ -161,7 +160,6 @@ const App = () => {
     const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
     setTheme(savedTheme);
     document.documentElement.setAttribute('data-theme', savedTheme);
-    setCurrentGeoPatternSeed(Math.random().toString());
 
     if (savedTheme === 'light') {
       const savedSettings = localStorage.getItem('widgetSettings');

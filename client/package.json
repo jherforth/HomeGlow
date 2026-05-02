@@ -16,24 +16,22 @@
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^7.3.6",
     "@mui/material": "^7.3.6",
-    "axios": "^1.13.2",
+    "axios": "^1.15.2",
+    "cron-parser": "^4.9.0",
     "hammerjs": "^2.0.8",
-    "react": "^19.2.1",
-    "react-dom": "^19.2.1",
-    "react-big-calendar": "^1.19.4",
     "moment": "^2.30.1",
-    "geopattern": "^1.2.3",
-    "extend": "3.0.2",
+    "react": "^19.2.1",
+    "react-big-calendar": "^1.19.4",
     "react-color": "2.19.3",
-    "recharts": "^3.5.1",
-    "react-rnd": "^10.5.2",
+    "react-dom": "^19.2.1",
     "react-grid-layout": "^2.1.0",
-    "cron-parser": "^4.9.0"
+    "react-rnd": "^10.5.2",
+    "recharts": "^3.5.1"
   },
   "devDependencies": {
-    "vite": "^7.2.7",
     "@vitejs/plugin-react": "^5.1.2",
     "@vitest/coverage-v8": "^3.2.4",
+    "vite": "^7.2.7",
     "vitest": "^3.2.4"
   }
 }
