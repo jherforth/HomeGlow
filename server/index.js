@@ -697,7 +697,9 @@ fastify.post('/api/widgets/github/install', async (request, reply) => {
 });
 
 // Initialize database
-const dbPath = path.resolve(__dirname, 'data', 'tasks.db');
+const dbPath = process.env.DB_PATH
+  ? path.resolve(process.env.DB_PATH)
+  : path.resolve(__dirname, 'data', 'tasks.db');
 console.log('Database path:', dbPath);
 let db; // Declare db variable outside to hold the single instance
 
@@ -3791,7 +3793,11 @@ const start = async () => {
     const currentSchemaId = getCurrentSchemaVersion();
     await applySchemaMigrations(currentSchemaId);
 
-    startNightlyCronJob(); // Start the nightly chore pruning job
+    if (process.env.HOMEGLOW_DISABLE_BACKGROUND_JOBS !== '1') {
+      startNightlyCronJob(); // Start the nightly chore pruning job
+    } else {
+      console.log('Nightly background processing disabled by HOMEGLOW_DISABLE_BACKGROUND_JOBS=1');
+    }
 
     // Create uploads directories
     const uploadsDir = path.join(__dirname, 'uploads');
@@ -3800,9 +3806,13 @@ const start = async () => {
     console.log('Uploads directories created');
 
     // Initialize calendar sync service
-    calendarSyncService = new CalendarSyncService(db, decryptPassword);
-    calendarSyncService.initialize();
-    console.log('Calendar sync service started');
+    if (process.env.HOMEGLOW_DISABLE_CALENDAR_SYNC !== '1') {
+      calendarSyncService = new CalendarSyncService(db, decryptPassword);
+      calendarSyncService.initialize();
+      console.log('Calendar sync service started');
+    } else {
+      console.log('Calendar sync service disabled by HOMEGLOW_DISABLE_CALENDAR_SYNC=1');
+    }
 
     if (!isEncryptionConfigured()) {
       console.warn('================================================================');

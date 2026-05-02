@@ -8,5 +8,8 @@
 node_modules/
 dist/
 build/
+coverage/
+**/coverage/
+*.lcov
 
 package-lock.json

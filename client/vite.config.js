@@ -3,6 +3,15 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  test: {
+    environment: 'node',
+    include: ['src/**/*.test.js'],
+    clearMocks: true,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'text-summary', 'html', 'lcov'],
+    },
+  },
   server: {
     port: 3001,
     host: '0.0.0.0',
@@ -27,4 +36,3 @@ export default defineConfig({
     },
   },
 });
-

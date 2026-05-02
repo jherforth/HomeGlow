@@ -5,7 +5,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "npm run test:clean && vitest run --coverage",
+    "test:clean": "node -e \"const fs=require('node:fs'); if (fs.existsSync('coverage')) fs.rmSync('coverage',{recursive:true,force:true});\""
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -28,6 +32,8 @@
   },
   "devDependencies": {
     "vite": "^7.2.7",
-    "@vitejs/plugin-react": "^5.1.2"
+    "@vitejs/plugin-react": "^5.1.2",
+    "@vitest/coverage-v8": "^3.2.4",
+    "vitest": "^3.2.4"
   }
 }
