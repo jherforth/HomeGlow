@@ -28,6 +28,7 @@ const PhotoWidget = ({ transparentBackground }) => {
   const [slideshowInterval, setSlideshowInterval] = useState(5000);
   const [photosPerView, setPhotosPerView] = useState(1);
   const [transitionType, setTransitionType] = useState('none');
+  const [photoHeight, setPhotoHeight] = useState(450);
 
   useEffect(() => {
     fetchPhotoSources();
@@ -49,6 +50,9 @@ const PhotoWidget = ({ transparentBackground }) => {
       }
       if (settings.PHOTO_WIDGET_SLIDESHOW_INTERVAL) {
         setSlideshowInterval(parseInt(settings.PHOTO_WIDGET_SLIDESHOW_INTERVAL));
+      }
+      if (settings.PHOTO_WIDGET_PHOTO_SIZE) {
+        setPhotoHeight(parseInt(settings.PHOTO_WIDGET_PHOTO_SIZE));
       }
     } catch (error) {
       console.error('Error loading photo widget preferences:', error);
@@ -287,7 +291,7 @@ const PhotoWidget = ({ transparentBackground }) => {
 
       {!loading && !error && photos.length > 0 && currentPhotos.length > 0 && (
         <Box>
-          <Box sx={{ position: 'relative', height: 400, overflow: 'hidden', borderRadius: 2, mb: 2 }}>
+          <Box sx={{ position: 'relative', height: photoHeight, overflow: 'hidden', borderRadius: 2, mb: 2 }}>
             <Box
               key={currentPhotoIndex}
               sx={{
@@ -430,6 +434,28 @@ const PhotoWidget = ({ transparentBackground }) => {
               <MenuItem value={1}>1 Photo</MenuItem>
               <MenuItem value={2}>2 Photos</MenuItem>
               <MenuItem value={3}>3 Photos</MenuItem>
+            </Select>
+          </Box>
+
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" color="text.secondary" gutterBottom display="block">
+              Photo Size
+            </Typography>
+            <Select
+              fullWidth
+              size="small"
+              value={photoHeight}
+              onChange={(e) => {
+                const value = e.target.value;
+                setPhotoHeight(value);
+                savePreference('PHOTO_WIDGET_PHOTO_SIZE', value);
+              }}
+            >
+              <MenuItem value={880}>Extra Large (880px)</MenuItem>
+              <MenuItem value={720}>Large (720px)</MenuItem>
+              <MenuItem value={580}>Medium (580px)</MenuItem>
+              <MenuItem value={450}>Small (450px)</MenuItem>
+              <MenuItem value={300}>Extra Small (300px)</MenuItem>
             </Select>
           </Box>
 
