@@ -93,6 +93,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   const [testingConnection, setTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState(null);
   const [savingCalendar, setSavingCalendar] = useState(false);
+  const [calendarFormError, setCalendarFormError] = useState('');
   const [googleCalendars, setGoogleCalendars] = useState([]);
   const [googleCalendarsLoading, setGoogleCalendarsLoading] = useState(false);
   const [googleCalendarsError, setGoogleCalendarsError] = useState('');
@@ -361,6 +362,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
   const handleAddCalendar = () => {
     setEditingCalendar(null);
+    setCalendarFormError('');
     setCalendarForm({
       name: '',
       type: 'ICS',
@@ -375,6 +377,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
   const handleEditCalendar = (calendar) => {
     setEditingCalendar(calendar);
+    setCalendarFormError('');
     setCalendarForm({
       name: calendar.name,
       type: calendar.type,
@@ -428,19 +431,61 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   };
 
   const handleSaveCalendar = async () => {
+    const name = (calendarForm.name || '').trim();
+    const url = (calendarForm.url || '').trim();
+    const username = (calendarForm.username || '').trim();
+    const password = (calendarForm.password || '').trim();
+
+    setCalendarFormError('');
+
+    if (!name) {
+      setCalendarFormError('Calendar name is required.');
+      return;
+    }
+
+    if (!url) {
+      setCalendarFormError(calendarForm.type === 'Google'
+        ? 'Select a Google calendar before saving.'
+        : 'Calendar URL is required.');
+      return;
+    }
+
+    if (calendarForm.type === 'CalDAV' && !username) {
+      setCalendarFormError('CalDAV username is required.');
+      return;
+    }
+
+    if (calendarForm.type === 'CalDAV' && !editingCalendar && !password) {
+      setCalendarFormError('CalDAV password is required.');
+      return;
+    }
+
     setSavingCalendar(true);
+
+    const payload = {
+      ...calendarForm,
+      name,
+      url,
+      username,
+    };
+
+    // Google sources are immutable in backend type validation on PATCH.
+    if (editingCalendar?.type === 'Google') {
+      delete payload.type;
+    }
+
     try {
       if (editingCalendar) {
-        await axios.patch(`${API_BASE_URL}/api/calendar-sources/${editingCalendar.id}`, calendarForm);
+        await axios.patch(`${API_BASE_URL}/api/calendar-sources/${editingCalendar.id}`, payload);
       } else {
-        await axios.post(`${API_BASE_URL}/api/calendar-sources`, calendarForm);
+        await axios.post(`${API_BASE_URL}/api/calendar-sources`, payload);
       }
       await fetchCalendarSources();
       await fetchCalendarEvents();
       setShowCalendarDialog(false);
     } catch (error) {
       console.error('Error saving calendar:', error);
-      alert('Failed to save calendar. Please try again.');
+      setCalendarFormError(error?.response?.data?.error || 'Failed to save calendar. Please try again.');
     } finally {
       setSavingCalendar(false);
     }
@@ -1803,7 +1848,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                     textSize: Math.min(24, Math.max(8, value))
                   }));
                 }}
-                inputProps={{ min: 8, max: 24 }}
+                slotProps={{ htmlInput: { min: 8, max: 24 } }}
                 sx={{ width: 100 }}
                 size="small"
               />
@@ -1847,7 +1892,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                     bulletSize: Math.min(20, Math.max(4, value))
                   }));
                 }}
-                inputProps={{ min: 4, max: 20 }}
+                slotProps={{ htmlInput: { min: 4, max: 20 } }}
                 sx={{ width: 100 }}
                 size="small"
               />
@@ -1888,6 +1933,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
         fullWidth
         PaperProps={{
           component: 'form',
+          noValidate: true,
           onSubmit: (event) => {
             event.preventDefault();
             handleSaveCalendar();
@@ -1899,6 +1945,10 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
         </DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 2 }}>
+            {calendarFormError && (
+              <Alert severity="error" sx={{ mb: 2 }}>{calendarFormError}</Alert>
+            )}
+
             <TextField
               fullWidth
               label="Calendar Name"
@@ -2065,9 +2115,10 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
         <DialogActions>
           <Button type="button" onClick={() => setShowCalendarDialog(false)}>Cancel</Button>
           <Button
-            type="submit"
+            type="button"
             variant="contained"
-            disabled={!calendarForm.name || !calendarForm.url || savingCalendar}
+            onClick={handleSaveCalendar}
+            disabled={savingCalendar}
           >
             {savingCalendar ? <CircularProgress size={20} /> : 'Save'}
           </Button>
