@@ -6,6 +6,7 @@ import moment from 'moment';
 import { SketchPicker } from 'react-color';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
+import { getEventPillPalette, getPreferredColorMode } from '../utils/colorContrast.js';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import MonthDayCell from './MonthDayCell.jsx';
 
@@ -865,6 +866,9 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
     );
   };
 
+  const colorMode = getPreferredColorMode();
+  const eventRowHoverColor = colorMode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
+
   if (loading) {
     return (
       <Box sx={{
@@ -1124,7 +1128,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
         <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
           <Box sx={{ display: 'flex', gap: 1, height: '100%' }}>
             {getNext7Days().map((day, index) => {
-              const pillColor = (event) => event.source_color || eventColors.backgroundColor;
+              const getPillPalette = (event) => getEventPillPalette(event.source_color || eventColors.backgroundColor, colorMode);
               const renderPill = (event, key) => {
                 if (!event) {
                   return (
@@ -1139,7 +1143,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                   );
                 }
                 const { isStart, isEnd } = getMultiDayPosition(event, day.date);
-                const color = pillColor(event);
+                const palette = getPillPalette(event);
                 return (
                   <Box
                     key={key}
@@ -1158,23 +1162,23 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                         flex: 1,
                         display: 'flex',
                         alignItems: 'center',
-                        backgroundColor: color,
+                        backgroundColor: palette.backgroundColor,
                         borderTopLeftRadius: isStart ? '12px' : '0px',
                         borderBottomLeftRadius: isStart ? '12px' : '0px',
                         borderTopRightRadius: isEnd ? '12px' : '0px',
                         borderBottomRightRadius: isEnd ? '12px' : '0px',
                         px: 1,
                         py: 0.125,
-                        border: '1px solid rgba(0,0,0,0.2)',
-                        borderLeft: !isStart ? 'none' : '1px solid rgba(0,0,0,0.2)',
-                        borderRight: !isEnd ? 'none' : '1px solid rgba(0,0,0,0.2)',
+                        border: `1px solid ${palette.borderColor}`,
+                        borderLeft: !isStart ? 'none' : `1px solid ${palette.borderColor}`,
+                        borderRight: !isEnd ? 'none' : `1px solid ${palette.borderColor}`,
                         overflow: 'hidden',
                         '&:hover': { filter: 'brightness(1.1)' }
                       }}
                     >
                       <Typography variant="caption" sx={{
                         fontSize: `${displaySettings.textSize}px`,
-                        color: '#fff',
+                        color: palette.textColor,
                         fontWeight: 500,
                         fontStyle: 'italic',
                         overflow: 'hidden',
@@ -1223,7 +1227,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                     )}
 
                     {day.allDaySingleEvents.map((event, evIdx) => {
-                      const color = pillColor(event);
+                      const palette = getPillPalette(event);
                       return (
                         <Box
                           key={`allday-${evIdx}`}
@@ -1242,18 +1246,18 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                               flex: 1,
                               display: 'flex',
                               alignItems: 'center',
-                              backgroundColor: color,
+                              backgroundColor: palette.backgroundColor,
                               borderRadius: '12px',
                               px: 1,
                               py: 0.125,
-                              border: '1px solid rgba(0,0,0,0.2)',
+                              border: `1px solid ${palette.borderColor}`,
                               overflow: 'hidden',
                               '&:hover': { filter: 'brightness(1.1)' }
                             }}
                           >
                             <Typography variant="caption" sx={{
                               fontSize: `${displaySettings.textSize}px`,
-                              color: '#fff',
+                              color: palette.textColor,
                               fontWeight: 500,
                               fontStyle: 'italic',
                               overflow: 'hidden',
@@ -1272,7 +1276,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                     )}
 
                     {day.timedEvents.map((event, evIdx) => {
-                      const color = pillColor(event);
+                      const palette = getPillPalette(event);
                       return (
                         <Box
                           key={`timed-${evIdx}`}
@@ -1285,7 +1289,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                             alignItems: 'flex-start',
                             gap: 0.5,
                             borderRadius: 0.5,
-                            '&:hover': { backgroundColor: 'rgba(0,0,0,0.05)' }
+                            '&:hover': { backgroundColor: eventRowHoverColor }
                           }}
                         >
                           <Box
@@ -1295,7 +1299,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                               minWidth: displaySettings.bulletSize,
                               minHeight: displaySettings.bulletSize,
                               borderRadius: '50%',
-                              backgroundColor: color,
+                              backgroundColor: palette.backgroundColor,
                               mt: displaySettings.bulletSize * 0.0625,
                               flexShrink: 0
                             }}
@@ -1345,7 +1349,9 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
             </Typography>
           ) : (
             <List>
-              {selectedDateEvents.map((event, index) => (
+              {selectedDateEvents.map((event, index) => {
+                const eventPalette = getEventPillPalette(event.source_color || eventColors.backgroundColor, colorMode);
+                return (
                 <ListItem
                   key={event.id || index}
                   sx={{
@@ -1365,7 +1371,7 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                         width: 16,
                         height: 16,
                         borderRadius: '50%',
-                        backgroundColor: event.source_color || eventColors.backgroundColor,
+                        backgroundColor: eventPalette.backgroundColor,
                         flexShrink: 0
                       }}
                     />
@@ -1373,8 +1379,8 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                       label={event.source_name || 'Unknown Calendar'}
                       size="small"
                       sx={{
-                        backgroundColor: event.source_color || eventColors.backgroundColor,
-                        color: '#ffffff',
+                        backgroundColor: eventPalette.backgroundColor,
+                        color: eventPalette.textColor,
                         fontWeight: 'bold',
                         fontSize: '0.75rem'
                       }}
@@ -1419,7 +1425,8 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                     }
                   />
                 </ListItem>
-              ))}
+                );
+              })}
             </List>
           )}
         </DialogContent>

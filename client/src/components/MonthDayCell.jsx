@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Box, Typography } from '@mui/material';
+import { getEventPillPalette, getPreferredColorMode } from '../utils/colorContrast.js';
 
 const MonthDayCell = ({
   day,
@@ -21,6 +22,9 @@ const MonthDayCell = ({
   const maxItemsRef = useRef(3);
   const rafRef = useRef(null);
   const [maxItems, setMaxItems] = useState(3);
+  const colorMode = getPreferredColorMode();
+  const cellHoverColor = colorMode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
+  const timedRowHoverColor = colorMode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
 
   const computeMax = useCallback(() => {
     const cellEl = cellRef.current;
@@ -78,7 +82,7 @@ const MonthDayCell = ({
     shownCount++;
     const dayDate = day.toDate();
     const { isStart, isEnd } = getMultiDayPosition(event, dayDate);
-    const color = event.source_color || eventColors.backgroundColor;
+    const palette = getEventPillPalette(event.source_color || eventColors.backgroundColor, colorMode);
     const isContinuing = !isStart;
     return (
       <Box
@@ -90,22 +94,22 @@ const MonthDayCell = ({
           flex: 1,
           display: 'flex',
           alignItems: 'center',
-          backgroundColor: color,
+          backgroundColor: palette.backgroundColor,
           borderTopLeftRadius: isStart ? '10px' : '0px',
           borderBottomLeftRadius: isStart ? '10px' : '0px',
           borderTopRightRadius: isEnd ? '10px' : '0px',
           borderBottomRightRadius: isEnd ? '10px' : '0px',
           px: 0.75,
           py: 0.125,
-          border: '1px solid rgba(0,0,0,0.2)',
-          borderLeft: !isStart ? 'none' : '1px solid rgba(0,0,0,0.2)',
-          borderRight: !isEnd ? 'none' : '1px solid rgba(0,0,0,0.2)',
+          border: `1px solid ${palette.borderColor}`,
+          borderLeft: !isStart ? 'none' : `1px solid ${palette.borderColor}`,
+          borderRight: !isEnd ? 'none' : `1px solid ${palette.borderColor}`,
           overflow: 'hidden',
           '&:hover': { filter: 'brightness(1.1)' }
         }}>
           <Typography variant="caption" sx={{
             fontSize: `${displaySettings.textSize}px`,
-            color: '#fff',
+            color: palette.textColor,
             fontWeight: 500,
             fontStyle: 'italic',
             overflow: 'hidden',
@@ -138,7 +142,7 @@ const MonthDayCell = ({
         minHeight: 0,
         overflow: 'hidden',
         '&:hover': {
-          bgcolor: isToday ? 'rgba(var(--accent-rgb), 0.15)' : 'rgba(0,0,0,0.05)'
+          bgcolor: isToday ? 'rgba(var(--accent-rgb), 0.15)' : cellHoverColor
         }
       }}
     >
@@ -154,18 +158,18 @@ const MonthDayCell = ({
         {dayAllDaySingle.map((event, evIdx) => {
           if (shownCount >= maxItems) return null;
           shownCount++;
-          const color = event.source_color || eventColors.backgroundColor;
+          const palette = getEventPillPalette(event.source_color || eventColors.backgroundColor, colorMode);
           return (
             <Box key={`allday-${evIdx}`} onClick={(e) => { e.stopPropagation(); onEventClick(event); }}
               sx={{ mb: 0.25, height: pillHeight, minHeight: pillHeight, display: 'flex', alignItems: 'stretch', cursor: 'pointer' }}>
               <Box sx={{
                 flex: 1, display: 'flex', alignItems: 'center',
-                backgroundColor: color, borderRadius: '10px', px: 0.75, py: 0.125,
-                border: '1px solid rgba(0,0,0,0.2)', overflow: 'hidden',
+                backgroundColor: palette.backgroundColor, borderRadius: '10px', px: 0.75, py: 0.125,
+                border: `1px solid ${palette.borderColor}`, overflow: 'hidden',
                 '&:hover': { filter: 'brightness(1.1)' }
               }}>
                 <Typography variant="caption" sx={{
-                  fontSize: `${displaySettings.textSize}px`, color: '#fff',
+                  fontSize: `${displaySettings.textSize}px`, color: palette.textColor,
                   fontWeight: 500, fontStyle: 'italic',
                   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
                 }}>
@@ -179,11 +183,11 @@ const MonthDayCell = ({
         {dayTimed.map((event, evIdx) => {
           if (shownCount >= maxItems) return null;
           shownCount++;
-          const color = event.source_color || eventColors.backgroundColor;
+          const palette = getEventPillPalette(event.source_color || eventColors.backgroundColor, colorMode);
           return (
             <Box key={`timed-${evIdx}`} onClick={(e) => { e.stopPropagation(); onEventClick(event); }}
-              sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25, cursor: 'pointer', borderRadius: 0.5, px: 0.25, '&:hover': { bgcolor: 'rgba(0,0,0,0.05)' } }}>
-              <Box sx={{ width: displaySettings.bulletSize, height: displaySettings.bulletSize, minWidth: displaySettings.bulletSize, borderRadius: '50%', backgroundColor: color, flexShrink: 0 }} />
+              sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25, cursor: 'pointer', borderRadius: 0.5, px: 0.25, '&:hover': { bgcolor: timedRowHoverColor } }}>
+              <Box sx={{ width: displaySettings.bulletSize, height: displaySettings.bulletSize, minWidth: displaySettings.bulletSize, borderRadius: '50%', backgroundColor: palette.backgroundColor, flexShrink: 0 }} />
               <Typography variant="caption" sx={{ fontSize: `${displaySettings.textSize}px`, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {event.title}
               </Typography>
