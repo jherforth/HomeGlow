@@ -1352,79 +1352,79 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
               {selectedDateEvents.map((event, index) => {
                 const eventPalette = getEventPillPalette(event.source_color || eventColors.backgroundColor, colorMode);
                 return (
-                <ListItem
-                  key={event.id || index}
-                  sx={{
-                    border: '1px solid var(--card-border)',
-                    borderRadius: 1,
-                    mb: 1,
-                    bgcolor: 'rgba(var(--accent-rgb), 0.05)',
-                    flexDirection: 'column',
-                    alignItems: 'flex-start',
-                    p: 2,
-                    position: 'relative'
-                  }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, width: '100%' }}>
-                    <Box
-                      sx={{
-                        width: 16,
-                        height: 16,
-                        borderRadius: '50%',
-                        backgroundColor: eventPalette.backgroundColor,
-                        flexShrink: 0
-                      }}
-                    />
-                    <Chip
-                      label={event.source_name || 'Unknown Calendar'}
-                      size="small"
-                      sx={{
-                        backgroundColor: eventPalette.backgroundColor,
-                        color: eventPalette.textColor,
-                        fontWeight: 'bold',
-                        fontSize: '0.75rem'
-                      }}
-                    />
-                  </Box>
-                  {isGoogleEvent(event) && (
-                    <Box sx={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 0.5 }}>
-                      <Tooltip title="Edit event">
-                        <IconButton size="small" onClick={() => openEditEventDialog(event)}>
-                          <Edit fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Delete event">
-                        <IconButton size="small" onClick={() => deleteEvent(event)}>
-                          <Delete fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+                  <ListItem
+                    key={event.id || index}
+                    sx={{
+                      border: '1px solid var(--card-border)',
+                      borderRadius: 1,
+                      mb: 1,
+                      bgcolor: 'rgba(var(--accent-rgb), 0.05)',
+                      flexDirection: 'column',
+                      alignItems: 'flex-start',
+                      p: 2,
+                      position: 'relative'
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, width: '100%' }}>
+                      <Box
+                        sx={{
+                          width: 16,
+                          height: 16,
+                          borderRadius: '50%',
+                          backgroundColor: eventPalette.backgroundColor,
+                          flexShrink: 0
+                        }}
+                      />
+                      <Chip
+                        label={event.source_name || 'Unknown Calendar'}
+                        size="small"
+                        sx={{
+                          backgroundColor: eventPalette.backgroundColor,
+                          color: eventPalette.textColor,
+                          fontWeight: 'bold',
+                          fontSize: '0.75rem'
+                        }}
+                      />
                     </Box>
-                  )}
-                  <ListItemText
-                    primary={
-                      <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1, fontStyle: event.all_day ? 'italic' : 'normal' }}>
-                        {event.title}
-                      </Typography>
-                    }
-                    secondary={
-                      <Box>
-                        <Typography variant="body1" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5, fontStyle: event.all_day ? 'italic' : 'normal' }}>
-                          🕐 {event.all_day ? 'All Day' : `${moment(event.start).format('h:mm A')} - ${moment(event.end).format('h:mm A')}`}
-                        </Typography>
-                        {event.location && (
-                          <Typography variant="body2" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            📍 {event.location}
-                          </Typography>
-                        )}
-                        {event.description && (
-                          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                            {event.description}
-                          </Typography>
-                        )}
+                    {isGoogleEvent(event) && (
+                      <Box sx={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 0.5 }}>
+                        <Tooltip title="Edit event">
+                          <IconButton size="small" onClick={() => openEditEventDialog(event)}>
+                            <Edit fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Delete event">
+                          <IconButton size="small" onClick={() => deleteEvent(event)}>
+                            <Delete fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
                       </Box>
-                    }
-                  />
-                </ListItem>
+                    )}
+                    <ListItemText
+                      primary={
+                        <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1, fontStyle: event.all_day ? 'italic' : 'normal' }}>
+                          {event.title}
+                        </Typography>
+                      }
+                      secondary={
+                        <Box>
+                          <Typography variant="body1" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5, fontStyle: event.all_day ? 'italic' : 'normal' }}>
+                            🕐 {event.all_day ? 'All Day' : `${moment(event.start).format('h:mm A')} - ${moment(event.end).format('h:mm A')}`}
+                          </Typography>
+                          {event.location && (
+                            <Typography variant="body2" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              📍 {event.location}
+                            </Typography>
+                          )}
+                          {event.description && (
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                              {event.description}
+                            </Typography>
+                          )}
+                        </Box>
+                      }
+                    />
+                  </ListItem>
                 );
               })}
             </List>
@@ -1451,12 +1451,14 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
         onClose={closeEventDialog}
         maxWidth="sm"
         fullWidth
-        PaperProps={{
-          component: 'form',
-          onSubmit: (event) => {
-            event.preventDefault();
-            saveEvent();
-          },
+        slotProps={{
+          paper: {
+            component: 'form',
+            onSubmit: (event) => {
+              event.preventDefault();
+              saveEvent();
+            },
+          }
         }}
       >
         <DialogTitle>{eventDialog.mode === 'create' ? 'New Event' : 'Edit Event'}</DialogTitle>
@@ -1938,13 +1940,15 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
         onClose={() => setShowCalendarDialog(false)}
         maxWidth="sm"
         fullWidth
-        PaperProps={{
-          component: 'form',
-          noValidate: true,
-          onSubmit: (event) => {
-            event.preventDefault();
-            handleSaveCalendar();
-          },
+        slotProps={{
+          paper: {
+            component: 'form',
+            noValidate: true,
+            onSubmit: (event) => {
+              event.preventDefault();
+              handleSaveCalendar();
+            },
+          }
         }}
       >
         <DialogTitle>
@@ -2122,9 +2126,8 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
         <DialogActions>
           <Button type="button" onClick={() => setShowCalendarDialog(false)}>Cancel</Button>
           <Button
-            type="button"
+            type="submit"
             variant="contained"
-            onClick={handleSaveCalendar}
             disabled={savingCalendar}
           >
             {savingCalendar ? <CircularProgress size={20} /> : 'Save'}

@@ -174,12 +174,14 @@ const PinModal = ({ open, onClose, onVerify, mode = 'verify', title }) => {
       onClose={isLoading ? undefined : onClose}
       maxWidth="xs"
       fullWidth
-      PaperProps={{
-        sx: {
-          background: 'var(--card-bg)',
-          backdropFilter: 'var(--backdrop-blur)',
-          border: '2px solid var(--accent)',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
+      slotProps={{
+        paper: {
+          sx: {
+            background: 'var(--card-bg)',
+            backdropFilter: 'var(--backdrop-blur)',
+            border: '2px solid var(--accent)',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
+          }
         }
       }}
     >

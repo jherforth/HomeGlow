@@ -73,7 +73,7 @@ const PhotoWidget = ({ transparentBackground }) => {
 
     if (refreshInterval > 0) {
       console.log(`PhotoWidget: Auto-refresh enabled (${refreshInterval}ms)`);
-      
+
       const intervalId = setInterval(() => {
         console.log('PhotoWidget: Auto-refreshing data...');
         fetchPhotos();
@@ -296,7 +296,7 @@ const PhotoWidget = ({ transparentBackground }) => {
                 gap: 1,
                 height: '100%',
                 animation: transitionType === 'fade' ? 'fadeIn 0.5s ease-in-out' :
-                          transitionType === 'slide' ? 'slideIn 0.5s ease-in-out' : 'none',
+                  transitionType === 'slide' ? 'slideIn 0.5s ease-in-out' : 'none',
                 '@keyframes fadeIn': {
                   '0%': {
                     opacity: 0,
@@ -532,12 +532,14 @@ const PhotoWidget = ({ transparentBackground }) => {
         onClose={() => setShowSourceDialog(false)}
         maxWidth="sm"
         fullWidth
-        PaperProps={{
-          component: 'form',
-          onSubmit: (event) => {
-            event.preventDefault();
-            handleSaveSource();
-          },
+        slotProps={{
+          paper: {
+            component: 'form',
+            onSubmit: (event) => {
+              event.preventDefault();
+              handleSaveSource();
+            },
+          }
         }}
       >
         <DialogTitle>

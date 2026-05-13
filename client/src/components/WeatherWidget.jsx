@@ -888,7 +888,7 @@ const WeatherWidget = ({
           </Box>
 
           {/* Charts - Right Column */}
-          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: 0 }}>
             <Box sx={{ display: 'flex', gap: 1, mb: 2, justifyContent: 'center' }}>
               <Button
                 size="small"
@@ -906,8 +906,8 @@ const WeatherWidget = ({
               </Button>
             </Box>
 
-            <Box sx={{ flex: 1, width: '100%', minHeight: 0 }}>
-              <ResponsiveContainer width="100%" height="100%">
+            <Box sx={{ flex: 1, width: '100%', minWidth: 0, minHeight: 220 }}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                 {chartType === 'temperature' ? (
                   <LineChart data={chartData}>
                     <XAxis dataKey="time" axisLine={false} tickLine={false} />
@@ -943,12 +943,14 @@ const WeatherWidget = ({
       onClose={handleCloseSettingsModal}
       maxWidth="xs"
       fullWidth
-      PaperProps={{
-        component: 'form',
-        onSubmit: (event) => {
-          event.preventDefault();
-          handleSaveSettingsModal();
-        },
+      slotProps={{
+        paper: {
+          component: 'form',
+          onSubmit: (event) => {
+            event.preventDefault();
+            handleSaveSettingsModal();
+          },
+        }
       }}
     >
       <DialogTitle>Weather Widget Settings</DialogTitle>

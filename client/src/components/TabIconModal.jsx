@@ -126,12 +126,14 @@ const TabIconModal = ({
       onClose={handleClose}
       maxWidth="sm"
       fullWidth
-      PaperProps={{
-        component: 'form',
-        onSubmit: (event) => {
-          event.preventDefault();
-          handleSave();
-        },
+      slotProps={{
+        paper: {
+          component: 'form',
+          onSubmit: (event) => {
+            event.preventDefault();
+            handleSave();
+          },
+        }
       }}
     >
       <DialogTitle>
@@ -176,7 +178,7 @@ const TabIconModal = ({
               const isSelected = selectedIcon === iconItem.name;
 
               return (
-                <Grid item xs={3} sm={2} key={iconItem.name}>
+                <Grid size={{ xs: 3, sm: 2 }} key={iconItem.name}>
                   <Paper
                     elevation={isSelected ? 8 : 1}
                     sx={{

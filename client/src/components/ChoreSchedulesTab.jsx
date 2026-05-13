@@ -613,12 +613,14 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
         onClose={() => setChoreDialogOpen(false)}
         maxWidth="sm"
         fullWidth
-        PaperProps={{
-          component: 'form',
-          onSubmit: (event) => {
-            event.preventDefault();
-            handleSaveChore();
-          },
+        slotProps={{
+          paper: {
+            component: 'form',
+            onSubmit: (event) => {
+              event.preventDefault();
+              handleSaveChore();
+            },
+          }
         }}
       >
         <DialogTitle>{editingChore ? 'Edit Chore' : 'New Chore'}</DialogTitle>
@@ -647,7 +649,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
               type="number"
               value={choreForm.clam_value}
               onChange={(e) => setChoreForm(f => ({ ...f, clam_value: parseInt(e.target.value) || 0 }))}
-              inputProps={{ min: 0 }}
+              slotProps={{ htmlInput: { min: 0 } }}
               sx={{ width: 140 }}
             />
           </Box>
@@ -695,12 +697,14 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
         onClose={() => setScheduleDialogOpen(false)}
         maxWidth="sm"
         fullWidth
-        PaperProps={{
-          component: 'form',
-          onSubmit: (event) => {
-            event.preventDefault();
-            handleSaveSchedule();
-          },
+        slotProps={{
+          paper: {
+            component: 'form',
+            onSubmit: (event) => {
+              event.preventDefault();
+              handleSaveSchedule();
+            },
+          }
         }}
       >
         <DialogTitle>{editingSchedule ? 'Edit Schedule' : 'New Schedule'}</DialogTitle>
@@ -782,7 +786,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
 
                 {scheduleForm.duration === 'once-completed' && (
                   <Grid container spacing={2}>
-                    <Grid item xs={6}>
+                    <Grid size={6}>
                       <TextField
                         fullWidth
                         size="small"
@@ -792,12 +796,12 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                           const digitsOnly = e.target.value.replace(/\D/g, '');
                           updateScheduleForm({ sleepCount: digitsOnly });
                         }}
-                        inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', min: 1 }}
+                        slotProps={{ htmlInput: { inputMode: 'numeric', pattern: '[0-9]*', min: 1 } }}
                         error={isOnceCompletedMissingInterval}
                         helperText={isOnceCompletedMissingInterval ? 'Required. Use digits only.' : 'Number of time units to wait.'}
                       />
                     </Grid>
-                    <Grid item xs={6}>
+                    <Grid size={6}>
                       <FormControl fullWidth size="small">
                         <InputLabel>Sleep Unit</InputLabel>
                         <Select

@@ -696,12 +696,14 @@ const ChoreWidget = ({ transparentBackground }) => {
           onClose={() => setShowAddDialog(false)}
           maxWidth="sm"
           fullWidth
-          PaperProps={{
-            component: 'form',
-            onSubmit: (event) => {
-              event.preventDefault();
-              saveChore();
-            },
+          slotProps={{
+            paper: {
+              component: 'form',
+              onSubmit: (event) => {
+                event.preventDefault();
+                saveChore();
+              },
+            }
           }}
         >
           <DialogTitle>Add New Chore</DialogTitle>

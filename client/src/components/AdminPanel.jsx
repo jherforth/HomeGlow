@@ -1486,8 +1486,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                       {widget} Widget
                     </Typography>
 
-                    <Grid container spacing={2} alignItems="center">
-                      <Grid item xs={12} sm={6}>
+                    <Grid container spacing={2} sx={{ alignItems: 'center' }}>
+                      <Grid size={{ xs: 12, sm: 6 }}>
                         <FormControlLabel
                           control={
                             <Switch
@@ -1509,7 +1509,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                         />
                       </Grid>
 
-                      <Grid item xs={12} sm={6}>
+                      <Grid size={{ xs: 12, sm: 6 }}>
                         <FormControl fullWidth size="small">
                           <InputLabel id={`${widget}-refresh-label`}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1550,15 +1550,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                             helperText="Select which tabs this widget should appear on (defaults to Home tab if none selected)"
                           />
                         )}
-                        renderTags={(value, getTagProps) =>
-                          value.map((option, index) => (
-                            <Chip
-                              label={option.label}
-                              {...getTagProps({ index })}
-                              sx={{ backgroundColor: 'var(--accent)', color: 'white' }}
-                            />
-                          ))
-                        }
                       />
                     </Box>
 
@@ -1575,8 +1566,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                     Weather Widget
                   </Typography>
 
-                  <Grid container spacing={2} alignItems="center">
-                    <Grid item xs={12} sm={6}>
+                  <Grid container spacing={2} sx={{ alignItems: 'center' }}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
                       <FormControlLabel
                         control={
                           <Switch
@@ -1598,7 +1589,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                       />
                     </Grid>
 
-                    <Grid item xs={12} sm={6}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
                       <FormControl fullWidth size="small">
                         <InputLabel id="weather-refresh-label">
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1639,15 +1630,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                           helperText="Select which tabs this widget should appear on (defaults to Home tab if none selected)"
                         />
                       )}
-                      renderTags={(value, getTagProps) =>
-                        value.map((option, index) => (
-                          <Chip
-                            label={option.label}
-                            {...getTagProps({ index })}
-                            sx={{ backgroundColor: 'var(--accent)', color: 'white' }}
-                          />
-                        ))
-                      }
                     />
                   </Box>
 
@@ -1667,7 +1649,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
             {widgetsSubTab === 1 && (
               <>
                 <Grid container spacing={3}>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <Typography variant="subtitle1" gutterBottom>Upload Custom Widget</Typography>
                     <Button
                       variant="contained"
@@ -1703,7 +1685,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                     </List>
                   </Grid>
 
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                       <Typography variant="subtitle1">GitHub Widget Repository</Typography>
                       <Button
@@ -1771,8 +1753,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                             </IconButton>
                           </Box>
 
-                          <Grid container spacing={2} alignItems="center">
-                            <Grid item xs={12} sm={6}>
+                          <Grid container spacing={2} sx={{ alignItems: 'center' }}>
+                            <Grid size={{ xs: 12, sm: 6 }}>
                               <FormControlLabel
                                 control={
                                   <Switch
@@ -1804,7 +1786,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                               />
                             </Grid>
 
-                            <Grid item xs={12} sm={6}>
+                            <Grid size={{ xs: 12, sm: 6 }}>
                               <FormControl fullWidth size="small">
                                 <InputLabel id={`plugin-${plugin.filename}-refresh-label`}>
                                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1853,15 +1835,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                                   helperText="Select which tabs this plugin should appear on (defaults to Home tab if none selected)"
                                 />
                               )}
-                              renderTags={(value, getTagProps) =>
-                                value.map((option, index) => (
-                                  <Chip
-                                    label={option.label}
-                                    {...getTagProps({ index })}
-                                    sx={{ backgroundColor: 'var(--accent)', color: 'white' }}
-                                  />
-                                ))
-                              }
                             />
                           </Box>
                         </Box>
@@ -1942,7 +1915,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                                 onClick={(e) => e.stopPropagation()}
                                 onChange={() => toggleTabShowLabel(tab)}
                                 disabled={isLoading}
-                                inputProps={{ 'aria-label': `Toggle show label for ${tab.label}` }}
+                                slotProps={{ input: { 'aria-label': `Toggle show label for ${tab.label}` } }}
                               />
                             </TableCell>
                             <TableCell>
@@ -2315,34 +2288,34 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 }}
               >
                 <Grid container spacing={2}>
-                <Grid item xs={12} sm={4}>
-                  <TextField
-                    fullWidth
-                    label="Username"
-                    value={newUser.username}
-                    onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <TextField
-                    fullWidth
-                    label="Email"
-                    type="email"
-                    value={newUser.email}
-                    onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <Button
-                    type="submit"
-                    variant="contained"
-                    disabled={!newUser.username || !newUser.email}
-                    fullWidth
-                    sx={{ height: '56px' }}
-                  >
-                    Add User
-                  </Button>
-                </Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <TextField
+                      fullWidth
+                      label="Username"
+                      value={newUser.username}
+                      onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <TextField
+                      fullWidth
+                      label="Email"
+                      type="email"
+                      value={newUser.email}
+                      onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <Button
+                      type="submit"
+                      variant="contained"
+                      disabled={!newUser.username || !newUser.email}
+                      fullWidth
+                      sx={{ height: '56px' }}
+                    >
+                      Add User
+                    </Button>
+                  </Grid>
                 </Grid>
               </Box>
             </Box>
@@ -2494,7 +2467,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                   value={settings.daily_completion_clam_reward || '2'}
                   onChange={(e) => setSettings(prev => ({ ...prev, daily_completion_clam_reward: e.target.value }))}
                   helperText="Clams awarded when a user completes all their daily chores"
-                  inputProps={{ min: 0, max: 100 }}
+                  slotProps={{ htmlInput: { min: 0, max: 100 } }}
                   sx={{ maxWidth: 340, flex: 1 }}
                 />
                 <Button
@@ -2541,34 +2514,34 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 }}
               >
                 <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label="Prize Name"
-                    value={newPrize.name}
-                    onChange={(e) => setNewPrize({ ...newPrize, name: e.target.value })}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={3}>
-                  <TextField
-                    fullWidth
-                    label="Clam Cost"
-                    type="number"
-                    value={newPrize.clam_cost}
-                    onChange={(e) => setNewPrize({ ...newPrize, clam_cost: parseInt(e.target.value) || 0 })}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={3}>
-                  <Button
-                    type="submit"
-                    variant="contained"
-                    disabled={!newPrize.name || newPrize.clam_cost <= 0}
-                    fullWidth
-                    sx={{ height: '56px' }}
-                  >
-                    Add Prize
-                  </Button>
-                </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      fullWidth
+                      label="Prize Name"
+                      value={newPrize.name}
+                      onChange={(e) => setNewPrize({ ...newPrize, name: e.target.value })}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 3 }}>
+                    <TextField
+                      fullWidth
+                      label="Clam Cost"
+                      type="number"
+                      value={newPrize.clam_cost}
+                      onChange={(e) => setNewPrize({ ...newPrize, clam_cost: parseInt(e.target.value) || 0 })}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 3 }}>
+                    <Button
+                      type="submit"
+                      variant="contained"
+                      disabled={!newPrize.name || newPrize.clam_cost <= 0}
+                      fullWidth
+                      sx={{ height: '56px' }}
+                    >
+                      Add Prize
+                    </Button>
+                  </Grid>
                 </Grid>
               </Box>
             </Box>
@@ -2650,7 +2623,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
               </Typography>
 
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <Paper elevation={0} sx={{ p: 2, backgroundColor: 'rgba(0, 0, 0, 0.1)' }}>
                     <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
                       PIN Requirements:
@@ -2667,7 +2640,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                   </Paper>
                 </Grid>
 
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <Paper elevation={0} sx={{ p: 2, backgroundColor: 'rgba(0, 0, 0, 0.1)' }}>
                     <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
                       Current Status:
