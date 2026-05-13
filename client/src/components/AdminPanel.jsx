@@ -74,6 +74,34 @@ import TabIconModal from './TabIconModal';
 import GoogleAccountConnection from './GoogleAccountConnection';
 
 const USERS_UPDATED_EVENT = 'homeglow:users-updated';
+const AUTO_DARK_MODE_STORAGE_KEY = 'autoDarkModeSettings';
+const DEFAULT_AUTO_DARK_MODE_SETTINGS = {
+  enabled: false,
+  locationQuery: '',
+  lat: null,
+  lon: null,
+  resolvedName: '',
+};
+
+const loadAutoDarkModeSettings = () => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(AUTO_DARK_MODE_STORAGE_KEY) || 'null');
+    if (!parsed || typeof parsed !== 'object') {
+      return { ...DEFAULT_AUTO_DARK_MODE_SETTINGS };
+    }
+
+    return {
+      ...DEFAULT_AUTO_DARK_MODE_SETTINGS,
+      ...parsed,
+      locationQuery: (parsed.locationQuery || '').trim(),
+      lat: typeof parsed.lat === 'number' ? parsed.lat : null,
+      lon: typeof parsed.lon === 'number' ? parsed.lon : null,
+      resolvedName: parsed.resolvedName || '',
+    };
+  } catch {
+    return { ...DEFAULT_AUTO_DARK_MODE_SETTINGS };
+  }
+};
 
 const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const [currentDeviceName, setCurrentDeviceName] = useState(() => getDeviceName());
@@ -137,6 +165,15 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       slideshowInterval: 10
     };
   });
+  const [autoDarkModeSettings, setAutoDarkModeSettings] = useState(loadAutoDarkModeSettings);
+  const [isSavingAutoDarkMode, setIsSavingAutoDarkMode] = useState(false);
+  const [autoDarkModeSunTimes, setAutoDarkModeSunTimes] = useState({
+    sunrise: null,
+    sunset: null,
+    timezoneOffset: 0,
+  });
+  const [autoDarkModeSunTimesLoading, setAutoDarkModeSunTimesLoading] = useState(false);
+  const [autoDarkModeSunTimesError, setAutoDarkModeSunTimesError] = useState('');
   const [tabIconModalState, setTabIconModalState] = useState({
     open: false,
     mode: 'create',
@@ -979,6 +1016,201 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     localStorage.setItem('screensaverSettings', JSON.stringify(screensaverSettings));
     setSaveMessage({ show: true, type: 'success', text: 'Screensaver settings saved!' });
     setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+  };
+
+  const resolveAutoDarkModeLocation = async (locationQuery) => {
+    const apiKey = settings.WEATHER_API_KEY?.trim();
+    if (!apiKey) {
+      throw new Error('Please save an OpenWeather API key in the Connections tab first.');
+    }
+
+    const normalized = locationQuery.trim();
+    const directCandidates = [normalized];
+    if (!normalized.includes(',') && /[a-zA-Z]/.test(normalized)) {
+      directCandidates.push(`${normalized},US`);
+    }
+
+    for (const candidate of directCandidates) {
+      const response = await axios.get('https://api.openweathermap.org/geo/1.0/direct', {
+        params: {
+          q: candidate,
+          limit: 1,
+          appid: apiKey,
+        },
+      });
+
+      const first = Array.isArray(response.data) ? response.data[0] : null;
+      if (first && typeof first.lat === 'number' && typeof first.lon === 'number') {
+        const nameParts = [first.name, first.state, first.country].filter(Boolean);
+        return {
+          lat: first.lat,
+          lon: first.lon,
+          resolvedName: nameParts.join(', '),
+        };
+      }
+    }
+
+    const zipPattern = /^[0-9]{3,10}(,[a-zA-Z]{2})?$/;
+    if (zipPattern.test(normalized)) {
+      const zipValue = normalized.includes(',') ? normalized : `${normalized},US`;
+      const response = await axios.get('https://api.openweathermap.org/geo/1.0/zip', {
+        params: {
+          zip: zipValue,
+          appid: apiKey,
+        },
+      });
+
+      if (typeof response?.data?.lat === 'number' && typeof response?.data?.lon === 'number') {
+        const nameParts = [response.data.name, response.data.country].filter(Boolean);
+        return {
+          lat: response.data.lat,
+          lon: response.data.lon,
+          resolvedName: nameParts.join(', '),
+        };
+      }
+    }
+
+    throw new Error('Location not found. Try a city, city/state, city/country, or ZIP code.');
+  };
+
+  const saveAutoDarkModeSettings = async () => {
+    const trimmedLocation = autoDarkModeSettings.locationQuery.trim();
+
+    if (!autoDarkModeSettings.enabled) {
+      const nextSettings = {
+        ...autoDarkModeSettings,
+        locationQuery: trimmedLocation,
+      };
+      localStorage.setItem(AUTO_DARK_MODE_STORAGE_KEY, JSON.stringify(nextSettings));
+      setAutoDarkModeSettings(nextSettings);
+      window.dispatchEvent(new Event('homeglow:auto-darkmode-updated'));
+      setSaveMessage({ show: true, type: 'success', text: 'Auto dark mode disabled.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+      return;
+    }
+
+    if (!settings.WEATHER_API_KEY?.trim()) {
+      setSaveMessage({
+        show: true,
+        type: 'error',
+        text: 'Add and save your OpenWeather API key in Connections before enabling auto dark mode.',
+      });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3500);
+      return;
+    }
+
+    if (!trimmedLocation) {
+      setSaveMessage({
+        show: true,
+        type: 'error',
+        text: 'Enter a location before enabling auto dark mode.',
+      });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+      return;
+    }
+
+    try {
+      setIsSavingAutoDarkMode(true);
+      const resolved = await resolveAutoDarkModeLocation(trimmedLocation);
+      const nextSettings = {
+        ...autoDarkModeSettings,
+        enabled: true,
+        locationQuery: trimmedLocation,
+        lat: resolved.lat,
+        lon: resolved.lon,
+        resolvedName: resolved.resolvedName,
+      };
+
+      localStorage.setItem(AUTO_DARK_MODE_STORAGE_KEY, JSON.stringify(nextSettings));
+      setAutoDarkModeSettings(nextSettings);
+      window.dispatchEvent(new Event('homeglow:auto-darkmode-updated'));
+      setSaveMessage({
+        show: true,
+        type: 'success',
+        text: 'Auto dark mode saved. Use the bottom-bar theme button until the half sun/half moon icon appears.',
+      });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 4500);
+    } catch (error) {
+      console.error('Error saving auto dark mode settings:', error);
+      const message = error?.response?.data?.message || error.message || 'Failed to save auto dark mode settings.';
+      setSaveMessage({ show: true, type: 'error', text: message });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3500);
+    } finally {
+      setIsSavingAutoDarkMode(false);
+    }
+  };
+
+  useEffect(() => {
+    const hasCoordinates = typeof autoDarkModeSettings.lat === 'number' && typeof autoDarkModeSettings.lon === 'number';
+    const apiKey = settings.WEATHER_API_KEY?.trim();
+
+    if (!autoDarkModeSettings.resolvedName || !hasCoordinates || !apiKey) {
+      setAutoDarkModeSunTimes({ sunrise: null, sunset: null, timezoneOffset: 0 });
+      setAutoDarkModeSunTimesError('');
+      setAutoDarkModeSunTimesLoading(false);
+      return;
+    }
+
+    let isCancelled = false;
+    const fetchSunTimes = async () => {
+      setAutoDarkModeSunTimesLoading(true);
+      setAutoDarkModeSunTimesError('');
+
+      try {
+        const response = await axios.get('https://api.openweathermap.org/data/2.5/weather', {
+          params: {
+            lat: autoDarkModeSettings.lat,
+            lon: autoDarkModeSettings.lon,
+            appid: apiKey,
+          },
+        });
+
+        const sunrise = response?.data?.sys?.sunrise;
+        const sunset = response?.data?.sys?.sunset;
+        const timezoneOffset = response?.data?.timezone;
+
+        if (typeof sunrise !== 'number' || typeof sunset !== 'number') {
+          throw new Error('Sunrise and sunset are unavailable for this location.');
+        }
+
+        if (!isCancelled) {
+          setAutoDarkModeSunTimes({
+            sunrise,
+            sunset,
+            timezoneOffset: typeof timezoneOffset === 'number' ? timezoneOffset : 0,
+          });
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          console.error('Error fetching auto dark mode sunrise/sunset:', error);
+          setAutoDarkModeSunTimes({ sunrise: null, sunset: null, timezoneOffset: 0 });
+          setAutoDarkModeSunTimesError('Unable to load today\'s sunrise and sunset.');
+        }
+      } finally {
+        if (!isCancelled) {
+          setAutoDarkModeSunTimesLoading(false);
+        }
+      }
+    };
+
+    void fetchSunTimes();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [autoDarkModeSettings.resolvedName, autoDarkModeSettings.lat, autoDarkModeSettings.lon, settings.WEATHER_API_KEY]);
+
+  const formatAutoDarkModeLocationTime = (unixSeconds, timezoneOffsetSeconds = 0) => {
+    if (typeof unixSeconds !== 'number') {
+      return '--';
+    }
+
+    const shiftedTime = new Date((unixSeconds + timezoneOffsetSeconds) * 1000);
+    return shiftedTime.toLocaleTimeString([], {
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: 'UTC',
+    });
   };
 
   const hasImmichConfigured = photoSources.some(source => source.type === 'Immich' && source.enabled === 1);
@@ -2266,6 +2498,89 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 sx={{ mt: 2 }}
               >
                 Save Screensaver Settings
+              </Button>
+
+              <Divider sx={{ my: 4 }} />
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                <Nightlight />
+                <Typography variant="h6">Daylight Auto Dark Mode</Typography>
+              </Box>
+
+              <Alert severity="info" sx={{ mb: 2 }}>
+                To enable auto mode: save an OpenWeather API key in Connections, enter a location here, save this section, then press the bottom-bar theme button until the half sun/half moon icon appears.
+              </Alert>
+
+              {!settings.WEATHER_API_KEY?.trim() && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  OpenWeather API key is not set yet. Add it in the Connections tab first.
+                </Alert>
+              )}
+
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={autoDarkModeSettings.enabled}
+                    onChange={(e) => {
+                      setAutoDarkModeSettings(prev => ({
+                        ...prev,
+                        enabled: e.target.checked,
+                      }));
+                    }}
+                  />
+                }
+                label="Enable Daylight Auto Dark Mode"
+                sx={{ mb: 2 }}
+              />
+
+              <TextField
+                fullWidth
+                label="Location"
+                value={autoDarkModeSettings.locationQuery}
+                onChange={(e) => {
+                  const nextValue = e.target.value;
+                  setAutoDarkModeSettings(prev => ({
+                    ...prev,
+                    locationQuery: nextValue,
+                  }));
+                }}
+                helperText="Examples: Dallas,TX,US, London,UK, or ZIP code like 76034"
+                sx={{ mb: 2 }}
+              />
+
+              {autoDarkModeSettings.resolvedName && (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      Current resolved location: {autoDarkModeSettings.resolvedName}
+                    </Typography>
+                    {autoDarkModeSunTimesLoading && (
+                      <Typography variant="body2" sx={{ mt: 0.5 }}>
+                        Loading today's sunrise and sunset...
+                      </Typography>
+                    )}
+                    {!autoDarkModeSunTimesLoading && autoDarkModeSunTimes.sunrise && autoDarkModeSunTimes.sunset && (
+                      <Typography variant="body2" sx={{ mt: 0.5 }}>
+                        Today's sunrise: {formatAutoDarkModeLocationTime(autoDarkModeSunTimes.sunrise, autoDarkModeSunTimes.timezoneOffset)} | Sunset: {formatAutoDarkModeLocationTime(autoDarkModeSunTimes.sunset, autoDarkModeSunTimes.timezoneOffset)}
+                      </Typography>
+                    )}
+                    {!autoDarkModeSunTimesLoading && autoDarkModeSunTimesError && (
+                      <Typography variant="body2" sx={{ mt: 0.5 }}>
+                        {autoDarkModeSunTimesError}
+                      </Typography>
+                    )}
+                  </Box>
+                </Alert>
+              )}
+
+              <Button
+                variant="contained"
+                onClick={saveAutoDarkModeSettings}
+                startIcon={<Save />}
+                fullWidth
+                disabled={isSavingAutoDarkMode}
+              >
+                {isSavingAutoDarkMode ? 'Saving Auto Dark Mode...' : 'Save Auto Dark Mode Settings'}
               </Button>
             </Box>
           </CardContent>

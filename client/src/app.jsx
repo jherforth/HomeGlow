@@ -1,7 +1,7 @@
 // client/src/app.jsx
 import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
 import { IconButton, Box, Dialog, DialogContent, Typography } from '@mui/material';
-import { Brightness4, Brightness7, Lock, LockOpen, Close } from '@mui/icons-material';
+import { Brightness4, Brightness6, Brightness7, Lock, LockOpen, Close } from '@mui/icons-material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RefreshIcon from '@mui/icons-material/Refresh';
 
@@ -59,6 +59,34 @@ const ChoreWidget = lazy(loadChoreWidget);
 const TabIconModal = lazy(loadTabIconModal);
 const ScreenSaver = lazy(loadScreenSaver);
 
+const AUTO_DARK_MODE_STORAGE_KEY = 'autoDarkModeSettings';
+const DEFAULT_AUTO_DARK_MODE_SETTINGS = {
+  enabled: false,
+  locationQuery: '',
+  lat: null,
+  lon: null,
+  resolvedName: '',
+};
+
+const loadAutoDarkModeSettings = () => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(AUTO_DARK_MODE_STORAGE_KEY) || 'null');
+    if (!parsed || typeof parsed !== 'object') {
+      return { ...DEFAULT_AUTO_DARK_MODE_SETTINGS };
+    }
+    return {
+      ...DEFAULT_AUTO_DARK_MODE_SETTINGS,
+      ...parsed,
+      locationQuery: (parsed.locationQuery || '').trim(),
+      lat: typeof parsed.lat === 'number' ? parsed.lat : null,
+      lon: typeof parsed.lon === 'number' ? parsed.lon : null,
+      resolvedName: parsed.resolvedName || '',
+    };
+  } catch {
+    return { ...DEFAULT_AUTO_DARK_MODE_SETTINGS };
+  }
+};
+
 const WidgetLoadingFallback = ({ label }) => (
   <Box
     sx={{
@@ -78,6 +106,15 @@ const WidgetLoadingFallback = ({ label }) => (
 const App = () => {
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [theme, setTheme] = useState('light');
+  const [themeMode, setThemeMode] = useState(() => {
+    const savedThemeMode = localStorage.getItem('themeMode');
+    if (savedThemeMode === 'light' || savedThemeMode === 'dark' || savedThemeMode === 'auto') {
+      return savedThemeMode;
+    }
+    const savedTheme = localStorage.getItem('theme');
+    return savedTheme === 'dark' ? 'dark' : 'light';
+  });
+  const [autoDarkModeSettings, setAutoDarkModeSettings] = useState(loadAutoDarkModeSettings);
   const [widgetsLocked, setWidgetsLocked] = useState(() => {
     const saved = localStorage.getItem('widgetsLocked');
     return saved !== null ? JSON.parse(saved) : true;
@@ -117,6 +154,7 @@ const App = () => {
     WEATHER_API_KEY: '',
     ICS_CALENDAR_URL: '',
   });
+  const [apiKeysLoaded, setApiKeysLoaded] = useState(false);
   const [installedPlugins, setInstalledPlugins] = useState([]);
   const [activeTab, setActiveTab] = useState(1);
   const [tabs, setTabs] = useState([]);
@@ -166,6 +204,8 @@ const App = () => {
         setApiKeys(response.data);
       } catch (error) {
         console.error('Error fetching API keys:', error);
+      } finally {
+        setApiKeysLoaded(true);
       }
     };
     fetchApiKeys();
@@ -210,20 +250,133 @@ const App = () => {
     }
   };
 
+  const applyTheme = useCallback((nextTheme) => {
+    setTheme(nextTheme);
+    document.documentElement.setAttribute('data-theme', nextTheme);
+    localStorage.setItem('theme', nextTheme);
+
+    if (nextTheme === 'light') {
+      const savedSettings = localStorage.getItem('widgetSettings');
+      const parsed = savedSettings ? JSON.parse(savedSettings) : {};
+      const primaryColor = parsed.primary || '#f5f5f5';
+      document.documentElement.style.setProperty('--background', primaryColor);
+      return;
+    }
+
+    document.documentElement.style.removeProperty('--background');
+  }, []);
+
+  const resolveAutoTheme = useCallback(async () => {
+    const hasCoordinates = typeof autoDarkModeSettings.lat === 'number' && typeof autoDarkModeSettings.lon === 'number';
+    if (!autoDarkModeSettings.enabled || !apiKeys.WEATHER_API_KEY || !hasCoordinates) {
+      return null;
+    }
+
+    try {
+      const response = await axios.get('https://api.openweathermap.org/data/2.5/weather', {
+        params: {
+          lat: autoDarkModeSettings.lat,
+          lon: autoDarkModeSettings.lon,
+          appid: apiKeys.WEATHER_API_KEY,
+        },
+      });
+
+      const sunrise = response?.data?.sys?.sunrise;
+      const sunset = response?.data?.sys?.sunset;
+      if (typeof sunrise !== 'number' || typeof sunset !== 'number') {
+        return null;
+      }
+
+      const nowUnix = Math.floor(Date.now() / 1000);
+      return nowUnix >= sunrise && nowUnix < sunset ? 'light' : 'dark';
+    } catch (error) {
+      console.error('Error resolving auto theme:', error);
+      return null;
+    }
+  }, [autoDarkModeSettings, apiKeys.WEATHER_API_KEY]);
+
+  const applyAutoThemeNow = useCallback(async () => {
+    const resolvedTheme = await resolveAutoTheme();
+    if (resolvedTheme) {
+      applyTheme(resolvedTheme);
+    }
+  }, [resolveAutoTheme, applyTheme]);
+
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-    setTheme(savedTheme);
-    document.documentElement.setAttribute('data-theme', savedTheme);
+    const savedThemeMode = localStorage.getItem('themeMode');
+    const initialMode = (savedThemeMode === 'light' || savedThemeMode === 'dark' || savedThemeMode === 'auto')
+      ? savedThemeMode
+      : savedTheme;
 
-    if (savedTheme === 'light') {
-      const savedSettings = localStorage.getItem('widgetSettings');
-      if (savedSettings) {
-        const parsed = JSON.parse(savedSettings);
-        const primaryColor = parsed.primary || '#f5f5f5';
-        document.documentElement.style.setProperty('--background', primaryColor);
-      }
-    }
+    setThemeMode(initialMode);
+    localStorage.setItem('themeMode', initialMode);
+    applyTheme(savedTheme);
+  }, [applyTheme]);
+
+  useEffect(() => {
+    const handleAutoDarkModeUpdate = () => {
+      setAutoDarkModeSettings(loadAutoDarkModeSettings());
+    };
+
+    window.addEventListener('homeglow:auto-darkmode-updated', handleAutoDarkModeUpdate);
+    return () => {
+      window.removeEventListener('homeglow:auto-darkmode-updated', handleAutoDarkModeUpdate);
+    };
   }, []);
+
+  useEffect(() => {
+    if (themeMode !== 'auto') {
+      return;
+    }
+
+    let isMounted = true;
+    const refresh = async () => {
+      const resolvedTheme = await resolveAutoTheme();
+      if (!isMounted || !resolvedTheme) {
+        return;
+      }
+      applyTheme(resolvedTheme);
+    };
+
+    void refresh();
+    const intervalId = setInterval(() => {
+      void refresh();
+    }, 15 * 60 * 1000);
+
+    const handleFocus = () => {
+      void refresh();
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void refresh();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [themeMode, resolveAutoTheme, applyTheme]);
+
+  useEffect(() => {
+    if (!apiKeysLoaded || themeMode !== 'auto') {
+      return;
+    }
+
+    const hasCoordinates = typeof autoDarkModeSettings.lat === 'number' && typeof autoDarkModeSettings.lon === 'number';
+    const autoModeAvailable = autoDarkModeSettings.enabled && Boolean(apiKeys.WEATHER_API_KEY) && hasCoordinates;
+    if (!autoModeAvailable) {
+      const fallbackMode = theme === 'dark' ? 'dark' : 'light';
+      setThemeMode(fallbackMode);
+      localStorage.setItem('themeMode', fallbackMode);
+    }
+  }, [apiKeysLoaded, themeMode, autoDarkModeSettings, apiKeys.WEATHER_API_KEY, theme]);
 
   useEffect(() => {
     document.documentElement.style.setProperty('--light-gradient-start', widgetSettings.lightGradientStart);
@@ -346,19 +499,22 @@ const App = () => {
   }, []);
 
   const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(newTheme);
-    document.documentElement.setAttribute('data-theme', newTheme);
-    localStorage.setItem('theme', newTheme);
+    const hasCoordinates = typeof autoDarkModeSettings.lat === 'number' && typeof autoDarkModeSettings.lon === 'number';
+    const includeAutoMode = autoDarkModeSettings.enabled && hasCoordinates && (Boolean(apiKeys.WEATHER_API_KEY) || !apiKeysLoaded);
+    const themeModes = includeAutoMode ? ['light', 'dark', 'auto'] : ['light', 'dark'];
 
-    if (newTheme === 'light') {
-      const savedSettings = localStorage.getItem('widgetSettings');
-      const parsed = savedSettings ? JSON.parse(savedSettings) : {};
-      const primaryColor = parsed.primary || '#f5f5f5';
-      document.documentElement.style.setProperty('--background', primaryColor);
-    } else {
-      document.documentElement.style.removeProperty('--background');
+    const currentIndex = themeModes.includes(themeMode) ? themeModes.indexOf(themeMode) : 0;
+    const nextMode = themeModes[(currentIndex + 1) % themeModes.length];
+
+    setThemeMode(nextMode);
+    localStorage.setItem('themeMode', nextMode);
+
+    if (nextMode === 'auto') {
+      void applyAutoThemeNow();
+      return;
     }
+
+    applyTheme(nextMode);
   };
 
   const toggleWidgetsLock = () => {
@@ -378,6 +534,8 @@ const App = () => {
       if (savedScreensaver) {
         setScreensaverSettings(JSON.parse(savedScreensaver));
       }
+
+      setAutoDarkModeSettings(loadAutoDarkModeSettings());
     }
     setShowAdminPanel(!showAdminPanel);
   };
@@ -669,12 +827,12 @@ const App = () => {
         }}>
           <IconButton
             onClick={toggleTheme}
-            aria-label="Toggle theme"
+            aria-label="Cycle theme mode"
             sx={{
               color: theme === 'light' ? 'action.active' : 'white',
             }}
           >
-            {theme === 'light' ? <Brightness4 /> : <Brightness7 />}
+            {themeMode === 'auto' ? <Brightness6 /> : (theme === 'light' ? <Brightness4 /> : <Brightness7 />)}
           </IconButton>
 
           <IconButton
