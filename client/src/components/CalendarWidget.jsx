@@ -32,6 +32,17 @@ const WEEKDAY_INDEX = {
   saturday: 6,
 };
 
+const DEFAULT_MONTH_VIEW_DAYS_TO_SHOW = 28;
+const DEFAULT_MONTH_VIEW_DAYS_PER_ROW = 7;
+
+const clampInteger = (value, min, max, fallback) => {
+  const parsed = Number.parseInt(value, 10);
+  if (Number.isNaN(parsed)) {
+    return fallback;
+  }
+  return Math.min(max, Math.max(min, parsed));
+};
+
 const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   const [events, setEvents] = useState([]);
   const [upcomingEvents, setUpcomingEvents] = useState([]);
@@ -62,7 +73,9 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
     if (!saved) {
       return {
         weekViewStart: 'today',
-        monthViewStart: 'sunday'
+        monthViewStart: 'sunday',
+        monthViewDaysToShow: DEFAULT_MONTH_VIEW_DAYS_TO_SHOW,
+        monthViewDaysPerRow: DEFAULT_MONTH_VIEW_DAYS_PER_ROW,
       };
     }
 
@@ -70,12 +83,16 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
       const parsed = JSON.parse(saved);
       return {
         weekViewStart: parsed.weekViewStart || 'today',
-        monthViewStart: parsed.monthViewStart || 'sunday'
+        monthViewStart: parsed.monthViewStart || 'sunday',
+        monthViewDaysToShow: clampInteger(parsed.monthViewDaysToShow, 1, 32, DEFAULT_MONTH_VIEW_DAYS_TO_SHOW),
+        monthViewDaysPerRow: clampInteger(parsed.monthViewDaysPerRow, 1, 14, DEFAULT_MONTH_VIEW_DAYS_PER_ROW),
       };
     } catch {
       return {
         weekViewStart: 'today',
-        monthViewStart: 'sunday'
+        monthViewStart: 'sunday',
+        monthViewDaysToShow: DEFAULT_MONTH_VIEW_DAYS_TO_SHOW,
+        monthViewDaysPerRow: DEFAULT_MONTH_VIEW_DAYS_PER_ROW,
       };
     }
   });
@@ -106,6 +123,9 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   const [syncStatus, setSyncStatus] = useState({});
   const [syncIntervals, setSyncIntervals] = useState({});
   const [isSyncing, setIsSyncing] = useState({});
+  const monthViewDaysToShow = clampInteger(dayOfWeekSettings.monthViewDaysToShow, 1, 32, DEFAULT_MONTH_VIEW_DAYS_TO_SHOW);
+  const monthViewDaysPerRow = clampInteger(dayOfWeekSettings.monthViewDaysPerRow, 1, 14, DEFAULT_MONTH_VIEW_DAYS_PER_ROW);
+  const isRollingMonthView = dayOfWeekSettings.monthViewStart === 'today' || dayOfWeekSettings.monthViewStart === 'yesterday';
 
   const syncIntervalOptions = [
     { label: 'Disabled', value: 0 },
@@ -816,7 +836,11 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   const handlePreviousPeriod = () => {
     if (viewMode === 'month') {
       const newDate = new Date(currentDate);
-      newDate.setMonth(newDate.getMonth() - 1);
+      if (isRollingMonthView) {
+        newDate.setDate(newDate.getDate() - monthViewDaysToShow);
+      } else {
+        newDate.setMonth(newDate.getMonth() - 1);
+      }
       setCurrentDate(newDate);
     } else {
       const newDate = new Date(currentDate);
@@ -828,7 +852,11 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   const handleNextPeriod = () => {
     if (viewMode === 'month') {
       const newDate = new Date(currentDate);
-      newDate.setMonth(newDate.getMonth() + 1);
+      if (isRollingMonthView) {
+        newDate.setDate(newDate.getDate() + monthViewDaysToShow);
+      } else {
+        newDate.setMonth(newDate.getMonth() + 1);
+      }
       setCurrentDate(newDate);
     } else {
       const newDate = new Date(currentDate);
@@ -839,6 +867,23 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
   const getCurrentPeriodLabel = () => {
     if (viewMode === 'month') {
+      if (isRollingMonthView) {
+        const start = dayOfWeekSettings.monthViewStart === 'yesterday'
+          ? moment(currentDate).startOf('day').subtract(1, 'day')
+          : moment(currentDate).startOf('day');
+        const end = start.clone().add(monthViewDaysToShow - 1, 'days');
+
+        if (start.year() !== end.year()) {
+          return `${start.format('MMM D, YYYY')} - ${end.format('MMM D, YYYY')}`;
+        }
+
+        if (start.month() === end.month()) {
+          return `${start.format('MMM D')}-${end.format('D, YYYY')}`;
+        }
+
+        return `${start.format('MMM D')} - ${end.format('MMM D, YYYY')}`;
+      }
+
       return moment(currentDate).format('MMMM YYYY');
     } else {
       const startOfWeek = getWeekStartDate();
@@ -954,49 +999,86 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
       {viewMode === 'month' ? (
         <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, mb: 1 }}>
-            {(() => {
-              if (dayOfWeekSettings.monthViewStart === 'first-day-of-month') {
-                const monthStart = moment(currentDate).startOf('month');
+          {(() => {
+            const monthStart = moment(currentDate).startOf('month');
+            const monthEnd = moment(currentDate).endOf('month');
+            const isFirstDayOfMonthMode = dayOfWeekSettings.monthViewStart === 'first-day-of-month';
+            const monthColumns = isRollingMonthView ? monthViewDaysPerRow : 7;
+            const rollingStartDate = dayOfWeekSettings.monthViewStart === 'yesterday'
+              ? moment(currentDate).startOf('day').subtract(1, 'day')
+              : moment(currentDate).startOf('day');
+
+            const headerLabels = (() => {
+              if (isRollingMonthView) {
+                return Array.from({ length: monthColumns }, (_, idx) => rollingStartDate.clone().add(idx, 'days').format('ddd'));
+              }
+
+              if (isFirstDayOfMonthMode) {
                 return Array.from({ length: 7 }, (_, idx) => monthStart.clone().add(idx, 'days').format('ddd'));
               }
 
               const firstDayIndex = WEEKDAY_INDEX[dayOfWeekSettings.monthViewStart] ?? 0;
               return Array.from({ length: 7 }, (_, idx) => WEEKDAY_LABELS[(firstDayIndex + idx) % 7]);
-            })().map((day) => (
-              <Box key={day} sx={{ textAlign: 'center', fontWeight: 'bold', py: 1 }}>
-                <Typography variant="caption">{day}</Typography>
-              </Box>
-            ))}
-          </Box>
-
-          {(() => {
-            const monthStart = moment(currentDate).startOf('month');
-            const monthEnd = moment(currentDate).endOf('month');
-            const isFirstDayOfMonthMode = dayOfWeekSettings.monthViewStart === 'first-day-of-month';
-
-            const startDate = (() => {
-              if (isFirstDayOfMonthMode) {
-                return monthStart.clone();
-              }
-
-              const firstDayIndex = WEEKDAY_INDEX[dayOfWeekSettings.monthViewStart] ?? 0;
-              const offset = (monthStart.day() - firstDayIndex + 7) % 7;
-              return monthStart.clone().subtract(offset, 'days');
             })();
 
-            const endDate = (() => {
-              if (isFirstDayOfMonthMode) {
-                return monthEnd.clone();
+            const rows = (() => {
+              if (isRollingMonthView) {
+                const totalRows = Math.ceil(monthViewDaysToShow / monthColumns);
+                return Array.from({ length: totalRows }, (_, rowIdx) => {
+                  const rowDates = Array.from({ length: monthColumns }, (_, colIdx) => {
+                    const offset = rowIdx * monthColumns + colIdx;
+                    if (offset >= monthViewDaysToShow) {
+                      return null;
+                    }
+                    return rollingStartDate.clone().add(offset, 'days');
+                  });
+
+                  const firstValidDay = rowDates.find(Boolean);
+                  return {
+                    rowDates,
+                    rowKey: firstValidDay ? firstValidDay.format('YYYY-MM-DD') : `rolling-row-${rowIdx}`,
+                  };
+                });
               }
 
-              const firstDayIndex = WEEKDAY_INDEX[dayOfWeekSettings.monthViewStart] ?? 0;
-              const lastColumnDay = (firstDayIndex + 6) % 7;
-              const trailing = (lastColumnDay - monthEnd.day() + 7) % 7;
-              return monthEnd.clone().add(trailing, 'days');
-            })();
+              const startDate = (() => {
+                if (isFirstDayOfMonthMode) {
+                  return monthStart.clone();
+                }
 
-            const numWeeks = Math.ceil((endDate.diff(startDate, 'days') + 1) / 7);
+                const firstDayIndex = WEEKDAY_INDEX[dayOfWeekSettings.monthViewStart] ?? 0;
+                const offset = (monthStart.day() - firstDayIndex + 7) % 7;
+                return monthStart.clone().subtract(offset, 'days');
+              })();
+
+              const endDate = (() => {
+                if (isFirstDayOfMonthMode) {
+                  return monthEnd.clone();
+                }
+
+                const firstDayIndex = WEEKDAY_INDEX[dayOfWeekSettings.monthViewStart] ?? 0;
+                const lastColumnDay = (firstDayIndex + 6) % 7;
+                const trailing = (lastColumnDay - monthEnd.day() + 7) % 7;
+                return monthEnd.clone().add(trailing, 'days');
+              })();
+
+              const totalRows = Math.ceil((endDate.diff(startDate, 'days') + 1) / 7);
+              return Array.from({ length: totalRows }, (_, rowIdx) => {
+                const rowDates = Array.from({ length: 7 }, (_, colIdx) => {
+                  const day = startDate.clone().add(rowIdx * 7 + colIdx, 'days');
+                  if (isFirstDayOfMonthMode && day.isAfter(monthEnd, 'day')) {
+                    return null;
+                  }
+                  return day;
+                });
+
+                const firstValidDay = rowDates.find(Boolean);
+                return {
+                  rowDates,
+                  rowKey: firstValidDay ? firstValidDay.format('YYYY-MM-DD') : `month-row-${rowIdx}`,
+                };
+              });
+            })();
 
             const isMultiDaySpanning = (event) => {
               return event.all_day
@@ -1004,23 +1086,14 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                 : !moment(event.start).isSame(moment(event.end), 'day');
             };
 
-            const weeks = [];
-            for (let w = 0; w < numWeeks; w++) {
-              const weekDates = [];
-              for (let d = 0; d < 7; d++) {
-                const day = startDate.clone().add(w * 7 + d, 'days');
-                if (isFirstDayOfMonthMode && day.isAfter(monthEnd, 'day')) {
-                  weekDates.push(null);
-                } else {
-                  weekDates.push(day);
-                }
-              }
-              const validWeekDates = weekDates.filter(Boolean);
-              const weekStart = validWeekDates[0] || startDate;
-              const weekEnd = validWeekDates[validWeekDates.length - 1] || weekStart;
+            const allWeekCells = [];
+            rows.forEach(({ rowDates, rowKey }) => {
+              const validRowDates = rowDates.filter(Boolean);
+              const rowStart = validRowDates[0] || rollingStartDate;
+              const rowEnd = validRowDates[validRowDates.length - 1] || rowStart;
 
-              const weekMultiDayEvents = events
-                .filter(e => isMultiDaySpanning(e) && moment(e.start).isSameOrBefore(weekEnd.clone().endOf('day')) && moment(e.end).isSameOrAfter(weekStart.clone().startOf('day')))
+              const rowMultiDayEvents = events
+                .filter(e => isMultiDaySpanning(e) && moment(e.start).isSameOrBefore(rowEnd.clone().endOf('day')) && moment(e.end).isSameOrAfter(rowStart.clone().startOf('day')))
                 .sort((a, b) => {
                   const aDur = moment(a.end).diff(moment(a.start), 'days');
                   const bDur = moment(b.end).diff(moment(b.start), 'days');
@@ -1029,37 +1102,36 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                 });
 
               const slots = [];
-              weekMultiDayEvents.forEach(event => {
+              rowMultiDayEvents.forEach(event => {
                 let placed = false;
                 for (let s = 0; s < slots.length; s++) {
                   const overlaps = slots[s].some(se =>
                     moment(event.start).isBefore(moment(se.end)) && moment(event.end).isAfter(moment(se.start))
                   );
-                  if (!overlaps) { slots[s].push(event); placed = true; break; }
+                  if (!overlaps) {
+                    slots[s].push(event);
+                    placed = true;
+                    break;
+                  }
                 }
                 if (!placed) slots.push([event]);
               });
 
               const multiDaySlotCount = slots.length;
-              const getSlot = (event) => { for (let s = 0; s < slots.length; s++) if (slots[s].includes(event)) return s; return -1; };
+              const getSlot = (event) => {
+                for (let s = 0; s < slots.length; s++) {
+                  if (slots[s].includes(event)) {
+                    return s;
+                  }
+                }
+                return -1;
+              };
 
-              weeks.push({
-                weekDates,
-                weekMultiDayEvents,
-                slots,
-                multiDaySlotCount,
-                getSlot,
-                weekKey: weekStart.format('YYYY-MM-DD')
-              });
-            }
-
-            const allWeekCells = [];
-            weeks.forEach(({ weekDates, weekMultiDayEvents, multiDaySlotCount, getSlot, weekKey }) => {
-              weekDates.forEach((day, dayIdx) => {
+              rowDates.forEach((day, dayIdx) => {
                 if (!day) {
                   allWeekCells.push(
                     <Box
-                      key={`empty-${weekKey}-${dayIdx}`}
+                      key={`empty-${rowKey}-${dayIdx}`}
                       sx={{
                         border: '1px solid var(--card-border)',
                         borderRadius: 1,
@@ -1071,10 +1143,10 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                 }
 
                 const dayDate = day.toDate();
-                const isCurrentMonth = day.month() === moment(currentDate).month();
+                const isCurrentMonth = isRollingMonthView ? true : day.month() === moment(currentDate).month();
                 const isToday = day.isSame(moment(), 'day');
 
-                const dayMultiDay = weekMultiDayEvents.filter(e => eventSpansDay(e, dayDate));
+                const dayMultiDay = rowMultiDayEvents.filter(e => eventSpansDay(e, dayDate));
                 const multiDaySlottedRows = Array(multiDaySlotCount).fill(null).map((_, slotIdx) =>
                   dayMultiDay.find(e => getSlot(e) === slotIdx) || null
                 );
@@ -1111,16 +1183,26 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
             });
 
             return (
-              <Box sx={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(7, 1fr)',
-                gridTemplateRows: `repeat(${numWeeks}, 1fr)`,
-                gap: 1,
-                flex: 1,
-                minHeight: 0
-              }}>
-                {allWeekCells}
-              </Box>
+              <>
+                <Box sx={{ display: 'grid', gridTemplateColumns: `repeat(${monthColumns}, 1fr)`, gap: 1, mb: 1 }}>
+                  {headerLabels.map((day, idx) => (
+                    <Box key={`${day}-${idx}`} sx={{ textAlign: 'center', fontWeight: 'bold', py: 1 }}>
+                      <Typography variant="caption">{day}</Typography>
+                    </Box>
+                  ))}
+                </Box>
+
+                <Box sx={{
+                  display: 'grid',
+                  gridTemplateColumns: `repeat(${monthColumns}, 1fr)`,
+                  gridTemplateRows: `repeat(${rows.length}, 1fr)`,
+                  gap: 1,
+                  flex: 1,
+                  minHeight: 0
+                }}>
+                  {allWeekCells}
+                </Box>
+              </>
             );
           })()}
         </Box>
@@ -1756,8 +1838,56 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
                   <MenuItem key={`month-${opt.value}`} value={opt.value}>{opt.label}</MenuItem>
                 ))}
                 <MenuItem value="first-day-of-month">1st day of month</MenuItem>
+                <MenuItem value="yesterday">Yesterday</MenuItem>
+                <MenuItem value="today">Today</MenuItem>
               </Select>
             </FormControl>
+
+            {(dayOfWeekSettings.monthViewStart === 'today' || dayOfWeekSettings.monthViewStart === 'yesterday') && (
+              <>
+                <TextField
+                  fullWidth
+                  size="small"
+                  type="number"
+                  label="Days to show"
+                  value={monthViewDaysToShow}
+                  onChange={(e) => {
+                    const nextValue = clampInteger(e.target.value, 1, 32, DEFAULT_MONTH_VIEW_DAYS_TO_SHOW);
+                    setDayOfWeekSettings(prev => ({ ...prev, monthViewDaysToShow: nextValue }));
+                  }}
+                  sx={{ mt: 1 }}
+                  slotProps={{
+                    htmlInput: {
+                      min: 1,
+                      max: 32,
+                      step: 1,
+                    }
+                  }}
+                  helperText="Range: 1-32"
+                />
+
+                <TextField
+                  fullWidth
+                  size="small"
+                  type="number"
+                  label="Days per row"
+                  value={monthViewDaysPerRow}
+                  onChange={(e) => {
+                    const nextValue = clampInteger(e.target.value, 1, 14, DEFAULT_MONTH_VIEW_DAYS_PER_ROW);
+                    setDayOfWeekSettings(prev => ({ ...prev, monthViewDaysPerRow: nextValue }));
+                  }}
+                  sx={{ mt: 1 }}
+                  slotProps={{
+                    htmlInput: {
+                      min: 1,
+                      max: 14,
+                      step: 1,
+                    }
+                  }}
+                  helperText="Range: 1-14"
+                />
+              </>
+            )}
           </Box>
 
           <Divider sx={{ my: 2 }} />
