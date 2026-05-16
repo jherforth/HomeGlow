@@ -978,15 +978,8 @@ function sendJsonWithConditionalCache(request, reply, payload, lastModifiedMs = 
     return reply.code(304).send();
   }
 
-  if (lastModifiedMs) {
-    const ifModifiedSince = request.headers['if-modified-since'];
-    if (ifModifiedSince) {
-      const ifModifiedSinceMs = Date.parse(ifModifiedSince);
-      if (Number.isFinite(ifModifiedSinceMs) && ifModifiedSinceMs >= lastModifiedMs) {
-        return reply.code(304).send();
-      }
-    }
-  }
+  // Use ETag validators only. Last-Modified has second-level precision and can
+  // incorrectly produce 304 responses when multiple writes happen within a second.
 
   return reply.send(payload);
 }
@@ -2603,9 +2596,19 @@ fastify.patch('/api/devices/:deviceName/widget-assignments/layout', async (reque
     return reply.status(400).send({ error: 'deviceName is required' });
   }
   const { widget_name, tabNumber, layout_x, layout_y, layout_w, layout_h, settings } = request.body;
+  const hasLayoutUpdates = [layout_x, layout_y, layout_w, layout_h].some((value) => value !== undefined);
+  const hasSettingsField = settings !== undefined;
 
   if (!widget_name || !tabNumber) {
     return reply.status(400).send({ error: 'widget_name and tabNumber are required' });
+  }
+
+  if (!hasLayoutUpdates && !hasSettingsField) {
+    return reply.status(400).send({ error: 'Request must include layout fields or settings object' });
+  }
+
+  if (hasSettingsField && (!settings || typeof settings !== 'object' || Array.isArray(settings))) {
+    return reply.status(400).send({ error: 'settings must be a JSON object when provided' });
   }
 
   try {

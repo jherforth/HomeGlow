@@ -42,6 +42,7 @@ const DEFAULT_CALENDAR_EVENT_COLORS = {
 const DEFAULT_CALENDAR_DISPLAY_SETTINGS = {
   textSize: 12,
   bulletSize: 10,
+  showStartTimes: true,
 };
 const DEFAULT_CALENDAR_DAY_OF_WEEK_SETTINGS = {
   weekViewStart: 'today',
@@ -59,6 +60,8 @@ const clampInteger = (value, min, max, fallback) => {
 };
 
 const TAB_CALENDAR_VIEW_MODES = new Set(['month', 'week']);
+const VALID_WEEK_VIEW_STARTS = new Set(['today', 'yesterday', ...WEEKDAY_OPTIONS.map((option) => option.value)]);
+const VALID_MONTH_VIEW_STARTS = new Set(['today', 'yesterday', 'first-day-of-month', ...WEEKDAY_OPTIONS.map((option) => option.value)]);
 
 const parseTabConfigJson = (configJson) => {
   if (!configJson) return {};
@@ -78,6 +81,44 @@ const readCalendarViewModeFromTabConfig = (configJson) => {
   const calendarEntry = layoutMap.calendar;
   const candidateViewMode = calendarEntry && typeof calendarEntry === 'object' ? calendarEntry.viewMode : null;
   return TAB_CALENDAR_VIEW_MODES.has(candidateViewMode) ? candidateViewMode : null;
+};
+
+const readCalendarTabSpecificSettingsFromTabConfig = (configJson) => {
+  const layoutMap = parseTabConfigJson(configJson);
+  const calendarEntry = layoutMap.calendar;
+  if (!calendarEntry || typeof calendarEntry !== 'object' || Array.isArray(calendarEntry)) {
+    return null;
+  }
+
+  return {
+    dayOfWeekSettings: {
+      weekViewStart: VALID_WEEK_VIEW_STARTS.has(calendarEntry.weekViewStart)
+        ? calendarEntry.weekViewStart
+        : DEFAULT_CALENDAR_DAY_OF_WEEK_SETTINGS.weekViewStart,
+      monthViewStart: VALID_MONTH_VIEW_STARTS.has(calendarEntry.monthViewStart)
+        ? calendarEntry.monthViewStart
+        : DEFAULT_CALENDAR_DAY_OF_WEEK_SETTINGS.monthViewStart,
+      monthViewDaysToShow: clampInteger(
+        calendarEntry.monthViewDaysToShow,
+        1,
+        32,
+        DEFAULT_MONTH_VIEW_DAYS_TO_SHOW,
+      ),
+      monthViewDaysPerRow: clampInteger(
+        calendarEntry.monthViewDaysPerRow,
+        1,
+        14,
+        DEFAULT_MONTH_VIEW_DAYS_PER_ROW,
+      ),
+    },
+    displaySettings: {
+      textSize: clampInteger(calendarEntry.textSize, 8, 24, DEFAULT_CALENDAR_DISPLAY_SETTINGS.textSize),
+      bulletSize: clampInteger(calendarEntry.bulletSize, 4, 20, DEFAULT_CALENDAR_DISPLAY_SETTINGS.bulletSize),
+      showStartTimes: typeof calendarEntry.showStartTimes === 'boolean'
+        ? calendarEntry.showStartTimes
+        : DEFAULT_CALENDAR_DISPLAY_SETTINGS.showStartTimes,
+    },
+  };
 };
 
 const CalendarWidget = ({
@@ -186,22 +227,6 @@ const CalendarWidget = ({
             ...settings.eventColors,
           });
         }
-
-        if (settings.displaySettings && typeof settings.displaySettings === 'object') {
-          setDisplaySettings({
-            ...DEFAULT_CALENDAR_DISPLAY_SETTINGS,
-            ...settings.displaySettings,
-          });
-        }
-
-        if (settings.dayOfWeekSettings && typeof settings.dayOfWeekSettings === 'object') {
-          setDayOfWeekSettings({
-            ...DEFAULT_CALENDAR_DAY_OF_WEEK_SETTINGS,
-            ...settings.dayOfWeekSettings,
-            monthViewDaysToShow: clampInteger(settings.dayOfWeekSettings.monthViewDaysToShow, 1, 32, DEFAULT_MONTH_VIEW_DAYS_TO_SHOW),
-            monthViewDaysPerRow: clampInteger(settings.dayOfWeekSettings.monthViewDaysPerRow, 1, 14, DEFAULT_MONTH_VIEW_DAYS_PER_ROW),
-          });
-        }
       } catch (error) {
         console.error('Error loading calendar widget settings:', error);
       } finally {
@@ -222,12 +247,6 @@ const CalendarWidget = ({
         await axios.patch(`${API_DEVICE_URL}/settings`, {
           calendarWidgetSettings: {
             eventColors,
-            displaySettings,
-            dayOfWeekSettings: {
-              ...dayOfWeekSettings,
-              monthViewDaysToShow,
-              monthViewDaysPerRow,
-            },
           },
         });
       } catch (error) {
@@ -241,15 +260,14 @@ const CalendarWidget = ({
     API_DEVICE_URL,
     calendarSettingsLoaded,
     eventColors,
-    displaySettings,
-    dayOfWeekSettings,
-    monthViewDaysToShow,
-    monthViewDaysPerRow,
   ]);
 
   useEffect(() => {
     const inMemoryViewMode = readCalendarViewModeFromTabConfig(activeTabConfigJson);
+    const inMemoryTabSettings = readCalendarTabSpecificSettingsFromTabConfig(activeTabConfigJson);
     setViewMode(inMemoryViewMode || 'month');
+    setDayOfWeekSettings(inMemoryTabSettings?.dayOfWeekSettings || { ...DEFAULT_CALENDAR_DAY_OF_WEEK_SETTINGS });
+    setDisplaySettings(inMemoryTabSettings?.displaySettings || { ...DEFAULT_CALENDAR_DISPLAY_SETTINGS });
   }, [activeTab, activeTabConfigJson]);
 
   useEffect(() => {
@@ -261,9 +279,12 @@ const CalendarWidget = ({
         const tabs = Array.isArray(response.data) ? response.data : [];
         const activeTabRow = tabs.find((tab) => Number(tab.number) === Number(activeTab));
         const dbViewMode = readCalendarViewModeFromTabConfig(activeTabRow?.config_json || null);
+        const dbTabSettings = readCalendarTabSpecificSettingsFromTabConfig(activeTabRow?.config_json || null);
 
         if (!cancelled) {
           setViewMode(dbViewMode || 'month');
+          setDayOfWeekSettings(dbTabSettings?.dayOfWeekSettings || { ...DEFAULT_CALENDAR_DAY_OF_WEEK_SETTINGS });
+          setDisplaySettings(dbTabSettings?.displaySettings || { ...DEFAULT_CALENDAR_DISPLAY_SETTINGS });
         }
       } catch {
         // Best effort only. Keep current UI mode when DB refresh fails.
@@ -291,6 +312,41 @@ const CalendarWidget = ({
       console.debug('Calendar tab view mode persistence failed:', error);
     }
   };
+
+  const persistTabSpecificSettingsForTab = async (tabNumber, nextDayOfWeekSettings, nextDisplaySettings) => {
+    try {
+      await axios.patch(`${API_DEVICE_URL}/widget-assignments/layout`, {
+        widget_name: 'calendar',
+        tabNumber,
+        settings: {
+          weekViewStart: nextDayOfWeekSettings.weekViewStart,
+          monthViewStart: nextDayOfWeekSettings.monthViewStart,
+          monthViewDaysToShow: clampInteger(nextDayOfWeekSettings.monthViewDaysToShow, 1, 32, DEFAULT_MONTH_VIEW_DAYS_TO_SHOW),
+          monthViewDaysPerRow: clampInteger(nextDayOfWeekSettings.monthViewDaysPerRow, 1, 14, DEFAULT_MONTH_VIEW_DAYS_PER_ROW),
+          textSize: clampInteger(nextDisplaySettings.textSize, 8, 24, DEFAULT_CALENDAR_DISPLAY_SETTINGS.textSize),
+          bulletSize: clampInteger(nextDisplaySettings.bulletSize, 4, 20, DEFAULT_CALENDAR_DISPLAY_SETTINGS.bulletSize),
+          showStartTimes: typeof nextDisplaySettings.showStartTimes === 'boolean'
+            ? nextDisplaySettings.showStartTimes
+            : DEFAULT_CALENDAR_DISPLAY_SETTINGS.showStartTimes,
+        },
+      });
+    } catch (error) {
+      // Non-blocking preference persistence.
+      console.debug('Calendar tab-specific settings persistence failed:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTabConfigJson == null) {
+      return undefined;
+    }
+
+    const timeoutId = setTimeout(() => {
+      void persistTabSpecificSettingsForTab(activeTab, dayOfWeekSettings, displaySettings);
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [API_DEVICE_URL, activeTab, activeTabConfigJson, dayOfWeekSettings, displaySettings]);
 
   const fetchCalendarSources = async () => {
     try {
@@ -1464,10 +1520,20 @@ const CalendarWidget = ({
                             }}
                           />
                           <Box sx={{ flex: 1, minWidth: 0 }}>
-                            <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block', fontSize: `${displaySettings.textSize}px` }}>
-                              {moment(event.start).format('h:mm A')}
-                            </Typography>
-                            <Typography variant="caption" sx={{ display: 'block', lineHeight: 1.2, fontSize: `${displaySettings.textSize}px` }}>
+                            {displaySettings.showStartTimes && (
+                              <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block', fontSize: `${displaySettings.textSize}px` }}>
+                                {moment(event.start).format('h:mm A')}
+                              </Typography>
+                            )}
+                            <Typography variant="caption" sx={{
+                              display: 'block',
+                              lineHeight: 1.2,
+                              fontSize: `${displaySettings.textSize}px`,
+                              whiteSpace: displaySettings.showStartTimes ? 'normal' : 'nowrap',
+                              overflow: displaySettings.showStartTimes ? 'visible' : 'hidden',
+                              textOverflow: displaySettings.showStartTimes ? 'clip' : 'ellipsis',
+                              overflowWrap: displaySettings.showStartTimes ? 'anywhere' : 'normal',
+                            }}>
                               {event.title}
                             </Typography>
                           </Box>
@@ -1886,7 +1952,7 @@ const CalendarWidget = ({
 
           <Divider sx={{ my: 2 }} />
 
-          <Typography variant="h6" sx={{ mb: 2 }}>Days of the week</Typography>
+          <Typography variant="h6" sx={{ mb: 2 }}>Tab specific settings</Typography>
 
           <Box sx={{ mb: 2 }}>
             <FormControl fullWidth size="small" sx={{ mb: 1 }}>
@@ -1965,6 +2031,121 @@ const CalendarWidget = ({
                 />
               </>
             )}
+
+            <Typography variant="subtitle1" sx={{ mt: 3, mb: 2 }}>Display Settings</Typography>
+
+            <FormControlLabel
+              control={(
+                <Switch
+                  checked={!!displaySettings.showStartTimes}
+                  onChange={(e) => setDisplaySettings(prev => ({
+                    ...prev,
+                    showStartTimes: e.target.checked,
+                  }))}
+                />
+              )}
+              label="Show start times"
+              sx={{ mb: 2 }}
+            />
+
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>Event Text Size</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <IconButton
+                  size="small"
+                  onClick={() => setDisplaySettings(prev => ({
+                    ...prev,
+                    textSize: Math.max(8, prev.textSize - 1)
+                  }))}
+                  disabled={displaySettings.textSize <= 8}
+                >
+                  <Remove />
+                </IconButton>
+                <TextField
+                  type="number"
+                  value={displaySettings.textSize}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value, 10) || 8;
+                    setDisplaySettings(prev => ({
+                      ...prev,
+                      textSize: Math.min(24, Math.max(8, value))
+                    }));
+                  }}
+                  slotProps={{ htmlInput: { min: 8, max: 24 } }}
+                  sx={{ width: 100 }}
+                  size="small"
+                />
+                <Typography variant="body2" sx={{ minWidth: 30 }}>px</Typography>
+                <IconButton
+                  size="small"
+                  onClick={() => setDisplaySettings(prev => ({
+                    ...prev,
+                    textSize: Math.min(24, prev.textSize + 1)
+                  }))}
+                  disabled={displaySettings.textSize >= 24}
+                >
+                  <Add />
+                </IconButton>
+              </Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                Range: 8-24 px
+              </Typography>
+            </Box>
+
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>Event Bullet Size</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <IconButton
+                  size="small"
+                  onClick={() => setDisplaySettings(prev => ({
+                    ...prev,
+                    bulletSize: Math.max(4, prev.bulletSize - 1)
+                  }))}
+                  disabled={displaySettings.bulletSize <= 4}
+                >
+                  <Remove />
+                </IconButton>
+                <TextField
+                  type="number"
+                  value={displaySettings.bulletSize}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value, 10) || 4;
+                    setDisplaySettings(prev => ({
+                      ...prev,
+                      bulletSize: Math.min(20, Math.max(4, value))
+                    }));
+                  }}
+                  slotProps={{ htmlInput: { min: 4, max: 20 } }}
+                  sx={{ width: 100 }}
+                  size="small"
+                />
+                <Typography variant="body2" sx={{ minWidth: 30 }}>px</Typography>
+                <IconButton
+                  size="small"
+                  onClick={() => setDisplaySettings(prev => ({
+                    ...prev,
+                    bulletSize: Math.min(20, prev.bulletSize + 1)
+                  }))}
+                  disabled={displaySettings.bulletSize >= 20}
+                >
+                  <Add />
+                </IconButton>
+              </Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                Range: 4-20 px
+              </Typography>
+            </Box>
+
+            <Button
+              variant="outlined"
+              fullWidth
+              onClick={() => {
+                setDisplaySettings({ textSize: 12, bulletSize: 10, showStartTimes: true });
+              }}
+              sx={{ mt: 1 }}
+            >
+              Reset Display Settings
+            </Button>
           </Box>
 
           <Divider sx={{ my: 2 }} />
@@ -2035,109 +2216,6 @@ const CalendarWidget = ({
             sx={{ mt: 2 }}
           >
             Reset to Default
-          </Button>
-
-          <Divider sx={{ my: 3 }} />
-
-          <Typography variant="h6" sx={{ mb: 2 }}>Display Settings</Typography>
-
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="subtitle2" sx={{ mb: 1 }}>Event Text Size</Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <IconButton
-                size="small"
-                onClick={() => setDisplaySettings(prev => ({
-                  ...prev,
-                  textSize: Math.max(8, prev.textSize - 1)
-                }))}
-                disabled={displaySettings.textSize <= 8}
-              >
-                <Remove />
-              </IconButton>
-              <TextField
-                type="number"
-                value={displaySettings.textSize}
-                onChange={(e) => {
-                  const value = parseInt(e.target.value) || 8;
-                  setDisplaySettings(prev => ({
-                    ...prev,
-                    textSize: Math.min(24, Math.max(8, value))
-                  }));
-                }}
-                slotProps={{ htmlInput: { min: 8, max: 24 } }}
-                sx={{ width: 100 }}
-                size="small"
-              />
-              <Typography variant="body2" sx={{ minWidth: 30 }}>px</Typography>
-              <IconButton
-                size="small"
-                onClick={() => setDisplaySettings(prev => ({
-                  ...prev,
-                  textSize: Math.min(24, prev.textSize + 1)
-                }))}
-                disabled={displaySettings.textSize >= 24}
-              >
-                <Add />
-              </IconButton>
-            </Box>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-              Range: 8-24 px
-            </Typography>
-          </Box>
-
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="subtitle2" sx={{ mb: 1 }}>Event Bullet Size</Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <IconButton
-                size="small"
-                onClick={() => setDisplaySettings(prev => ({
-                  ...prev,
-                  bulletSize: Math.max(4, prev.bulletSize - 1)
-                }))}
-                disabled={displaySettings.bulletSize <= 4}
-              >
-                <Remove />
-              </IconButton>
-              <TextField
-                type="number"
-                value={displaySettings.bulletSize}
-                onChange={(e) => {
-                  const value = parseInt(e.target.value) || 4;
-                  setDisplaySettings(prev => ({
-                    ...prev,
-                    bulletSize: Math.min(20, Math.max(4, value))
-                  }));
-                }}
-                slotProps={{ htmlInput: { min: 4, max: 20 } }}
-                sx={{ width: 100 }}
-                size="small"
-              />
-              <Typography variant="body2" sx={{ minWidth: 30 }}>px</Typography>
-              <IconButton
-                size="small"
-                onClick={() => setDisplaySettings(prev => ({
-                  ...prev,
-                  bulletSize: Math.min(20, prev.bulletSize + 1)
-                }))}
-                disabled={displaySettings.bulletSize >= 20}
-              >
-                <Add />
-              </IconButton>
-            </Box>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-              Range: 4-20 px
-            </Typography>
-          </Box>
-
-          <Button
-            variant="outlined"
-            fullWidth
-            onClick={() => {
-              setDisplaySettings({ textSize: 12, bulletSize: 10 });
-            }}
-            sx={{ mt: 1 }}
-          >
-            Reset Display Settings
           </Button>
         </Box>
       </Popover>

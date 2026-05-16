@@ -136,6 +136,43 @@ test('tabs endpoint returns default Home tab when device has no persisted tabs y
     assert.equal(body[0].icon, 'home');
 });
 
+test('tabs endpoint returns 200 with If-Modified-Since-only after rapid layout updates', async () => {
+    const deviceName = `tabs-ims-${Date.now()}`;
+
+    const createTabRes = await api(`/api/devices/${encodeURIComponent(deviceName)}/tabs`, {
+        method: 'POST',
+        body: JSON.stringify({ label: 'Calendar', icon: 'calendar_today', show_label: true }),
+    });
+    assert.equal(createTabRes.status, 200);
+
+    const firstTabsRead = await api(`/api/devices/${encodeURIComponent(deviceName)}/tabs`);
+    assert.equal(firstTabsRead.status, 200);
+    const lastModified = firstTabsRead.headers.get('last-modified');
+    assert.ok(lastModified);
+
+    const patchRes = await api(`/api/devices/${encodeURIComponent(deviceName)}/widget-assignments/layout`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+            widget_name: 'calendar',
+            tabNumber: 1,
+            settings: { showStartTimes: false },
+        }),
+    });
+    assert.equal(patchRes.status, 200);
+
+    const conditionalTabsRead = await api(`/api/devices/${encodeURIComponent(deviceName)}/tabs`, {
+        headers: {
+            'If-Modified-Since': lastModified,
+        },
+    });
+
+    assert.equal(conditionalTabsRead.status, 200);
+    const homeTab = conditionalTabsRead.body.find((row) => row.number === 1);
+    assert.ok(homeTab);
+    const parsedConfig = JSON.parse(homeTab.config_json || '{}');
+    assert.equal(parsedConfig.calendar.showStartTimes, false);
+});
+
 test('widget assignments endpoint backfills core widgets onto Home tab for existing devices', async () => {
     const deviceName = `core-backfill-${Date.now()}`;
 
@@ -237,6 +274,37 @@ test('device settings GET supports conditional requests with ETag', async () => 
     assert.equal(secondRead.status, 304);
 });
 
+test('If-None-Match mismatch returns 200 even when If-Modified-Since is in the future', async () => {
+    const deviceName = `etag-precedence-${Date.now()}`;
+
+    const firstWrite = await api(`/api/devices/${encodeURIComponent(deviceName)}/settings`, {
+        method: 'PUT',
+        body: JSON.stringify({ theme: 'light' }),
+    });
+    assert.equal(firstWrite.status, 200);
+
+    const initialRead = await api(`/api/devices/${encodeURIComponent(deviceName)}/settings`);
+    assert.equal(initialRead.status, 200);
+    const staleEtag = initialRead.headers.get('etag');
+    assert.ok(staleEtag);
+
+    const secondWrite = await api(`/api/devices/${encodeURIComponent(deviceName)}/settings`, {
+        method: 'PATCH',
+        body: JSON.stringify({ theme: 'dark' }),
+    });
+    assert.equal(secondWrite.status, 200);
+
+    const readWithBothValidators = await api(`/api/devices/${encodeURIComponent(deviceName)}/settings`, {
+        headers: {
+            'If-None-Match': staleEtag,
+            'If-Modified-Since': 'Fri, 31 Dec 9999 23:59:59 GMT',
+        },
+    });
+
+    assert.equal(readWithBothValidators.status, 200);
+    assert.equal(readWithBothValidators.body.theme, 'dark');
+});
+
 test('widget assignment IDs can be round-tripped for delete operations', async () => {
     const deviceName = `assignment-id-${Date.now()}`;
 
@@ -267,6 +335,59 @@ test('widget assignment IDs can be round-tripped for delete operations', async (
     assert.equal(listAfterDelete.status, 200);
     const stillThere = listAfterDelete.body.find((row) => row.widget_name === 'plugin:delete-me' && row.tab_number === 2);
     assert.equal(Boolean(stillThere), false);
+});
+
+test('widget layout settings PATCH persists calendar showStartTimes=false in tabs config_json', async () => {
+    const deviceName = `calendar-settings-${Date.now()}`;
+
+    const createTabRes = await api(`/api/devices/${encodeURIComponent(deviceName)}/tabs`, {
+        method: 'POST',
+        body: JSON.stringify({ label: 'Calendar', icon: 'calendar_today', show_label: true }),
+    });
+    assert.equal(createTabRes.status, 200);
+
+    const patchRes = await api(`/api/devices/${encodeURIComponent(deviceName)}/widget-assignments/layout`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+            widget_name: 'calendar',
+            tabNumber: 1,
+            settings: {
+                showStartTimes: false,
+            },
+        }),
+    });
+
+    assert.equal(patchRes.status, 200);
+    assert.equal(patchRes.body.showStartTimes, false);
+
+    const tabsRes = await api(`/api/devices/${encodeURIComponent(deviceName)}/tabs`);
+    assert.equal(tabsRes.status, 200);
+    const homeTab = tabsRes.body.find((row) => row.number === 1);
+    assert.ok(homeTab);
+
+    const parsedConfig = JSON.parse(homeTab.config_json || '{}');
+    assert.equal(parsedConfig.calendar.showStartTimes, false);
+});
+
+test('widget layout PATCH rejects requests that provide neither settings nor layout fields', async () => {
+    const deviceName = `calendar-layout-invalid-${Date.now()}`;
+
+    const createTabRes = await api(`/api/devices/${encodeURIComponent(deviceName)}/tabs`, {
+        method: 'POST',
+        body: JSON.stringify({ label: 'Calendar', icon: 'calendar_today', show_label: true }),
+    });
+    assert.equal(createTabRes.status, 200);
+
+    const badPatchRes = await api(`/api/devices/${encodeURIComponent(deviceName)}/widget-assignments/layout`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+            widget_name: 'calendar',
+            tabNumber: 1,
+        }),
+    });
+
+    assert.equal(badPatchRes.status, 400);
+    assert.equal(badPatchRes.body.error, 'Request must include layout fields or settings object');
 });
 
 test('settings endpoints persist and query values', async () => {

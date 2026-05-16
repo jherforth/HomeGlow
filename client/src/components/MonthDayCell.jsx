@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Box, Typography } from '@mui/material';
+import moment from 'moment';
 import { getEventPillPalette, getPreferredColorMode } from '../utils/colorContrast.js';
 
 const MonthDayCell = ({
@@ -186,11 +187,26 @@ const MonthDayCell = ({
           const palette = getEventPillPalette(event.source_color || eventColors.backgroundColor, colorMode);
           return (
             <Box key={`timed-${evIdx}`} onClick={(e) => { e.stopPropagation(); onEventClick(event); }}
-              sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25, cursor: 'pointer', borderRadius: 0.5, px: 0.25, '&:hover': { bgcolor: timedRowHoverColor } }}>
-              <Box sx={{ width: displaySettings.bulletSize, height: displaySettings.bulletSize, minWidth: displaySettings.bulletSize, borderRadius: '50%', backgroundColor: palette.backgroundColor, flexShrink: 0 }} />
-              <Typography variant="caption" sx={{ fontSize: `${displaySettings.textSize}px`, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {event.title}
-              </Typography>
+              sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5, mb: 0.25, cursor: 'pointer', borderRadius: 0.5, px: 0.25, '&:hover': { bgcolor: timedRowHoverColor } }}>
+              <Box sx={{ width: displaySettings.bulletSize, height: displaySettings.bulletSize, minWidth: displaySettings.bulletSize, borderRadius: '50%', backgroundColor: palette.backgroundColor, flexShrink: 0, mt: displaySettings.bulletSize * 0.0625 }} />
+              <Box sx={{ minWidth: 0 }}>
+                {displaySettings.showStartTimes && (
+                  <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block', fontSize: `${displaySettings.textSize}px`, lineHeight: 1.15 }}>
+                    {moment(event.start).format('h:mm A')}
+                  </Typography>
+                )}
+                <Typography variant="caption" sx={{
+                  fontSize: `${displaySettings.textSize}px`,
+                  lineHeight: 1.2,
+                  display: 'block',
+                  whiteSpace: displaySettings.showStartTimes ? 'normal' : 'nowrap',
+                  overflow: displaySettings.showStartTimes ? 'visible' : 'hidden',
+                  textOverflow: displaySettings.showStartTimes ? 'clip' : 'ellipsis',
+                  overflowWrap: displaySettings.showStartTimes ? 'anywhere' : 'normal',
+                }}>
+                  {event.title}
+                </Typography>
+              </Box>
             </Box>
           );
         })}
