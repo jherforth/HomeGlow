@@ -159,6 +159,35 @@ test('widget assignments endpoint backfills core widgets onto Home tab for exist
     });
 });
 
+test('deleting a non-home tab moves assigned widgets to Home tab', async () => {
+    const deviceName = `delete-tab-move-${Date.now()}`;
+
+    const createTabRes = await api(`/api/devices/${encodeURIComponent(deviceName)}/tabs`, {
+        method: 'POST',
+        body: JSON.stringify({ label: 'Extras', icon: 'star', show_label: true }),
+    });
+    assert.equal(createTabRes.status, 200);
+    assert.equal(createTabRes.body.number, 2);
+
+    const createAssignmentRes = await api(`/api/devices/${encodeURIComponent(deviceName)}/widget-assignments`, {
+        method: 'POST',
+        body: JSON.stringify({ widget_name: 'plugin:sample-widget', tabNumber: 2 }),
+    });
+    assert.equal(createAssignmentRes.status, 200);
+
+    const deleteTabRes = await api(`/api/devices/${encodeURIComponent(deviceName)}/tabs/2`, {
+        method: 'DELETE',
+    });
+    assert.equal(deleteTabRes.status, 200);
+
+    const assignmentsRes = await api(`/api/devices/${encodeURIComponent(deviceName)}/widget-assignments`);
+    assert.equal(assignmentsRes.status, 200);
+
+    const movedAssignment = assignmentsRes.body.find((row) => row.widget_name === 'plugin:sample-widget');
+    assert.ok(movedAssignment, 'Expected plugin assignment to remain after tab deletion');
+    assert.equal(movedAssignment.tab_number, 1);
+});
+
 test('settings endpoints persist and query values', async () => {
     const saveRes = await api('/api/settings', {
         method: 'POST',

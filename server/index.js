@@ -48,6 +48,7 @@ const schemaMigrations = [
   { schemaId: 10, migrationPath: './migrations/schema10-googlePhotosPicker', },
   { schemaId: 11, migrationPath: './migrations/schema11-homeglowPhotos', },
   { schemaId: 12, migrationPath: './migrations/schema12-onceCompletedScheduling', },
+  { schemaId: 13, migrationPath: './migrations/schema13-tabsByDefaultBackfill', },
 ];
 
 const ALLOWED_SCHEDULE_DURATIONS = new Set(['day-of', 'until-completed', 'once-completed']);
@@ -1005,6 +1006,7 @@ function backfillDefaultCoreWidgetAssignments(deviceName) {
 function ensureDeviceExists(deviceName) {
   db.prepare('INSERT OR IGNORE INTO devices (name, updateTime) VALUES (?, CURRENT_TIMESTAMP)').run(deviceName);
   ensureHomeTabExists(deviceName);
+  backfillDefaultCoreWidgetAssignments(deviceName);
 }
 function touchDeviceUpdateTime(deviceName) {
   db.prepare('UPDATE devices SET updateTime = CURRENT_TIMESTAMP WHERE name = ?').run(deviceName);
@@ -2274,7 +2276,6 @@ fastify.get('/api/devices/:deviceName/widget-assignments', async (request, reply
     return reply.status(400).send({ error: 'deviceName is required' });
   }
   try {
-    backfillDefaultCoreWidgetAssignments(deviceName);
     const assignments = db.prepare('SELECT * FROM widget_tab_assignments WHERE device_name = ?').all(deviceName);
     return assignments;
   } catch (error) {
