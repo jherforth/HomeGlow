@@ -124,6 +124,41 @@ test('GET /api/timezone returns configured timezone', async () => {
     assert.equal(body.timezone, 'UTC');
 });
 
+test('tabs endpoint returns default Home tab when device has no persisted tabs yet', async () => {
+    const deviceName = `new-device-${Date.now()}`;
+    const { status, body } = await api(`/api/devices/${encodeURIComponent(deviceName)}/tabs`);
+
+    assert.equal(status, 200);
+    assert.ok(Array.isArray(body));
+    assert.equal(body.length, 1);
+    assert.equal(body[0].number, 1);
+    assert.equal(body[0].label, 'Home');
+    assert.equal(body[0].icon, 'home');
+});
+
+test('widget assignments endpoint backfills core widgets onto Home tab for existing devices', async () => {
+    const deviceName = `core-backfill-${Date.now()}`;
+
+    const createTabRes = await api(`/api/devices/${encodeURIComponent(deviceName)}/tabs`, {
+        method: 'POST',
+        body: JSON.stringify({ label: 'Kitchen', icon: 'star', show_label: true }),
+    });
+    assert.equal(createTabRes.status, 200);
+
+    const assignmentsRes = await api(`/api/devices/${encodeURIComponent(deviceName)}/widget-assignments`);
+    assert.equal(assignmentsRes.status, 200);
+    assert.ok(Array.isArray(assignmentsRes.body));
+
+    const widgetNames = new Set(assignmentsRes.body.map((row) => row.widget_name));
+    ['calendar', 'weather', 'chores', 'photos'].forEach((widgetName) => {
+        assert.equal(widgetNames.has(widgetName), true, `Expected backfilled assignment for ${widgetName}`);
+    });
+
+    assignmentsRes.body.forEach((row) => {
+        assert.equal(row.tab_number, 1);
+    });
+});
+
 test('settings endpoints persist and query values', async () => {
     const saveRes = await api('/api/settings', {
         method: 'POST',

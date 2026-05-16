@@ -584,9 +584,7 @@ const App = () => {
 
   const isWidgetAssignedToTab = (widgetName, tabNumber) => {
     const assignments = widgetAssignments[widgetName];
-    if (!assignments || assignments.length === 0) {
-      return tabNumber === 1;
-    }
+    if (!assignments || assignments.length === 0) return false;
     return assignments.some(a => a.tabNumber === tabNumber);
   };
 

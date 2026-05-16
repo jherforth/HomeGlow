@@ -473,9 +473,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
   const collectAffectedTabNumbers = (existingTabNumbers, desiredTabNumbers) => {
     const affected = new Set([...existingTabNumbers, ...desiredTabNumbers]);
-    if (existingTabNumbers.length === 0 || desiredTabNumbers.length === 0) {
-      affected.add(1);
-    }
     return Array.from(affected);
   };
 
@@ -488,12 +485,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
       Object.keys(CORE_WIDGET_DEFAULT_SIZES).forEach((widgetName) => {
         const assignedTabs = coreAssignments[widgetName] || [];
-        if (assignedTabs.length === 0) {
-          if (tabNumber === 1) {
-            assigned.push(widgetName);
-          }
-          return;
-        }
         if (assignedTabs.includes(tabNumber)) {
           assigned.push(widgetName);
         }
@@ -501,12 +492,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
       Object.entries(pluginAssignmentMap || {}).forEach(([widgetName, assignedTabs]) => {
         const tabsForWidget = Array.isArray(assignedTabs) ? assignedTabs : [];
-        if (tabsForWidget.length === 0) {
-          if (tabNumber === 1) {
-            assigned.push(widgetName);
-          }
-          return;
-        }
         if (tabsForWidget.includes(tabNumber)) {
           assigned.push(widgetName);
         }

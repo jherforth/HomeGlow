@@ -38,6 +38,7 @@ const migrateChoreHistoryTitle = require('./migrations/migrateChoreHistoryTitle'
 const migrateToDurationField = require('./migrations/migrateToDurationField');
 
 const SYSTEM_SCHEMA_ID_KEY = 'SYSTEM_SCHEMA_ID';
+const CORE_WIDGET_NAMES = ['calendar', 'weather', 'chores', 'photos'];
 
 const schemaMigrations = [
   { schemaId: 6, migrationPath: './migrations/migrateDeviceSchemaV6', },
@@ -949,6 +950,58 @@ function ensureHomeTabExists(deviceName) {
     console.error('Error creating default home tab:', error);
   }
 }
+
+function doesDeviceExist(deviceName) {
+  const device = db.prepare('SELECT name FROM devices WHERE name = ?').get(deviceName);
+  return !!device;
+}
+
+function buildDefaultHomeTab(deviceName) {
+  return {
+    id: 1,
+    device_name: deviceName,
+    number: 1,
+    label: 'Home',
+    icon: 'home',
+    show_label: 1,
+    created_at: null,
+  };
+}
+
+function backfillDefaultCoreWidgetAssignments(deviceName) {
+  if (!doesDeviceExist(deviceName)) {
+    return 0;
+  }
+
+  const homeTab = db.prepare('SELECT id FROM tabs WHERE number = 1 AND device_name = ?').get(deviceName);
+  if (!homeTab) {
+    return 0;
+  }
+
+  const existingNames = new Set(
+    db
+      .prepare('SELECT DISTINCT widget_name FROM widget_tab_assignments WHERE device_name = ?')
+      .all(deviceName)
+      .map(row => row.widget_name)
+  );
+
+  const missingCoreWidgets = CORE_WIDGET_NAMES.filter(widgetName => !existingNames.has(widgetName));
+  if (missingCoreWidgets.length === 0) {
+    return 0;
+  }
+
+  const insertMissing = db.transaction((widgetNames) => {
+    const stmt = db.prepare('INSERT INTO widget_tab_assignments (widget_name, tab_number, device_name) VALUES (?, ?, ?)');
+    widgetNames.forEach(widgetName => {
+      stmt.run(widgetName, 1, deviceName);
+    });
+  });
+
+  insertMissing(missingCoreWidgets);
+  touchDeviceUpdateTime(deviceName);
+  return missingCoreWidgets.length;
+}
+
 function ensureDeviceExists(deviceName) {
   db.prepare('INSERT OR IGNORE INTO devices (name, updateTime) VALUES (?, CURRENT_TIMESTAMP)').run(deviceName);
   ensureHomeTabExists(deviceName);
@@ -2025,6 +2078,9 @@ fastify.get('/api/devices/:deviceName/tabs', async (request, reply) => {
 
   try {
     const tabs = db.prepare('SELECT * FROM tabs WHERE device_name = ? ORDER BY number ASC').all(deviceName);
+    if (tabs.length === 0) {
+      return [buildDefaultHomeTab(deviceName)];
+    }
     return tabs;
   } catch (error) {
     console.error('Error fetching tabs:', error);
@@ -2177,15 +2233,12 @@ fastify.delete('/api/devices/:deviceName/tabs/:tabNumber', async (request, reply
   }
 
   try {
-    // const widgetAssignments = db.prepare('SELECT * FROM widget_tab_assignments WHERE tab_number in (0,?) AND device_name = ?').all(tabNumber, deviceName);
-
-    // if (widgetAssignments.length > 0) {
-    //   const updateStmt = db.prepare('UPDATE widget_tab_assignments SET tab_number = 0 WHERE tab_number = ? AND device_name = ?');
-    //   updateStmt.run(tabNumber, deviceName);
-    // }
+    const parsedTabNumber = parseInt(tabNumber, 10);
+    const moveAssignmentsStmt = db.prepare('UPDATE widget_tab_assignments SET tab_number = 1 WHERE tab_number = ? AND device_name = ?');
+    moveAssignmentsStmt.run(parsedTabNumber, deviceName);
 
     const deleteStmt = db.prepare('DELETE FROM tabs WHERE number = ? AND device_name = ?');
-    deleteStmt.run(tabNumber, deviceName);
+    deleteStmt.run(parsedTabNumber, deviceName);
 
     const remainingTabs = db
       .prepare('SELECT id FROM tabs WHERE device_name = ? AND number != 1 ORDER BY number ASC')
@@ -2221,6 +2274,7 @@ fastify.get('/api/devices/:deviceName/widget-assignments', async (request, reply
     return reply.status(400).send({ error: 'deviceName is required' });
   }
   try {
+    backfillDefaultCoreWidgetAssignments(deviceName);
     const assignments = db.prepare('SELECT * FROM widget_tab_assignments WHERE device_name = ?').all(deviceName);
     return assignments;
   } catch (error) {
