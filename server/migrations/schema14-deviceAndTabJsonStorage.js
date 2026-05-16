@@ -6,10 +6,10 @@ if (!context || !context.db) {
 
 const { db, schemaIdKey, targetSchemaId } = context;
 
-function parseLayoutJson(layoutJson) {
-    if (!layoutJson) return {};
+function parseConfigJson(configJson) {
+    if (!configJson) return {};
     try {
-        const parsed = JSON.parse(layoutJson);
+        const parsed = JSON.parse(configJson);
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
             return parsed;
         }
@@ -31,9 +31,9 @@ try {
         }
 
         const tabColumns = db.prepare('PRAGMA table_info(tabs)').all();
-        const hasLayoutJson = tabColumns.some((col) => col.name === 'layout_json');
-        if (!hasLayoutJson) {
-            db.exec('ALTER TABLE tabs ADD COLUMN layout_json TEXT');
+        const hasConfigJson = tabColumns.some((col) => col.name === 'config_json');
+        if (!hasConfigJson) {
+            db.exec('ALTER TABLE tabs ADD COLUMN config_json TEXT');
         }
 
         const hasAssignmentTable = !!db
@@ -54,12 +54,12 @@ try {
                 throw new Error(`Cannot migrate widget assignments: found ${orphanedAssignments.length} orphaned rows`);
             }
 
-            const tabs = db.prepare('SELECT id, device_name, number, layout_json FROM tabs').all();
+            const tabs = db.prepare('SELECT id, device_name, number, config_json FROM tabs').all();
             const tabsByKey = new Map();
             tabs.forEach((tab) => {
                 tabsByKey.set(`${tab.device_name}::${tab.number}`, {
                     id: tab.id,
-                    layout: parseLayoutJson(tab.layout_json),
+                    layout: parseConfigJson(tab.config_json),
                 });
             });
 
@@ -83,15 +83,15 @@ try {
                 };
             });
 
-            const updateTabLayout = db.prepare('UPDATE tabs SET layout_json = ? WHERE id = ?');
+            const updateTabConfig = db.prepare('UPDATE tabs SET config_json = ? WHERE id = ?');
             tabsByKey.forEach((tab) => {
-                updateTabLayout.run(JSON.stringify(tab.layout), tab.id);
+                updateTabConfig.run(JSON.stringify(tab.layout), tab.id);
             });
 
             db.exec('DROP TABLE widget_tab_assignments');
         }
 
-        db.exec("UPDATE tabs SET layout_json = '{}' WHERE layout_json IS NULL OR TRIM(layout_json) = ''");
+        db.exec("UPDATE tabs SET config_json = '{}' WHERE config_json IS NULL OR TRIM(config_json) = ''");
         db.exec("UPDATE devices SET device_settings_json = '{}' WHERE device_settings_json IS NULL OR TRIM(device_settings_json) = ''");
 
         db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(

@@ -60,21 +60,21 @@ const clampInteger = (value, min, max, fallback) => {
 
 const TAB_CALENDAR_VIEW_MODES = new Set(['month', 'week']);
 
-const parseTabLayoutJson = (layoutJson) => {
-  if (!layoutJson) return {};
-  if (typeof layoutJson === 'object' && !Array.isArray(layoutJson)) return layoutJson;
-  if (typeof layoutJson !== 'string') return {};
+const parseTabConfigJson = (configJson) => {
+  if (!configJson) return {};
+  if (typeof configJson === 'object' && !Array.isArray(configJson)) return configJson;
+  if (typeof configJson !== 'string') return {};
 
   try {
-    const parsed = JSON.parse(layoutJson);
+    const parsed = JSON.parse(configJson);
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
   } catch {
     return {};
   }
 };
 
-const readCalendarViewModeFromLayoutJson = (layoutJson) => {
-  const layoutMap = parseTabLayoutJson(layoutJson);
+const readCalendarViewModeFromTabConfig = (configJson) => {
+  const layoutMap = parseTabConfigJson(configJson);
   const calendarEntry = layoutMap.calendar;
   const candidateViewMode = calendarEntry && typeof calendarEntry === 'object' ? calendarEntry.viewMode : null;
   return TAB_CALENDAR_VIEW_MODES.has(candidateViewMode) ? candidateViewMode : null;
@@ -85,7 +85,7 @@ const CalendarWidget = ({
   icsCalendarUrl,
   refreshInterval = 0,
   activeTab = 1,
-  activeTabLayoutJson = null,
+  activeTabConfigJson = null,
 }) => {
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [events, setEvents] = useState([]);
@@ -248,9 +248,9 @@ const CalendarWidget = ({
   ]);
 
   useEffect(() => {
-    const inMemoryViewMode = readCalendarViewModeFromLayoutJson(activeTabLayoutJson);
+    const inMemoryViewMode = readCalendarViewModeFromTabConfig(activeTabConfigJson);
     setViewMode(inMemoryViewMode || 'month');
-  }, [activeTab, activeTabLayoutJson]);
+  }, [activeTab, activeTabConfigJson]);
 
   useEffect(() => {
     let cancelled = false;
@@ -260,7 +260,7 @@ const CalendarWidget = ({
         const response = await axios.get(`${API_DEVICE_URL}/tabs`);
         const tabs = Array.isArray(response.data) ? response.data : [];
         const activeTabRow = tabs.find((tab) => Number(tab.number) === Number(activeTab));
-        const dbViewMode = readCalendarViewModeFromLayoutJson(activeTabRow?.layout_json || null);
+        const dbViewMode = readCalendarViewModeFromTabConfig(activeTabRow?.config_json || null);
 
         if (!cancelled) {
           setViewMode(dbViewMode || 'month');

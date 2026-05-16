@@ -953,8 +953,8 @@ function parseJsonObject(value, fallback = {}) {
   return fallback;
 }
 
-function parseTabLayoutJson(layoutJson) {
-  return parseJsonObject(layoutJson, {});
+function parseTabConfigJson(configJson) {
+  return parseJsonObject(configJson, {});
 }
 
 function getDeviceUpdateTimeMs(deviceName) {
@@ -1035,18 +1035,18 @@ function parseAssignmentId(assignmentId) {
 
 function getTabsForDevice(deviceName) {
   return db
-    .prepare('SELECT id, device_name, number, label, icon, show_label, created_at, layout_json FROM tabs WHERE device_name = ? ORDER BY number ASC')
+    .prepare('SELECT id, device_name, number, label, icon, show_label, created_at, config_json FROM tabs WHERE device_name = ? ORDER BY number ASC')
     .all(deviceName);
 }
 
 function getTabByNumber(deviceName, tabNumber) {
   return db
-    .prepare('SELECT id, device_name, number, label, icon, show_label, created_at, layout_json FROM tabs WHERE device_name = ? AND number = ?')
+    .prepare('SELECT id, device_name, number, label, icon, show_label, created_at, config_json FROM tabs WHERE device_name = ? AND number = ?')
     .get(deviceName, tabNumber);
 }
 
-function saveTabLayoutById(tabId, layoutMap) {
-  db.prepare('UPDATE tabs SET layout_json = ? WHERE id = ?').run(JSON.stringify(layoutMap), tabId);
+function saveTabConfigById(tabId, layoutMap) {
+  db.prepare('UPDATE tabs SET config_json = ? WHERE id = ?').run(JSON.stringify(layoutMap), tabId);
 }
 
 function listWidgetAssignmentsFromTabLayouts(deviceName) {
@@ -1054,7 +1054,7 @@ function listWidgetAssignmentsFromTabLayouts(deviceName) {
   const rows = [];
 
   tabs.forEach((tab) => {
-    const layoutMap = parseTabLayoutJson(tab.layout_json);
+    const layoutMap = parseTabConfigJson(tab.config_json);
     Object.entries(layoutMap).forEach(([widgetName, layout]) => {
       const normalized = normalizeLayoutFields(layout);
       rows.push({
@@ -1084,7 +1084,7 @@ function ensureCoreWidgetsInHomeTab(deviceName) {
     return 0;
   }
 
-  const layoutMap = parseTabLayoutJson(homeTab.layout_json);
+  const layoutMap = parseTabConfigJson(homeTab.config_json);
   let created = 0;
 
   CORE_WIDGET_NAMES.forEach((widgetName) => {
@@ -1100,7 +1100,7 @@ function ensureCoreWidgetsInHomeTab(deviceName) {
   });
 
   if (created > 0) {
-    saveTabLayoutById(homeTab.id, layoutMap);
+    saveTabConfigById(homeTab.id, layoutMap);
     touchDeviceUpdateTime(deviceName);
   }
 
@@ -1112,7 +1112,7 @@ function ensureHomeTabExists(deviceName) {
   try {
     const homeTab = db.prepare('SELECT id FROM tabs WHERE number = 1 AND device_name = ?').get(deviceName);
     if (!homeTab) {
-      db.prepare('INSERT INTO tabs (label, icon, show_label, number, device_name, layout_json) VALUES (?, ?, ?, ?, ?, ?)').run('Home', 'home', 1, 1, deviceName, '{}');
+      db.prepare('INSERT INTO tabs (label, icon, show_label, number, device_name, config_json) VALUES (?, ?, ?, ?, ?, ?)').run('Home', 'home', 1, 1, deviceName, '{}');
       console.log('Default home tab created');
     }
   } catch (error) {
@@ -1136,7 +1136,7 @@ function buildDefaultHomeTab(deviceName) {
     icon: 'home',
     show_label: 1,
     created_at: null,
-    layout_json: '{}',
+    config_json: '{}',
   };
   // endRegion #98
 }
@@ -1159,7 +1159,7 @@ fastify.get('/api/devices', async (request, reply) => {
     return devices.map((device) => {
       const tabs = getTabsForDevice(device.name);
       const widgetCount = tabs.reduce((count, tab) => {
-        const layoutMap = parseTabLayoutJson(tab.layout_json);
+        const layoutMap = parseTabConfigJson(tab.config_json);
         return count + Object.keys(layoutMap).length;
       }, 0);
 
@@ -1288,8 +1288,8 @@ fastify.post('/api/devices/:deviceName/copy-from/:sourceDeviceName', async (requ
       db.prepare('DELETE FROM tabs WHERE device_name = ?').run(deviceName);
 
       db.prepare(`
-        INSERT INTO tabs (device_name, label, icon, show_label, number, created_at, layout_json)
-        SELECT ?, label, icon, show_label, number, created_at, COALESCE(layout_json, '{}')
+        INSERT INTO tabs (device_name, label, icon, show_label, number, created_at, config_json)
+        SELECT ?, label, icon, show_label, number, created_at, COALESCE(config_json, '{}')
         FROM tabs
         WHERE device_name = ?
         ORDER BY number ASC
@@ -2288,7 +2288,7 @@ fastify.post('/api/devices/:deviceName/tabs', async (request, reply) => {
     const maxOrder = db.prepare('SELECT MAX(number) as max FROM tabs WHERE device_name = ?').get(deviceName);
     const nextTabNumber = (maxOrder.max || 0) + 1;
 
-    const stmt = db.prepare('INSERT INTO tabs (device_name, label, icon, show_label, number, layout_json) VALUES (?, ?, ?, ?, ?, ?) RETURNING *');
+    const stmt = db.prepare('INSERT INTO tabs (device_name, label, icon, show_label, number, config_json) VALUES (?, ?, ?, ?, ?, ?) RETURNING *');
     const row = stmt.get(deviceName, label, icon, show_label ? 1 : 0, nextTabNumber, '{}');
     touchDeviceUpdateTime(deviceName);
 
@@ -2425,8 +2425,8 @@ fastify.delete('/api/devices/:deviceName/tabs/:tabNumber', async (request, reply
     }
 
     const homeTab = getTabByNumber(deviceName, 1);
-    const sourceLayoutMap = parseTabLayoutJson(sourceTab.layout_json);
-    const homeLayoutMap = parseTabLayoutJson(homeTab?.layout_json);
+    const sourceLayoutMap = parseTabConfigJson(sourceTab.config_json);
+    const homeLayoutMap = parseTabConfigJson(homeTab?.config_json);
     let homeChanged = false;
 
     Object.entries(sourceLayoutMap).forEach(([widgetName, layout]) => {
@@ -2437,7 +2437,7 @@ fastify.delete('/api/devices/:deviceName/tabs/:tabNumber', async (request, reply
     });
 
     if (homeTab && homeChanged) {
-      saveTabLayoutById(homeTab.id, homeLayoutMap);
+      saveTabConfigById(homeTab.id, homeLayoutMap);
     }
 
     const deleteStmt = db.prepare('DELETE FROM tabs WHERE number = ? AND device_name = ?');
@@ -2503,7 +2503,7 @@ fastify.post('/api/devices/:deviceName/widget-assignments', async (request, repl
       return reply.status(404).send({ error: 'Tab not found' });
     }
 
-    const layoutMap = parseTabLayoutJson(tab.layout_json);
+    const layoutMap = parseTabConfigJson(tab.config_json);
     const existing = layoutMap[widget_name];
 
     if (existing) {
@@ -2517,7 +2517,7 @@ fastify.post('/api/devices/:deviceName/widget-assignments', async (request, repl
       layout_h: null,
     };
 
-    saveTabLayoutById(tab.id, layoutMap);
+    saveTabConfigById(tab.id, layoutMap);
     touchDeviceUpdateTime(deviceName);
 
     return {
@@ -2553,13 +2553,13 @@ fastify.delete('/api/devices/:deviceName/widget-assignments/:id', async (request
       return reply.status(404).send({ error: 'Assignment not found' });
     }
 
-    const layoutMap = parseTabLayoutJson(tab.layout_json);
+    const layoutMap = parseTabConfigJson(tab.config_json);
     if (!(parsedId.widgetName in layoutMap)) {
       return reply.status(404).send({ error: 'Assignment not found' });
     }
 
     delete layoutMap[parsedId.widgetName];
-    saveTabLayoutById(tab.id, layoutMap);
+    saveTabConfigById(tab.id, layoutMap);
     touchDeviceUpdateTime(deviceName);
     return { success: true, message: 'Assignment deleted successfully' };
   } catch (error) {
@@ -2579,10 +2579,10 @@ fastify.delete('/api/devices/:deviceName/widget-assignments/widget/:widgetName',
     let changed = false;
 
     tabs.forEach((tab) => {
-      const layoutMap = parseTabLayoutJson(tab.layout_json);
+      const layoutMap = parseTabConfigJson(tab.config_json);
       if (widgetName in layoutMap) {
         delete layoutMap[widgetName];
-        saveTabLayoutById(tab.id, layoutMap);
+        saveTabConfigById(tab.id, layoutMap);
         changed = true;
       }
     });
@@ -2616,7 +2616,7 @@ fastify.patch('/api/devices/:deviceName/widget-assignments/layout', async (reque
       return reply.status(404).send({ error: 'Assignment not found' });
     }
 
-    const layoutMap = parseTabLayoutJson(tab.layout_json);
+    const layoutMap = parseTabConfigJson(tab.config_json);
     const existing = layoutMap[widget_name];
 
     if (!existing) {
@@ -2639,7 +2639,7 @@ fastify.patch('/api/devices/:deviceName/widget-assignments/layout', async (reque
       ...normalizedLayout,
       ...mergedSettings,
     };
-    saveTabLayoutById(tab.id, layoutMap);
+    saveTabConfigById(tab.id, layoutMap);
 
     touchDeviceUpdateTime(deviceName);
     return {
@@ -2670,7 +2670,7 @@ fastify.patch('/api/devices/:deviceName/widget-assignments/layout/bulk', async (
     const tabsByNumber = new Map(
       getTabsForDevice(deviceName).map(tab => [tab.number, {
         tab,
-        layoutMap: parseTabLayoutJson(tab.layout_json),
+        layoutMap: parseTabConfigJson(tab.config_json),
         changed: false,
       }])
     );
@@ -2708,7 +2708,7 @@ fastify.patch('/api/devices/:deviceName/widget-assignments/layout/bulk', async (
 
     tabsByNumber.forEach((tabEntry) => {
       if (tabEntry.changed) {
-        saveTabLayoutById(tabEntry.tab.id, tabEntry.layoutMap);
+        saveTabConfigById(tabEntry.tab.id, tabEntry.layoutMap);
       }
     });
 

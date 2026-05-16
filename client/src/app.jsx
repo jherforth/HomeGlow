@@ -769,7 +769,7 @@ const App = () => {
               icsCalendarUrl={apiKeys.ICS_CALENDAR_URL}
               refreshInterval={widgetSettings.calendar.refreshInterval || 0}
               activeTab={activeTab}
-              activeTabLayoutJson={tabs.find((tab) => tab.number === activeTab)?.layout_json || null}
+              activeTabConfigJson={tabs.find((tab) => tab.number === activeTab)?.config_json || null}
             />
           </Suspense>
         ),
