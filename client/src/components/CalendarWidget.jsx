@@ -58,7 +58,35 @@ const clampInteger = (value, min, max, fallback) => {
   return Math.min(max, Math.max(min, parsed));
 };
 
-const CalendarWidget = ({ transparentBackground, icsCalendarUrl, refreshInterval = 0 }) => {
+const TAB_CALENDAR_VIEW_MODES = new Set(['month', 'week']);
+
+const parseTabLayoutJson = (layoutJson) => {
+  if (!layoutJson) return {};
+  if (typeof layoutJson === 'object' && !Array.isArray(layoutJson)) return layoutJson;
+  if (typeof layoutJson !== 'string') return {};
+
+  try {
+    const parsed = JSON.parse(layoutJson);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const readCalendarViewModeFromLayoutJson = (layoutJson) => {
+  const layoutMap = parseTabLayoutJson(layoutJson);
+  const calendarEntry = layoutMap.calendar;
+  const candidateViewMode = calendarEntry && typeof calendarEntry === 'object' ? calendarEntry.viewMode : null;
+  return TAB_CALENDAR_VIEW_MODES.has(candidateViewMode) ? candidateViewMode : null;
+};
+
+const CalendarWidget = ({
+  transparentBackground,
+  icsCalendarUrl,
+  refreshInterval = 0,
+  activeTab = 1,
+  activeTabLayoutJson = null,
+}) => {
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [events, setEvents] = useState([]);
   const [upcomingEvents, setUpcomingEvents] = useState([]);
@@ -218,6 +246,51 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl, refreshInterval
     monthViewDaysToShow,
     monthViewDaysPerRow,
   ]);
+
+  useEffect(() => {
+    const inMemoryViewMode = readCalendarViewModeFromLayoutJson(activeTabLayoutJson);
+    setViewMode(inMemoryViewMode || 'month');
+  }, [activeTab, activeTabLayoutJson]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const refreshViewModeFromTabConfig = async () => {
+      try {
+        const response = await axios.get(`${API_DEVICE_URL}/tabs`);
+        const tabs = Array.isArray(response.data) ? response.data : [];
+        const activeTabRow = tabs.find((tab) => Number(tab.number) === Number(activeTab));
+        const dbViewMode = readCalendarViewModeFromLayoutJson(activeTabRow?.layout_json || null);
+
+        if (!cancelled) {
+          setViewMode(dbViewMode || 'month');
+        }
+      } catch {
+        // Best effort only. Keep current UI mode when DB refresh fails.
+      }
+    };
+
+    void refreshViewModeFromTabConfig();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [API_DEVICE_URL, activeTab]);
+
+  const persistViewModeForTab = async (tabNumber, nextViewMode) => {
+    try {
+      await axios.patch(`${API_DEVICE_URL}/widget-assignments/layout`, {
+        widget_name: 'calendar',
+        tabNumber,
+        settings: {
+          viewMode: nextViewMode,
+        },
+      });
+    } catch (error) {
+      // Non-blocking preference persistence.
+      console.debug('Calendar tab view mode persistence failed:', error);
+    }
+  };
 
   const fetchCalendarSources = async () => {
     try {
@@ -826,9 +899,11 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl, refreshInterval
   };
 
   const handleViewModeChange = (event, newViewMode) => {
-    if (newViewMode !== null) {
-      setViewMode(newViewMode);
-    }
+    if (newViewMode === null || !TAB_CALENDAR_VIEW_MODES.has(newViewMode)) return;
+
+    // Optimistic UI: switch instantly, then persist in the background.
+    setViewMode(newViewMode);
+    void persistViewModeForTab(activeTab, newViewMode);
   };
 
   const getCurrentMonthYear = () => {

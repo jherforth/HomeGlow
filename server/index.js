@@ -2602,7 +2602,7 @@ fastify.patch('/api/devices/:deviceName/widget-assignments/layout', async (reque
   if (!deviceName) {
     return reply.status(400).send({ error: 'deviceName is required' });
   }
-  const { widget_name, tabNumber, layout_x, layout_y, layout_w, layout_h } = request.body;
+  const { widget_name, tabNumber, layout_x, layout_y, layout_w, layout_h, settings } = request.body;
 
   if (!widget_name || !tabNumber) {
     return reply.status(400).send({ error: 'widget_name and tabNumber are required' });
@@ -2623,7 +2623,22 @@ fastify.patch('/api/devices/:deviceName/widget-assignments/layout', async (reque
       return reply.status(404).send({ error: 'Assignment not found' });
     }
 
-    layoutMap[widget_name] = normalizeLayoutFields({ layout_x, layout_y, layout_w, layout_h });
+    const normalizedLayout = normalizeLayoutFields({
+      layout_x: layout_x ?? existing.layout_x,
+      layout_y: layout_y ?? existing.layout_y,
+      layout_w: layout_w ?? existing.layout_w,
+      layout_h: layout_h ?? existing.layout_h,
+    });
+
+    const mergedSettings = settings && typeof settings === 'object' && !Array.isArray(settings)
+      ? settings
+      : {};
+
+    layoutMap[widget_name] = {
+      ...existing,
+      ...normalizedLayout,
+      ...mergedSettings,
+    };
     saveTabLayoutById(tab.id, layoutMap);
 
     touchDeviceUpdateTime(deviceName);
@@ -2677,7 +2692,16 @@ fastify.patch('/api/devices/:deviceName/widget-assignments/layout/bulk', async (
         continue;
       }
 
-      tabEntry.layoutMap[widgetName] = normalizeLayoutFields(item);
+      const existingLayout = tabEntry.layoutMap[widgetName];
+      tabEntry.layoutMap[widgetName] = {
+        ...existingLayout,
+        ...normalizeLayoutFields({
+          layout_x: item.layout_x ?? existingLayout.layout_x,
+          layout_y: item.layout_y ?? existingLayout.layout_y,
+          layout_w: item.layout_w ?? existingLayout.layout_w,
+          layout_h: item.layout_h ?? existingLayout.layout_h,
+        }),
+      };
       tabEntry.changed = true;
       anyChanged = true;
     }
