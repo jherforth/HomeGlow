@@ -59,7 +59,49 @@ const ChoreWidget = lazy(loadChoreWidget);
 const TabIconModal = lazy(loadTabIconModal);
 const ScreenSaver = lazy(loadScreenSaver);
 
+// region #98 - expected to get removed in the future (localStorage migration bridge)
 const AUTO_DARK_MODE_STORAGE_KEY = 'autoDarkModeSettings';
+const DEVICE_SETTINGS_UPDATED_EVENT = 'homeglow:device-settings-updated';
+const DEVICE_SETTINGS_MIGRATION_KEY_PATTERN = /^(enabledWidgets|theme|themeMode|widgetsLocked|widgetSettings|pluginSettings|screensaverSettings|autoDarkModeSettings)$/;
+
+const isAllowedDeviceSettingsMigrationKey = (key) => DEVICE_SETTINGS_MIGRATION_KEY_PATTERN.test(key);
+// endRegion #98
+
+const DEFAULT_SCREENSAVER_SETTINGS = {
+  enabled: false,
+  mode: 'tabs',
+  timeout: 5,
+  slideshowInterval: 10,
+};
+
+const DEFAULT_WIDGET_SETTINGS = {
+  chores: { enabled: false, transparent: false },
+  calendar: { enabled: false, transparent: false },
+  photos: { enabled: false, transparent: false },
+  weather: { enabled: false, transparent: false },
+  lightGradientStart: '#00ddeb',
+  lightGradientEnd: '#ff6b6b',
+  darkGradientStart: '#2e2767',
+  darkGradientEnd: '#620808',
+  lightButtonGradientStart: '#00ddeb',
+  lightButtonGradientEnd: '#ff6b6b',
+  darkButtonGradientStart: '#2e2767',
+  darkButtonGradientEnd: '#620808',
+};
+
+const normalizeWidgetSettings = (raw) => ({
+  ...DEFAULT_WIDGET_SETTINGS,
+  ...(raw && typeof raw === 'object' ? raw : {}),
+  chores: { ...DEFAULT_WIDGET_SETTINGS.chores, ...(raw?.chores || {}) },
+  calendar: { ...DEFAULT_WIDGET_SETTINGS.calendar, ...(raw?.calendar || {}) },
+  photos: { ...DEFAULT_WIDGET_SETTINGS.photos, ...(raw?.photos || {}) },
+  weather: { ...DEFAULT_WIDGET_SETTINGS.weather, ...(raw?.weather || {}) },
+});
+
+const normalizeScreensaverSettings = (raw) => ({
+  ...DEFAULT_SCREENSAVER_SETTINGS,
+  ...(raw && typeof raw === 'object' ? raw : {}),
+});
 const DEFAULT_AUTO_DARK_MODE_SETTINGS = {
   enabled: false,
   locationQuery: '',
@@ -68,23 +110,19 @@ const DEFAULT_AUTO_DARK_MODE_SETTINGS = {
   resolvedName: '',
 };
 
-const loadAutoDarkModeSettings = () => {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(AUTO_DARK_MODE_STORAGE_KEY) || 'null');
-    if (!parsed || typeof parsed !== 'object') {
-      return { ...DEFAULT_AUTO_DARK_MODE_SETTINGS };
-    }
-    return {
-      ...DEFAULT_AUTO_DARK_MODE_SETTINGS,
-      ...parsed,
-      locationQuery: (parsed.locationQuery || '').trim(),
-      lat: typeof parsed.lat === 'number' ? parsed.lat : null,
-      lon: typeof parsed.lon === 'number' ? parsed.lon : null,
-      resolvedName: parsed.resolvedName || '',
-    };
-  } catch {
+const normalizeAutoDarkModeSettings = (raw) => {
+  if (!raw || typeof raw !== 'object') {
     return { ...DEFAULT_AUTO_DARK_MODE_SETTINGS };
   }
+
+  return {
+    ...DEFAULT_AUTO_DARK_MODE_SETTINGS,
+    ...raw,
+    locationQuery: (raw.locationQuery || '').trim(),
+    lat: typeof raw.lat === 'number' ? raw.lat : null,
+    lon: typeof raw.lon === 'number' ? raw.lon : null,
+    resolvedName: raw.resolvedName || '',
+  };
 };
 
 const WidgetLoadingFallback = ({ label }) => (
@@ -106,49 +144,15 @@ const WidgetLoadingFallback = ({ label }) => (
 const App = () => {
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [theme, setTheme] = useState('light');
-  const [themeMode, setThemeMode] = useState(() => {
-    const savedThemeMode = localStorage.getItem('themeMode');
-    if (savedThemeMode === 'light' || savedThemeMode === 'dark' || savedThemeMode === 'auto') {
-      return savedThemeMode;
-    }
-    const savedTheme = localStorage.getItem('theme');
-    return savedTheme === 'dark' ? 'dark' : 'light';
-  });
-  const [autoDarkModeSettings, setAutoDarkModeSettings] = useState(loadAutoDarkModeSettings);
-  const [widgetsLocked, setWidgetsLocked] = useState(() => {
-    const saved = localStorage.getItem('widgetsLocked');
-    return saved !== null ? JSON.parse(saved) : true;
-  });
+  const [themeMode, setThemeMode] = useState('light');
+  const [autoDarkModeSettings, setAutoDarkModeSettings] = useState({ ...DEFAULT_AUTO_DARK_MODE_SETTINGS });
+  const [widgetsLocked, setWidgetsLocked] = useState(true);
   const [screensaverActive, setScreensaverActive] = useState(false);
-  const [screensaverSettings, setScreensaverSettings] = useState(() => {
-    const saved = localStorage.getItem('screensaverSettings');
-    return saved ? JSON.parse(saved) : {
-      enabled: false,
-      mode: 'tabs',
-      timeout: 5,
-      slideshowInterval: 10
-    };
-  });
+  const [screensaverSettings, setScreensaverSettings] = useState({ ...DEFAULT_SCREENSAVER_SETTINGS });
   const inactivityTimerRef = useRef(null);
   const lastActivityRef = useRef(Date.now());
-  const [widgetSettings, setWidgetSettings] = useState(() => {
-    const defaultSettings = {
-      chores: { enabled: false, transparent: false },
-      calendar: { enabled: false, transparent: false },
-      photos: { enabled: false, transparent: false },
-      weather: { enabled: false, transparent: false },
-      lightGradientStart: '#00ddeb',
-      lightGradientEnd: '#ff6b6b',
-      darkGradientStart: '#2e2767',
-      darkGradientEnd: '#620808',
-      lightButtonGradientStart: '#00ddeb',
-      lightButtonGradientEnd: '#ff6b6b',
-      darkButtonGradientStart: '#2e2767',
-      darkButtonGradientEnd: '#620808',
-    };
-    const savedSettings = localStorage.getItem('widgetSettings');
-    return savedSettings ? { ...defaultSettings, ...JSON.parse(savedSettings) } : defaultSettings;
-  });
+  const [widgetSettings, setWidgetSettings] = useState({ ...DEFAULT_WIDGET_SETTINGS });
+  const [pluginSettings, setPluginSettings] = useState({});
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [apiKeys, setApiKeys] = useState({
     WEATHER_API_KEY: '',
@@ -160,6 +164,8 @@ const App = () => {
   const [tabs, setTabs] = useState([]);
   const [widgetAssignments, setWidgetAssignments] = useState({});
   const [showTabIconModal, setShowTabIconModal] = useState(false);
+  const [deviceSettingsLoaded, setDeviceSettingsLoaded] = useState(false);
+  const [isFirstRunClient, setIsFirstRunClient] = useState(false);
 
   const fetchInstalledPlugins = async () => {
     try {
@@ -170,6 +176,140 @@ const App = () => {
     }
   };
 
+  const hydrateFromDeviceSettings = useCallback((settings) => {
+    const widgetSettingsFromServer = normalizeWidgetSettings(settings?.widgetSettings);
+    const pluginSettingsFromServer = settings?.pluginSettings && typeof settings.pluginSettings === 'object'
+      ? settings.pluginSettings
+      : {};
+    const screensaverFromServer = normalizeScreensaverSettings(settings?.screensaverSettings);
+    const autoDarkFromServer = normalizeAutoDarkModeSettings(settings?.autoDarkModeSettings);
+    const widgetsLockedFromServer = typeof settings?.widgetsLocked === 'boolean' ? settings.widgetsLocked : true;
+    const themeFromServer = settings?.theme === 'dark' ? 'dark' : 'light';
+    const themeModeFromServer = ['light', 'dark', 'auto'].includes(settings?.themeMode)
+      ? settings.themeMode
+      : themeFromServer;
+
+    setWidgetSettings(widgetSettingsFromServer);
+    setPluginSettings(pluginSettingsFromServer);
+    setScreensaverSettings(screensaverFromServer);
+    setAutoDarkModeSettings(autoDarkFromServer);
+    setWidgetsLocked(widgetsLockedFromServer);
+    setThemeMode(themeModeFromServer);
+    applyTheme(themeFromServer);
+
+    const hasKnownDeviceSettings = [
+      'widgetSettings',
+      'pluginSettings',
+      'screensaverSettings',
+      'autoDarkModeSettings',
+      'theme',
+      'themeMode',
+      'widgetsLocked',
+    ].some((key) => Object.prototype.hasOwnProperty.call(settings || {}, key));
+
+    setIsFirstRunClient(!hasKnownDeviceSettings);
+    setDeviceSettingsLoaded(true);
+  }, [applyTheme]);
+
+  const fetchDeviceSettings = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API_DEVICE_URL}/settings`);
+      hydrateFromDeviceSettings(response.data || {});
+    } catch (error) {
+      console.error('Error fetching device settings:', error);
+    }
+  }, [API_DEVICE_URL, hydrateFromDeviceSettings]);
+
+  // region #98 - expected to get removed in the future (one-time local-to-server settings migration)
+  const migrateLocalDeviceSettingsToServer = useCallback(async () => {
+    const localPayload = {};
+
+    if (isAllowedDeviceSettingsMigrationKey('theme')) {
+      const theme = localStorage.getItem('theme');
+      if (theme === 'light' || theme === 'dark') {
+        localPayload.theme = theme;
+      }
+    }
+
+    if (isAllowedDeviceSettingsMigrationKey('themeMode')) {
+      const themeMode = localStorage.getItem('themeMode');
+      if (themeMode === 'light' || themeMode === 'dark' || themeMode === 'auto') {
+        localPayload.themeMode = themeMode;
+      }
+    }
+
+    if (isAllowedDeviceSettingsMigrationKey('widgetsLocked')) {
+      const widgetsLockedRaw = localStorage.getItem('widgetsLocked');
+      if (widgetsLockedRaw !== null) {
+        try {
+          localPayload.widgetsLocked = JSON.parse(widgetsLockedRaw);
+        } catch {
+          // Ignore malformed local value.
+        }
+      }
+    }
+
+    const parseJsonKey = (key) => {
+      if (!isAllowedDeviceSettingsMigrationKey(key)) return null;
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      try {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : null;
+      } catch {
+        return null;
+      }
+    };
+
+    const widgetSettingsRaw = parseJsonKey('widgetSettings');
+    if (widgetSettingsRaw) {
+      localPayload.widgetSettings = normalizeWidgetSettings(widgetSettingsRaw);
+    }
+
+    const pluginSettingsRaw = parseJsonKey('pluginSettings');
+    if (pluginSettingsRaw) {
+      localPayload.pluginSettings = pluginSettingsRaw;
+    }
+
+    const screensaverRaw = parseJsonKey('screensaverSettings');
+    if (screensaverRaw) {
+      localPayload.screensaverSettings = normalizeScreensaverSettings(screensaverRaw);
+    }
+
+    const autoDarkRaw = parseJsonKey(AUTO_DARK_MODE_STORAGE_KEY);
+    if (autoDarkRaw) {
+      localPayload.autoDarkModeSettings = normalizeAutoDarkModeSettings(autoDarkRaw);
+    }
+
+    const keysToMigrate = Object.keys(localPayload);
+    if (keysToMigrate.length === 0) {
+      return;
+    }
+
+    try {
+      await axios.put(`${API_DEVICE_URL}/settings`, localPayload);
+
+      // Remove only known migrated keys.
+      ['theme', 'themeMode', 'widgetsLocked', 'widgetSettings', 'pluginSettings', 'screensaverSettings', AUTO_DARK_MODE_STORAGE_KEY]
+        .filter(isAllowedDeviceSettingsMigrationKey)
+        .forEach((key) => {
+          localStorage.removeItem(key);
+        });
+    } catch (error) {
+      console.error('Error migrating local device settings to server:', error);
+    }
+  }, [API_DEVICE_URL]);
+  // endRegion #98
+
+  const patchDeviceSettings = useCallback(async (partialSettings) => {
+    try {
+      await axios.patch(`${API_DEVICE_URL}/settings`, partialSettings);
+    } catch (error) {
+      console.error('Error updating device settings:', error);
+    }
+  }, [API_DEVICE_URL]);
+
+  // region #98 - expected to get removed in the future (legacy key normalization)
   useEffect(() => {
     const oldEnabled = localStorage.getItem('enabledWidgets');
     if (oldEnabled) {
@@ -196,7 +336,9 @@ const App = () => {
       } catch { }
     }
   }, []);
+  // endRegion #98
 
+  // region #98 - expected to get removed in the future (invoke migration bridge during bootstrap)
   useEffect(() => {
     const fetchApiKeys = async () => {
       try {
@@ -208,11 +350,21 @@ const App = () => {
         setApiKeysLoaded(true);
       }
     };
-    fetchApiKeys();
-    fetchTabs();
-    fetchWidgetAssignments();
-    fetchInstalledPlugins();
-  }, []);
+
+    const initialize = async () => {
+      await migrateLocalDeviceSettingsToServer();
+      await fetchDeviceSettings();
+      await Promise.all([
+        fetchTabs(),
+        fetchWidgetAssignments(),
+        fetchInstalledPlugins(),
+      ]);
+      await fetchApiKeys();
+    };
+
+    void initialize();
+  }, [fetchDeviceSettings, migrateLocalDeviceSettingsToServer]);
+  // endRegion #98
 
   const fetchTabs = async () => {
     try {
@@ -253,18 +405,15 @@ const App = () => {
   const applyTheme = useCallback((nextTheme) => {
     setTheme(nextTheme);
     document.documentElement.setAttribute('data-theme', nextTheme);
-    localStorage.setItem('theme', nextTheme);
 
     if (nextTheme === 'light') {
-      const savedSettings = localStorage.getItem('widgetSettings');
-      const parsed = savedSettings ? JSON.parse(savedSettings) : {};
-      const primaryColor = parsed.primary || '#f5f5f5';
+      const primaryColor = widgetSettings.primary || '#f5f5f5';
       document.documentElement.style.setProperty('--background', primaryColor);
       return;
     }
 
     document.documentElement.style.removeProperty('--background');
-  }, []);
+  }, [widgetSettings.primary]);
 
   const resolveAutoTheme = useCallback(async () => {
     const hasCoordinates = typeof autoDarkModeSettings.lat === 'number' && typeof autoDarkModeSettings.lon === 'number';
@@ -303,27 +452,19 @@ const App = () => {
   }, [resolveAutoTheme, applyTheme]);
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-    const savedThemeMode = localStorage.getItem('themeMode');
-    const initialMode = (savedThemeMode === 'light' || savedThemeMode === 'dark' || savedThemeMode === 'auto')
-      ? savedThemeMode
-      : savedTheme;
-
-    setThemeMode(initialMode);
-    localStorage.setItem('themeMode', initialMode);
-    applyTheme(savedTheme);
+    applyTheme('light');
   }, [applyTheme]);
 
   useEffect(() => {
-    const handleAutoDarkModeUpdate = () => {
-      setAutoDarkModeSettings(loadAutoDarkModeSettings());
+    const handleDeviceSettingsUpdated = () => {
+      void fetchDeviceSettings();
     };
 
-    window.addEventListener('homeglow:auto-darkmode-updated', handleAutoDarkModeUpdate);
+    window.addEventListener(DEVICE_SETTINGS_UPDATED_EVENT, handleDeviceSettingsUpdated);
     return () => {
-      window.removeEventListener('homeglow:auto-darkmode-updated', handleAutoDarkModeUpdate);
+      window.removeEventListener(DEVICE_SETTINGS_UPDATED_EVENT, handleDeviceSettingsUpdated);
     };
-  }, []);
+  }, [fetchDeviceSettings]);
 
   useEffect(() => {
     if (themeMode !== 'auto') {
@@ -374,9 +515,12 @@ const App = () => {
     if (!autoModeAvailable) {
       const fallbackMode = theme === 'dark' ? 'dark' : 'light';
       setThemeMode(fallbackMode);
-      localStorage.setItem('themeMode', fallbackMode);
+      void patchDeviceSettings({
+        themeMode: fallbackMode,
+        theme: fallbackMode,
+      });
     }
-  }, [apiKeysLoaded, themeMode, autoDarkModeSettings, apiKeys.WEATHER_API_KEY, theme]);
+  }, [apiKeysLoaded, themeMode, autoDarkModeSettings, apiKeys.WEATHER_API_KEY, theme, patchDeviceSettings]);
 
   useEffect(() => {
     document.documentElement.style.setProperty('--light-gradient-start', widgetSettings.lightGradientStart);
@@ -447,13 +591,6 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    const savedScreensaverSettings = localStorage.getItem('screensaverSettings');
-    if (savedScreensaverSettings) {
-      setScreensaverSettings(JSON.parse(savedScreensaverSettings));
-    }
-  }, []);
-
-  useEffect(() => {
     if (!screensaverSettings.enabled) {
       if (inactivityTimerRef.current) {
         clearTimeout(inactivityTimerRef.current);
@@ -507,7 +644,12 @@ const App = () => {
     const nextMode = themeModes[(currentIndex + 1) % themeModes.length];
 
     setThemeMode(nextMode);
-    localStorage.setItem('themeMode', nextMode);
+
+    const nextTheme = nextMode === 'auto' ? theme : nextMode;
+    void patchDeviceSettings({
+      themeMode: nextMode,
+      theme: nextTheme,
+    });
 
     if (nextMode === 'auto') {
       void applyAutoThemeNow();
@@ -520,22 +662,12 @@ const App = () => {
   const toggleWidgetsLock = () => {
     const newLockState = !widgetsLocked;
     setWidgetsLocked(newLockState);
-    localStorage.setItem('widgetsLocked', JSON.stringify(newLockState));
+    void patchDeviceSettings({ widgetsLocked: newLockState });
   };
 
   const toggleAdminPanel = () => {
     if (showAdminPanel) {
-      const savedSettings = localStorage.getItem('widgetSettings');
-      if (savedSettings) {
-        const parsed = JSON.parse(savedSettings);
-        setWidgetSettings(prev => ({ ...prev, ...parsed }));
-      }
-      const savedScreensaver = localStorage.getItem('screensaverSettings');
-      if (savedScreensaver) {
-        setScreensaverSettings(JSON.parse(savedScreensaver));
-      }
-
-      setAutoDarkModeSettings(loadAutoDarkModeSettings());
+      void fetchDeviceSettings();
     }
     setShowAdminPanel(!showAdminPanel);
   };
@@ -673,7 +805,6 @@ const App = () => {
       });
     }
 
-    const pluginSettings = JSON.parse(localStorage.getItem('pluginSettings') || '{}');
     installedPlugins.forEach((plugin, index) => {
       const pSettings = pluginSettings[plugin.filename] || {};
       if (!pSettings.enabled) return;
@@ -699,22 +830,18 @@ const App = () => {
     });
 
     return result;
-  }, [widgetSettings, activeTab, apiKeys, widgetAssignments, installedPlugins, theme]);
+  }, [widgetSettings, pluginSettings, activeTab, apiKeys, widgetAssignments, installedPlugins, theme]);
 
   const activeTabId = useMemo(() => {
     const active = tabs.find(tab => tab.number === activeTab);
     return active?.id ?? 1;
   }, [tabs, activeTab]);
 
-  const isFirstRunClient = useMemo(() => {
-    return localStorage.getItem('widgetSettings') === null;
-  }, []);
-
   return (
     <>
       <Box sx={{ width: '100%', minHeight: '100vh', position: 'relative', pb: '60px' }}>
         {widgets.length > 0 && <WidgetContainer widgets={widgets} locked={widgetsLocked} activeTab={activeTab} activeTabId={activeTabId} />}
-        {widgets.length === 0 && isFirstRunClient && (
+        {deviceSettingsLoaded && widgets.length === 0 && isFirstRunClient && (
           <Box
             sx={{
               minHeight: 'calc(100vh - 60px)',

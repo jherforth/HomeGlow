@@ -74,7 +74,7 @@ import TabIconModal from './TabIconModal';
 import GoogleAccountConnection from './GoogleAccountConnection';
 
 const USERS_UPDATED_EVENT = 'homeglow:users-updated';
-const AUTO_DARK_MODE_STORAGE_KEY = 'autoDarkModeSettings';
+const DEVICE_SETTINGS_UPDATED_EVENT = 'homeglow:device-settings-updated';
 const DEFAULT_AUTO_DARK_MODE_SETTINGS = {
   enabled: false,
   locationQuery: '',
@@ -83,25 +83,36 @@ const DEFAULT_AUTO_DARK_MODE_SETTINGS = {
   resolvedName: '',
 };
 
-const loadAutoDarkModeSettings = () => {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(AUTO_DARK_MODE_STORAGE_KEY) || 'null');
-    if (!parsed || typeof parsed !== 'object') {
-      return { ...DEFAULT_AUTO_DARK_MODE_SETTINGS };
-    }
-
-    return {
-      ...DEFAULT_AUTO_DARK_MODE_SETTINGS,
-      ...parsed,
-      locationQuery: (parsed.locationQuery || '').trim(),
-      lat: typeof parsed.lat === 'number' ? parsed.lat : null,
-      lon: typeof parsed.lon === 'number' ? parsed.lon : null,
-      resolvedName: parsed.resolvedName || '',
-    };
-  } catch {
-    return { ...DEFAULT_AUTO_DARK_MODE_SETTINGS };
-  }
+const DEFAULT_WIDGET_SETTINGS = {
+  chores: { enabled: false, transparent: false, refreshInterval: 0 },
+  calendar: { enabled: false, transparent: false, refreshInterval: 0 },
+  photos: { enabled: false, transparent: false, refreshInterval: 0 },
+  weather: { enabled: false, transparent: false, refreshInterval: 0 },
+  primary: '#f5f5f5',
+  secondary: '#38bdf8',
+  accent: '#f472b6'
 };
+
+const DEFAULT_SCREENSAVER_SETTINGS = {
+  enabled: false,
+  mode: 'tabs',
+  timeout: 5,
+  slideshowInterval: 10
+};
+
+const normalizeWidgetSettings = (raw) => ({
+  ...DEFAULT_WIDGET_SETTINGS,
+  ...(raw && typeof raw === 'object' ? raw : {}),
+  chores: { ...DEFAULT_WIDGET_SETTINGS.chores, ...(raw?.chores || {}) },
+  calendar: { ...DEFAULT_WIDGET_SETTINGS.calendar, ...(raw?.calendar || {}) },
+  photos: { ...DEFAULT_WIDGET_SETTINGS.photos, ...(raw?.photos || {}) },
+  weather: { ...DEFAULT_WIDGET_SETTINGS.weather, ...(raw?.weather || {}) },
+});
+
+const normalizeScreensaverSettings = (raw) => ({
+  ...DEFAULT_SCREENSAVER_SETTINGS,
+  ...(raw && typeof raw === 'object' ? raw : {}),
+});
 
 const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const [currentDeviceName, setCurrentDeviceName] = useState(() => getDeviceName());
@@ -121,13 +132,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     daily_completion_clam_reward: '2'
   });
   const [widgetSettings, setLocalWidgetSettings] = useState({
-    chores: { enabled: false, transparent: false, refreshInterval: 0 },
-    calendar: { enabled: false, transparent: false, refreshInterval: 0 },
-    photos: { enabled: false, transparent: false, refreshInterval: 0 },
-    weather: { enabled: false, transparent: false, refreshInterval: 0 },
-    primary: '#f5f5f5',
-    secondary: '#38bdf8',
-    accent: '#f472b6'
+    ...DEFAULT_WIDGET_SETTINGS
   });
   const [users, setUsers] = useState([]);
   const [chores, setChores] = useState([]);
@@ -150,22 +155,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const [checkingPin, setCheckingPin] = useState(true);
   const [tabs, setTabs] = useState([]);
   const [widgetAssignments, setWidgetAssignments] = useState({});
-  const [pluginSettings, setPluginSettings] = useState(() => {
-    const saved = localStorage.getItem('pluginSettings');
-    return saved ? JSON.parse(saved) : {};
-  });
+  const [pluginSettings, setPluginSettings] = useState({});
   const [pluginAssignments, setPluginAssignments] = useState({});
   const [photoSources, setPhotoSources] = useState([]);
-  const [screensaverSettings, setScreensaverSettings] = useState(() => {
-    const saved = localStorage.getItem('screensaverSettings');
-    return saved ? JSON.parse(saved) : {
-      enabled: false,
-      mode: 'tabs',
-      timeout: 5,
-      slideshowInterval: 10
-    };
-  });
-  const [autoDarkModeSettings, setAutoDarkModeSettings] = useState(loadAutoDarkModeSettings);
+  const [screensaverSettings, setScreensaverSettings] = useState({ ...DEFAULT_SCREENSAVER_SETTINGS });
+  const [autoDarkModeSettings, setAutoDarkModeSettings] = useState({ ...DEFAULT_AUTO_DARK_MODE_SETTINGS });
   const [isSavingAutoDarkMode, setIsSavingAutoDarkMode] = useState(false);
   const [autoDarkModeSunTimes, setAutoDarkModeSunTimes] = useState({
     sunrise: null,
@@ -206,32 +200,13 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   ];
 
   useEffect(() => {
-    const savedSettings = localStorage.getItem('widgetSettings');
-    if (savedSettings) {
-      const parsed = JSON.parse(savedSettings);
-      // Ensure refresh intervals are included for all widgets.
-      const settingsWithDefaults = {
-        chores: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.chores },
-        calendar: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.calendar },
-        photos: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.photos },
-        weather: {
-          enabled: false,
-          transparent: false,
-          refreshInterval: 0,
-          ...parsed.weather
-        },
-        primary: parsed.primary || '#f5f5f5',
-        secondary: parsed.secondary || '#38bdf8',
-        accent: parsed.accent || '#f472b6'
-      };
-      setLocalWidgetSettings(settingsWithDefaults);
-    }
     checkPinStatus();
   }, []);
 
   useEffect(() => {
     if (isAuthenticated) {
       fetchSettings();
+      fetchDeviceSettings();
       fetchUsers();
       fetchChores();
       fetchPrizes();
@@ -288,6 +263,38 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     } catch (error) {
       console.error('Error fetching settings:', error);
     }
+  };
+
+  const fetchDeviceSettings = async () => {
+    try {
+      const response = await axios.get(`${API_DEVICE_URL}/settings`);
+      const deviceSettings = response.data && typeof response.data === 'object' ? response.data : {};
+
+      const nextWidgetSettings = normalizeWidgetSettings(deviceSettings.widgetSettings);
+      const nextPluginSettings = deviceSettings.pluginSettings && typeof deviceSettings.pluginSettings === 'object'
+        ? deviceSettings.pluginSettings
+        : {};
+      const nextScreensaverSettings = normalizeScreensaverSettings(deviceSettings.screensaverSettings);
+      const nextAutoDarkSettings = {
+        ...DEFAULT_AUTO_DARK_MODE_SETTINGS,
+        ...(deviceSettings.autoDarkModeSettings && typeof deviceSettings.autoDarkModeSettings === 'object'
+          ? deviceSettings.autoDarkModeSettings
+          : {}),
+      };
+
+      setLocalWidgetSettings(nextWidgetSettings);
+      setWidgetSettings(nextWidgetSettings);
+      setPluginSettings(nextPluginSettings);
+      setScreensaverSettings(nextScreensaverSettings);
+      setAutoDarkModeSettings(nextAutoDarkSettings);
+    } catch (error) {
+      console.error('Error fetching device settings:', error);
+    }
+  };
+
+  const patchDeviceSettings = async (partialSettings) => {
+    await axios.patch(`${API_DEVICE_URL}/settings`, partialSettings);
+    window.dispatchEvent(new Event(DEVICE_SETTINGS_UPDATED_EVENT));
   };
 
   const fetchUsers = async () => {
@@ -555,8 +562,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const saveWidgetSettings = async () => {
     setIsLoading(true);
     try {
-      localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
       setWidgetSettings(widgetSettings);
+      await patchDeviceSettings({ widgetSettings });
 
       const currentResponse = await axios.get(`${API_DEVICE_URL}/widget-assignments`);
       const currentAssignments = Array.isArray(currentResponse.data) ? currentResponse.data : [];
@@ -617,7 +624,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const savePluginSettings = async () => {
     setIsLoading(true);
     try {
-      localStorage.setItem('pluginSettings', JSON.stringify(pluginSettings));
+      await patchDeviceSettings({ pluginSettings });
 
       const currentResponse = await axios.get(`${API_DEVICE_URL}/widget-assignments`);
       const currentAssignments = Array.isArray(currentResponse.data) ? currentResponse.data : [];
@@ -868,6 +875,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       setCopyDeviceDialog({ open: false, device: null });
       await fetchTabs();
       await fetchWidgetAssignments();
+      await fetchDeviceSettings();
       await fetchDevices();
       if (onTabsChanged) {
         await onTabsChanged();
@@ -961,15 +969,24 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     }
   };
 
-  const saveInterfaceSettings = () => {
-    localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
-    setWidgetSettings(widgetSettings);
+  const saveInterfaceSettings = async () => {
+    try {
+      setIsLoading(true);
+      setWidgetSettings(widgetSettings);
+      await patchDeviceSettings({ widgetSettings });
 
-    // Apply CSS variables immediately
-    applyAccentColors();
+      // Apply CSS variables immediately
+      applyAccentColors();
 
-    setSaveMessage({ show: true, type: 'success', text: 'Accent colors saved! Refresh page to see all changes.' });
-    setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+      setSaveMessage({ show: true, type: 'success', text: 'Accent colors saved! Refresh page to see all changes.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error saving accent colors:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to save accent colors. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const applyAccentColors = () => {
@@ -997,10 +1014,19 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
   };
 
-  const saveScreensaverSettings = () => {
-    localStorage.setItem('screensaverSettings', JSON.stringify(screensaverSettings));
-    setSaveMessage({ show: true, type: 'success', text: 'Screensaver settings saved!' });
-    setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+  const saveScreensaverSettings = async () => {
+    try {
+      setIsLoading(true);
+      await patchDeviceSettings({ screensaverSettings: normalizeScreensaverSettings(screensaverSettings) });
+      setSaveMessage({ show: true, type: 'success', text: 'Screensaver settings saved!' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error saving screensaver settings:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to save screensaver settings. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const resolveAutoDarkModeLocation = async (locationQuery) => {
@@ -1066,9 +1092,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         ...autoDarkModeSettings,
         locationQuery: trimmedLocation,
       };
-      localStorage.setItem(AUTO_DARK_MODE_STORAGE_KEY, JSON.stringify(nextSettings));
+      await patchDeviceSettings({ autoDarkModeSettings: nextSettings });
       setAutoDarkModeSettings(nextSettings);
-      window.dispatchEvent(new Event('homeglow:auto-darkmode-updated'));
       setSaveMessage({ show: true, type: 'success', text: 'Auto dark mode disabled.' });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
       return;
@@ -1106,9 +1131,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         resolvedName: resolved.resolvedName,
       };
 
-      localStorage.setItem(AUTO_DARK_MODE_STORAGE_KEY, JSON.stringify(nextSettings));
+      await patchDeviceSettings({ autoDarkModeSettings: nextSettings });
       setAutoDarkModeSettings(nextSettings);
-      window.dispatchEvent(new Event('homeglow:auto-darkmode-updated'));
       setSaveMessage({
         show: true,
         type: 'success',
@@ -1364,12 +1388,14 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         await axios.delete(`${API_BASE_URL}/api/widgets/${filename}`);
         const pluginWidgetName = `plugin:${filename}`;
         await axios.delete(`${API_DEVICE_URL}/widget-assignments/widget/${encodeURIComponent(pluginWidgetName)}`).catch(() => { });
+        let nextPluginSettings = {};
         setPluginSettings(prev => {
           const updated = { ...prev };
           delete updated[filename];
-          localStorage.setItem('pluginSettings', JSON.stringify(updated));
+          nextPluginSettings = updated;
           return updated;
         });
+        await patchDeviceSettings({ pluginSettings: nextPluginSettings });
         setPluginAssignments(prev => {
           const updated = { ...prev };
           delete updated[pluginWidgetName];

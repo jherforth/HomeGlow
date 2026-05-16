@@ -49,6 +49,7 @@ const schemaMigrations = [
   { schemaId: 11, migrationPath: './migrations/schema11-homeglowPhotos', },
   { schemaId: 12, migrationPath: './migrations/schema12-onceCompletedScheduling', },
   { schemaId: 13, migrationPath: './migrations/schema13-tabsByDefaultBackfill', },
+  { schemaId: 14, migrationPath: './migrations/schema14-deviceAndTabJsonStorage', },
 ];
 
 const ALLOWED_SCHEDULE_DURATIONS = new Set(['day-of', 'until-completed', 'once-completed']);
@@ -939,12 +940,178 @@ function startNightlyCronJob() {
   console.log('Daily background processing cron job scheduled for midnight');
 }
 
+function parseJsonObject(value, fallback = {}) {
+  if (!value) return fallback;
+  try {
+    const parsed = JSON.parse(value);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed;
+    }
+  } catch {
+    // Ignore malformed JSON and fall back.
+  }
+  return fallback;
+}
+
+function parseTabLayoutJson(layoutJson) {
+  return parseJsonObject(layoutJson, {});
+}
+
+function getDeviceUpdateTimeMs(deviceName) {
+  const row = db.prepare('SELECT updateTime FROM devices WHERE name = ?').get(deviceName);
+  if (!row?.updateTime) return null;
+  const timestamp = Date.parse(row.updateTime);
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function sendJsonWithConditionalCache(request, reply, payload, lastModifiedMs = null) {
+  const serialized = JSON.stringify(payload);
+  const etag = `W/"${crypto.createHash('sha1').update(serialized).digest('hex')}"`;
+  reply.header('ETag', etag);
+
+  if (lastModifiedMs) {
+    reply.header('Last-Modified', new Date(lastModifiedMs).toUTCString());
+  }
+
+  const ifNoneMatch = request.headers['if-none-match'];
+  if (ifNoneMatch && ifNoneMatch === etag) {
+    return reply.code(304).send();
+  }
+
+  if (lastModifiedMs) {
+    const ifModifiedSince = request.headers['if-modified-since'];
+    if (ifModifiedSince) {
+      const ifModifiedSinceMs = Date.parse(ifModifiedSince);
+      if (Number.isFinite(ifModifiedSinceMs) && ifModifiedSinceMs >= lastModifiedMs) {
+        return reply.code(304).send();
+      }
+    }
+  }
+
+  return reply.send(payload);
+}
+
+function normalizeLayoutFields(layout) {
+  if (!layout || typeof layout !== 'object') {
+    return {
+      layout_x: null,
+      layout_y: null,
+      layout_w: null,
+      layout_h: null,
+    };
+  }
+
+  const normalize = (value) => {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  return {
+    layout_x: normalize(layout.layout_x),
+    layout_y: normalize(layout.layout_y),
+    layout_w: normalize(layout.layout_w),
+    layout_h: normalize(layout.layout_h),
+  };
+}
+
+function buildAssignmentId(tabNumber, widgetName) {
+  return `${tabNumber}::${widgetName}`;
+}
+
+function parseAssignmentId(assignmentId) {
+  if (typeof assignmentId !== 'string') return null;
+  const delimiterIndex = assignmentId.indexOf('::');
+  if (delimiterIndex <= 0) return null;
+
+  const tabNumberRaw = assignmentId.slice(0, delimiterIndex);
+  const widgetName = assignmentId.slice(delimiterIndex + 2);
+  const tabNumber = Number.parseInt(tabNumberRaw, 10);
+  if (!Number.isFinite(tabNumber) || !widgetName) {
+    return null;
+  }
+
+  return { tabNumber, widgetName };
+}
+
+function getTabsForDevice(deviceName) {
+  return db
+    .prepare('SELECT id, device_name, number, label, icon, show_label, created_at, layout_json FROM tabs WHERE device_name = ? ORDER BY number ASC')
+    .all(deviceName);
+}
+
+function getTabByNumber(deviceName, tabNumber) {
+  return db
+    .prepare('SELECT id, device_name, number, label, icon, show_label, created_at, layout_json FROM tabs WHERE device_name = ? AND number = ?')
+    .get(deviceName, tabNumber);
+}
+
+function saveTabLayoutById(tabId, layoutMap) {
+  db.prepare('UPDATE tabs SET layout_json = ? WHERE id = ?').run(JSON.stringify(layoutMap), tabId);
+}
+
+function listWidgetAssignmentsFromTabLayouts(deviceName) {
+  const tabs = getTabsForDevice(deviceName);
+  const rows = [];
+
+  tabs.forEach((tab) => {
+    const layoutMap = parseTabLayoutJson(tab.layout_json);
+    Object.entries(layoutMap).forEach(([widgetName, layout]) => {
+      const normalized = normalizeLayoutFields(layout);
+      rows.push({
+        id: buildAssignmentId(tab.number, widgetName),
+        device_name: deviceName,
+        tab_number: tab.number,
+        widget_name: widgetName,
+        layout_x: normalized.layout_x,
+        layout_y: normalized.layout_y,
+        layout_w: normalized.layout_w,
+        layout_h: normalized.layout_h,
+      });
+    });
+  });
+
+  return rows;
+}
+
+function ensureCoreWidgetsInHomeTab(deviceName) {
+  if (!doesDeviceExist(deviceName)) {
+    return 0;
+  }
+
+  const homeTab = getTabByNumber(deviceName, 1);
+  if (!homeTab) {
+    return 0;
+  }
+
+  const layoutMap = parseTabLayoutJson(homeTab.layout_json);
+  let created = 0;
+
+  CORE_WIDGET_NAMES.forEach((widgetName) => {
+    if (!(widgetName in layoutMap)) {
+      layoutMap[widgetName] = {
+        layout_x: null,
+        layout_y: null,
+        layout_w: null,
+        layout_h: null,
+      };
+      created += 1;
+    }
+  });
+
+  if (created > 0) {
+    saveTabLayoutById(homeTab.id, layoutMap);
+    touchDeviceUpdateTime(deviceName);
+  }
+
+  return created;
+}
+
 function ensureHomeTabExists(deviceName) {
   // Insert default home tab if it doesn't exist
   try {
     const homeTab = db.prepare('SELECT id FROM tabs WHERE number = 1 AND device_name = ?').get(deviceName);
     if (!homeTab) {
-      db.prepare('INSERT INTO tabs (label, icon, show_label, number, device_name) VALUES (?, ?, ?, ?, ?)').run('Home', 'home', 1, 1, deviceName);
+      db.prepare('INSERT INTO tabs (label, icon, show_label, number, device_name, layout_json) VALUES (?, ?, ?, ?, ?, ?)').run('Home', 'home', 1, 1, deviceName, '{}');
       console.log('Default home tab created');
     }
   } catch (error) {
@@ -966,47 +1133,14 @@ function buildDefaultHomeTab(deviceName) {
     icon: 'home',
     show_label: 1,
     created_at: null,
+    layout_json: '{}',
   };
-}
-
-function backfillDefaultCoreWidgetAssignments(deviceName) {
-  if (!doesDeviceExist(deviceName)) {
-    return 0;
-  }
-
-  const homeTab = db.prepare('SELECT id FROM tabs WHERE number = 1 AND device_name = ?').get(deviceName);
-  if (!homeTab) {
-    return 0;
-  }
-
-  const existingNames = new Set(
-    db
-      .prepare('SELECT DISTINCT widget_name FROM widget_tab_assignments WHERE device_name = ?')
-      .all(deviceName)
-      .map(row => row.widget_name)
-  );
-
-  const missingCoreWidgets = CORE_WIDGET_NAMES.filter(widgetName => !existingNames.has(widgetName));
-  if (missingCoreWidgets.length === 0) {
-    return 0;
-  }
-
-  const insertMissing = db.transaction((widgetNames) => {
-    const stmt = db.prepare('INSERT INTO widget_tab_assignments (widget_name, tab_number, device_name) VALUES (?, ?, ?)');
-    widgetNames.forEach(widgetName => {
-      stmt.run(widgetName, 1, deviceName);
-    });
-  });
-
-  insertMissing(missingCoreWidgets);
-  touchDeviceUpdateTime(deviceName);
-  return missingCoreWidgets.length;
 }
 
 function ensureDeviceExists(deviceName) {
   db.prepare('INSERT OR IGNORE INTO devices (name, updateTime) VALUES (?, CURRENT_TIMESTAMP)').run(deviceName);
   ensureHomeTabExists(deviceName);
-  backfillDefaultCoreWidgetAssignments(deviceName);
+  ensureCoreWidgetsInHomeTab(deviceName);
 }
 function touchDeviceUpdateTime(deviceName) {
   db.prepare('UPDATE devices SET updateTime = CURRENT_TIMESTAMP WHERE name = ?').run(deviceName);
@@ -1015,23 +1149,76 @@ function touchDeviceUpdateTime(deviceName) {
 // Devices API Endpoints
 fastify.get('/api/devices', async (request, reply) => {
   try {
-    const devices = db.prepare(`
-      SELECT
-        d.name,
-        d.updateTime,
-        COUNT(wta.id) AS widgets
-      FROM devices d
-      LEFT JOIN widget_tab_assignments wta ON wta.device_name = d.name
-      GROUP BY d.name, d.updateTime
-      ORDER BY d.updateTime DESC
-    `).all();
+    const devices = db.prepare('SELECT name, updateTime FROM devices ORDER BY updateTime DESC').all();
+    return devices.map((device) => {
+      const tabs = getTabsForDevice(device.name);
+      const widgetCount = tabs.reduce((count, tab) => {
+        const layoutMap = parseTabLayoutJson(tab.layout_json);
+        return count + Object.keys(layoutMap).length;
+      }, 0);
 
-    return devices;
+      return {
+        ...device,
+        widgets: widgetCount,
+      };
+    });
   } catch (error) {
     console.error('Error fetching devices:', error);
     reply.status(500).send({ error: 'Failed to fetch devices' });
   }
 });
+
+fastify.get('/api/devices/:deviceName/settings', async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+
+  try {
+    const row = db.prepare('SELECT device_settings_json FROM devices WHERE name = ?').get(deviceName);
+    const lastModifiedMs = getDeviceUpdateTimeMs(deviceName);
+    if (!row) {
+      return sendJsonWithConditionalCache(request, reply, {}, null);
+    }
+
+    return sendJsonWithConditionalCache(request, reply, parseJsonObject(row.device_settings_json, {}), lastModifiedMs);
+  } catch (error) {
+    console.error('Error fetching device settings:', error);
+    reply.status(500).send({ error: 'Failed to fetch device settings' });
+  }
+});
+
+const upsertDeviceSettings = async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+
+  const incoming = request.body;
+  if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) {
+    return reply.status(400).send({ error: 'Request body must be a JSON object' });
+  }
+
+  try {
+    ensureDeviceExists(deviceName);
+    const row = db.prepare('SELECT device_settings_json FROM devices WHERE name = ?').get(deviceName);
+    const existingSettings = parseJsonObject(row?.device_settings_json, {});
+    const merged = { ...existingSettings, ...incoming };
+
+    db.prepare('UPDATE devices SET device_settings_json = ?, updateTime = CURRENT_TIMESTAMP WHERE name = ?').run(
+      JSON.stringify(merged),
+      deviceName
+    );
+
+    return merged;
+  } catch (error) {
+    console.error('Error saving device settings:', error);
+    reply.status(500).send({ error: 'Failed to save device settings' });
+  }
+};
+
+fastify.put('/api/devices/:deviceName/settings', upsertDeviceSettings);
+fastify.patch('/api/devices/:deviceName/settings', upsertDeviceSettings);
 
 
 fastify.patch('/api/devices/:deviceName', async (request, reply) => {
@@ -1091,40 +1278,18 @@ fastify.post('/api/devices/:deviceName/copy-from/:sourceDeviceName', async (requ
     ensureDeviceExists(deviceName);
 
     const copyTransaction = db.transaction(() => {
-      db.prepare('DELETE FROM widget_tab_assignments WHERE device_name = ?').run(deviceName);
       db.prepare('DELETE FROM tabs WHERE device_name = ?').run(deviceName);
 
       db.prepare(`
-        INSERT INTO tabs (device_name, label, icon, show_label, number)
-        SELECT ?, label, icon, show_label, number
+        INSERT INTO tabs (device_name, label, icon, show_label, number, created_at, layout_json)
+        SELECT ?, label, icon, show_label, number, created_at, COALESCE(layout_json, '{}')
         FROM tabs
         WHERE device_name = ?
         ORDER BY number ASC
       `).run(deviceName, sourceDeviceName);
 
-      db.prepare(`
-        INSERT INTO widget_tab_assignments (
-          widget_name,
-          tab_number,
-          layout_x,
-          layout_y,
-          layout_w,
-          layout_h,
-          device_name
-        )
-        SELECT
-          widget_name,
-          tab_number,
-          layout_x,
-          layout_y,
-          layout_w,
-          layout_h,
-          ?
-        FROM widget_tab_assignments
-        WHERE device_name = ?
-      `).run(deviceName, sourceDeviceName);
-
       ensureHomeTabExists(deviceName);
+      ensureCoreWidgetsInHomeTab(deviceName);
       touchDeviceUpdateTime(deviceName);
     });
 
@@ -2080,10 +2245,11 @@ fastify.get('/api/devices/:deviceName/tabs', async (request, reply) => {
 
   try {
     const tabs = db.prepare('SELECT * FROM tabs WHERE device_name = ? ORDER BY number ASC').all(deviceName);
+    const lastModifiedMs = getDeviceUpdateTimeMs(deviceName);
     if (tabs.length === 0) {
-      return [buildDefaultHomeTab(deviceName)];
+      return sendJsonWithConditionalCache(request, reply, [buildDefaultHomeTab(deviceName)], null);
     }
-    return tabs;
+    return sendJsonWithConditionalCache(request, reply, tabs, lastModifiedMs);
   } catch (error) {
     console.error('Error fetching tabs:', error);
     reply.status(500).send({ error: 'Failed to fetch tabs' });
@@ -2106,8 +2272,8 @@ fastify.post('/api/devices/:deviceName/tabs', async (request, reply) => {
     const maxOrder = db.prepare('SELECT MAX(number) as max FROM tabs WHERE device_name = ?').get(deviceName);
     const nextTabNumber = (maxOrder.max || 0) + 1;
 
-    const stmt = db.prepare('INSERT INTO tabs (device_name, label, icon, show_label, number) VALUES (?, ?, ?, ?, ?) RETURNING *');
-    const row = stmt.get(deviceName, label, icon, show_label ? 1 : 0, nextTabNumber);
+    const stmt = db.prepare('INSERT INTO tabs (device_name, label, icon, show_label, number, layout_json) VALUES (?, ?, ?, ?, ?, ?) RETURNING *');
+    const row = stmt.get(deviceName, label, icon, show_label ? 1 : 0, nextTabNumber, '{}');
     touchDeviceUpdateTime(deviceName);
 
     return row;
@@ -2236,8 +2402,27 @@ fastify.delete('/api/devices/:deviceName/tabs/:tabNumber', async (request, reply
 
   try {
     const parsedTabNumber = parseInt(tabNumber, 10);
-    const moveAssignmentsStmt = db.prepare('UPDATE widget_tab_assignments SET tab_number = 1 WHERE tab_number = ? AND device_name = ?');
-    moveAssignmentsStmt.run(parsedTabNumber, deviceName);
+
+    const sourceTab = getTabByNumber(deviceName, parsedTabNumber);
+    if (!sourceTab) {
+      return reply.status(404).send({ error: 'Tab not found' });
+    }
+
+    const homeTab = getTabByNumber(deviceName, 1);
+    const sourceLayoutMap = parseTabLayoutJson(sourceTab.layout_json);
+    const homeLayoutMap = parseTabLayoutJson(homeTab?.layout_json);
+    let homeChanged = false;
+
+    Object.entries(sourceLayoutMap).forEach(([widgetName, layout]) => {
+      if (!(widgetName in homeLayoutMap)) {
+        homeLayoutMap[widgetName] = normalizeLayoutFields(layout);
+        homeChanged = true;
+      }
+    });
+
+    if (homeTab && homeChanged) {
+      saveTabLayoutById(homeTab.id, homeLayoutMap);
+    }
 
     const deleteStmt = db.prepare('DELETE FROM tabs WHERE number = ? AND device_name = ?');
     deleteStmt.run(parsedTabNumber, deviceName);
@@ -2276,8 +2461,8 @@ fastify.get('/api/devices/:deviceName/widget-assignments', async (request, reply
     return reply.status(400).send({ error: 'deviceName is required' });
   }
   try {
-    const assignments = db.prepare('SELECT * FROM widget_tab_assignments WHERE device_name = ?').all(deviceName);
-    return assignments;
+    const lastModifiedMs = getDeviceUpdateTimeMs(deviceName);
+    return sendJsonWithConditionalCache(request, reply, listWidgetAssignmentsFromTabLayouts(deviceName), lastModifiedMs);
   } catch (error) {
     console.error('Error fetching widget assignments:', error);
     reply.status(500).send({ error: 'Failed to fetch widget assignments' });
@@ -2296,17 +2481,39 @@ fastify.post('/api/devices/:deviceName/widget-assignments', async (request, repl
 
   try {
     ensureDeviceExists(deviceName);
-    const existing = db.prepare('SELECT id FROM widget_tab_assignments WHERE widget_name = ? AND tab_number = ? AND device_name = ?').get(widget_name, tabNumber, deviceName);
+    const parsedTabNumber = parseInt(tabNumber, 10);
+    const tab = getTabByNumber(deviceName, parsedTabNumber);
+    if (!tab) {
+      return reply.status(404).send({ error: 'Tab not found' });
+    }
+
+    const layoutMap = parseTabLayoutJson(tab.layout_json);
+    const existing = layoutMap[widget_name];
 
     if (existing) {
       return reply.status(400).send({ error: 'Assignment already exists' });
     }
 
-    const stmt = db.prepare('INSERT INTO widget_tab_assignments (widget_name, tab_number, device_name) VALUES (?, ?, ?) RETURNING *');
-    const row = stmt.get(widget_name, tabNumber, deviceName);
+    layoutMap[widget_name] = {
+      layout_x: null,
+      layout_y: null,
+      layout_w: null,
+      layout_h: null,
+    };
+
+    saveTabLayoutById(tab.id, layoutMap);
     touchDeviceUpdateTime(deviceName);
 
-    return row;
+    return {
+      id: buildAssignmentId(parsedTabNumber, widget_name),
+      device_name: deviceName,
+      tab_number: parsedTabNumber,
+      widget_name,
+      layout_x: null,
+      layout_y: null,
+      layout_w: null,
+      layout_h: null,
+    };
   } catch (error) {
     console.error('Error creating widget assignment:', error);
     reply.status(500).send({ error: 'Failed to create widget assignment' });
@@ -2320,9 +2527,23 @@ fastify.delete('/api/devices/:deviceName/widget-assignments/:id', async (request
   }
 
   try {
-    ensureDeviceExists(deviceName);
-    const stmt = db.prepare('DELETE FROM widget_tab_assignments WHERE id = ? AND device_name = ?');
-    stmt.run(id, deviceName);
+    const parsedId = parseAssignmentId(id);
+    if (!parsedId) {
+      return reply.status(400).send({ error: 'Invalid assignment id' });
+    }
+
+    const tab = getTabByNumber(deviceName, parsedId.tabNumber);
+    if (!tab) {
+      return reply.status(404).send({ error: 'Assignment not found' });
+    }
+
+    const layoutMap = parseTabLayoutJson(tab.layout_json);
+    if (!(parsedId.widgetName in layoutMap)) {
+      return reply.status(404).send({ error: 'Assignment not found' });
+    }
+
+    delete layoutMap[parsedId.widgetName];
+    saveTabLayoutById(tab.id, layoutMap);
     touchDeviceUpdateTime(deviceName);
     return { success: true, message: 'Assignment deleted successfully' };
   } catch (error) {
@@ -2338,10 +2559,21 @@ fastify.delete('/api/devices/:deviceName/widget-assignments/widget/:widgetName',
   }
 
   try {
-    ensureDeviceExists(deviceName);
-    const stmt = db.prepare('DELETE FROM widget_tab_assignments WHERE widget_name = ? AND device_name = ?');
-    stmt.run(widgetName, deviceName);
-    touchDeviceUpdateTime(deviceName);
+    const tabs = getTabsForDevice(deviceName);
+    let changed = false;
+
+    tabs.forEach((tab) => {
+      const layoutMap = parseTabLayoutJson(tab.layout_json);
+      if (widgetName in layoutMap) {
+        delete layoutMap[widgetName];
+        saveTabLayoutById(tab.id, layoutMap);
+        changed = true;
+      }
+    });
+
+    if (changed) {
+      touchDeviceUpdateTime(deviceName);
+    }
     return { success: true, message: 'Widget assignments deleted successfully' };
   } catch (error) {
     console.error('Error deleting widget assignments:', error);
@@ -2362,17 +2594,30 @@ fastify.patch('/api/devices/:deviceName/widget-assignments/layout', async (reque
 
   try {
     ensureDeviceExists(deviceName);
-    const existing = db.prepare('SELECT id FROM widget_tab_assignments WHERE widget_name = ? AND tab_number = ? AND device_name = ?').get(widget_name, tabNumber, deviceName);
+    const parsedTabNumber = parseInt(tabNumber, 10);
+    const tab = getTabByNumber(deviceName, parsedTabNumber);
+    if (!tab) {
+      return reply.status(404).send({ error: 'Assignment not found' });
+    }
+
+    const layoutMap = parseTabLayoutJson(tab.layout_json);
+    const existing = layoutMap[widget_name];
 
     if (!existing) {
       return reply.status(404).send({ error: 'Assignment not found' });
     }
 
-    const stmt = db.prepare('UPDATE widget_tab_assignments SET layout_x = ?, layout_y = ?, layout_w = ?, layout_h = ? WHERE widget_name = ? AND tab_number = ? AND device_name = ? RETURNING *');
-    const row = stmt.get(layout_x, layout_y, layout_w, layout_h, widget_name, tabNumber, deviceName);
+    layoutMap[widget_name] = normalizeLayoutFields({ layout_x, layout_y, layout_w, layout_h });
+    saveTabLayoutById(tab.id, layoutMap);
 
     touchDeviceUpdateTime(deviceName);
-    return row;
+    return {
+      id: buildAssignmentId(parsedTabNumber, widget_name),
+      device_name: deviceName,
+      tab_number: parsedTabNumber,
+      widget_name,
+      ...layoutMap[widget_name],
+    };
   } catch (error) {
     console.error('Error updating widget layout:', error);
     reply.status(500).send({ error: 'Failed to update widget layout' });
@@ -2391,12 +2636,46 @@ fastify.patch('/api/devices/:deviceName/widget-assignments/layout/bulk', async (
 
   try {
     ensureDeviceExists(deviceName);
-    const stmt = db.prepare('UPDATE widget_tab_assignments SET layout_x = ?, layout_y = ?, layout_w = ?, layout_h = ? WHERE widget_name = ? AND tab_number = ? AND device_name = ?');
+    const tabsByNumber = new Map(
+      getTabsForDevice(deviceName).map(tab => [tab.number, {
+        tab,
+        layoutMap: parseTabLayoutJson(tab.layout_json),
+        changed: false,
+      }])
+    );
 
+    let anyChanged = false;
     for (const item of layouts) {
-      stmt.run(item.layout_x, item.layout_y, item.layout_w, item.layout_h, item.widget_name, item.tabNumber, deviceName);
+      const parsedTabNumber = parseInt(item.tabNumber, 10);
+      const widgetName = item.widget_name;
+      if (!Number.isFinite(parsedTabNumber) || !widgetName) {
+        continue;
+      }
+
+      const tabEntry = tabsByNumber.get(parsedTabNumber);
+      if (!tabEntry) {
+        continue;
+      }
+
+      if (!(widgetName in tabEntry.layoutMap)) {
+        continue;
+      }
+
+      tabEntry.layoutMap[widgetName] = normalizeLayoutFields(item);
+      tabEntry.changed = true;
+      anyChanged = true;
     }
-    touchDeviceUpdateTime(deviceName);
+
+    tabsByNumber.forEach((tabEntry) => {
+      if (tabEntry.changed) {
+        saveTabLayoutById(tabEntry.tab.id, tabEntry.layoutMap);
+      }
+    });
+
+    if (anyChanged) {
+      touchDeviceUpdateTime(deviceName);
+    }
+
     return { success: true, message: 'Layouts updated successfully' };
   } catch (error) {
     console.error('Error updating widget layouts:', error);

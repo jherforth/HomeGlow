@@ -57,7 +57,7 @@ async function api(pathname, options = {}) {
         body = text;
     }
 
-    return { status: response.status, body };
+    return { status: response.status, body, headers: response.headers };
 }
 
 test.before(async () => {
@@ -186,6 +186,87 @@ test('deleting a non-home tab moves assigned widgets to Home tab', async () => {
     const movedAssignment = assignmentsRes.body.find((row) => row.widget_name === 'plugin:sample-widget');
     assert.ok(movedAssignment, 'Expected plugin assignment to remain after tab deletion');
     assert.equal(movedAssignment.tab_number, 1);
+});
+
+test('device settings endpoints merge incoming keys without overwriting unspecified values', async () => {
+    const deviceName = `device-settings-${Date.now()}`;
+
+    const firstWrite = await api(`/api/devices/${encodeURIComponent(deviceName)}/settings`, {
+        method: 'PUT',
+        body: JSON.stringify({ theme: 'dark', widgetsLocked: true }),
+    });
+    assert.equal(firstWrite.status, 200);
+    assert.equal(firstWrite.body.theme, 'dark');
+    assert.equal(firstWrite.body.widgetsLocked, true);
+
+    const secondWrite = await api(`/api/devices/${encodeURIComponent(deviceName)}/settings`, {
+        method: 'PATCH',
+        body: JSON.stringify({ themeMode: 'auto' }),
+    });
+    assert.equal(secondWrite.status, 200);
+    assert.equal(secondWrite.body.theme, 'dark');
+    assert.equal(secondWrite.body.widgetsLocked, true);
+    assert.equal(secondWrite.body.themeMode, 'auto');
+
+    const readBack = await api(`/api/devices/${encodeURIComponent(deviceName)}/settings`);
+    assert.equal(readBack.status, 200);
+    assert.equal(readBack.body.theme, 'dark');
+    assert.equal(readBack.body.widgetsLocked, true);
+    assert.equal(readBack.body.themeMode, 'auto');
+});
+
+test('device settings GET supports conditional requests with ETag', async () => {
+    const deviceName = `etag-settings-${Date.now()}`;
+
+    const writeRes = await api(`/api/devices/${encodeURIComponent(deviceName)}/settings`, {
+        method: 'PUT',
+        body: JSON.stringify({ theme: 'light' }),
+    });
+    assert.equal(writeRes.status, 200);
+
+    const firstRead = await api(`/api/devices/${encodeURIComponent(deviceName)}/settings`);
+    assert.equal(firstRead.status, 200);
+    const etag = firstRead.headers.get('etag');
+    assert.ok(etag, 'Expected ETag header to be present');
+
+    const secondRead = await api(`/api/devices/${encodeURIComponent(deviceName)}/settings`, {
+        headers: {
+            'If-None-Match': etag,
+        },
+    });
+    assert.equal(secondRead.status, 304);
+});
+
+test('widget assignment IDs can be round-tripped for delete operations', async () => {
+    const deviceName = `assignment-id-${Date.now()}`;
+
+    const createTabRes = await api(`/api/devices/${encodeURIComponent(deviceName)}/tabs`, {
+        method: 'POST',
+        body: JSON.stringify({ label: 'Workspace', icon: 'star', show_label: true }),
+    });
+    assert.equal(createTabRes.status, 200);
+
+    const createAssignmentRes = await api(`/api/devices/${encodeURIComponent(deviceName)}/widget-assignments`, {
+        method: 'POST',
+        body: JSON.stringify({ widget_name: 'plugin:delete-me', tabNumber: 2 }),
+    });
+    assert.equal(createAssignmentRes.status, 200);
+
+    const listBeforeDelete = await api(`/api/devices/${encodeURIComponent(deviceName)}/widget-assignments`);
+    assert.equal(listBeforeDelete.status, 200);
+    const created = listBeforeDelete.body.find((row) => row.widget_name === 'plugin:delete-me' && row.tab_number === 2);
+    assert.ok(created);
+    assert.equal(typeof created.id, 'string');
+
+    const deleteRes = await api(`/api/devices/${encodeURIComponent(deviceName)}/widget-assignments/${encodeURIComponent(created.id)}`, {
+        method: 'DELETE',
+    });
+    assert.equal(deleteRes.status, 200);
+
+    const listAfterDelete = await api(`/api/devices/${encodeURIComponent(deviceName)}/widget-assignments`);
+    assert.equal(listAfterDelete.status, 200);
+    const stillThere = listAfterDelete.body.find((row) => row.widget_name === 'plugin:delete-me' && row.tab_number === 2);
+    assert.equal(Boolean(stillThere), false);
 });
 
 test('settings endpoints persist and query values', async () => {
