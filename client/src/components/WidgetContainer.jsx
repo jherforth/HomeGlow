@@ -21,7 +21,16 @@ const resolveWidgetName = (widgetId) => {
   return null;
 };
 
-const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange: onLayoutChangeCallback, activeTab = 1, activeTabId = 1 }) => {
+const WidgetContainer = ({
+  children,
+  widgets = [],
+  locked = true,
+  onLayoutChange: onLayoutChangeCallback,
+  activeTab = 1,
+  activeTabId = 1,
+  deviceWidgetSettings = {},
+  devicePluginSettings = {},
+}) => {
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [containerWidth, setContainerWidth] = useState(1200);
   const [gridCols, setGridCols] = useState(12);
@@ -36,10 +45,6 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
   const hasInitializedLockEffectRef = useRef(false);
   const saveTimerRef = useRef(null);
   const resizeTapGuardRef = useRef(new Map());
-
-  const getTabLayoutCacheKey = useCallback((widgetId) => {
-    return `widget-layout-id-${activeTabId}-${widgetId}`;
-  }, [activeTabId]);
 
   const saveLayoutsToApi = useCallback((layoutItems, tabNumber) => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -120,27 +125,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
       const h = widget.defaultSize.height;
       let item;
 
-      const localKey = getTabLayoutCacheKey(widget.id);
-      const localLayout = localStorage.getItem(localKey);
-      if (localLayout) {
-        let parsed = null;
-        try {
-          parsed = JSON.parse(localLayout);
-        } catch {
-          parsed = null;
-        }
-
-        item = {
-          i: widget.id,
-          x: parsed?.x ?? widget.defaultPosition.x,
-          y: parsed?.y ?? widget.defaultPosition.y,
-          w: parsed?.w || w,
-          h: parsed?.h || h,
-          minW: widget.minWidth || 3,
-          minH: widget.minHeight || 2,
-          static: lockedRef.current,
-        };
-      } else if (widget.savedLayout) {
+      if (widget.savedLayout) {
         item = {
           i: widget.id,
           x: widget.savedLayout.x ?? widget.defaultPosition.x,
@@ -169,7 +154,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
       return item;
     });
     setLayout(initialLayout);
-  }, [widgets, activeTab, gridCols, getTabLayoutCacheKey]);
+  }, [widgets, activeTab, gridCols]);
 
   useEffect(() => {
     const wasLocked = prevLockedRef.current;
@@ -185,15 +170,6 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
 
       const shouldPersistLockedLayouts = hasInitializedLockEffectRef.current && !wasLocked && locked;
       if (shouldPersistLockedLayouts) {
-        updatedLayout.forEach((item) => {
-          const layoutData = {
-            x: item.x,
-            y: item.y,
-            w: item.w,
-            h: item.h,
-          };
-          localStorage.setItem(getTabLayoutCacheKey(item.i), JSON.stringify(layoutData));
-        });
         saveLayoutsToApi(updatedLayout, activeTab);
       }
 
@@ -209,7 +185,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
     }, 50);
 
     return () => clearTimeout(timer);
-  }, [locked, saveLayoutsToApi, getTabLayoutCacheKey, activeTab]);
+  }, [locked, saveLayoutsToApi, activeTab]);
 
   // Deselect widget when locked
   useEffect(() => {
@@ -256,16 +232,6 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
 
     setLayout(updatedLayout);
     layoutRef.current = updatedLayout;
-
-    updatedLayout.forEach((item) => {
-      const layoutData = {
-        x: item.x,
-        y: item.y,
-        w: item.w,
-        h: item.h,
-      };
-      localStorage.setItem(getTabLayoutCacheKey(item.i), JSON.stringify(layoutData));
-    });
 
     saveLayoutsToApi(updatedLayout, activeTab);
 
@@ -346,7 +312,6 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
             w: updatedItem.w,
             h: updatedItem.h,
           };
-          localStorage.setItem(getTabLayoutCacheKey(item.i), JSON.stringify(layoutData));
 
           return updatedItem;
         }
@@ -443,8 +408,6 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
   }, [locked, selectedWidget, layout]);
 
   const getWidgetRefreshInterval = (widgetId) => {
-    const widgetSettings = JSON.parse(localStorage.getItem('widgetSettings') || '{}');
-
     const widgetMap = {
       'chores-widget': 'chores',
       'calendar-widget': 'calendar',
@@ -453,14 +416,13 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
     };
 
     const settingsKey = widgetMap[widgetId];
-    if (settingsKey && widgetSettings[settingsKey]) {
-      return widgetSettings[settingsKey].refreshInterval || 0;
+    if (settingsKey && deviceWidgetSettings[settingsKey]) {
+      return deviceWidgetSettings[settingsKey].refreshInterval || 0;
     }
 
     if (widgetId.startsWith('plugin-')) {
       const filename = widgetId.slice(7);
-      const pluginSettings = JSON.parse(localStorage.getItem('pluginSettings') || '{}');
-      return pluginSettings[filename]?.refreshInterval || 0;
+      return devicePluginSettings[filename]?.refreshInterval || 0;
     }
 
     return 0;

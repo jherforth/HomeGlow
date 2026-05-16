@@ -59,13 +59,7 @@ const ChoreWidget = lazy(loadChoreWidget);
 const TabIconModal = lazy(loadTabIconModal);
 const ScreenSaver = lazy(loadScreenSaver);
 
-// region #98 - expected to get removed in the future (localStorage migration bridge)
-const AUTO_DARK_MODE_STORAGE_KEY = 'autoDarkModeSettings';
 const DEVICE_SETTINGS_UPDATED_EVENT = 'homeglow:device-settings-updated';
-const DEVICE_SETTINGS_MIGRATION_KEY_PATTERN = /^(enabledWidgets|theme|themeMode|widgetsLocked|widgetSettings|pluginSettings|screensaverSettings|autoDarkModeSettings)$/;
-
-const isAllowedDeviceSettingsMigrationKey = (key) => DEVICE_SETTINGS_MIGRATION_KEY_PATTERN.test(key);
-// endRegion #98
 
 const DEFAULT_SCREENSAVER_SETTINGS = {
   enabled: false,
@@ -220,87 +214,6 @@ const App = () => {
     }
   }, [API_DEVICE_URL, hydrateFromDeviceSettings]);
 
-  // region #98 - expected to get removed in the future (one-time local-to-server settings migration)
-  const migrateLocalDeviceSettingsToServer = useCallback(async () => {
-    const localPayload = {};
-
-    if (isAllowedDeviceSettingsMigrationKey('theme')) {
-      const theme = localStorage.getItem('theme');
-      if (theme === 'light' || theme === 'dark') {
-        localPayload.theme = theme;
-      }
-    }
-
-    if (isAllowedDeviceSettingsMigrationKey('themeMode')) {
-      const themeMode = localStorage.getItem('themeMode');
-      if (themeMode === 'light' || themeMode === 'dark' || themeMode === 'auto') {
-        localPayload.themeMode = themeMode;
-      }
-    }
-
-    if (isAllowedDeviceSettingsMigrationKey('widgetsLocked')) {
-      const widgetsLockedRaw = localStorage.getItem('widgetsLocked');
-      if (widgetsLockedRaw !== null) {
-        try {
-          localPayload.widgetsLocked = JSON.parse(widgetsLockedRaw);
-        } catch {
-          // Ignore malformed local value.
-        }
-      }
-    }
-
-    const parseJsonKey = (key) => {
-      if (!isAllowedDeviceSettingsMigrationKey(key)) return null;
-      const raw = localStorage.getItem(key);
-      if (!raw) return null;
-      try {
-        const parsed = JSON.parse(raw);
-        return parsed && typeof parsed === 'object' ? parsed : null;
-      } catch {
-        return null;
-      }
-    };
-
-    const widgetSettingsRaw = parseJsonKey('widgetSettings');
-    if (widgetSettingsRaw) {
-      localPayload.widgetSettings = normalizeWidgetSettings(widgetSettingsRaw);
-    }
-
-    const pluginSettingsRaw = parseJsonKey('pluginSettings');
-    if (pluginSettingsRaw) {
-      localPayload.pluginSettings = pluginSettingsRaw;
-    }
-
-    const screensaverRaw = parseJsonKey('screensaverSettings');
-    if (screensaverRaw) {
-      localPayload.screensaverSettings = normalizeScreensaverSettings(screensaverRaw);
-    }
-
-    const autoDarkRaw = parseJsonKey(AUTO_DARK_MODE_STORAGE_KEY);
-    if (autoDarkRaw) {
-      localPayload.autoDarkModeSettings = normalizeAutoDarkModeSettings(autoDarkRaw);
-    }
-
-    const keysToMigrate = Object.keys(localPayload);
-    if (keysToMigrate.length === 0) {
-      return;
-    }
-
-    try {
-      await axios.put(`${API_DEVICE_URL}/settings`, localPayload);
-
-      // Remove only known migrated keys.
-      ['theme', 'themeMode', 'widgetsLocked', 'widgetSettings', 'pluginSettings', 'screensaverSettings', AUTO_DARK_MODE_STORAGE_KEY]
-        .filter(isAllowedDeviceSettingsMigrationKey)
-        .forEach((key) => {
-          localStorage.removeItem(key);
-        });
-    } catch (error) {
-      console.error('Error migrating local device settings to server:', error);
-    }
-  }, [API_DEVICE_URL]);
-  // endRegion #98
-
   const patchDeviceSettings = useCallback(async (partialSettings) => {
     try {
       await axios.patch(`${API_DEVICE_URL}/settings`, partialSettings);
@@ -309,36 +222,6 @@ const App = () => {
     }
   }, [API_DEVICE_URL]);
 
-  // region #98 - expected to get removed in the future (legacy key normalization)
-  useEffect(() => {
-    const oldEnabled = localStorage.getItem('enabledWidgets');
-    if (oldEnabled) {
-      try {
-        const parsed = JSON.parse(oldEnabled);
-        const existing = JSON.parse(localStorage.getItem('pluginSettings') || '{}');
-        Object.entries(parsed).forEach(([filename, isEnabled]) => {
-          if (!existing[filename]) {
-            existing[filename] = { enabled: !!isEnabled, transparent: false, refreshInterval: 0 };
-          }
-        });
-        localStorage.setItem('pluginSettings', JSON.stringify(existing));
-      } catch { }
-      localStorage.removeItem('enabledWidgets');
-    }
-    const ws = localStorage.getItem('widgetSettings');
-    if (ws) {
-      try {
-        const parsed = JSON.parse(ws);
-        if (parsed.widgetGallery) {
-          delete parsed.widgetGallery;
-          localStorage.setItem('widgetSettings', JSON.stringify(parsed));
-        }
-      } catch { }
-    }
-  }, []);
-  // endRegion #98
-
-  // region #98 - expected to get removed in the future (invoke migration bridge during bootstrap)
   useEffect(() => {
     const fetchApiKeys = async () => {
       try {
@@ -352,7 +235,6 @@ const App = () => {
     };
 
     const initialize = async () => {
-      await migrateLocalDeviceSettingsToServer();
       await fetchDeviceSettings();
       await Promise.all([
         fetchTabs(),
@@ -363,8 +245,7 @@ const App = () => {
     };
 
     void initialize();
-  }, [fetchDeviceSettings, migrateLocalDeviceSettingsToServer]);
-  // endRegion #98
+  }, [fetchDeviceSettings]);
 
   const fetchTabs = async () => {
     try {
@@ -745,6 +626,7 @@ const App = () => {
             <CalendarWidget
               transparentBackground={widgetSettings.calendar.transparent}
               icsCalendarUrl={apiKeys.ICS_CALENDAR_URL}
+              refreshInterval={widgetSettings.calendar.refreshInterval || 0}
             />
           </Suspense>
         ),
@@ -765,6 +647,7 @@ const App = () => {
             <WeatherWidget
               transparentBackground={widgetSettings.weather.transparent}
               weatherApiKey={apiKeys.WEATHER_API_KEY}
+              refreshInterval={widgetSettings.weather.refreshInterval || 0}
             />
           </Suspense>
         ),
@@ -782,7 +665,10 @@ const App = () => {
         savedLayout: dbLayout,
         content: (
           <Suspense fallback={<WidgetLoadingFallback label="chores" />}>
-            <ChoreWidget transparentBackground={widgetSettings.chores.transparent} />
+            <ChoreWidget
+              transparentBackground={widgetSettings.chores.transparent}
+              refreshInterval={widgetSettings.chores.refreshInterval || 0}
+            />
           </Suspense>
         ),
       });
@@ -799,7 +685,10 @@ const App = () => {
         savedLayout: dbLayout,
         content: (
           <Suspense fallback={<WidgetLoadingFallback label="photos" />}>
-            <PhotoWidget transparentBackground={widgetSettings.photos.transparent} />
+            <PhotoWidget
+              transparentBackground={widgetSettings.photos.transparent}
+              refreshInterval={widgetSettings.photos.refreshInterval || 0}
+            />
           </Suspense>
         ),
       });
@@ -840,7 +729,16 @@ const App = () => {
   return (
     <>
       <Box sx={{ width: '100%', minHeight: '100vh', position: 'relative', pb: '60px' }}>
-        {widgets.length > 0 && <WidgetContainer widgets={widgets} locked={widgetsLocked} activeTab={activeTab} activeTabId={activeTabId} />}
+        {widgets.length > 0 && (
+          <WidgetContainer
+            widgets={widgets}
+            locked={widgetsLocked}
+            activeTab={activeTab}
+            activeTabId={activeTabId}
+            deviceWidgetSettings={widgetSettings}
+            devicePluginSettings={pluginSettings}
+          />
+        )}
         {deviceSettingsLoaded && widgets.length === 0 && isFirstRunClient && (
           <Box
             sx={{

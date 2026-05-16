@@ -25,11 +25,13 @@ import {
 import { Edit, Save, Cancel, Add, Delete, Check, Undo } from '@mui/icons-material';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
+import { getDeviceApiBase } from '../utils/deviceName.js';
 import { shouldShowChoreToday, getTodayDateString, convertDaysToCrontab } from '../utils/choreHelpers.js';
 
 const USERS_UPDATED_EVENT = 'homeglow:users-updated';
 
-const ChoreWidget = ({ transparentBackground }) => {
+const ChoreWidget = ({ transparentBackground, refreshInterval = 0 }) => {
+  const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [users, setUsers] = useState([]);
   const [chores, setChores] = useState([]);
   const [schedules, setSchedules] = useState([]);
@@ -46,10 +48,8 @@ const ChoreWidget = ({ transparentBackground }) => {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showPrizesModal, setShowPrizesModal] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [showBonusChores, setShowBonusChores] = useState(() => {
-    const saved = localStorage.getItem('showBonusChores');
-    return saved !== null ? JSON.parse(saved) : true;
-  });
+  const [showBonusChores, setShowBonusChores] = useState(true);
+  const [deviceSettingsLoaded, setDeviceSettingsLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [dailyClamReward, setDailyClamReward] = useState(2);
 
@@ -60,13 +60,24 @@ const ChoreWidget = ({ transparentBackground }) => {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('showBonusChores', JSON.stringify(showBonusChores));
-  }, [showBonusChores]);
+    const loadDeviceWidgetSettings = async () => {
+      try {
+        const response = await axios.get(`${API_DEVICE_URL}/settings`);
+        const choreSettings = response.data?.choreWidgetSettings;
+        if (choreSettings && typeof choreSettings.showBonusChores === 'boolean') {
+          setShowBonusChores(choreSettings.showBonusChores);
+        }
+      } catch (error) {
+        console.error('Error loading chore widget settings:', error);
+      } finally {
+        setDeviceSettingsLoaded(true);
+      }
+    };
+
+    void loadDeviceWidgetSettings();
+  }, [API_DEVICE_URL]);
 
   useEffect(() => {
-    const widgetSettings = JSON.parse(localStorage.getItem('widgetSettings') || '{}');
-    const refreshInterval = widgetSettings.chore?.refreshInterval || 0;
-
     if (refreshInterval > 0) {
       console.log(`ChoreWidget: Auto-refresh enabled (${refreshInterval}ms)`);
 
@@ -80,7 +91,27 @@ const ChoreWidget = ({ transparentBackground }) => {
         clearInterval(intervalId);
       };
     }
-  }, []);
+  }, [refreshInterval]);
+
+  useEffect(() => {
+    if (!deviceSettingsLoaded) {
+      return;
+    }
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        await axios.patch(`${API_DEVICE_URL}/settings`, {
+          choreWidgetSettings: {
+            showBonusChores,
+          },
+        });
+      } catch (error) {
+        console.error('Error saving chore widget settings:', error);
+      }
+    }, 250);
+
+    return () => clearTimeout(timeoutId);
+  }, [API_DEVICE_URL, deviceSettingsLoaded, showBonusChores]);
 
   useEffect(() => {
     const onUsersUpdated = () => {

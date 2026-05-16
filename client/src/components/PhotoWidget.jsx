@@ -4,7 +4,7 @@ import { Settings, Add, Delete, Edit, Refresh, ChevronLeft, ChevronRight, PlayAr
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 
-const PhotoWidget = ({ transparentBackground }) => {
+const PhotoWidget = ({ transparentBackground, refreshInterval = 0 }) => {
   const [photos, setPhotos] = useState([]);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -68,9 +68,6 @@ const PhotoWidget = ({ transparentBackground }) => {
 
   // Auto-refresh functionality
   useEffect(() => {
-    const widgetSettings = JSON.parse(localStorage.getItem('widgetSettings') || '{}');
-    const refreshInterval = widgetSettings.photo?.refreshInterval || 0;
-
     if (refreshInterval > 0) {
       console.log(`PhotoWidget: Auto-refresh enabled (${refreshInterval}ms)`);
 
@@ -84,7 +81,7 @@ const PhotoWidget = ({ transparentBackground }) => {
         clearInterval(intervalId);
       };
     }
-  }, []);
+  }, [refreshInterval]);
 
   // Slideshow timer
   useEffect(() => {

@@ -6,6 +6,7 @@ import moment from 'moment';
 import { SketchPicker } from 'react-color';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
+import { getDeviceApiBase } from '../utils/deviceName.js';
 import { getEventPillPalette, getPreferredColorMode } from '../utils/colorContrast.js';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import MonthDayCell from './MonthDayCell.jsx';
@@ -34,6 +35,20 @@ const WEEKDAY_INDEX = {
 
 const DEFAULT_MONTH_VIEW_DAYS_TO_SHOW = 28;
 const DEFAULT_MONTH_VIEW_DAYS_PER_ROW = 7;
+const DEFAULT_CALENDAR_EVENT_COLORS = {
+  backgroundColor: '#6e44ff',
+  textColor: '#ffffff',
+};
+const DEFAULT_CALENDAR_DISPLAY_SETTINGS = {
+  textSize: 12,
+  bulletSize: 10,
+};
+const DEFAULT_CALENDAR_DAY_OF_WEEK_SETTINGS = {
+  weekViewStart: 'today',
+  monthViewStart: 'sunday',
+  monthViewDaysToShow: DEFAULT_MONTH_VIEW_DAYS_TO_SHOW,
+  monthViewDaysPerRow: DEFAULT_MONTH_VIEW_DAYS_PER_ROW,
+};
 
 const clampInteger = (value, min, max, fallback) => {
   const parsed = Number.parseInt(value, 10);
@@ -43,7 +58,8 @@ const clampInteger = (value, min, max, fallback) => {
   return Math.min(max, Math.max(min, parsed));
 };
 
-const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
+const CalendarWidget = ({ transparentBackground, icsCalendarUrl, refreshInterval = 0 }) => {
+  const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [events, setEvents] = useState([]);
   const [upcomingEvents, setUpcomingEvents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -54,48 +70,10 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
   const [settingsAnchor, setSettingsAnchor] = useState(null);
   const [viewMode, setViewMode] = useState('month');
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [eventColors, setEventColors] = useState(() => {
-    const saved = localStorage.getItem('calendarEventColors');
-    return saved ? JSON.parse(saved) : {
-      backgroundColor: '#6e44ff',
-      textColor: '#ffffff'
-    };
-  });
-  const [displaySettings, setDisplaySettings] = useState(() => {
-    const saved = localStorage.getItem('calendarDisplaySettings');
-    return saved ? JSON.parse(saved) : {
-      textSize: 12,
-      bulletSize: 10
-    };
-  });
-  const [dayOfWeekSettings, setDayOfWeekSettings] = useState(() => {
-    const saved = localStorage.getItem('calendarDayOfWeekSettings');
-    if (!saved) {
-      return {
-        weekViewStart: 'today',
-        monthViewStart: 'sunday',
-        monthViewDaysToShow: DEFAULT_MONTH_VIEW_DAYS_TO_SHOW,
-        monthViewDaysPerRow: DEFAULT_MONTH_VIEW_DAYS_PER_ROW,
-      };
-    }
-
-    try {
-      const parsed = JSON.parse(saved);
-      return {
-        weekViewStart: parsed.weekViewStart || 'today',
-        monthViewStart: parsed.monthViewStart || 'sunday',
-        monthViewDaysToShow: clampInteger(parsed.monthViewDaysToShow, 1, 32, DEFAULT_MONTH_VIEW_DAYS_TO_SHOW),
-        monthViewDaysPerRow: clampInteger(parsed.monthViewDaysPerRow, 1, 14, DEFAULT_MONTH_VIEW_DAYS_PER_ROW),
-      };
-    } catch {
-      return {
-        weekViewStart: 'today',
-        monthViewStart: 'sunday',
-        monthViewDaysToShow: DEFAULT_MONTH_VIEW_DAYS_TO_SHOW,
-        monthViewDaysPerRow: DEFAULT_MONTH_VIEW_DAYS_PER_ROW,
-      };
-    }
-  });
+  const [eventColors, setEventColors] = useState({ ...DEFAULT_CALENDAR_EVENT_COLORS });
+  const [displaySettings, setDisplaySettings] = useState({ ...DEFAULT_CALENDAR_DISPLAY_SETTINGS });
+  const [dayOfWeekSettings, setDayOfWeekSettings] = useState({ ...DEFAULT_CALENDAR_DAY_OF_WEEK_SETTINGS });
+  const [calendarSettingsLoaded, setCalendarSettingsLoaded] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState({ background: false, text: false });
   const [calendarSources, setCalendarSources] = useState([]);
   const [showCalendarDialog, setShowCalendarDialog] = useState(false);
@@ -148,9 +126,6 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
 
   // Auto-refresh functionality
   useEffect(() => {
-    const widgetSettings = JSON.parse(localStorage.getItem('widgetSettings') || '{}');
-    const refreshInterval = widgetSettings.calendar?.refreshInterval || 0;
-
     if (refreshInterval > 0) {
       console.log(`CalendarWidget: Auto-refresh enabled (${refreshInterval}ms)`);
 
@@ -165,57 +140,84 @@ const CalendarWidget = ({ transparentBackground, icsCalendarUrl }) => {
         clearInterval(intervalId);
       };
     }
-  }, []);
+  }, [refreshInterval]);
 
   useEffect(() => {
-    localStorage.setItem('calendarEventColors', JSON.stringify(eventColors));
-  }, [eventColors]);
-
-  useEffect(() => {
-    localStorage.setItem('calendarDisplaySettings', JSON.stringify(displaySettings));
-
-    const saveToDatabase = async () => {
+    const loadCalendarWidgetSettings = async () => {
       try {
-        await axios.post(`${API_BASE_URL}/api/settings`, {
-          key: 'CALENDAR_TEXT_SIZE',
-          value: displaySettings.textSize.toString()
-        });
-        await axios.post(`${API_BASE_URL}/api/settings`, {
-          key: 'CALENDAR_BULLET_SIZE',
-          value: displaySettings.bulletSize.toString()
-        });
-      } catch (error) {
-        console.error('Error saving display settings to database:', error);
-      }
-    };
+        const response = await axios.get(`${API_DEVICE_URL}/settings`);
+        const settings = response.data?.calendarWidgetSettings;
+        if (!settings || typeof settings !== 'object') {
+          setCalendarSettingsLoaded(true);
+          return;
+        }
 
-    const timeoutId = setTimeout(saveToDatabase, 500);
-    return () => clearTimeout(timeoutId);
-  }, [displaySettings]);
+        if (settings.eventColors && typeof settings.eventColors === 'object') {
+          setEventColors({
+            ...DEFAULT_CALENDAR_EVENT_COLORS,
+            ...settings.eventColors,
+          });
+        }
 
-  useEffect(() => {
-    localStorage.setItem('calendarDayOfWeekSettings', JSON.stringify(dayOfWeekSettings));
-  }, [dayOfWeekSettings]);
-
-  useEffect(() => {
-    const loadDisplaySettings = async () => {
-      try {
-        const response = await axios.post(`${API_BASE_URL}/api/settings/search`, ['CALENDAR_*']);
-        const settings = response.data;
-
-        if (settings.CALENDAR_TEXT_SIZE || settings.CALENDAR_BULLET_SIZE) {
+        if (settings.displaySettings && typeof settings.displaySettings === 'object') {
           setDisplaySettings({
-            textSize: settings.CALENDAR_TEXT_SIZE ? parseInt(settings.CALENDAR_TEXT_SIZE) : 12,
-            bulletSize: settings.CALENDAR_BULLET_SIZE ? parseInt(settings.CALENDAR_BULLET_SIZE) : 10
+            ...DEFAULT_CALENDAR_DISPLAY_SETTINGS,
+            ...settings.displaySettings,
+          });
+        }
+
+        if (settings.dayOfWeekSettings && typeof settings.dayOfWeekSettings === 'object') {
+          setDayOfWeekSettings({
+            ...DEFAULT_CALENDAR_DAY_OF_WEEK_SETTINGS,
+            ...settings.dayOfWeekSettings,
+            monthViewDaysToShow: clampInteger(settings.dayOfWeekSettings.monthViewDaysToShow, 1, 32, DEFAULT_MONTH_VIEW_DAYS_TO_SHOW),
+            monthViewDaysPerRow: clampInteger(settings.dayOfWeekSettings.monthViewDaysPerRow, 1, 14, DEFAULT_MONTH_VIEW_DAYS_PER_ROW),
           });
         }
       } catch (error) {
-        console.error('Error loading display settings from database:', error);
+        console.error('Error loading calendar widget settings:', error);
+      } finally {
+        setCalendarSettingsLoaded(true);
       }
     };
 
-    loadDisplaySettings();
-  }, []);
+    void loadCalendarWidgetSettings();
+  }, [API_DEVICE_URL]);
+
+  useEffect(() => {
+    if (!calendarSettingsLoaded) {
+      return;
+    }
+
+    const persistCalendarWidgetSettings = async () => {
+      try {
+        await axios.patch(`${API_DEVICE_URL}/settings`, {
+          calendarWidgetSettings: {
+            eventColors,
+            displaySettings,
+            dayOfWeekSettings: {
+              ...dayOfWeekSettings,
+              monthViewDaysToShow,
+              monthViewDaysPerRow,
+            },
+          },
+        });
+      } catch (error) {
+        console.error('Error saving calendar widget settings:', error);
+      }
+    };
+
+    const timeoutId = setTimeout(persistCalendarWidgetSettings, 300);
+    return () => clearTimeout(timeoutId);
+  }, [
+    API_DEVICE_URL,
+    calendarSettingsLoaded,
+    eventColors,
+    displaySettings,
+    dayOfWeekSettings,
+    monthViewDaysToShow,
+    monthViewDaysPerRow,
+  ]);
 
   const fetchCalendarSources = async () => {
     try {

@@ -1276,6 +1276,7 @@ fastify.post('/api/devices/:deviceName/copy-from/:sourceDeviceName', async (requ
     }
 
     ensureDeviceExists(deviceName);
+    const sourceDeviceSettings = db.prepare('SELECT device_settings_json FROM devices WHERE name = ?').get(sourceDeviceName);
 
     const copyTransaction = db.transaction(() => {
       db.prepare('DELETE FROM tabs WHERE device_name = ?').run(deviceName);
@@ -1287,6 +1288,11 @@ fastify.post('/api/devices/:deviceName/copy-from/:sourceDeviceName', async (requ
         WHERE device_name = ?
         ORDER BY number ASC
       `).run(deviceName, sourceDeviceName);
+
+      db.prepare('UPDATE devices SET device_settings_json = ?, updateTime = CURRENT_TIMESTAMP WHERE name = ?').run(
+        sourceDeviceSettings?.device_settings_json || '{}',
+        deviceName
+      );
 
       ensureHomeTabExists(deviceName);
       ensureCoreWidgetsInHomeTab(deviceName);
