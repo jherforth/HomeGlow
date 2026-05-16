@@ -13,3 +13,5 @@ coverage/
 *.lcov
 
 package-lock.json
+
+.vscode/
