@@ -63,6 +63,33 @@ const WeatherWidget = ({
     return instanceSettings && typeof instanceSettings === 'object' ? instanceSettings : {};
   };
 
+  // region #98 - expected to get removed in the future (legacy weather defaults compatibility)
+  const readLegacyWeatherDefaultsFromDeviceSettings = (deviceSettings) => {
+    const legacySettings = deviceSettings?.weatherLegacySettings && typeof deviceSettings.weatherLegacySettings === 'object'
+      ? deviceSettings.weatherLegacySettings
+      : {};
+    const legacyWidgetSettings = deviceSettings?.widgetSettings?.weather && typeof deviceSettings.widgetSettings.weather === 'object'
+      ? deviceSettings.widgetSettings.weather
+      : {};
+
+    const legacyLocationQuery = String(
+      legacySettings.locationQuery || legacySettings.zipCode || ''
+    ).trim();
+    const legacyTempUnit = legacySettings.tempUnit === 'C' || legacySettings.tempUnit === 'F'
+      ? legacySettings.tempUnit
+      : 'F';
+
+    const legacyLayoutModeCandidate = legacySettings.layoutMode || legacyWidgetSettings.layoutMode || 'auto';
+    const legacyLayoutMode = VALID_LAYOUT_MODES.has(legacyLayoutModeCandidate) ? legacyLayoutModeCandidate : 'auto';
+
+    return {
+      legacyLocationQuery: legacyLocationQuery || DEFAULT_LOCATION_QUERY,
+      legacyTempUnit,
+      legacyLayoutMode,
+    };
+  };
+  // endRegion #98
+
   const saveInstanceSettingsToDevice = async (nextSettings) => {
     const response = await axios.get(`${API_DEVICE_URL}/settings`);
     const currentSettings = response.data && typeof response.data === 'object' ? response.data : {};
@@ -101,11 +128,13 @@ const WeatherWidget = ({
     return notFoundError;
   };
 
+  // region #98 - expected to get removed in the future (legacy weather settings key compatibility)
   const resolveInstanceConfig = (rawSettings = {}, fallbackLocationQuery = DEFAULT_LOCATION_QUERY, fallbackTempUnit = 'F') => {
     const resolvedLocationQuery = (rawSettings.locationQuery || rawSettings.zipCode || fallbackLocationQuery || '').trim();
     const resolvedTempUnit = normalizeTempUnit(rawSettings.tempUnit, fallbackTempUnit);
     return { resolvedLocationQuery, resolvedTempUnit };
   };
+  // endRegion #98
 
   const applyWeatherPayloadToState = (payload) => {
     setWeatherData(payload.weatherData || null);
@@ -295,8 +324,10 @@ const WeatherWidget = ({
       locationKey: normalizeLocationKey(targetLocationQuery),
       lat,
       lon,
+      // region #98 - expected to get removed in the future (legacy weather payload key compatibility)
       // Keep zipCode for backward compatibility with older cache readers.
       zipCode: targetLocationQuery,
+      // endRegion #98
       tempUnit: targetTempUnit,
       weatherData: nextWeatherData,
       airQualityData: nextAirQualityData,
@@ -357,9 +388,16 @@ const WeatherWidget = ({
       setError(null);
 
       let instanceSettings = {};
+      let legacyFallback = {
+        legacyLocationQuery: DEFAULT_LOCATION_QUERY,
+        legacyTempUnit: 'F',
+        legacyLayoutMode: 'auto',
+      };
       try {
         const response = await axios.get(`${API_DEVICE_URL}/settings`);
-        instanceSettings = readInstanceSettingsFromDeviceSettings(response.data || {});
+        const deviceSettings = response.data || {};
+        instanceSettings = readInstanceSettingsFromDeviceSettings(deviceSettings);
+        legacyFallback = readLegacyWeatherDefaultsFromDeviceSettings(deviceSettings);
       } catch (error) {
         console.error('Error loading weather widget settings:', error);
       }
@@ -370,10 +408,10 @@ const WeatherWidget = ({
 
       const { resolvedLocationQuery: savedLocationQuery, resolvedTempUnit: savedTempUnit } = resolveInstanceConfig(
         instanceSettings,
-        DEFAULT_LOCATION_QUERY,
-        'F'
+        legacyFallback.legacyLocationQuery,
+        legacyFallback.legacyTempUnit
       );
-      const candidateLayoutMode = instanceSettings.layoutMode || 'auto';
+      const candidateLayoutMode = instanceSettings.layoutMode || legacyFallback.legacyLayoutMode || 'auto';
       const savedLayoutMode = VALID_LAYOUT_MODES.has(candidateLayoutMode) ? candidateLayoutMode : 'auto';
 
       setWeatherData(null);

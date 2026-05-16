@@ -1073,6 +1073,7 @@ function listWidgetAssignmentsFromTabLayouts(deviceName) {
   return rows;
 }
 
+// region #98 - expected to get removed in the future (legacy tabs/home/core-widget backfill compatibility)
 function ensureCoreWidgetsInHomeTab(deviceName) {
   if (!doesDeviceExist(deviceName)) {
     return 0;
@@ -1118,6 +1119,7 @@ function ensureHomeTabExists(deviceName) {
     console.error('Error creating default home tab:', error);
   }
 }
+// endRegion #98
 
 function doesDeviceExist(deviceName) {
   const device = db.prepare('SELECT name FROM devices WHERE name = ?').get(deviceName);
@@ -1125,6 +1127,7 @@ function doesDeviceExist(deviceName) {
 }
 
 function buildDefaultHomeTab(deviceName) {
+  // region #98 - expected to get removed in the future (legacy empty-tabs API fallback)
   return {
     id: 1,
     device_name: deviceName,
@@ -1135,12 +1138,15 @@ function buildDefaultHomeTab(deviceName) {
     created_at: null,
     layout_json: '{}',
   };
+  // endRegion #98
 }
 
 function ensureDeviceExists(deviceName) {
   db.prepare('INSERT OR IGNORE INTO devices (name, updateTime) VALUES (?, CURRENT_TIMESTAMP)').run(deviceName);
+  // region #98 - expected to get removed in the future (legacy tabs/home/core-widget backfill compatibility)
   ensureHomeTabExists(deviceName);
   ensureCoreWidgetsInHomeTab(deviceName);
+  // endRegion #98
 }
 function touchDeviceUpdateTime(deviceName) {
   db.prepare('UPDATE devices SET updateTime = CURRENT_TIMESTAMP WHERE name = ?').run(deviceName);
@@ -1294,8 +1300,10 @@ fastify.post('/api/devices/:deviceName/copy-from/:sourceDeviceName', async (requ
         deviceName
       );
 
+      // region #98 - expected to get removed in the future (legacy tabs/home/core-widget backfill compatibility)
       ensureHomeTabExists(deviceName);
       ensureCoreWidgetsInHomeTab(deviceName);
+      // endRegion #98
       touchDeviceUpdateTime(deviceName);
     });
 
@@ -2252,9 +2260,11 @@ fastify.get('/api/devices/:deviceName/tabs', async (request, reply) => {
   try {
     const tabs = db.prepare('SELECT * FROM tabs WHERE device_name = ? ORDER BY number ASC').all(deviceName);
     const lastModifiedMs = getDeviceUpdateTimeMs(deviceName);
+    // region #98 - expected to get removed in the future (legacy empty-tabs API fallback)
     if (tabs.length === 0) {
       return sendJsonWithConditionalCache(request, reply, [buildDefaultHomeTab(deviceName)], null);
     }
+    // endRegion #98
     return sendJsonWithConditionalCache(request, reply, tabs, lastModifiedMs);
   } catch (error) {
     console.error('Error fetching tabs:', error);

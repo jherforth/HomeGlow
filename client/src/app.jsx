@@ -59,7 +59,13 @@ const ChoreWidget = lazy(loadChoreWidget);
 const TabIconModal = lazy(loadTabIconModal);
 const ScreenSaver = lazy(loadScreenSaver);
 
+// region #98 - expected to get removed in the future (localStorage migration bridge)
+const AUTO_DARK_MODE_STORAGE_KEY = 'autoDarkModeSettings';
 const DEVICE_SETTINGS_UPDATED_EVENT = 'homeglow:device-settings-updated';
+const DEVICE_SETTINGS_MIGRATION_KEY_PATTERN = /^(enabledWidgets|theme|themeMode|widgetsLocked|widgetSettings|pluginSettings|screensaverSettings|autoDarkModeSettings|weatherZipCode|weatherTempUnit)$/;
+
+const isAllowedDeviceSettingsMigrationKey = (key) => DEVICE_SETTINGS_MIGRATION_KEY_PATTERN.test(key);
+// endRegion #98
 
 const DEFAULT_SCREENSAVER_SETTINGS = {
   enabled: false,
@@ -170,6 +176,19 @@ const App = () => {
     }
   };
 
+  const applyTheme = useCallback((nextTheme) => {
+    setTheme(nextTheme);
+    document.documentElement.setAttribute('data-theme', nextTheme);
+
+    if (nextTheme === 'light') {
+      const primaryColor = widgetSettings.primary || '#f5f5f5';
+      document.documentElement.style.setProperty('--background', primaryColor);
+      return;
+    }
+
+    document.documentElement.style.removeProperty('--background');
+  }, [widgetSettings.primary]);
+
   const hydrateFromDeviceSettings = useCallback((settings) => {
     const widgetSettingsFromServer = normalizeWidgetSettings(settings?.widgetSettings);
     const pluginSettingsFromServer = settings?.pluginSettings && typeof settings.pluginSettings === 'object'
@@ -214,6 +233,138 @@ const App = () => {
     }
   }, [API_DEVICE_URL, hydrateFromDeviceSettings]);
 
+  // region #98 - expected to get removed in the future (one-time local-to-server settings migration)
+  const migrateLocalDeviceSettingsToServer = useCallback(async () => {
+    const localPayload = {};
+
+    if (isAllowedDeviceSettingsMigrationKey('theme')) {
+      const localTheme = localStorage.getItem('theme');
+      if (localTheme === 'light' || localTheme === 'dark') {
+        localPayload.theme = localTheme;
+      }
+    }
+
+    if (isAllowedDeviceSettingsMigrationKey('themeMode')) {
+      const localThemeMode = localStorage.getItem('themeMode');
+      if (localThemeMode === 'light' || localThemeMode === 'dark' || localThemeMode === 'auto') {
+        localPayload.themeMode = localThemeMode;
+      }
+    }
+
+    if (isAllowedDeviceSettingsMigrationKey('widgetsLocked')) {
+      const widgetsLockedRaw = localStorage.getItem('widgetsLocked');
+      if (widgetsLockedRaw !== null) {
+        try {
+          localPayload.widgetsLocked = JSON.parse(widgetsLockedRaw);
+        } catch {
+          // Ignore malformed local value.
+        }
+      }
+    }
+
+    const parseJsonKey = (key) => {
+      if (!isAllowedDeviceSettingsMigrationKey(key)) return null;
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      try {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : null;
+      } catch {
+        return null;
+      }
+    };
+
+    const widgetSettingsRaw = parseJsonKey('widgetSettings');
+    if (widgetSettingsRaw) {
+      const sanitizedWidgetSettings = { ...widgetSettingsRaw };
+      if (Object.prototype.hasOwnProperty.call(sanitizedWidgetSettings, 'widgetGallery')) {
+        delete sanitizedWidgetSettings.widgetGallery;
+      }
+      localPayload.widgetSettings = normalizeWidgetSettings(sanitizedWidgetSettings);
+    }
+
+    const pluginSettingsRaw = parseJsonKey('pluginSettings');
+    let mergedPluginSettings = pluginSettingsRaw && typeof pluginSettingsRaw === 'object'
+      ? { ...pluginSettingsRaw }
+      : null;
+
+    if (isAllowedDeviceSettingsMigrationKey('enabledWidgets')) {
+      const enabledWidgetsRaw = localStorage.getItem('enabledWidgets');
+      if (enabledWidgetsRaw) {
+        try {
+          const parsedEnabledWidgets = JSON.parse(enabledWidgetsRaw);
+          if (parsedEnabledWidgets && typeof parsedEnabledWidgets === 'object') {
+            const nextPluginSettings = mergedPluginSettings ? { ...mergedPluginSettings } : {};
+            Object.entries(parsedEnabledWidgets).forEach(([filename, isEnabled]) => {
+              if (!nextPluginSettings[filename]) {
+                nextPluginSettings[filename] = { enabled: !!isEnabled, transparent: false, refreshInterval: 0 };
+              }
+            });
+            mergedPluginSettings = nextPluginSettings;
+          }
+        } catch {
+          // Ignore malformed local value.
+        }
+      }
+    }
+
+    if (mergedPluginSettings && Object.keys(mergedPluginSettings).length > 0) {
+      localPayload.pluginSettings = mergedPluginSettings;
+    }
+
+    const screensaverRaw = parseJsonKey('screensaverSettings');
+    if (screensaverRaw) {
+      localPayload.screensaverSettings = normalizeScreensaverSettings(screensaverRaw);
+    }
+
+    const autoDarkRaw = parseJsonKey(AUTO_DARK_MODE_STORAGE_KEY);
+    if (autoDarkRaw) {
+      localPayload.autoDarkModeSettings = normalizeAutoDarkModeSettings(autoDarkRaw);
+    }
+
+    if (isAllowedDeviceSettingsMigrationKey('weatherZipCode') || isAllowedDeviceSettingsMigrationKey('weatherTempUnit')) {
+      const weatherLegacySettings = {};
+
+      if (isAllowedDeviceSettingsMigrationKey('weatherZipCode')) {
+        const weatherZipCode = (localStorage.getItem('weatherZipCode') || '').trim();
+        if (weatherZipCode) {
+          weatherLegacySettings.locationQuery = weatherZipCode;
+          weatherLegacySettings.zipCode = weatherZipCode;
+        }
+      }
+
+      if (isAllowedDeviceSettingsMigrationKey('weatherTempUnit')) {
+        const weatherTempUnit = localStorage.getItem('weatherTempUnit');
+        if (weatherTempUnit === 'C' || weatherTempUnit === 'F') {
+          weatherLegacySettings.tempUnit = weatherTempUnit;
+        }
+      }
+
+      if (Object.keys(weatherLegacySettings).length > 0) {
+        localPayload.weatherLegacySettings = weatherLegacySettings;
+      }
+    }
+
+    const keysToMigrate = Object.keys(localPayload);
+    if (keysToMigrate.length === 0) {
+      return;
+    }
+
+    try {
+      await axios.put(`${API_DEVICE_URL}/settings`, localPayload);
+
+      // Remove only known migrated keys.
+      ['enabledWidgets', 'theme', 'themeMode', 'widgetsLocked', 'widgetSettings', 'pluginSettings', 'screensaverSettings', AUTO_DARK_MODE_STORAGE_KEY, 'weatherZipCode', 'weatherTempUnit']
+        .filter(isAllowedDeviceSettingsMigrationKey)
+        .forEach((key) => {
+          localStorage.removeItem(key);
+        });
+    } catch (error) {
+      console.error('Error migrating local device settings to server:', error);
+    }
+  }, [API_DEVICE_URL]);
+  // endRegion #98
+
   const patchDeviceSettings = useCallback(async (partialSettings) => {
     try {
       await axios.patch(`${API_DEVICE_URL}/settings`, partialSettings);
@@ -222,6 +373,7 @@ const App = () => {
     }
   }, [API_DEVICE_URL]);
 
+  // region #98 - expected to get removed in the future (invoke migration bridge during bootstrap)
   useEffect(() => {
     const fetchApiKeys = async () => {
       try {
@@ -235,6 +387,7 @@ const App = () => {
     };
 
     const initialize = async () => {
+      await migrateLocalDeviceSettingsToServer();
       await fetchDeviceSettings();
       await Promise.all([
         fetchTabs(),
@@ -245,7 +398,8 @@ const App = () => {
     };
 
     void initialize();
-  }, [fetchDeviceSettings]);
+  }, [fetchDeviceSettings, migrateLocalDeviceSettingsToServer]);
+  // endRegion #98
 
   const fetchTabs = async () => {
     try {
@@ -282,19 +436,6 @@ const App = () => {
       setWidgetAssignments({});
     }
   };
-
-  const applyTheme = useCallback((nextTheme) => {
-    setTheme(nextTheme);
-    document.documentElement.setAttribute('data-theme', nextTheme);
-
-    if (nextTheme === 'light') {
-      const primaryColor = widgetSettings.primary || '#f5f5f5';
-      document.documentElement.style.setProperty('--background', primaryColor);
-      return;
-    }
-
-    document.documentElement.style.removeProperty('--background');
-  }, [widgetSettings.primary]);
 
   const resolveAutoTheme = useCallback(async () => {
     const hasCoordinates = typeof autoDarkModeSettings.lat === 'number' && typeof autoDarkModeSettings.lon === 'number';
