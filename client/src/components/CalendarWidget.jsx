@@ -1492,6 +1492,7 @@ const CalendarWidget = ({
 
                     {day.timedEvents.map((event, evIdx) => {
                       const palette = getPillPalette(event);
+                      const showWeekStartTimes = true;
                       return (
                         <Box
                           key={`timed-${evIdx}`}
@@ -1520,7 +1521,7 @@ const CalendarWidget = ({
                             }}
                           />
                           <Box sx={{ flex: 1, minWidth: 0 }}>
-                            {displaySettings.showStartTimes && (
+                            {showWeekStartTimes && (
                               <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block', fontSize: `${displaySettings.textSize}px` }}>
                                 {moment(event.start).format('h:mm A')}
                               </Typography>
@@ -1529,10 +1530,10 @@ const CalendarWidget = ({
                               display: 'block',
                               lineHeight: 1.2,
                               fontSize: `${displaySettings.textSize}px`,
-                              whiteSpace: displaySettings.showStartTimes ? 'normal' : 'nowrap',
-                              overflow: displaySettings.showStartTimes ? 'visible' : 'hidden',
-                              textOverflow: displaySettings.showStartTimes ? 'clip' : 'ellipsis',
-                              overflowWrap: displaySettings.showStartTimes ? 'anywhere' : 'normal',
+                              whiteSpace: showWeekStartTimes ? 'normal' : 'nowrap',
+                              overflow: showWeekStartTimes ? 'visible' : 'hidden',
+                              textOverflow: showWeekStartTimes ? 'clip' : 'ellipsis',
+                              overflowWrap: showWeekStartTimes ? 'anywhere' : 'normal',
                             }}>
                               {event.title}
                             </Typography>
