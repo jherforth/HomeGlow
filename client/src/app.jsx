@@ -24,6 +24,10 @@ const loadScreenSaver = () => import('./components/ScreenSaver.jsx');
 
 const MAX_IDLE_WARM_IMPORTS = 3;
 const WIDGETS_LOCKED_STORAGE_KEY = 'widgetsLocked';
+const THEME_STORAGE_KEY = 'theme';
+const THEME_MODE_STORAGE_KEY = 'themeMode';
+const INTERFACE_COLORS_STORAGE_KEY = 'interfaceColors';
+const SCREENSAVER_SETTINGS_STORAGE_KEY = 'screensaverSettings';
 
 const shouldSkipWarmupForConnection = () => {
   if (typeof navigator === 'undefined') return false;
@@ -63,7 +67,8 @@ const ScreenSaver = lazy(loadScreenSaver);
 // region #98 - expected to get removed in the future (localStorage migration bridge)
 const AUTO_DARK_MODE_STORAGE_KEY = 'autoDarkModeSettings';
 const DEVICE_SETTINGS_UPDATED_EVENT = 'homeglow:device-settings-updated';
-const DEVICE_SETTINGS_MIGRATION_KEY_PATTERN = /^(enabledWidgets|theme|themeMode|widgetSettings|pluginSettings|screensaverSettings|autoDarkModeSettings|weatherZipCode|weatherTempUnit)$/;
+const INTERFACE_SETTINGS_UPDATED_EVENT = 'homeglow:interface-settings-updated';
+const DEVICE_SETTINGS_MIGRATION_KEY_PATTERN = /^(enabledWidgets|widgetSettings|pluginSettings|weatherZipCode|weatherTempUnit)$/;
 
 const isAllowedDeviceSettingsMigrationKey = (key) => DEVICE_SETTINGS_MIGRATION_KEY_PATTERN.test(key);
 // endRegion #98
@@ -73,6 +78,12 @@ const DEFAULT_SCREENSAVER_SETTINGS = {
   mode: 'tabs',
   timeout: 5,
   slideshowInterval: 10,
+};
+
+const DEFAULT_INTERFACE_COLORS = {
+  primary: '#f5f5f5',
+  secondary: '#38bdf8',
+  accent: '#f472b6',
 };
 
 const DEFAULT_WIDGET_SETTINGS = {
@@ -126,6 +137,55 @@ const normalizeAutoDarkModeSettings = (raw) => {
   };
 };
 
+const normalizeInterfaceColors = (raw) => ({
+  ...DEFAULT_INTERFACE_COLORS,
+  ...(raw && typeof raw === 'object' ? raw : {}),
+});
+
+const readLocalTheme = () => {
+  const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+  return savedTheme === 'dark' ? 'dark' : 'light';
+};
+
+const readLocalThemeMode = (fallbackTheme) => {
+  const savedThemeMode = localStorage.getItem(THEME_MODE_STORAGE_KEY);
+  if (savedThemeMode === 'light' || savedThemeMode === 'dark' || savedThemeMode === 'auto') {
+    return savedThemeMode;
+  }
+
+  return fallbackTheme === 'dark' ? 'dark' : 'light';
+};
+
+const readLocalInterfaceColors = () => {
+  try {
+    const raw = localStorage.getItem(INTERFACE_COLORS_STORAGE_KEY);
+    if (!raw) return { ...DEFAULT_INTERFACE_COLORS };
+    return normalizeInterfaceColors(JSON.parse(raw));
+  } catch {
+    return { ...DEFAULT_INTERFACE_COLORS };
+  }
+};
+
+const readLocalScreensaverSettings = () => {
+  try {
+    const raw = localStorage.getItem(SCREENSAVER_SETTINGS_STORAGE_KEY);
+    if (!raw) return { ...DEFAULT_SCREENSAVER_SETTINGS };
+    return normalizeScreensaverSettings(JSON.parse(raw));
+  } catch {
+    return { ...DEFAULT_SCREENSAVER_SETTINGS };
+  }
+};
+
+const readLocalAutoDarkModeSettings = () => {
+  try {
+    const raw = localStorage.getItem(AUTO_DARK_MODE_STORAGE_KEY);
+    if (!raw) return { ...DEFAULT_AUTO_DARK_MODE_SETTINGS };
+    return normalizeAutoDarkModeSettings(JSON.parse(raw));
+  } catch {
+    return { ...DEFAULT_AUTO_DARK_MODE_SETTINGS };
+  }
+};
+
 const readLocalWidgetsLocked = () => {
   const saved = localStorage.getItem(WIDGETS_LOCKED_STORAGE_KEY);
   if (saved === null) {
@@ -158,12 +218,13 @@ const WidgetLoadingFallback = ({ label }) => (
 
 const App = () => {
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
-  const [theme, setTheme] = useState('light');
-  const [themeMode, setThemeMode] = useState('light');
-  const [autoDarkModeSettings, setAutoDarkModeSettings] = useState({ ...DEFAULT_AUTO_DARK_MODE_SETTINGS });
+  const [theme, setTheme] = useState(readLocalTheme);
+  const [themeMode, setThemeMode] = useState(() => readLocalThemeMode(readLocalTheme()));
+  const [autoDarkModeSettings, setAutoDarkModeSettings] = useState(readLocalAutoDarkModeSettings);
+  const [interfaceColors, setInterfaceColors] = useState(readLocalInterfaceColors);
   const [widgetsLocked, setWidgetsLocked] = useState(readLocalWidgetsLocked);
   const [screensaverActive, setScreensaverActive] = useState(false);
-  const [screensaverSettings, setScreensaverSettings] = useState({ ...DEFAULT_SCREENSAVER_SETTINGS });
+  const [screensaverSettings, setScreensaverSettings] = useState(readLocalScreensaverSettings);
   const inactivityTimerRef = useRef(null);
   const lastActivityRef = useRef(Date.now());
   const [widgetSettings, setWidgetSettings] = useState({ ...DEFAULT_WIDGET_SETTINGS });
@@ -193,48 +254,26 @@ const App = () => {
 
   const applyTheme = useCallback((nextTheme) => {
     setTheme(nextTheme);
-    document.documentElement.setAttribute('data-theme', nextTheme);
-
-    if (nextTheme === 'light') {
-      const primaryColor = widgetSettings.primary || '#f5f5f5';
-      document.documentElement.style.setProperty('--background', primaryColor);
-      return;
-    }
-
-    document.documentElement.style.removeProperty('--background');
-  }, [widgetSettings.primary]);
+    localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+  }, []);
 
   const hydrateFromDeviceSettings = useCallback((settings) => {
     const widgetSettingsFromServer = normalizeWidgetSettings(settings?.widgetSettings);
     const pluginSettingsFromServer = settings?.pluginSettings && typeof settings.pluginSettings === 'object'
       ? settings.pluginSettings
       : {};
-    const screensaverFromServer = normalizeScreensaverSettings(settings?.screensaverSettings);
-    const autoDarkFromServer = normalizeAutoDarkModeSettings(settings?.autoDarkModeSettings);
-    const themeFromServer = settings?.theme === 'dark' ? 'dark' : 'light';
-    const themeModeFromServer = ['light', 'dark', 'auto'].includes(settings?.themeMode)
-      ? settings.themeMode
-      : themeFromServer;
 
     setWidgetSettings(widgetSettingsFromServer);
     setPluginSettings(pluginSettingsFromServer);
-    setScreensaverSettings(screensaverFromServer);
-    setAutoDarkModeSettings(autoDarkFromServer);
-    setThemeMode(themeModeFromServer);
-    applyTheme(themeFromServer);
 
     const hasKnownDeviceSettings = [
       'widgetSettings',
       'pluginSettings',
-      'screensaverSettings',
-      'autoDarkModeSettings',
-      'theme',
-      'themeMode',
     ].some((key) => Object.prototype.hasOwnProperty.call(settings || {}, key));
 
     setIsFirstRunClient(!hasKnownDeviceSettings);
     setDeviceSettingsLoaded(true);
-  }, [applyTheme]);
+  }, []);
 
   const fetchDeviceSettings = useCallback(async () => {
     try {
@@ -248,20 +287,6 @@ const App = () => {
   // region #98 - expected to get removed in the future (one-time local-to-server settings migration)
   const migrateLocalDeviceSettingsToServer = useCallback(async () => {
     const localPayload = {};
-
-    if (isAllowedDeviceSettingsMigrationKey('theme')) {
-      const localTheme = localStorage.getItem('theme');
-      if (localTheme === 'light' || localTheme === 'dark') {
-        localPayload.theme = localTheme;
-      }
-    }
-
-    if (isAllowedDeviceSettingsMigrationKey('themeMode')) {
-      const localThemeMode = localStorage.getItem('themeMode');
-      if (localThemeMode === 'light' || localThemeMode === 'dark' || localThemeMode === 'auto') {
-        localPayload.themeMode = localThemeMode;
-      }
-    }
 
     const parseJsonKey = (key) => {
       if (!isAllowedDeviceSettingsMigrationKey(key)) return null;
@@ -313,16 +338,6 @@ const App = () => {
       localPayload.pluginSettings = mergedPluginSettings;
     }
 
-    const screensaverRaw = parseJsonKey('screensaverSettings');
-    if (screensaverRaw) {
-      localPayload.screensaverSettings = normalizeScreensaverSettings(screensaverRaw);
-    }
-
-    const autoDarkRaw = parseJsonKey(AUTO_DARK_MODE_STORAGE_KEY);
-    if (autoDarkRaw) {
-      localPayload.autoDarkModeSettings = normalizeAutoDarkModeSettings(autoDarkRaw);
-    }
-
     if (isAllowedDeviceSettingsMigrationKey('weatherZipCode') || isAllowedDeviceSettingsMigrationKey('weatherTempUnit')) {
       const weatherLegacySettings = {};
 
@@ -355,7 +370,7 @@ const App = () => {
       await axios.put(`${API_DEVICE_URL}/settings`, localPayload);
 
       // Remove only known migrated keys.
-      ['enabledWidgets', 'theme', 'themeMode', 'widgetSettings', 'pluginSettings', 'screensaverSettings', AUTO_DARK_MODE_STORAGE_KEY, 'weatherZipCode', 'weatherTempUnit']
+      ['enabledWidgets', 'widgetSettings', 'pluginSettings', 'weatherZipCode', 'weatherTempUnit']
         .filter(isAllowedDeviceSettingsMigrationKey)
         .forEach((key) => {
           localStorage.removeItem(key);
@@ -365,14 +380,6 @@ const App = () => {
     }
   }, [API_DEVICE_URL]);
   // endRegion #98
-
-  const patchDeviceSettings = useCallback(async (partialSettings) => {
-    try {
-      await axios.patch(`${API_DEVICE_URL}/settings`, partialSettings);
-    } catch (error) {
-      console.error('Error updating device settings:', error);
-    }
-  }, [API_DEVICE_URL]);
 
   // region #98 - expected to get removed in the future (invoke migration bridge during bootstrap)
   useEffect(() => {
@@ -475,17 +482,42 @@ const App = () => {
   }, [resolveAutoTheme, applyTheme]);
 
   useEffect(() => {
-    applyTheme('light');
-  }, [applyTheme]);
+    document.documentElement.style.setProperty('--primary', interfaceColors.primary);
+    document.documentElement.style.setProperty('--secondary', interfaceColors.secondary);
+    document.documentElement.style.setProperty('--accent', interfaceColors.accent);
+  }, [interfaceColors]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    if (theme === 'light') {
+      document.documentElement.style.setProperty('--background', interfaceColors.primary);
+      return;
+    }
+
+    document.documentElement.style.removeProperty('--background');
+  }, [theme, interfaceColors.primary]);
 
   useEffect(() => {
     const handleDeviceSettingsUpdated = () => {
       void fetchDeviceSettings();
     };
 
+    const handleInterfaceSettingsUpdated = () => {
+      setInterfaceColors(readLocalInterfaceColors());
+      setScreensaverSettings(readLocalScreensaverSettings());
+      setAutoDarkModeSettings(readLocalAutoDarkModeSettings());
+
+      const localTheme = readLocalTheme();
+      const localThemeMode = readLocalThemeMode(localTheme);
+      setTheme(localTheme);
+      setThemeMode(localThemeMode);
+    };
+
     window.addEventListener(DEVICE_SETTINGS_UPDATED_EVENT, handleDeviceSettingsUpdated);
+    window.addEventListener(INTERFACE_SETTINGS_UPDATED_EVENT, handleInterfaceSettingsUpdated);
     return () => {
       window.removeEventListener(DEVICE_SETTINGS_UPDATED_EVENT, handleDeviceSettingsUpdated);
+      window.removeEventListener(INTERFACE_SETTINGS_UPDATED_EVENT, handleInterfaceSettingsUpdated);
     };
   }, [fetchDeviceSettings]);
 
@@ -538,12 +570,9 @@ const App = () => {
     if (!autoModeAvailable) {
       const fallbackMode = theme === 'dark' ? 'dark' : 'light';
       setThemeMode(fallbackMode);
-      void patchDeviceSettings({
-        themeMode: fallbackMode,
-        theme: fallbackMode,
-      });
+      localStorage.setItem(THEME_MODE_STORAGE_KEY, fallbackMode);
     }
-  }, [apiKeysLoaded, themeMode, autoDarkModeSettings, apiKeys.WEATHER_API_KEY, theme, patchDeviceSettings]);
+  }, [apiKeysLoaded, themeMode, autoDarkModeSettings, apiKeys.WEATHER_API_KEY, theme]);
 
   useEffect(() => {
     document.documentElement.style.setProperty('--light-gradient-start', widgetSettings.lightGradientStart);
@@ -667,12 +696,9 @@ const App = () => {
     const nextMode = themeModes[(currentIndex + 1) % themeModes.length];
 
     setThemeMode(nextMode);
+    localStorage.setItem(THEME_MODE_STORAGE_KEY, nextMode);
 
     const nextTheme = nextMode === 'auto' ? theme : nextMode;
-    void patchDeviceSettings({
-      themeMode: nextMode,
-      theme: nextTheme,
-    });
 
     if (nextMode === 'auto') {
       void applyAutoThemeNow();

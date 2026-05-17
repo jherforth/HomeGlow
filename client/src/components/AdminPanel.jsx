@@ -75,6 +75,10 @@ import GoogleAccountConnection from './GoogleAccountConnection';
 
 const USERS_UPDATED_EVENT = 'homeglow:users-updated';
 const DEVICE_SETTINGS_UPDATED_EVENT = 'homeglow:device-settings-updated';
+const INTERFACE_SETTINGS_UPDATED_EVENT = 'homeglow:interface-settings-updated';
+const INTERFACE_COLORS_STORAGE_KEY = 'interfaceColors';
+const INTERFACE_SCREENSAVER_STORAGE_KEY = 'screensaverSettings';
+const INTERFACE_AUTO_DARK_MODE_STORAGE_KEY = 'autoDarkModeSettings';
 const DEFAULT_AUTO_DARK_MODE_SETTINGS = {
   enabled: false,
   locationQuery: '',
@@ -88,9 +92,12 @@ const DEFAULT_WIDGET_SETTINGS = {
   calendar: { enabled: false, transparent: false, refreshInterval: 0 },
   photos: { enabled: false, transparent: false, refreshInterval: 0 },
   weather: { enabled: false, transparent: false, refreshInterval: 0 },
+};
+
+const DEFAULT_INTERFACE_COLORS = {
   primary: '#f5f5f5',
   secondary: '#38bdf8',
-  accent: '#f472b6'
+  accent: '#f472b6',
 };
 
 const DEFAULT_SCREENSAVER_SETTINGS = {
@@ -102,7 +109,6 @@ const DEFAULT_SCREENSAVER_SETTINGS = {
 
 const normalizeWidgetSettings = (raw) => ({
   ...DEFAULT_WIDGET_SETTINGS,
-  ...(raw && typeof raw === 'object' ? raw : {}),
   chores: { ...DEFAULT_WIDGET_SETTINGS.chores, ...(raw?.chores || {}) },
   calendar: { ...DEFAULT_WIDGET_SETTINGS.calendar, ...(raw?.calendar || {}) },
   photos: { ...DEFAULT_WIDGET_SETTINGS.photos, ...(raw?.photos || {}) },
@@ -113,6 +119,44 @@ const normalizeScreensaverSettings = (raw) => ({
   ...DEFAULT_SCREENSAVER_SETTINGS,
   ...(raw && typeof raw === 'object' ? raw : {}),
 });
+
+const normalizeInterfaceColors = (raw) => ({
+  ...DEFAULT_INTERFACE_COLORS,
+  ...(raw && typeof raw === 'object' ? raw : {}),
+});
+
+const readLocalInterfaceColors = () => {
+  try {
+    const raw = localStorage.getItem(INTERFACE_COLORS_STORAGE_KEY);
+    if (!raw) return { ...DEFAULT_INTERFACE_COLORS };
+    return normalizeInterfaceColors(JSON.parse(raw));
+  } catch {
+    return { ...DEFAULT_INTERFACE_COLORS };
+  }
+};
+
+const readLocalScreensaverSettings = () => {
+  try {
+    const raw = localStorage.getItem(INTERFACE_SCREENSAVER_STORAGE_KEY);
+    if (!raw) return { ...DEFAULT_SCREENSAVER_SETTINGS };
+    return normalizeScreensaverSettings(JSON.parse(raw));
+  } catch {
+    return { ...DEFAULT_SCREENSAVER_SETTINGS };
+  }
+};
+
+const readLocalAutoDarkModeSettings = () => {
+  try {
+    const raw = localStorage.getItem(INTERFACE_AUTO_DARK_MODE_STORAGE_KEY);
+    if (!raw) return { ...DEFAULT_AUTO_DARK_MODE_SETTINGS };
+    return {
+      ...DEFAULT_AUTO_DARK_MODE_SETTINGS,
+      ...JSON.parse(raw),
+    };
+  } catch {
+    return { ...DEFAULT_AUTO_DARK_MODE_SETTINGS };
+  }
+};
 
 const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const [currentDeviceName, setCurrentDeviceName] = useState(() => getDeviceName());
@@ -134,6 +178,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const [widgetSettings, setLocalWidgetSettings] = useState({
     ...DEFAULT_WIDGET_SETTINGS
   });
+  const [interfaceColors, setInterfaceColors] = useState(readLocalInterfaceColors);
   const [users, setUsers] = useState([]);
   const [chores, setChores] = useState([]);
   const [prizes, setPrizes] = useState([]);
@@ -158,8 +203,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const [pluginSettings, setPluginSettings] = useState({});
   const [pluginAssignments, setPluginAssignments] = useState({});
   const [photoSources, setPhotoSources] = useState([]);
-  const [screensaverSettings, setScreensaverSettings] = useState({ ...DEFAULT_SCREENSAVER_SETTINGS });
-  const [autoDarkModeSettings, setAutoDarkModeSettings] = useState({ ...DEFAULT_AUTO_DARK_MODE_SETTINGS });
+  const [screensaverSettings, setScreensaverSettings] = useState(readLocalScreensaverSettings);
+  const [autoDarkModeSettings, setAutoDarkModeSettings] = useState(readLocalAutoDarkModeSettings);
   const [isSavingAutoDarkMode, setIsSavingAutoDarkMode] = useState(false);
   const [autoDarkModeSunTimes, setAutoDarkModeSunTimes] = useState({
     sunrise: null,
@@ -205,6 +250,9 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
   useEffect(() => {
     if (isAuthenticated) {
+      setInterfaceColors(readLocalInterfaceColors());
+      setScreensaverSettings(readLocalScreensaverSettings());
+      setAutoDarkModeSettings(readLocalAutoDarkModeSettings());
       fetchSettings();
       fetchDeviceSettings();
       fetchUsers();
@@ -274,19 +322,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       const nextPluginSettings = deviceSettings.pluginSettings && typeof deviceSettings.pluginSettings === 'object'
         ? deviceSettings.pluginSettings
         : {};
-      const nextScreensaverSettings = normalizeScreensaverSettings(deviceSettings.screensaverSettings);
-      const nextAutoDarkSettings = {
-        ...DEFAULT_AUTO_DARK_MODE_SETTINGS,
-        ...(deviceSettings.autoDarkModeSettings && typeof deviceSettings.autoDarkModeSettings === 'object'
-          ? deviceSettings.autoDarkModeSettings
-          : {}),
-      };
 
       setLocalWidgetSettings(nextWidgetSettings);
       setWidgetSettings(nextWidgetSettings);
       setPluginSettings(nextPluginSettings);
-      setScreensaverSettings(nextScreensaverSettings);
-      setAutoDarkModeSettings(nextAutoDarkSettings);
     } catch (error) {
       console.error('Error fetching device settings:', error);
     }
@@ -447,8 +486,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const saveWidgetSettings = async () => {
     setIsLoading(true);
     try {
-      setWidgetSettings(widgetSettings);
-      await patchDeviceSettings({ widgetSettings });
+      const normalizedWidgetSettings = normalizeWidgetSettings(widgetSettings);
+      setLocalWidgetSettings(normalizedWidgetSettings);
+      setWidgetSettings(normalizedWidgetSettings);
+      await patchDeviceSettings({ widgetSettings: normalizedWidgetSettings });
 
       const currentResponse = await axios.get(`${API_DEVICE_URL}/widget-assignments`);
       const currentAssignments = Array.isArray(currentResponse.data) ? currentResponse.data : [];
@@ -819,13 +860,14 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const saveInterfaceSettings = async () => {
     try {
       setIsLoading(true);
-      setWidgetSettings(widgetSettings);
-      await patchDeviceSettings({ widgetSettings });
+      const normalizedColors = normalizeInterfaceColors(interfaceColors);
+      localStorage.setItem(INTERFACE_COLORS_STORAGE_KEY, JSON.stringify(normalizedColors));
 
       // Apply CSS variables immediately
       applyAccentColors();
+      window.dispatchEvent(new Event(INTERFACE_SETTINGS_UPDATED_EVENT));
 
-      setSaveMessage({ show: true, type: 'success', text: 'Accent colors saved! Refresh page to see all changes.' });
+      setSaveMessage({ show: true, type: 'success', text: 'Accent colors saved for this display.' });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } catch (error) {
       console.error('Error saving accent colors:', error);
@@ -840,23 +882,17 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     const root = document.documentElement;
     const isLight = root.getAttribute('data-theme') === 'light';
 
-    root.style.setProperty('--primary', widgetSettings.primary);
-    root.style.setProperty('--secondary', widgetSettings.secondary);
-    root.style.setProperty('--accent', widgetSettings.accent);
+    root.style.setProperty('--primary', interfaceColors.primary);
+    root.style.setProperty('--secondary', interfaceColors.secondary);
+    root.style.setProperty('--accent', interfaceColors.accent);
 
     if (isLight) {
-      root.style.setProperty('--background', widgetSettings.primary);
+      root.style.setProperty('--background', interfaceColors.primary);
     }
   };
 
   const resetToDefaults = () => {
-    const defaultSettings = {
-      primary: '#f5f5f5',
-      secondary: '#38bdf8',
-      accent: '#f472b6'
-    };
-
-    setLocalWidgetSettings(prev => ({ ...prev, ...defaultSettings }));
+    setInterfaceColors({ ...DEFAULT_INTERFACE_COLORS });
     setSaveMessage({ show: true, type: 'info', text: 'Reset to default colors. Click Save to apply.' });
     setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
   };
@@ -864,8 +900,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const saveScreensaverSettings = async () => {
     try {
       setIsLoading(true);
-      await patchDeviceSettings({ screensaverSettings: normalizeScreensaverSettings(screensaverSettings) });
-      setSaveMessage({ show: true, type: 'success', text: 'Screensaver settings saved!' });
+      const normalizedScreensaver = normalizeScreensaverSettings(screensaverSettings);
+      localStorage.setItem(INTERFACE_SCREENSAVER_STORAGE_KEY, JSON.stringify(normalizedScreensaver));
+      window.dispatchEvent(new Event(INTERFACE_SETTINGS_UPDATED_EVENT));
+      setSaveMessage({ show: true, type: 'success', text: 'Screensaver settings saved for this display.' });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } catch (error) {
       console.error('Error saving screensaver settings:', error);
@@ -939,9 +977,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         ...autoDarkModeSettings,
         locationQuery: trimmedLocation,
       };
-      await patchDeviceSettings({ autoDarkModeSettings: nextSettings });
+      localStorage.setItem(INTERFACE_AUTO_DARK_MODE_STORAGE_KEY, JSON.stringify(nextSettings));
+      window.dispatchEvent(new Event(INTERFACE_SETTINGS_UPDATED_EVENT));
       setAutoDarkModeSettings(nextSettings);
-      setSaveMessage({ show: true, type: 'success', text: 'Auto dark mode disabled.' });
+      setSaveMessage({ show: true, type: 'success', text: 'Auto dark mode disabled for this display.' });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
       return;
     }
@@ -978,12 +1017,13 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         resolvedName: resolved.resolvedName,
       };
 
-      await patchDeviceSettings({ autoDarkModeSettings: nextSettings });
+      localStorage.setItem(INTERFACE_AUTO_DARK_MODE_STORAGE_KEY, JSON.stringify(nextSettings));
+      window.dispatchEvent(new Event(INTERFACE_SETTINGS_UPDATED_EVENT));
       setAutoDarkModeSettings(nextSettings);
       setSaveMessage({
         show: true,
         type: 'success',
-        text: 'Auto dark mode saved. Use the bottom-bar theme button until the half sun/half moon icon appears.',
+        text: 'Auto dark mode saved for this display. Use the bottom-bar theme button until the half sun/half moon icon appears.',
       });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 4500);
     } catch (error) {
@@ -1093,14 +1133,14 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   };
 
   const handleSettingChange = (setting, value) => {
-    setLocalWidgetSettings(prev => ({
+    setInterfaceColors(prev => ({
       ...prev,
       [setting]: value
     }));
   };
 
   const handleColorChange = (colorKey, color) => {
-    setLocalWidgetSettings(prev => ({
+    setInterfaceColors(prev => ({
       ...prev,
       [colorKey]: color.hex
     }));
@@ -1452,7 +1492,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
           sx={{
             width: 60,
             height: 60,
-            backgroundColor: widgetSettings[key],
+            backgroundColor: interfaceColors[key],
             border: '3px solid var(--card-border)',
             borderRadius: 2,
             cursor: 'pointer',
@@ -1473,7 +1513,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         />
         <TextField
           size="medium"
-          value={widgetSettings[key]}
+          value={interfaceColors[key]}
           onChange={(e) => handleSettingChange(key, e.target.value)}
           sx={{ flex: 1 }}
           placeholder="#000000"
@@ -1481,7 +1521,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       </Box>
       <ColorPickerPopover
         anchorEl={colorPickerAnchor.key === key ? colorPickerAnchor.el : null}
-        color={widgetSettings[key]}
+        color={interfaceColors[key]}
         onChange={(color) => handleColorChange(key, color)}
         onClose={() => setColorPickerAnchor({ key: null, el: null })}
       />
