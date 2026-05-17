@@ -23,6 +23,7 @@ const loadTabIconModal = () => import('./components/TabIconModal.jsx');
 const loadScreenSaver = () => import('./components/ScreenSaver.jsx');
 
 const MAX_IDLE_WARM_IMPORTS = 3;
+const WIDGETS_LOCKED_STORAGE_KEY = 'widgetsLocked';
 
 const shouldSkipWarmupForConnection = () => {
   if (typeof navigator === 'undefined') return false;
@@ -62,7 +63,7 @@ const ScreenSaver = lazy(loadScreenSaver);
 // region #98 - expected to get removed in the future (localStorage migration bridge)
 const AUTO_DARK_MODE_STORAGE_KEY = 'autoDarkModeSettings';
 const DEVICE_SETTINGS_UPDATED_EVENT = 'homeglow:device-settings-updated';
-const DEVICE_SETTINGS_MIGRATION_KEY_PATTERN = /^(enabledWidgets|theme|themeMode|widgetsLocked|widgetSettings|pluginSettings|screensaverSettings|autoDarkModeSettings|weatherZipCode|weatherTempUnit)$/;
+const DEVICE_SETTINGS_MIGRATION_KEY_PATTERN = /^(enabledWidgets|theme|themeMode|widgetSettings|pluginSettings|screensaverSettings|autoDarkModeSettings|weatherZipCode|weatherTempUnit)$/;
 
 const isAllowedDeviceSettingsMigrationKey = (key) => DEVICE_SETTINGS_MIGRATION_KEY_PATTERN.test(key);
 // endRegion #98
@@ -125,6 +126,20 @@ const normalizeAutoDarkModeSettings = (raw) => {
   };
 };
 
+const readLocalWidgetsLocked = () => {
+  const saved = localStorage.getItem(WIDGETS_LOCKED_STORAGE_KEY);
+  if (saved === null) {
+    return true;
+  }
+
+  try {
+    const parsed = JSON.parse(saved);
+    return typeof parsed === 'boolean' ? parsed : true;
+  } catch {
+    return true;
+  }
+};
+
 const WidgetLoadingFallback = ({ label }) => (
   <Box
     sx={{
@@ -146,7 +161,7 @@ const App = () => {
   const [theme, setTheme] = useState('light');
   const [themeMode, setThemeMode] = useState('light');
   const [autoDarkModeSettings, setAutoDarkModeSettings] = useState({ ...DEFAULT_AUTO_DARK_MODE_SETTINGS });
-  const [widgetsLocked, setWidgetsLocked] = useState(true);
+  const [widgetsLocked, setWidgetsLocked] = useState(readLocalWidgetsLocked);
   const [screensaverActive, setScreensaverActive] = useState(false);
   const [screensaverSettings, setScreensaverSettings] = useState({ ...DEFAULT_SCREENSAVER_SETTINGS });
   const inactivityTimerRef = useRef(null);
@@ -196,7 +211,6 @@ const App = () => {
       : {};
     const screensaverFromServer = normalizeScreensaverSettings(settings?.screensaverSettings);
     const autoDarkFromServer = normalizeAutoDarkModeSettings(settings?.autoDarkModeSettings);
-    const widgetsLockedFromServer = typeof settings?.widgetsLocked === 'boolean' ? settings.widgetsLocked : true;
     const themeFromServer = settings?.theme === 'dark' ? 'dark' : 'light';
     const themeModeFromServer = ['light', 'dark', 'auto'].includes(settings?.themeMode)
       ? settings.themeMode
@@ -206,7 +220,6 @@ const App = () => {
     setPluginSettings(pluginSettingsFromServer);
     setScreensaverSettings(screensaverFromServer);
     setAutoDarkModeSettings(autoDarkFromServer);
-    setWidgetsLocked(widgetsLockedFromServer);
     setThemeMode(themeModeFromServer);
     applyTheme(themeFromServer);
 
@@ -217,7 +230,6 @@ const App = () => {
       'autoDarkModeSettings',
       'theme',
       'themeMode',
-      'widgetsLocked',
     ].some((key) => Object.prototype.hasOwnProperty.call(settings || {}, key));
 
     setIsFirstRunClient(!hasKnownDeviceSettings);
@@ -248,17 +260,6 @@ const App = () => {
       const localThemeMode = localStorage.getItem('themeMode');
       if (localThemeMode === 'light' || localThemeMode === 'dark' || localThemeMode === 'auto') {
         localPayload.themeMode = localThemeMode;
-      }
-    }
-
-    if (isAllowedDeviceSettingsMigrationKey('widgetsLocked')) {
-      const widgetsLockedRaw = localStorage.getItem('widgetsLocked');
-      if (widgetsLockedRaw !== null) {
-        try {
-          localPayload.widgetsLocked = JSON.parse(widgetsLockedRaw);
-        } catch {
-          // Ignore malformed local value.
-        }
       }
     }
 
@@ -354,7 +355,7 @@ const App = () => {
       await axios.put(`${API_DEVICE_URL}/settings`, localPayload);
 
       // Remove only known migrated keys.
-      ['enabledWidgets', 'theme', 'themeMode', 'widgetsLocked', 'widgetSettings', 'pluginSettings', 'screensaverSettings', AUTO_DARK_MODE_STORAGE_KEY, 'weatherZipCode', 'weatherTempUnit']
+      ['enabledWidgets', 'theme', 'themeMode', 'widgetSettings', 'pluginSettings', 'screensaverSettings', AUTO_DARK_MODE_STORAGE_KEY, 'weatherZipCode', 'weatherTempUnit']
         .filter(isAllowedDeviceSettingsMigrationKey)
         .forEach((key) => {
           localStorage.removeItem(key);
@@ -684,7 +685,7 @@ const App = () => {
   const toggleWidgetsLock = () => {
     const newLockState = !widgetsLocked;
     setWidgetsLocked(newLockState);
-    void patchDeviceSettings({ widgetsLocked: newLockState });
+    localStorage.setItem(WIDGETS_LOCKED_STORAGE_KEY, JSON.stringify(newLockState));
   };
 
   const toggleAdminPanel = () => {

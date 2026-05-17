@@ -42,7 +42,7 @@ const DEFAULT_CALENDAR_EVENT_COLORS = {
 const DEFAULT_CALENDAR_DISPLAY_SETTINGS = {
   textSize: 12,
   bulletSize: 10,
-  showStartTimes: true,
+  showStartTimes: false,
 };
 const DEFAULT_CALENDAR_DAY_OF_WEEK_SETTINGS = {
   weekViewStart: 'today',
