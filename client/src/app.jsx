@@ -818,6 +818,9 @@ const App = () => {
               transparentBackground={widgetSettings.weather.transparent}
               weatherApiKey={apiKeys.WEATHER_API_KEY}
               refreshInterval={widgetSettings.weather.refreshInterval || 0}
+              activeTab={activeTab}
+              activeTabConfigJson={tabs.find((tab) => tab.number === activeTab)?.config_json || null}
+              allTabConfigs={tabs}
             />
           </Suspense>
         ),
@@ -896,6 +899,11 @@ const App = () => {
     return active?.id ?? 1;
   }, [tabs, activeTab]);
 
+  const shouldRunWeatherBackgroundPrefetch =
+    widgetSettings.weather.enabled &&
+    !!apiKeys.WEATHER_API_KEY &&
+    !isWidgetAssignedToTab('weather', activeTab);
+
   return (
     <>
       <Box sx={{ width: '100%', minHeight: '100vh', position: 'relative', pb: '60px' }}>
@@ -908,6 +916,21 @@ const App = () => {
             deviceWidgetSettings={widgetSettings}
             devicePluginSettings={pluginSettings}
           />
+        )}
+        {shouldRunWeatherBackgroundPrefetch && (
+          <Box sx={{ display: 'none' }}>
+            <Suspense fallback={null}>
+              <WeatherWidget
+                transparentBackground={widgetSettings.weather.transparent}
+                weatherApiKey={apiKeys.WEATHER_API_KEY}
+                refreshInterval={widgetSettings.weather.refreshInterval || 0}
+                activeTab={activeTab}
+                activeTabConfigJson={tabs.find((tab) => tab.number === activeTab)?.config_json || null}
+                allTabConfigs={tabs}
+                prefetchOnly
+              />
+            </Suspense>
+          </Box>
         )}
         {deviceSettingsLoaded && widgets.length === 0 && isFirstRunClient && (
           <Box

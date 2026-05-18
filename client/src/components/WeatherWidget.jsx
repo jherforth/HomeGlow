@@ -22,18 +22,37 @@ import { getDeviceApiBase } from '../utils/deviceName.js';
 
 const DEFAULT_LOCATION_QUERY = '14818';
 const VALID_LAYOUT_MODES = new Set(['auto', 'compact', 'medium', 'full']);
+const WEATHER_CACHE_FALLBACK_REFRESH_MS = 5 * 60 * 1000;
+const WEATHER_CACHE = new Map();
+const WEATHER_TAB_SETTINGS_OVERRIDES = new Map();
+
+const normalizeWeatherCacheLocation = (rawLocation) => String(rawLocation || '').trim().toLowerCase();
+
+const buildWeatherCacheKey = (locationQuery, tempUnit) => {
+  const normalizedUnit = tempUnit === 'C' ? 'C' : 'F';
+  return `${normalizeWeatherCacheLocation(locationQuery)}::${normalizedUnit}`;
+};
+
+const isValidCoordinates = (candidate) => {
+  return !!candidate
+    && typeof candidate.lat === 'number'
+    && typeof candidate.lon === 'number'
+    && Number.isFinite(candidate.lat)
+    && Number.isFinite(candidate.lon);
+};
 
 const WeatherWidget = ({
   transparentBackground,
   weatherApiKey,
   refreshInterval = 0,
   widgetSize = { width: 4, height: 4 },
-  activeTabId = 1,
-  widgetId = 'weather-widget',
+  activeTab = 1,
+  activeTabConfigJson = null,
+  allTabConfigs = [],
+  prefetchOnly = false,
   refreshNonce = 0,
 }) => {
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
-  const weatherSettingsKey = `${activeTabId}:${widgetId}`;
   const [weatherData, setWeatherData] = useState(null);
   const [forecastData, setForecastData] = useState([]);
   const [airQualityData, setAirQualityData] = useState(null);
@@ -43,6 +62,7 @@ const WeatherWidget = ({
   const [error, setError] = useState(null);
   const [chartType, setChartType] = useState('temperature');
   const [tempUnit, setTempUnit] = useState('F');
+  const [coordinates, setCoordinates] = useState(null);
   const [layoutMode, setLayoutMode] = useState('auto');
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
@@ -53,55 +73,18 @@ const WeatherWidget = ({
 
   const unitSymbol = `°${tempUnit}`;
 
-  const readInstanceSettingsFromDeviceSettings = (deviceSettings) => {
-    const widgetSettingsMap = deviceSettings?.weatherWidgetSettings;
-    if (!widgetSettingsMap || typeof widgetSettingsMap !== 'object') {
-      return {};
-    }
-
-    const instanceSettings = widgetSettingsMap[weatherSettingsKey];
-    return instanceSettings && typeof instanceSettings === 'object' ? instanceSettings : {};
+  const getCachedPayloadFor = (targetLocationQuery, targetTempUnit) => {
+    const cacheKey = buildWeatherCacheKey(targetLocationQuery, targetTempUnit);
+    const entry = WEATHER_CACHE.get(cacheKey);
+    return entry && entry.payload ? entry.payload : null;
   };
 
-  // region #98 - expected to get removed in the future (legacy weather defaults compatibility)
-  const readLegacyWeatherDefaultsFromDeviceSettings = (deviceSettings) => {
-    const legacySettings = deviceSettings?.weatherLegacySettings && typeof deviceSettings.weatherLegacySettings === 'object'
-      ? deviceSettings.weatherLegacySettings
-      : {};
-    const legacyWidgetSettings = deviceSettings?.widgetSettings?.weather && typeof deviceSettings.widgetSettings.weather === 'object'
-      ? deviceSettings.widgetSettings.weather
-      : {};
-
-    const legacyLocationQuery = String(
-      legacySettings.locationQuery || legacySettings.zipCode || ''
-    ).trim();
-    const legacyTempUnit = legacySettings.tempUnit === 'C' || legacySettings.tempUnit === 'F'
-      ? legacySettings.tempUnit
-      : 'F';
-
-    const legacyLayoutModeCandidate = legacySettings.layoutMode || legacyWidgetSettings.layoutMode || 'auto';
-    const legacyLayoutMode = VALID_LAYOUT_MODES.has(legacyLayoutModeCandidate) ? legacyLayoutModeCandidate : 'auto';
-
-    return {
-      legacyLocationQuery: legacyLocationQuery || DEFAULT_LOCATION_QUERY,
-      legacyTempUnit,
-      legacyLayoutMode,
-    };
-  };
-  // endRegion #98
-
-  const saveInstanceSettingsToDevice = async (nextSettings) => {
-    const response = await axios.get(`${API_DEVICE_URL}/settings`);
-    const currentSettings = response.data && typeof response.data === 'object' ? response.data : {};
-    const existingMap = currentSettings.weatherWidgetSettings && typeof currentSettings.weatherWidgetSettings === 'object'
-      ? currentSettings.weatherWidgetSettings
-      : {};
-
-    await axios.patch(`${API_DEVICE_URL}/settings`, {
-      weatherWidgetSettings: {
-        ...existingMap,
-        [weatherSettingsKey]: nextSettings,
-      },
+  const writeCachedPayloadFor = (targetLocationQuery, targetTempUnit, payload) => {
+    const cacheKey = buildWeatherCacheKey(targetLocationQuery, targetTempUnit);
+    WEATHER_CACHE.set(cacheKey, {
+      payload,
+      fetchedAt: Date.now(),
+      promise: null,
     });
   };
 
@@ -115,8 +98,62 @@ const WeatherWidget = ({
     return 'F';
   };
 
-  const normalizeLocationKey = (rawLocation) => {
-    return String(rawLocation || '').replace(/\s+/g, '').toLowerCase();
+  const parseTabConfigJson = (configJson) => {
+    if (!configJson) return {};
+    if (typeof configJson === 'object' && !Array.isArray(configJson)) return configJson;
+    if (typeof configJson !== 'string') return {};
+
+    try {
+      const parsed = JSON.parse(configJson);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  };
+
+  const readWeatherSettingsFromTabConfig = (configJson) => {
+    const layoutMap = parseTabConfigJson(configJson);
+    const weatherEntry = layoutMap.weather;
+    if (!weatherEntry || typeof weatherEntry !== 'object' || Array.isArray(weatherEntry)) {
+      return null;
+    }
+
+    const locationQuery = String(weatherEntry.locationQuery || weatherEntry.zipCode || '').trim();
+    const coordinates = isValidCoordinates(weatherEntry)
+      ? { lat: weatherEntry.lat, lon: weatherEntry.lon }
+      : null;
+
+    return {
+      locationQuery: locationQuery || DEFAULT_LOCATION_QUERY,
+      tempUnit: normalizeTempUnit(weatherEntry.tempUnit, 'F'),
+      layoutMode: VALID_LAYOUT_MODES.has(weatherEntry.layoutMode) ? weatherEntry.layoutMode : 'auto',
+      coordinates,
+      resolvedName: weatherEntry.resolvedName || '',
+    };
+  };
+
+  const saveInstanceSettingsToTab = async (tabNumber, nextSettings) => {
+    await axios.patch(`${API_DEVICE_URL}/widget-assignments/layout`, {
+      widget_name: 'weather',
+      tabNumber,
+      settings: nextSettings,
+    });
+    WEATHER_TAB_SETTINGS_OVERRIDES.set(Number(tabNumber), { ...nextSettings });
+  };
+
+  const getEffectiveWeatherSettingsForTab = (tabNumber, configJson) => {
+    const override = WEATHER_TAB_SETTINGS_OVERRIDES.get(Number(tabNumber));
+    if (override && typeof override === 'object') {
+      return {
+        locationQuery: String(override.locationQuery || '').trim() || DEFAULT_LOCATION_QUERY,
+        tempUnit: normalizeTempUnit(override.tempUnit, 'F'),
+        layoutMode: VALID_LAYOUT_MODES.has(override.layoutMode) ? override.layoutMode : 'auto',
+        coordinates: isValidCoordinates(override) ? { lat: override.lat, lon: override.lon } : null,
+        resolvedName: override.resolvedName || '',
+      };
+    }
+
+    return readWeatherSettingsFromTabConfig(configJson);
   };
 
   const buildNotFoundError = () => {
@@ -127,14 +164,6 @@ const WeatherWidget = ({
     };
     return notFoundError;
   };
-
-  // region #98 - expected to get removed in the future (legacy weather settings key compatibility)
-  const resolveInstanceConfig = (rawSettings = {}, fallbackLocationQuery = DEFAULT_LOCATION_QUERY, fallbackTempUnit = 'F') => {
-    const resolvedLocationQuery = (rawSettings.locationQuery || rawSettings.zipCode || fallbackLocationQuery || '').trim();
-    const resolvedTempUnit = normalizeTempUnit(rawSettings.tempUnit, fallbackTempUnit);
-    return { resolvedLocationQuery, resolvedTempUnit };
-  };
-  // endRegion #98
 
   const applyWeatherPayloadToState = (payload) => {
     setWeatherData(payload.weatherData || null);
@@ -243,11 +272,13 @@ const WeatherWidget = ({
     throw buildNotFoundError();
   };
 
-  const fetchWeatherPayload = async (targetLocationQuery, targetTempUnit) => {
+  const fetchWeatherPayload = async (targetLocationQuery, targetTempUnit, targetCoordinates = null) => {
     const targetUnitParam = targetTempUnit === 'F' ? 'imperial' : 'metric';
 
-    const coordinates = await resolveCoordinatesForLocation(targetLocationQuery);
-    const { lat, lon } = coordinates;
+    const resolvedCoordinates = isValidCoordinates(targetCoordinates)
+      ? { ...targetCoordinates, source: 'saved' }
+      : await resolveCoordinatesForLocation(targetLocationQuery);
+    const { lat, lon } = resolvedCoordinates;
 
     const currentWeatherUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${weatherApiKey}&units=${targetUnitParam}`;
     const currentResponse = await axios.get(currentWeatherUrl);
@@ -320,20 +351,62 @@ const WeatherWidget = ({
     }
 
     return {
-      locationQuery: targetLocationQuery,
-      locationKey: normalizeLocationKey(targetLocationQuery),
-      lat,
-      lon,
-      // region #98 - expected to get removed in the future (legacy weather payload key compatibility)
-      // Keep zipCode for backward compatibility with older cache readers.
-      zipCode: targetLocationQuery,
-      // endRegion #98
-      tempUnit: targetTempUnit,
+      coordinates: {
+        lat,
+        lon,
+      },
+      resolvedName: resolvedCoordinates.name || '',
       weatherData: nextWeatherData,
       airQualityData: nextAirQualityData,
       forecastData: nextForecastData,
       chartData: nextChartData,
     };
+  };
+
+  const resolvePayloadFromCacheOrApi = async (
+    targetLocationQuery,
+    targetTempUnit,
+    { forceRefresh = false, targetCoordinates = null } = {}
+  ) => {
+    const cacheKey = buildWeatherCacheKey(targetLocationQuery, targetTempUnit);
+    const existing = WEATHER_CACHE.get(cacheKey);
+
+    if (!forceRefresh && existing?.payload) {
+      return existing.payload;
+    }
+
+    if (existing?.promise) {
+      return await existing.promise;
+    }
+
+    const effectiveCoordinates = isValidCoordinates(targetCoordinates)
+      ? targetCoordinates
+      : (isValidCoordinates(existing?.payload?.coordinates) ? existing.payload.coordinates : null);
+
+    const pendingPromise = (async () => {
+      const payload = await fetchWeatherPayload(targetLocationQuery, targetTempUnit, effectiveCoordinates);
+      writeCachedPayloadFor(targetLocationQuery, targetTempUnit, payload);
+      return payload;
+    })();
+
+    WEATHER_CACHE.set(cacheKey, {
+      payload: existing?.payload || null,
+      fetchedAt: existing?.fetchedAt || 0,
+      promise: pendingPromise,
+    });
+
+    try {
+      return await pendingPromise;
+    } finally {
+      const latest = WEATHER_CACHE.get(cacheKey);
+      if (latest?.promise === pendingPromise) {
+        WEATHER_CACHE.set(cacheKey, {
+          payload: latest.payload || null,
+          fetchedAt: latest.fetchedAt || 0,
+          promise: null,
+        });
+      }
+    }
   };
 
   const refreshCurrentWeather = async () => {
@@ -342,8 +415,14 @@ const WeatherWidget = ({
     }
 
     try {
-      const payload = await fetchWeatherPayload(locationQuery, tempUnit);
+      const payload = await resolvePayloadFromCacheOrApi(locationQuery, tempUnit, {
+        forceRefresh: true,
+        targetCoordinates: coordinates,
+      });
       applyWeatherPayloadToState(payload);
+      if (isValidCoordinates(payload.coordinates)) {
+        setCoordinates(payload.coordinates);
+      }
       setError(null);
     } catch (requestError) {
       setError(getWeatherErrorMessage(requestError));
@@ -380,60 +459,82 @@ const WeatherWidget = ({
 
   const layoutType = getLayoutType();
 
-  useEffect(() => {
-    let cancelled = false;
+  const applyResolvedTabSettings = (resolvedSettings) => {
+    const savedLocationQuery = resolvedSettings?.locationQuery || DEFAULT_LOCATION_QUERY;
+    const savedTempUnit = resolvedSettings?.tempUnit || 'F';
+    const savedLayoutMode = resolvedSettings?.layoutMode || 'auto';
+    const savedCoordinates = isValidCoordinates(resolvedSettings?.coordinates)
+      ? resolvedSettings.coordinates
+      : null;
 
-    const loadSettingsFromDevice = async () => {
-      setSettingsLoaded(false);
-      setError(null);
+    const cachedPayload = getCachedPayloadFor(savedLocationQuery, savedTempUnit);
+    const shouldAvoidDefaultFetch = prefetchOnly && !resolvedSettings;
 
-      let instanceSettings = {};
-      let legacyFallback = {
-        legacyLocationQuery: DEFAULT_LOCATION_QUERY,
-        legacyTempUnit: 'F',
-        legacyLayoutMode: 'auto',
-      };
-      try {
-        const response = await axios.get(`${API_DEVICE_URL}/settings`);
-        const deviceSettings = response.data || {};
-        instanceSettings = readInstanceSettingsFromDeviceSettings(deviceSettings);
-        legacyFallback = readLegacyWeatherDefaultsFromDeviceSettings(deviceSettings);
-      } catch (error) {
-        console.error('Error loading weather widget settings:', error);
-      }
-
-      if (cancelled) {
-        return;
-      }
-
-      const { resolvedLocationQuery: savedLocationQuery, resolvedTempUnit: savedTempUnit } = resolveInstanceConfig(
-        instanceSettings,
-        legacyFallback.legacyLocationQuery,
-        legacyFallback.legacyTempUnit
-      );
-      const candidateLayoutMode = instanceSettings.layoutMode || legacyFallback.legacyLayoutMode || 'auto';
-      const savedLayoutMode = VALID_LAYOUT_MODES.has(candidateLayoutMode) ? candidateLayoutMode : 'auto';
-
+    setError(null);
+    if (cachedPayload) {
+      applyWeatherPayloadToState(cachedPayload);
+      setShouldFetchNow(false);
+    } else if (shouldAvoidDefaultFetch) {
+      setWeatherData(null);
+      setForecastData([]);
+      setAirQualityData(null);
+      setChartData([]);
+      setShouldFetchNow(false);
+    } else {
       setWeatherData(null);
       setForecastData([]);
       setAirQualityData(null);
       setChartData([]);
       setShouldFetchNow(true);
+    }
 
-      setLocationQuery(savedLocationQuery);
-      setTempUnit(savedTempUnit);
-      setLayoutMode(savedLayoutMode);
-      setDraftLocationQuery(savedLocationQuery);
-      setDraftTempUnit(savedTempUnit);
-      setDraftLayoutMode(savedLayoutMode);
-      setSettingsLoaded(true);
-    };
+    setLocationQuery(savedLocationQuery);
+    setTempUnit(savedTempUnit);
+    setCoordinates(savedCoordinates);
+    setLayoutMode(savedLayoutMode);
+    setDraftLocationQuery(savedLocationQuery);
+    setDraftTempUnit(savedTempUnit);
+    setDraftLayoutMode(savedLayoutMode);
+    setSettingsLoaded(true);
+  };
 
-    void loadSettingsFromDevice();
-    return () => {
-      cancelled = true;
-    };
-  }, [API_DEVICE_URL, weatherSettingsKey, refreshNonce]);
+  const persistActiveTabSettingsIfChanged = async ({
+    nextLocationQuery,
+    nextTempUnit,
+    nextLayoutMode,
+    nextCoordinates,
+    nextResolvedName = '',
+  }) => {
+    const current = getEffectiveWeatherSettingsForTab(activeTab, activeTabConfigJson);
+    const currentCoords = isValidCoordinates(current?.coordinates) ? current.coordinates : null;
+    const nextCoords = isValidCoordinates(nextCoordinates) ? nextCoordinates : null;
+
+    const isSame =
+      (current?.locationQuery || DEFAULT_LOCATION_QUERY) === nextLocationQuery
+      && (current?.tempUnit || 'F') === nextTempUnit
+      && (current?.layoutMode || 'auto') === nextLayoutMode
+      && (!currentCoords && !nextCoords
+        || (currentCoords && nextCoords && currentCoords.lat === nextCoords.lat && currentCoords.lon === nextCoords.lon))
+      && (current?.resolvedName || '') === nextResolvedName;
+
+    if (isSame) {
+      return;
+    }
+
+    await saveInstanceSettingsToTab(activeTab, {
+      locationQuery: nextLocationQuery,
+      tempUnit: nextTempUnit,
+      layoutMode: nextLayoutMode,
+      ...(nextCoords ? { lat: nextCoords.lat, lon: nextCoords.lon } : {}),
+      ...(nextResolvedName ? { resolvedName: nextResolvedName } : {}),
+    });
+  };
+
+  useEffect(() => {
+    const tabSettings = getEffectiveWeatherSettingsForTab(activeTab, activeTabConfigJson);
+    setSettingsLoaded(false);
+    applyResolvedTabSettings(tabSettings);
+  }, [activeTab, activeTabConfigJson, refreshNonce]);
 
   useEffect(() => {
     if (!settingsLoaded || !shouldFetchNow) {
@@ -445,6 +546,92 @@ const WeatherWidget = ({
       setShouldFetchNow(false);
     }
   }, [locationQuery, weatherApiKey, tempUnit, settingsLoaded, shouldFetchNow]);
+
+  useEffect(() => {
+    if (!settingsLoaded || !weatherApiKey) {
+      return;
+    }
+
+    const collectTargets = () => {
+      const targetsByKey = new Map();
+
+      const activeSettings = getEffectiveWeatherSettingsForTab(activeTab, activeTabConfigJson);
+      const includeActiveTarget = !!activeSettings?.locationQuery || !prefetchOnly;
+
+      if (includeActiveTarget && locationQuery) {
+        const currentKey = buildWeatherCacheKey(locationQuery, tempUnit);
+        targetsByKey.set(currentKey, {
+          tabNumber: Number(activeTab),
+          locationQuery,
+          tempUnit,
+          layoutMode: layoutMode || 'auto',
+          coordinates: isValidCoordinates(coordinates) ? coordinates : null,
+        });
+      }
+
+      const tabsList = Array.isArray(allTabConfigs) ? allTabConfigs : [];
+      for (const tab of tabsList) {
+        const weatherSettings = getEffectiveWeatherSettingsForTab(tab?.number, tab?.config_json || null);
+        if (!weatherSettings?.locationQuery) {
+          continue;
+        }
+        const key = buildWeatherCacheKey(weatherSettings.locationQuery, weatherSettings.tempUnit);
+        targetsByKey.set(key, {
+          tabNumber: Number(tab.number),
+          locationQuery: weatherSettings.locationQuery,
+          tempUnit: weatherSettings.tempUnit,
+          layoutMode: weatherSettings.layoutMode || 'auto',
+          coordinates: isValidCoordinates(weatherSettings.coordinates) ? weatherSettings.coordinates : null,
+        });
+      }
+
+      return Array.from(targetsByKey.values());
+    };
+
+    const prefetchAllTargets = async () => {
+      const targets = collectTargets();
+      if (targets.length === 0) {
+        return;
+      }
+
+      await Promise.all(targets.map(async (target) => {
+        try {
+          const payload = await resolvePayloadFromCacheOrApi(target.locationQuery, target.tempUnit, {
+            forceRefresh: true,
+            targetCoordinates: target.coordinates,
+          });
+
+          if (
+            Number.isFinite(target.tabNumber)
+            && !isValidCoordinates(target.coordinates)
+            && isValidCoordinates(payload?.coordinates)
+          ) {
+            await saveInstanceSettingsToTab(target.tabNumber, {
+              locationQuery: target.locationQuery,
+              tempUnit: target.tempUnit,
+              layoutMode: target.layoutMode || 'auto',
+              lat: payload.coordinates.lat,
+              lon: payload.coordinates.lon,
+              ...(payload.resolvedName ? { resolvedName: payload.resolvedName } : {}),
+            });
+          }
+        } catch {
+          // Keep prefetch failures non-blocking.
+        }
+      }));
+    };
+
+    void prefetchAllTargets();
+
+    const intervalMs = refreshInterval > 0 ? refreshInterval : WEATHER_CACHE_FALLBACK_REFRESH_MS;
+    const intervalId = setInterval(() => {
+      void prefetchAllTargets();
+    }, intervalMs);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [allTabConfigs, activeTab, activeTabConfigJson, prefetchOnly, locationQuery, tempUnit, layoutMode, settingsLoaded, weatherApiKey, refreshInterval]);
 
   useEffect(() => {
     if (!settingsLoaded) {
@@ -477,8 +664,25 @@ const WeatherWidget = ({
     setError(null);
 
     try {
-      const payload = await fetchWeatherPayload(locationQuery, tempUnit);
+      const payload = await resolvePayloadFromCacheOrApi(locationQuery, tempUnit, {
+        forceRefresh: false,
+        targetCoordinates: coordinates,
+      });
       applyWeatherPayloadToState(payload);
+      if (isValidCoordinates(payload.coordinates)) {
+        setCoordinates(payload.coordinates);
+
+        // Backfill coordinates for existing tabs that were saved before coordinate persistence.
+        void persistActiveTabSettingsIfChanged({
+          nextLocationQuery: locationQuery,
+          nextTempUnit: tempUnit,
+          nextLayoutMode: layoutMode,
+          nextCoordinates: payload.coordinates,
+          nextResolvedName: payload.resolvedName || '',
+        }).catch(() => {
+          // Keep weather rendering resilient even if backfill persistence fails.
+        });
+      }
     } catch (error) {
       setError(getWeatherErrorMessage(error));
     } finally {
@@ -519,8 +723,29 @@ const WeatherWidget = ({
     const normalizedLayoutMode = VALID_LAYOUT_MODES.has(draftLayoutMode) ? draftLayoutMode : 'auto';
     const shouldRefreshForDataChange = normalizedLocationQuery !== locationQuery || normalizedTempUnit !== tempUnit;
 
+    const existing = getEffectiveWeatherSettingsForTab(activeTab, activeTabConfigJson);
+    let resolvedCoordinates =
+      existing
+      && existing.locationQuery === normalizedLocationQuery
+      && isValidCoordinates(existing.coordinates)
+      ? existing.coordinates
+      : null;
+    let resolvedName = existing?.resolvedName || '';
+
+    if (!resolvedCoordinates) {
+      try {
+        const geocoded = await resolveCoordinatesForLocation(normalizedLocationQuery);
+        resolvedCoordinates = { lat: geocoded.lat, lon: geocoded.lon };
+        resolvedName = geocoded.name || '';
+      } catch (error) {
+        setError(getWeatherErrorMessage(error));
+        return;
+      }
+    }
+
     setLocationQuery(normalizedLocationQuery);
     setTempUnit(normalizedTempUnit);
+    setCoordinates(resolvedCoordinates);
     setLayoutMode(normalizedLayoutMode);
 
     if (shouldRefreshForDataChange) {
@@ -528,10 +753,12 @@ const WeatherWidget = ({
     }
 
     try {
-      await saveInstanceSettingsToDevice({
-        locationQuery: normalizedLocationQuery,
-        tempUnit: normalizedTempUnit,
-        layoutMode: normalizedLayoutMode,
+      await persistActiveTabSettingsIfChanged({
+        nextLocationQuery: normalizedLocationQuery,
+        nextTempUnit: normalizedTempUnit,
+        nextLayoutMode: normalizedLayoutMode,
+        nextCoordinates: resolvedCoordinates,
+        nextResolvedName: resolvedName,
       });
     } catch (error) {
       console.error('Error saving weather widget settings:', error);
