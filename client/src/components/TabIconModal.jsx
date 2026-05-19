@@ -9,8 +9,6 @@ import {
   Box,
   Grid,
   Typography,
-  FormControlLabel,
-  Switch,
   Paper,
 } from '@mui/material';
 import {
@@ -81,14 +79,12 @@ const TabIconModal = ({
 }) => {
   const [label, setLabel] = useState('');
   const [selectedIcon, setSelectedIcon] = useState('star');
-  const [showLabel, setShowLabel] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (!open) return;
     setLabel(initialData?.label || '');
     setSelectedIcon(initialData?.icon || 'star');
-    setShowLabel(initialData?.show_label ?? true);
     setError('');
   }, [open, initialData]);
 
@@ -106,12 +102,11 @@ const TabIconModal = ({
     onSave({
       label: label.trim(),
       icon: selectedIcon,
-      show_label: showLabel,
+      show_label: false,
     });
 
     setLabel('');
     setSelectedIcon('star');
-    setShowLabel(true);
     setError('');
   };
 
@@ -155,17 +150,6 @@ const TabIconModal = ({
             helperText={error || `${label.length}/20 characters`}
             sx={{ mb: 3 }}
             autoFocus
-          />
-
-          <FormControlLabel
-            control={
-              <Switch
-                checked={showLabel}
-                onChange={(e) => setShowLabel(e.target.checked)}
-              />
-            }
-            label="Show label on tab"
-            sx={{ mb: 3 }}
           />
 
           <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
