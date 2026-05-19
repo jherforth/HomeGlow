@@ -145,6 +145,12 @@ test('tabs endpoint returns 200 with If-Modified-Since-only after rapid layout u
     });
     assert.equal(createTabRes.status, 200);
 
+    const assignRes = await api(`/api/devices/${encodeURIComponent(deviceName)}/widget-assignments`, {
+        method: 'POST',
+        body: JSON.stringify({ widget_name: 'calendar', tabNumber: 1 }),
+    });
+    assert.equal(assignRes.status, 200);
+
     const firstTabsRead = await api(`/api/devices/${encodeURIComponent(deviceName)}/tabs`);
     assert.equal(firstTabsRead.status, 200);
     const lastModified = firstTabsRead.headers.get('last-modified');
@@ -171,29 +177,6 @@ test('tabs endpoint returns 200 with If-Modified-Since-only after rapid layout u
     assert.ok(homeTab);
     const parsedConfig = JSON.parse(homeTab.config_json || '{}');
     assert.equal(parsedConfig.calendar.showStartTimes, false);
-});
-
-test('widget assignments endpoint backfills core widgets onto Home tab for existing devices', async () => {
-    const deviceName = `core-backfill-${Date.now()}`;
-
-    const createTabRes = await api(`/api/devices/${encodeURIComponent(deviceName)}/tabs`, {
-        method: 'POST',
-        body: JSON.stringify({ label: 'Kitchen', icon: 'star', show_label: true }),
-    });
-    assert.equal(createTabRes.status, 200);
-
-    const assignmentsRes = await api(`/api/devices/${encodeURIComponent(deviceName)}/widget-assignments`);
-    assert.equal(assignmentsRes.status, 200);
-    assert.ok(Array.isArray(assignmentsRes.body));
-
-    const widgetNames = new Set(assignmentsRes.body.map((row) => row.widget_name));
-    ['calendar', 'weather', 'chores', 'photos'].forEach((widgetName) => {
-        assert.equal(widgetNames.has(widgetName), true, `Expected backfilled assignment for ${widgetName}`);
-    });
-
-    assignmentsRes.body.forEach((row) => {
-        assert.equal(row.tab_number, 1);
-    });
 });
 
 test('deleting a non-home tab moves assigned widgets to Home tab', async () => {
@@ -346,6 +329,12 @@ test('widget layout settings PATCH persists calendar showStartTimes=false in tab
     });
     assert.equal(createTabRes.status, 200);
 
+    const assignRes = await api(`/api/devices/${encodeURIComponent(deviceName)}/widget-assignments`, {
+        method: 'POST',
+        body: JSON.stringify({ widget_name: 'calendar', tabNumber: 1 }),
+    });
+    assert.equal(assignRes.status, 200);
+
     const patchRes = await api(`/api/devices/${encodeURIComponent(deviceName)}/widget-assignments/layout`, {
         method: 'PATCH',
         body: JSON.stringify({
@@ -377,6 +366,12 @@ test('widget layout PATCH rejects requests that provide neither settings nor lay
         body: JSON.stringify({ label: 'Calendar', icon: 'calendar_today', show_label: true }),
     });
     assert.equal(createTabRes.status, 200);
+
+    const assignRes = await api(`/api/devices/${encodeURIComponent(deviceName)}/widget-assignments`, {
+        method: 'POST',
+        body: JSON.stringify({ widget_name: 'calendar', tabNumber: 1 }),
+    });
+    assert.equal(assignRes.status, 200);
 
     const badPatchRes = await api(`/api/devices/${encodeURIComponent(deviceName)}/widget-assignments/layout`, {
         method: 'PATCH',
