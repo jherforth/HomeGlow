@@ -38,7 +38,6 @@ const migrateChoreHistoryTitle = require('./migrations/migrateChoreHistoryTitle'
 const migrateToDurationField = require('./migrations/migrateToDurationField');
 
 const SYSTEM_SCHEMA_ID_KEY = 'SYSTEM_SCHEMA_ID';
-const CORE_WIDGET_NAMES = ['calendar', 'weather', 'chores', 'photos'];
 
 const schemaMigrations = [
   { schemaId: 6, migrationPath: './migrations/migrateDeviceSchemaV6', },
@@ -1066,40 +1065,6 @@ function listWidgetAssignmentsFromTabLayouts(deviceName) {
   return rows;
 }
 
-// region #98 - expected to get removed in the future (legacy tabs/home/core-widget backfill compatibility)
-function ensureCoreWidgetsInHomeTab(deviceName) {
-  if (!doesDeviceExist(deviceName)) {
-    return 0;
-  }
-
-  const homeTab = getTabByNumber(deviceName, 1);
-  if (!homeTab) {
-    return 0;
-  }
-
-  const layoutMap = parseTabConfigJson(homeTab.config_json);
-  let created = 0;
-
-  CORE_WIDGET_NAMES.forEach((widgetName) => {
-    if (!(widgetName in layoutMap)) {
-      layoutMap[widgetName] = {
-        layout_x: null,
-        layout_y: null,
-        layout_w: null,
-        layout_h: null,
-      };
-      created += 1;
-    }
-  });
-
-  if (created > 0) {
-    saveTabConfigById(homeTab.id, layoutMap);
-    touchDeviceUpdateTime(deviceName);
-  }
-
-  return created;
-}
-
 function ensureHomeTabExists(deviceName) {
   // Insert default home tab if it doesn't exist
   try {
@@ -1112,7 +1077,6 @@ function ensureHomeTabExists(deviceName) {
     console.error('Error creating default home tab:', error);
   }
 }
-// endRegion #98
 
 function doesDeviceExist(deviceName) {
   const device = db.prepare('SELECT name FROM devices WHERE name = ?').get(deviceName);
@@ -1136,10 +1100,7 @@ function buildDefaultHomeTab(deviceName) {
 
 function ensureDeviceExists(deviceName) {
   db.prepare('INSERT OR IGNORE INTO devices (name, updateTime) VALUES (?, CURRENT_TIMESTAMP)').run(deviceName);
-  // region #98 - expected to get removed in the future (legacy tabs/home/core-widget backfill compatibility)
   ensureHomeTabExists(deviceName);
-  ensureCoreWidgetsInHomeTab(deviceName);
-  // endRegion #98
 }
 function touchDeviceUpdateTime(deviceName) {
   db.prepare('UPDATE devices SET updateTime = CURRENT_TIMESTAMP WHERE name = ?').run(deviceName);
@@ -1293,10 +1254,7 @@ fastify.post('/api/devices/:deviceName/copy-from/:sourceDeviceName', async (requ
         deviceName
       );
 
-      // region #98 - expected to get removed in the future (legacy tabs/home/core-widget backfill compatibility)
       ensureHomeTabExists(deviceName);
-      ensureCoreWidgetsInHomeTab(deviceName);
-      // endRegion #98
       touchDeviceUpdateTime(deviceName);
     });
 
