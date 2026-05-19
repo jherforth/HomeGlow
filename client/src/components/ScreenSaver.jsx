@@ -17,7 +17,7 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange }) => 
     } else {
       setLoading(false);
       if (mode === 'tabs' && tabs.length > 0 && onTabChange) {
-        onTabChange(tabs[0].id);
+        onTabChange(tabs[0].number);
       }
     }
   }, [mode]);
@@ -45,7 +45,7 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange }) => 
         setCurrentTabIndex(prev => {
           const nextIndex = (prev + 1) % tabs.length;
           if (onTabChange) {
-            onTabChange(tabs[nextIndex].id);
+            onTabChange(tabs[nextIndex].number);
           }
           return nextIndex;
         });
