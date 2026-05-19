@@ -1,9 +1,7 @@
 // client/src/app.jsx
 import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
 import { IconButton, Box, Dialog, DialogContent, Typography } from '@mui/material';
-import { Brightness4, Brightness6, Brightness7, Lock, LockOpen, Close } from '@mui/icons-material';
-import SettingsIcon from '@mui/icons-material/Settings';
-import RefreshIcon from '@mui/icons-material/Refresh';
+import { Close } from '@mui/icons-material';
 
 import axios from 'axios';
 import PluginWidgetWrapper from './components/PluginWidgetWrapper.jsx';
@@ -906,7 +904,7 @@ const App = () => {
 
   return (
     <>
-      <Box sx={{ width: '100%', minHeight: '100vh', position: 'relative', pb: '60px' }}>
+      <Box sx={{ width: '100%', minHeight: '100vh', position: 'relative', pb: '80px' }}>
         {widgets.length > 0 && (
           <WidgetContainer
             widgets={widgets}
@@ -935,7 +933,7 @@ const App = () => {
         {deviceSettingsLoaded && widgets.length === 0 && isFirstRunClient && (
           <Box
             sx={{
-              minHeight: 'calc(100vh - 60px)',
+              minHeight: 'calc(100vh - 80px)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -957,12 +955,11 @@ const App = () => {
                 py: { xs: 3, sm: 4 },
               }}
             >
-              <SettingsIcon sx={{ fontSize: 48, color: 'var(--accent)', mb: 1 }} />
               <Typography variant="h5" sx={{ color: 'var(--text)', fontWeight: 700, mb: 1 }}>
                 Welcome to HomeGlow
               </Typography>
               <Typography variant="body1" sx={{ color: 'var(--text-secondary)', mb: 1 }}>
-                Use the settings gear in the bottom bar to choose which widgets you want to see.
+                Click the HomeGlow logo in the dock below and open Settings to choose which widgets you want to see.
               </Typography>
               <Typography variant="body2" sx={{ color: 'var(--text-secondary)' }}>
                 Once you enable widgets, this dashboard will fill in automatically.
@@ -1002,98 +999,29 @@ const App = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Fixed Bottom Bar */}
-      <Box
-        sx={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          width: '100%',
-          height: '50px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '0 20px',
-          backgroundColor: 'var(--bottom-bar-bg)',
-          borderTop: '1px solid var(--card-border)',
-          backdropFilter: 'var(--backdrop-blur)',
-          boxShadow: 'var(--shadow)',
-          zIndex: 1000,
-        }}
-      >
-        {/* Left: TabBar */}
-        <TabBar
-          tabs={tabs}
-          activeTab={activeTab}
-          onTabChange={handleTabChange}
-          widgetsLocked={widgetsLocked}
-          onAddTab={handleAddTab}
-          onDeleteTab={handleDeleteTab}
-        />
-
-        {/* Center: Control Buttons */}
-        <Box sx={{
-          display: 'flex',
-          gap: 1,
-          alignItems: 'center',
-          position: 'absolute',
-          left: '50%',
-          transform: 'translateX(-50%)'
-        }}>
-          <IconButton
-            onClick={toggleTheme}
-            aria-label="Cycle theme mode"
-            sx={{
-              color: theme === 'light' ? 'action.active' : 'white',
-            }}
-          >
-            {themeMode === 'auto' ? <Brightness6 /> : (theme === 'light' ? <Brightness4 /> : <Brightness7 />)}
-          </IconButton>
-
-          <IconButton
-            onClick={toggleWidgetsLock}
-            aria-label={widgetsLocked ? "Unlock widgets" : "Lock widgets"}
-            sx={{
-              color: widgetsLocked
-                ? (theme === 'light' ? 'action.active' : 'white')
-                : 'var(--accent)',
-              transition: 'color 0.2s ease',
-            }}
-          >
-            {widgetsLocked ? <Lock /> : <LockOpen />}
-          </IconButton>
-
-          <IconButton
-            onClick={toggleAdminPanel}
-            aria-label="Toggle Admin Panel"
-            sx={{
-              color: theme === 'light' ? 'action.active' : 'white',
-            }}
-          >
-            <SettingsIcon />
-          </IconButton>
-
-          <IconButton
-            onClick={handlePageRefresh}
-            aria-label="Refresh Page"
-            sx={{
-              color: theme === 'light' ? 'action.active' : 'white',
-            }}
-          >
-            <RefreshIcon />
-          </IconButton>
-        </Box>
-
-        <Box sx={{ display: 'flex', alignItems: 'center', minWidth: '50px', justifyContent: 'flex-end' }}>
+      {/* Floating Dock TabBar */}
+      <TabBar
+        tabs={tabs}
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        widgetsLocked={widgetsLocked}
+        onAddTab={handleAddTab}
+        onDeleteTab={handleDeleteTab}
+        onToggleTheme={toggleTheme}
+        onToggleLock={toggleWidgetsLock}
+        onOpenSettings={toggleAdminPanel}
+        onRefresh={handlePageRefresh}
+        theme={theme}
+        themeMode={themeMode}
+        screensaverCountdown={
           <ScreensaverCountdown
             enabled={screensaverSettings.enabled}
             timeoutMinutes={screensaverSettings.timeout}
             lastActivityRef={lastActivityRef}
             screensaverActive={screensaverActive}
           />
-        </Box>
-      </Box>
+        }
+      />
 
       <Suspense fallback={null}>
         <TabIconModal
