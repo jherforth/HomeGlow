@@ -9,8 +9,6 @@ import {
   Box,
   Grid,
   Typography,
-  FormControlLabel,
-  Switch,
   Paper,
 } from '@mui/material';
 import {
@@ -81,14 +79,12 @@ const TabIconModal = ({
 }) => {
   const [label, setLabel] = useState('');
   const [selectedIcon, setSelectedIcon] = useState('star');
-  const [showLabel, setShowLabel] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (!open) return;
     setLabel(initialData?.label || '');
     setSelectedIcon(initialData?.icon || 'star');
-    setShowLabel(initialData?.show_label ?? true);
     setError('');
   }, [open, initialData]);
 
@@ -106,12 +102,11 @@ const TabIconModal = ({
     onSave({
       label: label.trim(),
       icon: selectedIcon,
-      show_label: showLabel,
+      show_label: false,
     });
 
     setLabel('');
     setSelectedIcon('star');
-    setShowLabel(true);
     setError('');
   };
 
@@ -121,7 +116,21 @@ const TabIconModal = ({
   };
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+    <Dialog
+      open={open}
+      onClose={handleClose}
+      maxWidth="sm"
+      fullWidth
+      slotProps={{
+        paper: {
+          component: 'form',
+          onSubmit: (event) => {
+            event.preventDefault();
+            handleSave();
+          },
+        }
+      }}
+    >
       <DialogTitle>
         <Typography variant="h6" component="div">
           {title}
@@ -143,17 +152,6 @@ const TabIconModal = ({
             autoFocus
           />
 
-          <FormControlLabel
-            control={
-              <Switch
-                checked={showLabel}
-                onChange={(e) => setShowLabel(e.target.checked)}
-              />
-            }
-            label="Show label on tab"
-            sx={{ mb: 3 }}
-          />
-
           <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
             Select an Icon
           </Typography>
@@ -164,7 +162,7 @@ const TabIconModal = ({
               const isSelected = selectedIcon === iconItem.name;
 
               return (
-                <Grid item xs={3} sm={2} key={iconItem.name}>
+                <Grid size={{ xs: 3, sm: 2 }} key={iconItem.name}>
                   <Paper
                     elevation={isSelected ? 8 : 1}
                     sx={{
@@ -198,10 +196,10 @@ const TabIconModal = ({
         </Box>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={handleClose} variant="outlined">
+        <Button type="button" onClick={handleClose} variant="outlined">
           Cancel
         </Button>
-        <Button onClick={handleSave} variant="contained" disabled={!label.trim()}>
+        <Button type="submit" variant="contained" disabled={!label.trim()}>
           {saveButtonText}
         </Button>
       </DialogActions>

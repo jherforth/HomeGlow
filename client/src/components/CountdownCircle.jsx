@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Box } from '@mui/material';
+import AutorenewIcon from '@mui/icons-material/Autorenew';
 
 const CountdownCircle = ({ refreshInterval, onRefresh }) => {
   const [progress, setProgress] = useState(0);
   const [cycleKey, setCycleKey] = useState(0);
+  const [isHovered, setIsHovered] = useState(false);
 
   useEffect(() => {
     if (!refreshInterval || refreshInterval === 0) {
@@ -44,8 +46,27 @@ const CountdownCircle = ({ refreshInterval, onRefresh }) => {
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (progress / 100) * circumference;
 
+  const handleManualRefresh = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (onRefresh) {
+      onRefresh();
+    }
+
+    // Restart the countdown immediately after manual refresh.
+    setCycleKey(prev => prev + 1);
+  };
+
   return (
     <Box
+      component="button"
+      type="button"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      onClick={handleManualRefresh}
+      aria-label="Refresh widget now"
+      title="Refresh now"
       sx={{
         position: 'absolute',
         bottom: 8,
@@ -56,7 +77,12 @@ const CountdownCircle = ({ refreshInterval, onRefresh }) => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        pointerEvents: 'none',
+        cursor: 'pointer',
+        pointerEvents: 'auto',
+        background: 'transparent',
+        border: 'none',
+        padding: 0,
+        margin: 0,
       }}
     >
       <svg
@@ -90,6 +116,23 @@ const CountdownCircle = ({ refreshInterval, onRefresh }) => {
           }}
         />
       </svg>
+
+      <Box
+        sx={{
+          position: 'absolute',
+          inset: 0,
+          borderRadius: '50%',
+          backgroundColor: 'rgba(0, 0, 0, 0.35)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: isHovered ? 1 : 0,
+          transition: 'opacity 0.15s ease',
+          pointerEvents: 'none',
+        }}
+      >
+        <AutorenewIcon sx={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: 18 }} />
+      </Box>
     </Box>
   );
 };

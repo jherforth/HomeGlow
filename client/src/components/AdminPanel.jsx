@@ -71,6 +71,92 @@ import PinModal from './PinModal';
 import ChoreSchedulesTab from './ChoreSchedulesTab';
 import ChoreHistoryTab from './ChoreHistoryTab';
 import TabIconModal from './TabIconModal';
+import GoogleAccountConnection from './GoogleAccountConnection';
+
+const USERS_UPDATED_EVENT = 'homeglow:users-updated';
+const DEVICE_SETTINGS_UPDATED_EVENT = 'homeglow:device-settings-updated';
+const INTERFACE_SETTINGS_UPDATED_EVENT = 'homeglow:interface-settings-updated';
+const INTERFACE_COLORS_STORAGE_KEY = 'interfaceColors';
+const INTERFACE_SCREENSAVER_STORAGE_KEY = 'screensaverSettings';
+const INTERFACE_AUTO_DARK_MODE_STORAGE_KEY = 'autoDarkModeSettings';
+const DEFAULT_AUTO_DARK_MODE_SETTINGS = {
+  enabled: false,
+  locationQuery: '',
+  lat: null,
+  lon: null,
+  resolvedName: '',
+};
+
+const DEFAULT_WIDGET_SETTINGS = {
+  chores: { enabled: false, transparent: false, refreshInterval: 0 },
+  calendar: { enabled: false, transparent: false, refreshInterval: 0 },
+  photos: { enabled: false, transparent: false, refreshInterval: 0 },
+  weather: { enabled: false, transparent: false, refreshInterval: 0 },
+};
+
+const DEFAULT_INTERFACE_COLORS = {
+  primary: '#f5f5f5',
+  secondary: '#38bdf8',
+  accent: '#f472b6',
+};
+
+const DEFAULT_SCREENSAVER_SETTINGS = {
+  enabled: false,
+  mode: 'tabs',
+  timeout: 5,
+  slideshowInterval: 10
+};
+
+const normalizeWidgetSettings = (raw) => ({
+  ...DEFAULT_WIDGET_SETTINGS,
+  chores: { ...DEFAULT_WIDGET_SETTINGS.chores, ...(raw?.chores || {}) },
+  calendar: { ...DEFAULT_WIDGET_SETTINGS.calendar, ...(raw?.calendar || {}) },
+  photos: { ...DEFAULT_WIDGET_SETTINGS.photos, ...(raw?.photos || {}) },
+  weather: { ...DEFAULT_WIDGET_SETTINGS.weather, ...(raw?.weather || {}) },
+});
+
+const normalizeScreensaverSettings = (raw) => ({
+  ...DEFAULT_SCREENSAVER_SETTINGS,
+  ...(raw && typeof raw === 'object' ? raw : {}),
+});
+
+const normalizeInterfaceColors = (raw) => ({
+  ...DEFAULT_INTERFACE_COLORS,
+  ...(raw && typeof raw === 'object' ? raw : {}),
+});
+
+const readLocalInterfaceColors = () => {
+  try {
+    const raw = localStorage.getItem(INTERFACE_COLORS_STORAGE_KEY);
+    if (!raw) return { ...DEFAULT_INTERFACE_COLORS };
+    return normalizeInterfaceColors(JSON.parse(raw));
+  } catch {
+    return { ...DEFAULT_INTERFACE_COLORS };
+  }
+};
+
+const readLocalScreensaverSettings = () => {
+  try {
+    const raw = localStorage.getItem(INTERFACE_SCREENSAVER_STORAGE_KEY);
+    if (!raw) return { ...DEFAULT_SCREENSAVER_SETTINGS };
+    return normalizeScreensaverSettings(JSON.parse(raw));
+  } catch {
+    return { ...DEFAULT_SCREENSAVER_SETTINGS };
+  }
+};
+
+const readLocalAutoDarkModeSettings = () => {
+  try {
+    const raw = localStorage.getItem(INTERFACE_AUTO_DARK_MODE_STORAGE_KEY);
+    if (!raw) return { ...DEFAULT_AUTO_DARK_MODE_SETTINGS };
+    return {
+      ...DEFAULT_AUTO_DARK_MODE_SETTINGS,
+      ...JSON.parse(raw),
+    };
+  } catch {
+    return { ...DEFAULT_AUTO_DARK_MODE_SETTINGS };
+  }
+};
 
 const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const [currentDeviceName, setCurrentDeviceName] = useState(() => getDeviceName());
@@ -90,14 +176,9 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     daily_completion_clam_reward: '2'
   });
   const [widgetSettings, setLocalWidgetSettings] = useState({
-    chores: { enabled: false, transparent: false, refreshInterval: 0 },
-    calendar: { enabled: false, transparent: false, refreshInterval: 0 },
-    photos: { enabled: false, transparent: false, refreshInterval: 0 },
-    weather: { enabled: false, transparent: false, refreshInterval: 0 },
-    primary: '#f5f5f5',
-    secondary: '#38bdf8',
-    accent: '#f472b6'
+    ...DEFAULT_WIDGET_SETTINGS
   });
+  const [interfaceColors, setInterfaceColors] = useState(readLocalInterfaceColors);
   const [users, setUsers] = useState([]);
   const [chores, setChores] = useState([]);
   const [prizes, setPrizes] = useState([]);
@@ -119,21 +200,19 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const [checkingPin, setCheckingPin] = useState(true);
   const [tabs, setTabs] = useState([]);
   const [widgetAssignments, setWidgetAssignments] = useState({});
-  const [pluginSettings, setPluginSettings] = useState(() => {
-    const saved = localStorage.getItem('pluginSettings');
-    return saved ? JSON.parse(saved) : {};
-  });
+  const [pluginSettings, setPluginSettings] = useState({});
   const [pluginAssignments, setPluginAssignments] = useState({});
   const [photoSources, setPhotoSources] = useState([]);
-  const [screensaverSettings, setScreensaverSettings] = useState(() => {
-    const saved = localStorage.getItem('screensaverSettings');
-    return saved ? JSON.parse(saved) : {
-      enabled: false,
-      mode: 'tabs',
-      timeout: 5,
-      slideshowInterval: 10
-    };
+  const [screensaverSettings, setScreensaverSettings] = useState(readLocalScreensaverSettings);
+  const [autoDarkModeSettings, setAutoDarkModeSettings] = useState(readLocalAutoDarkModeSettings);
+  const [isSavingAutoDarkMode, setIsSavingAutoDarkMode] = useState(false);
+  const [autoDarkModeSunTimes, setAutoDarkModeSunTimes] = useState({
+    sunrise: null,
+    sunset: null,
+    timezoneOffset: 0,
   });
+  const [autoDarkModeSunTimesLoading, setAutoDarkModeSunTimesLoading] = useState(false);
+  const [autoDarkModeSunTimesError, setAutoDarkModeSunTimesError] = useState('');
   const [tabIconModalState, setTabIconModalState] = useState({
     open: false,
     mode: 'create',
@@ -166,32 +245,16 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   ];
 
   useEffect(() => {
-    const savedSettings = localStorage.getItem('widgetSettings');
-    if (savedSettings) {
-      const parsed = JSON.parse(savedSettings);
-      // Ensure refresh intervals are included for all widgets.
-      const settingsWithDefaults = {
-        chores: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.chores },
-        calendar: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.calendar },
-        photos: { enabled: false, transparent: false, refreshInterval: 0, ...parsed.photos },
-        weather: {
-          enabled: false,
-          transparent: false,
-          refreshInterval: 0,
-          ...parsed.weather
-        },
-        primary: parsed.primary || '#f5f5f5',
-        secondary: parsed.secondary || '#38bdf8',
-        accent: parsed.accent || '#f472b6'
-      };
-      setLocalWidgetSettings(settingsWithDefaults);
-    }
     checkPinStatus();
   }, []);
 
   useEffect(() => {
     if (isAuthenticated) {
+      setInterfaceColors(readLocalInterfaceColors());
+      setScreensaverSettings(readLocalScreensaverSettings());
+      setAutoDarkModeSettings(readLocalAutoDarkModeSettings());
       fetchSettings();
+      fetchDeviceSettings();
       fetchUsers();
       fetchChores();
       fetchPrizes();
@@ -248,6 +311,29 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     } catch (error) {
       console.error('Error fetching settings:', error);
     }
+  };
+
+  const fetchDeviceSettings = async () => {
+    try {
+      const response = await axios.get(`${API_DEVICE_URL}/settings`);
+      const deviceSettings = response.data && typeof response.data === 'object' ? response.data : {};
+
+      const nextWidgetSettings = normalizeWidgetSettings(deviceSettings.widgetSettings);
+      const nextPluginSettings = deviceSettings.pluginSettings && typeof deviceSettings.pluginSettings === 'object'
+        ? deviceSettings.pluginSettings
+        : {};
+
+      setLocalWidgetSettings(nextWidgetSettings);
+      setWidgetSettings(nextWidgetSettings);
+      setPluginSettings(nextPluginSettings);
+    } catch (error) {
+      console.error('Error fetching device settings:', error);
+    }
+  };
+
+  const patchDeviceSettings = async (partialSettings) => {
+    await axios.patch(`${API_DEVICE_URL}/settings`, partialSettings);
+    window.dispatchEvent(new Event(DEVICE_SETTINGS_UPDATED_EVENT));
   };
 
   const fetchUsers = async () => {
@@ -361,13 +447,30 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     }
   };
 
+  const saveDailyClamReward = async () => {
+    setIsLoading(true);
+    try {
+      await axios.post(`${API_BASE_URL}/api/settings`, {
+        key: 'daily_completion_clam_reward',
+        value: settings.daily_completion_clam_reward || '2',
+      });
+      setSaveMessage({ show: true, type: 'success', text: 'Daily completion clam reward saved.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error saving clam reward:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to save clam reward. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const saveAllApiSettings = async () => {
     setIsLoading(true);
     try {
       await Promise.all([
         axios.post(`${API_BASE_URL}/api/settings`, { key: 'WEATHER_API_KEY', value: settings.WEATHER_API_KEY || '' }),
-        axios.post(`${API_BASE_URL}/api/settings`, { key: 'PROXY_WHITELIST', value: settings.PROXY_WHITELIST || '' }),
-        axios.post(`${API_BASE_URL}/api/settings`, { key: 'daily_completion_clam_reward', value: settings.daily_completion_clam_reward || '2' })
+        axios.post(`${API_BASE_URL}/api/settings`, { key: 'PROXY_WHITELIST', value: settings.PROXY_WHITELIST || '' })
       ]);
       setSaveMessage({ show: true, type: 'success', text: 'All settings saved successfully!' });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
@@ -380,158 +483,20 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     }
   };
 
-  const getWidgetIdFromWidgetName = (widgetName) => {
-    const coreMap = {
-      calendar: 'calendar-widget',
-      weather: 'weather-widget',
-      chores: 'chores-widget',
-      photos: 'photos-widget',
-    };
-
-    if (coreMap[widgetName]) return coreMap[widgetName];
-    if (widgetName.startsWith('plugin:')) return `plugin-${widgetName.slice(7)}`;
-    return null;
-  };
-
-  const getDefaultSizeForWidgetName = (widgetName) => {
-    if (CORE_WIDGET_DEFAULT_SIZES[widgetName]) return CORE_WIDGET_DEFAULT_SIZES[widgetName];
-    if (widgetName.startsWith('plugin:')) return { w: 6, h: 4 };
-    return null;
-  };
-
-  const ensureLocalLayoutKeyForAssignment = (widgetName, tabNumber) => {
-    const tab = tabs.find(t => t.number === tabNumber);
-    if (!tab?.id) return;
-
-    const widgetId = getWidgetIdFromWidgetName(widgetName);
-    const defaultSize = getDefaultSizeForWidgetName(widgetName);
-    if (!widgetId || !defaultSize) return;
-
-    const localKey = `widget-layout-id-${tab.id}-${widgetId}`;
-    if (localStorage.getItem(localKey)) return;
-
-    // Store only dimensions; WidgetContainer will apply widget default position for x/y.
-    localStorage.setItem(localKey, JSON.stringify({ w: defaultSize.w, h: defaultSize.h }));
-  };
-
-  const collectAffectedTabNumbers = (existingTabNumbers, desiredTabNumbers) => {
-    const affected = new Set([...existingTabNumbers, ...desiredTabNumbers]);
-    if (existingTabNumbers.length === 0 || desiredTabNumbers.length === 0) {
-      affected.add(1);
-    }
-    return Array.from(affected);
-  };
-
-  const recalculateLayoutsForAffectedTabs = (affectedTabNumbers, coreAssignments, pluginAssignmentMap) => {
-    const tabNumbers = Array.from(new Set(affectedTabNumbers.filter(Boolean)));
-    if (tabNumbers.length === 0) return;
-
-    const getAssignedWidgetsForTab = (tabNumber) => {
-      const assigned = [];
-
-      Object.keys(CORE_WIDGET_DEFAULT_SIZES).forEach((widgetName) => {
-        const assignedTabs = coreAssignments[widgetName] || [];
-        if (assignedTabs.length === 0) {
-          if (tabNumber === 1) {
-            assigned.push(widgetName);
-          }
-          return;
-        }
-        if (assignedTabs.includes(tabNumber)) {
-          assigned.push(widgetName);
-        }
-      });
-
-      Object.entries(pluginAssignmentMap || {}).forEach(([widgetName, assignedTabs]) => {
-        const tabsForWidget = Array.isArray(assignedTabs) ? assignedTabs : [];
-        if (tabsForWidget.length === 0) {
-          if (tabNumber === 1) {
-            assigned.push(widgetName);
-          }
-          return;
-        }
-        if (tabsForWidget.includes(tabNumber)) {
-          assigned.push(widgetName);
-        }
-      });
-
-      return assigned
-        .map((widgetName) => {
-          const widgetId = getWidgetIdFromWidgetName(widgetName);
-          const defaultSize = getDefaultSizeForWidgetName(widgetName);
-          if (!widgetId || !defaultSize) return null;
-          return { widgetId, defaultSize };
-        })
-        .filter(Boolean)
-        .sort((a, b) => a.widgetId.localeCompare(b.widgetId));
-    };
-
-    const findFreePosition = (placed, w, h, cols = 12) => {
-      const collides = (x, y) => placed.some((p) => (
-        x < p.x + p.w && x + w > p.x && y < p.y + p.h && y + h > p.y
-      ));
-
-      for (let row = 0; row < 200; row += 1) {
-        for (let col = 0; col <= cols - w; col += 1) {
-          if (!collides(col, row)) {
-            return { x: col, y: row };
-          }
-        }
-      }
-
-      return { x: 0, y: 0 };
-    };
-
-    tabNumbers.forEach((tabNumber) => {
-      const tab = tabs.find(t => t.number === tabNumber);
-      if (!tab?.id) return;
-
-      const widgetsForTab = getAssignedWidgetsForTab(tabNumber);
-      if (widgetsForTab.length === 0) return;
-
-      const placed = [];
-      widgetsForTab.forEach(({ widgetId, defaultSize }) => {
-        const key = `widget-layout-id-${tab.id}-${widgetId}`;
-        let parsed = null;
-        try {
-          parsed = JSON.parse(localStorage.getItem(key) || 'null');
-        } catch {
-          parsed = null;
-        }
-
-        const w = Math.max(Number(parsed?.w) || defaultSize.w, 1);
-        const h = Math.max(Number(parsed?.h) || defaultSize.h, 1);
-        const pos = findFreePosition(placed, w, h, 12);
-        const layoutData = { x: pos.x, y: pos.y, w, h };
-
-        placed.push(layoutData);
-        localStorage.setItem(key, JSON.stringify(layoutData));
-      });
-    });
-  };
-
   const saveWidgetSettings = async () => {
     setIsLoading(true);
     try {
-      localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
-      setWidgetSettings(widgetSettings);
+      const normalizedWidgetSettings = normalizeWidgetSettings(widgetSettings);
+      setLocalWidgetSettings(normalizedWidgetSettings);
+      setWidgetSettings(normalizedWidgetSettings);
+      await patchDeviceSettings({ widgetSettings: normalizedWidgetSettings });
 
       const currentResponse = await axios.get(`${API_DEVICE_URL}/widget-assignments`);
       const currentAssignments = Array.isArray(currentResponse.data) ? currentResponse.data : [];
-      const affectedTabs = new Set();
-      const nextCoreAssignments = {};
 
       for (const [widgetName, desiredTabNumbers] of Object.entries(widgetAssignments)) {
         const existing = currentAssignments.filter(a => a.widget_name === widgetName);
         const existingTabNumbers = existing.map(a => a.tab_number);
-        desiredTabNumbers.forEach(number => {
-          if (Number.isFinite(number)) {
-            nextCoreAssignments[widgetName] = nextCoreAssignments[widgetName] || [];
-            nextCoreAssignments[widgetName].push(number);
-          }
-        });
-
-        collectAffectedTabNumbers(existingTabNumbers, desiredTabNumbers).forEach((tabNumber) => affectedTabs.add(tabNumber));
 
         const toRemove = existing.filter(a => !desiredTabNumbers.includes(a.tab_number));
         const toAdd = desiredTabNumbers.filter(number => !existingTabNumbers.includes(number));
@@ -545,17 +510,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
             widget_name: widgetName,
             tabNumber: tabNumber,
           });
-          ensureLocalLayoutKeyForAssignment(widgetName, tabNumber);
         }
       }
-
-      Object.keys(CORE_WIDGET_DEFAULT_SIZES).forEach((widgetName) => {
-        if (!nextCoreAssignments[widgetName]) {
-          nextCoreAssignments[widgetName] = [];
-        }
-      });
-
-      recalculateLayoutsForAffectedTabs(Array.from(affectedTabs), nextCoreAssignments, pluginAssignments);
 
       if (onTabsChanged) {
         await onTabsChanged();
@@ -575,24 +531,14 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const savePluginSettings = async () => {
     setIsLoading(true);
     try {
-      localStorage.setItem('pluginSettings', JSON.stringify(pluginSettings));
+      await patchDeviceSettings({ pluginSettings });
 
       const currentResponse = await axios.get(`${API_DEVICE_URL}/widget-assignments`);
       const currentAssignments = Array.isArray(currentResponse.data) ? currentResponse.data : [];
-      const affectedTabs = new Set();
-      const nextPluginAssignments = {};
 
       for (const [pluginWidgetName, desiredTabNumbers] of Object.entries(pluginAssignments)) {
         const existing = currentAssignments.filter(a => a.widget_name === pluginWidgetName);
         const existingTabNumbers = existing.map(a => a.tab_number);
-        desiredTabNumbers.forEach(number => {
-          if (Number.isFinite(number)) {
-            nextPluginAssignments[pluginWidgetName] = nextPluginAssignments[pluginWidgetName] || [];
-            nextPluginAssignments[pluginWidgetName].push(number);
-          }
-        });
-
-        collectAffectedTabNumbers(existingTabNumbers, desiredTabNumbers).forEach((tabNumber) => affectedTabs.add(tabNumber));
 
         const toRemove = existing.filter(a => !desiredTabNumbers.includes(a.tab_number));
         const toAdd = desiredTabNumbers.filter(number => !existingTabNumbers.includes(number));
@@ -606,17 +552,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
             widget_name: pluginWidgetName,
             tabNumber: tabNumber,
           });
-          ensureLocalLayoutKeyForAssignment(pluginWidgetName, tabNumber);
         }
       }
-
-      Object.keys(pluginAssignments).forEach((pluginWidgetName) => {
-        if (!nextPluginAssignments[pluginWidgetName]) {
-          nextPluginAssignments[pluginWidgetName] = [];
-        }
-      });
-
-      recalculateLayoutsForAffectedTabs(Array.from(affectedTabs), widgetAssignments, nextPluginAssignments);
 
       if (onTabsChanged) {
         await onTabsChanged();
@@ -826,6 +763,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       setCopyDeviceDialog({ open: false, device: null });
       await fetchTabs();
       await fetchWidgetAssignments();
+      await fetchDeviceSettings();
       await fetchDevices();
       if (onTabsChanged) {
         await onTabsChanged();
@@ -919,46 +857,256 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     }
   };
 
-  const saveInterfaceSettings = () => {
-    localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
-    setWidgetSettings(widgetSettings);
+  const saveInterfaceSettings = async () => {
+    try {
+      setIsLoading(true);
+      const normalizedColors = normalizeInterfaceColors(interfaceColors);
+      localStorage.setItem(INTERFACE_COLORS_STORAGE_KEY, JSON.stringify(normalizedColors));
 
-    // Apply CSS variables immediately
-    applyAccentColors();
+      // Apply CSS variables immediately
+      applyAccentColors();
+      window.dispatchEvent(new Event(INTERFACE_SETTINGS_UPDATED_EVENT));
 
-    setSaveMessage({ show: true, type: 'success', text: 'Accent colors saved! Refresh page to see all changes.' });
-    setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+      setSaveMessage({ show: true, type: 'success', text: 'Accent colors saved for this display.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error saving accent colors:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to save accent colors. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const applyAccentColors = () => {
     const root = document.documentElement;
     const isLight = root.getAttribute('data-theme') === 'light';
 
-    root.style.setProperty('--primary', widgetSettings.primary);
-    root.style.setProperty('--secondary', widgetSettings.secondary);
-    root.style.setProperty('--accent', widgetSettings.accent);
+    root.style.setProperty('--primary', interfaceColors.primary);
+    root.style.setProperty('--secondary', interfaceColors.secondary);
+    root.style.setProperty('--accent', interfaceColors.accent);
 
     if (isLight) {
-      root.style.setProperty('--background', widgetSettings.primary);
+      root.style.setProperty('--background', interfaceColors.primary);
     }
   };
 
   const resetToDefaults = () => {
-    const defaultSettings = {
-      primary: '#f5f5f5',
-      secondary: '#38bdf8',
-      accent: '#f472b6'
-    };
-
-    setLocalWidgetSettings(prev => ({ ...prev, ...defaultSettings }));
+    setInterfaceColors({ ...DEFAULT_INTERFACE_COLORS });
     setSaveMessage({ show: true, type: 'info', text: 'Reset to default colors. Click Save to apply.' });
     setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
   };
 
-  const saveScreensaverSettings = () => {
-    localStorage.setItem('screensaverSettings', JSON.stringify(screensaverSettings));
-    setSaveMessage({ show: true, type: 'success', text: 'Screensaver settings saved!' });
-    setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+  const saveScreensaverSettings = async () => {
+    try {
+      setIsLoading(true);
+      const normalizedScreensaver = normalizeScreensaverSettings(screensaverSettings);
+      localStorage.setItem(INTERFACE_SCREENSAVER_STORAGE_KEY, JSON.stringify(normalizedScreensaver));
+      window.dispatchEvent(new Event(INTERFACE_SETTINGS_UPDATED_EVENT));
+      setSaveMessage({ show: true, type: 'success', text: 'Screensaver settings saved for this display.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error saving screensaver settings:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to save screensaver settings. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const resolveAutoDarkModeLocation = async (locationQuery) => {
+    const apiKey = settings.WEATHER_API_KEY?.trim();
+    if (!apiKey) {
+      throw new Error('Please save an OpenWeather API key in the Connections tab first.');
+    }
+
+    const normalized = locationQuery.trim();
+    const directCandidates = [normalized];
+    if (!normalized.includes(',') && /[a-zA-Z]/.test(normalized)) {
+      directCandidates.push(`${normalized},US`);
+    }
+
+    for (const candidate of directCandidates) {
+      const response = await axios.get('https://api.openweathermap.org/geo/1.0/direct', {
+        params: {
+          q: candidate,
+          limit: 1,
+          appid: apiKey,
+        },
+      });
+
+      const first = Array.isArray(response.data) ? response.data[0] : null;
+      if (first && typeof first.lat === 'number' && typeof first.lon === 'number') {
+        const nameParts = [first.name, first.state, first.country].filter(Boolean);
+        return {
+          lat: first.lat,
+          lon: first.lon,
+          resolvedName: nameParts.join(', '),
+        };
+      }
+    }
+
+    const zipPattern = /^[0-9]{3,10}(,[a-zA-Z]{2})?$/;
+    if (zipPattern.test(normalized)) {
+      const zipValue = normalized.includes(',') ? normalized : `${normalized},US`;
+      const response = await axios.get('https://api.openweathermap.org/geo/1.0/zip', {
+        params: {
+          zip: zipValue,
+          appid: apiKey,
+        },
+      });
+
+      if (typeof response?.data?.lat === 'number' && typeof response?.data?.lon === 'number') {
+        const nameParts = [response.data.name, response.data.country].filter(Boolean);
+        return {
+          lat: response.data.lat,
+          lon: response.data.lon,
+          resolvedName: nameParts.join(', '),
+        };
+      }
+    }
+
+    throw new Error('Location not found. Try a city, city/state, city/country, or ZIP code.');
+  };
+
+  const saveAutoDarkModeSettings = async () => {
+    const trimmedLocation = autoDarkModeSettings.locationQuery.trim();
+
+    if (!autoDarkModeSettings.enabled) {
+      const nextSettings = {
+        ...autoDarkModeSettings,
+        locationQuery: trimmedLocation,
+      };
+      localStorage.setItem(INTERFACE_AUTO_DARK_MODE_STORAGE_KEY, JSON.stringify(nextSettings));
+      window.dispatchEvent(new Event(INTERFACE_SETTINGS_UPDATED_EVENT));
+      setAutoDarkModeSettings(nextSettings);
+      setSaveMessage({ show: true, type: 'success', text: 'Auto dark mode disabled for this display.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+      return;
+    }
+
+    if (!settings.WEATHER_API_KEY?.trim()) {
+      setSaveMessage({
+        show: true,
+        type: 'error',
+        text: 'Add and save your OpenWeather API key in Connections before enabling auto dark mode.',
+      });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3500);
+      return;
+    }
+
+    if (!trimmedLocation) {
+      setSaveMessage({
+        show: true,
+        type: 'error',
+        text: 'Enter a location before enabling auto dark mode.',
+      });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+      return;
+    }
+
+    try {
+      setIsSavingAutoDarkMode(true);
+      const resolved = await resolveAutoDarkModeLocation(trimmedLocation);
+      const nextSettings = {
+        ...autoDarkModeSettings,
+        enabled: true,
+        locationQuery: trimmedLocation,
+        lat: resolved.lat,
+        lon: resolved.lon,
+        resolvedName: resolved.resolvedName,
+      };
+
+      localStorage.setItem(INTERFACE_AUTO_DARK_MODE_STORAGE_KEY, JSON.stringify(nextSettings));
+      window.dispatchEvent(new Event(INTERFACE_SETTINGS_UPDATED_EVENT));
+      setAutoDarkModeSettings(nextSettings);
+      setSaveMessage({
+        show: true,
+        type: 'success',
+        text: 'Auto dark mode saved for this display. Use the bottom-bar theme button until the half sun/half moon icon appears.',
+      });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 4500);
+    } catch (error) {
+      console.error('Error saving auto dark mode settings:', error);
+      const message = error?.response?.data?.message || error.message || 'Failed to save auto dark mode settings.';
+      setSaveMessage({ show: true, type: 'error', text: message });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3500);
+    } finally {
+      setIsSavingAutoDarkMode(false);
+    }
+  };
+
+  useEffect(() => {
+    const hasCoordinates = typeof autoDarkModeSettings.lat === 'number' && typeof autoDarkModeSettings.lon === 'number';
+    const apiKey = settings.WEATHER_API_KEY?.trim();
+
+    if (!autoDarkModeSettings.resolvedName || !hasCoordinates || !apiKey) {
+      setAutoDarkModeSunTimes({ sunrise: null, sunset: null, timezoneOffset: 0 });
+      setAutoDarkModeSunTimesError('');
+      setAutoDarkModeSunTimesLoading(false);
+      return;
+    }
+
+    let isCancelled = false;
+    const fetchSunTimes = async () => {
+      setAutoDarkModeSunTimesLoading(true);
+      setAutoDarkModeSunTimesError('');
+
+      try {
+        const response = await axios.get('https://api.openweathermap.org/data/2.5/weather', {
+          params: {
+            lat: autoDarkModeSettings.lat,
+            lon: autoDarkModeSettings.lon,
+            appid: apiKey,
+          },
+        });
+
+        const sunrise = response?.data?.sys?.sunrise;
+        const sunset = response?.data?.sys?.sunset;
+        const timezoneOffset = response?.data?.timezone;
+
+        if (typeof sunrise !== 'number' || typeof sunset !== 'number') {
+          throw new Error('Sunrise and sunset are unavailable for this location.');
+        }
+
+        if (!isCancelled) {
+          setAutoDarkModeSunTimes({
+            sunrise,
+            sunset,
+            timezoneOffset: typeof timezoneOffset === 'number' ? timezoneOffset : 0,
+          });
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          console.error('Error fetching auto dark mode sunrise/sunset:', error);
+          setAutoDarkModeSunTimes({ sunrise: null, sunset: null, timezoneOffset: 0 });
+          setAutoDarkModeSunTimesError('Unable to load today\'s sunrise and sunset.');
+        }
+      } finally {
+        if (!isCancelled) {
+          setAutoDarkModeSunTimesLoading(false);
+        }
+      }
+    };
+
+    void fetchSunTimes();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [autoDarkModeSettings.resolvedName, autoDarkModeSettings.lat, autoDarkModeSettings.lon, settings.WEATHER_API_KEY]);
+
+  const formatAutoDarkModeLocationTime = (unixSeconds, timezoneOffsetSeconds = 0) => {
+    if (typeof unixSeconds !== 'number') {
+      return '--';
+    }
+
+    const shiftedTime = new Date((unixSeconds + timezoneOffsetSeconds) * 1000);
+    return shiftedTime.toLocaleTimeString([], {
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: 'UTC',
+    });
   };
 
   const hasImmichConfigured = photoSources.some(source => source.type === 'Immich' && source.enabled === 1);
@@ -985,14 +1133,14 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   };
 
   const handleSettingChange = (setting, value) => {
-    setLocalWidgetSettings(prev => ({
+    setInterfaceColors(prev => ({
       ...prev,
       [setting]: value
     }));
   };
 
   const handleColorChange = (colorKey, color) => {
-    setLocalWidgetSettings(prev => ({
+    setInterfaceColors(prev => ({
       ...prev,
       [colorKey]: color.hex
     }));
@@ -1001,6 +1149,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const saveUser = async () => {
     try {
       setIsLoading(true);
+      const isCreatingUser = !editingUser;
       if (editingUser) {
         await axios.patch(`${API_BASE_URL}/api/users/${editingUser.id}`, editingUser);
       } else {
@@ -1009,6 +1158,9 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       }
       setEditingUser(null);
       fetchUsers();
+      if (isCreatingUser) {
+        window.dispatchEvent(new Event(USERS_UPDATED_EVENT));
+      }
     } catch (error) {
       console.error('Error saving user:', error);
     } finally {
@@ -1028,6 +1180,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
       fetchUsers();
       fetchChores();
+      window.dispatchEvent(new Event(USERS_UPDATED_EVENT));
       setDeleteUserDialog({ open: false, user: null });
     } catch (error) {
       console.error('Error deleting user:', error);
@@ -1122,12 +1275,14 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         await axios.delete(`${API_BASE_URL}/api/widgets/${filename}`);
         const pluginWidgetName = `plugin:${filename}`;
         await axios.delete(`${API_DEVICE_URL}/widget-assignments/widget/${encodeURIComponent(pluginWidgetName)}`).catch(() => { });
+        let nextPluginSettings = {};
         setPluginSettings(prev => {
           const updated = { ...prev };
           delete updated[filename];
-          localStorage.setItem('pluginSettings', JSON.stringify(updated));
+          nextPluginSettings = updated;
           return updated;
         });
+        await patchDeviceSettings({ pluginSettings: nextPluginSettings });
         setPluginAssignments(prev => {
           const updated = { ...prev };
           delete updated[pluginWidgetName];
@@ -1337,7 +1492,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
           sx={{
             width: 60,
             height: 60,
-            backgroundColor: widgetSettings[key],
+            backgroundColor: interfaceColors[key],
             border: '3px solid var(--card-border)',
             borderRadius: 2,
             cursor: 'pointer',
@@ -1358,7 +1513,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         />
         <TextField
           size="medium"
-          value={widgetSettings[key]}
+          value={interfaceColors[key]}
           onChange={(e) => handleSettingChange(key, e.target.value)}
           sx={{ flex: 1 }}
           placeholder="#000000"
@@ -1366,7 +1521,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       </Box>
       <ColorPickerPopover
         anchorEl={colorPickerAnchor.key === key ? colorPickerAnchor.el : null}
-        color={widgetSettings[key]}
+        color={interfaceColors[key]}
         onChange={(color) => handleColorChange(key, color)}
         onClose={() => setColorPickerAnchor({ key: null, el: null })}
       />
@@ -1385,7 +1540,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     'Chores',
     'Prizes',
     'Security',
-    'APIs'
+    'Connections'
   ];
 
   if (checkingPin) {
@@ -1442,7 +1597,13 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
             )}
 
             {widgetsSubTab === 0 && (
-              <>
+              <Box
+                component="form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  saveWidgetSettings();
+                }}
+              >
                 <Alert severity="info" sx={{ mb: 2 }}>
                   Enable widgets to show them on the dashboard. Click to select a widget, then drag to move or resize from corners.
                 </Alert>
@@ -1455,8 +1616,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                       {widget} Widget
                     </Typography>
 
-                    <Grid container spacing={2} alignItems="center">
-                      <Grid item xs={12} sm={6}>
+                    <Grid container spacing={2} sx={{ alignItems: 'center' }}>
+                      <Grid size={{ xs: 12, sm: 6 }}>
                         <FormControlLabel
                           control={
                             <Switch
@@ -1478,7 +1639,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                         />
                       </Grid>
 
-                      <Grid item xs={12} sm={6}>
+                      <Grid size={{ xs: 12, sm: 6 }}>
                         <FormControl fullWidth size="small">
                           <InputLabel id={`${widget}-refresh-label`}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1519,15 +1680,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                             helperText="Select which tabs this widget should appear on (defaults to Home tab if none selected)"
                           />
                         )}
-                        renderTags={(value, getTagProps) =>
-                          value.map((option, index) => (
-                            <Chip
-                              label={option.label}
-                              {...getTagProps({ index })}
-                              sx={{ backgroundColor: 'var(--accent)', color: 'white' }}
-                            />
-                          ))
-                        }
                       />
                     </Box>
 
@@ -1544,8 +1696,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                     Weather Widget
                   </Typography>
 
-                  <Grid container spacing={2} alignItems="center">
-                    <Grid item xs={12} sm={6}>
+                  <Grid container spacing={2} sx={{ alignItems: 'center' }}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
                       <FormControlLabel
                         control={
                           <Switch
@@ -1567,7 +1719,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                       />
                     </Grid>
 
-                    <Grid item xs={12} sm={6}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
                       <FormControl fullWidth size="small">
                         <InputLabel id="weather-refresh-label">
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1608,15 +1760,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                           helperText="Select which tabs this widget should appear on (defaults to Home tab if none selected)"
                         />
                       )}
-                      renderTags={(value, getTagProps) =>
-                        value.map((option, index) => (
-                          <Chip
-                            label={option.label}
-                            {...getTagProps({ index })}
-                            sx={{ backgroundColor: 'var(--accent)', color: 'white' }}
-                          />
-                        ))
-                      }
                     />
                   </Box>
 
@@ -1627,16 +1770,16 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                   )}
                 </Box>
 
-                <Button variant="contained" onClick={saveWidgetSettings} sx={{ mt: 2 }} startIcon={<Save />}>
+                <Button type="submit" variant="contained" sx={{ mt: 2 }} startIcon={<Save />}>
                   Save Widget Settings
                 </Button>
-              </>
+              </Box>
             )}
 
             {widgetsSubTab === 1 && (
               <>
                 <Grid container spacing={3}>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <Typography variant="subtitle1" gutterBottom>Upload Custom Widget</Typography>
                     <Button
                       variant="contained"
@@ -1672,7 +1815,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                     </List>
                   </Grid>
 
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                       <Typography variant="subtitle1">GitHub Widget Repository</Typography>
                       <Button
@@ -1708,7 +1851,13 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 </Grid>
 
                 {uploadedWidgets.length > 0 && (
-                  <>
+                  <Box
+                    component="form"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      savePluginSettings();
+                    }}
+                  >
                     <Divider sx={{ my: 3 }} />
                     <Typography variant="h6" gutterBottom>Plugin Settings</Typography>
                     <Alert severity="info" sx={{ mb: 2 }}>
@@ -1734,8 +1883,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                             </IconButton>
                           </Box>
 
-                          <Grid container spacing={2} alignItems="center">
-                            <Grid item xs={12} sm={6}>
+                          <Grid container spacing={2} sx={{ alignItems: 'center' }}>
+                            <Grid size={{ xs: 12, sm: 6 }}>
                               <FormControlLabel
                                 control={
                                   <Switch
@@ -1767,7 +1916,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                               />
                             </Grid>
 
-                            <Grid item xs={12} sm={6}>
+                            <Grid size={{ xs: 12, sm: 6 }}>
                               <FormControl fullWidth size="small">
                                 <InputLabel id={`plugin-${plugin.filename}-refresh-label`}>
                                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1816,25 +1965,16 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                                   helperText="Select which tabs this plugin should appear on (defaults to Home tab if none selected)"
                                 />
                               )}
-                              renderTags={(value, getTagProps) =>
-                                value.map((option, index) => (
-                                  <Chip
-                                    label={option.label}
-                                    {...getTagProps({ index })}
-                                    sx={{ backgroundColor: 'var(--accent)', color: 'white' }}
-                                  />
-                                ))
-                              }
                             />
                           </Box>
                         </Box>
                       );
                     })}
 
-                    <Button variant="contained" onClick={savePluginSettings} sx={{ mt: 2 }} startIcon={<Save />}>
+                    <Button type="submit" variant="contained" sx={{ mt: 2 }} startIcon={<Save />}>
                       Save Plugin Settings
                     </Button>
-                  </>
+                  </Box>
                 )}
               </>
             )}
@@ -1905,7 +2045,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                                 onClick={(e) => e.stopPropagation()}
                                 onChange={() => toggleTabShowLabel(tab)}
                                 disabled={isLoading}
-                                inputProps={{ 'aria-label': `Toggle show label for ${tab.label}` }}
+                                slotProps={{ input: { 'aria-label': `Toggle show label for ${tab.label}` } }}
                               />
                             </TableCell>
                             <TableCell>
@@ -2257,6 +2397,89 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
               >
                 Save Screensaver Settings
               </Button>
+
+              <Divider sx={{ my: 4 }} />
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                <Nightlight />
+                <Typography variant="h6">Daylight Auto Dark Mode</Typography>
+              </Box>
+
+              <Alert severity="info" sx={{ mb: 2 }}>
+                To enable auto mode: save an OpenWeather API key in Connections, enter a location here, save this section, then press the bottom-bar theme button until the half sun/half moon icon appears.
+              </Alert>
+
+              {!settings.WEATHER_API_KEY?.trim() && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  OpenWeather API key is not set yet. Add it in the Connections tab first.
+                </Alert>
+              )}
+
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={autoDarkModeSettings.enabled}
+                    onChange={(e) => {
+                      setAutoDarkModeSettings(prev => ({
+                        ...prev,
+                        enabled: e.target.checked,
+                      }));
+                    }}
+                  />
+                }
+                label="Enable Daylight Auto Dark Mode"
+                sx={{ mb: 2 }}
+              />
+
+              <TextField
+                fullWidth
+                label="Location"
+                value={autoDarkModeSettings.locationQuery}
+                onChange={(e) => {
+                  const nextValue = e.target.value;
+                  setAutoDarkModeSettings(prev => ({
+                    ...prev,
+                    locationQuery: nextValue,
+                  }));
+                }}
+                helperText="Examples: Dallas,TX,US, London,UK, or ZIP code like 76034"
+                sx={{ mb: 2 }}
+              />
+
+              {autoDarkModeSettings.resolvedName && (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      Current resolved location: {autoDarkModeSettings.resolvedName}
+                    </Typography>
+                    {autoDarkModeSunTimesLoading && (
+                      <Typography variant="body2" sx={{ mt: 0.5 }}>
+                        Loading today's sunrise and sunset...
+                      </Typography>
+                    )}
+                    {!autoDarkModeSunTimesLoading && autoDarkModeSunTimes.sunrise && autoDarkModeSunTimes.sunset && (
+                      <Typography variant="body2" sx={{ mt: 0.5 }}>
+                        Today's sunrise: {formatAutoDarkModeLocationTime(autoDarkModeSunTimes.sunrise, autoDarkModeSunTimes.timezoneOffset)} | Sunset: {formatAutoDarkModeLocationTime(autoDarkModeSunTimes.sunset, autoDarkModeSunTimes.timezoneOffset)}
+                      </Typography>
+                    )}
+                    {!autoDarkModeSunTimesLoading && autoDarkModeSunTimesError && (
+                      <Typography variant="body2" sx={{ mt: 0.5 }}>
+                        {autoDarkModeSunTimesError}
+                      </Typography>
+                    )}
+                  </Box>
+                </Alert>
+              )}
+
+              <Button
+                variant="contained"
+                onClick={saveAutoDarkModeSettings}
+                startIcon={<Save />}
+                fullWidth
+                disabled={isSavingAutoDarkMode}
+              >
+                {isSavingAutoDarkMode ? 'Saving Auto Dark Mode...' : 'Save Auto Dark Mode Settings'}
+              </Button>
             </Box>
           </CardContent>
         </Card>
@@ -2270,36 +2493,44 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
             <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
               <Typography variant="subtitle1" sx={{ mb: 2 }}>Add New User</Typography>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={4}>
-                  <TextField
-                    fullWidth
-                    label="Username"
-                    value={newUser.username}
-                    onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
-                  />
+              <Box
+                component="form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  saveUser();
+                }}
+              >
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <TextField
+                      fullWidth
+                      label="Username"
+                      value={newUser.username}
+                      onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <TextField
+                      fullWidth
+                      label="Email"
+                      type="email"
+                      value={newUser.email}
+                      onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <Button
+                      type="submit"
+                      variant="contained"
+                      disabled={!newUser.username || !newUser.email}
+                      fullWidth
+                      sx={{ height: '56px' }}
+                    >
+                      Add User
+                    </Button>
+                  </Grid>
                 </Grid>
-                <Grid item xs={12} sm={4}>
-                  <TextField
-                    fullWidth
-                    label="Email"
-                    type="email"
-                    value={newUser.email}
-                    onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <Button
-                    variant="contained"
-                    onClick={saveUser}
-                    disabled={!newUser.username || !newUser.email}
-                    fullWidth
-                    sx={{ height: '56px' }}
-                  >
-                    Add User
-                  </Button>
-                </Grid>
-              </Grid>
+              </Box>
             </Box>
 
             <TableContainer component={Paper}>
@@ -2432,6 +2663,38 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       {activeTab === 3 && (
         <Card>
           <CardContent>
+            {saveMessage.show && (
+              <Alert severity={saveMessage.type} sx={{ mb: 2 }}>
+                {saveMessage.text}
+              </Alert>
+            )}
+
+            <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
+              <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600 }}>
+                Rewards
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, alignItems: { sm: 'flex-start' } }}>
+                <TextField
+                  label="Daily Completion Clam Reward"
+                  type="number"
+                  value={settings.daily_completion_clam_reward || '2'}
+                  onChange={(e) => setSettings(prev => ({ ...prev, daily_completion_clam_reward: e.target.value }))}
+                  helperText="Clams awarded when a user completes all their daily chores"
+                  slotProps={{ htmlInput: { min: 0, max: 100 } }}
+                  sx={{ maxWidth: 340, flex: 1 }}
+                />
+                <Button
+                  variant="contained"
+                  onClick={saveDailyClamReward}
+                  disabled={isLoading}
+                  startIcon={<Save />}
+                  sx={{ alignSelf: { xs: 'stretch', sm: 'center' }, mt: { xs: 0, sm: 1 } }}
+                >
+                  {isLoading ? 'Saving...' : 'Save'}
+                </Button>
+              </Box>
+            </Box>
+
             <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
               <Tabs value={choresSubTab} onChange={(_, v) => setChoresSubTab(v)} size="small">
                 <Tab label="Chores" />
@@ -2456,36 +2719,44 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
             <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
               <Typography variant="subtitle1" sx={{ mb: 2 }}>Add New Prize</Typography>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label="Prize Name"
-                    value={newPrize.name}
-                    onChange={(e) => setNewPrize({ ...newPrize, name: e.target.value })}
-                  />
+              <Box
+                component="form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  savePrize();
+                }}
+              >
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      fullWidth
+                      label="Prize Name"
+                      value={newPrize.name}
+                      onChange={(e) => setNewPrize({ ...newPrize, name: e.target.value })}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 3 }}>
+                    <TextField
+                      fullWidth
+                      label="Clam Cost"
+                      type="number"
+                      value={newPrize.clam_cost}
+                      onChange={(e) => setNewPrize({ ...newPrize, clam_cost: parseInt(e.target.value) || 0 })}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 3 }}>
+                    <Button
+                      type="submit"
+                      variant="contained"
+                      disabled={!newPrize.name || newPrize.clam_cost <= 0}
+                      fullWidth
+                      sx={{ height: '56px' }}
+                    >
+                      Add Prize
+                    </Button>
+                  </Grid>
                 </Grid>
-                <Grid item xs={12} sm={3}>
-                  <TextField
-                    fullWidth
-                    label="Clam Cost"
-                    type="number"
-                    value={newPrize.clam_cost}
-                    onChange={(e) => setNewPrize({ ...newPrize, clam_cost: parseInt(e.target.value) || 0 })}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={3}>
-                  <Button
-                    variant="contained"
-                    onClick={savePrize}
-                    disabled={!newPrize.name || newPrize.clam_cost <= 0}
-                    fullWidth
-                    sx={{ height: '56px' }}
-                  >
-                    Add Prize
-                  </Button>
-                </Grid>
-              </Grid>
+              </Box>
             </Box>
 
             <List>
@@ -2565,7 +2836,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
               </Typography>
 
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <Paper elevation={0} sx={{ p: 2, backgroundColor: 'rgba(0, 0, 0, 0.1)' }}>
                     <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
                       PIN Requirements:
@@ -2582,7 +2853,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                   </Paper>
                 </Grid>
 
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <Paper elevation={0} sx={{ p: 2, backgroundColor: 'rgba(0, 0, 0, 0.1)' }}>
                     <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
                       Current Status:
@@ -2639,11 +2910,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         </Card>
       )}
 
-      {/* APIs Tab */}
+      {/* Connections Tab */}
       {activeTab === 6 && (
         <Card>
           <CardContent>
-            <Typography variant="h6" gutterBottom>API Configuration</Typography>
+            <Typography variant="h6" gutterBottom>Connections</Typography>
 
             {saveMessage.show && (
               <Alert severity={saveMessage.type} sx={{ mb: 2 }}>
@@ -2651,46 +2922,56 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
               </Alert>
             )}
 
-            <Box sx={{ maxWidth: 600 }}>
-              <TextField
-                fullWidth
-                label="OpenWeatherMap API Key"
-                type="password"
-                value={settings.WEATHER_API_KEY || ''}
-                onChange={(e) => setSettings(prev => ({ ...prev, WEATHER_API_KEY: e.target.value }))}
-                sx={{ mb: 2 }}
-                helperText="Get your free API key from openweathermap.org/api"
-              />
+            <Box sx={{ maxWidth: 700 }}>
+              <Typography variant="subtitle1" sx={{ mt: 1, mb: 1.5, fontWeight: 600 }}>
+                API Keys
+              </Typography>
 
-              <TextField
-                fullWidth
-                label="Proxy Whitelist (comma-separated domains)"
-                value={settings.PROXY_WHITELIST || ''}
-                onChange={(e) => setSettings(prev => ({ ...prev, PROXY_WHITELIST: e.target.value }))}
-                sx={{ mb: 2 }}
-                helperText="Domains allowed for proxy requests (e.g., api.example.com, another-api.com)"
-              />
-
-              <TextField
-                fullWidth
-                label="Daily Completion Clam Reward"
-                type="number"
-                value={settings.daily_completion_clam_reward || '2'}
-                onChange={(e) => setSettings(prev => ({ ...prev, daily_completion_clam_reward: e.target.value }))}
-                sx={{ mb: 2 }}
-                helperText="Number of clams awarded when a user completes all their daily chores"
-                inputProps={{ min: 0, max: 100 }}
-              />
-
-              <Button
-                variant="contained"
-                onClick={saveAllApiSettings}
-                disabled={isLoading}
-                startIcon={<Save />}
-                sx={{ mt: 2 }}
+              <Box
+                component="form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  saveAllApiSettings();
+                }}
               >
-                {isLoading ? 'Saving...' : 'Save Settings'}
-              </Button>
+                <TextField
+                  fullWidth
+                  label="OpenWeatherMap API Key"
+                  type="password"
+                  value={settings.WEATHER_API_KEY || ''}
+                  onChange={(e) => setSettings(prev => ({ ...prev, WEATHER_API_KEY: e.target.value }))}
+                  sx={{ mb: 2 }}
+                  helperText="Get your free API key from openweathermap.org/api"
+                />
+
+                <TextField
+                  fullWidth
+                  label="Proxy Whitelist (comma-separated domains)"
+                  value={settings.PROXY_WHITELIST || ''}
+                  onChange={(e) => setSettings(prev => ({ ...prev, PROXY_WHITELIST: e.target.value }))}
+                  sx={{ mb: 2 }}
+                  helperText="Domains allowed for proxy requests (e.g., api.example.com, another-api.com)"
+                />
+
+                <Button
+                  type="submit"
+                  variant="contained"
+                  disabled={isLoading}
+                  startIcon={<Save />}
+                  sx={{ mt: 1, mb: 4 }}
+                >
+                  {isLoading ? 'Saving...' : 'Save API Keys'}
+                </Button>
+              </Box>
+
+              <Divider sx={{ my: 2 }} />
+
+              <GoogleAccountConnection
+                onMessage={({ type, text }) => {
+                  setSaveMessage({ show: true, type, text });
+                  setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+                }}
+              />
             </Box>
           </CardContent>
         </Card>

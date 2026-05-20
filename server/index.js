@@ -10,19 +10,25 @@ const ical = require('ical-generator');
 const node_ical = require('node-ical');
 const path = require('path');
 const fs = require('fs').promises;
+const fsSync = require('fs');
 const multipart = require('@fastify/multipart');
 const crypto = require('crypto');
 
 // NEW: Import axios for HTTP requests and ical.js for parsing
 const axios = require('axios');
 const ICAL = require('ical.js');
-const parser = require('cron-parser');
+const { CronExpressionParser } = require('cron-parser');
 const cron = require('node-cron');
 // For widget upload and registry
 const widgetRegistryPath = path.join(__dirname, 'widgets_registry.json');
 
 // Calendar sync service
 const CalendarSyncService = require('./services/calendarSync');
+const googleConnection = require('./services/googleConnection');
+const googleCalendar = require('./services/googleCalendar');
+const googlePhotos = require('./services/googlePhotos');
+const googlePhotosPicker = require('./services/googlePhotosPicker');
+const { isEncryptionConfigured, getEncryptionStatus } = require('./utils/encryption');
 let calendarSyncService = null;
 
 const initializeDatabase = require('./migrations/initializeDatabase');
@@ -37,7 +43,16 @@ const schemaMigrations = [
   { schemaId: 6, migrationPath: './migrations/migrateDeviceSchemaV6', },
   { schemaId: 7, migrationPath: './migrations/schema7-proveMigrations', },
   { schemaId: 8, migrationPath: './migrations/schema8-calendarCacheTables', },
+  { schemaId: 9, migrationPath: './migrations/schema9-googleConnection', },
+  { schemaId: 10, migrationPath: './migrations/schema10-googlePhotosPicker', },
+  { schemaId: 11, migrationPath: './migrations/schema11-homeglowPhotos', },
+  { schemaId: 12, migrationPath: './migrations/schema12-onceCompletedScheduling', },
+  { schemaId: 13, migrationPath: './migrations/schema13-tabsByDefaultBackfill', },
+  { schemaId: 14, migrationPath: './migrations/schema14-deviceAndTabJsonStorage', },
 ];
+
+const ALLOWED_SCHEDULE_DURATIONS = new Set(['day-of', 'until-completed', 'once-completed']);
+const SCHEDULE_INTERVAL_REGEX = /^([1-9]\d*)([dwmy])$/;
 
 // GitHub API configuration
 const GITHUB_REPO_OWNER = 'jherforth';
@@ -50,6 +65,98 @@ function getTodayLocalDateString() {
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const day = String(now.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function normalizeScheduleDuration(duration) {
+  if (duration === undefined || duration === null || duration === '') {
+    return 'day-of';
+  }
+  return String(duration);
+}
+
+function normalizeScheduleInterval(intervalValue) {
+  if (intervalValue === undefined || intervalValue === null) {
+    return null;
+  }
+  const normalized = String(intervalValue).trim().toLowerCase();
+  return normalized || null;
+}
+
+function isValidScheduleInterval(intervalValue) {
+  return typeof intervalValue === 'string' && SCHEDULE_INTERVAL_REGEX.test(intervalValue);
+}
+
+function parseDateOnlyToLocalDate(dateString) {
+  if (typeof dateString !== 'string') {
+    return null;
+  }
+
+  const parts = dateString.split('-').map(Number);
+  if (parts.length !== 3 || parts.some(Number.isNaN)) {
+    return null;
+  }
+
+  const [year, month, day] = parts;
+  if (!year || !month || !day) {
+    return null;
+  }
+
+  return new Date(year, month - 1, day, 0, 0, 0, 0);
+}
+
+function addMonthsCalendarAware(baseDate, monthCount) {
+  const result = new Date(baseDate);
+  const originalDay = result.getDate();
+  result.setDate(1);
+  result.setMonth(result.getMonth() + monthCount);
+  const lastDayOfTargetMonth = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
+  result.setDate(Math.min(originalDay, lastDayOfTargetMonth));
+  return result;
+}
+
+function addYearsCalendarAware(baseDate, yearCount) {
+  return addMonthsCalendarAware(baseDate, yearCount * 12);
+}
+
+function addIntervalToDate(baseDate, intervalValue) {
+  const normalizedInterval = normalizeScheduleInterval(intervalValue);
+  if (!normalizedInterval || !isValidScheduleInterval(normalizedInterval)) {
+    return null;
+  }
+
+  const [, countRaw, unit] = normalizedInterval.match(SCHEDULE_INTERVAL_REGEX);
+  const count = parseInt(countRaw, 10);
+  if (count <= 0) {
+    return null;
+  }
+
+  switch (unit) {
+    case 'd': {
+      const result = new Date(baseDate);
+      result.setDate(result.getDate() + count);
+      return result;
+    }
+    case 'w': {
+      const result = new Date(baseDate);
+      result.setDate(result.getDate() + (count * 7));
+      return result;
+    }
+    case 'm':
+      return addMonthsCalendarAware(baseDate, count);
+    case 'y':
+      return addYearsCalendarAware(baseDate, count);
+    default:
+      return null;
+  }
+}
+
+function buildDateCrontab(dateObj) {
+  if (!(dateObj instanceof Date) || Number.isNaN(dateObj.getTime())) {
+    return null;
+  }
+  const dayOfMonth = dateObj.getDate();
+  const month = dateObj.getMonth() + 1;
+  return `0 0 ${dayOfMonth} ${month} *`;
 }
 
 // Encryption utilities for calendar credentials
@@ -90,7 +197,12 @@ fastify.register(require('@fastify/cors'), {
   allowedHeaders: ['Content-Type', 'Authorization'], // Add any other headers your client might send
 });
 
-fastify.register(multipart);
+fastify.register(multipart, {
+  limits: {
+    fileSize: 25 * 1024 * 1024, // 25MB per file
+    files: 50,
+  },
+});
 
 // Add a preHandler hook to log all incoming requests
 fastify.addHook('preHandler', (request, reply, done) => {
@@ -587,7 +699,9 @@ fastify.post('/api/widgets/github/install', async (request, reply) => {
 });
 
 // Initialize database
-const dbPath = path.resolve(__dirname, 'data', 'tasks.db');
+const dbPath = process.env.DB_PATH
+  ? path.resolve(process.env.DB_PATH)
+  : path.resolve(__dirname, 'data', 'tasks.db');
 console.log('Database path:', dbPath);
 let db; // Declare db variable outside to hold the single instance
 
@@ -678,6 +792,7 @@ async function dailyBackgroundProcessing() {
 
     let prunedScheduleCount = 0;
     for (const schedule of schedulesToPrune) {
+
       db.prepare('DELETE FROM chore_schedules WHERE id = ?').run(schedule.id);
       console.log(`Pruned schedule ID ${schedule.id}: "${schedule.title}" (user_id: ${schedule.user_id})`);
       prunedScheduleCount++;
@@ -738,20 +853,31 @@ async function dailyBackgroundProcessing() {
     }
 
 
-    // Handle until-completed schedules: create one-time schedules for until-completed chores that trigger today
-    // ensure there are no existing one-time schedules for the chore with an until-completed enabled schedule
-    const untilCompletedSchedules = db.prepare(`
-      SELECT id, chore_id, user_id, crontab FROM chore_schedules cs
-      WHERE crontab IS NOT NULL
-      AND duration = 'until-completed'
-      AND visible = 1
-      AND NOT EXISTS (
-        SELECT 1 FROM chore_schedules
-        WHERE crontab IS NULL
-        AND chore_id = cs.chore_id
-      )
+    // Handle sticky schedules: create one-time children for until-completed and once-completed parents that trigger today.
+    const stickyParentSchedules = db.prepare(`
+      SELECT cs.id, cs.chore_id, cs.user_id, cs.crontab, cs.duration, cs.interval
+      FROM chore_schedules cs
+      WHERE cs.crontab IS NOT NULL
+        AND cs.duration IN ('until-completed', 'once-completed')
+        AND cs.visible = 1
+        AND NOT EXISTS (
+          SELECT 1 FROM chore_schedules child
+          WHERE child.crontab IS NULL
+            AND child.visible = 1
+            AND (
+              child.parent_schedule_id = cs.id
+              OR (
+                child.parent_schedule_id IS NULL
+                AND child.chore_id = cs.chore_id
+                AND (
+                  (child.user_id = cs.user_id)
+                  OR (child.user_id IS NULL AND cs.user_id IS NULL)
+                )
+              )
+            )
+        )
     `).all();
-    console.log(`Found ${untilCompletedSchedules.length} until-completed schedules to check`);
+    console.log(`Found ${stickyParentSchedules.length} sticky schedules to check`);
 
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
@@ -760,31 +886,32 @@ async function dailyBackgroundProcessing() {
       currentDate: justBeforeToday,
       utc: false,
     }
-    let untilCompletedCreated = 0;
-    let triggeredSchedules = []
-    for (const schedule of untilCompletedSchedules) {
-      const interval = parser.parseExpression(schedule.crontab, options);
-      // console.log(Object.getOwnPropertyNames(Object.getPrototypeOf(interval)));
-      const next = interval.next().toISOString().split('T')[0];
-      console.log(`-------------- Next date for ${schedule.id} is ${next}`);
+    let stickySchedulesCreated = 0;
+    const triggeredSchedules = [];
+    for (const schedule of stickyParentSchedules) {
+      let next = null;
+      try {
+        const cronInterval = CronExpressionParser.parse(schedule.crontab, options);
+        next = cronInterval.next().toISOString().split('T')[0];
+      } catch (parseError) {
+        console.warn(`Skipping sticky schedule ${schedule.id} due to invalid crontab: ${schedule.crontab}`);
+        continue;
+      }
 
-      // We need to add a one-time task because today is the trigger!
       if (today === next) {
-        console.log(`-------------- Add ${schedule.id} to today's chores!`);
-
         const scheduleResult = db.prepare(`
-          INSERT INTO chore_schedules (chore_id, user_id)
-          VALUES (?, ?)
+          INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, visible, parent_schedule_id)
+          VALUES (?, ?, NULL, 'day-of', 1, ?)
           RETURNING *
-          `).all(schedule.chore_id, schedule.user_id)
-        console.log(`-------------- Added ${scheduleResult} to today's chores!`);
+        `).get(schedule.chore_id, schedule.user_id, schedule.id);
+
         triggeredSchedules.push(scheduleResult);
-        untilCompletedCreated++;
+        stickySchedulesCreated++;
       }
     }
     results = {
       ...results,
-      triggeredSchedulesCount: untilCompletedCreated,
+      triggeredSchedulesCount: stickySchedulesCreated,
       triggeredSchedules: triggeredSchedules,
     }
 
@@ -793,7 +920,7 @@ async function dailyBackgroundProcessing() {
     console.log(`  - Day-of schedules pruned: ${prunedScheduleCount}`);
     console.log(`  - Orphaned chores deleted: ${prunedChoreCount}`);
     console.log(`  - Bonus chores reset: ${resetScheduleCount}`);
-    console.log(`  - Until-completed chores triggered: ${untilCompletedCreated}`);
+    console.log(`  - Sticky chores triggered: ${stickySchedulesCreated}`);
     console.log(`Total: ${prunedScheduleCount + prunedChoreCount + resetScheduleCount} operations performed`);
     return results;
   } catch (error) {
@@ -812,18 +939,165 @@ function startNightlyCronJob() {
   console.log('Daily background processing cron job scheduled for midnight');
 }
 
+function parseJsonObject(value, fallback = {}) {
+  if (!value) return fallback;
+  try {
+    const parsed = JSON.parse(value);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed;
+    }
+  } catch {
+    // Ignore malformed JSON and fall back.
+  }
+  return fallback;
+}
+
+function parseTabConfigJson(configJson) {
+  return parseJsonObject(configJson, {});
+}
+
+function getDeviceUpdateTimeMs(deviceName) {
+  const row = db.prepare('SELECT updateTime FROM devices WHERE name = ?').get(deviceName);
+  if (!row?.updateTime) return null;
+  const timestamp = Date.parse(row.updateTime);
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function sendJsonWithConditionalCache(request, reply, payload, lastModifiedMs = null) {
+  const serialized = JSON.stringify(payload);
+  const etag = `W/"${crypto.createHash('sha1').update(serialized).digest('hex')}"`;
+  reply.header('ETag', etag);
+
+  if (lastModifiedMs) {
+    reply.header('Last-Modified', new Date(lastModifiedMs).toUTCString());
+  }
+
+  const ifNoneMatch = request.headers['if-none-match'];
+  if (ifNoneMatch && ifNoneMatch === etag) {
+    return reply.code(304).send();
+  }
+
+  // Use ETag validators only. Last-Modified has second-level precision and can
+  // incorrectly produce 304 responses when multiple writes happen within a second.
+
+  return reply.send(payload);
+}
+
+function normalizeLayoutFields(layout) {
+  if (!layout || typeof layout !== 'object') {
+    return {
+      layout_x: null,
+      layout_y: null,
+      layout_w: null,
+      layout_h: null,
+    };
+  }
+
+  const normalize = (value) => {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  return {
+    layout_x: normalize(layout.layout_x),
+    layout_y: normalize(layout.layout_y),
+    layout_w: normalize(layout.layout_w),
+    layout_h: normalize(layout.layout_h),
+  };
+}
+
+function buildAssignmentId(tabNumber, widgetName) {
+  return `${tabNumber}::${widgetName}`;
+}
+
+function parseAssignmentId(assignmentId) {
+  if (typeof assignmentId !== 'string') return null;
+  const delimiterIndex = assignmentId.indexOf('::');
+  if (delimiterIndex <= 0) return null;
+
+  const tabNumberRaw = assignmentId.slice(0, delimiterIndex);
+  const widgetName = assignmentId.slice(delimiterIndex + 2);
+  const tabNumber = Number.parseInt(tabNumberRaw, 10);
+  if (!Number.isFinite(tabNumber) || !widgetName) {
+    return null;
+  }
+
+  return { tabNumber, widgetName };
+}
+
+function getTabsForDevice(deviceName) {
+  return db
+    .prepare('SELECT id, device_name, number, label, icon, show_label, created_at, config_json FROM tabs WHERE device_name = ? ORDER BY number ASC')
+    .all(deviceName);
+}
+
+function getTabByNumber(deviceName, tabNumber) {
+  return db
+    .prepare('SELECT id, device_name, number, label, icon, show_label, created_at, config_json FROM tabs WHERE device_name = ? AND number = ?')
+    .get(deviceName, tabNumber);
+}
+
+function saveTabConfigById(tabId, layoutMap) {
+  db.prepare('UPDATE tabs SET config_json = ? WHERE id = ?').run(JSON.stringify(layoutMap), tabId);
+}
+
+function listWidgetAssignmentsFromTabLayouts(deviceName) {
+  const tabs = getTabsForDevice(deviceName);
+  const rows = [];
+
+  tabs.forEach((tab) => {
+    const layoutMap = parseTabConfigJson(tab.config_json);
+    Object.entries(layoutMap).forEach(([widgetName, layout]) => {
+      const normalized = normalizeLayoutFields(layout);
+      rows.push({
+        id: buildAssignmentId(tab.number, widgetName),
+        device_name: deviceName,
+        tab_number: tab.number,
+        widget_name: widgetName,
+        layout_x: normalized.layout_x,
+        layout_y: normalized.layout_y,
+        layout_w: normalized.layout_w,
+        layout_h: normalized.layout_h,
+      });
+    });
+  });
+
+  return rows;
+}
+
 function ensureHomeTabExists(deviceName) {
   // Insert default home tab if it doesn't exist
   try {
     const homeTab = db.prepare('SELECT id FROM tabs WHERE number = 1 AND device_name = ?').get(deviceName);
     if (!homeTab) {
-      db.prepare('INSERT INTO tabs (label, icon, show_label, number, device_name) VALUES (?, ?, ?, ?, ?)').run('Home', 'home', 1, 1, deviceName);
+      db.prepare('INSERT INTO tabs (label, icon, show_label, number, device_name, config_json) VALUES (?, ?, ?, ?, ?, ?)').run('Home', 'home', 1, 1, deviceName, '{}');
       console.log('Default home tab created');
     }
   } catch (error) {
     console.error('Error creating default home tab:', error);
   }
 }
+
+function doesDeviceExist(deviceName) {
+  const device = db.prepare('SELECT name FROM devices WHERE name = ?').get(deviceName);
+  return !!device;
+}
+
+function buildDefaultHomeTab(deviceName) {
+  // region #98 - expected to get removed in the future (legacy empty-tabs API fallback)
+  return {
+    id: 1,
+    device_name: deviceName,
+    number: 1,
+    label: 'Home',
+    icon: 'home',
+    show_label: 1,
+    created_at: null,
+    config_json: '{}',
+  };
+  // endRegion #98
+}
+
 function ensureDeviceExists(deviceName) {
   db.prepare('INSERT OR IGNORE INTO devices (name, updateTime) VALUES (?, CURRENT_TIMESTAMP)').run(deviceName);
   ensureHomeTabExists(deviceName);
@@ -835,23 +1109,76 @@ function touchDeviceUpdateTime(deviceName) {
 // Devices API Endpoints
 fastify.get('/api/devices', async (request, reply) => {
   try {
-    const devices = db.prepare(`
-      SELECT
-        d.name,
-        d.updateTime,
-        COUNT(wta.id) AS widgets
-      FROM devices d
-      LEFT JOIN widget_tab_assignments wta ON wta.device_name = d.name
-      GROUP BY d.name, d.updateTime
-      ORDER BY d.updateTime DESC
-    `).all();
+    const devices = db.prepare('SELECT name, updateTime FROM devices ORDER BY updateTime DESC').all();
+    return devices.map((device) => {
+      const tabs = getTabsForDevice(device.name);
+      const widgetCount = tabs.reduce((count, tab) => {
+        const layoutMap = parseTabConfigJson(tab.config_json);
+        return count + Object.keys(layoutMap).length;
+      }, 0);
 
-    return devices;
+      return {
+        ...device,
+        widgets: widgetCount,
+      };
+    });
   } catch (error) {
     console.error('Error fetching devices:', error);
     reply.status(500).send({ error: 'Failed to fetch devices' });
   }
 });
+
+fastify.get('/api/devices/:deviceName/settings', async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+
+  try {
+    const row = db.prepare('SELECT device_settings_json FROM devices WHERE name = ?').get(deviceName);
+    const lastModifiedMs = getDeviceUpdateTimeMs(deviceName);
+    if (!row) {
+      return sendJsonWithConditionalCache(request, reply, {}, null);
+    }
+
+    return sendJsonWithConditionalCache(request, reply, parseJsonObject(row.device_settings_json, {}), lastModifiedMs);
+  } catch (error) {
+    console.error('Error fetching device settings:', error);
+    reply.status(500).send({ error: 'Failed to fetch device settings' });
+  }
+});
+
+const upsertDeviceSettings = async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+
+  const incoming = request.body;
+  if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) {
+    return reply.status(400).send({ error: 'Request body must be a JSON object' });
+  }
+
+  try {
+    ensureDeviceExists(deviceName);
+    const row = db.prepare('SELECT device_settings_json FROM devices WHERE name = ?').get(deviceName);
+    const existingSettings = parseJsonObject(row?.device_settings_json, {});
+    const merged = { ...existingSettings, ...incoming };
+
+    db.prepare('UPDATE devices SET device_settings_json = ?, updateTime = CURRENT_TIMESTAMP WHERE name = ?').run(
+      JSON.stringify(merged),
+      deviceName
+    );
+
+    return merged;
+  } catch (error) {
+    console.error('Error saving device settings:', error);
+    reply.status(500).send({ error: 'Failed to save device settings' });
+  }
+};
+
+fastify.put('/api/devices/:deviceName/settings', upsertDeviceSettings);
+fastify.patch('/api/devices/:deviceName/settings', upsertDeviceSettings);
 
 
 fastify.patch('/api/devices/:deviceName', async (request, reply) => {
@@ -909,40 +1236,23 @@ fastify.post('/api/devices/:deviceName/copy-from/:sourceDeviceName', async (requ
     }
 
     ensureDeviceExists(deviceName);
+    const sourceDeviceSettings = db.prepare('SELECT device_settings_json FROM devices WHERE name = ?').get(sourceDeviceName);
 
     const copyTransaction = db.transaction(() => {
-      db.prepare('DELETE FROM widget_tab_assignments WHERE device_name = ?').run(deviceName);
       db.prepare('DELETE FROM tabs WHERE device_name = ?').run(deviceName);
 
       db.prepare(`
-        INSERT INTO tabs (device_name, label, icon, show_label, number)
-        SELECT ?, label, icon, show_label, number
+        INSERT INTO tabs (device_name, label, icon, show_label, number, created_at, config_json)
+        SELECT ?, label, icon, show_label, number, created_at, COALESCE(config_json, '{}')
         FROM tabs
         WHERE device_name = ?
         ORDER BY number ASC
       `).run(deviceName, sourceDeviceName);
 
-      db.prepare(`
-        INSERT INTO widget_tab_assignments (
-          widget_name,
-          tab_number,
-          layout_x,
-          layout_y,
-          layout_w,
-          layout_h,
-          device_name
-        )
-        SELECT
-          widget_name,
-          tab_number,
-          layout_x,
-          layout_y,
-          layout_w,
-          layout_h,
-          ?
-        FROM widget_tab_assignments
-        WHERE device_name = ?
-      `).run(deviceName, sourceDeviceName);
+      db.prepare('UPDATE devices SET device_settings_json = ?, updateTime = CURRENT_TIMESTAMP WHERE name = ?').run(
+        sourceDeviceSettings?.device_settings_json || '{}',
+        deviceName
+      );
 
       ensureHomeTabExists(deviceName);
       touchDeviceUpdateTime(deviceName);
@@ -1052,8 +1362,8 @@ fastify.get('/api/chore-schedules', async (request, reply) => {
     if (usage !== undefined && usage === 'chart') {
       conditions.push('cs.visible = ?');
       params.push(1);
-      conditions.push('cs.duration != ?');
-      params.push('until-completed');
+      conditions.push('(cs.duration IS NULL OR cs.duration NOT IN (?, ?))');
+      params.push('until-completed', 'once-completed');
     }
     if (chore_id !== undefined) {
       conditions.push('cs.chore_id = ?');
@@ -1087,22 +1397,60 @@ fastify.get('/api/chore-schedules/:id', async (request, reply) => {
 });
 
 fastify.post('/api/chore-schedules', async (request, reply) => {
-  const { chore_id, user_id, crontab, duration, visible } = request.body;
+  const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id } = request.body;
   try {
     if (!chore_id) {
       return reply.status(400).send({ error: 'chore_id is required' });
     }
 
+    const normalizedDuration = normalizeScheduleDuration(duration);
+    if (!ALLOWED_SCHEDULE_DURATIONS.has(normalizedDuration)) {
+      return reply.status(400).send({ error: `Invalid duration. Expected one of: ${Array.from(ALLOWED_SCHEDULE_DURATIONS).join(', ')}` });
+    }
+
+    const normalizedInterval = normalizeScheduleInterval(interval);
+    if (normalizedDuration === 'once-completed') {
+      if (!crontab) {
+        return reply.status(400).send({ error: 'once-completed schedules require a crontab expression' });
+      }
+      if (!isValidScheduleInterval(normalizedInterval)) {
+        return reply.status(400).send({ error: 'once-completed schedules require a valid interval like 30d, 3w, 2m, or 1y' });
+      }
+    } else if (normalizedInterval !== null) {
+      return reply.status(400).send({ error: 'interval is only allowed for once-completed schedules' });
+    }
+
     if (crontab) {
       try {
-        parser.parseExpression(crontab);
+        CronExpressionParser.parse(crontab);
       } catch (e) {
         return reply.status(400).send({ error: 'Invalid crontab expression: ' + e.message });
       }
     }
 
-    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, visible) VALUES (?, ?, ?, ?, ?)');
-    const info = stmt.run(chore_id, user_id || null, crontab || null, duration || 'day-of', visible !== undefined ? visible : 1);
+    let normalizedParentScheduleId = null;
+    if (parent_schedule_id !== undefined && parent_schedule_id !== null && parent_schedule_id !== '') {
+      const parsedParentScheduleId = parseInt(parent_schedule_id, 10);
+      if (Number.isNaN(parsedParentScheduleId)) {
+        return reply.status(400).send({ error: 'parent_schedule_id must be a number' });
+      }
+      const parentExists = db.prepare('SELECT id FROM chore_schedules WHERE id = ?').get(parsedParentScheduleId);
+      if (!parentExists) {
+        return reply.status(400).send({ error: 'parent_schedule_id must reference an existing schedule' });
+      }
+      normalizedParentScheduleId = parsedParentScheduleId;
+    }
+
+    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    const info = stmt.run(
+      chore_id,
+      user_id || null,
+      crontab || null,
+      normalizedDuration,
+      visible !== undefined ? visible : 1,
+      normalizedDuration === 'once-completed' ? normalizedInterval : null,
+      normalizedParentScheduleId
+    );
     return { id: info.lastInsertRowid, success: true };
   } catch (error) {
     console.error('Error adding schedule:', error);
@@ -1119,7 +1467,7 @@ fastify.post('/api/chore-schedules/bulk', async (request, reply) => {
 
     if (crontab) {
       try {
-        parser.parseExpression(crontab);
+        CronExpressionParser.parse(crontab);
       } catch (e) {
         return reply.status(400).send({ error: 'Invalid crontab expression: ' + e.message });
       }
@@ -1142,14 +1490,37 @@ fastify.post('/api/chore-schedules/bulk', async (request, reply) => {
 
 fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
   const { id } = request.params;
-  const { chore_id, user_id, crontab, duration, visible } = request.body;
+  const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id } = request.body;
   try {
     if (crontab !== undefined && crontab !== null) {
       try {
-        parser.parseExpression(crontab);
+        CronExpressionParser.parse(crontab);
       } catch (e) {
         return reply.status(400).send({ error: 'Invalid crontab expression: ' + e.message });
       }
+    }
+
+    const existingSchedule = db.prepare('SELECT id, crontab, duration, interval FROM chore_schedules WHERE id = ?').get(id);
+    if (!existingSchedule) {
+      return reply.status(404).send({ error: 'Schedule not found' });
+    }
+
+    const nextDuration = normalizeScheduleDuration(duration !== undefined ? duration : existingSchedule.duration);
+    if (!ALLOWED_SCHEDULE_DURATIONS.has(nextDuration)) {
+      return reply.status(400).send({ error: `Invalid duration. Expected one of: ${Array.from(ALLOWED_SCHEDULE_DURATIONS).join(', ')}` });
+    }
+
+    const nextCrontab = crontab !== undefined ? (crontab || null) : existingSchedule.crontab;
+    const nextInterval = normalizeScheduleInterval(interval !== undefined ? interval : existingSchedule.interval);
+    if (nextDuration === 'once-completed') {
+      if (!nextCrontab) {
+        return reply.status(400).send({ error: 'once-completed schedules require a crontab expression' });
+      }
+      if (!isValidScheduleInterval(nextInterval)) {
+        return reply.status(400).send({ error: 'once-completed schedules require a valid interval like 30d, 3w, 2m, or 1y' });
+      }
+    } else if (interval !== undefined && nextInterval !== null) {
+      return reply.status(400).send({ error: 'interval is only allowed for once-completed schedules' });
     }
 
     const updates = [];
@@ -1158,7 +1529,30 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
     if (chore_id !== undefined) { updates.push('chore_id = ?'); params.push(chore_id); }
     if (user_id !== undefined) { updates.push('user_id = ?'); params.push(user_id || null); }
     if (crontab !== undefined) { updates.push('crontab = ?'); params.push(crontab || null); }
-    if (duration !== undefined) { updates.push('duration = ?'); params.push(duration); }
+    if (duration !== undefined) { updates.push('duration = ?'); params.push(nextDuration); }
+    if (interval !== undefined || duration !== undefined) {
+      updates.push('interval = ?');
+      params.push(nextDuration === 'once-completed' ? nextInterval : null);
+    }
+    if (parent_schedule_id !== undefined) {
+      if (parent_schedule_id === null || parent_schedule_id === '') {
+        updates.push('parent_schedule_id = NULL');
+      } else {
+        const parsedParentScheduleId = parseInt(parent_schedule_id, 10);
+        if (Number.isNaN(parsedParentScheduleId)) {
+          return reply.status(400).send({ error: 'parent_schedule_id must be a number' });
+        }
+        if (parsedParentScheduleId === parseInt(id, 10)) {
+          return reply.status(400).send({ error: 'A schedule cannot reference itself as parent_schedule_id' });
+        }
+        const parentExists = db.prepare('SELECT id FROM chore_schedules WHERE id = ?').get(parsedParentScheduleId);
+        if (!parentExists) {
+          return reply.status(400).send({ error: 'parent_schedule_id must reference an existing schedule' });
+        }
+        updates.push('parent_schedule_id = ?');
+        params.push(parsedParentScheduleId);
+      }
+    }
     if (visible !== undefined) { updates.push('visible = ?'); params.push(visible ? 1 : 0); }
 
     if (updates.length === 0) {
@@ -1331,6 +1725,21 @@ fastify.post('/api/chores/complete', async (request, reply) => {
 
     db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title) VALUES (?, ?, ?, ?, ?)').run(user_id, chore_schedule_id, date, schedule.clam_value, schedule.title);
 
+    if (schedule.parent_schedule_id) {
+      const parentSchedule = db.prepare('SELECT id, duration, interval FROM chore_schedules WHERE id = ?').get(schedule.parent_schedule_id);
+      if (parentSchedule && parentSchedule.duration === 'once-completed') {
+        const completionDate = parseDateOnlyToLocalDate(date);
+        const nextDueDate = completionDate ? addIntervalToDate(completionDate, parentSchedule.interval) : null;
+        const nextCrontab = buildDateCrontab(nextDueDate);
+
+        if (nextCrontab) {
+          db.prepare('UPDATE chore_schedules SET crontab = ?, visible = 1 WHERE id = ?').run(nextCrontab, parentSchedule.id);
+        } else {
+          console.warn(`Could not reschedule once-completed parent schedule ${parentSchedule.id}; invalid interval: ${parentSchedule.interval}`);
+        }
+      }
+    }
+
     const today = getTodayLocalDateString();
     const allUserSchedules = db.prepare(`
       SELECT cs.*,
@@ -1349,7 +1758,7 @@ fastify.post('/api/chores/complete', async (request, reply) => {
         AND cs.visible = 1
         AND NOT (
           cs.crontab IS NOT NULL
-          AND cs.duration = 'until-completed'
+          AND cs.duration IN ('until-completed', 'once-completed')
         )
     `).all(today, user_id);
 
@@ -1371,7 +1780,7 @@ fastify.post('/api/chores/complete', async (request, reply) => {
       }
 
       // ensure only chores that are due today are part of today's chores
-      const interval = parser.parseExpression(schedule.crontab, options);
+      const interval = CronExpressionParser.parse(schedule.crontab, options);
       const next = interval.next().toISOString().split('T')[0];
       if (today === next) {
         todaysChores.push(schedule);
@@ -1694,6 +2103,24 @@ fastify.get('/api/timezone', async (request, reply) => {
   return reply.send({ timezone: APP_TIMEZONE });
 });
 
+function deserializeSettingValue(value) {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed || (trimmed[0] !== '{' && trimmed[0] !== '[')) {
+    return value;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    return parsed !== null && typeof parsed === 'object' ? parsed : value;
+  } catch {
+    return value;
+  }
+}
+
 // NEW: API Endpoints for Settings (including API keys)
 fastify.get('/api/settings', async (request, reply) => {
   try {
@@ -1702,7 +2129,7 @@ fastify.get('/api/settings', async (request, reply) => {
     console.log('Raw settings from database:', rows);
     // Convert array of {key, value} objects to a single object {key: value}
     const settings = rows.reduce((acc, row) => {
-      acc[row.key] = row.value;
+      acc[row.key] = deserializeSettingValue(row.value);
       return acc;
     }, {});
     console.log('Processed settings object:', settings);
@@ -1730,7 +2157,7 @@ fastify.post('/api/settings/search', async (request, reply) => {
     console.log('Raw settings from database:', rows);
     // Convert array of {key, value} objects to a single object {key: value}
     const settings = rows.reduce((acc, row) => {
-      acc[row.key] = row.value;
+      acc[row.key] = deserializeSettingValue(row.value);
       return acc;
     }, {});
     console.log('Processed settings object:', settings);
@@ -1783,7 +2210,13 @@ fastify.get('/api/devices/:deviceName/tabs', async (request, reply) => {
 
   try {
     const tabs = db.prepare('SELECT * FROM tabs WHERE device_name = ? ORDER BY number ASC').all(deviceName);
-    return tabs;
+    const lastModifiedMs = getDeviceUpdateTimeMs(deviceName);
+    // region #98 - expected to get removed in the future (legacy empty-tabs API fallback)
+    if (tabs.length === 0) {
+      return sendJsonWithConditionalCache(request, reply, [buildDefaultHomeTab(deviceName)], null);
+    }
+    // endRegion #98
+    return sendJsonWithConditionalCache(request, reply, tabs, lastModifiedMs);
   } catch (error) {
     console.error('Error fetching tabs:', error);
     reply.status(500).send({ error: 'Failed to fetch tabs' });
@@ -1806,8 +2239,8 @@ fastify.post('/api/devices/:deviceName/tabs', async (request, reply) => {
     const maxOrder = db.prepare('SELECT MAX(number) as max FROM tabs WHERE device_name = ?').get(deviceName);
     const nextTabNumber = (maxOrder.max || 0) + 1;
 
-    const stmt = db.prepare('INSERT INTO tabs (device_name, label, icon, show_label, number) VALUES (?, ?, ?, ?, ?) RETURNING *');
-    const row = stmt.get(deviceName, label, icon, show_label ? 1 : 0, nextTabNumber);
+    const stmt = db.prepare('INSERT INTO tabs (device_name, label, icon, show_label, number, config_json) VALUES (?, ?, ?, ?, ?, ?) RETURNING *');
+    const row = stmt.get(deviceName, label, icon, show_label ? 1 : 0, nextTabNumber, '{}');
     touchDeviceUpdateTime(deviceName);
 
     return row;
@@ -1935,15 +2368,31 @@ fastify.delete('/api/devices/:deviceName/tabs/:tabNumber', async (request, reply
   }
 
   try {
-    // const widgetAssignments = db.prepare('SELECT * FROM widget_tab_assignments WHERE tab_number in (0,?) AND device_name = ?').all(tabNumber, deviceName);
+    const parsedTabNumber = parseInt(tabNumber, 10);
 
-    // if (widgetAssignments.length > 0) {
-    //   const updateStmt = db.prepare('UPDATE widget_tab_assignments SET tab_number = 0 WHERE tab_number = ? AND device_name = ?');
-    //   updateStmt.run(tabNumber, deviceName);
-    // }
+    const sourceTab = getTabByNumber(deviceName, parsedTabNumber);
+    if (!sourceTab) {
+      return reply.status(404).send({ error: 'Tab not found' });
+    }
+
+    const homeTab = getTabByNumber(deviceName, 1);
+    const sourceLayoutMap = parseTabConfigJson(sourceTab.config_json);
+    const homeLayoutMap = parseTabConfigJson(homeTab?.config_json);
+    let homeChanged = false;
+
+    Object.entries(sourceLayoutMap).forEach(([widgetName, layout]) => {
+      if (!(widgetName in homeLayoutMap)) {
+        homeLayoutMap[widgetName] = normalizeLayoutFields(layout);
+        homeChanged = true;
+      }
+    });
+
+    if (homeTab && homeChanged) {
+      saveTabConfigById(homeTab.id, homeLayoutMap);
+    }
 
     const deleteStmt = db.prepare('DELETE FROM tabs WHERE number = ? AND device_name = ?');
-    deleteStmt.run(tabNumber, deviceName);
+    deleteStmt.run(parsedTabNumber, deviceName);
 
     const remainingTabs = db
       .prepare('SELECT id FROM tabs WHERE device_name = ? AND number != 1 ORDER BY number ASC')
@@ -1979,8 +2428,8 @@ fastify.get('/api/devices/:deviceName/widget-assignments', async (request, reply
     return reply.status(400).send({ error: 'deviceName is required' });
   }
   try {
-    const assignments = db.prepare('SELECT * FROM widget_tab_assignments WHERE device_name = ?').all(deviceName);
-    return assignments;
+    const lastModifiedMs = getDeviceUpdateTimeMs(deviceName);
+    return sendJsonWithConditionalCache(request, reply, listWidgetAssignmentsFromTabLayouts(deviceName), lastModifiedMs);
   } catch (error) {
     console.error('Error fetching widget assignments:', error);
     reply.status(500).send({ error: 'Failed to fetch widget assignments' });
@@ -1999,17 +2448,39 @@ fastify.post('/api/devices/:deviceName/widget-assignments', async (request, repl
 
   try {
     ensureDeviceExists(deviceName);
-    const existing = db.prepare('SELECT id FROM widget_tab_assignments WHERE widget_name = ? AND tab_number = ? AND device_name = ?').get(widget_name, tabNumber, deviceName);
+    const parsedTabNumber = parseInt(tabNumber, 10);
+    const tab = getTabByNumber(deviceName, parsedTabNumber);
+    if (!tab) {
+      return reply.status(404).send({ error: 'Tab not found' });
+    }
+
+    const layoutMap = parseTabConfigJson(tab.config_json);
+    const existing = layoutMap[widget_name];
 
     if (existing) {
       return reply.status(400).send({ error: 'Assignment already exists' });
     }
 
-    const stmt = db.prepare('INSERT INTO widget_tab_assignments (widget_name, tab_number, device_name) VALUES (?, ?, ?) RETURNING *');
-    const row = stmt.get(widget_name, tabNumber, deviceName);
+    layoutMap[widget_name] = {
+      layout_x: null,
+      layout_y: null,
+      layout_w: null,
+      layout_h: null,
+    };
+
+    saveTabConfigById(tab.id, layoutMap);
     touchDeviceUpdateTime(deviceName);
 
-    return row;
+    return {
+      id: buildAssignmentId(parsedTabNumber, widget_name),
+      device_name: deviceName,
+      tab_number: parsedTabNumber,
+      widget_name,
+      layout_x: null,
+      layout_y: null,
+      layout_w: null,
+      layout_h: null,
+    };
   } catch (error) {
     console.error('Error creating widget assignment:', error);
     reply.status(500).send({ error: 'Failed to create widget assignment' });
@@ -2023,9 +2494,23 @@ fastify.delete('/api/devices/:deviceName/widget-assignments/:id', async (request
   }
 
   try {
-    ensureDeviceExists(deviceName);
-    const stmt = db.prepare('DELETE FROM widget_tab_assignments WHERE id = ? AND device_name = ?');
-    stmt.run(id, deviceName);
+    const parsedId = parseAssignmentId(id);
+    if (!parsedId) {
+      return reply.status(400).send({ error: 'Invalid assignment id' });
+    }
+
+    const tab = getTabByNumber(deviceName, parsedId.tabNumber);
+    if (!tab) {
+      return reply.status(404).send({ error: 'Assignment not found' });
+    }
+
+    const layoutMap = parseTabConfigJson(tab.config_json);
+    if (!(parsedId.widgetName in layoutMap)) {
+      return reply.status(404).send({ error: 'Assignment not found' });
+    }
+
+    delete layoutMap[parsedId.widgetName];
+    saveTabConfigById(tab.id, layoutMap);
     touchDeviceUpdateTime(deviceName);
     return { success: true, message: 'Assignment deleted successfully' };
   } catch (error) {
@@ -2041,10 +2526,21 @@ fastify.delete('/api/devices/:deviceName/widget-assignments/widget/:widgetName',
   }
 
   try {
-    ensureDeviceExists(deviceName);
-    const stmt = db.prepare('DELETE FROM widget_tab_assignments WHERE widget_name = ? AND device_name = ?');
-    stmt.run(widgetName, deviceName);
-    touchDeviceUpdateTime(deviceName);
+    const tabs = getTabsForDevice(deviceName);
+    let changed = false;
+
+    tabs.forEach((tab) => {
+      const layoutMap = parseTabConfigJson(tab.config_json);
+      if (widgetName in layoutMap) {
+        delete layoutMap[widgetName];
+        saveTabConfigById(tab.id, layoutMap);
+        changed = true;
+      }
+    });
+
+    if (changed) {
+      touchDeviceUpdateTime(deviceName);
+    }
     return { success: true, message: 'Widget assignments deleted successfully' };
   } catch (error) {
     console.error('Error deleting widget assignments:', error);
@@ -2057,25 +2553,63 @@ fastify.patch('/api/devices/:deviceName/widget-assignments/layout', async (reque
   if (!deviceName) {
     return reply.status(400).send({ error: 'deviceName is required' });
   }
-  const { widget_name, tabNumber, layout_x, layout_y, layout_w, layout_h } = request.body;
+  const { widget_name, tabNumber, layout_x, layout_y, layout_w, layout_h, settings } = request.body;
+  const hasLayoutUpdates = [layout_x, layout_y, layout_w, layout_h].some((value) => value !== undefined);
+  const hasSettingsField = settings !== undefined;
 
   if (!widget_name || !tabNumber) {
     return reply.status(400).send({ error: 'widget_name and tabNumber are required' });
   }
 
+  if (!hasLayoutUpdates && !hasSettingsField) {
+    return reply.status(400).send({ error: 'Request must include layout fields or settings object' });
+  }
+
+  if (hasSettingsField && (!settings || typeof settings !== 'object' || Array.isArray(settings))) {
+    return reply.status(400).send({ error: 'settings must be a JSON object when provided' });
+  }
+
   try {
     ensureDeviceExists(deviceName);
-    const existing = db.prepare('SELECT id FROM widget_tab_assignments WHERE widget_name = ? AND tab_number = ? AND device_name = ?').get(widget_name, tabNumber, deviceName);
+    const parsedTabNumber = parseInt(tabNumber, 10);
+    const tab = getTabByNumber(deviceName, parsedTabNumber);
+    if (!tab) {
+      return reply.status(404).send({ error: 'Assignment not found' });
+    }
+
+    const layoutMap = parseTabConfigJson(tab.config_json);
+    const existing = layoutMap[widget_name];
 
     if (!existing) {
       return reply.status(404).send({ error: 'Assignment not found' });
     }
 
-    const stmt = db.prepare('UPDATE widget_tab_assignments SET layout_x = ?, layout_y = ?, layout_w = ?, layout_h = ? WHERE widget_name = ? AND tab_number = ? AND device_name = ? RETURNING *');
-    const row = stmt.get(layout_x, layout_y, layout_w, layout_h, widget_name, tabNumber, deviceName);
+    const normalizedLayout = normalizeLayoutFields({
+      layout_x: layout_x ?? existing.layout_x,
+      layout_y: layout_y ?? existing.layout_y,
+      layout_w: layout_w ?? existing.layout_w,
+      layout_h: layout_h ?? existing.layout_h,
+    });
+
+    const mergedSettings = settings && typeof settings === 'object' && !Array.isArray(settings)
+      ? settings
+      : {};
+
+    layoutMap[widget_name] = {
+      ...existing,
+      ...normalizedLayout,
+      ...mergedSettings,
+    };
+    saveTabConfigById(tab.id, layoutMap);
 
     touchDeviceUpdateTime(deviceName);
-    return row;
+    return {
+      id: buildAssignmentId(parsedTabNumber, widget_name),
+      device_name: deviceName,
+      tab_number: parsedTabNumber,
+      widget_name,
+      ...layoutMap[widget_name],
+    };
   } catch (error) {
     console.error('Error updating widget layout:', error);
     reply.status(500).send({ error: 'Failed to update widget layout' });
@@ -2094,12 +2628,55 @@ fastify.patch('/api/devices/:deviceName/widget-assignments/layout/bulk', async (
 
   try {
     ensureDeviceExists(deviceName);
-    const stmt = db.prepare('UPDATE widget_tab_assignments SET layout_x = ?, layout_y = ?, layout_w = ?, layout_h = ? WHERE widget_name = ? AND tab_number = ? AND device_name = ?');
+    const tabsByNumber = new Map(
+      getTabsForDevice(deviceName).map(tab => [tab.number, {
+        tab,
+        layoutMap: parseTabConfigJson(tab.config_json),
+        changed: false,
+      }])
+    );
 
+    let anyChanged = false;
     for (const item of layouts) {
-      stmt.run(item.layout_x, item.layout_y, item.layout_w, item.layout_h, item.widget_name, item.tabNumber, deviceName);
+      const parsedTabNumber = parseInt(item.tabNumber, 10);
+      const widgetName = item.widget_name;
+      if (!Number.isFinite(parsedTabNumber) || !widgetName) {
+        continue;
+      }
+
+      const tabEntry = tabsByNumber.get(parsedTabNumber);
+      if (!tabEntry) {
+        continue;
+      }
+
+      if (!(widgetName in tabEntry.layoutMap)) {
+        continue;
+      }
+
+      const existingLayout = tabEntry.layoutMap[widgetName];
+      tabEntry.layoutMap[widgetName] = {
+        ...existingLayout,
+        ...normalizeLayoutFields({
+          layout_x: item.layout_x ?? existingLayout.layout_x,
+          layout_y: item.layout_y ?? existingLayout.layout_y,
+          layout_w: item.layout_w ?? existingLayout.layout_w,
+          layout_h: item.layout_h ?? existingLayout.layout_h,
+        }),
+      };
+      tabEntry.changed = true;
+      anyChanged = true;
     }
-    touchDeviceUpdateTime(deviceName);
+
+    tabsByNumber.forEach((tabEntry) => {
+      if (tabEntry.changed) {
+        saveTabConfigById(tabEntry.tab.id, tabEntry.layoutMap);
+      }
+    });
+
+    if (anyChanged) {
+      touchDeviceUpdateTime(deviceName);
+    }
+
     return { success: true, message: 'Layouts updated successfully' };
   } catch (error) {
     console.error('Error updating widget layouts:', error);
@@ -2336,6 +2913,216 @@ fastify.delete('/api/prizes/:id', async (request, reply) => {
   }
 });
 
+// Google Connections routes
+fastify.get('/api/connections/google/status', async (request, reply) => {
+  try {
+    const oauth = googleConnection.getOAuthStatus(db);
+    const account = googleConnection.getConnectedAccount(db);
+    let redirectUri = '';
+    try { redirectUri = googleConnection.deriveRedirectUri(db, request); } catch (_) { }
+    return {
+      encryption: { configured: oauth.encryption_configured, status: getEncryptionStatus() },
+      oauth: {
+        has_client_id: oauth.has_client_id,
+        has_client_secret: oauth.has_client_secret,
+        client_id_preview: oauth.client_id_preview,
+        redirect_uri_override: oauth.redirect_uri_override,
+        redirect_uri: redirectUri,
+      },
+      account: account ? {
+        id: account.id,
+        email: account.email,
+        name: account.name,
+        picture: account.picture,
+        scopes: account.scopes,
+        connected_at: account.created_at,
+        updated_at: account.updated_at,
+      } : null,
+    };
+  } catch (error) {
+    console.error('Error fetching Google connection status:', error);
+    reply.status(500).send({ error: 'Failed to fetch Google connection status' });
+  }
+});
+
+fastify.post('/api/connections/google/config', async (request, reply) => {
+  try {
+    if (!isEncryptionConfigured()) {
+      return reply.status(400).send({ error: 'ENCRYPTION_KEY is not configured on the server.' });
+    }
+    const { client_id, client_secret, redirect_uri_override } = request.body || {};
+    googleConnection.saveOAuthConfig(db, {
+      clientId: client_id,
+      clientSecret: client_secret,
+      redirectUriOverride: redirect_uri_override,
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('Error saving Google OAuth config:', error);
+    reply.status(500).send({ error: error.message || 'Failed to save Google OAuth config' });
+  }
+});
+
+fastify.get('/api/connections/google/authorize', async (request, reply) => {
+  try {
+    if (!isEncryptionConfigured()) {
+      return reply.status(400).send({ error: 'ENCRYPTION_KEY is not configured on the server.' });
+    }
+    const status = googleConnection.getOAuthStatus(db);
+    if (!status.has_client_id || !status.has_client_secret) {
+      return reply.status(400).send({ error: 'Google OAuth credentials are not configured.' });
+    }
+    const redirectUri = googleConnection.deriveRedirectUri(db, request);
+    const returnUrl = request.query && request.query.return_url;
+    const state = googleConnection.createAuthState(db, redirectUri, returnUrl);
+    const url = googleConnection.buildAuthUrl(db, { redirectUri, state });
+    return { url, redirect_uri: redirectUri };
+  } catch (error) {
+    console.error('Error building authorize URL:', error);
+    reply.status(500).send({ error: error.message || 'Failed to build authorize URL' });
+  }
+});
+
+fastify.get('/api/connections/google/callback', async (request, reply) => {
+  const { code, state, error: oauthError } = request.query || {};
+  const renderPage = (title, message, ok) => {
+    reply.header('Content-Type', 'text/html; charset=utf-8');
+    return `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>
+<style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0f172a;color:#f8fafc;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:24px}
+.card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:32px;max-width:480px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.3)}
+h1{margin:0 0 12px;font-size:22px;color:${ok ? '#4ade80' : '#f87171'}}p{margin:0;color:#cbd5e1;line-height:1.5}
+button{margin-top:20px;background:#2563eb;color:#fff;border:0;padding:10px 18px;border-radius:8px;font-size:14px;cursor:pointer}
+button:hover{background:#1d4ed8}</style></head>
+<body><div class="card"><h1>${title}</h1><p>${message}</p>
+<button onclick="window.close()">Close window</button>
+<script>try{window.opener&&window.opener.postMessage({type:'homeglow:google-oauth',ok:${ok ? 'true' : 'false'}},'*');}catch(e){}</script>
+</div></body></html>`;
+  };
+  try {
+    if (oauthError) {
+      return renderPage('Authorization failed', `Google reported: ${oauthError}`, false);
+    }
+    if (!code || !state) {
+      return renderPage('Authorization failed', 'Missing authorization code or state.', false);
+    }
+    const stateRow = googleConnection.consumeAuthState(db, state);
+    if (!stateRow) {
+      return renderPage('Authorization failed', 'Invalid or expired OAuth state.', false);
+    }
+    const tokens = await googleConnection.exchangeCodeForTokens(db, { code, redirectUri: stateRow.redirect_uri });
+    const userInfo = await googleConnection.fetchUserInfo(tokens.access_token);
+    googleConnection.upsertGoogleAccount(db, {
+      sub: userInfo.sub,
+      email: userInfo.email,
+      name: userInfo.name,
+      picture: userInfo.picture,
+      tokens,
+    });
+    return renderPage('Connected to Google', `Signed in as ${userInfo.email || userInfo.name || 'your Google account'}. You can close this window.`, true);
+  } catch (error) {
+    console.error('Google OAuth callback error:', error);
+    return renderPage('Authorization failed', error.message || 'An unexpected error occurred.', false);
+  }
+});
+
+fastify.get('/api/connections/google/albums', async (request, reply) => {
+  try {
+    const account = googleConnection.getConnectedAccount(db);
+    if (!account) return reply.status(404).send({ error: 'No Google account connected.' });
+    const albums = await googlePhotos.listAlbums(db, account.id);
+    return { albums };
+  } catch (error) {
+    console.error('Error listing Google Photos albums:', error);
+    reply.status(error.status || 500).send({ error: error.message || 'Failed to list Google Photos albums' });
+  }
+});
+
+fastify.get('/api/connections/google/calendars', async (request, reply) => {
+  try {
+    const account = googleConnection.getConnectedAccount(db);
+    if (!account) return reply.status(404).send({ error: 'No Google account connected.' });
+    const calendars = await googleCalendar.listCalendars(db, account.id);
+    return { calendars };
+  } catch (error) {
+    console.error('Error listing Google calendars:', error);
+    reply.status(500).send({ error: error.message || 'Failed to list Google calendars' });
+  }
+});
+
+fastify.post('/api/calendar-sources/:id/events', async (request, reply) => {
+  try {
+    const { id } = request.params;
+    const source = db.prepare('SELECT * FROM calendar_sources WHERE id = ?').get(id);
+    if (!source) return reply.status(404).send({ error: 'Calendar source not found' });
+    if (source.type !== 'Google') {
+      return reply.status(400).send({ error: 'This calendar type is read-only.' });
+    }
+    const account = googleConnection.getConnectedAccount(db);
+    if (!account) return reply.status(400).send({ error: 'No Google account connected.' });
+
+    const created = await googleCalendar.createEvent(db, account.id, source.url, request.body || {});
+    if (calendarSyncService) calendarSyncService.syncSource(source.id).catch(() => { });
+    return { success: true, event: created };
+  } catch (error) {
+    console.error('Error creating Google calendar event:', error);
+    reply.status(error.status || 500).send({ error: error.message || 'Failed to create event' });
+  }
+});
+
+fastify.patch('/api/calendar-sources/:id/events/:eventId', async (request, reply) => {
+  try {
+    const { id, eventId } = request.params;
+    const source = db.prepare('SELECT * FROM calendar_sources WHERE id = ?').get(id);
+    if (!source) return reply.status(404).send({ error: 'Calendar source not found' });
+    if (source.type !== 'Google') {
+      return reply.status(400).send({ error: 'This calendar type is read-only.' });
+    }
+    const account = googleConnection.getConnectedAccount(db);
+    if (!account) return reply.status(400).send({ error: 'No Google account connected.' });
+
+    const updated = await googleCalendar.updateEvent(db, account.id, source.url, eventId, request.body || {});
+    if (calendarSyncService) calendarSyncService.syncSource(source.id).catch(() => { });
+    return { success: true, event: updated };
+  } catch (error) {
+    console.error('Error updating Google calendar event:', error);
+    reply.status(error.status || 500).send({ error: error.message || 'Failed to update event' });
+  }
+});
+
+fastify.delete('/api/calendar-sources/:id/events/:eventId', async (request, reply) => {
+  try {
+    const { id, eventId } = request.params;
+    const source = db.prepare('SELECT * FROM calendar_sources WHERE id = ?').get(id);
+    if (!source) return reply.status(404).send({ error: 'Calendar source not found' });
+    if (source.type !== 'Google') {
+      return reply.status(400).send({ error: 'This calendar type is read-only.' });
+    }
+    const account = googleConnection.getConnectedAccount(db);
+    if (!account) return reply.status(400).send({ error: 'No Google account connected.' });
+
+    await googleCalendar.deleteEvent(db, account.id, source.url, eventId);
+    if (calendarSyncService) calendarSyncService.syncSource(source.id).catch(() => { });
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting Google calendar event:', error);
+    reply.status(error.status || 500).send({ error: error.message || 'Failed to delete event' });
+  }
+});
+
+fastify.delete('/api/connections/google/account', async (request, reply) => {
+  try {
+    const account = googleConnection.getConnectedAccount(db);
+    if (!account) {
+      return { success: true, message: 'No Google account connected.' };
+    }
+    await googleConnection.revokeAndDisconnect(db, account.id);
+    return { success: true };
+  } catch (error) {
+    console.error('Error disconnecting Google account:', error);
+    reply.status(500).send({ error: error.message || 'Failed to disconnect Google account' });
+  }
+});
+
 // Calendar sources routes
 fastify.get('/api/calendar-sources', async (request, reply) => {
   try {
@@ -2352,8 +3139,11 @@ fastify.post('/api/calendar-sources', async (request, reply) => {
   if (!name || !type || !url) {
     return reply.status(400).send({ error: 'Name, type, and URL are required.' });
   }
-  if (!['ICS', 'CalDAV'].includes(type)) {
-    return reply.status(400).send({ error: 'Type must be either ICS or CalDAV.' });
+  if (!['ICS', 'CalDAV', 'Google'].includes(type)) {
+    return reply.status(400).send({ error: 'Type must be ICS, CalDAV, or Google.' });
+  }
+  if (type === 'Google' && !googleConnection.getConnectedAccount(db)) {
+    return reply.status(400).send({ error: 'Connect your Google account before adding a Google calendar.' });
   }
   try {
     const encryptedPassword = password ? encryptPassword(password) : null;
@@ -2617,8 +3407,8 @@ fastify.post('/api/photo-sources', async (request, reply) => {
   if (!name || !type) {
     return reply.status(400).send({ error: 'Name and type are required.' });
   }
-  if (!['Immich', 'GooglePhotos'].includes(type)) {
-    return reply.status(400).send({ error: 'Type must be either Immich or GooglePhotos.' });
+  if (!['Immich', 'GooglePhotos', 'HomeGlowPhotos'].includes(type)) {
+    return reply.status(400).send({ error: 'Type must be Immich, GooglePhotos, or HomeGlowPhotos.' });
   }
   try {
     const encryptedApiKey = api_key ? encryptPassword(api_key) : null;
@@ -2654,8 +3444,8 @@ fastify.patch('/api/photo-sources/:id', async (request, reply) => {
 
     if (name !== undefined) { updateFields.push('name = ?'); updateValues.push(name); }
     if (type !== undefined) {
-      if (!['Immich', 'GooglePhotos'].includes(type)) {
-        return reply.status(400).send({ error: 'Type must be either Immich or GooglePhotos.' });
+      if (!['Immich', 'GooglePhotos', 'HomeGlowPhotos'].includes(type)) {
+        return reply.status(400).send({ error: 'Type must be Immich, GooglePhotos, or HomeGlowPhotos.' });
       }
       updateFields.push('type = ?');
       updateValues.push(type);
@@ -2701,6 +3491,14 @@ fastify.patch('/api/photo-sources/:id', async (request, reply) => {
 fastify.delete('/api/photo-sources/:id', async (request, reply) => {
   const { id } = request.params;
   try {
+    const picked = db.prepare('SELECT local_path FROM google_picked_media WHERE source_id = ?').all(id);
+    for (const p of picked) googlePhotosPicker.removeLocalFile(p.local_path);
+    db.prepare('DELETE FROM google_picked_media WHERE source_id = ?').run(id);
+
+    const homeglowDir = path.join(__dirname, 'uploads', 'homeglow-photos', String(id));
+    try { fsSync.rmSync(homeglowDir, { recursive: true, force: true }); } catch (_) { }
+    db.prepare('DELETE FROM homeglow_photos WHERE source_id = ?').run(id);
+
     const stmt = db.prepare('DELETE FROM photo_sources WHERE id = ?');
     const info = stmt.run(id);
     if (info.changes === 0) {
@@ -2739,9 +3537,17 @@ fastify.post('/api/photo-sources/:id/test', async (request, reply) => {
       );
       return { success: true, assetCount: response.data.length || 0, message: `Immich connection successful (${response.data.length || 0} assets found)` };
     } else if (source.type === 'GooglePhotos') {
-      const decryptedRefreshToken = decryptPassword(source.refresh_token);
-      return { success: true, message: 'Google Photos configuration saved (connection test not yet implemented)' };
+      const account = googleConnection.getConnectedAccount(db);
+      if (!account) {
+        return reply.status(400).send({ success: false, error: 'No Google account connected. Connect one in Admin > Connections.' });
+      }
+      const count = db.prepare('SELECT COUNT(*) AS c FROM google_picked_media WHERE source_id = ?').get(source.id).c;
+      return { success: true, message: `${count} picked photo${count === 1 ? '' : 's'} available for this source.` };
+    } else if (source.type === 'HomeGlowPhotos') {
+      const count = db.prepare('SELECT COUNT(*) AS c FROM homeglow_photos WHERE source_id = ?').get(source.id).c;
+      return { success: true, message: `${count} uploaded photo${count === 1 ? '' : 's'} available for this source.` };
     }
+    return reply.status(400).send({ success: false, error: `Unsupported photo source type: ${source.type}` });
   } catch (error) {
     console.error('Error testing photo source:', error.message);
     if (error.code === 'ECONNREFUSED') {
@@ -2808,6 +3614,303 @@ fastify.get('/api/photo-proxy/:sourceId/:assetId', async (request, reply) => {
   }
 });
 
+// HomeGlow Photos - list uploaded photos for a source
+fastify.get('/api/photo-sources/:sourceId/uploaded', async (request, reply) => {
+  const { sourceId } = request.params;
+  try {
+    const source = db.prepare('SELECT id, type FROM photo_sources WHERE id = ?').get(sourceId);
+    if (!source || source.type !== 'HomeGlowPhotos') {
+      return reply.status(404).send({ error: 'HomeGlow Photos source not found' });
+    }
+    const rows = db.prepare(
+      'SELECT id, filename, original_name, mime_type, size, uploaded_at FROM homeglow_photos WHERE source_id = ? ORDER BY uploaded_at DESC'
+    ).all(sourceId);
+    return rows.map((r) => ({
+      ...r,
+      url: `/api/photo-sources/${sourceId}/uploaded/${r.id}/file`,
+      thumbnail_url: `/api/photo-sources/${sourceId}/uploaded/${r.id}/file`,
+    }));
+  } catch (error) {
+    console.error('Error listing uploaded photos:', error);
+    reply.status(500).send({ error: 'Failed to list uploaded photos' });
+  }
+});
+
+// HomeGlow Photos - serve a single uploaded file
+fastify.get('/api/photo-sources/:sourceId/uploaded/:photoId/file', async (request, reply) => {
+  const { sourceId, photoId } = request.params;
+  try {
+    const row = db.prepare(
+      'SELECT filename, mime_type FROM homeglow_photos WHERE id = ? AND source_id = ?'
+    ).get(photoId, sourceId);
+    if (!row) return reply.status(404).send({ error: 'Photo not found' });
+    const filePath = path.join(__dirname, 'uploads', 'homeglow-photos', String(sourceId), row.filename);
+    if (!fsSync.existsSync(filePath)) return reply.status(404).send({ error: 'File missing' });
+    reply.header('Content-Type', row.mime_type || 'image/jpeg');
+    reply.header('Cache-Control', 'private, max-age=86400');
+    return reply.send(fsSync.createReadStream(filePath));
+  } catch (error) {
+    console.error('Error serving uploaded photo:', error);
+    reply.status(500).send({ error: 'Failed to load photo' });
+  }
+});
+
+// HomeGlow Photos - upload one or more photos (multipart)
+fastify.post('/api/photo-sources/:sourceId/uploaded', async (request, reply) => {
+  const { sourceId } = request.params;
+  try {
+    const source = db.prepare('SELECT id, type FROM photo_sources WHERE id = ?').get(sourceId);
+    if (!source || source.type !== 'HomeGlowPhotos') {
+      return reply.status(404).send({ error: 'HomeGlow Photos source not found' });
+    }
+    const uploadDir = path.join(__dirname, 'uploads', 'homeglow-photos', String(sourceId));
+    await fs.mkdir(uploadDir, { recursive: true });
+
+    const parts = request.parts();
+    const added = [];
+    const failed = [];
+    for await (const part of parts) {
+      if (part.type !== 'file') continue;
+      if (!part.mimetype || !part.mimetype.startsWith('image/')) {
+        failed.push({ name: part.filename, reason: 'Not an image' });
+        await part.toBuffer().catch(() => null);
+        continue;
+      }
+      try {
+        const ext = path.extname(part.filename || '') || '.jpg';
+        const safeBase = crypto.randomBytes(12).toString('hex');
+        const filename = `${safeBase}${ext.toLowerCase()}`;
+        const filePath = path.join(uploadDir, filename);
+        const buffer = await part.toBuffer();
+        await fs.writeFile(filePath, buffer);
+        const info = db.prepare(
+          `INSERT INTO homeglow_photos (source_id, filename, original_name, mime_type, size) VALUES (?, ?, ?, ?, ?)`
+        ).run(sourceId, filename, part.filename || null, part.mimetype, buffer.length);
+        added.push({ id: info.lastInsertRowid, filename, original_name: part.filename });
+      } catch (err) {
+        console.error('Upload failure for part:', err);
+        failed.push({ name: part.filename, reason: err.message });
+      }
+    }
+    return { success: true, added: added.length, failed: failed.length, items: added, errors: failed };
+  } catch (error) {
+    console.error('Error uploading photos:', error);
+    reply.status(500).send({ error: 'Failed to upload photos' });
+  }
+});
+
+// HomeGlow Photos - delete an uploaded photo
+fastify.delete('/api/photo-sources/:sourceId/uploaded/:photoId', async (request, reply) => {
+  const { sourceId, photoId } = request.params;
+  try {
+    const row = db.prepare(
+      'SELECT filename FROM homeglow_photos WHERE id = ? AND source_id = ?'
+    ).get(photoId, sourceId);
+    if (!row) return reply.status(404).send({ error: 'Photo not found' });
+    const filePath = path.join(__dirname, 'uploads', 'homeglow-photos', String(sourceId), row.filename);
+    try { await fs.unlink(filePath); } catch (_) { }
+    db.prepare('DELETE FROM homeglow_photos WHERE id = ?').run(photoId);
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting uploaded photo:', error);
+    reply.status(500).send({ error: 'Failed to delete photo' });
+  }
+});
+
+fastify.get('/api/photo-sources/:sourceId/picked/:mediaRowId', async (request, reply) => {
+  const { sourceId, mediaRowId } = request.params;
+  try {
+    const row = db.prepare(
+      'SELECT local_path, mime_type FROM google_picked_media WHERE id = ? AND source_id = ?'
+    ).get(mediaRowId, sourceId);
+    if (!row || !fsSync.existsSync(row.local_path)) {
+      return reply.status(404).send({ error: 'Picked media not found' });
+    }
+    reply.header('Content-Type', row.mime_type || 'image/jpeg');
+    reply.header('Cache-Control', 'private, max-age=86400');
+    return reply.send(fsSync.readFileSync(row.local_path));
+  } catch (error) {
+    console.error('Error serving picked media:', error.message);
+    return reply.status(500).send({ error: 'Failed to load picked media' });
+  }
+});
+
+fastify.get('/api/photo-sources/:sourceId/picked', async (request, reply) => {
+  const { sourceId } = request.params;
+  try {
+    const rows = db.prepare(
+      'SELECT id, google_media_id, filename, mime_type, width, height, created_time, downloaded_at FROM google_picked_media WHERE source_id = ? ORDER BY downloaded_at DESC'
+    ).all(sourceId);
+    return rows.map((r) => ({
+      ...r,
+      thumbnail_url: `/api/photo-sources/${sourceId}/picked/${r.id}`,
+    }));
+  } catch (error) {
+    console.error('Error listing picked media:', error);
+    reply.status(500).send({ error: 'Failed to list picked media' });
+  }
+});
+
+fastify.delete('/api/photo-sources/:sourceId/picked/:mediaRowId', async (request, reply) => {
+  const { sourceId, mediaRowId } = request.params;
+  try {
+    const row = db.prepare(
+      'SELECT local_path FROM google_picked_media WHERE id = ? AND source_id = ?'
+    ).get(mediaRowId, sourceId);
+    if (!row) return reply.status(404).send({ error: 'Picked media not found' });
+    googlePhotosPicker.removeLocalFile(row.local_path);
+    db.prepare('DELETE FROM google_picked_media WHERE id = ?').run(mediaRowId);
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting picked media:', error);
+    reply.status(500).send({ error: 'Failed to delete picked media' });
+  }
+});
+
+fastify.post('/api/photo-sources/:sourceId/picker-session', async (request, reply) => {
+  const { sourceId } = request.params;
+  try {
+    const source = db.prepare('SELECT * FROM photo_sources WHERE id = ?').get(sourceId);
+    if (!source || source.type !== 'GooglePhotos') {
+      return reply.status(404).send({ error: 'Google Photos source not found' });
+    }
+    const account = googleConnection.getConnectedAccount(db);
+    if (!account) return reply.status(400).send({ error: 'No Google account connected.' });
+
+    const session = await googlePhotosPicker.createSession(db, account.id);
+    db.prepare(
+      'UPDATE photo_sources SET picker_session_id = ?, picker_session_expire = ? WHERE id = ?'
+    ).run(session.id || null, session.expireTime || null, sourceId);
+
+    return {
+      sessionId: session.id,
+      pickerUri: session.pickerUri,
+      expireTime: session.expireTime,
+      mediaItemsSet: !!session.mediaItemsSet,
+      pollingConfig: session.pollingConfig || null,
+    };
+  } catch (error) {
+    console.error('Error creating picker session:', error);
+    reply.status(error.status || 500).send({ error: error.message || 'Failed to create picker session' });
+  }
+});
+
+fastify.get('/api/photo-sources/:sourceId/picker-session', async (request, reply) => {
+  const { sourceId } = request.params;
+  try {
+    const source = db.prepare('SELECT * FROM photo_sources WHERE id = ?').get(sourceId);
+    if (!source || source.type !== 'GooglePhotos') {
+      return reply.status(404).send({ error: 'Google Photos source not found' });
+    }
+    if (!source.picker_session_id) {
+      return { sessionId: null, mediaItemsSet: false };
+    }
+    const account = googleConnection.getConnectedAccount(db);
+    if (!account) return reply.status(400).send({ error: 'No Google account connected.' });
+
+    const session = await googlePhotosPicker.getSession(db, account.id, source.picker_session_id);
+    return {
+      sessionId: session.id,
+      pickerUri: session.pickerUri,
+      expireTime: session.expireTime,
+      mediaItemsSet: !!session.mediaItemsSet,
+      pollingConfig: session.pollingConfig || null,
+    };
+  } catch (error) {
+    console.error('Error polling picker session:', error);
+    if (error.status === 404 || error.status === 400) {
+      db.prepare('UPDATE photo_sources SET picker_session_id = NULL, picker_session_expire = NULL WHERE id = ?').run(sourceId);
+    }
+    reply.status(error.status || 500).send({ error: error.message || 'Failed to poll picker session' });
+  }
+});
+
+fastify.post('/api/photo-sources/:sourceId/picker-session/ingest', async (request, reply) => {
+  const { sourceId } = request.params;
+  try {
+    const source = db.prepare('SELECT * FROM photo_sources WHERE id = ?').get(sourceId);
+    if (!source || source.type !== 'GooglePhotos') {
+      return reply.status(404).send({ error: 'Google Photos source not found' });
+    }
+    if (!source.picker_session_id) {
+      return reply.status(400).send({ error: 'No active picker session' });
+    }
+    const account = googleConnection.getConnectedAccount(db);
+    if (!account) return reply.status(400).send({ error: 'No Google account connected.' });
+
+    const session = await googlePhotosPicker.getSession(db, account.id, source.picker_session_id);
+    if (!session.mediaItemsSet) {
+      return reply.status(400).send({ error: 'Picker session not yet completed by user' });
+    }
+
+    const items = await googlePhotosPicker.listPickedMediaItems(db, account.id, source.picker_session_id);
+    const insert = db.prepare(`
+      INSERT OR IGNORE INTO google_picked_media
+        (source_id, google_media_id, filename, mime_type, local_path, width, height, created_time)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    let added = 0;
+    let skipped = 0;
+    let failed = 0;
+    for (const item of items) {
+      const mediaFile = item.mediaFile || {};
+      const mime = mediaFile.mimeType;
+      if (!googlePhotosPicker.isImageMime(mime)) { skipped++; continue; }
+      const existing = db.prepare('SELECT id FROM google_picked_media WHERE source_id = ? AND google_media_id = ?').get(sourceId, item.id);
+      if (existing) { skipped++; continue; }
+      try {
+        const saved = await googlePhotosPicker.downloadMedia(db, account.id, sourceId, item);
+        insert.run(
+          sourceId,
+          item.id,
+          saved.filename,
+          saved.mimeType,
+          saved.localPath,
+          saved.width,
+          saved.height,
+          item.createTime || null,
+        );
+        added++;
+      } catch (err) {
+        console.error('Failed to ingest picked item', item.id, err.message);
+        failed++;
+      }
+    }
+
+    try {
+      await googlePhotosPicker.deleteSession(db, account.id, source.picker_session_id);
+    } catch (e) {
+      console.warn('Failed to delete picker session (non-fatal):', e.message);
+    }
+    db.prepare('UPDATE photo_sources SET picker_session_id = NULL, picker_session_expire = NULL WHERE id = ?').run(sourceId);
+
+    return { added, skipped, failed, total: items.length };
+  } catch (error) {
+    console.error('Error ingesting picked media:', error);
+    reply.status(error.status || 500).send({ error: error.message || 'Failed to ingest picker session' });
+  }
+});
+
+fastify.delete('/api/photo-sources/:sourceId/picker-session', async (request, reply) => {
+  const { sourceId } = request.params;
+  try {
+    const source = db.prepare('SELECT * FROM photo_sources WHERE id = ?').get(sourceId);
+    if (!source) return reply.status(404).send({ error: 'Source not found' });
+    if (source.picker_session_id) {
+      const account = googleConnection.getConnectedAccount(db);
+      if (account) {
+        try { await googlePhotosPicker.deleteSession(db, account.id, source.picker_session_id); } catch (_) { }
+      }
+    }
+    db.prepare('UPDATE photo_sources SET picker_session_id = NULL, picker_session_expire = NULL WHERE id = ?').run(sourceId);
+    return { success: true };
+  } catch (error) {
+    console.error('Error clearing picker session:', error);
+    reply.status(500).send({ error: 'Failed to clear picker session' });
+  }
+});
+
 fastify.get('/api/photo-items', async (request, reply) => {
   try {
     const sources = db.prepare('SELECT * FROM photo_sources WHERE enabled = 1 ORDER BY sort_order, id').all();
@@ -2862,7 +3965,41 @@ fastify.get('/api/photo-items', async (request, reply) => {
             source_type: 'Immich'
           }));
         } else if (source.type === 'GooglePhotos') {
-          return [];
+          const rows = db.prepare(
+            'SELECT id, google_media_id FROM google_picked_media WHERE source_id = ?'
+          ).all(source.id);
+          const photos = rows.map((r) => ({
+            id: r.google_media_id,
+            url: `/api/photo-sources/${source.id}/picked/${r.id}`,
+            thumbnail: `/api/photo-sources/${source.id}/picked/${r.id}`,
+            type: 'IMAGE',
+            source_id: source.id,
+            source_name: source.name,
+            source_type: 'GooglePhotos',
+          }));
+          for (let i = photos.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [photos[i], photos[j]] = [photos[j], photos[i]];
+          }
+          return photos;
+        } else if (source.type === 'HomeGlowPhotos') {
+          const rows = db.prepare(
+            'SELECT id, filename FROM homeglow_photos WHERE source_id = ? ORDER BY uploaded_at DESC'
+          ).all(source.id);
+          const photos = rows.map((r) => ({
+            id: `homeglow-${r.id}`,
+            url: `/api/photo-sources/${source.id}/uploaded/${r.id}/file`,
+            thumbnail: `/api/photo-sources/${source.id}/uploaded/${r.id}/file`,
+            type: 'IMAGE',
+            source_id: source.id,
+            source_name: source.name,
+            source_type: 'HomeGlowPhotos',
+          }));
+          for (let i = photos.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [photos[i], photos[j]] = [photos[j], photos[i]];
+          }
+          return photos;
         }
       } catch (error) {
         console.error(`Error fetching photos from source ${source.name}:`, error.message);
@@ -2991,7 +4128,11 @@ const start = async () => {
     const currentSchemaId = getCurrentSchemaVersion();
     await applySchemaMigrations(currentSchemaId);
 
-    startNightlyCronJob(); // Start the nightly chore pruning job
+    if (process.env.HOMEGLOW_DISABLE_BACKGROUND_JOBS !== '1') {
+      startNightlyCronJob(); // Start the nightly chore pruning job
+    } else {
+      console.log('Nightly background processing disabled by HOMEGLOW_DISABLE_BACKGROUND_JOBS=1');
+    }
 
     // Create uploads directories
     const uploadsDir = path.join(__dirname, 'uploads');
@@ -3000,9 +4141,22 @@ const start = async () => {
     console.log('Uploads directories created');
 
     // Initialize calendar sync service
-    calendarSyncService = new CalendarSyncService(db, decryptPassword);
-    calendarSyncService.initialize();
-    console.log('Calendar sync service started');
+    if (process.env.HOMEGLOW_DISABLE_CALENDAR_SYNC !== '1') {
+      calendarSyncService = new CalendarSyncService(db, decryptPassword);
+      calendarSyncService.initialize();
+      console.log('Calendar sync service started');
+    } else {
+      console.log('Calendar sync service disabled by HOMEGLOW_DISABLE_CALENDAR_SYNC=1');
+    }
+
+    if (!isEncryptionConfigured()) {
+      console.warn('================================================================');
+      console.warn(' WARNING: Encryption key is unavailable or invalid.');
+      console.warn(' Third-party connections (Google, etc.) will be disabled.');
+      console.warn(' Provide a 32-byte key via ENCRYPTION_KEY or delete');
+      console.warn(' server/data/.encryption-key to regenerate on restart.');
+      console.warn('================================================================');
+    }
 
     await fastify.listen({ port: process.env.PORT || 5000, host: '0.0.0.0' });
     console.log(`Server running on port ${process.env.PORT || 5000}`);

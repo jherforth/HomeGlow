@@ -25,9 +25,13 @@ import {
 import { Edit, Save, Cancel, Add, Delete, Check, Undo } from '@mui/icons-material';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
+import { getDeviceApiBase } from '../utils/deviceName.js';
 import { shouldShowChoreToday, getTodayDateString, convertDaysToCrontab } from '../utils/choreHelpers.js';
 
-const ChoreWidget = ({ transparentBackground }) => {
+const USERS_UPDATED_EVENT = 'homeglow:users-updated';
+
+const ChoreWidget = ({ transparentBackground, refreshInterval = 0 }) => {
+  const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [users, setUsers] = useState([]);
   const [chores, setChores] = useState([]);
   const [schedules, setSchedules] = useState([]);
@@ -44,10 +48,8 @@ const ChoreWidget = ({ transparentBackground }) => {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showPrizesModal, setShowPrizesModal] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [showBonusChores, setShowBonusChores] = useState(() => {
-    const saved = localStorage.getItem('showBonusChores');
-    return saved !== null ? JSON.parse(saved) : true;
-  });
+  const [showBonusChores, setShowBonusChores] = useState(true);
+  const [deviceSettingsLoaded, setDeviceSettingsLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [dailyClamReward, setDailyClamReward] = useState(2);
 
@@ -58,13 +60,24 @@ const ChoreWidget = ({ transparentBackground }) => {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('showBonusChores', JSON.stringify(showBonusChores));
-  }, [showBonusChores]);
+    const loadDeviceWidgetSettings = async () => {
+      try {
+        const response = await axios.get(`${API_DEVICE_URL}/settings`);
+        const choreSettings = response.data?.choreWidgetSettings;
+        if (choreSettings && typeof choreSettings.showBonusChores === 'boolean') {
+          setShowBonusChores(choreSettings.showBonusChores);
+        }
+      } catch (error) {
+        console.error('Error loading chore widget settings:', error);
+      } finally {
+        setDeviceSettingsLoaded(true);
+      }
+    };
+
+    void loadDeviceWidgetSettings();
+  }, [API_DEVICE_URL]);
 
   useEffect(() => {
-    const widgetSettings = JSON.parse(localStorage.getItem('widgetSettings') || '{}');
-    const refreshInterval = widgetSettings.chore?.refreshInterval || 0;
-
     if (refreshInterval > 0) {
       console.log(`ChoreWidget: Auto-refresh enabled (${refreshInterval}ms)`);
 
@@ -78,6 +91,37 @@ const ChoreWidget = ({ transparentBackground }) => {
         clearInterval(intervalId);
       };
     }
+  }, [refreshInterval]);
+
+  useEffect(() => {
+    if (!deviceSettingsLoaded) {
+      return;
+    }
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        await axios.patch(`${API_DEVICE_URL}/settings`, {
+          choreWidgetSettings: {
+            showBonusChores,
+          },
+        });
+      } catch (error) {
+        console.error('Error saving chore widget settings:', error);
+      }
+    }, 250);
+
+    return () => clearTimeout(timeoutId);
+  }, [API_DEVICE_URL, deviceSettingsLoaded, showBonusChores]);
+
+  useEffect(() => {
+    const onUsersUpdated = () => {
+      fetchUsers();
+    };
+
+    window.addEventListener(USERS_UPDATED_EVENT, onUsersUpdated);
+    return () => {
+      window.removeEventListener(USERS_UPDATED_EVENT, onUsersUpdated);
+    };
   }, []);
 
   const fetchData = async () => {
@@ -678,28 +722,42 @@ const ChoreWidget = ({ transparentBackground }) => {
           </DialogActions>
         </Dialog>
 
-        <Dialog open={showAddDialog} onClose={() => setShowAddDialog(false)} maxWidth="sm" fullWidth>
+        <Dialog
+          open={showAddDialog}
+          onClose={() => setShowAddDialog(false)}
+          maxWidth="sm"
+          fullWidth
+          slotProps={{
+            paper: {
+              component: 'form',
+              onSubmit: (event) => {
+                event.preventDefault();
+                saveChore();
+              },
+            }
+          }}
+        >
           <DialogTitle>Add New Chore</DialogTitle>
           <DialogContent>
             <TextField
               fullWidth
               label="Title"
               value={newChore.title}
-              onChange={(e) => setNewChore({...newChore, title: e.target.value})}
+              onChange={(e) => setNewChore({ ...newChore, title: e.target.value })}
               sx={{ mb: 2, mt: 1 }}
             />
             <TextField
               fullWidth
               label="Description"
               value={newChore.description}
-              onChange={(e) => setNewChore({...newChore, description: e.target.value})}
+              onChange={(e) => setNewChore({ ...newChore, description: e.target.value })}
               sx={{ mb: 2 }}
             />
             <FormControl fullWidth sx={{ mb: 2 }}>
               <InputLabel>Assign to User</InputLabel>
               <Select
                 value={newChore.user_id}
-                onChange={(e) => setNewChore({...newChore, user_id: e.target.value})}
+                onChange={(e) => setNewChore({ ...newChore, user_id: e.target.value })}
               >
                 <MenuItem value={0}>Bonus Chore (Unassigned)</MenuItem>
                 {users.map(user => (
@@ -755,13 +813,13 @@ const ChoreWidget = ({ transparentBackground }) => {
               type="number"
               label="🥟 Clam Value (0 for regular chore)"
               value={newChore.clam_value}
-              onChange={(e) => setNewChore({...newChore, clam_value: parseInt(e.target.value) || 0})}
+              onChange={(e) => setNewChore({ ...newChore, clam_value: parseInt(e.target.value) || 0 })}
             />
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setShowAddDialog(false)}>Cancel</Button>
+            <Button type="button" onClick={() => setShowAddDialog(false)}>Cancel</Button>
             <Button
-              onClick={saveChore}
+              type="submit"
               variant="contained"
               disabled={!newChore.is_one_time && newChore.assigned_days_of_week.length === 0}
             >

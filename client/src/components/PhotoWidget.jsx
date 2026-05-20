@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Typography, Box, IconButton, Popover, Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Switch, FormControlLabel, Select, MenuItem, FormControl, InputLabel, List, ListItem, ListItemText, ListItemSecondaryAction, CircularProgress, Alert, Chip } from '@mui/material';
-import { Settings, Add, Delete, Edit, Refresh, ChevronLeft, ChevronRight, PlayArrow, Pause } from '@mui/icons-material';
+import { Settings, Add, Delete, Edit, Refresh, ChevronLeft, ChevronRight, PlayArrow, Pause, CloudUpload } from '@mui/icons-material';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 
-const PhotoWidget = ({ transparentBackground }) => {
+const PhotoWidget = ({ transparentBackground, refreshInterval = 0 }) => {
   const [photos, setPhotos] = useState([]);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -68,12 +68,9 @@ const PhotoWidget = ({ transparentBackground }) => {
 
   // Auto-refresh functionality
   useEffect(() => {
-    const widgetSettings = JSON.parse(localStorage.getItem('widgetSettings') || '{}');
-    const refreshInterval = widgetSettings.photo?.refreshInterval || 0;
-
     if (refreshInterval > 0) {
       console.log(`PhotoWidget: Auto-refresh enabled (${refreshInterval}ms)`);
-      
+
       const intervalId = setInterval(() => {
         console.log('PhotoWidget: Auto-refreshing data...');
         fetchPhotos();
@@ -84,7 +81,7 @@ const PhotoWidget = ({ transparentBackground }) => {
         clearInterval(intervalId);
       };
     }
-  }, []);
+  }, [refreshInterval]);
 
   // Slideshow timer
   useEffect(() => {
@@ -296,7 +293,7 @@ const PhotoWidget = ({ transparentBackground }) => {
                 gap: 1,
                 height: '100%',
                 animation: transitionType === 'fade' ? 'fadeIn 0.5s ease-in-out' :
-                          transitionType === 'slide' ? 'slideIn 0.5s ease-in-out' : 'none',
+                  transitionType === 'slide' ? 'slideIn 0.5s ease-in-out' : 'none',
                 '@keyframes fadeIn': {
                   '0%': {
                     opacity: 0,
@@ -532,6 +529,15 @@ const PhotoWidget = ({ transparentBackground }) => {
         onClose={() => setShowSourceDialog(false)}
         maxWidth="sm"
         fullWidth
+        slotProps={{
+          paper: {
+            component: 'form',
+            onSubmit: (event) => {
+              event.preventDefault();
+              handleSaveSource();
+            },
+          }
+        }}
       >
         <DialogTitle>
           {editingSource ? 'Edit Photo Source' : 'Add Photo Source'}
@@ -553,7 +559,7 @@ const PhotoWidget = ({ transparentBackground }) => {
               label="Type"
             >
               <MenuItem value="Immich">Immich</MenuItem>
-              <MenuItem value="GooglePhotos">Google Photos (Coming Soon)</MenuItem>
+              <MenuItem value="HomeGlowPhotos">HomeGlow Photos</MenuItem>
             </Select>
           </FormControl>
 
@@ -588,10 +594,35 @@ const PhotoWidget = ({ transparentBackground }) => {
             </>
           )}
 
-          {sourceForm.type === 'GooglePhotos' && (
-            <Alert severity="info" sx={{ mt: 2 }}>
-              Google Photos integration coming soon. Stay tuned!
-            </Alert>
+          {sourceForm.type === 'HomeGlowPhotos' && (
+            <Box sx={{ mt: 2 }}>
+              {!editingSource ? (
+                <Alert severity="info">
+                  Save this source first, then open the upload page to add photos from your device.
+                </Alert>
+              ) : (
+                <>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    Upload photos directly from your device. They will be stored on your HomeGlow
+                    server and displayed in this widget.
+                  </Typography>
+                  <Button
+                    type="button"
+                    variant="contained"
+                    startIcon={<CloudUpload />}
+                    onClick={() => {
+                      window.location.href = `/photos?source=${editingSource.id}`;
+                    }}
+                  >
+                    Open upload page
+                  </Button>
+                  <Alert severity="info" sx={{ mt: 2 }}>
+                    The upload page is mobile-friendly—open it on your phone to upload photos
+                    straight from your camera roll.
+                  </Alert>
+                </>
+              )}
+            </Box>
           )}
 
           {testResult && (
@@ -603,6 +634,7 @@ const PhotoWidget = ({ transparentBackground }) => {
         <DialogActions>
           {editingSource && (
             <Button
+              type="button"
               onClick={handleTestConnection}
               disabled={testingConnection}
               startIcon={testingConnection ? <CircularProgress size={16} /> : <Refresh />}
@@ -610,9 +642,9 @@ const PhotoWidget = ({ transparentBackground }) => {
               Test Connection
             </Button>
           )}
-          <Button onClick={() => setShowSourceDialog(false)}>Cancel</Button>
+          <Button type="button" onClick={() => setShowSourceDialog(false)}>Cancel</Button>
           <Button
-            onClick={handleSaveSource}
+            type="submit"
             variant="contained"
             disabled={savingSource || !sourceForm.name || !sourceForm.type}
           >

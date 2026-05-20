@@ -3,9 +3,9 @@ import { Box } from '@mui/material';
 import GridLayout from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 
-const DraggableWidget = ({ 
-  id, 
-  children, 
+const DraggableWidget = ({
+  id,
+  children,
   defaultPosition = { x: 0, y: 0 },
   defaultSize = { width: 3, height: 2 }, // Grid units (cols x rows)
   minWidth = 3,
@@ -19,44 +19,22 @@ const DraggableWidget = ({
   const [isSelected, setIsSelected] = useState(false);
   const [layout, setLayout] = useState([]);
 
-  // Load saved layout from localStorage
   useEffect(() => {
-    const savedLayout = localStorage.getItem(`widget-layout-${id}`);
-    if (savedLayout) {
-      const parsed = JSON.parse(savedLayout);
-      setLayout([{
-        i: id,
-        x: parsed.x || defaultPosition.x,
-        y: parsed.y || defaultPosition.y,
-        w: parsed.w || defaultSize.width,
-        h: parsed.h || defaultSize.height,
-        minW: minWidth,
-        minH: minHeight
-      }]);
-    } else {
-      setLayout([{
-        i: id,
-        x: defaultPosition.x,
-        y: defaultPosition.y,
-        w: defaultSize.width,
-        h: defaultSize.height,
-        minW: minWidth,
-        minH: minHeight
-      }]);
-    }
+    setLayout([{
+      i: id,
+      x: defaultPosition.x,
+      y: defaultPosition.y,
+      w: defaultSize.width,
+      h: defaultSize.height,
+      minW: minWidth,
+      minH: minHeight
+    }]);
   }, [id, defaultPosition, defaultSize, minWidth, minHeight]);
 
-  // Save layout to localStorage
   const saveLayout = (newLayout) => {
     if (newLayout && newLayout.length > 0) {
       const item = newLayout[0];
-      localStorage.setItem(`widget-layout-${id}`, JSON.stringify({
-        x: item.x,
-        y: item.y,
-        w: item.w,
-        h: item.h
-      }));
-      
+
       if (onPositionChange) {
         onPositionChange({ x: item.x, y: item.y });
       }
@@ -154,18 +132,18 @@ const DraggableWidget = ({
             border: isSelected ? '3px solid var(--accent)' : '3px solid transparent',
             borderRadius: 2,
             transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
-            boxShadow: isSelected 
-              ? '0 8px 32px rgba(158, 127, 255, 0.3)' 
+            boxShadow: isSelected
+              ? '0 8px 32px rgba(158, 127, 255, 0.3)'
               : '0 2px 8px rgba(0, 0, 0, 0.1)',
             backgroundColor: 'var(--card-bg)',
             overflow: 'hidden',
             cursor: isSelected ? 'move' : 'pointer',
             '&:hover': {
-              border: isSelected 
-                ? '3px solid var(--accent)' 
+              border: isSelected
+                ? '3px solid var(--accent)'
                 : '3px solid rgba(158, 127, 255, 0.3)',
-              boxShadow: isSelected 
-                ? '0 8px 32px rgba(158, 127, 255, 0.3)' 
+              boxShadow: isSelected
+                ? '0 8px 32px rgba(158, 127, 255, 0.3)'
                 : '0 4px 16px rgba(0, 0, 0, 0.15)',
             }
           }}

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Box, IconButton } from '@mui/material';
-import { DragIndicator } from '@mui/icons-material';
 import GridLayout from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
@@ -22,7 +21,16 @@ const resolveWidgetName = (widgetId) => {
   return null;
 };
 
-const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange: onLayoutChangeCallback, activeTab = 1, activeTabId = 1 }) => {
+const WidgetContainer = ({
+  children,
+  widgets = [],
+  locked = true,
+  onLayoutChange: onLayoutChangeCallback,
+  activeTab = 1,
+  activeTabId = 1,
+  deviceWidgetSettings = {},
+  devicePluginSettings = {},
+}) => {
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [containerWidth, setContainerWidth] = useState(1200);
   const [gridCols, setGridCols] = useState(12);
@@ -37,10 +45,6 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
   const hasInitializedLockEffectRef = useRef(false);
   const saveTimerRef = useRef(null);
   const resizeTapGuardRef = useRef(new Map());
-
-  const getTabLayoutCacheKey = useCallback((widgetId) => {
-    return `widget-layout-id-${activeTabId}-${widgetId}`;
-  }, [activeTabId]);
 
   const saveLayoutsToApi = useCallback((layoutItems, tabNumber) => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -66,7 +70,10 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
   useEffect(() => {
     const updateDimensions = () => {
       if (containerRef.current) {
-        const width = containerRef.current.offsetWidth;
+        const computed = window.getComputedStyle(containerRef.current);
+        const paddingLeft = parseFloat(computed.paddingLeft) || 0;
+        const paddingRight = parseFloat(computed.paddingRight) || 0;
+        const width = Math.max(0, containerRef.current.clientWidth - paddingLeft - paddingRight);
         setContainerWidth(width);
 
         // Responsive grid columns
@@ -118,27 +125,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
       const h = widget.defaultSize.height;
       let item;
 
-      const localKey = getTabLayoutCacheKey(widget.id);
-      const localLayout = localStorage.getItem(localKey);
-      if (localLayout) {
-        let parsed = null;
-        try {
-          parsed = JSON.parse(localLayout);
-        } catch {
-          parsed = null;
-        }
-
-        item = {
-          i: widget.id,
-          x: parsed?.x ?? widget.defaultPosition.x,
-          y: parsed?.y ?? widget.defaultPosition.y,
-          w: parsed?.w || w,
-          h: parsed?.h || h,
-          minW: widget.minWidth || 3,
-          minH: widget.minHeight || 2,
-          static: lockedRef.current,
-        };
-      } else if (widget.savedLayout) {
+      if (widget.savedLayout) {
         item = {
           i: widget.id,
           x: widget.savedLayout.x ?? widget.defaultPosition.x,
@@ -167,7 +154,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
       return item;
     });
     setLayout(initialLayout);
-  }, [widgets, activeTab, gridCols, getTabLayoutCacheKey]);
+  }, [widgets, activeTab, gridCols]);
 
   useEffect(() => {
     const wasLocked = prevLockedRef.current;
@@ -183,15 +170,6 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
 
       const shouldPersistLockedLayouts = hasInitializedLockEffectRef.current && !wasLocked && locked;
       if (shouldPersistLockedLayouts) {
-        updatedLayout.forEach((item) => {
-          const layoutData = {
-            x: item.x,
-            y: item.y,
-            w: item.w,
-            h: item.h,
-          };
-          localStorage.setItem(getTabLayoutCacheKey(item.i), JSON.stringify(layoutData));
-        });
         saveLayoutsToApi(updatedLayout, activeTab);
       }
 
@@ -207,7 +185,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
     }, 50);
 
     return () => clearTimeout(timer);
-  }, [locked, saveLayoutsToApi, getTabLayoutCacheKey, activeTab]);
+  }, [locked, saveLayoutsToApi, activeTab]);
 
   // Deselect widget when locked
   useEffect(() => {
@@ -254,16 +232,6 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
 
     setLayout(updatedLayout);
     layoutRef.current = updatedLayout;
-
-    updatedLayout.forEach((item) => {
-      const layoutData = {
-        x: item.x,
-        y: item.y,
-        w: item.w,
-        h: item.h,
-      };
-      localStorage.setItem(getTabLayoutCacheKey(item.i), JSON.stringify(layoutData));
-    });
 
     saveLayoutsToApi(updatedLayout, activeTab);
 
@@ -344,7 +312,6 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
             w: updatedItem.w,
             h: updatedItem.h,
           };
-          localStorage.setItem(getTabLayoutCacheKey(item.i), JSON.stringify(layoutData));
 
           return updatedItem;
         }
@@ -441,8 +408,6 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
   }, [locked, selectedWidget, layout]);
 
   const getWidgetRefreshInterval = (widgetId) => {
-    const widgetSettings = JSON.parse(localStorage.getItem('widgetSettings') || '{}');
-
     const widgetMap = {
       'chores-widget': 'chores',
       'calendar-widget': 'calendar',
@@ -451,14 +416,13 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
     };
 
     const settingsKey = widgetMap[widgetId];
-    if (settingsKey && widgetSettings[settingsKey]) {
-      return widgetSettings[settingsKey].refreshInterval || 0;
+    if (settingsKey && deviceWidgetSettings[settingsKey]) {
+      return deviceWidgetSettings[settingsKey].refreshInterval || 0;
     }
 
     if (widgetId.startsWith('plugin-')) {
       const filename = widgetId.slice(7);
-      const pluginSettings = JSON.parse(localStorage.getItem('pluginSettings') || '{}');
-      return pluginSettings[filename]?.refreshInterval || 0;
+      return devicePluginSettings[filename]?.refreshInterval || 0;
     }
 
     return 0;
@@ -551,12 +515,11 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                 key={widget.id}
                 className={`widget-wrapper ${isSelected ? 'selected' : ''}`}
                 data-grid={{ ...effectiveLayout }}
-                onPointerDown={(e) => {
+                onPointerDownCapture={(e) => {
                   if (!locked && !isSelected && !e.target.closest('.drag-handle') && !e.target.closest('.resize-button')) {
                     if (isInteractiveTarget(e.target)) {
-                      if (selectedWidget) {
-                        setSelectedWidget(null);
-                      }
+                      // Select on interactive taps too so edit affordances (drag/resize) remain reachable.
+                      setSelectedWidget(widget.id);
                       return;
                     }
 
@@ -594,6 +557,29 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                   }
                 }}
               >
+                {!locked && !isSelected && (
+                  <Box
+                    className="selection-overlay"
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setSelectedWidget(widget.id);
+                    }}
+                    sx={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      cursor: 'pointer',
+                      zIndex: 1000,
+                      pointerEvents: 'auto',
+                      touchAction: 'manipulation',
+                      userSelect: 'none',
+                    }}
+                  />
+                )}
+
                 {/* Resize Buttons - Only visible when selected and unlocked */}
                 {isSelected && !locked && (
                   <>
@@ -817,6 +803,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                         pointerEvents: locked ? 'none' : 'auto',
                       }}
                     />
+
                   </>
                 )}
 
@@ -842,6 +829,7 @@ const WidgetContainer = ({ children, widgets = [], locked = true, onLayoutChange
                   {React.cloneElement(widget.content, {
                     key: refreshKeys[widget.id] || 0,
                     widgetId: widget.id,
+                    refreshNonce: refreshKeys[widget.id] || 0,
                     activeTabId,
                     widgetSize: {
                       width: effectiveLayout.w,

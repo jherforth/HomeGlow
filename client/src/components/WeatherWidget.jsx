@@ -17,53 +17,75 @@ import {
 import { Settings } from '@mui/icons-material';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import axios from 'axios';
+import { API_BASE_URL } from '../utils/apiConfig.js';
+import { getDeviceApiBase } from '../utils/deviceName.js';
 
-const DEFAULT_ZIP_CODE = '14818';
+const DEFAULT_LOCATION_QUERY = '14818';
 const VALID_LAYOUT_MODES = new Set(['auto', 'compact', 'medium', 'full']);
-const WEATHER_SETTINGS_STORAGE_PREFIX = 'weatherWidgetSettings:';
-const WEATHER_CACHE_STORAGE_PREFIX = 'weatherWidgetCache:';
+const WEATHER_CACHE_FALLBACK_REFRESH_MS = 5 * 60 * 1000;
+const WEATHER_CACHE = new Map();
+const WEATHER_TAB_SETTINGS_OVERRIDES = new Map();
+
+const normalizeWeatherCacheLocation = (rawLocation) => String(rawLocation || '').trim().toLowerCase();
+
+const buildWeatherCacheKey = (locationQuery, tempUnit) => {
+  const normalizedUnit = tempUnit === 'C' ? 'C' : 'F';
+  return `${normalizeWeatherCacheLocation(locationQuery)}::${normalizedUnit}`;
+};
+
+const isValidCoordinates = (candidate) => {
+  return !!candidate
+    && typeof candidate.lat === 'number'
+    && typeof candidate.lon === 'number'
+    && Number.isFinite(candidate.lat)
+    && Number.isFinite(candidate.lon);
+};
 
 const WeatherWidget = ({
   transparentBackground,
   weatherApiKey,
+  refreshInterval = 0,
   widgetSize = { width: 4, height: 4 },
-  activeTabId = 1,
-  widgetId = 'weather-widget',
+  activeTab = 1,
+  activeTabConfigJson = null,
+  allTabConfigs = [],
+  prefetchOnly = false,
+  refreshNonce = 0,
 }) => {
-  const weatherSettingsStorageKey = `${WEATHER_SETTINGS_STORAGE_PREFIX}${activeTabId}:${widgetId}`;
-  const weatherCacheStorageKey = `${WEATHER_CACHE_STORAGE_PREFIX}${activeTabId}:${widgetId}`;
+  const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [weatherData, setWeatherData] = useState(null);
   const [forecastData, setForecastData] = useState([]);
   const [airQualityData, setAirQualityData] = useState(null);
   const [chartData, setChartData] = useState([]);
-  const [zipCode, setZipCode] = useState(DEFAULT_ZIP_CODE);
+  const [locationQuery, setLocationQuery] = useState(DEFAULT_LOCATION_QUERY);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [chartType, setChartType] = useState('temperature');
   const [tempUnit, setTempUnit] = useState('F');
+  const [coordinates, setCoordinates] = useState(null);
   const [layoutMode, setLayoutMode] = useState('auto');
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [shouldFetchNow, setShouldFetchNow] = useState(false);
-  const [draftZipCode, setDraftZipCode] = useState(DEFAULT_ZIP_CODE);
+  const [draftLocationQuery, setDraftLocationQuery] = useState(DEFAULT_LOCATION_QUERY);
   const [draftTempUnit, setDraftTempUnit] = useState('F');
   const [draftLayoutMode, setDraftLayoutMode] = useState('auto');
 
   const unitSymbol = `°${tempUnit}`;
 
-  const persistInstanceSettings = (nextSettings) => {
-    localStorage.setItem(weatherSettingsStorageKey, JSON.stringify(nextSettings));
+  const getCachedPayloadFor = (targetLocationQuery, targetTempUnit) => {
+    const cacheKey = buildWeatherCacheKey(targetLocationQuery, targetTempUnit);
+    const entry = WEATHER_CACHE.get(cacheKey);
+    return entry && entry.payload ? entry.payload : null;
   };
 
-  const persistWeatherCacheForKey = (cacheKey, payload) => {
-    localStorage.setItem(cacheKey, JSON.stringify({
-      ...payload,
-      cachedAt: Date.now(),
-    }));
-  };
-
-  const persistWeatherCache = (payload) => {
-    persistWeatherCacheForKey(weatherCacheStorageKey, payload);
+  const writeCachedPayloadFor = (targetLocationQuery, targetTempUnit, payload) => {
+    const cacheKey = buildWeatherCacheKey(targetLocationQuery, targetTempUnit);
+    WEATHER_CACHE.set(cacheKey, {
+      payload,
+      fetchedAt: Date.now(),
+      promise: null,
+    });
   };
 
   const normalizeTempUnit = (candidateUnit, fallbackUnit = 'F') => {
@@ -76,10 +98,71 @@ const WeatherWidget = ({
     return 'F';
   };
 
-  const resolveInstanceConfig = (rawSettings = {}, fallbackZipCode = DEFAULT_ZIP_CODE, fallbackTempUnit = 'F') => {
-    const resolvedZipCode = (rawSettings.zipCode || fallbackZipCode || '').trim();
-    const resolvedTempUnit = normalizeTempUnit(rawSettings.tempUnit, fallbackTempUnit);
-    return { resolvedZipCode, resolvedTempUnit };
+  const parseTabConfigJson = (configJson) => {
+    if (!configJson) return {};
+    if (typeof configJson === 'object' && !Array.isArray(configJson)) return configJson;
+    if (typeof configJson !== 'string') return {};
+
+    try {
+      const parsed = JSON.parse(configJson);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  };
+
+  const readWeatherSettingsFromTabConfig = (configJson) => {
+    const layoutMap = parseTabConfigJson(configJson);
+    const weatherEntry = layoutMap.weather;
+    if (!weatherEntry || typeof weatherEntry !== 'object' || Array.isArray(weatherEntry)) {
+      return null;
+    }
+
+    const locationQuery = String(weatherEntry.locationQuery || weatherEntry.zipCode || '').trim();
+    const coordinates = isValidCoordinates(weatherEntry)
+      ? { lat: weatherEntry.lat, lon: weatherEntry.lon }
+      : null;
+
+    return {
+      locationQuery: locationQuery || DEFAULT_LOCATION_QUERY,
+      tempUnit: normalizeTempUnit(weatherEntry.tempUnit, 'F'),
+      layoutMode: VALID_LAYOUT_MODES.has(weatherEntry.layoutMode) ? weatherEntry.layoutMode : 'auto',
+      coordinates,
+      resolvedName: weatherEntry.resolvedName || '',
+    };
+  };
+
+  const saveInstanceSettingsToTab = async (tabNumber, nextSettings) => {
+    await axios.patch(`${API_DEVICE_URL}/widget-assignments/layout`, {
+      widget_name: 'weather',
+      tabNumber,
+      settings: nextSettings,
+    });
+    WEATHER_TAB_SETTINGS_OVERRIDES.set(Number(tabNumber), { ...nextSettings });
+  };
+
+  const getEffectiveWeatherSettingsForTab = (tabNumber, configJson) => {
+    const override = WEATHER_TAB_SETTINGS_OVERRIDES.get(Number(tabNumber));
+    if (override && typeof override === 'object') {
+      return {
+        locationQuery: String(override.locationQuery || '').trim() || DEFAULT_LOCATION_QUERY,
+        tempUnit: normalizeTempUnit(override.tempUnit, 'F'),
+        layoutMode: VALID_LAYOUT_MODES.has(override.layoutMode) ? override.layoutMode : 'auto',
+        coordinates: isValidCoordinates(override) ? { lat: override.lat, lon: override.lon } : null,
+        resolvedName: override.resolvedName || '',
+      };
+    }
+
+    return readWeatherSettingsFromTabConfig(configJson);
+  };
+
+  const buildNotFoundError = () => {
+    const notFoundError = new Error('Location not found');
+    notFoundError.response = {
+      status: 404,
+      statusText: 'Not Found',
+    };
+    return notFoundError;
   };
 
   const applyWeatherPayloadToState = (payload) => {
@@ -95,7 +178,7 @@ const WeatherWidget = ({
         return 'Invalid API key. Please check your OpenWeatherMap API key in the Admin Panel.';
       }
       if (requestError.response.status === 404) {
-        return 'Invalid zip code. Please enter a valid US zip code.';
+        return 'Invalid location. Try a city and country code like "Sydney,AU" or a postal code like "14818,US".';
       }
       return `Weather service error: ${requestError.response.status} ${requestError.response.statusText}`;
     }
@@ -107,10 +190,97 @@ const WeatherWidget = ({
     return 'Failed to fetch weather data. Please try again later.';
   };
 
-  const fetchWeatherPayload = async (targetZipCode, targetTempUnit) => {
+  const shouldTryZipFallback = (candidateLocation) => {
+    const normalizedCandidate = String(candidateLocation || '').trim();
+    if (!normalizedCandidate) {
+      return false;
+    }
+
+    // Treat as postal/zip style when the query has no alphabetic characters.
+    return !/[a-z]/i.test(normalizedCandidate);
+  };
+
+  const getDirectGeocodeCandidates = (targetLocationQuery) => {
+    const baseQuery = String(targetLocationQuery || '').trim();
+    if (!baseQuery) {
+      return [];
+    }
+
+    const candidates = [baseQuery];
+    const alreadyUsQualified = /,\s*us\s*$/i.test(baseQuery) || /,\s*usa\s*$/i.test(baseQuery);
+    const hasExplicitCountrySegment = baseQuery.split(',').length >= 3;
+
+    if (!alreadyUsQualified && !hasExplicitCountrySegment) {
+      candidates.push(`${baseQuery},US`);
+    }
+
+    return candidates;
+  };
+
+  const resolveCoordinatesForLocation = async (targetLocationQuery) => {
+    const directCandidates = getDirectGeocodeCandidates(targetLocationQuery);
+    for (const directCandidate of directCandidates) {
+      const encodedLocation = encodeURIComponent(directCandidate);
+      const directGeocodeUrl = `https://api.openweathermap.org/geo/1.0/direct?q=${encodedLocation}&limit=1&appid=${weatherApiKey}`;
+
+      try {
+        const directResponse = await axios.get(directGeocodeUrl);
+        if (Array.isArray(directResponse.data) && directResponse.data.length > 0) {
+          const bestMatch = directResponse.data[0];
+          const resolvedCoordinates = {
+            lat: bestMatch.lat,
+            lon: bestMatch.lon,
+            name: bestMatch.name,
+            country: bestMatch.country,
+            state: bestMatch.state || null,
+            source: 'direct',
+          };
+          return resolvedCoordinates;
+        }
+      } catch (requestError) {
+        if (requestError?.response?.status !== 404) {
+          throw requestError;
+        }
+      }
+    }
+
+    if (shouldTryZipFallback(targetLocationQuery)) {
+      const normalizedZip = targetLocationQuery.includes(',') ? targetLocationQuery : `${targetLocationQuery},US`;
+      const encodedZip = encodeURIComponent(normalizedZip);
+      const zipGeocodeUrl = `https://api.openweathermap.org/geo/1.0/zip?zip=${encodedZip}&appid=${weatherApiKey}`;
+
+      try {
+        const zipResponse = await axios.get(zipGeocodeUrl);
+        if (zipResponse?.data && typeof zipResponse.data.lat === 'number' && typeof zipResponse.data.lon === 'number') {
+          const resolvedCoordinates = {
+            lat: zipResponse.data.lat,
+            lon: zipResponse.data.lon,
+            name: zipResponse.data.name || null,
+            country: zipResponse.data.country || null,
+            state: null,
+            source: 'zip',
+          };
+          return resolvedCoordinates;
+        }
+      } catch (requestError) {
+        if (requestError?.response?.status !== 404) {
+          throw requestError;
+        }
+      }
+    }
+
+    throw buildNotFoundError();
+  };
+
+  const fetchWeatherPayload = async (targetLocationQuery, targetTempUnit, targetCoordinates = null) => {
     const targetUnitParam = targetTempUnit === 'F' ? 'imperial' : 'metric';
 
-    const currentWeatherUrl = `https://api.openweathermap.org/data/2.5/weather?zip=${targetZipCode},US&appid=${weatherApiKey}&units=${targetUnitParam}`;
+    const resolvedCoordinates = isValidCoordinates(targetCoordinates)
+      ? { ...targetCoordinates, source: 'saved' }
+      : await resolveCoordinatesForLocation(targetLocationQuery);
+    const { lat, lon } = resolvedCoordinates;
+
+    const currentWeatherUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${weatherApiKey}&units=${targetUnitParam}`;
     const currentResponse = await axios.get(currentWeatherUrl);
     const nextWeatherData = currentResponse.data;
     let nextAirQualityData = null;
@@ -129,7 +299,7 @@ const WeatherWidget = ({
       }
     }
 
-    const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?zip=${targetZipCode},US&appid=${weatherApiKey}&units=${targetUnitParam}`;
+    const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${weatherApiKey}&units=${targetUnitParam}`;
     const forecastResponse = await axios.get(forecastUrl);
     const chartDataPoints = [];
 
@@ -181,8 +351,11 @@ const WeatherWidget = ({
     }
 
     return {
-      zipCode: targetZipCode,
-      tempUnit: targetTempUnit,
+      coordinates: {
+        lat,
+        lon,
+      },
+      resolvedName: resolvedCoordinates.name || '',
       weatherData: nextWeatherData,
       airQualityData: nextAirQualityData,
       forecastData: nextForecastData,
@@ -190,80 +363,69 @@ const WeatherWidget = ({
     };
   };
 
-  const refreshAllConfiguredWeatherCaches = async () => {
-    if (!weatherApiKey) {
-      return;
+  const resolvePayloadFromCacheOrApi = async (
+    targetLocationQuery,
+    targetTempUnit,
+    { forceRefresh = false, targetCoordinates = null } = {}
+  ) => {
+    const cacheKey = buildWeatherCacheKey(targetLocationQuery, targetTempUnit);
+    const existing = WEATHER_CACHE.get(cacheKey);
+
+    if (!forceRefresh && existing?.payload) {
+      return existing.payload;
     }
 
-    const legacyZipCode = localStorage.getItem('weatherZipCode') || DEFAULT_ZIP_CODE;
-    const legacyTempUnit = localStorage.getItem('weatherTempUnit') === 'C' ? 'C' : 'F';
-    const settingsKeys = Object.keys(localStorage).filter((key) => key.startsWith(WEATHER_SETTINGS_STORAGE_PREFIX));
-
-    if (!settingsKeys.includes(weatherSettingsStorageKey)) {
-      settingsKeys.push(weatherSettingsStorageKey);
+    if (existing?.promise) {
+      return await existing.promise;
     }
 
-    const refreshTargets = settingsKeys
-      .map((settingsKey) => {
-        let parsedSettings = {};
-        try {
-          parsedSettings = JSON.parse(localStorage.getItem(settingsKey) || '{}');
-        } catch {
-          parsedSettings = {};
-        }
+    const effectiveCoordinates = isValidCoordinates(targetCoordinates)
+      ? targetCoordinates
+      : (isValidCoordinates(existing?.payload?.coordinates) ? existing.payload.coordinates : null);
 
-        const currentTargetFallbackZip = settingsKey === weatherSettingsStorageKey ? zipCode : legacyZipCode;
-        const currentTargetFallbackTemp = settingsKey === weatherSettingsStorageKey ? tempUnit : legacyTempUnit;
-        const { resolvedZipCode, resolvedTempUnit } = resolveInstanceConfig(
-          parsedSettings,
-          currentTargetFallbackZip,
-          currentTargetFallbackTemp
-        );
+    const pendingPromise = (async () => {
+      const payload = await fetchWeatherPayload(targetLocationQuery, targetTempUnit, effectiveCoordinates);
+      writeCachedPayloadFor(targetLocationQuery, targetTempUnit, payload);
+      return payload;
+    })();
 
-        if (!resolvedZipCode) {
-          return null;
-        }
-
-        return {
-          cacheKey: settingsKey.replace(WEATHER_SETTINGS_STORAGE_PREFIX, WEATHER_CACHE_STORAGE_PREFIX),
-          zipCode: resolvedZipCode,
-          tempUnit: resolvedTempUnit,
-        };
-      })
-      .filter(Boolean);
-
-    if (refreshTargets.length === 0) {
-      return;
-    }
-
-    const queryGroups = new Map();
-    refreshTargets.forEach((target) => {
-      const queryKey = `${target.zipCode}|${target.tempUnit}`;
-      if (!queryGroups.has(queryKey)) {
-        queryGroups.set(queryKey, []);
-      }
-      queryGroups.get(queryKey).push(target);
+    WEATHER_CACHE.set(cacheKey, {
+      payload: existing?.payload || null,
+      fetchedAt: existing?.fetchedAt || 0,
+      promise: pendingPromise,
     });
 
-    for (const targets of queryGroups.values()) {
-      const { zipCode: targetZipCode, tempUnit: targetTempUnit } = targets[0];
-
-      try {
-        const payload = await fetchWeatherPayload(targetZipCode, targetTempUnit);
-
-        targets.forEach((target) => {
-          persistWeatherCacheForKey(target.cacheKey, payload);
+    try {
+      return await pendingPromise;
+    } finally {
+      const latest = WEATHER_CACHE.get(cacheKey);
+      if (latest?.promise === pendingPromise) {
+        WEATHER_CACHE.set(cacheKey, {
+          payload: latest.payload || null,
+          fetchedAt: latest.fetchedAt || 0,
+          promise: null,
         });
-
-        if (targetZipCode === zipCode && targetTempUnit === tempUnit) {
-          applyWeatherPayloadToState(payload);
-          setError(null);
-        }
-      } catch (requestError) {
-        if (targetZipCode === zipCode && targetTempUnit === tempUnit) {
-          setError(getWeatherErrorMessage(requestError));
-        }
       }
+    }
+  };
+
+  const refreshCurrentWeather = async () => {
+    if (!weatherApiKey || !locationQuery) {
+      return;
+    }
+
+    try {
+      const payload = await resolvePayloadFromCacheOrApi(locationQuery, tempUnit, {
+        forceRefresh: true,
+        targetCoordinates: coordinates,
+      });
+      applyWeatherPayloadToState(payload);
+      if (isValidCoordinates(payload.coordinates)) {
+        setCoordinates(payload.coordinates);
+      }
+      setError(null);
+    } catch (requestError) {
+      setError(getWeatherErrorMessage(requestError));
     }
   };
 
@@ -297,54 +459,26 @@ const WeatherWidget = ({
 
   const layoutType = getLayoutType();
 
-  useEffect(() => {
-    setSettingsLoaded(false);
+  const applyResolvedTabSettings = (resolvedSettings) => {
+    const savedLocationQuery = resolvedSettings?.locationQuery || DEFAULT_LOCATION_QUERY;
+    const savedTempUnit = resolvedSettings?.tempUnit || 'F';
+    const savedLayoutMode = resolvedSettings?.layoutMode || 'auto';
+    const savedCoordinates = isValidCoordinates(resolvedSettings?.coordinates)
+      ? resolvedSettings.coordinates
+      : null;
+
+    const cachedPayload = getCachedPayloadFor(savedLocationQuery, savedTempUnit);
+    const shouldAvoidDefaultFetch = prefetchOnly && !resolvedSettings;
+
     setError(null);
-
-    let parsedSettings = {};
-    let legacyWidgetSettings = {};
-
-    try {
-      parsedSettings = JSON.parse(localStorage.getItem(weatherSettingsStorageKey) || '{}');
-    } catch {
-      parsedSettings = {};
-    }
-
-    try {
-      legacyWidgetSettings = JSON.parse(localStorage.getItem('widgetSettings') || '{}');
-    } catch {
-      legacyWidgetSettings = {};
-    }
-
-    let parsedCache = null;
-    try {
-      parsedCache = JSON.parse(localStorage.getItem(weatherCacheStorageKey) || 'null');
-    } catch {
-      parsedCache = null;
-    }
-
-    const legacyZipCode = localStorage.getItem('weatherZipCode') || DEFAULT_ZIP_CODE;
-    const legacyTempUnit = localStorage.getItem('weatherTempUnit') === 'C' ? 'C' : 'F';
-    const { resolvedZipCode: savedZipCode, resolvedTempUnit: savedTempUnit } = resolveInstanceConfig(
-      parsedSettings,
-      legacyZipCode,
-      legacyTempUnit
-    );
-    const candidateLayoutMode = parsedSettings.layoutMode || legacyWidgetSettings.weather?.layoutMode || 'auto';
-    const savedLayoutMode = VALID_LAYOUT_MODES.has(candidateLayoutMode) ? candidateLayoutMode : 'auto';
-
-    const hasMatchingCache = Boolean(
-      parsedCache
-      && parsedCache.zipCode === savedZipCode
-      && parsedCache.tempUnit === savedTempUnit
-      && parsedCache.weatherData
-    );
-
-    if (hasMatchingCache) {
-      setWeatherData(parsedCache.weatherData || null);
-      setForecastData(Array.isArray(parsedCache.forecastData) ? parsedCache.forecastData : []);
-      setAirQualityData(parsedCache.airQualityData || null);
-      setChartData(Array.isArray(parsedCache.chartData) ? parsedCache.chartData : []);
+    if (cachedPayload) {
+      applyWeatherPayloadToState(cachedPayload);
+      setShouldFetchNow(false);
+    } else if (shouldAvoidDefaultFetch) {
+      setWeatherData(null);
+      setForecastData([]);
+      setAirQualityData(null);
+      setChartData([]);
       setShouldFetchNow(false);
     } else {
       setWeatherData(null);
@@ -354,44 +488,166 @@ const WeatherWidget = ({
       setShouldFetchNow(true);
     }
 
-    setZipCode(savedZipCode);
+    setLocationQuery(savedLocationQuery);
     setTempUnit(savedTempUnit);
+    setCoordinates(savedCoordinates);
     setLayoutMode(savedLayoutMode);
-    setDraftZipCode(savedZipCode);
+    setDraftLocationQuery(savedLocationQuery);
     setDraftTempUnit(savedTempUnit);
     setDraftLayoutMode(savedLayoutMode);
     setSettingsLoaded(true);
-  }, [weatherSettingsStorageKey, weatherCacheStorageKey]);
+  };
+
+  const persistActiveTabSettingsIfChanged = async ({
+    nextLocationQuery,
+    nextTempUnit,
+    nextLayoutMode,
+    nextCoordinates,
+    nextResolvedName = '',
+  }) => {
+    const current = getEffectiveWeatherSettingsForTab(activeTab, activeTabConfigJson);
+    const currentCoords = isValidCoordinates(current?.coordinates) ? current.coordinates : null;
+    const nextCoords = isValidCoordinates(nextCoordinates) ? nextCoordinates : null;
+
+    const isSame =
+      (current?.locationQuery || DEFAULT_LOCATION_QUERY) === nextLocationQuery
+      && (current?.tempUnit || 'F') === nextTempUnit
+      && (current?.layoutMode || 'auto') === nextLayoutMode
+      && (!currentCoords && !nextCoords
+        || (currentCoords && nextCoords && currentCoords.lat === nextCoords.lat && currentCoords.lon === nextCoords.lon))
+      && (current?.resolvedName || '') === nextResolvedName;
+
+    if (isSame) {
+      return;
+    }
+
+    await saveInstanceSettingsToTab(activeTab, {
+      locationQuery: nextLocationQuery,
+      tempUnit: nextTempUnit,
+      layoutMode: nextLayoutMode,
+      ...(nextCoords ? { lat: nextCoords.lat, lon: nextCoords.lon } : {}),
+      ...(nextResolvedName ? { resolvedName: nextResolvedName } : {}),
+    });
+  };
+
+  useEffect(() => {
+    const tabSettings = getEffectiveWeatherSettingsForTab(activeTab, activeTabConfigJson);
+    setSettingsLoaded(false);
+    applyResolvedTabSettings(tabSettings);
+  }, [activeTab, activeTabConfigJson, refreshNonce]);
 
   useEffect(() => {
     if (!settingsLoaded || !shouldFetchNow) {
       return;
     }
 
-    if (zipCode && weatherApiKey) {
+    if (locationQuery && weatherApiKey) {
       fetchWeatherData();
       setShouldFetchNow(false);
     }
-  }, [zipCode, weatherApiKey, tempUnit, settingsLoaded, shouldFetchNow]);
+  }, [locationQuery, weatherApiKey, tempUnit, settingsLoaded, shouldFetchNow]);
+
+  useEffect(() => {
+    if (!settingsLoaded || !weatherApiKey) {
+      return;
+    }
+
+    const collectTargets = () => {
+      const targetsByKey = new Map();
+
+      const activeSettings = getEffectiveWeatherSettingsForTab(activeTab, activeTabConfigJson);
+      const includeActiveTarget = !!activeSettings?.locationQuery || !prefetchOnly;
+
+      if (includeActiveTarget && locationQuery) {
+        const currentKey = buildWeatherCacheKey(locationQuery, tempUnit);
+        targetsByKey.set(currentKey, {
+          tabNumber: Number(activeTab),
+          locationQuery,
+          tempUnit,
+          layoutMode: layoutMode || 'auto',
+          coordinates: isValidCoordinates(coordinates) ? coordinates : null,
+        });
+      }
+
+      const tabsList = Array.isArray(allTabConfigs) ? allTabConfigs : [];
+      for (const tab of tabsList) {
+        const weatherSettings = getEffectiveWeatherSettingsForTab(tab?.number, tab?.config_json || null);
+        if (!weatherSettings?.locationQuery) {
+          continue;
+        }
+        const key = buildWeatherCacheKey(weatherSettings.locationQuery, weatherSettings.tempUnit);
+        targetsByKey.set(key, {
+          tabNumber: Number(tab.number),
+          locationQuery: weatherSettings.locationQuery,
+          tempUnit: weatherSettings.tempUnit,
+          layoutMode: weatherSettings.layoutMode || 'auto',
+          coordinates: isValidCoordinates(weatherSettings.coordinates) ? weatherSettings.coordinates : null,
+        });
+      }
+
+      return Array.from(targetsByKey.values());
+    };
+
+    const prefetchAllTargets = async () => {
+      const targets = collectTargets();
+      if (targets.length === 0) {
+        return;
+      }
+
+      await Promise.all(targets.map(async (target) => {
+        try {
+          const payload = await resolvePayloadFromCacheOrApi(target.locationQuery, target.tempUnit, {
+            forceRefresh: true,
+            targetCoordinates: target.coordinates,
+          });
+
+          if (
+            Number.isFinite(target.tabNumber)
+            && !isValidCoordinates(target.coordinates)
+            && isValidCoordinates(payload?.coordinates)
+          ) {
+            await saveInstanceSettingsToTab(target.tabNumber, {
+              locationQuery: target.locationQuery,
+              tempUnit: target.tempUnit,
+              layoutMode: target.layoutMode || 'auto',
+              lat: payload.coordinates.lat,
+              lon: payload.coordinates.lon,
+              ...(payload.resolvedName ? { resolvedName: payload.resolvedName } : {}),
+            });
+          }
+        } catch {
+          // Keep prefetch failures non-blocking.
+        }
+      }));
+    };
+
+    void prefetchAllTargets();
+
+    const intervalMs = refreshInterval > 0 ? refreshInterval : WEATHER_CACHE_FALLBACK_REFRESH_MS;
+    const intervalId = setInterval(() => {
+      void prefetchAllTargets();
+    }, intervalMs);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [allTabConfigs, activeTab, activeTabConfigJson, prefetchOnly, locationQuery, tempUnit, layoutMode, settingsLoaded, weatherApiKey, refreshInterval]);
 
   useEffect(() => {
     if (!settingsLoaded) {
       return;
     }
 
-    const widgetSettings = JSON.parse(localStorage.getItem('widgetSettings') || '{}');
-    const refreshInterval = widgetSettings.weather?.refreshInterval || 0;
-
     if (refreshInterval > 0) {
       const intervalId = setInterval(() => {
-        void refreshAllConfiguredWeatherCaches();
+        void refreshCurrentWeather();
       }, refreshInterval);
 
       return () => {
         clearInterval(intervalId);
       };
     }
-  }, [zipCode, weatherApiKey, tempUnit, settingsLoaded]);
+  }, [refreshInterval, settingsLoaded, weatherApiKey, locationQuery, tempUnit]);
 
   const fetchWeatherData = async () => {
     if (!weatherApiKey) {
@@ -399,8 +655,8 @@ const WeatherWidget = ({
       return;
     }
 
-    if (!zipCode) {
-      setError('Please enter a zip code.');
+    if (!locationQuery) {
+      setError('Please enter a location.');
       return;
     }
 
@@ -408,9 +664,25 @@ const WeatherWidget = ({
     setError(null);
 
     try {
-      const payload = await fetchWeatherPayload(zipCode, tempUnit);
+      const payload = await resolvePayloadFromCacheOrApi(locationQuery, tempUnit, {
+        forceRefresh: false,
+        targetCoordinates: coordinates,
+      });
       applyWeatherPayloadToState(payload);
-      persistWeatherCache(payload);
+      if (isValidCoordinates(payload.coordinates)) {
+        setCoordinates(payload.coordinates);
+
+        // Backfill coordinates for existing tabs that were saved before coordinate persistence.
+        void persistActiveTabSettingsIfChanged({
+          nextLocationQuery: locationQuery,
+          nextTempUnit: tempUnit,
+          nextLayoutMode: layoutMode,
+          nextCoordinates: payload.coordinates,
+          nextResolvedName: payload.resolvedName || '',
+        }).catch(() => {
+          // Keep weather rendering resilient even if backfill persistence fails.
+        });
+      }
     } catch (error) {
       setError(getWeatherErrorMessage(error));
     } finally {
@@ -430,7 +702,7 @@ const WeatherWidget = ({
   };
 
   const handleOpenSettingsModal = () => {
-    setDraftZipCode(zipCode || DEFAULT_ZIP_CODE);
+    setDraftLocationQuery(locationQuery || DEFAULT_LOCATION_QUERY);
     setDraftTempUnit(tempUnit);
     setDraftLayoutMode(layoutMode);
     setSettingsModalOpen(true);
@@ -440,30 +712,59 @@ const WeatherWidget = ({
     setSettingsModalOpen(false);
   };
 
-  const handleSaveSettingsModal = () => {
-    const normalizedZip = (draftZipCode || '').trim();
-    if (!normalizedZip) {
-      setError('Please enter a zip code.');
+  const handleSaveSettingsModal = async () => {
+    const normalizedLocationQuery = (draftLocationQuery || '').trim();
+    if (!normalizedLocationQuery) {
+      setError('Please enter a location.');
       return;
     }
 
     const normalizedTempUnit = draftTempUnit === 'C' ? 'C' : 'F';
     const normalizedLayoutMode = VALID_LAYOUT_MODES.has(draftLayoutMode) ? draftLayoutMode : 'auto';
-    const shouldRefreshForDataChange = normalizedZip !== zipCode || normalizedTempUnit !== tempUnit;
+    const shouldRefreshForDataChange = normalizedLocationQuery !== locationQuery || normalizedTempUnit !== tempUnit;
 
-    setZipCode(normalizedZip);
+    const existing = getEffectiveWeatherSettingsForTab(activeTab, activeTabConfigJson);
+    let resolvedCoordinates =
+      existing
+      && existing.locationQuery === normalizedLocationQuery
+      && isValidCoordinates(existing.coordinates)
+      ? existing.coordinates
+      : null;
+    let resolvedName = existing?.resolvedName || '';
+
+    if (!resolvedCoordinates) {
+      try {
+        const geocoded = await resolveCoordinatesForLocation(normalizedLocationQuery);
+        resolvedCoordinates = { lat: geocoded.lat, lon: geocoded.lon };
+        resolvedName = geocoded.name || '';
+      } catch (error) {
+        setError(getWeatherErrorMessage(error));
+        return;
+      }
+    }
+
+    setLocationQuery(normalizedLocationQuery);
     setTempUnit(normalizedTempUnit);
+    setCoordinates(resolvedCoordinates);
     setLayoutMode(normalizedLayoutMode);
 
     if (shouldRefreshForDataChange) {
       setShouldFetchNow(true);
     }
 
-    persistInstanceSettings({
-      zipCode: normalizedZip,
-      tempUnit: normalizedTempUnit,
-      layoutMode: normalizedLayoutMode,
-    });
+    try {
+      await persistActiveTabSettingsIfChanged({
+        nextLocationQuery: normalizedLocationQuery,
+        nextTempUnit: normalizedTempUnit,
+        nextLayoutMode: normalizedLayoutMode,
+        nextCoordinates: resolvedCoordinates,
+        nextResolvedName: resolvedName,
+      });
+    } catch (error) {
+      console.error('Error saving weather widget settings:', error);
+      setError('Failed to save weather settings. Please try again.');
+      return;
+    }
 
     setSettingsModalOpen(false);
   };
@@ -719,7 +1020,7 @@ const WeatherWidget = ({
           </Box>
 
           {/* Charts - Right Column */}
-          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: 0 }}>
             <Box sx={{ display: 'flex', gap: 1, mb: 2, justifyContent: 'center' }}>
               <Button
                 size="small"
@@ -737,8 +1038,8 @@ const WeatherWidget = ({
               </Button>
             </Box>
 
-            <Box sx={{ flex: 1, width: '100%', minHeight: 0 }}>
-              <ResponsiveContainer width="100%" height="100%">
+            <Box sx={{ flex: 1, width: '100%', minWidth: 0, minHeight: 220 }}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                 {chartType === 'temperature' ? (
                   <LineChart data={chartData}>
                     <XAxis dataKey="time" axisLine={false} tickLine={false} />
@@ -769,7 +1070,21 @@ const WeatherWidget = ({
   };
 
   const settingsModal = (
-    <Dialog open={settingsModalOpen} onClose={handleCloseSettingsModal} maxWidth="xs" fullWidth>
+    <Dialog
+      open={settingsModalOpen}
+      onClose={handleCloseSettingsModal}
+      maxWidth="xs"
+      fullWidth
+      slotProps={{
+        paper: {
+          component: 'form',
+          onSubmit: (event) => {
+            event.preventDefault();
+            handleSaveSettingsModal();
+          },
+        }
+      }}
+    >
       <DialogTitle>Weather Widget Settings</DialogTitle>
       <DialogContent>
         <Typography variant="caption" sx={{ display: 'block', mb: 2, opacity: 0.8 }}>
@@ -778,10 +1093,11 @@ const WeatherWidget = ({
 
         <TextField
           fullWidth
-          label="Zip Code"
-          value={draftZipCode}
-          onChange={(e) => setDraftZipCode(e.target.value)}
+          label="Location"
+          value={draftLocationQuery}
+          onChange={(e) => setDraftLocationQuery(e.target.value)}
           sx={{ mb: 2 }}
+          helperText="Examples: Sydney,AU or 14818,US"
         />
 
         <FormControl fullWidth sx={{ mb: 2 }}>
@@ -813,8 +1129,8 @@ const WeatherWidget = ({
         </FormControl>
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleCloseSettingsModal}>Cancel</Button>
-        <Button variant="contained" onClick={handleSaveSettingsModal}>Save</Button>
+        <Button type="button" onClick={handleCloseSettingsModal}>Cancel</Button>
+        <Button type="submit" variant="contained">Save</Button>
       </DialogActions>
     </Dialog>
   );
