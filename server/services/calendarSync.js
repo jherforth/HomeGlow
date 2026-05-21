@@ -3,6 +3,7 @@ const ICAL = require('ical.js');
 const node_ical = require('node-ical');
 const googleConnection = require('./googleConnection');
 const googleCalendar = require('./googleCalendar');
+const appleCalDAV = require('./appleCalDAV');
 
 class CalendarSyncService {
   constructor(db, decryptPassword) {
@@ -66,6 +67,8 @@ class CalendarSyncService {
         events = await this.fetchCalDAVEvents(source);
       } else if (source.type === 'Google') {
         events = await this.fetchGoogleEvents(source);
+      } else if (source.type === 'Apple') {
+        events = await this.fetchAppleCalDAVEvents(source);
       }
 
       this.db.prepare('DELETE FROM calendar_events_cache WHERE source_id = ?').run(sourceId);
@@ -199,6 +202,11 @@ class CalendarSyncService {
         raw: {}
       };
     });
+  }
+
+  async fetchAppleCalDAVEvents(source) {
+    const decryptedPassword = this.decryptPassword(source.password);
+    return await appleCalDAV.fetchCalendarEvents(source.url, source.username, decryptedPassword);
   }
 
   async fetchGoogleEvents(source) {

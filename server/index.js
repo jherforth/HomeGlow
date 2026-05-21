@@ -26,6 +26,7 @@ const widgetRegistryPath = path.join(__dirname, 'widgets_registry.json');
 const CalendarSyncService = require('./services/calendarSync');
 const googleConnection = require('./services/googleConnection');
 const googleCalendar = require('./services/googleCalendar');
+const appleCalDAV = require('./services/appleCalDAV');
 const googlePhotos = require('./services/googlePhotos');
 const googlePhotosPicker = require('./services/googlePhotosPicker');
 const { isEncryptionConfigured, getEncryptionStatus } = require('./utils/encryption');
@@ -3123,6 +3124,21 @@ fastify.delete('/api/connections/google/account', async (request, reply) => {
   }
 });
 
+// Apple Calendar (iCloud CalDAV) connection routes
+fastify.post('/api/connections/apple/calendars', async (request, reply) => {
+  try {
+    const { appleId, appPassword } = request.body || {};
+    if (!appleId || !appPassword) {
+      return reply.status(400).send({ error: 'Apple ID and app-specific password are required.' });
+    }
+    const { calendars } = await appleCalDAV.discoverAndListCalendars(appleId.trim(), appPassword.trim());
+    return { calendars };
+  } catch (error) {
+    console.error('Apple CalDAV discovery error:', error.message);
+    reply.status(400).send({ error: error.message || 'Failed to connect to iCloud. Check your Apple ID and app-specific password.' });
+  }
+});
+
 // Calendar sources routes
 fastify.get('/api/calendar-sources', async (request, reply) => {
   try {
@@ -3139,11 +3155,14 @@ fastify.post('/api/calendar-sources', async (request, reply) => {
   if (!name || !type || !url) {
     return reply.status(400).send({ error: 'Name, type, and URL are required.' });
   }
-  if (!['ICS', 'CalDAV', 'Google'].includes(type)) {
-    return reply.status(400).send({ error: 'Type must be ICS, CalDAV, or Google.' });
+  if (!['ICS', 'CalDAV', 'Google', 'Apple'].includes(type)) {
+    return reply.status(400).send({ error: 'Type must be ICS, CalDAV, Google, or Apple.' });
   }
   if (type === 'Google' && !googleConnection.getConnectedAccount(db)) {
     return reply.status(400).send({ error: 'Connect your Google account before adding a Google calendar.' });
+  }
+  if (type === 'Apple' && (!request.body.username || !password)) {
+    return reply.status(400).send({ error: 'Apple ID and app-specific password are required.' });
   }
   try {
     const encryptedPassword = password ? encryptPassword(password) : null;
@@ -3182,8 +3201,8 @@ fastify.patch('/api/calendar-sources/:id', async (request, reply) => {
 
     if (name !== undefined) { updateFields.push('name = ?'); updateValues.push(name); }
     if (type !== undefined) {
-      if (!['ICS', 'CalDAV'].includes(type)) {
-        return reply.status(400).send({ error: 'Type must be either ICS or CalDAV.' });
+      if (!['ICS', 'CalDAV', 'Apple'].includes(type)) {
+        return reply.status(400).send({ error: 'Type must be ICS, CalDAV, or Apple.' });
       }
       updateFields.push('type = ?');
       updateValues.push(type);
@@ -3266,6 +3285,10 @@ fastify.post('/api/calendar-sources/:id/test', async (request, reply) => {
         timeout: 10000
       });
       return { success: true, message: 'CalDAV connection successful' };
+    } else if (source.type === 'Apple') {
+      const decryptedPassword = decryptPassword(source.password);
+      const events = await appleCalDAV.fetchCalendarEvents(source.url, source.username, decryptedPassword);
+      return { success: true, eventCount: events.length, message: 'iCloud calendar connection successful' };
     }
   } catch (error) {
     console.error('Error testing calendar source:', error);

@@ -162,6 +162,10 @@ const CalendarWidget = ({
   const [googleCalendars, setGoogleCalendars] = useState([]);
   const [googleCalendarsLoading, setGoogleCalendarsLoading] = useState(false);
   const [googleCalendarsError, setGoogleCalendarsError] = useState('');
+  const [appleCalendars, setAppleCalendars] = useState([]);
+  const [appleCalendarsLoading, setAppleCalendarsLoading] = useState(false);
+  const [appleCalendarsError, setAppleCalendarsError] = useState('');
+  const [appleDiscoveryCredentials, setAppleDiscoveryCredentials] = useState({ appleId: '', appPassword: '' });
   const [googleAccountConnected, setGoogleAccountConnected] = useState(false);
   const [eventDialog, setEventDialog] = useState({ open: false, mode: 'create', event: null, sourceId: '' });
   const [eventForm, setEventForm] = useState({ title: '', description: '', location: '', all_day: false, start: '', end: '' });
@@ -512,6 +516,23 @@ const CalendarWidget = ({
     }
   }, [showCalendarDialog, calendarForm.type]);
 
+  const loadAppleCalendars = async (appleId, appPassword) => {
+    setAppleCalendarsLoading(true);
+    setAppleCalendarsError('');
+    setAppleCalendars([]);
+    try {
+      const { data } = await axios.post(`${API_BASE_URL}/api/connections/apple/calendars`, { appleId, appPassword });
+      setAppleCalendars(Array.isArray(data.calendars) ? data.calendars : []);
+      if (!data.calendars?.length) {
+        setAppleCalendarsError('No calendars found on this iCloud account.');
+      }
+    } catch (err) {
+      setAppleCalendarsError(err?.response?.data?.error || 'Failed to connect to iCloud. Check your credentials.');
+    } finally {
+      setAppleCalendarsLoading(false);
+    }
+  };
+
   const handleAddCalendar = () => {
     setEditingCalendar(null);
     setCalendarFormError('');
@@ -524,6 +545,9 @@ const CalendarWidget = ({
       color: '#6e44ff'
     });
     setTestResult(null);
+    setAppleCalendars([]);
+    setAppleCalendarsError('');
+    setAppleDiscoveryCredentials({ appleId: '', appPassword: '' });
     setShowCalendarDialog(true);
   };
 
@@ -539,6 +563,9 @@ const CalendarWidget = ({
       color: calendar.color
     });
     setTestResult(null);
+    setAppleCalendars([]);
+    setAppleCalendarsError('');
+    setAppleDiscoveryCredentials({ appleId: calendar.username || '', appPassword: '' });
     setShowCalendarDialog(true);
   };
 
@@ -598,7 +625,9 @@ const CalendarWidget = ({
     if (!url) {
       setCalendarFormError(calendarForm.type === 'Google'
         ? 'Select a Google calendar before saving.'
-        : 'Calendar URL is required.');
+        : calendarForm.type === 'Apple'
+          ? 'Select an iCloud calendar before saving.'
+          : 'Calendar URL is required.');
       return;
     }
 
@@ -612,13 +641,24 @@ const CalendarWidget = ({
       return;
     }
 
+    if (calendarForm.type === 'Apple' && !appleDiscoveryCredentials.appleId.trim()) {
+      setCalendarFormError('Apple ID is required.');
+      return;
+    }
+
+    if (calendarForm.type === 'Apple' && !editingCalendar && !appleDiscoveryCredentials.appPassword.trim()) {
+      setCalendarFormError('App-specific password is required.');
+      return;
+    }
+
     setSavingCalendar(true);
 
     const payload = {
       ...calendarForm,
       name,
       url,
-      username,
+      username: calendarForm.type === 'Apple' ? appleDiscoveryCredentials.appleId.trim() : username,
+      password: calendarForm.type === 'Apple' ? appleDiscoveryCredentials.appPassword.trim() : calendarForm.password,
     };
 
     // Google sources are immutable in backend type validation on PATCH.
@@ -2267,6 +2307,7 @@ const CalendarWidget = ({
                 <MenuItem value="Google" disabled={!googleAccountConnected}>
                   Google Calendar {googleAccountConnected ? '' : '(connect in Admin > Connections)'}
                 </MenuItem>
+                <MenuItem value="Apple">Apple iCloud Calendar</MenuItem>
               </Select>
             </FormControl>
 
@@ -2315,6 +2356,88 @@ const CalendarWidget = ({
                 )}
                 <Typography variant="caption" color="text.secondary">
                   Events will sync in both directions using your connected Google account.
+                </Typography>
+              </Box>
+            ) : calendarForm.type === 'Apple' ? (
+              <Box sx={{ mb: 2 }}>
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  Requires an <strong>app-specific password</strong> from{' '}
+                  <strong>appleid.apple.com</strong> → Sign-In &amp; Security → App-Specific Passwords.
+                  Two-factor authentication must be enabled on your Apple ID.
+                </Alert>
+                <TextField
+                  fullWidth
+                  label="Apple ID (email)"
+                  value={appleDiscoveryCredentials.appleId}
+                  onChange={(e) => setAppleDiscoveryCredentials({ ...appleDiscoveryCredentials, appleId: e.target.value })}
+                  sx={{ mb: 2 }}
+                  required
+                  placeholder="you@icloud.com"
+                  autoComplete="username"
+                />
+                <TextField
+                  fullWidth
+                  label="App-Specific Password"
+                  type="password"
+                  value={appleDiscoveryCredentials.appPassword}
+                  onChange={(e) => setAppleDiscoveryCredentials({ ...appleDiscoveryCredentials, appPassword: e.target.value })}
+                  sx={{ mb: 2 }}
+                  required={!editingCalendar}
+                  placeholder={editingCalendar ? 'Leave blank to keep current password' : 'xxxx-xxxx-xxxx-xxxx'}
+                  autoComplete="current-password"
+                />
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <FormControl fullWidth>
+                    <InputLabel>iCloud Calendar</InputLabel>
+                    <Select
+                      value={calendarForm.url || ''}
+                      label="iCloud Calendar"
+                      onChange={(e) => {
+                        const cal = appleCalendars.find((c) => c.id === e.target.value);
+                        setCalendarForm({
+                          ...calendarForm,
+                          url: e.target.value,
+                          username: appleDiscoveryCredentials.appleId,
+                          password: appleDiscoveryCredentials.appPassword,
+                          name: calendarForm.name || (cal ? cal.name : ''),
+                          color: calendarForm.color && calendarForm.color !== '#6e44ff'
+                            ? calendarForm.color
+                            : (cal && cal.color) || calendarForm.color,
+                        });
+                      }}
+                    >
+                      {appleCalendars.length === 0 && (
+                        <MenuItem value="" disabled>
+                          {appleCalendarsLoading ? 'Loading...' : 'Enter credentials above and click Find Calendars'}
+                        </MenuItem>
+                      )}
+                      {appleCalendars.map((c) => (
+                        <MenuItem key={c.id} value={c.id}>
+                          <Box component="span" sx={{
+                            display: 'inline-block', width: 10, height: 10, borderRadius: '50%',
+                            bgcolor: c.color || '#3d7ab5', mr: 1,
+                          }} />
+                          {c.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <Button
+                    type="button"
+                    variant="outlined"
+                    size="small"
+                    onClick={() => loadAppleCalendars(appleDiscoveryCredentials.appleId, appleDiscoveryCredentials.appPassword)}
+                    disabled={appleCalendarsLoading || !appleDiscoveryCredentials.appleId || !appleDiscoveryCredentials.appPassword}
+                    sx={{ whiteSpace: 'nowrap', minWidth: 'max-content' }}
+                  >
+                    {appleCalendarsLoading ? <CircularProgress size={18} /> : 'Find Calendars'}
+                  </Button>
+                </Box>
+                {appleCalendarsError && (
+                  <Alert severity="warning" sx={{ mb: 1 }}>{appleCalendarsError}</Alert>
+                )}
+                <Typography variant="caption" color="text.secondary">
+                  Events sync read-only from iCloud using CalDAV.
                 </Typography>
               </Box>
             ) : (
