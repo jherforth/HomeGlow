@@ -27,6 +27,7 @@ import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
 import { shouldShowChoreToday, getTodayDateString, convertDaysToCrontab } from '../utils/choreHelpers.js';
+import { getServerTimezoneSync } from '../utils/timezone.js';
 
 const USERS_UPDATED_EVENT = 'homeglow:users-updated';
 
@@ -92,6 +93,34 @@ const ChoreWidget = ({ transparentBackground, refreshInterval = 0 }) => {
       };
     }
   }, [refreshInterval]);
+
+  useEffect(() => {
+    function getMsUntilServerMidnight() {
+      const tz = getServerTimezoneSync();
+      const now = new Date();
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: tz,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
+      const parts = formatter.formatToParts(now);
+      const get = (type) => parseInt(parts.find(p => p.type === type).value, 10);
+      const h = get('hour'), m = get('minute'), s = get('second');
+      const secondsUntilMidnight = (24 * 3600) - (h * 3600 + m * 60 + s);
+      return secondsUntilMidnight * 1000 + 1000;
+    }
+
+    const timerId = setTimeout(() => {
+      fetchData();
+    }, getMsUntilServerMidnight());
+
+    return () => clearTimeout(timerId);
+  }, [history]);
 
   useEffect(() => {
     if (!deviceSettingsLoaded) {

@@ -12,18 +12,25 @@ export function shouldShowChoreToday(schedule) {
 
   try {
     const tz = getServerTimezoneSync();
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const todayStr = getTodayDateString();
+    const [year, month, day] = todayStr.split('-').map(Number);
+    const todayInServerTz = new Date(year, month - 1, day);
 
     const interval = CronExpressionParser.parse(schedule.crontab, {
-      currentDate: new Date(today.getTime() + 24 * 60 * 60 * 1000),
+      currentDate: new Date(todayInServerTz.getTime() + 24 * 60 * 60 * 1000),
       tz
     });
 
     const prevOccurrence = interval.prev().toDate();
-    prevOccurrence.setHours(0, 0, 0, 0);
+    const prevFormatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    const prevStr = prevFormatter.format(prevOccurrence);
 
-    return prevOccurrence.getTime() === today.getTime();
+    return prevStr === todayStr;
   } catch (error) {
     console.error('Error parsing crontab:', schedule.crontab, error);
     return false;
