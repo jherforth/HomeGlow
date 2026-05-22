@@ -602,7 +602,46 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     }
   };
 
+  const getMissingEnabledCoreWidgetAssignments = (settingsToValidate, assignmentsToValidate) => {
+    const normalizedSettings = normalizeWidgetSettings(settingsToValidate);
+
+    return Object.keys(DEFAULT_WIDGET_SETTINGS).filter((widgetName) => {
+      const isEnabled = Boolean(normalizedSettings?.[widgetName]?.enabled);
+      const selectedTabNumbers = assignmentsToValidate?.[widgetName];
+      return isEnabled && (!Array.isArray(selectedTabNumbers) || selectedTabNumbers.length === 0);
+    });
+  };
+
+  const getMissingEnabledPluginAssignments = (pluginSettingsToValidate, assignmentsToValidate, uploadedWidgetsToValidate) => {
+    const uploadedPluginFilenames = new Set((uploadedWidgetsToValidate || []).map((widget) => widget.filename));
+
+    return Object.entries(pluginSettingsToValidate || {}).reduce((missing, [filename, config]) => {
+      if (!uploadedPluginFilenames.has(filename)) {
+        return missing;
+      }
+
+      if (!config?.enabled) {
+        return missing;
+      }
+
+      const pluginWidgetName = `plugin:${filename}`;
+      const selectedTabNumbers = assignmentsToValidate?.[pluginWidgetName];
+      if (!Array.isArray(selectedTabNumbers) || selectedTabNumbers.length === 0) {
+        missing.push(pluginWidgetName);
+      }
+
+      return missing;
+    }, []);
+  };
+
   const saveWidgetSettings = async () => {
+    const missingEnabledWidgets = getMissingEnabledCoreWidgetAssignments(widgetSettings, widgetAssignments);
+    if (missingEnabledWidgets.length > 0) {
+      setSaveMessage({ show: true, type: 'error', text: 'Each enabled widget must have at least one tab selected.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 4000);
+      return;
+    }
+
     setIsLoading(true);
     try {
       const normalizedWidgetSettings = normalizeWidgetSettings(widgetSettings);
@@ -648,6 +687,13 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   };
 
   const savePluginSettings = async () => {
+    const missingEnabledPlugins = getMissingEnabledPluginAssignments(pluginSettings, pluginAssignments, uploadedWidgets);
+    if (missingEnabledPlugins.length > 0) {
+      setSaveMessage({ show: true, type: 'error', text: 'Each enabled plugin must have at least one tab selected.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 4000);
+      return;
+    }
+
     setIsLoading(true);
     try {
       await patchDeviceSettings({ pluginSettings });
@@ -1671,6 +1717,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     ? backendStats.repository
     : DEFAULT_HOMEGLOW_REPOSITORY;
   const backendCommitUrl = buildCommitUrl(backendRepository, backendStats?.commit);
+  const weatherHasRequiredTabsError = Boolean(widgetSettings.weather?.enabled)
+    && (!Array.isArray(widgetAssignments.weather) || widgetAssignments.weather.length === 0);
 
   if (checkingPin) {
     return (
@@ -1728,6 +1776,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
             {widgetsSubTab === 0 && (
               <Box
                 component="form"
+                noValidate
                 onSubmit={(event) => {
                   event.preventDefault();
                   saveWidgetSettings();
@@ -1739,7 +1788,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
                 {Object.entries(widgetSettings).filter(([key]) =>
                   ['chores', 'calendar', 'photos'].includes(key)
-                ).map(([widget, config]) => (
+                ).map(([widget, config]) => {
+                  const hasRequiredTabsError = Boolean(config.enabled) && (!Array.isArray(widgetAssignments[widget]) || widgetAssignments[widget].length === 0);
+
+                  return (
                   <Box key={widget} sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
                     <Typography variant="subtitle1" sx={{ mb: 2, textTransform: 'capitalize', fontWeight: 'bold' }}>
                       {widget} Widget
@@ -1805,8 +1857,14 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                           <TextField
                             {...params}
                             label="Show on Tabs"
+                            required={Boolean(config.enabled)}
+                            error={hasRequiredTabsError}
                             placeholder="Select tabs..."
-                            helperText="Select which tabs this widget should appear on (defaults to Home tab if none selected)"
+                            helperText={
+                              hasRequiredTabsError
+                                ? 'Required: select at least one tab when this widget is enabled.'
+                                : 'Select which tabs this widget should appear on.'
+                            }
                           />
                         )}
                       />
@@ -1818,7 +1876,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                       </Alert>
                     )}
                   </Box>
-                ))}
+                  );
+                })}
 
                 <Box sx={{ mb: 3, p: 2, border: '2px solid var(--accent)', borderRadius: 1, backgroundColor: 'rgba(158, 127, 255, 0.05)' }}>
                   <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>
@@ -1885,8 +1944,14 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                         <TextField
                           {...params}
                           label="Show on Tabs"
+                          required={Boolean(widgetSettings.weather?.enabled)}
+                          error={weatherHasRequiredTabsError}
                           placeholder="Select tabs..."
-                          helperText="Select which tabs this widget should appear on (defaults to Home tab if none selected)"
+                          helperText={
+                            weatherHasRequiredTabsError
+                              ? 'Required: select at least one tab when this widget is enabled.'
+                              : 'Select which tabs this widget should appear on.'
+                          }
                         />
                       )}
                     />
@@ -1982,6 +2047,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 {uploadedWidgets.length > 0 && (
                   <Box
                     component="form"
+                    noValidate
                     onSubmit={(event) => {
                       event.preventDefault();
                       savePluginSettings();
@@ -1996,6 +2062,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                     {uploadedWidgets.map((plugin) => {
                       const pSettings = pluginSettings[plugin.filename] || {};
                       const pluginWidgetName = `plugin:${plugin.filename}`;
+                      const hasRequiredTabsError = Boolean(pSettings.enabled) && (!Array.isArray(pluginAssignments[pluginWidgetName]) || pluginAssignments[pluginWidgetName].length === 0);
                       return (
                         <Box key={plugin.filename} sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -2090,8 +2157,14 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                                 <TextField
                                   {...params}
                                   label="Show on Tabs"
+                                  required={Boolean(pSettings.enabled)}
+                                  error={hasRequiredTabsError}
                                   placeholder="Select tabs..."
-                                  helperText="Select which tabs this plugin should appear on (defaults to Home tab if none selected)"
+                                  helperText={
+                                    hasRequiredTabsError
+                                      ? 'Required: select at least one tab when this plugin is enabled.'
+                                      : 'Select which tabs this plugin should appear on.'
+                                  }
                                 />
                               )}
                             />
