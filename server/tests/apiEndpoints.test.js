@@ -73,6 +73,9 @@ test.before(async () => {
             HOMEGLOW_DISABLE_BACKGROUND_JOBS: '1',
             HOMEGLOW_DISABLE_CALENDAR_SYNC: '1',
             ENCRYPTION_KEY: Buffer.alloc(32, 3).toString('base64'),
+            BACKEND_VERSION: 'test-backend-version',
+            BACKEND_GIT_COMMIT: '1234567890abcdef1234567890abcdef12345678',
+            BACKEND_GITHUB_REPOSITORY: 'jherforth/HomeGlow',
         },
         stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -122,6 +125,19 @@ test('GET /api/timezone returns configured timezone', async () => {
 
     assert.equal(status, 200);
     assert.equal(body.timezone, 'UTC');
+});
+
+test('GET /api/stats returns backend build metadata', async () => {
+    const { status, body } = await api('/api/stats');
+
+    assert.equal(status, 200);
+    assert.equal(body.backend.version, 'test-backend-version');
+    assert.equal(body.backend.commit, '1234567890abcdef1234567890abcdef12345678');
+    assert.equal(body.backend.repository, 'jherforth/HomeGlow');
+    assert.equal(
+        body.backend.commitUrl,
+        'https://github.com/jherforth/HomeGlow/commit/1234567890abcdef1234567890abcdef12345678'
+    );
 });
 
 test('tabs endpoint returns default Home tab when device has no persisted tabs yet', async () => {

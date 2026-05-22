@@ -4,10 +4,17 @@ WORKDIR /app
 # Accept PORT and TZ as build arguments with defaults
 ARG PORT=5000
 ARG TZ=America/New_York
+ARG BACKEND_VERSION=dev
+ARG BACKEND_GIT_COMMIT=
+ARG BACKEND_GITHUB_REPOSITORY=jherforth/HomeGlow
 
 # Set as environment variables for runtime
 ENV PORT=$PORT
 ENV TZ=$TZ
+ENV APP_VERSION=$BACKEND_VERSION
+ENV BACKEND_VERSION=$BACKEND_VERSION
+ENV BACKEND_GIT_COMMIT=$BACKEND_GIT_COMMIT
+ENV BACKEND_GITHUB_REPOSITORY=$BACKEND_GITHUB_REPOSITORY
 
 # Install SQLite3 dependencies with GPG error handling
 RUN apt-get clean && \

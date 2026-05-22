@@ -11,6 +11,7 @@ const node_ical = require('node-ical');
 const path = require('path');
 const fs = require('fs').promises;
 const fsSync = require('fs');
+const serverPackageJson = require('./package.json');
 const multipart = require('@fastify/multipart');
 const crypto = require('crypto');
 
@@ -59,6 +60,22 @@ const SCHEDULE_INTERVAL_REGEX = /^([1-9]\d*)([dwmy])$/;
 const GITHUB_REPO_OWNER = 'jherforth';
 const GITHUB_REPO_NAME = 'HomeGlowPlugins';
 const GITHUB_API_BASE = 'https://api.github.com';
+
+const DEFAULT_HOMEGLOW_REPOSITORY = 'jherforth/HomeGlow';
+const BACKEND_VERSION = (process.env.BACKEND_VERSION || process.env.APP_VERSION || serverPackageJson.version || 'dev').trim();
+const BACKEND_GIT_COMMIT = (process.env.BACKEND_GIT_COMMIT || process.env.GIT_COMMIT || process.env.GITHUB_SHA || '').trim() || null;
+const BACKEND_GITHUB_REPOSITORY = (process.env.BACKEND_GITHUB_REPOSITORY || process.env.GITHUB_REPOSITORY || DEFAULT_HOMEGLOW_REPOSITORY).trim();
+
+function isValidRepositorySlug(repository) {
+  return typeof repository === 'string' && /^[^/\s]+\/[^/\s]+$/.test(repository);
+}
+
+function buildGitHubCommitUrl(repository, commitSha) {
+  if (!commitSha || !isValidRepositorySlug(repository)) {
+    return null;
+  }
+  return `https://github.com/${repository}/commit/${commitSha}`;
+}
 
 function getTodayLocalDateString() {
   const now = new Date();
@@ -284,6 +301,21 @@ fastify.get('/api/test', async (request, reply) => {
     message: 'Server is working!',
     timestamp: new Date().toISOString(),
     widgetsDir: path.join(__dirname, 'widgets')
+  };
+});
+
+fastify.get('/api/stats', async (request, reply) => {
+  const repository = isValidRepositorySlug(BACKEND_GITHUB_REPOSITORY)
+    ? BACKEND_GITHUB_REPOSITORY
+    : DEFAULT_HOMEGLOW_REPOSITORY;
+
+  return {
+    backend: {
+      version: BACKEND_VERSION,
+      commit: BACKEND_GIT_COMMIT,
+      repository,
+      commitUrl: buildGitHubCommitUrl(repository, BACKEND_GIT_COMMIT),
+    },
   };
 });
 

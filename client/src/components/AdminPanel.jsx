@@ -61,7 +61,8 @@ import {
   Tab as TabIcon,
   DragIndicator,
   PhotoLibrary,
-  Info
+  Info,
+  OpenInNew
 } from '@mui/icons-material';
 import ColorPickerPopover from './ColorPickerPopover';
 import axios from 'axios';
@@ -158,6 +159,48 @@ const readLocalAutoDarkModeSettings = () => {
   }
 };
 
+const DEFAULT_HOMEGLOW_REPOSITORY = 'jherforth/HomeGlow';
+const FRONTEND_VERSION = (import.meta.env.VITE_APP_VERSION || 'dev').trim();
+const FRONTEND_GIT_COMMIT = (import.meta.env.VITE_GIT_COMMIT || '').trim() || null;
+const FRONTEND_GITHUB_REPOSITORY = (import.meta.env.VITE_GITHUB_REPOSITORY || DEFAULT_HOMEGLOW_REPOSITORY).trim();
+
+const isValidRepositorySlug = (repository) => typeof repository === 'string' && /^[^/\s]+\/[^/\s]+$/.test(repository);
+
+const splitRepositorySlug = (repository) => {
+  if (!isValidRepositorySlug(repository)) {
+    return null;
+  }
+  const [owner, name] = repository.split('/');
+  return { owner, name };
+};
+
+const normalizeCommit = (commitSha) => (typeof commitSha === 'string' ? commitSha.trim().toLowerCase() : '');
+
+const commitMatches = (left, right) => {
+  const normalizedLeft = normalizeCommit(left);
+  const normalizedRight = normalizeCommit(right);
+  if (!normalizedLeft || !normalizedRight) {
+    return false;
+  }
+  return normalizedLeft === normalizedRight || normalizedLeft.startsWith(normalizedRight) || normalizedRight.startsWith(normalizedLeft);
+};
+
+const buildCommitUrl = (repository, commitSha) => {
+  if (!isValidRepositorySlug(repository) || !commitSha) {
+    return null;
+  }
+  return `https://github.com/${repository}/commit/${commitSha}`;
+};
+
+const buildTagUrl = (repository, tagName) => {
+  if (!isValidRepositorySlug(repository) || !tagName) {
+    return null;
+  }
+  return `https://github.com/${repository}/releases/tag/${encodeURIComponent(tagName)}`;
+};
+
+const toShortCommit = (commitSha) => (commitSha ? commitSha.slice(0, 7) : 'Unknown');
+
 const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const [currentDeviceName, setCurrentDeviceName] = useState(() => getDeviceName());
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
@@ -230,6 +273,12 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     newName: '',
     error: '',
   });
+  const [backendStats, setBackendStats] = useState(null);
+  const [aboutLoading, setAboutLoading] = useState(false);
+  const [aboutTagsLoading, setAboutTagsLoading] = useState(false);
+  const [aboutError, setAboutError] = useState('');
+  const [frontendCommitTags, setFrontendCommitTags] = useState([]);
+  const [backendCommitTags, setBackendCommitTags] = useState([]);
 
   // Refresh interval options in milliseconds
   const refreshIntervalOptions = [
@@ -265,6 +314,18 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       fetchDevices();
     }
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated || activeTab !== 7) {
+      return;
+    }
+
+    if (backendStats || aboutLoading) {
+      return;
+    }
+
+    void refreshAboutData();
+  }, [activeTab, aboutLoading, backendStats, isAuthenticated]);
 
   const fetchDevices = async () => {
     try {
@@ -426,6 +487,64 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       setGithubWidgets([]);
     } finally {
       setLoadingGithub(false);
+    }
+  };
+
+  const fetchTagsForCommit = async (repository, commitSha) => {
+    const repoParts = splitRepositorySlug(repository);
+    if (!repoParts || !commitSha) {
+      return [];
+    }
+
+    const response = await axios.get(`https://api.github.com/repos/${repoParts.owner}/${repoParts.name}/tags`, {
+      params: { per_page: 100 },
+      timeout: 10000,
+    });
+
+    const tags = Array.isArray(response.data) ? response.data : [];
+    const matchingTags = tags
+      .filter((tag) => commitMatches(tag?.commit?.sha, commitSha))
+      .map((tag) => tag?.name)
+      .filter((tagName) => typeof tagName === 'string' && tagName.trim().length > 0);
+
+    return Array.from(new Set(matchingTags));
+  };
+
+  const refreshAboutData = async () => {
+    setAboutLoading(true);
+    setAboutError('');
+
+    try {
+      const statsResponse = await axios.get(`${API_BASE_URL}/api/stats`);
+      const backend = statsResponse?.data?.backend && typeof statsResponse.data.backend === 'object'
+        ? statsResponse.data.backend
+        : null;
+      setBackendStats(backend);
+
+      setAboutTagsLoading(true);
+      try {
+        const [frontendTags, backendTags] = await Promise.all([
+          fetchTagsForCommit(FRONTEND_GITHUB_REPOSITORY, FRONTEND_GIT_COMMIT),
+          fetchTagsForCommit(backend?.repository, backend?.commit),
+        ]);
+        setFrontendCommitTags(frontendTags);
+        setBackendCommitTags(backendTags);
+      } catch (tagError) {
+        console.error('Error fetching commit tags:', tagError);
+        setFrontendCommitTags([]);
+        setBackendCommitTags([]);
+      } finally {
+        setAboutTagsLoading(false);
+      }
+    } catch (error) {
+      console.error('Error fetching build metadata:', error);
+      setBackendStats(null);
+      setFrontendCommitTags([]);
+      setBackendCommitTags([]);
+      setAboutError('Failed to load version information.');
+      setAboutTagsLoading(false);
+    } finally {
+      setAboutLoading(false);
     }
   };
 
@@ -1540,8 +1659,18 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     'Chores',
     'Prizes',
     'Security',
-    'Connections'
+    'Connections',
+    'About'
   ];
+
+  const frontendRepository = isValidRepositorySlug(FRONTEND_GITHUB_REPOSITORY)
+    ? FRONTEND_GITHUB_REPOSITORY
+    : DEFAULT_HOMEGLOW_REPOSITORY;
+  const frontendCommitUrl = buildCommitUrl(frontendRepository, FRONTEND_GIT_COMMIT);
+  const backendRepository = isValidRepositorySlug(backendStats?.repository)
+    ? backendStats.repository
+    : DEFAULT_HOMEGLOW_REPOSITORY;
+  const backendCommitUrl = buildCommitUrl(backendRepository, backendStats?.commit);
 
   if (checkingPin) {
     return (
@@ -2973,6 +3102,191 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 }}
               />
             </Box>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* About Tab */}
+      {activeTab === 7 && (
+        <Card>
+          <CardContent>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6">About</Typography>
+              <Button
+                variant="outlined"
+                startIcon={<Refresh />}
+                onClick={refreshAboutData}
+                disabled={aboutLoading}
+              >
+                {aboutLoading ? 'Refreshing...' : 'Refresh Version Info'}
+              </Button>
+            </Box>
+
+            <Alert severity="info" sx={{ mb: 2 }}>
+              This tab shows build metadata for the running client and server plus any Git tags that point to each commit.
+            </Alert>
+
+            {aboutError && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {aboutError}
+              </Alert>
+            )}
+
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Paper variant="outlined" sx={{ p: 2, height: '100%' }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+                    Frontend
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    Version
+                  </Typography>
+                  <Chip label={FRONTEND_VERSION || 'Unknown'} color="primary" size="small" sx={{ mb: 2 }} />
+
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    Commit
+                  </Typography>
+                  {frontendCommitUrl ? (
+                    <Button
+                      component="a"
+                      href={frontendCommitUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      variant="text"
+                      size="small"
+                      endIcon={<OpenInNew fontSize="small" />}
+                      sx={{ p: 0, minWidth: 0, textTransform: 'none', mb: 2 }}
+                    >
+                      {toShortCommit(FRONTEND_GIT_COMMIT)}
+                    </Button>
+                  ) : (
+                    <Typography variant="body2" sx={{ mb: 2 }}>Unknown</Typography>
+                  )}
+
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    Repository
+                  </Typography>
+                  <Button
+                    component="a"
+                    href={`https://github.com/${frontendRepository}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    variant="text"
+                    size="small"
+                    endIcon={<OpenInNew fontSize="small" />}
+                    sx={{ p: 0, minWidth: 0, textTransform: 'none', mb: 2 }}
+                  >
+                    {frontendRepository}
+                  </Button>
+
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    Tags for this commit
+                  </Typography>
+                  {aboutTagsLoading ? (
+                    <CircularProgress size={16} />
+                  ) : frontendCommitTags.length > 0 ? (
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                      {frontendCommitTags.map((tagName) => {
+                        const tagUrl = buildTagUrl(frontendRepository, tagName);
+                        return tagUrl ? (
+                          <Chip
+                            key={`frontend-tag-${tagName}`}
+                            label={tagName}
+                            component="a"
+                            href={tagUrl}
+                            clickable
+                            target="_blank"
+                            rel="noreferrer"
+                            size="small"
+                          />
+                        ) : (
+                          <Chip key={`frontend-tag-${tagName}`} label={tagName} size="small" />
+                        );
+                      })}
+                    </Box>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">No tags found for this commit.</Typography>
+                  )}
+                </Paper>
+              </Grid>
+
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Paper variant="outlined" sx={{ p: 2, height: '100%' }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+                    Backend
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    Version
+                  </Typography>
+                  <Chip label={backendStats?.version || 'Unknown'} color="primary" size="small" sx={{ mb: 2 }} />
+
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    Commit
+                  </Typography>
+                  {backendCommitUrl ? (
+                    <Button
+                      component="a"
+                      href={backendCommitUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      variant="text"
+                      size="small"
+                      endIcon={<OpenInNew fontSize="small" />}
+                      sx={{ p: 0, minWidth: 0, textTransform: 'none', mb: 2 }}
+                    >
+                      {toShortCommit(backendStats?.commit)}
+                    </Button>
+                  ) : (
+                    <Typography variant="body2" sx={{ mb: 2 }}>Unknown</Typography>
+                  )}
+
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    Repository
+                  </Typography>
+                  <Button
+                    component="a"
+                    href={`https://github.com/${backendRepository}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    variant="text"
+                    size="small"
+                    endIcon={<OpenInNew fontSize="small" />}
+                    sx={{ p: 0, minWidth: 0, textTransform: 'none', mb: 2 }}
+                  >
+                    {backendRepository}
+                  </Button>
+
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    Tags for this commit
+                  </Typography>
+                  {aboutTagsLoading ? (
+                    <CircularProgress size={16} />
+                  ) : backendCommitTags.length > 0 ? (
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                      {backendCommitTags.map((tagName) => {
+                        const tagUrl = buildTagUrl(backendRepository, tagName);
+                        return tagUrl ? (
+                          <Chip
+                            key={`backend-tag-${tagName}`}
+                            label={tagName}
+                            component="a"
+                            href={tagUrl}
+                            clickable
+                            target="_blank"
+                            rel="noreferrer"
+                            size="small"
+                          />
+                        ) : (
+                          <Chip key={`backend-tag-${tagName}`} label={tagName} size="small" />
+                        );
+                      })}
+                    </Box>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">No tags found for this commit.</Typography>
+                  )}
+                </Paper>
+              </Grid>
+            </Grid>
           </CardContent>
         </Card>
       )}

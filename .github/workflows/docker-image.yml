@@ -40,6 +40,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Compute build metadata
+        id: buildmeta
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "app_version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "app_version=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+          echo "git_commit=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "repository=${GITHUB_REPOSITORY}" >> "$GITHUB_OUTPUT"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -74,5 +86,12 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VITE_APP_VERSION=${{ steps.buildmeta.outputs.app_version }}
+            VITE_GIT_COMMIT=${{ steps.buildmeta.outputs.git_commit }}
+            VITE_GITHUB_REPOSITORY=${{ steps.buildmeta.outputs.repository }}
+            BACKEND_VERSION=${{ steps.buildmeta.outputs.app_version }}
+            BACKEND_GIT_COMMIT=${{ steps.buildmeta.outputs.git_commit }}
+            BACKEND_GITHUB_REPOSITORY=${{ steps.buildmeta.outputs.repository }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
