@@ -208,10 +208,7 @@ async function fetchCalendarEvents(calendarUrl, appleId, appPassword) {
   const calDataMatches = body.match(/<[^>]*:?calendar-data[^>]*>([\s\S]*?)<\/[^>]*:?calendar-data>/gi) || [];
 
   for (const match of calDataMatches) {
-    const icsContent = match
-      .replace(/<[^>]*:?calendar-data[^>]*>/i, '')
-      .replace(/<\/[^>]*:?calendar-data>/i, '')
-      .trim();
+    const icsContent = extractIcsFromCalendarData(match);
 
     if (!icsContent) continue;
 
@@ -253,7 +250,51 @@ function subtractOneDay(date) {
   return d;
 }
 
+// Decode the minimal set of XML entities that can appear in non-CDATA
+// calendar-data payloads. iCloud wraps its payload in CDATA, but other CalDAV
+// servers may return entity-encoded ICS instead.
+function decodeXmlEntities(text) {
+  return text
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(Number(dec)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    // Ampersand must be decoded last so we don't double-decode the entities above.
+    .replace(/&amp;/g, '&');
+}
+
+// Extract the raw ICS text from a single <calendar-data>...</calendar-data>
+// block. iCloud returns the ICS wrapped in a CDATA section; those markers must
+// be removed before handing the content to ICAL.parse, otherwise the first line
+// becomes "<![CDATA[BEGIN:VCALENDAR" and ical.js never initializes its design
+// set (throwing "Cannot read properties of undefined (reading 'propertyGroups')").
+function extractIcsFromCalendarData(block) {
+  let content = block
+    .replace(/<[^>]*:?calendar-data[^>]*>/i, '')
+    .replace(/<\/[^>]*:?calendar-data>/i, '')
+    .trim();
+
+  const cdataMatch = content.match(/^<!\[CDATA\[([\s\S]*?)\]\]>$/);
+  if (cdataMatch) {
+    // CDATA content is literal; no entity decoding required.
+    return cdataMatch[1].trim();
+  }
+
+  // Defensive: strip stray CDATA markers if the regex above didn't match
+  // (e.g. trailing whitespace variations), then decode XML entities for
+  // servers that return entity-encoded ICS instead of CDATA.
+  content = content
+    .replace(/^<!\[CDATA\[/i, '')
+    .replace(/\]\]>$/i, '')
+    .trim();
+
+  return decodeXmlEntities(content).trim();
+}
+
 module.exports = {
   discoverAndListCalendars,
   fetchCalendarEvents,
+  extractIcsFromCalendarData,
 };
