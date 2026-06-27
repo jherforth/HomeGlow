@@ -15,3 +15,11 @@ coverage/
 package-lock.json
 
 .vscode/
+
+# Local dev runtime data created by docker-compose-dev.yml (SQLite DB, uploads,
+# auto-generated encryption key) — must never be committed.
+homeglowdev/
+
+# IDE / tooling
+.idea/
+.tool-versions
