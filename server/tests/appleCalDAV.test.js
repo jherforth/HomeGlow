@@ -1,10 +1,19 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const ICAL = require('ical.js');
-const { extractIcsFromCalendarData } = require('../services/appleCalDAV');
+const {
+    parsePrincipalUrl,
+    parseCalendarHomeUrl,
+    parseCalendars,
+    extractIcsPayloads,
+    icsToEvents,
+} = require('../services/appleCalDAV');
 
 // Anonymized fixtures: no real names, emails, or principal/DSID values.
-const ANON_VEVENT = [
+const ANON_VCALENDAR = [
+    'BEGIN:VCALENDAR',
+    'CALSCALE:GREGORIAN',
+    'PRODID:-//Example Inc.//Example//EN',
+    'VERSION:2.0',
     'BEGIN:VEVENT',
     'ATTENDEE;CN=Jane Doe;CUTYPE=INDIVIDUAL;EMAIL=jane@example.com',
     ' ;PARTSTAT=ACCEPTED;ROLE=CHAIR:/principal/',
@@ -16,66 +25,152 @@ const ANON_VEVENT = [
     'DTSTAMP:20260108T022826Z',
     'TRANSP:OPAQUE',
     'END:VEVENT',
-].join('\r\n');
-
-const ANON_VCALENDAR = [
-    'BEGIN:VCALENDAR',
-    'CALSCALE:GREGORIAN',
-    'PRODID:-//Example Inc.//Example//EN',
-    'VERSION:2.0',
-    ANON_VEVENT,
     'END:VCALENDAR',
 ].join('\r\n');
 
-// Mirrors the shape iCloud returns: calendar-data wrapped in a CDATA section.
-function buildCdataResponseBlock(icsBody) {
-    return [
-        '<calendar-data xmlns="urn:ietf:params:xml:ns:caldav">',
-        `<![CDATA[${icsBody}`,
-        ']]>',
-        '</calendar-data>',
-    ].join('\n');
+// Wrap an ICS body in a calendar REPORT multistatus, the way iCloud does: the
+// calendar-data is inside a CDATA section.
+function buildReportWithCdata(icsBody) {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<multistatus xmlns="DAV:" xmlns:caldav="urn:ietf:params:xml:ns:caldav">
+  <response>
+    <href>/123456/calendars/home/event.ics</href>
+    <propstat>
+      <prop>
+        <getetag>"abc123"</getetag>
+        <caldav:calendar-data><![CDATA[${icsBody}]]></caldav:calendar-data>
+      </prop>
+      <status>HTTP/1.1 200 OK</status>
+    </propstat>
+  </response>
+</multistatus>`;
 }
 
 // Some CalDAV servers return entity-encoded ICS instead of CDATA.
-function buildEntityEncodedResponseBlock(icsBody) {
+function buildReportWithEntities(icsBody) {
     const encoded = icsBody
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
-    return `<calendar-data xmlns="urn:ietf:params:xml:ns:caldav">${encoded}</calendar-data>`;
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<multistatus xmlns="DAV:" xmlns:caldav="urn:ietf:params:xml:ns:caldav">
+  <response>
+    <href>/123456/calendars/home/event.ics</href>
+    <propstat>
+      <prop>
+        <caldav:calendar-data>${encoded}</caldav:calendar-data>
+      </prop>
+      <status>HTTP/1.1 200 OK</status>
+    </propstat>
+  </response>
+</multistatus>`;
 }
 
-test('extractIcsFromCalendarData strips the CDATA wrapper', () => {
-    const block = buildCdataResponseBlock(ANON_VCALENDAR);
-    const ics = extractIcsFromCalendarData(block);
+test('extractIcsPayloads unwraps CDATA calendar-data (regression: propertyGroups)', () => {
+    const payloads = extractIcsPayloads(buildReportWithCdata(ANON_VCALENDAR));
 
-    assert.ok(ics.startsWith('BEGIN:VCALENDAR'), 'first line must be BEGIN:VCALENDAR');
-    assert.ok(!ics.includes('<![CDATA['), 'CDATA opening marker must be removed');
-    assert.ok(!ics.includes(']]>'), 'CDATA closing marker must be removed');
+    assert.equal(payloads.length, 1);
+    assert.ok(payloads[0].startsWith('BEGIN:VCALENDAR'), 'first line must be BEGIN:VCALENDAR');
+    assert.ok(!payloads[0].includes('<![CDATA['), 'CDATA marker must be gone');
+    assert.ok(!payloads[0].includes(']]>'), 'CDATA marker must be gone');
+
+    // Previously threw "Cannot read properties of undefined (reading 'propertyGroups')".
+    const events = icsToEvents(payloads[0]);
+    assert.equal(events.length, 1);
+    assert.equal(events[0].title, 'Sample Event');
+    assert.equal(events[0].uid, '00000000-0000-0000-0000-000000000000');
+    assert.equal(events[0].all_day, false);
 });
 
-test('CDATA-wrapped calendar-data parses cleanly with ical.js', () => {
-    const block = buildCdataResponseBlock(ANON_VCALENDAR);
-    const ics = extractIcsFromCalendarData(block);
+test('extractIcsPayloads decodes entity-encoded (non-CDATA) calendar-data', () => {
+    const payloads = extractIcsPayloads(buildReportWithEntities(ANON_VCALENDAR));
 
-    // Regression: previously threw "Cannot read properties of undefined
-    // (reading 'propertyGroups')" because the CDATA prefix prevented ical.js
-    // from initializing its design set on the first line.
-    const comp = new ICAL.Component(ICAL.parse(ics));
-    const vevents = comp.getAllSubcomponents('vevent');
-
-    assert.equal(vevents.length, 1);
-    const event = new ICAL.Event(vevents[0]);
-    assert.equal(event.summary, 'Sample Event');
-    assert.equal(event.uid, '00000000-0000-0000-0000-000000000000');
+    assert.equal(payloads.length, 1);
+    assert.ok(payloads[0].startsWith('BEGIN:VCALENDAR'));
+    assert.equal(icsToEvents(payloads[0]).length, 1);
 });
 
-test('extractIcsFromCalendarData decodes entity-encoded (non-CDATA) calendar-data', () => {
-    const block = buildEntityEncodedResponseBlock(ANON_VCALENDAR);
-    const ics = extractIcsFromCalendarData(block);
+test('extractIcsPayloads handles multiple responses and skips empty ones', () => {
+    const body = `<?xml version="1.0" encoding="UTF-8"?>
+<multistatus xmlns="DAV:" xmlns:caldav="urn:ietf:params:xml:ns:caldav">
+  <response>
+    <href>/123456/calendars/home/a.ics</href>
+    <propstat><prop><caldav:calendar-data><![CDATA[${ANON_VCALENDAR}]]></caldav:calendar-data></prop><status>HTTP/1.1 200 OK</status></propstat>
+  </response>
+  <response>
+    <href>/123456/calendars/home/missing.ics</href>
+    <propstat><prop/><status>HTTP/1.1 404 Not Found</status></propstat>
+  </response>
+  <response>
+    <href>/123456/calendars/home/b.ics</href>
+    <propstat><prop><caldav:calendar-data><![CDATA[${ANON_VCALENDAR}]]></caldav:calendar-data></prop><status>HTTP/1.1 200 OK</status></propstat>
+  </response>
+</multistatus>`;
 
-    assert.ok(ics.startsWith('BEGIN:VCALENDAR'));
-    const comp = new ICAL.Component(ICAL.parse(ics));
-    assert.equal(comp.getAllSubcomponents('vevent').length, 1);
+    assert.equal(extractIcsPayloads(body).length, 2);
+});
+
+test('parsePrincipalUrl extracts and absolutizes the current-user-principal href', () => {
+    const body = `<?xml version="1.0" encoding="UTF-8"?>
+<multistatus xmlns="DAV:">
+  <response>
+    <href>/</href>
+    <propstat>
+      <prop><current-user-principal><href>/123456/principal/</href></current-user-principal></prop>
+      <status>HTTP/1.1 200 OK</status>
+    </propstat>
+  </response>
+</multistatus>`;
+
+    assert.equal(parsePrincipalUrl(body), 'https://caldav.icloud.com/123456/principal/');
+});
+
+test('parseCalendarHomeUrl extracts the calendar-home-set href', () => {
+    const body = `<?xml version="1.0" encoding="UTF-8"?>
+<multistatus xmlns="DAV:" xmlns:caldav="urn:ietf:params:xml:ns:caldav">
+  <response>
+    <href>/123456/principal/</href>
+    <propstat>
+      <prop><caldav:calendar-home-set><href>/123456/calendars/</href></caldav:calendar-home-set></prop>
+      <status>HTTP/1.1 200 OK</status>
+    </propstat>
+  </response>
+</multistatus>`;
+
+    assert.equal(parseCalendarHomeUrl(body), 'https://caldav.icloud.com/123456/calendars/');
+});
+
+test('parseCalendars returns VEVENT calendars and skips non-calendar / VTODO-only collections', () => {
+    const body = `<?xml version="1.0" encoding="UTF-8"?>
+<multistatus xmlns="DAV:" xmlns:caldav="urn:ietf:params:xml:ns:caldav"
+             xmlns:cs="http://calendarserver.org/ns/" xmlns:ical="http://apple.com/ns/ical/">
+  <response>
+    <href>/123456/calendars/</href>
+    <propstat><prop><resourcetype><collection/></resourcetype></prop><status>HTTP/1.1 200 OK</status></propstat>
+  </response>
+  <response>
+    <href>/123456/calendars/home/</href>
+    <propstat><prop>
+      <displayname>Family</displayname>
+      <resourcetype><collection/><caldav:calendar/></resourcetype>
+      <ical:calendar-color>#FF2968FF</ical:calendar-color>
+      <caldav:supported-calendar-component-set><caldav:comp name="VEVENT"/></caldav:supported-calendar-component-set>
+    </prop><status>HTTP/1.1 200 OK</status></propstat>
+  </response>
+  <response>
+    <href>/123456/calendars/tasks/</href>
+    <propstat><prop>
+      <displayname>Reminders</displayname>
+      <resourcetype><collection/><caldav:calendar/></resourcetype>
+      <caldav:supported-calendar-component-set><caldav:comp name="VTODO"/></caldav:supported-calendar-component-set>
+    </prop><status>HTTP/1.1 200 OK</status></propstat>
+  </response>
+</multistatus>`;
+
+    const calendars = parseCalendars(body);
+    assert.equal(calendars.length, 1);
+    assert.equal(calendars[0].name, 'Family');
+    assert.equal(calendars[0].url, 'https://caldav.icloud.com/123456/calendars/home/');
+    // #RRGGBBAA normalized to #RRGGBB
+    assert.equal(calendars[0].color, '#FF2968');
 });
