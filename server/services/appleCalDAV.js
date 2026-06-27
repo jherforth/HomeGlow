@@ -103,21 +103,26 @@ function parseCalendars(xmlBody) {
     const href = nodeText(response.href);
     if (!href) continue;
 
-    // Must be a calendar collection (resourcetype contains <calendar/>).
-    const resourcetype = findProp(response, 'resourcetype');
-    const isCalendar = !!resourcetype && typeof resourcetype === 'object' && 'calendar' in resourcetype;
-    if (!isCalendar) continue;
-
-    // If the server advertises supported components, require VEVENT support so
-    // we skip task/reminder-only collections.
+    // A collection holds events if it advertises VEVENT in its supported
+    // component set. This is the most reliable signal and works across regular,
+    // shared, and subscribed iCloud calendars (subscriptions use a
+    // <cs:subscribed/> resourcetype rather than <C:calendar/>, so we must not
+    // gate on resourcetype alone).
     const compSet = findProp(response, 'supported-calendar-component-set');
     const comps = compSet ? asArray(compSet.comp) : [];
-    if (comps.length > 0) {
-      const supportsVevent = comps.some(
-        (comp) => String(comp && comp['@_name'] ? comp['@_name'] : '').toUpperCase() === 'VEVENT'
-      );
-      if (!supportsVevent) continue;
-    }
+    const supportsVevent = comps.some(
+      (comp) => String(comp && comp['@_name'] ? comp['@_name'] : '').toUpperCase() === 'VEVENT'
+    );
+
+    // Fallback when no component set is advertised: accept calendar/subscribed
+    // resource types (covers servers that omit supported-calendar-component-set)
+    // while still excluding the calendar-home root and inbox/outbox collections.
+    const resourcetype = findProp(response, 'resourcetype');
+    const isCalendarResourceType = !!resourcetype && typeof resourcetype === 'object'
+      && ('calendar' in resourcetype || 'subscribed' in resourcetype);
+
+    const include = comps.length > 0 ? supportsVevent : isCalendarResourceType;
+    if (!include) continue;
 
     const name = nodeText(findProp(response, 'displayname')) || 'Calendar';
     let color = nodeText(findProp(response, 'calendar-color'));

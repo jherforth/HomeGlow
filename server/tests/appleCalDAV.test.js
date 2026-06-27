@@ -174,3 +174,40 @@ test('parseCalendars returns VEVENT calendars and skips non-calendar / VTODO-onl
     // #RRGGBBAA normalized to #RRGGBB
     assert.equal(calendars[0].color, '#FF2968');
 });
+
+test('parseCalendars includes shared/subscribed calendars that advertise VEVENT', () => {
+    // Subscribed iCloud calendars use <cs:subscribed/> instead of <C:calendar/>
+    // but still advertise VEVENT support. Regression: these were being dropped.
+    const body = `<?xml version="1.0" encoding="UTF-8"?>
+<multistatus xmlns="DAV:" xmlns:caldav="urn:ietf:params:xml:ns:caldav"
+             xmlns:cs="http://calendarserver.org/ns/" xmlns:ical="http://apple.com/ns/ical/">
+  <response>
+    <href>/123456/calendars/work/</href>
+    <propstat><prop>
+      <displayname>Work</displayname>
+      <resourcetype><collection/><caldav:calendar/></resourcetype>
+      <caldav:supported-calendar-component-set><caldav:comp name="VEVENT"/></caldav:supported-calendar-component-set>
+    </prop><status>HTTP/1.1 200 OK</status></propstat>
+  </response>
+  <response>
+    <href>/123456/calendars/holidays/</href>
+    <propstat><prop>
+      <displayname>US Holidays</displayname>
+      <resourcetype><collection/><cs:subscribed/></resourcetype>
+      <caldav:supported-calendar-component-set><caldav:comp name="VEVENT"/></caldav:supported-calendar-component-set>
+    </prop><status>HTTP/1.1 200 OK</status></propstat>
+  </response>
+  <response>
+    <href>/123456/calendars/legacy/</href>
+    <propstat><prop>
+      <displayname>Legacy</displayname>
+      <resourcetype><collection/><caldav:calendar/></resourcetype>
+    </prop><status>HTTP/1.1 200 OK</status></propstat>
+  </response>
+</multistatus>`;
+
+    const calendars = parseCalendars(body);
+    const names = calendars.map((c) => c.name).sort();
+    // Work + subscribed Holidays (VEVENT) + Legacy (no comp set, calendar resourcetype)
+    assert.deepEqual(names, ['Legacy', 'US Holidays', 'Work']);
+});
