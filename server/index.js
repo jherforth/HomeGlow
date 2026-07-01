@@ -1533,7 +1533,7 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
       }
     }
 
-    const existingSchedule = db.prepare('SELECT id, crontab, duration, interval FROM chore_schedules WHERE id = ?').get(id);
+    const existingSchedule = db.prepare('SELECT id, user_id, crontab, duration, interval FROM chore_schedules WHERE id = ?').get(id);
     if (!existingSchedule) {
       return reply.status(404).send({ error: 'Schedule not found' });
     }
@@ -1599,6 +1599,25 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
     if (info.changes === 0) {
       return reply.status(404).send({ error: 'Schedule not found' });
     }
+
+    // When a chore is reassigned to a different person, re-check the daily "all
+    // regular chores done" bonus for both the previous and new owner. Losing a
+    // chore can make someone newly all-done, so this awards the bonus they've
+    // earned. It never removes points, so no one loses their score on a move.
+    if (user_id !== undefined) {
+      const previousUserId = existingSchedule.user_id;
+      const nextUserId = user_id || null;
+      if (previousUserId !== nextUserId) {
+        const today = getTodayLocalDateString();
+        if (previousUserId) {
+          awardDailyRegularBonusIfDue(previousUserId, today);
+        }
+        if (nextUserId) {
+          awardDailyRegularBonusIfDue(nextUserId, today);
+        }
+      }
+    }
+
     return { success: true };
   } catch (error) {
     console.error('Error updating schedule:', error);
@@ -1734,6 +1753,84 @@ fastify.delete('/api/chore-history/:id', async (request, reply) => {
   }
 });
 
+// Returns the list of a user's regular (non-bonus) chore schedules that are due today.
+function getTodaysRegularChoresForUser(userId, today) {
+  const allUserSchedules = db.prepare(`
+    SELECT cs.*,
+     c.clam_value,
+     EXISTS (
+         SELECT 1
+         FROM chore_history ch
+         WHERE ch.chore_schedule_id = cs.id
+           AND ch.user_id = cs.user_id
+           AND ch.date = ?
+     ) AS completed_today
+    FROM chore_schedules cs
+    JOIN chores c
+      ON cs.chore_id = c.id
+    WHERE cs.user_id = ?
+      AND cs.visible = 1
+      AND NOT (
+        cs.crontab IS NOT NULL
+        AND cs.duration IN ('until-completed', 'once-completed')
+      )
+  `).all(today, userId);
+
+  const regularChores = allUserSchedules.filter(s => s.clam_value === 0);
+
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const justBeforeToday = new Date(startOfToday.getTime() - 1);
+  const options = { currentDate: justBeforeToday, utc: false };
+
+  const todaysChores = [];
+  for (const schedule of regularChores) {
+    // schedules without crontab are one-time and always part of today's chores
+    if (!schedule.crontab) {
+      todaysChores.push(schedule);
+      continue;
+    }
+
+    // ensure only chores that are due today are part of today's chores
+    const interval = CronExpressionParser.parse(schedule.crontab, options);
+    const next = interval.next().toISOString().split('T')[0];
+    if (today === next) {
+      todaysChores.push(schedule);
+    }
+  }
+
+  return todaysChores;
+}
+
+// Awards the daily "all regular chores completed" bonus to a user if every regular
+// chore due today is completed and the bonus hasn't already been recorded.
+// Never removes points; safe to call any time a user's chore set changes (e.g. reassignment).
+function awardDailyRegularBonusIfDue(userId, date) {
+  const today = getTodayLocalDateString();
+  const todaysChores = getTodaysRegularChoresForUser(userId, today);
+  const uncompletedRegularChores = todaysChores.filter(cs => cs.completed_today == 0);
+
+  if (!todaysChores.length || uncompletedRegularChores.length) {
+    return;
+  }
+
+  const dailyRewardSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('daily_completion_clam_reward');
+  const dailyReward = dailyRewardSetting ? parseInt(dailyRewardSetting.value, 10) : 2;
+
+  const bonusAlreadyAwarded = db.prepare(`
+      SELECT id FROM chore_history
+      WHERE user_id = ?
+      AND date = ?
+      AND chore_schedule_id IS NULL
+      AND clam_value = ?
+      AND title = ?
+    `).get(userId, date, dailyReward, 'Regular chores');
+
+  if (!bonusAlreadyAwarded) {
+    db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title) VALUES (?, NULL, ?, ?, ?)').run(userId, date, dailyReward, 'Regular chores');
+  }
+}
+
 // Chore completion endpoints
 fastify.post('/api/chores/complete', async (request, reply) => {
   const { chore_schedule_id, user_id, date } = request.body;
@@ -1773,71 +1870,7 @@ fastify.post('/api/chores/complete', async (request, reply) => {
       }
     }
 
-    const today = getTodayLocalDateString();
-    const allUserSchedules = db.prepare(`
-      SELECT cs.*,
-       c.clam_value,
-       EXISTS (
-           SELECT 1
-           FROM chore_history ch
-           WHERE ch.chore_schedule_id = cs.id
-             AND ch.user_id = cs.user_id
-             AND ch.date = ?
-       ) AS completed_today
-      FROM chore_schedules cs
-      JOIN chores c
-        ON cs.chore_id = c.id
-      WHERE cs.user_id = ?
-        AND cs.visible = 1
-        AND NOT (
-          cs.crontab IS NOT NULL
-          AND cs.duration IN ('until-completed', 'once-completed')
-        )
-    `).all(today, user_id);
-
-    const regularChores = allUserSchedules.filter(s => s.clam_value === 0);
-
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-    const justBeforeToday = new Date(startOfToday.getTime() - 1);
-    let options = {
-      currentDate: justBeforeToday,
-      utc: false,
-    }
-    let todaysChores = []
-    for (const schedule of regularChores) {
-      // schedules without crontab are one-time and always part of today's chores
-      if (!schedule.crontab) {
-        todaysChores.push(schedule);
-        continue;
-      }
-
-      // ensure only chores that are due today are part of today's chores
-      const interval = CronExpressionParser.parse(schedule.crontab, options);
-      const next = interval.next().toISOString().split('T')[0];
-      if (today === next) {
-        todaysChores.push(schedule);
-      }
-    }
-
-    const uncompletedRegularChores = todaysChores.filter(cs => cs.completed_today == 0);
-    if (todaysChores.length && !uncompletedRegularChores.length) {
-      const dailyRewardSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('daily_completion_clam_reward');
-      const dailyReward = dailyRewardSetting ? parseInt(dailyRewardSetting.value, 10) : 2;
-
-      const bonusAlreadyAwarded = db.prepare(`
-          SELECT id FROM chore_history
-          WHERE user_id = ?
-          AND date = ?
-          AND chore_schedule_id IS NULL
-          AND clam_value = ?
-          AND title = ?
-        `).get(user_id, date, dailyReward, 'Regular chores');
-
-      if (!bonusAlreadyAwarded) {
-        db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title) VALUES (?, NULL, ?, ?, ?)').run(user_id, date, dailyReward, 'Regular chores');
-      }
-    }
+    awardDailyRegularBonusIfDue(user_id, date);
 
     const totalResult = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(user_id);
 

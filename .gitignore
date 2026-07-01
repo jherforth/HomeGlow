@@ -15,3 +15,12 @@ coverage/
 package-lock.json
 
 .vscode/
+
+# Local SQLite database (runtime data, initialized by migrations)
+server/data/*.db
+server/data/*.db-journal
+server/data/*.db-wal
+server/data/*.db-shm
+
+# Generated encryption key (secret, do not commit)
+server/data/.encryption-key
