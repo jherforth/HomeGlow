@@ -73,6 +73,7 @@ import ChoreSchedulesTab from './ChoreSchedulesTab';
 import ChoreHistoryTab from './ChoreHistoryTab';
 import TabIconModal from './TabIconModal';
 import GoogleAccountConnection from './GoogleAccountConnection';
+import ClamValueModal from './ClamValueModal';
 
 const USERS_UPDATED_EVENT = 'homeglow:users-updated';
 const DEVICE_SETTINGS_UPDATED_EVENT = 'homeglow:device-settings-updated';
@@ -226,6 +227,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const [chores, setChores] = useState([]);
   const [prizes, setPrizes] = useState([]);
   const [editingUser, setEditingUser] = useState(null);
+  const [clamModalUser, setClamModalUser] = useState(null);
   const [editingPrize, setEditingPrize] = useState(null);
   const [newUser, setNewUser] = useState({ username: '', email: '', profile_picture: '' });
   const [newPrize, setNewPrize] = useState({ name: '', clam_cost: 0 });
@@ -1377,6 +1379,12 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleClamSave = async (newTotal) => {
+    if (!clamModalUser) return;
+    await updateUserClams(clamModalUser.id, newTotal);
+    setClamModalUser(null);
   };
 
   const savePrize = async () => {
@@ -2797,18 +2805,15 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                             color="primary"
                             size="small"
                           />
-                          <TextField
-                            type="number"
-                            size="small"
-                            sx={{ width: 80 }}
-                            defaultValue={user.clam_total || 0}
-                            onBlur={(e) => {
-                              const newTotal = parseInt(e.target.value) || 0;
-                              if (newTotal !== user.clam_total) {
-                                updateUserClams(user.id, newTotal);
-                              }
-                            }}
-                          />
+                          <Tooltip title="Edit clams">
+                            <IconButton
+                              onClick={() => setClamModalUser(user)}
+                              color="primary"
+                              size="small"
+                            >
+                              <Edit />
+                            </IconButton>
+                          </Tooltip>
                         </Box>
                       </TableCell>
                       <TableCell>
@@ -3735,6 +3740,14 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         onVerify={handlePinVerify}
         mode={pinModal.mode}
         title={pinModal.title}
+      />
+
+      <ClamValueModal
+        open={!!clamModalUser}
+        user={clamModalUser}
+        onClose={() => setClamModalUser(null)}
+        onSave={handleClamSave}
+        isSaving={isLoading}
       />
     </Box>
   );
