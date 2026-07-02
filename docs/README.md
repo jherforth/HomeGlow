@@ -5,6 +5,9 @@ point for anyone evaluating the project or preparing to contribute. It describes
 what HomeGlow is **in its current state**, how the pieces fit together, and how
 to get productive quickly.
 
+Please be sure to update these docs as changes are made to ensure the information
+stays relevant.
+
 > **HomeGlow** is an open-source, self-hosted dashboard for touch-enabled home
 > displays (think Magic Mirror), built as a React SPA frontend and a Fastify +
 > SQLite backend, shipped as two Docker images.
