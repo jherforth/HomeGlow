@@ -9,7 +9,6 @@ node_modules/
 dist/
 build/
 coverage/
-docs/
 **/coverage/
 *.lcov
 
