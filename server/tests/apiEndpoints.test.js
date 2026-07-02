@@ -496,3 +496,85 @@ test('user endpoints support create, list, and update', async () => {
     assert.equal(updateRes.status, 200);
     assert.equal(updateRes.body.success, true);
 });
+
+test('GET /api/sounds lists seeded default sounds', async () => {
+    const { status, body } = await api('/api/sounds');
+
+    assert.equal(status, 200);
+    assert.ok(Array.isArray(body));
+    const chime = body.find((s) => s.filename === 'chime.wav');
+    assert.ok(chime, 'expected the default chime.wav sound to be present');
+    assert.equal(chime.isDefault, true);
+    assert.equal(chime.url, '/Uploads/sounds/chime.wav');
+});
+
+test('DELETE /api/sounds refuses to delete a bundled default', async () => {
+    const { status, body } = await api('/api/sounds/chime.wav', { method: 'DELETE' });
+
+    assert.equal(status, 400);
+    assert.match(body.error, /default/i);
+});
+
+test('chore schedule persists due_time and sound fields through create and patch', async () => {
+    const choreRes = await api('/api/chores', {
+        method: 'POST',
+        body: JSON.stringify({ title: 'Take medicine', description: '', clam_value: 0 }),
+    });
+    assert.equal(choreRes.status, 200);
+    const choreId = choreRes.body.id;
+
+    const createRes = await api('/api/chore-schedules', {
+        method: 'POST',
+        body: JSON.stringify({
+            chore_id: choreId,
+            crontab: '0 0 * * *',
+            duration: 'day-of',
+            visible: 1,
+            due_time: '15:30',
+            sound_enabled: 1,
+            sound: 'bell.wav',
+            reminder_interval_minutes: 30,
+        }),
+    });
+    assert.equal(createRes.status, 200);
+    const scheduleId = createRes.body.id;
+
+    const afterCreate = await api(`/api/chore-schedules/${scheduleId}`);
+    assert.equal(afterCreate.status, 200);
+    assert.equal(afterCreate.body.due_time, '15:30');
+    assert.equal(afterCreate.body.sound_enabled, 1);
+    assert.equal(afterCreate.body.sound, 'bell.wav');
+    assert.equal(afterCreate.body.reminder_interval_minutes, 30);
+
+    const patchRes = await api(`/api/chore-schedules/${scheduleId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ due_time: '08:00', sound_enabled: 0, reminder_interval_minutes: 0 }),
+    });
+    assert.equal(patchRes.status, 200);
+
+    const afterPatch = await api(`/api/chore-schedules/${scheduleId}`);
+    assert.equal(afterPatch.body.due_time, '08:00');
+    assert.equal(afterPatch.body.sound_enabled, 0);
+    assert.equal(afterPatch.body.reminder_interval_minutes, null);
+});
+
+test('chore schedule rejects an invalid due_time', async () => {
+    const choreRes = await api('/api/chores', {
+        method: 'POST',
+        body: JSON.stringify({ title: 'Bad time chore', description: '', clam_value: 0 }),
+    });
+    const choreId = choreRes.body.id;
+
+    const createRes = await api('/api/chore-schedules', {
+        method: 'POST',
+        body: JSON.stringify({
+            chore_id: choreId,
+            crontab: '0 0 * * *',
+            duration: 'day-of',
+            due_time: '25:99',
+        }),
+    });
+
+    assert.equal(createRes.status, 400);
+    assert.match(createRes.body.error, /due_time/);
+});

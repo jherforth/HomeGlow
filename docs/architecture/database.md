@@ -44,6 +44,7 @@ run in ascending order. The registry lives in `schemaMigrations` in
 | 12 | `schema12-onceCompletedScheduling.js` | Adds `interval` and `parent_schedule_id` columns to `chore_schedules`. |
 | 13 | `schema13-tabsByDefaultBackfill.js` | Backfills default tabs. |
 | 14 | `schema14-deviceAndTabJsonStorage.js` | Moves widget layout into `tabs.config_json` and device settings into `devices.device_settings_json`; **drops** `widget_tab_assignments`. |
+| 15 | `schema15-choreDueTimeSound.js` | Adds `due_time`, `sound`, `sound_enabled`, `reminder_interval_minutes` to `chore_schedules` (chore due-time notification sounds). |
 
 Each versioned migration runs inside a transaction, reads its context from
 `globalThis.__HOMEGLOW_SCHEMA_MIGRATION_CONTEXT`, and writes the new
@@ -73,6 +74,10 @@ crontab (NULL = one-time instance),
 duration ('day-of' | 'until-completed' | 'once-completed'),
 interval (e.g. '3m', '1w' for recurring sticky chores),
 parent_schedule_id ─▶ chore_schedules(id),   -- links generated instances to their recurring parent
+due_time,                     -- 'HH:MM' 24h local time the chore is due (nullable)
+sound_enabled,                -- 0/1: play a notification sound at due_time
+sound,                        -- chosen sound filename; null = use global default
+reminder_interval_minutes,    -- null/0 = ring once; N = repeat every N min until completed
 visible, created_at
 ```
 

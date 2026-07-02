@@ -91,6 +91,17 @@ segment (the browser's `localStorage` UUID).
 | POST | `/api/widgets/github/install` | Install a widget from GitHub. |
 | GET | `/widgets/:filename` | Serve a widget's HTML (theme-aware, sandboxed). |
 
+### Chore notification sounds
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/sounds` | List available sounds (bundled defaults + uploads); each has `filename`, `url` (`/Uploads/sounds/<file>`), `isDefault`. |
+| POST | `/api/sounds/upload` | Upload a custom sound (`.mp3/.wav/.ogg/.m4a/.aac`). |
+| DELETE | `/api/sounds/:filename` | Delete an uploaded sound (bundled defaults are protected). |
+
+Default sounds ship in `server/assets/sounds/` and are seeded into
+`uploads/sounds/` on startup; all sounds are served via the existing `/Uploads/`
+static route.
+
 ### Devices, tabs & layout (device-scoped)
 | Method | Path | Purpose |
 | --- | --- | --- |
@@ -114,7 +125,7 @@ segment (the browser's `localStorage` UUID).
 | --- | --- | --- |
 | GET/POST | `/api/chores` | List / create chore definitions. |
 | PATCH/DELETE | `/api/chores/:id` | Update / delete a chore. |
-| GET/POST | `/api/chore-schedules` | List (filter by `user_id`, `visible`, `usage`, `chore_id`) / create. |
+| GET/POST | `/api/chore-schedules` | List (filter by `user_id`, `visible`, `usage`, `chore_id`) / create. Accepts `due_time` (`HH:MM`), `sound`, `sound_enabled`, `reminder_interval_minutes` for due-time sounds. |
 | GET/PATCH/DELETE | `/api/chore-schedules/:id` | Single schedule CRUD. |
 | POST | `/api/chore-schedules/bulk` | Bulk create schedules. |
 | GET/POST | `/api/chore-history` | Query / add history entries. |

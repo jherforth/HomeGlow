@@ -12,6 +12,10 @@ coverage/
 **/coverage/
 *.lcov
 
+# Runtime uploads (user avatars, photos, uploaded sounds). Bundled default
+# sounds live in server/assets/ and ARE tracked; seeded copies land here.
+server/uploads/
+
 package-lock.json
 
 .vscode/

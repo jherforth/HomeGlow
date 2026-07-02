@@ -53,6 +53,7 @@ Open with the gear (⚙️) icon. These persist server-side (global settings in 
 | Section | What it configures | Storage |
 | --- | --- | --- |
 | **APIs** | OpenWeatherMap API key, ICS calendar URL | `settings` (global) |
+| **Chores → sounds** | Master enable (`CHORE_SOUND_ENABLED`), default sound (`CHORE_SOUND_DEFAULT`), volume (`CHORE_SOUND_VOLUME`) | `settings` (global) |
 | **Widgets** | Enable/disable built-ins, per-widget auto-refresh interval, transparency | `devices.device_settings_json` (per device) |
 | **Users** | Family members, avatars, clam adjustments | `users`, `chore_history` |
 | **Chores** | Chore definitions, schedules (cron/duration/interval), history | `chores`, `chore_schedules`, `chore_history` |
@@ -68,6 +69,13 @@ Open with the gear (⚙️) icon. These persist server-side (global settings in 
 
 Widgets support independent auto-refresh (5/15/30 min, 1–6 h). This is a per-widget
 device setting; a `CountdownCircle` shows time to next refresh.
+
+## Chore sounds (per device)
+
+Each display can silence chore due-time sounds independently via the 🔔/🔕 button on
+the chore widget, stored as `choreWidgetSettings.soundEnabled` in that device's
+`device_settings_json`. This is layered under the global master switch — see
+[Features → Chore due-time sounds](features.md#chore-due-time-sounds).
 
 ## Security notes
 

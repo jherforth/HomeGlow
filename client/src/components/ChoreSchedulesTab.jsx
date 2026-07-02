@@ -46,6 +46,7 @@ import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { CronExpressionParser } from 'cron-parser';
 import { getServerTimezoneSync } from '../utils/timezone.js';
+import SoundPicker from './SoundPicker.jsx';
 
 const DAY_OPTIONS = [
   { label: 'Sun', value: 0 },
@@ -124,7 +125,11 @@ const defaultScheduleForm = {
   duration: 'day-of',
   sleepCount: '',
   sleepUnit: 'd',
-  visible: true
+  visible: true,
+  due_time: '',
+  sound_enabled: false,
+  sound: '',
+  reminder_interval_minutes: ''
 };
 
 const defaultChoreForm = { title: '', description: '', clam_value: 0 };
@@ -235,7 +240,11 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
       duration: schedule.duration || 'day-of',
       sleepCount: schedule.interval ? (schedule.interval.match(/^(\d+)/)?.[1] || '') : '',
       sleepUnit: schedule.interval ? (schedule.interval.match(/[dwmy]$/i)?.[0].toLowerCase() || 'd') : 'd',
-      visible: !!schedule.visible
+      visible: !!schedule.visible,
+      due_time: schedule.due_time || '',
+      sound_enabled: !!schedule.sound_enabled,
+      sound: schedule.sound || '',
+      reminder_interval_minutes: schedule.reminder_interval_minutes ? String(schedule.reminder_interval_minutes) : ''
     });
     setCrontabError(null);
     setScheduleDialogOpen(true);
@@ -263,7 +272,13 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
         crontab: cron || null,
         duration: !scheduleForm.isOneTime ? scheduleForm.duration : 'day-of',
         interval: normalizedInterval,
-        visible: scheduleForm.visible ? 1 : 0
+        visible: scheduleForm.visible ? 1 : 0,
+        due_time: scheduleForm.due_time || null,
+        sound_enabled: scheduleForm.sound_enabled ? 1 : 0,
+        sound: scheduleForm.sound_enabled ? (scheduleForm.sound || null) : null,
+        reminder_interval_minutes: scheduleForm.sound_enabled && scheduleForm.reminder_interval_minutes
+          ? parseInt(scheduleForm.reminder_interval_minutes, 10)
+          : null
       };
 
       if (editingSchedule) {
@@ -910,6 +925,55 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                 )}
               </Alert>
             )}
+
+            <Divider />
+
+            <TextField
+              label="Due time (optional)"
+              type="time"
+              size="small"
+              value={scheduleForm.due_time}
+              onChange={(e) => updateScheduleForm({ due_time: e.target.value })}
+              InputLabelProps={{ shrink: true }}
+              helperText="Time of day this chore is due. Required to play a sound."
+              sx={{ maxWidth: 220 }}
+            />
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={scheduleForm.sound_enabled}
+                  onChange={(e) => updateScheduleForm({ sound_enabled: e.target.checked })}
+                  disabled={!scheduleForm.due_time}
+                />
+              }
+              label="Play sound when due"
+            />
+
+            {scheduleForm.sound_enabled && scheduleForm.due_time && (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pl: 1 }}>
+                <SoundPicker
+                  label="Sound"
+                  value={scheduleForm.sound}
+                  onChange={(sound) => updateScheduleForm({ sound })}
+                  includeNoneOption
+                  noneLabel="Use default sound"
+                  allowDelete
+                />
+                <TextField
+                  label="Repeat reminder every (minutes)"
+                  type="number"
+                  size="small"
+                  value={scheduleForm.reminder_interval_minutes}
+                  onChange={(e) => updateScheduleForm({ reminder_interval_minutes: e.target.value })}
+                  helperText="Leave blank to ring once. Reminders repeat until the chore is completed."
+                  inputProps={{ min: 0 }}
+                  sx={{ maxWidth: 280 }}
+                />
+              </Box>
+            )}
+
+            <Divider />
 
             <FormControlLabel
               control={

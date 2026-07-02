@@ -10,6 +10,8 @@ import TabBar from './components/TabBar.jsx';
 import ScreensaverCountdown from './components/ScreensaverCountdown.jsx';
 import { API_BASE_URL } from './utils/apiConfig.js';
 import { getDeviceApiBase } from './utils/deviceName.js';
+import { unlockAudio } from './utils/choreSound.js';
+import useChoreSoundScheduler from './hooks/useChoreSoundScheduler.js';
 import './index.css';
 
 const loadAdminPanel = () => import('./components/AdminPanel.jsx');
@@ -240,6 +242,7 @@ const App = () => {
   const [showTabIconModal, setShowTabIconModal] = useState(false);
   const [deviceSettingsLoaded, setDeviceSettingsLoaded] = useState(false);
   const [isFirstRunClient, setIsFirstRunClient] = useState(false);
+  const [choreSoundDeviceEnabled, setChoreSoundDeviceEnabled] = useState(true);
 
   const fetchInstalledPlugins = async () => {
     try {
@@ -263,6 +266,7 @@ const App = () => {
 
     setWidgetSettings(widgetSettingsFromServer);
     setPluginSettings(pluginSettingsFromServer);
+    setChoreSoundDeviceEnabled(settings?.choreWidgetSettings?.soundEnabled !== false);
 
     const hasKnownDeviceSettings = [
       'widgetSettings',
@@ -901,6 +905,26 @@ const App = () => {
     widgetSettings.weather.enabled &&
     !!apiKeys.WEATHER_API_KEY &&
     !isWidgetAssignedToTab('weather', activeTab);
+
+  // Unlock audio on the first user interaction (kiosk autoplay policy).
+  useEffect(() => {
+    unlockAudio();
+  }, []);
+
+  // Chore due-time notification sounds: fire regardless of the active tab.
+  // Gated by the global master switch AND this device not being muted AND the
+  // chores feature being enabled.
+  const choreSoundGlobalEnabled =
+    apiKeys.CHORE_SOUND_ENABLED === 'true' || apiKeys.CHORE_SOUND_ENABLED === true;
+  const parsedSoundVolume = Number(apiKeys.CHORE_SOUND_VOLUME);
+  useChoreSoundScheduler({
+    enabled:
+      widgetSettings.chores.enabled &&
+      choreSoundGlobalEnabled &&
+      choreSoundDeviceEnabled,
+    defaultSound: apiKeys.CHORE_SOUND_DEFAULT || null,
+    volume: Number.isFinite(parsedSoundVolume) ? parsedSoundVolume / 100 : 1,
+  });
 
   return (
     <>

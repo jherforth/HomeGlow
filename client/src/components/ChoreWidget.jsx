@@ -30,6 +30,18 @@ import { shouldShowChoreToday, getTodayDateString, convertDaysToCrontab } from '
 
 const USERS_UPDATED_EVENT = 'homeglow:users-updated';
 
+// Format an 'HH:MM' 24h string as a friendly 12h time (e.g. '3:00 PM').
+const formatDueTime = (dueTime) => {
+  if (typeof dueTime !== 'string') return '';
+  const match = dueTime.match(/^(\d{2}):(\d{2})$/);
+  if (!match) return dueTime;
+  let hour = parseInt(match[1], 10);
+  const minute = match[2];
+  const period = hour >= 12 ? 'PM' : 'AM';
+  hour = hour % 12 || 12;
+  return `${hour}:${minute} ${period}`;
+};
+
 const ChoreWidget = ({ transparentBackground, refreshInterval = 0 }) => {
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [users, setUsers] = useState([]);
@@ -49,6 +61,7 @@ const ChoreWidget = ({ transparentBackground, refreshInterval = 0 }) => {
   const [showPrizesModal, setShowPrizesModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showBonusChores, setShowBonusChores] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const [deviceSettingsLoaded, setDeviceSettingsLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [dailyClamReward, setDailyClamReward] = useState(2);
@@ -66,6 +79,9 @@ const ChoreWidget = ({ transparentBackground, refreshInterval = 0 }) => {
         const choreSettings = response.data?.choreWidgetSettings;
         if (choreSettings && typeof choreSettings.showBonusChores === 'boolean') {
           setShowBonusChores(choreSettings.showBonusChores);
+        }
+        if (choreSettings && typeof choreSettings.soundEnabled === 'boolean') {
+          setSoundEnabled(choreSettings.soundEnabled);
         }
       } catch (error) {
         console.error('Error loading chore widget settings:', error);
@@ -103,6 +119,7 @@ const ChoreWidget = ({ transparentBackground, refreshInterval = 0 }) => {
         await axios.patch(`${API_DEVICE_URL}/settings`, {
           choreWidgetSettings: {
             showBonusChores,
+            soundEnabled,
           },
         });
       } catch (error) {
@@ -111,7 +128,7 @@ const ChoreWidget = ({ transparentBackground, refreshInterval = 0 }) => {
     }, 250);
 
     return () => clearTimeout(timeoutId);
-  }, [API_DEVICE_URL, deviceSettingsLoaded, showBonusChores]);
+  }, [API_DEVICE_URL, deviceSettingsLoaded, showBonusChores, soundEnabled]);
 
   useEffect(() => {
     const onUsersUpdated = () => {
@@ -440,6 +457,14 @@ const ChoreWidget = ({ transparentBackground, refreshInterval = 0 }) => {
                 sx={{ ml: 1, bgcolor: 'var(--accent)', color: 'white' }}
               />
             )}
+            {schedule.due_time && (
+              <Chip
+                label={`${schedule.sound_enabled ? '🔔 ' : '🕑 '}${formatDueTime(schedule.due_time)}`}
+                size="small"
+                variant="outlined"
+                sx={{ ml: 1, fontSize: '0.7rem' }}
+              />
+            )}
           </Typography>
           {schedule.description && (
             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
@@ -517,6 +542,15 @@ const ChoreWidget = ({ transparentBackground, refreshInterval = 0 }) => {
               title={showBonusChores ? "Hide Bonus Chores" : "Show Bonus Chores"}
             >
               🥟
+            </Button>
+            <Button
+              onClick={() => setSoundEnabled(!soundEnabled)}
+              variant={soundEnabled ? "contained" : "outlined"}
+              size="small"
+              sx={{ minWidth: 'auto', px: 1 }}
+              title={soundEnabled ? "Mute chore sounds on this display" : "Enable chore sounds on this display"}
+            >
+              {soundEnabled ? '🔔' : '🔕'}
             </Button>
             <Button
               onClick={() => setShowPrizesModal(true)}

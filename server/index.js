@@ -23,6 +23,40 @@ const cron = require('node-cron');
 // For widget upload and registry
 const widgetRegistryPath = path.join(__dirname, 'widgets_registry.json');
 
+// Chore notification sounds: bundled defaults (in the image) seeded into the
+// persisted uploads volume, plus user uploads. Served via the /Uploads/ static root.
+const DEFAULT_SOUNDS_DIR = path.join(__dirname, 'assets', 'sounds');
+const SOUNDS_UPLOAD_DIR = path.join(__dirname, 'uploads', 'sounds');
+const ALLOWED_SOUND_EXTENSIONS = new Set(['.mp3', '.wav', '.ogg', '.m4a', '.aac']);
+
+function getDefaultSoundFilenames() {
+  try {
+    return new Set(fsSync.readdirSync(DEFAULT_SOUNDS_DIR));
+  } catch {
+    return new Set();
+  }
+}
+
+async function seedDefaultSounds() {
+  await fs.mkdir(SOUNDS_UPLOAD_DIR, { recursive: true });
+  let defaults = [];
+  try {
+    defaults = await fs.readdir(DEFAULT_SOUNDS_DIR);
+  } catch {
+    return; // No bundled defaults present; nothing to seed.
+  }
+
+  for (const filename of defaults) {
+    const target = path.join(SOUNDS_UPLOAD_DIR, filename);
+    try {
+      await fs.access(target);
+    } catch {
+      await fs.copyFile(path.join(DEFAULT_SOUNDS_DIR, filename), target);
+      console.log(`Seeded default sound: ${filename}`);
+    }
+  }
+}
+
 // Calendar sync service
 const CalendarSyncService = require('./services/calendarSync');
 const googleConnection = require('./services/googleConnection');
@@ -51,6 +85,7 @@ const schemaMigrations = [
   { schemaId: 12, migrationPath: './migrations/schema12-onceCompletedScheduling', },
   { schemaId: 13, migrationPath: './migrations/schema13-tabsByDefaultBackfill', },
   { schemaId: 14, migrationPath: './migrations/schema14-deviceAndTabJsonStorage', },
+  { schemaId: 15, migrationPath: './migrations/schema15-choreDueTimeSound', },
 ];
 
 const ALLOWED_SCHEDULE_DURATIONS = new Set(['day-of', 'until-completed', 'once-completed']);
@@ -102,6 +137,32 @@ function normalizeScheduleInterval(intervalValue) {
 
 function isValidScheduleInterval(intervalValue) {
   return typeof intervalValue === 'string' && SCHEDULE_INTERVAL_REGEX.test(intervalValue);
+}
+
+const DUE_TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+// Returns { valid, value } where value is a normalized 'HH:MM' string or null.
+function normalizeDueTime(dueTime) {
+  if (dueTime === undefined || dueTime === null || dueTime === '') {
+    return { valid: true, value: null };
+  }
+  const normalized = String(dueTime).trim();
+  if (!DUE_TIME_REGEX.test(normalized)) {
+    return { valid: false, value: null };
+  }
+  return { valid: true, value: normalized };
+}
+
+// Returns { valid, value } where value is a positive integer of minutes or null.
+function normalizeReminderInterval(minutes) {
+  if (minutes === undefined || minutes === null || minutes === '' || Number(minutes) === 0) {
+    return { valid: true, value: null };
+  }
+  const parsed = Number.parseInt(minutes, 10);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    return { valid: false, value: null };
+  }
+  return { valid: true, value: parsed > 0 ? parsed : null };
 }
 
 function parseDateOnlyToLocalDate(dateString) {
@@ -538,6 +599,79 @@ fastify.delete('/api/widgets/:filename', async (request, reply) => {
     return { success: true, message: 'Widget deleted.' };
   } catch (err) {
     reply.status(500).send({ error: 'Failed to delete widget.' });
+  }
+});
+
+// --- Chore notification sound bank ---
+
+// Endpoint: List available sounds (bundled defaults + user uploads)
+fastify.get('/api/sounds', async (request, reply) => {
+  try {
+    await fs.mkdir(SOUNDS_UPLOAD_DIR, { recursive: true });
+    const defaults = getDefaultSoundFilenames();
+    const files = await fs.readdir(SOUNDS_UPLOAD_DIR);
+
+    return files
+      .filter((filename) => ALLOWED_SOUND_EXTENSIONS.has(path.extname(filename).toLowerCase()))
+      .sort((a, b) => a.localeCompare(b))
+      .map((filename) => ({
+        filename,
+        name: filename.replace(/\.[^.]+$/, ''),
+        url: `/Uploads/sounds/${filename}`,
+        isDefault: defaults.has(filename),
+      }));
+  } catch (error) {
+    console.error('Error listing sounds:', error);
+    reply.status(500).send({ error: 'Failed to list sounds' });
+  }
+});
+
+// Endpoint: Upload a custom sound
+fastify.post('/api/sounds/upload', async (request, reply) => {
+  try {
+    const data = await request.file();
+    if (!data) {
+      return reply.status(400).send({ error: 'No file uploaded.' });
+    }
+
+    const ext = path.extname(data.filename).toLowerCase();
+    if (!ALLOWED_SOUND_EXTENSIONS.has(ext)) {
+      return reply.status(400).send({
+        error: `Unsupported file type. Allowed: ${Array.from(ALLOWED_SOUND_EXTENSIONS).join(', ')}`,
+      });
+    }
+
+    await fs.mkdir(SOUNDS_UPLOAD_DIR, { recursive: true });
+    const safeName = data.filename.replace(/[^a-zA-Z0-9-._]/g, '_');
+    await fs.writeFile(path.join(SOUNDS_UPLOAD_DIR, safeName), await data.toBuffer());
+
+    return {
+      success: true,
+      message: 'Sound uploaded!',
+      sound: { filename: safeName, name: safeName.replace(/\.[^.]+$/, ''), url: `/Uploads/sounds/${safeName}`, isDefault: false },
+    };
+  } catch (error) {
+    console.error('Error uploading sound:', error);
+    reply.status(500).send({ error: 'Failed to upload sound.' });
+  }
+});
+
+// Endpoint: Delete an uploaded sound (bundled defaults are protected)
+fastify.delete('/api/sounds/:filename', async (request, reply) => {
+  const { filename } = request.params;
+  try {
+    if (getDefaultSoundFilenames().has(filename)) {
+      return reply.status(400).send({ error: 'Default sounds cannot be deleted.' });
+    }
+
+    await fs.unlink(path.join(SOUNDS_UPLOAD_DIR, filename));
+    return { success: true, message: 'Sound deleted.' };
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return reply.status(404).send({ error: 'Sound not found.' });
+    }
+    console.error('Error deleting sound:', error);
+    reply.status(500).send({ error: 'Failed to delete sound.' });
   }
 });
 
@@ -1430,10 +1564,19 @@ fastify.get('/api/chore-schedules/:id', async (request, reply) => {
 });
 
 fastify.post('/api/chore-schedules', async (request, reply) => {
-  const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id } = request.body;
+  const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes } = request.body;
   try {
     if (!chore_id) {
       return reply.status(400).send({ error: 'chore_id is required' });
+    }
+
+    const dueTimeResult = normalizeDueTime(due_time);
+    if (!dueTimeResult.valid) {
+      return reply.status(400).send({ error: 'due_time must be in HH:MM 24-hour format' });
+    }
+    const reminderResult = normalizeReminderInterval(reminder_interval_minutes);
+    if (!reminderResult.valid) {
+      return reply.status(400).send({ error: 'reminder_interval_minutes must be a non-negative integer' });
     }
 
     const normalizedDuration = normalizeScheduleDuration(duration);
@@ -1474,7 +1617,7 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
       normalizedParentScheduleId = parsedParentScheduleId;
     }
 
-    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     const info = stmt.run(
       chore_id,
       user_id || null,
@@ -1482,7 +1625,11 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
       normalizedDuration,
       visible !== undefined ? visible : 1,
       normalizedDuration === 'once-completed' ? normalizedInterval : null,
-      normalizedParentScheduleId
+      normalizedParentScheduleId,
+      dueTimeResult.value,
+      sound || null,
+      sound_enabled ? 1 : 0,
+      reminderResult.value
     );
     return { id: info.lastInsertRowid, success: true };
   } catch (error) {
@@ -1492,10 +1639,19 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
 });
 
 fastify.post('/api/chore-schedules/bulk', async (request, reply) => {
-  const { chore_id, user_ids, crontab, visible } = request.body;
+  const { chore_id, user_ids, crontab, visible, due_time, sound, sound_enabled, reminder_interval_minutes } = request.body;
   try {
     if (!chore_id || !user_ids || !Array.isArray(user_ids)) {
       return reply.status(400).send({ error: 'chore_id and user_ids array are required' });
+    }
+
+    const dueTimeResult = normalizeDueTime(due_time);
+    if (!dueTimeResult.valid) {
+      return reply.status(400).send({ error: 'due_time must be in HH:MM 24-hour format' });
+    }
+    const reminderResult = normalizeReminderInterval(reminder_interval_minutes);
+    if (!reminderResult.valid) {
+      return reply.status(400).send({ error: 'reminder_interval_minutes must be a non-negative integer' });
     }
 
     if (crontab) {
@@ -1506,11 +1662,11 @@ fastify.post('/api/chore-schedules/bulk', async (request, reply) => {
       }
     }
 
-    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, visible) VALUES (?, ?, ?, ?)');
+    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, visible, due_time, sound, sound_enabled, reminder_interval_minutes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
     const ids = [];
 
     for (const user_id of user_ids) {
-      const info = stmt.run(chore_id, user_id, crontab || null, visible !== undefined ? visible : 1);
+      const info = stmt.run(chore_id, user_id, crontab || null, visible !== undefined ? visible : 1, dueTimeResult.value, sound || null, sound_enabled ? 1 : 0, reminderResult.value);
       ids.push(info.lastInsertRowid);
     }
 
@@ -1523,8 +1679,17 @@ fastify.post('/api/chore-schedules/bulk', async (request, reply) => {
 
 fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
   const { id } = request.params;
-  const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id } = request.body;
+  const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes } = request.body;
   try {
+    const dueTimeResult = normalizeDueTime(due_time);
+    if (due_time !== undefined && !dueTimeResult.valid) {
+      return reply.status(400).send({ error: 'due_time must be in HH:MM 24-hour format' });
+    }
+    const reminderResult = normalizeReminderInterval(reminder_interval_minutes);
+    if (reminder_interval_minutes !== undefined && !reminderResult.valid) {
+      return reply.status(400).send({ error: 'reminder_interval_minutes must be a non-negative integer' });
+    }
+
     if (crontab !== undefined && crontab !== null) {
       try {
         CronExpressionParser.parse(crontab);
@@ -1587,6 +1752,10 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
       }
     }
     if (visible !== undefined) { updates.push('visible = ?'); params.push(visible ? 1 : 0); }
+    if (due_time !== undefined) { updates.push('due_time = ?'); params.push(dueTimeResult.value); }
+    if (sound !== undefined) { updates.push('sound = ?'); params.push(sound || null); }
+    if (sound_enabled !== undefined) { updates.push('sound_enabled = ?'); params.push(sound_enabled ? 1 : 0); }
+    if (reminder_interval_minutes !== undefined) { updates.push('reminder_interval_minutes = ?'); params.push(reminderResult.value); }
 
     if (updates.length === 0) {
       return reply.status(400).send({ error: 'No fields to update' });
@@ -4194,6 +4363,9 @@ const start = async () => {
     const usersDir = path.join(uploadsDir, 'users');
     await fs.mkdir(usersDir, { recursive: true });
     console.log('Uploads directories created');
+
+    // Seed bundled default chore notification sounds into the persisted uploads volume
+    await seedDefaultSounds();
 
     // Initialize calendar sync service
     if (process.env.HOMEGLOW_DISABLE_CALENDAR_SYNC !== '1') {
