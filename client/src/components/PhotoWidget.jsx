@@ -28,7 +28,7 @@ const PhotoWidget = ({ transparentBackground, refreshInterval = 0 }) => {
   const [slideshowInterval, setSlideshowInterval] = useState(5000);
   const [photosPerView, setPhotosPerView] = useState(1);
   const [transitionType, setTransitionType] = useState('none');
-  const [photoHeight, setPhotoHeight] = useState(450);
+  const [photoHeight, setPhotoHeight] = useState('auto');
 
   useEffect(() => {
     fetchPhotoSources();
@@ -52,7 +52,8 @@ const PhotoWidget = ({ transparentBackground, refreshInterval = 0 }) => {
         setSlideshowInterval(parseInt(settings.PHOTO_WIDGET_SLIDESHOW_INTERVAL));
       }
       if (settings.PHOTO_WIDGET_PHOTO_SIZE) {
-        setPhotoHeight(parseInt(settings.PHOTO_WIDGET_PHOTO_SIZE));
+        const storedSize = settings.PHOTO_WIDGET_PHOTO_SIZE;
+        setPhotoHeight(storedSize === 'auto' ? 'auto' : parseInt(storedSize));
       }
     } catch (error) {
       console.error('Error loading photo widget preferences:', error);
@@ -287,8 +288,14 @@ const PhotoWidget = ({ transparentBackground, refreshInterval = 0 }) => {
       )}
 
       {!loading && !error && photos.length > 0 && currentPhotos.length > 0 && (
-        <Box>
-          <Box sx={{ position: 'relative', height: photoHeight, overflow: 'hidden', borderRadius: 2, mb: 2 }}>
+        <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          <Box sx={{
+            position: 'relative',
+            ...(photoHeight === 'auto' ? { flex: 1, minHeight: 0 } : { height: photoHeight }),
+            overflow: 'hidden',
+            borderRadius: 2,
+            mb: 2
+          }}>
             <Box
               key={currentPhotoIndex}
               sx={{
@@ -448,6 +455,7 @@ const PhotoWidget = ({ transparentBackground, refreshInterval = 0 }) => {
                 savePreference('PHOTO_WIDGET_PHOTO_SIZE', value);
               }}
             >
+              <MenuItem value="auto">Auto (fit widget)</MenuItem>
               <MenuItem value={880}>Extra Large (880px)</MenuItem>
               <MenuItem value={720}>Large (720px)</MenuItem>
               <MenuItem value={580}>Medium (580px)</MenuItem>
