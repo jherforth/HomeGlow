@@ -158,6 +158,6 @@ This project is open-source and available under the [AGPL v3.0](LICENSE).
 
 **HomeGlow** - Transform your home with a beautiful, intelligent dashboard that grows with your family's needs.
 
-<img width="1148" height="1920" alt="image" src="https://github.com/user-attachments/assets/4588fe42-10e4-484e-85a0-39e5516095c8" /><img width="233" height="181" alt="HomeGlowLogo" src="https://github.com/user-attachments/assets/8a199ee6-5872-44dc-b534-88483279c763" />
+<img width="1148" height="1920" alt="image" src="https://github.com/user-attachments/assets/4588fe42-10e4-484e-85a0-39e5516095c8" />
 
 ENJOY!
