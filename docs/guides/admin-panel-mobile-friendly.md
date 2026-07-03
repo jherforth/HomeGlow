@@ -15,7 +15,42 @@ touch-first app that people also administer from their phones, the settings surf
 be first-class on narrow screens.
 
 **Goal:** the entire Admin Panel — shell, embedded tabs, and shared modals — is comfortable
-and native-feeling on a ~360px phone, with **zero visual change at ≥600px** (desktop/kiosk).
+and usable on a ~360px phone, with **zero visual change at ≥600px** (desktop/kiosk).
+
+## Scope & non-goals
+
+HomeGlow is **not** a mobile web app — it is a touch-first dashboard designed for a
+wall-mounted / large touchscreen display (Raspberry Pi, kiosk, etc.). This work is
+**narrowly about letting an end user administer settings from a phone out of
+convenience.** Everything else stays exactly as it is.
+
+**In scope:** the Admin Panel and everything reachable from it — [AdminPanel.jsx](../../client/src/components/AdminPanel.jsx),
+the embedded [ChoreSchedulesTab.jsx](../../client/src/components/ChoreSchedulesTab.jsx) /
+[ChoreHistoryTab.jsx](../../client/src/components/ChoreHistoryTab.jsx), the shared modals
+([PinModal.jsx](../../client/src/components/PinModal.jsx),
+[ClamValueModal.jsx](../../client/src/components/ClamValueModal.jsx),
+[TabIconModal.jsx](../../client/src/components/TabIconModal.jsx),
+[SoundPicker.jsx](../../client/src/components/SoundPicker.jsx)), and the single Admin-Panel
+`<Dialog>` in `app.jsx`.
+
+**Explicitly out of scope (do not touch):** the dashboard/widget grid
+([WidgetContainer.jsx](../../client/src/components/WidgetContainer.jsx),
+[DraggableWidget.jsx](../../client/src/components/DraggableWidget.jsx)), the widgets
+themselves (Calendar/Weather/Chore/Photo), the [TabBar](../../client/src/components/TabBar.jsx)
+dock, the screensaver, and the overall app layout. These are meant for the large display and
+should keep behaving as they do today.
+
+**Why the rest of the app is safe:** every change in this plan is **viewport-gated** behind
+`useIsMobile` (`max-width: 599.95px`). On the large kiosk display that query is always
+false, so the responsive behavior never activates there — nothing changes on the dashboard,
+and even the shared modals (which are also reachable from the main display, e.g. the PIN pad
+from the dock or the Tab-icon modal from the TabBar) only go full-screen when opened on a
+genuinely small viewport. The only `app.jsx` edit is to the Admin-Panel `<Dialog>` itself;
+no dashboard, layout, or widget code is modified.
+
+**Bar for "done":** convenient and operable on a phone — not a pixel-perfect native mobile
+experience. Where a full card reflow would be awkward for a given table, a horizontal-scroll
+fallback is acceptable.
 
 ## Constraints & current state (what the code looks like today)
 
