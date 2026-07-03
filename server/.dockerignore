@@ -5,10 +5,12 @@ node_modules
 npm-debug.log
 
 # Local data / secrets — keep out of the image build context.
+# `widgets/` holds runtime-uploaded custom widgets; the directory is created at
+# runtime by the Dockerfile (`mkdir -p /app/widgets`), so nothing here needs to
+# be copied from the build context.
 data
 uploads
-widgets/*
-!widgets/.gitkeep
+widgets/
 
 # Misc
 .env
