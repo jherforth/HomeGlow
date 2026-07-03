@@ -116,7 +116,7 @@ const SoundPicker = ({
 
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-      <FormControl size={size} sx={{ minWidth: 160, flex: 1 }} disabled={disabled}>
+      <FormControl size={size} sx={{ minWidth: { xs: 120, sm: 160 }, flex: 1 }} disabled={disabled}>
         <InputLabel>{label}</InputLabel>
         <Select
           label={label}

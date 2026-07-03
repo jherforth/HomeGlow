@@ -47,6 +47,8 @@ import { API_BASE_URL } from '../utils/apiConfig.js';
 import { CronExpressionParser } from 'cron-parser';
 import { getServerTimezoneSync } from '../utils/timezone.js';
 import SoundPicker from './SoundPicker.jsx';
+import useIsMobile from '../hooks/useIsMobile.js';
+import { stackableTableSx } from '../utils/responsiveTable.js';
 
 const DAY_OPTIONS = [
   { label: 'Sun', value: 0 },
@@ -136,6 +138,7 @@ const defaultScheduleForm = {
 const defaultChoreForm = { title: '', description: '', clam_value: 0 };
 
 export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
+  const isMobile = useIsMobile();
   const [schedules, setSchedules] = useState([]);
   const [chores, setChores] = useState([]);
   const [users, setUsers] = useState([]);
@@ -428,7 +431,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
       </Alert>
 
       <TableContainer component={Paper} sx={{ mb: 4 }}>
-        <Table size="small">
+        <Table size="small" sx={stackableTableSx}>
           <TableHead>
             <TableRow>
               <TableCell>Title</TableCell>
@@ -448,20 +451,20 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
             ) : (
               chores.map(c => (
                 <TableRow key={c.id}>
-                  <TableCell>
+                  <TableCell data-label="Title">
                     <Typography variant="body2" fontWeight="bold">{c.title}</Typography>
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="Description">
                     <Typography variant="body2" color="text.secondary">
                       {c.description || <em style={{ opacity: 0.5 }}>No description</em>}
                     </Typography>
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="Clams">
                     {c.clam_value > 0
                       ? <Chip label={`${c.clam_value} 🥟`} size="small" color="primary" />
                       : <Typography variant="caption" color="text.secondary">—</Typography>}
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="Schedules">
                     <Chip
                       label={`${getScheduleCountForChore(c.id)} schedule${getScheduleCountForChore(c.id) !== 1 ? 's' : ''}`}
                       size="small"
@@ -531,7 +534,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
       </Box>
 
       <TableContainer component={Paper}>
-        <Table size="small">
+        <Table size="small" sx={stackableTableSx}>
           <TableHead>
             <TableRow>
               <TableCell>Chore</TableCell>
@@ -554,13 +557,15 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
             ) : (
               filteredSchedules.map((s) => (
                 <TableRow key={s.id} sx={{ opacity: s.visible ? 1 : 0.5 }}>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight="bold">{s.title}</Typography>
-                    {s.description && (
-                      <Typography variant="caption" color="text.secondary">{s.description}</Typography>
-                    )}
+                  <TableCell data-label="Chore">
+                    <Box>
+                      <Typography variant="body2" fontWeight="bold">{s.title}</Typography>
+                      {s.description && (
+                        <Typography variant="caption" color="text.secondary">{s.description}</Typography>
+                      )}
+                    </Box>
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="Assigned To">
                     <Chip
                       label={getUserName(s.user_id)}
                       size="small"
@@ -568,17 +573,17 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                       color={s.user_id ? 'primary' : 'default'}
                     />
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="Crontab">
                     <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
                       {s.crontab || <em style={{ opacity: 0.6 }}>one-time</em>}
                     </Typography>
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="Next Occurrence">
                     <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
                       {getNextOccurrence(s.crontab)}
                     </Typography>
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="Duration">
                     {s.crontab && s.duration === 'until-completed' ? (
                       <Chip label="Until Completed" size="small" color="warning" />
                     ) : s.crontab && s.duration === 'once-completed' ? (
@@ -589,12 +594,12 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                       <Typography variant="caption" color="text.secondary">—</Typography>
                     )}
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="Clams">
                     {s.clam_value > 0
                       ? <Chip label={`${s.clam_value} 🥟`} size="small" color="primary" />
                       : <Typography variant="caption" color="text.secondary">—</Typography>}
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="Visible">
                     <Tooltip title={s.visible ? 'Click to hide' : 'Click to show'}>
                       <Switch size="small" checked={!!s.visible} onChange={() => handleToggleVisible(s)} />
                     </Tooltip>
@@ -631,6 +636,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
         onClose={() => setChoreDialogOpen(false)}
         maxWidth="sm"
         fullWidth
+        fullScreen={isMobile}
         slotProps={{
           paper: {
             component: 'form',
@@ -668,7 +674,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
               value={choreForm.clam_value}
               onChange={(e) => setChoreForm(f => ({ ...f, clam_value: parseInt(e.target.value) || 0 }))}
               slotProps={{ htmlInput: { min: 0 } }}
-              sx={{ width: 140 }}
+              sx={{ width: { xs: '100%', sm: 140 } }}
             />
           </Box>
         </DialogContent>
@@ -686,7 +692,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
       </Dialog>
 
       {/* ── DELETE CHORE DIALOG ───────────────────────────── */}
-      <Dialog open={deleteChoreDialog.open} onClose={() => setDeleteChoreDialog({ open: false, chore: null })} maxWidth="xs" fullWidth>
+      <Dialog open={deleteChoreDialog.open} onClose={() => setDeleteChoreDialog({ open: false, chore: null })} maxWidth="xs" fullWidth fullScreen={isMobile}>
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Warning color="error" />
@@ -715,6 +721,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
         onClose={() => setScheduleDialogOpen(false)}
         maxWidth="sm"
         fullWidth
+        fullScreen={isMobile}
         slotProps={{
           paper: {
             component: 'form',
@@ -1014,7 +1021,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
       </Dialog>
 
       {/* ── DELETE SCHEDULE DIALOG ────────────────────────── */}
-      <Dialog open={deleteScheduleDialog.open} onClose={() => setDeleteScheduleDialog({ open: false, schedule: null })} maxWidth="xs" fullWidth>
+      <Dialog open={deleteScheduleDialog.open} onClose={() => setDeleteScheduleDialog({ open: false, schedule: null })} maxWidth="xs" fullWidth fullScreen={isMobile}>
         <DialogTitle>Delete Schedule</DialogTitle>
         <DialogContent>
           <Alert severity="warning" sx={{ mb: 2 }}>

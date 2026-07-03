@@ -1,9 +1,9 @@
 # Making the Admin Panel Mobile-Friendly (Design & Implementation Plan)
 
-> **Status: proposed / not yet implemented.** This is a forward-looking plan for a
-> future development pass. It documents what breaks on small screens, the chosen
-> approach, and a concrete checklist so the work can be picked up and executed
-> confidently. Nothing here is wired up yet.
+> **Status: implemented.** The primitives (`hooks/useIsMobile.js`,
+> `utils/responsiveTable.js`) and all three patterns below are wired up across the
+> Admin Panel, its embedded tabs, and the shared modals. The primitives are the
+> app-wide groundwork: any future mobile work (Phase 2) should reuse them.
 
 ## Motivation
 
@@ -191,15 +191,20 @@ add `data-label="<header>"` to every body `<TableCell>`. Drop now-pointless fixe
 
 ## Implementation checklist
 
-- [ ] Add `hooks/useIsMobile.js` and `utils/responsiveTable.js`.
-- [ ] `app.jsx`: outer dialog `fullScreen`/`fullWidth`, responsive `DialogContent` padding,
-      fix close-button overlap.
-- [ ] AdminPanel.jsx: scrollable main + sub tabs; `fullScreen` on all 6 dialogs; `stackableTableSx`
+- [x] Add `hooks/useIsMobile.js` and `utils/responsiveTable.js`.
+- [x] `app.jsx`: outer dialog `fullScreen`, responsive `DialogContent` padding,
+      fix close-button overlap. (`fullWidth` was dropped: `fullScreen` covers mobile and
+      `fullWidth` would have stretched the desktop dialog, violating the ≥600px rule.)
+- [x] AdminPanel.jsx: scrollable main + sub tabs; `fullScreen` on all 6 dialogs; `stackableTableSx`
       + `data-label` on all 4 tables; Prize-row + hard-width fixes.
-- [ ] ChoreSchedulesTab.jsx: `fullScreen` on all 4 dialogs; card reflow on both tables.
-- [ ] ChoreHistoryTab.jsx: card reflow on the history table.
-- [ ] PinModal / ClamValueModal / TabIconModal: `fullScreen` on mobile.
-- [ ] SoundPicker: responsive `minWidth`.
+- [x] ChoreSchedulesTab.jsx: `fullScreen` on all 4 dialogs; card reflow on both tables.
+- [x] ChoreHistoryTab.jsx: card reflow on the history table.
+- [x] PinModal / ClamValueModal / TabIconModal: `fullScreen` on mobile.
+- [x] SoundPicker: responsive `minWidth`.
+- [x] (Found during verification) `app.jsx`: hide the floating dock while the Admin Panel is
+      open on mobile — the dock (`z-index: 9999`) renders above MUI dialogs (`z-index: 1300`)
+      and covered the bottom action buttons of full-screen dialogs. Gated on `isMobile`, so
+      the kiosk/desktop dock is untouched.
 
 ## Verification
 

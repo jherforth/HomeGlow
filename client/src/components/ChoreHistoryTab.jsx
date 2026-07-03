@@ -18,6 +18,7 @@ import {
 import { Delete, Refresh } from '@mui/icons-material';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
+import { stackableTableSx } from '../utils/responsiveTable.js';
 
 export default function ChoreHistoryTab() {
   const [history, setHistory] = useState([]);
@@ -89,7 +90,7 @@ export default function ChoreHistoryTab() {
         </Box>
       ) : (
         <TableContainer component={Paper} variant="outlined">
-          <Table size="small">
+          <Table size="small" sx={stackableTableSx}>
             <TableHead>
               <TableRow>
                 <TableCell sx={{ fontWeight: 600 }}>User</TableCell>
@@ -102,20 +103,20 @@ export default function ChoreHistoryTab() {
             <TableBody>
               {history.map((entry) => (
                 <TableRow key={entry.id} hover>
-                  <TableCell>
+                  <TableCell data-label="User">
                     <Typography variant="body2" sx={{ fontWeight: 500 }}>
                       {entry.username || '—'}
                     </Typography>
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="Title">
                     <Typography variant="body2">
                       {entry.title || <span style={{ color: 'rgba(0,0,0,0.4)', fontStyle: 'italic' }}>Unknown</span>}
                     </Typography>
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="Date">
                     <Typography variant="body2">{formatDate(entry.date)}</Typography>
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="Clams">
                     <Chip
                       label={`${entry.clam_value} 🥟`}
                       size="small"

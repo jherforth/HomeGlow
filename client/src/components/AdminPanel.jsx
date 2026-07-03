@@ -75,6 +75,8 @@ import TabIconModal from './TabIconModal';
 import GoogleAccountConnection from './GoogleAccountConnection';
 import ClamValueModal from './ClamValueModal';
 import SoundPicker from './SoundPicker';
+import useIsMobile from '../hooks/useIsMobile.js';
+import { stackableTableSx } from '../utils/responsiveTable.js';
 
 const USERS_UPDATED_EVENT = 'homeglow:users-updated';
 const DEVICE_SETTINGS_UPDATED_EVENT = 'homeglow:device-settings-updated';
@@ -204,6 +206,7 @@ const buildTagUrl = (repository, tagName) => {
 const toShortCommit = (commitSha) => (commitSha ? commitSha.slice(0, 7) : 'Unknown');
 
 const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
+  const isMobile = useIsMobile();
   const [currentDeviceName, setCurrentDeviceName] = useState(() => getDeviceName());
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const CORE_WIDGET_DEFAULT_SIZES = {
@@ -1775,11 +1778,18 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
   return (
     <Box sx={{ width: '100%', maxWidth: 1200, mx: 'auto' }}>
-      <Typography variant="h4" gutterBottom>
+      <Typography variant="h4" gutterBottom sx={{ pr: { xs: 5, sm: 0 } }}>
         ⚙️ Admin Panel
       </Typography>
 
-      <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)} sx={{ mb: 3 }}>
+      <Tabs
+        value={activeTab}
+        onChange={(e, newValue) => setActiveTab(newValue)}
+        variant="scrollable"
+        scrollButtons="auto"
+        allowScrollButtonsMobile
+        sx={{ mb: 3 }}
+      >
         {adminTabs.map((tab, index) => (
           <Tab key={tab} label={tab} />
         ))}
@@ -1790,7 +1800,14 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         <Card>
           <CardContent>
             <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-              <Tabs value={widgetsSubTab} onChange={(_, v) => setWidgetsSubTab(v)} size="small">
+              <Tabs
+                value={widgetsSubTab}
+                onChange={(_, v) => setWidgetsSubTab(v)}
+                size="small"
+                variant="scrollable"
+                scrollButtons="auto"
+                allowScrollButtonsMobile
+              >
                 <Tab label="Widgets" />
                 <Tab label="Plugins" />
                 <Tab label="Tabs" />
@@ -2224,7 +2241,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 </Box>
 
                 <TableContainer component={Paper}>
-                  <Table>
+                  <Table sx={stackableTableSx}>
                     <TableHead>
                       <TableRow>
                         <TableCell width={60}>Order</TableCell>
@@ -2257,22 +2274,22 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                               opacity: draggingTabNumber === tab.number ? 0.65 : 1,
                             }}
                           >
-                            <TableCell>
+                            <TableCell data-label="Order">
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 {!isHome && <DragIndicator fontSize="small" />}
                                 <Chip label={tab.number} size="small" />
                               </Box>
                             </TableCell>
-                            <TableCell>
+                            <TableCell data-label="Label">
                               {tab.label}
                               {isHome && (
                                 <Chip size="small" label="Home" color="primary" sx={{ ml: 1 }} />
                               )}
                             </TableCell>
-                            <TableCell>
+                            <TableCell data-label="Icon">
                               <Chip size="small" label={tab.icon} />
                             </TableCell>
-                            <TableCell>
+                            <TableCell data-label="Show Label">
                               <Switch
                                 checked={Boolean(tab.show_label)}
                                 onClick={(e) => e.stopPropagation()}
@@ -2327,7 +2344,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 </Box>
 
                 <TableContainer component={Paper}>
-                  <Table>
+                  <Table sx={stackableTableSx}>
                     <TableHead>
                       <TableRow>
                         <TableCell>Name</TableCell>
@@ -2341,7 +2358,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                         const isCurrent = device.name === currentDeviceName;
                         return (
                           <TableRow key={device.name}>
-                            <TableCell>
+                            <TableCell data-label="Name">
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                                 {isCurrent && <Chip label="Current" color="primary" size="small" />}
                                 <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
@@ -2349,10 +2366,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                                 </Typography>
                               </Box>
                             </TableCell>
-                            <TableCell>
+                            <TableCell data-label="Last Updated">
                               {device.updateTime ? new Date(device.updateTime).toLocaleString() : 'Unknown'}
                             </TableCell>
-                            <TableCell>
+                            <TableCell data-label="Widgets">
                               <Chip label={Number(device.widgets) || 0} size="small" />
                             </TableCell>
                             <TableCell>
@@ -2767,7 +2784,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
             </Box>
 
             <TableContainer component={Paper}>
-              <Table>
+              <Table sx={stackableTableSx}>
                 <TableHead>
                   <TableRow>
                     <TableCell>Avatar</TableCell>
@@ -2799,7 +2816,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                           </Button>
                         </Box>
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Username">
                         {editingUser?.id === user.id ? (
                           <TextField
                             value={editingUser.username}
@@ -2810,7 +2827,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                           user.username
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Email" sx={{ '@media (max-width:599.95px)': { wordBreak: 'break-all' } }}>
                         {editingUser?.id === user.id ? (
                           <TextField
                             value={editingUser.email}
@@ -2821,7 +2838,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                           user.email
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Clam Total">
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <Chip
                             label={`${user.clam_total || 0} 🥟`}
@@ -2839,7 +2856,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                           </Tooltip>
                         </Box>
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Chores">
                         <Button
                           variant="outlined"
                           size="small"
@@ -2978,7 +2995,14 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
             </Box>
 
             <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-              <Tabs value={choresSubTab} onChange={(_, v) => setChoresSubTab(v)} size="small">
+              <Tabs
+                value={choresSubTab}
+                onChange={(_, v) => setChoresSubTab(v)}
+                size="small"
+                variant="scrollable"
+                scrollButtons="auto"
+                allowScrollButtonsMobile
+              >
                 <Tab label="Chores" />
                 <Tab label="History" />
               </Tabs>
@@ -3045,7 +3069,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
               {prizes.map((prize) => (
                 <ListItem key={prize.id} sx={{ border: '1px solid var(--card-border)', borderRadius: 1, mb: 1 }}>
                   {editingPrize?.id === prize.id ? (
-                    <Box sx={{ display: 'flex', gap: 2, width: '100%', alignItems: 'center' }}>
+                    <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, width: '100%', alignItems: { xs: 'stretch', sm: 'center' } }}>
                       <TextField
                         label="Prize Name"
                         value={editingPrize.name}
@@ -3057,7 +3081,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                         type="number"
                         value={editingPrize.clam_cost}
                         onChange={(e) => setEditingPrize({ ...editingPrize, clam_cost: parseInt(e.target.value) || 0 })}
-                        sx={{ width: 120 }}
+                        sx={{ width: { xs: '100%', sm: 120 } }}
                       />
                       <IconButton onClick={savePrize} color="primary">
                         <Save />
@@ -3459,6 +3483,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         onClose={() => setDeleteTabDialog({ open: false, tab: null })}
         maxWidth="sm"
         fullWidth
+        fullScreen={isMobile}
       >
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -3489,6 +3514,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         onClose={() => setCopyDeviceDialog({ open: false, device: null })}
         maxWidth="sm"
         fullWidth
+        fullScreen={isMobile}
       >
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -3525,6 +3551,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         onClose={() => setRenameDeviceDialog({ open: false, currentName: '', newName: '', error: '' })}
         maxWidth="sm"
         fullWidth
+        fullScreen={isMobile}
       >
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -3559,6 +3586,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         onClose={() => setDeleteDeviceDialog({ open: false, device: null })}
         maxWidth="sm"
         fullWidth
+        fullScreen={isMobile}
       >
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -3590,6 +3618,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         onClose={() => setDeleteUserDialog({ open: false, user: null })}
         maxWidth="sm"
         fullWidth
+        fullScreen={isMobile}
       >
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -3632,6 +3661,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         onClose={closeChoreModal}
         maxWidth="md"
         fullWidth
+        fullScreen={isMobile}
       >
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -3652,7 +3682,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
             </Typography>
           ) : (
             <TableContainer component={Paper} sx={{ mt: 1 }}>
-              <Table>
+              <Table sx={stackableTableSx}>
                 <TableHead>
                   <TableRow>
                     <TableCell>Title</TableCell>
@@ -3666,29 +3696,29 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 <TableBody>
                   {choreModal.userChores.map((chore) => (
                     <TableRow key={chore.id}>
-                      <TableCell>
+                      <TableCell data-label="Title">
                         <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                           {chore.title}
                         </Typography>
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Description">
                         <Typography variant="body2" color="text.secondary">
                           {chore.description || 'No description'}
                         </Typography>
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Schedule">
                         <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
                           {chore.crontab || 'One-time'}
                         </Typography>
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Visible">
                         <Chip
                           label={chore.visible ? 'Visible' : 'Hidden'}
                           color={chore.visible ? 'success' : 'default'}
                           size="small"
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Clams">
                         {chore.clam_value > 0 ? (
                           <Chip
                             label={`${chore.clam_value} 🥟`}

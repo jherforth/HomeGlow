@@ -11,8 +11,10 @@ import {
   Alert
 } from '@mui/material';
 import { Lock, Backspace } from '@mui/icons-material';
+import useIsMobile from '../hooks/useIsMobile.js';
 
 const PinModal = ({ open, onClose, onVerify, mode = 'verify', title }) => {
+  const isMobile = useIsMobile();
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [step, setStep] = useState('enter');
@@ -174,12 +176,13 @@ const PinModal = ({ open, onClose, onVerify, mode = 'verify', title }) => {
       onClose={isLoading ? undefined : onClose}
       maxWidth="xs"
       fullWidth
+      fullScreen={isMobile}
       slotProps={{
         paper: {
           sx: {
             background: 'var(--card-bg)',
             backdropFilter: 'var(--backdrop-blur)',
-            border: '2px solid var(--accent)',
+            border: isMobile ? 'none' : '2px solid var(--accent)',
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
           }
         }

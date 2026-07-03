@@ -11,10 +11,12 @@ import {
   Paper,
 } from '@mui/material';
 import { Backspace } from '@mui/icons-material';
+import useIsMobile from '../hooks/useIsMobile.js';
 
 const MAX_DIGITS = 6;
 
 const ClamValueModal = ({ open, onClose, onSave, user, isSaving = false }) => {
+  const isMobile = useIsMobile();
   const [value, setValue] = useState('');
 
   // Seed the input with the user's current balance whenever the modal opens.
@@ -88,12 +90,13 @@ const ClamValueModal = ({ open, onClose, onSave, user, isSaving = false }) => {
       onClose={isSaving ? undefined : onClose}
       maxWidth="xs"
       fullWidth
+      fullScreen={isMobile}
       slotProps={{
         paper: {
           sx: {
             background: 'var(--card-bg)',
             backdropFilter: 'var(--backdrop-blur)',
-            border: '2px solid var(--accent)',
+            border: isMobile ? 'none' : '2px solid var(--accent)',
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
           },
         },

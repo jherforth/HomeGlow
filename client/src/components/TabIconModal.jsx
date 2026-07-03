@@ -39,6 +39,7 @@ import {
   LocalDrink,
   Cloud,
 } from '@mui/icons-material';
+import useIsMobile from '../hooks/useIsMobile.js';
 
 const availableIcons = [
   { name: 'bell', icon: Notifications, label: 'Bell' },
@@ -77,6 +78,7 @@ const TabIconModal = ({
   saveButtonText = 'Create Tab',
   initialData = null,
 }) => {
+  const isMobile = useIsMobile();
   const [label, setLabel] = useState('');
   const [selectedIcon, setSelectedIcon] = useState('star');
   const [error, setError] = useState('');
@@ -121,6 +123,7 @@ const TabIconModal = ({
       onClose={handleClose}
       maxWidth="sm"
       fullWidth
+      fullScreen={isMobile}
       slotProps={{
         paper: {
           component: 'form',

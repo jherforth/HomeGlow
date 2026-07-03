@@ -12,6 +12,7 @@ import { API_BASE_URL } from './utils/apiConfig.js';
 import { getDeviceApiBase } from './utils/deviceName.js';
 import { unlockAudio } from './utils/choreSound.js';
 import useChoreSoundScheduler from './hooks/useChoreSoundScheduler.js';
+import useIsMobile from './hooks/useIsMobile.js';
 import './index.css';
 
 const loadAdminPanel = () => import('./components/AdminPanel.jsx');
@@ -218,6 +219,7 @@ const WidgetLoadingFallback = ({ label }) => (
 
 const App = () => {
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
+  const isMobile = useIsMobile();
   const [theme, setTheme] = useState(readLocalTheme);
   const [themeMode, setThemeMode] = useState(() => readLocalThemeMode(readLocalTheme()));
   const [autoDarkModeSettings, setAutoDarkModeSettings] = useState(readLocalAutoDarkModeSettings);
@@ -993,8 +995,8 @@ const App = () => {
         )}
       </Box>
 
-      <Dialog open={showAdminPanel} onClose={toggleAdminPanel} maxWidth="lg">
-        <DialogContent sx={{ position: 'relative' }}>
+      <Dialog open={showAdminPanel} onClose={toggleAdminPanel} maxWidth="lg" fullScreen={isMobile}>
+        <DialogContent sx={{ position: 'relative', '@media (max-width:599.95px)': { p: 1.5 } }}>
           <IconButton
             onClick={toggleAdminPanel}
             sx={{
@@ -1023,7 +1025,10 @@ const App = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Floating Dock TabBar */}
+      {/* Floating Dock TabBar. The dock renders above MUI dialogs, so hide it
+          while the Admin Panel is open full-screen on mobile — otherwise it
+          covers the bottom action buttons of the panel's dialogs. */}
+      {!(isMobile && showAdminPanel) && (
       <TabBar
         tabs={tabs}
         activeTab={activeTab}
@@ -1046,6 +1051,7 @@ const App = () => {
           />
         }
       />
+      )}
 
       <Suspense fallback={null}>
         <TabIconModal
