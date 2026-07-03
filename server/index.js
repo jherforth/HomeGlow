@@ -4158,11 +4158,22 @@ fastify.get('/api/photo-items', async (request, reply) => {
           let assets = [];
 
           if (source.album_id) {
-            const albumResponse = await axios.get(`${apiBase}/albums/${source.album_id}`, {
-              headers: immichHeaders,
-              timeout: 15000
-            });
-            assets = albumResponse.data?.assets || [];
+            // Immich v3 removed the `assets` array from GET /api/albums/{id}
+            // (https://immich.app/blog/v3-migration). Fetch album assets via the
+            // paginated metadata search instead — works on both Immich v2 and v3.
+            let page = 1;
+            while (page && assets.length < 1000) {
+              const searchResponse = await axios.post(`${apiBase}/search/metadata`,
+                { albumIds: [source.album_id], page, size: 1000 },
+                {
+                  headers: immichHeaders,
+                  timeout: 15000
+                }
+              );
+              const bucket = searchResponse.data?.assets || {};
+              assets.push(...(bucket.items || []));
+              page = bucket.nextPage ? Number(bucket.nextPage) : null;
+            }
             for (let i = assets.length - 1; i > 0; i--) {
               const j = Math.floor(Math.random() * (i + 1));
               [assets[i], assets[j]] = [assets[j], assets[i]];
