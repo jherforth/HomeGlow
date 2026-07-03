@@ -1,0 +1,19 @@
+# Never copy host-built artifacts into the image.
+# better-sqlite3 is a native module and MUST be built inside the container;
+# copying a macOS/Windows-built node_modules causes "invalid ELF header".
+node_modules
+npm-debug.log
+
+# Local data / secrets — keep out of the image build context.
+data
+uploads
+widgets/*
+!widgets/.gitkeep
+
+# Misc
+.env
+**/.env
+coverage
+*.lcov
+.git
+.DS_Store

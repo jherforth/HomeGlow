@@ -20,6 +20,7 @@
     "better-sqlite3": "^12.9.0",
     "cron-parser": "^5.5.0",
     "dotenv": "^17.4.2",
+    "fast-xml-parser": "5.9.3",
     "fastify": "^5.8.5",
     "ical-generator": "^10.2.0",
     "ical.js": "^2.2.1",

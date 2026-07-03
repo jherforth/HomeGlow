@@ -1,0 +1,17 @@
+# Never copy host-built artifacts into the image.
+# esbuild/rollup (used by Vite) ship platform-specific native binaries, so a
+# macOS/Windows-built node_modules can break the Linux build. Always install
+# fresh inside the container.
+node_modules
+npm-debug.log
+
+# Build output is produced inside the image.
+dist
+
+# Misc
+.env
+**/.env
+coverage
+*.lcov
+.git
+.DS_Store

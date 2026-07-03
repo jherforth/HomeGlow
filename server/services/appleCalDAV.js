@@ -1,11 +1,165 @@
 const axios = require('axios');
 const ICAL = require('ical.js');
+const { XMLParser } = require('fast-xml-parser');
 
 const CALDAV_BASE = 'https://caldav.icloud.com';
+
+// CalDAV responses are WebDAV "multistatus" XML envelopes whose <calendar-data>
+// elements contain an iCalendar (ICS) text payload. We use a real XML parser for
+// the envelope (it transparently handles CDATA, XML entities, and namespaces) and
+// hand the extracted ICS text to ical.js, which is responsible for parsing the
+// iCalendar payload itself.
+const xmlParser = new XMLParser({
+  removeNSPrefix: true,   // collapse d:/c:/cs:/ical: prefixes
+  ignoreAttributes: false, // need attributes (e.g. comp[name="VEVENT"])
+  attributeNamePrefix: '@_',
+  parseTagValue: false,    // keep text as strings (colors, ctags, hrefs)
+  trimValues: true,
+});
 
 function buildAuthHeader(appleId, appPassword) {
   return 'Basic ' + Buffer.from(`${appleId}:${appPassword}`).toString('base64');
 }
+
+// ---------------------------------------------------------------------------
+// XML helpers (pure, exported for testing)
+// ---------------------------------------------------------------------------
+
+function asArray(value) {
+  if (value === undefined || value === null) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+// Resolve the text content of a parsed node, whether it is a bare string or an
+// object carrying attributes alongside a #text value (CDATA included).
+function nodeText(node) {
+  if (node === undefined || node === null) return null;
+  if (typeof node === 'string') return node;
+  if (typeof node === 'number' || typeof node === 'boolean') return String(node);
+  if (typeof node === 'object' && '#text' in node) {
+    const text = node['#text'];
+    return text === undefined || text === null ? null : String(text);
+  }
+  return null;
+}
+
+// Find a prop value across all <propstat> blocks of a <response> (a response can
+// carry multiple propstats, e.g. one HTTP 200 and one HTTP 404).
+function findProp(response, key) {
+  for (const propstat of asArray(response && response.propstat)) {
+    const prop = propstat && propstat.prop;
+    if (prop && prop[key] !== undefined) return prop[key];
+  }
+  return undefined;
+}
+
+function absolutizeUrl(href) {
+  const value = (href || '').trim();
+  if (!value) return null;
+  return value.startsWith('http') ? value : `${CALDAV_BASE}${value}`;
+}
+
+function parseMultistatusResponses(xmlBody) {
+  const doc = xmlParser.parse(xmlBody);
+  return asArray(doc && doc.multistatus && doc.multistatus.response);
+}
+
+// Extract the current-user-principal URL from a PROPFIND response body.
+function parsePrincipalUrl(xmlBody) {
+  const responses = parseMultistatusResponses(xmlBody);
+  for (const response of responses) {
+    const cup = findProp(response, 'current-user-principal');
+    if (cup) {
+      const url = absolutizeUrl(nodeText(cup.href) ?? nodeText(cup));
+      if (url) return url;
+    }
+  }
+  // Fallback: first response-level href.
+  for (const response of responses) {
+    const url = absolutizeUrl(nodeText(response.href));
+    if (url) return url;
+  }
+  return null;
+}
+
+// Extract the calendar-home-set URL from a PROPFIND response body.
+function parseCalendarHomeUrl(xmlBody) {
+  const responses = parseMultistatusResponses(xmlBody);
+  for (const response of responses) {
+    const home = findProp(response, 'calendar-home-set');
+    if (home) {
+      const url = absolutizeUrl(nodeText(home.href) ?? nodeText(home));
+      if (url) return url;
+    }
+  }
+  return null;
+}
+
+// Extract VEVENT-capable calendars from a Depth:1 PROPFIND response body.
+function parseCalendars(xmlBody) {
+  const calendars = [];
+
+  for (const response of parseMultistatusResponses(xmlBody)) {
+    const href = nodeText(response.href);
+    if (!href) continue;
+
+    // A collection holds events if it advertises VEVENT in its supported
+    // component set. This is the most reliable signal and works across regular,
+    // shared, and subscribed iCloud calendars (subscriptions use a
+    // <cs:subscribed/> resourcetype rather than <C:calendar/>, so we must not
+    // gate on resourcetype alone).
+    const compSet = findProp(response, 'supported-calendar-component-set');
+    const comps = compSet ? asArray(compSet.comp) : [];
+    const supportsVevent = comps.some(
+      (comp) => String(comp && comp['@_name'] ? comp['@_name'] : '').toUpperCase() === 'VEVENT'
+    );
+
+    // Fallback when no component set is advertised: accept calendar/subscribed
+    // resource types (covers servers that omit supported-calendar-component-set)
+    // while still excluding the calendar-home root and inbox/outbox collections.
+    const resourcetype = findProp(response, 'resourcetype');
+    const isCalendarResourceType = !!resourcetype && typeof resourcetype === 'object'
+      && ('calendar' in resourcetype || 'subscribed' in resourcetype);
+
+    const include = comps.length > 0 ? supportsVevent : isCalendarResourceType;
+    if (!include) continue;
+
+    const name = nodeText(findProp(response, 'displayname')) || 'Calendar';
+    let color = nodeText(findProp(response, 'calendar-color'));
+    // Apple returns colors like #RRGGBBAA; normalize to #RRGGBB.
+    if (color && color.length === 9 && color.startsWith('#')) {
+      color = color.slice(0, 7);
+    }
+
+    const calUrl = absolutizeUrl(href);
+    calendars.push({ id: calUrl, name, color: color || '#3d7ab5', url: calUrl });
+  }
+
+  return calendars;
+}
+
+// Extract the raw ICS payload strings from a calendar REPORT response body.
+// The XML parser already unwraps CDATA and decodes XML entities, so the returned
+// strings start at "BEGIN:VCALENDAR" and are ready for ICAL.parse().
+function extractIcsPayloads(xmlBody) {
+  const payloads = [];
+
+  for (const response of parseMultistatusResponses(xmlBody)) {
+    const ics = nodeText(findProp(response, 'calendar-data'));
+    if (!ics) continue;
+
+    const trimmed = ics.trim();
+    if (trimmed.includes('BEGIN:VCALENDAR')) {
+      payloads.push(trimmed);
+    }
+  }
+
+  return payloads;
+}
+
+// ---------------------------------------------------------------------------
+// CalDAV HTTP flows
+// ---------------------------------------------------------------------------
 
 // Discover the user's personal CalDAV principal URL via PROPFIND
 async function discoverPrincipalUrl(appleId, appPassword) {
@@ -31,19 +185,8 @@ async function discoverPrincipalUrl(appleId, appPassword) {
   });
 
   if (response.status === 207 || response.status === 200) {
-    const body = response.data;
-    const hrefMatch = body.match(/<[^>]*:?href[^>]*>(https?:\/\/[^<]+)<\/[^>]*:?href>/i)
-      || body.match(/<[^>]*:?current-user-principal[^>]*>[\s\S]*?<[^>]*:?href[^>]*>([^<]+)<\/[^>]*:?href>/i);
-    if (hrefMatch) {
-      const href = hrefMatch[1].trim();
-      return href.startsWith('http') ? href : `${CALDAV_BASE}${href}`;
-    }
-    // Try to extract any href path
-    const pathMatch = body.match(/<[^>]*:?href[^>]*>([^<]+)<\/[^>]*:?href>/i);
-    if (pathMatch) {
-      const path = pathMatch[1].trim();
-      return path.startsWith('http') ? path : `${CALDAV_BASE}${path}`;
-    }
+    const principalUrl = parsePrincipalUrl(response.data);
+    if (principalUrl) return principalUrl;
   }
 
   throw new Error(`iCloud principal discovery failed (HTTP ${response.status}). Check your Apple ID and app-specific password.`);
@@ -72,12 +215,9 @@ async function discoverCalendarHome(principalUrl, appleId, appPassword) {
   });
 
   if (response.status === 207 || response.status === 200) {
-    const body = response.data;
-    const hrefMatch = body.match(/<[^>]*:?calendar-home-set[^>]*>[\s\S]*?<[^>]*:?href[^>]*>([^<]+)<\/[^>]*:?href>/i);
-    if (hrefMatch) {
-      const href = hrefMatch[1].trim();
-      return href.startsWith('http') ? href : `${CALDAV_BASE}${href}`;
-    }
+    const homeUrl = parseCalendarHomeUrl(response.data);
+    if (homeUrl) return homeUrl;
+
     // Fallback: derive from principal URL (Apple structure is /DSID/principal -> /DSID/calendars/)
     const dsidMatch = principalUrl.match(/\/(\d+)\//);
     if (dsidMatch) {
@@ -119,38 +259,7 @@ async function listCalendars(calendarHomeUrl, appleId, appPassword) {
     throw new Error(`Failed to list iCloud calendars (HTTP ${response.status}).`);
   }
 
-  const body = response.data;
-  const calendars = [];
-
-  // Parse multistatus responses - each <response> element is a calendar or collection
-  const responseBlocks = body.match(/<[^>]*:?response[^>]*>[\s\S]*?<\/[^>]*:?response>/gi) || [];
-
-  for (const block of responseBlocks) {
-    // Must be a calendar (vevent support)
-    const isCalendar = block.includes('calendar') && !block.includes('calendar-home-set');
-    const hasVEvent = block.includes('VEVENT') || block.includes('vevent');
-    if (!isCalendar || !hasVEvent) continue;
-
-    const hrefMatch = block.match(/<[^>]*:?href[^>]*>([^<]+)<\/[^>]*:?href>/i);
-    const nameMatch = block.match(/<[^>]*:?displayname[^>]*>([^<]*)<\/[^>]*:?displayname>/i);
-    const colorMatch = block.match(/<[^>]*:?calendar-color[^>]*>([^<]*)<\/[^>]*:?calendar-color>/i);
-
-    if (!hrefMatch) continue;
-
-    const href = hrefMatch[1].trim();
-    const calUrl = href.startsWith('http') ? href : `${CALDAV_BASE}${href}`;
-    const name = nameMatch ? nameMatch[1].trim() : 'Calendar';
-    let color = colorMatch ? colorMatch[1].trim() : null;
-
-    // Apple returns colors like #RRGGBBAA, normalize to #RRGGBB
-    if (color && color.length === 9 && color.startsWith('#')) {
-      color = color.slice(0, 7);
-    }
-
-    calendars.push({ id: calUrl, name, color: color || '#3d7ab5', url: calUrl });
-  }
-
-  return calendars;
+  return parseCalendars(response.data);
 }
 
 // Full discovery flow: credentials -> list of calendars
@@ -159,6 +268,35 @@ async function discoverAndListCalendars(appleId, appPassword) {
   const homeUrl = await discoverCalendarHome(principalUrl, appleId, appPassword);
   const calendars = await listCalendars(homeUrl, appleId, appPassword);
   return { principalUrl, homeUrl, calendars };
+}
+
+// Convert a parsed ICS payload into HomeGlow event objects.
+function icsToEvents(icsContent) {
+  const comp = new ICAL.Component(ICAL.parse(icsContent));
+  const vevents = comp.getAllSubcomponents('vevent');
+  const events = [];
+
+  for (const vevent of vevents) {
+    const event = new ICAL.Event(vevent);
+    const dtstart = vevent.getFirstPropertyValue('dtstart');
+    const isAllDay = dtstart?.isDate ?? false;
+    const startDate = event.startDate.toJSDate();
+    const rawEnd = event.endDate.toJSDate();
+    const endDate = isAllDay ? subtractOneDay(rawEnd) : rawEnd;
+
+    events.push({
+      uid: event.uid || `apple-${Date.now()}-${Math.random()}`,
+      title: event.summary || 'Untitled Event',
+      start: startDate,
+      end: endDate,
+      description: event.description || null,
+      location: event.location || null,
+      all_day: isAllDay,
+      raw: {},
+    });
+  }
+
+  return events;
 }
 
 // Fetch events from a specific calendar URL using CalDAV REPORT
@@ -201,44 +339,11 @@ async function fetchCalendarEvents(calendarUrl, appleId, appPassword) {
     throw new Error(`Failed to fetch iCloud events (HTTP ${response.status}).`);
   }
 
-  const body = response.data;
   const events = [];
 
-  // Extract calendar-data blocks from multistatus
-  const calDataMatches = body.match(/<[^>]*:?calendar-data[^>]*>([\s\S]*?)<\/[^>]*:?calendar-data>/gi) || [];
-
-  for (const match of calDataMatches) {
-    const icsContent = match
-      .replace(/<[^>]*:?calendar-data[^>]*>/i, '')
-      .replace(/<\/[^>]*:?calendar-data>/i, '')
-      .trim();
-
-    if (!icsContent) continue;
-
+  for (const icsContent of extractIcsPayloads(response.data)) {
     try {
-      const jcalData = ICAL.parse(icsContent);
-      const comp = new ICAL.Component(jcalData);
-      const vevents = comp.getAllSubcomponents('vevent');
-
-      for (const vevent of vevents) {
-        const event = new ICAL.Event(vevent);
-        const dtstart = vevent.getFirstPropertyValue('dtstart');
-        const isAllDay = dtstart?.isDate ?? false;
-        const startDate = event.startDate.toJSDate();
-        const rawEnd = event.endDate.toJSDate();
-        const endDate = isAllDay ? subtractOneDay(rawEnd) : rawEnd;
-
-        events.push({
-          uid: event.uid || `apple-${Date.now()}-${Math.random()}`,
-          title: event.summary || 'Untitled Event',
-          start: startDate,
-          end: endDate,
-          description: event.description || null,
-          location: event.location || null,
-          all_day: isAllDay,
-          raw: {},
-        });
-      }
+      events.push(...icsToEvents(icsContent));
     } catch (err) {
       console.warn('Failed to parse Apple CalDAV event block:', err.message);
     }
@@ -256,4 +361,10 @@ function subtractOneDay(date) {
 module.exports = {
   discoverAndListCalendars,
   fetchCalendarEvents,
+  // Exported for unit testing (pure XML/ICS helpers, no network).
+  parsePrincipalUrl,
+  parseCalendarHomeUrl,
+  parseCalendars,
+  extractIcsPayloads,
+  icsToEvents,
 };
