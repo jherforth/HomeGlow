@@ -64,3 +64,28 @@ export function convertDaysToCrontab(daysArray) {
   const dayNumbers = daysArray.map(day => dayMap[day.toLowerCase()]).sort();
   return `0 0 * * ${dayNumbers.join(',')}`;
 }
+
+// Urgency status for a chore's calendar due date (issue #97).
+// Compares 'YYYY-MM-DD' strings lexicographically (valid for ISO dates).
+// Returns: 'none' (no date / already completed), 'upcoming' (before due day),
+// 'due' (due today), or 'overdue' (past due).
+export function getDueDateStatus(dueDate, todayStr = getTodayDateString(), completed = false) {
+  if (!dueDate || completed) {
+    return 'none';
+  }
+  if (dueDate === todayStr) {
+    return 'due';
+  }
+  return dueDate < todayStr ? 'overdue' : 'upcoming';
+}
+
+// Formats a 'YYYY-MM-DD' string as a short, locale-friendly label (e.g. 'Jul 3').
+export function formatDueDate(dueDate) {
+  if (typeof dueDate !== 'string') return '';
+  const parts = dueDate.split('-').map(Number);
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return dueDate;
+  const [year, month, day] = parts;
+  const date = new Date(year, month - 1, day);
+  if (Number.isNaN(date.getTime())) return dueDate;
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}

@@ -20,13 +20,15 @@ import {
   DialogContent,
   DialogActions,
   Backdrop,
-  CircularProgress
+  CircularProgress,
+  Menu,
+  ListItemText
 } from '@mui/material';
-import { Edit, Save, Cancel, Add, Delete, Check, Undo } from '@mui/icons-material';
+import { Edit, Save, Cancel, Add, Delete, Check, Undo, SwapHoriz } from '@mui/icons-material';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
-import { shouldShowChoreToday, getTodayDateString, convertDaysToCrontab } from '../utils/choreHelpers.js';
+import { shouldShowChoreToday, getTodayDateString, convertDaysToCrontab, getDueDateStatus, formatDueDate } from '../utils/choreHelpers.js';
 
 const USERS_UPDATED_EVENT = 'homeglow:users-updated';
 
@@ -65,6 +67,8 @@ const ChoreWidget = ({ transparentBackground, refreshInterval = 0 }) => {
   const [deviceSettingsLoaded, setDeviceSettingsLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [dailyClamReward, setDailyClamReward] = useState(2);
+  const [reassignAnchor, setReassignAnchor] = useState(null);
+  const [reassignSchedule, setReassignSchedule] = useState(null);
 
   const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
@@ -282,6 +286,46 @@ const ChoreWidget = ({ transparentBackground, refreshInterval = 0 }) => {
     }
   };
 
+  const reassignChore = async (scheduleId, newUserId) => {
+    const schedule = schedules.find(s => s.id === scheduleId);
+    if (!schedule || schedule.user_id === newUserId) {
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      await axios.patch(`${API_BASE_URL}/api/chore-schedules/${scheduleId}`, {
+        user_id: newUserId,
+        visible: 1
+      });
+      await fetchData();
+    } catch (error) {
+      console.error('Error reassigning chore:', error);
+      alert(error.response?.data?.error || 'Failed to reassign chore');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const openReassignMenu = (event, schedule) => {
+    event.stopPropagation();
+    setReassignAnchor(event.currentTarget);
+    setReassignSchedule(schedule);
+  };
+
+  const closeReassignMenu = () => {
+    setReassignAnchor(null);
+    setReassignSchedule(null);
+  };
+
+  const handleReassignSelect = (newUserId) => {
+    const scheduleId = reassignSchedule?.id;
+    closeReassignMenu();
+    if (scheduleId) {
+      reassignChore(scheduleId, newUserId);
+    }
+  };
+
   const saveChore = async () => {
     try {
       setIsLoading(true);
@@ -433,6 +477,15 @@ const ChoreWidget = ({ transparentBackground, refreshInterval = 0 }) => {
   };
 
   const renderChoreItem = (schedule) => {
+    const dueStatus = getDueDateStatus(schedule.due_date, getTodayDateString(), schedule.completed);
+    const rowBgColor = schedule.completed
+      ? 'rgba(0, 255, 0, 0.1)'
+      : dueStatus === 'overdue'
+        ? 'rgba(244, 67, 54, 0.16)'
+        : dueStatus === 'due'
+          ? 'rgba(255, 193, 7, 0.20)'
+          : 'transparent';
+
     return (
       <Box
         key={schedule.id}
@@ -441,7 +494,7 @@ const ChoreWidget = ({ transparentBackground, refreshInterval = 0 }) => {
           border: '1px solid var(--card-border)',
           borderRadius: 2,
           mb: 1,
-          bgcolor: schedule.completed ? 'rgba(0, 255, 0, 0.1)' : 'transparent',
+          bgcolor: rowBgColor,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center'
@@ -465,6 +518,15 @@ const ChoreWidget = ({ transparentBackground, refreshInterval = 0 }) => {
                 sx={{ ml: 1, fontSize: '0.7rem' }}
               />
             )}
+            {schedule.due_date && (
+              <Chip
+                label={`${dueStatus === 'overdue' ? '⚠️ Overdue' : `Due ${formatDueDate(schedule.due_date)}`}`}
+                size="small"
+                color={dueStatus === 'overdue' ? 'error' : dueStatus === 'due' ? 'warning' : 'default'}
+                variant={dueStatus === 'upcoming' || dueStatus === 'none' ? 'outlined' : 'filled'}
+                sx={{ ml: 1, fontSize: '0.7rem' }}
+              />
+            )}
           </Typography>
           {schedule.description && (
             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
@@ -472,7 +534,7 @@ const ChoreWidget = ({ transparentBackground, refreshInterval = 0 }) => {
             </Typography>
           )}
         </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
+        <Box sx={{ display: 'flex', gap: 0.5 }}>
           <IconButton
             color={schedule.completed ? "secondary" : "primary"}
             onClick={() => toggleChoreCompletion(schedule, schedule.completed)}
@@ -491,6 +553,25 @@ const ChoreWidget = ({ transparentBackground, refreshInterval = 0 }) => {
           >
             {schedule.completed ? <Undo fontSize="small" /> : <Check fontSize="small" />}
           </IconButton>
+          {users.length > 1 && (
+            <IconButton
+              onClick={(e) => openReassignMenu(e, schedule)}
+              size="small"
+              title="Reassign to another person"
+              sx={{
+                minWidth: 'auto',
+                width: 32,
+                height: 32,
+                color: 'var(--accent)',
+                border: '1px solid var(--card-border)',
+                '&:hover': {
+                  bgcolor: 'rgba(var(--accent-rgb), 0.1)'
+                }
+              }}
+            >
+              <SwapHoriz fontSize="small" />
+            </IconButton>
+          )}
         </Box>
       </Box>
     );
@@ -861,6 +942,25 @@ const ChoreWidget = ({ transparentBackground, refreshInterval = 0 }) => {
             </Button>
           </DialogActions>
         </Dialog>
+
+        <Menu
+          anchorEl={reassignAnchor}
+          open={Boolean(reassignAnchor)}
+          onClose={closeReassignMenu}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        >
+          <MenuItem disabled sx={{ opacity: 0.7, fontSize: '0.8rem' }}>
+            Reassign to…
+          </MenuItem>
+          {users
+            .filter(user => user.id !== reassignSchedule?.user_id)
+            .map(user => (
+              <MenuItem key={user.id} onClick={() => handleReassignSelect(user.id)}>
+                <ListItemText primary={user.username} />
+              </MenuItem>
+            ))}
+        </Menu>
       </Box>
 
       <Backdrop

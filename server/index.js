@@ -86,6 +86,7 @@ const schemaMigrations = [
   { schemaId: 13, migrationPath: './migrations/schema13-tabsByDefaultBackfill', },
   { schemaId: 14, migrationPath: './migrations/schema14-deviceAndTabJsonStorage', },
   { schemaId: 15, migrationPath: './migrations/schema15-choreDueTimeSound', },
+  { schemaId: 16, migrationPath: './migrations/schema16-choreDueDate', },
 ];
 
 const ALLOWED_SCHEDULE_DURATIONS = new Set(['day-of', 'until-completed', 'once-completed']);
@@ -181,6 +182,30 @@ function parseDateOnlyToLocalDate(dateString) {
   }
 
   return new Date(year, month - 1, day, 0, 0, 0, 0);
+}
+
+const DUE_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+// Returns { valid, value } where value is a normalized 'YYYY-MM-DD' string or null.
+// Rejects malformed strings and impossible calendar dates (e.g. 2026-02-30).
+function normalizeDueDate(dueDate) {
+  if (dueDate === undefined || dueDate === null || dueDate === '') {
+    return { valid: true, value: null };
+  }
+  const normalized = String(dueDate).trim();
+  if (!DUE_DATE_REGEX.test(normalized)) {
+    return { valid: false, value: null };
+  }
+  const parsed = parseDateOnlyToLocalDate(normalized);
+  if (!parsed || Number.isNaN(parsed.getTime())) {
+    return { valid: false, value: null };
+  }
+  // Guard against roll-over (e.g. '2026-02-30' -> Mar 2): re-serialize and compare.
+  const roundTrip = `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+  if (roundTrip !== normalized) {
+    return { valid: false, value: null };
+  }
+  return { valid: true, value: normalized };
 }
 
 function addMonthsCalendarAware(baseDate, monthCount) {
@@ -1564,7 +1589,7 @@ fastify.get('/api/chore-schedules/:id', async (request, reply) => {
 });
 
 fastify.post('/api/chore-schedules', async (request, reply) => {
-  const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes } = request.body;
+  const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date } = request.body;
   try {
     if (!chore_id) {
       return reply.status(400).send({ error: 'chore_id is required' });
@@ -1573,6 +1598,10 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
     const dueTimeResult = normalizeDueTime(due_time);
     if (!dueTimeResult.valid) {
       return reply.status(400).send({ error: 'due_time must be in HH:MM 24-hour format' });
+    }
+    const dueDateResult = normalizeDueDate(due_date);
+    if (!dueDateResult.valid) {
+      return reply.status(400).send({ error: 'due_date must be a valid YYYY-MM-DD date' });
     }
     const reminderResult = normalizeReminderInterval(reminder_interval_minutes);
     if (!reminderResult.valid) {
@@ -1617,7 +1646,7 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
       normalizedParentScheduleId = parsedParentScheduleId;
     }
 
-    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     const info = stmt.run(
       chore_id,
       user_id || null,
@@ -1629,7 +1658,8 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
       dueTimeResult.value,
       sound || null,
       sound_enabled ? 1 : 0,
-      reminderResult.value
+      reminderResult.value,
+      dueDateResult.value
     );
     return { id: info.lastInsertRowid, success: true };
   } catch (error) {
@@ -1639,7 +1669,7 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
 });
 
 fastify.post('/api/chore-schedules/bulk', async (request, reply) => {
-  const { chore_id, user_ids, crontab, visible, due_time, sound, sound_enabled, reminder_interval_minutes } = request.body;
+  const { chore_id, user_ids, crontab, visible, due_time, sound, sound_enabled, reminder_interval_minutes, due_date } = request.body;
   try {
     if (!chore_id || !user_ids || !Array.isArray(user_ids)) {
       return reply.status(400).send({ error: 'chore_id and user_ids array are required' });
@@ -1648,6 +1678,10 @@ fastify.post('/api/chore-schedules/bulk', async (request, reply) => {
     const dueTimeResult = normalizeDueTime(due_time);
     if (!dueTimeResult.valid) {
       return reply.status(400).send({ error: 'due_time must be in HH:MM 24-hour format' });
+    }
+    const dueDateResult = normalizeDueDate(due_date);
+    if (!dueDateResult.valid) {
+      return reply.status(400).send({ error: 'due_date must be a valid YYYY-MM-DD date' });
     }
     const reminderResult = normalizeReminderInterval(reminder_interval_minutes);
     if (!reminderResult.valid) {
@@ -1662,11 +1696,11 @@ fastify.post('/api/chore-schedules/bulk', async (request, reply) => {
       }
     }
 
-    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, visible, due_time, sound, sound_enabled, reminder_interval_minutes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, visible, due_time, sound, sound_enabled, reminder_interval_minutes, due_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
     const ids = [];
 
     for (const user_id of user_ids) {
-      const info = stmt.run(chore_id, user_id, crontab || null, visible !== undefined ? visible : 1, dueTimeResult.value, sound || null, sound_enabled ? 1 : 0, reminderResult.value);
+      const info = stmt.run(chore_id, user_id, crontab || null, visible !== undefined ? visible : 1, dueTimeResult.value, sound || null, sound_enabled ? 1 : 0, reminderResult.value, dueDateResult.value);
       ids.push(info.lastInsertRowid);
     }
 
@@ -1679,11 +1713,15 @@ fastify.post('/api/chore-schedules/bulk', async (request, reply) => {
 
 fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
   const { id } = request.params;
-  const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes } = request.body;
+  const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date } = request.body;
   try {
     const dueTimeResult = normalizeDueTime(due_time);
     if (due_time !== undefined && !dueTimeResult.valid) {
       return reply.status(400).send({ error: 'due_time must be in HH:MM 24-hour format' });
+    }
+    const dueDateResult = normalizeDueDate(due_date);
+    if (due_date !== undefined && !dueDateResult.valid) {
+      return reply.status(400).send({ error: 'due_date must be a valid YYYY-MM-DD date' });
     }
     const reminderResult = normalizeReminderInterval(reminder_interval_minutes);
     if (reminder_interval_minutes !== undefined && !reminderResult.valid) {
@@ -1698,7 +1736,7 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
       }
     }
 
-    const existingSchedule = db.prepare('SELECT id, crontab, duration, interval FROM chore_schedules WHERE id = ?').get(id);
+    const existingSchedule = db.prepare('SELECT id, user_id, crontab, duration, interval FROM chore_schedules WHERE id = ?').get(id);
     if (!existingSchedule) {
       return reply.status(404).send({ error: 'Schedule not found' });
     }
@@ -1756,6 +1794,7 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
     if (sound !== undefined) { updates.push('sound = ?'); params.push(sound || null); }
     if (sound_enabled !== undefined) { updates.push('sound_enabled = ?'); params.push(sound_enabled ? 1 : 0); }
     if (reminder_interval_minutes !== undefined) { updates.push('reminder_interval_minutes = ?'); params.push(reminderResult.value); }
+    if (due_date !== undefined) { updates.push('due_date = ?'); params.push(dueDateResult.value); }
 
     if (updates.length === 0) {
       return reply.status(400).send({ error: 'No fields to update' });
@@ -1768,6 +1807,25 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
     if (info.changes === 0) {
       return reply.status(404).send({ error: 'Schedule not found' });
     }
+
+    // When a chore is reassigned to a different person, re-check the daily "all
+    // regular chores done" bonus for both the previous and new owner. Losing a
+    // chore can make someone newly all-done, so this awards the bonus they've
+    // earned. It never removes points, so no one loses their score on a move.
+    if (user_id !== undefined) {
+      const previousUserId = existingSchedule.user_id;
+      const nextUserId = user_id || null;
+      if (previousUserId !== nextUserId) {
+        const today = getTodayLocalDateString();
+        if (previousUserId) {
+          awardDailyRegularBonusIfDue(previousUserId, today);
+        }
+        if (nextUserId) {
+          awardDailyRegularBonusIfDue(nextUserId, today);
+        }
+      }
+    }
+
     return { success: true };
   } catch (error) {
     console.error('Error updating schedule:', error);
@@ -1903,6 +1961,84 @@ fastify.delete('/api/chore-history/:id', async (request, reply) => {
   }
 });
 
+// Returns the list of a user's regular (non-bonus) chore schedules that are due today.
+function getTodaysRegularChoresForUser(userId, today) {
+  const allUserSchedules = db.prepare(`
+    SELECT cs.*,
+     c.clam_value,
+     EXISTS (
+         SELECT 1
+         FROM chore_history ch
+         WHERE ch.chore_schedule_id = cs.id
+           AND ch.user_id = cs.user_id
+           AND ch.date = ?
+     ) AS completed_today
+    FROM chore_schedules cs
+    JOIN chores c
+      ON cs.chore_id = c.id
+    WHERE cs.user_id = ?
+      AND cs.visible = 1
+      AND NOT (
+        cs.crontab IS NOT NULL
+        AND cs.duration IN ('until-completed', 'once-completed')
+      )
+  `).all(today, userId);
+
+  const regularChores = allUserSchedules.filter(s => s.clam_value === 0);
+
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const justBeforeToday = new Date(startOfToday.getTime() - 1);
+  const options = { currentDate: justBeforeToday, utc: false };
+
+  const todaysChores = [];
+  for (const schedule of regularChores) {
+    // schedules without crontab are one-time and always part of today's chores
+    if (!schedule.crontab) {
+      todaysChores.push(schedule);
+      continue;
+    }
+
+    // ensure only chores that are due today are part of today's chores
+    const interval = CronExpressionParser.parse(schedule.crontab, options);
+    const next = interval.next().toISOString().split('T')[0];
+    if (today === next) {
+      todaysChores.push(schedule);
+    }
+  }
+
+  return todaysChores;
+}
+
+// Awards the daily "all regular chores completed" bonus to a user if every regular
+// chore due today is completed and the bonus hasn't already been recorded.
+// Never removes points; safe to call any time a user's chore set changes (e.g. reassignment).
+function awardDailyRegularBonusIfDue(userId, date) {
+  const today = getTodayLocalDateString();
+  const todaysChores = getTodaysRegularChoresForUser(userId, today);
+  const uncompletedRegularChores = todaysChores.filter(cs => cs.completed_today == 0);
+
+  if (!todaysChores.length || uncompletedRegularChores.length) {
+    return;
+  }
+
+  const dailyRewardSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('daily_completion_clam_reward');
+  const dailyReward = dailyRewardSetting ? parseInt(dailyRewardSetting.value, 10) : 2;
+
+  const bonusAlreadyAwarded = db.prepare(`
+      SELECT id FROM chore_history
+      WHERE user_id = ?
+      AND date = ?
+      AND chore_schedule_id IS NULL
+      AND clam_value = ?
+      AND title = ?
+    `).get(userId, date, dailyReward, 'Regular chores');
+
+  if (!bonusAlreadyAwarded) {
+    db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title) VALUES (?, NULL, ?, ?, ?)').run(userId, date, dailyReward, 'Regular chores');
+  }
+}
+
 // Chore completion endpoints
 fastify.post('/api/chores/complete', async (request, reply) => {
   const { chore_schedule_id, user_id, date } = request.body;
@@ -1942,71 +2078,7 @@ fastify.post('/api/chores/complete', async (request, reply) => {
       }
     }
 
-    const today = getTodayLocalDateString();
-    const allUserSchedules = db.prepare(`
-      SELECT cs.*,
-       c.clam_value,
-       EXISTS (
-           SELECT 1
-           FROM chore_history ch
-           WHERE ch.chore_schedule_id = cs.id
-             AND ch.user_id = cs.user_id
-             AND ch.date = ?
-       ) AS completed_today
-      FROM chore_schedules cs
-      JOIN chores c
-        ON cs.chore_id = c.id
-      WHERE cs.user_id = ?
-        AND cs.visible = 1
-        AND NOT (
-          cs.crontab IS NOT NULL
-          AND cs.duration IN ('until-completed', 'once-completed')
-        )
-    `).all(today, user_id);
-
-    const regularChores = allUserSchedules.filter(s => s.clam_value === 0);
-
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-    const justBeforeToday = new Date(startOfToday.getTime() - 1);
-    let options = {
-      currentDate: justBeforeToday,
-      utc: false,
-    }
-    let todaysChores = []
-    for (const schedule of regularChores) {
-      // schedules without crontab are one-time and always part of today's chores
-      if (!schedule.crontab) {
-        todaysChores.push(schedule);
-        continue;
-      }
-
-      // ensure only chores that are due today are part of today's chores
-      const interval = CronExpressionParser.parse(schedule.crontab, options);
-      const next = interval.next().toISOString().split('T')[0];
-      if (today === next) {
-        todaysChores.push(schedule);
-      }
-    }
-
-    const uncompletedRegularChores = todaysChores.filter(cs => cs.completed_today == 0);
-    if (todaysChores.length && !uncompletedRegularChores.length) {
-      const dailyRewardSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('daily_completion_clam_reward');
-      const dailyReward = dailyRewardSetting ? parseInt(dailyRewardSetting.value, 10) : 2;
-
-      const bonusAlreadyAwarded = db.prepare(`
-          SELECT id FROM chore_history
-          WHERE user_id = ?
-          AND date = ?
-          AND chore_schedule_id IS NULL
-          AND clam_value = ?
-          AND title = ?
-        `).get(user_id, date, dailyReward, 'Regular chores');
-
-      if (!bonusAlreadyAwarded) {
-        db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title) VALUES (?, NULL, ?, ?, ?)').run(user_id, date, dailyReward, 'Regular chores');
-      }
-    }
+    awardDailyRegularBonusIfDue(user_id, date);
 
     const totalResult = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(user_id);
 

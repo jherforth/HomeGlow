@@ -23,6 +23,7 @@ stays relevant.
 - [Database & Migrations](architecture/database.md) — SQLite schema, tables, and the migration system.
 - [Backend Reference](reference/backend-api.md) — server structure, services, and the full REST API surface.
 - [Frontend Reference](reference/frontend.md) — React component map, state, and data flow.
+- [Chores Refactor History](architecture/chores-refactor-history.md) — the (implemented) original design spec for the three-table chore system.
 
 ### Feature deep-dives
 - [Features & Domains](reference/features.md) — chores/clams, calendar sync, photos, screensaver, theming, tabs & layout.

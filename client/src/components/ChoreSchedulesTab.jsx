@@ -126,6 +126,7 @@ const defaultScheduleForm = {
   sleepCount: '',
   sleepUnit: 'd',
   visible: true,
+  due_date: '',
   due_time: '',
   sound_enabled: false,
   sound: '',
@@ -241,6 +242,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
       sleepCount: schedule.interval ? (schedule.interval.match(/^(\d+)/)?.[1] || '') : '',
       sleepUnit: schedule.interval ? (schedule.interval.match(/[dwmy]$/i)?.[0].toLowerCase() || 'd') : 'd',
       visible: !!schedule.visible,
+      due_date: schedule.due_date || '',
       due_time: schedule.due_time || '',
       sound_enabled: !!schedule.sound_enabled,
       sound: schedule.sound || '',
@@ -273,6 +275,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
         duration: !scheduleForm.isOneTime ? scheduleForm.duration : 'day-of',
         interval: normalizedInterval,
         visible: scheduleForm.visible ? 1 : 0,
+        due_date: scheduleForm.due_date || null,
         due_time: scheduleForm.due_time || null,
         sound_enabled: scheduleForm.sound_enabled ? 1 : 0,
         sound: scheduleForm.sound_enabled ? (scheduleForm.sound || null) : null,
@@ -927,6 +930,17 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
             )}
 
             <Divider />
+
+            <TextField
+              label="Due date (optional)"
+              type="date"
+              size="small"
+              value={scheduleForm.due_date}
+              onChange={(e) => updateScheduleForm({ due_date: e.target.value })}
+              InputLabelProps={{ shrink: true }}
+              helperText="Calendar deadline (best for one-time tasks). The chore turns yellow when due, red when overdue."
+              sx={{ maxWidth: 260 }}
+            />
 
             <TextField
               label="Due time (optional)"

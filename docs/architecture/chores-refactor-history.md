@@ -1,3 +1,16 @@
+# Chores Refactor — Historical Design Spec
+
+> **Status: implemented.** This is the original design spec for the migration from the
+> old single-table chores model to the current three-table system
+> (`chores` / `chore_schedules` / `chore_history`). It is kept for history and to explain
+> *why* the schema looks the way it does. For the current schema and endpoints see
+> [database.md](database.md) and [../reference/backend-api.md](../reference/backend-api.md).
+> Later additions on top of this design: `duration`/`interval`/`parent_schedule_id`
+> (sticky/recurring scheduling), `due_time`/`sound*` (due-time notification sounds, #108),
+> and `due_date` (calendar deadlines with urgency coloring, #97).
+
+---
+
 Current State Analysis
 The existing system stores all chore information in a single chores table with fields: id, user_id, title, description, time_period, assigned_day_of_week, repeat_type, completed, clam_value, expiration_date. Clam totals are maintained in users.clam_total, and there's a pruneAndResetChores() function that runs on server startup to manage chore lifecycle.
 

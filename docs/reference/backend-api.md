@@ -125,7 +125,7 @@ static route.
 | --- | --- | --- |
 | GET/POST | `/api/chores` | List / create chore definitions. |
 | PATCH/DELETE | `/api/chores/:id` | Update / delete a chore. |
-| GET/POST | `/api/chore-schedules` | List (filter by `user_id`, `visible`, `usage`, `chore_id`) / create. Accepts `due_time` (`HH:MM`), `sound`, `sound_enabled`, `reminder_interval_minutes` for due-time sounds. |
+| GET/POST | `/api/chore-schedules` | List (filter by `user_id`, `visible`, `usage`, `chore_id`) / create. Accepts `due_time` (`HH:MM`), `sound`, `sound_enabled`, `reminder_interval_minutes` for due-time sounds, and `due_date` (`YYYY-MM-DD`) for calendar deadlines. PATCH `user_id` reassigns a chore and re-checks the daily bonus for both owners. |
 | GET/PATCH/DELETE | `/api/chore-schedules/:id` | Single schedule CRUD. |
 | POST | `/api/chore-schedules/bulk` | Bulk create schedules. |
 | GET/POST | `/api/chore-history` | Query / add history entries. |

@@ -578,3 +578,46 @@ test('chore schedule rejects an invalid due_time', async () => {
     assert.equal(createRes.status, 400);
     assert.match(createRes.body.error, /due_time/);
 });
+
+test('chore schedule persists and updates due_date', async () => {
+    const choreRes = await api('/api/chores', {
+        method: 'POST',
+        body: JSON.stringify({ title: 'Guest room sheets', description: '', clam_value: 0 }),
+    });
+    const choreId = choreRes.body.id;
+
+    const createRes = await api('/api/chore-schedules', {
+        method: 'POST',
+        body: JSON.stringify({ chore_id: choreId, crontab: null, duration: 'day-of', due_date: '2026-07-03' }),
+    });
+    assert.equal(createRes.status, 200);
+    const scheduleId = createRes.body.id;
+
+    const afterCreate = await api(`/api/chore-schedules/${scheduleId}`);
+    assert.equal(afterCreate.body.due_date, '2026-07-03');
+
+    const patchRes = await api(`/api/chore-schedules/${scheduleId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ due_date: '' }),
+    });
+    assert.equal(patchRes.status, 200);
+
+    const afterPatch = await api(`/api/chore-schedules/${scheduleId}`);
+    assert.equal(afterPatch.body.due_date, null);
+});
+
+test('chore schedule rejects an impossible due_date', async () => {
+    const choreRes = await api('/api/chores', {
+        method: 'POST',
+        body: JSON.stringify({ title: 'Bad date chore', description: '', clam_value: 0 }),
+    });
+    const choreId = choreRes.body.id;
+
+    const createRes = await api('/api/chore-schedules', {
+        method: 'POST',
+        body: JSON.stringify({ chore_id: choreId, crontab: '0 0 * * *', duration: 'day-of', due_date: '2026-02-30' }),
+    });
+
+    assert.equal(createRes.status, 400);
+    assert.match(createRes.body.error, /due_date/);
+});

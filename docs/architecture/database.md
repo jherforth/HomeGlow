@@ -45,6 +45,7 @@ run in ascending order. The registry lives in `schemaMigrations` in
 | 13 | `schema13-tabsByDefaultBackfill.js` | Backfills default tabs. |
 | 14 | `schema14-deviceAndTabJsonStorage.js` | Moves widget layout into `tabs.config_json` and device settings into `devices.device_settings_json`; **drops** `widget_tab_assignments`. |
 | 15 | `schema15-choreDueTimeSound.js` | Adds `due_time`, `sound`, `sound_enabled`, `reminder_interval_minutes` to `chore_schedules` (chore due-time notification sounds). |
+| 16 | `schema16-choreDueDate.js` | Adds `due_date` to `chore_schedules` (calendar deadline with urgency coloring, issue #97). |
 
 Each versioned migration runs inside a transaction, reads its context from
 `globalThis.__HOMEGLOW_SCHEMA_MIGRATION_CONTEXT`, and writes the new
@@ -78,6 +79,7 @@ due_time,                     -- 'HH:MM' 24h local time the chore is due (nullab
 sound_enabled,                -- 0/1: play a notification sound at due_time
 sound,                        -- chosen sound filename; null = use global default
 reminder_interval_minutes,    -- null/0 = ring once; N = repeat every N min until completed
+due_date,                     -- 'YYYY-MM-DD' calendar deadline (nullable; drives yellow/red urgency, #97)
 visible, created_at
 ```
 

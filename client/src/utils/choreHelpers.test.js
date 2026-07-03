@@ -4,7 +4,7 @@ vi.mock('./timezone.js', () => ({
     getServerTimezoneSync: () => 'UTC',
 }));
 
-import { shouldShowChoreToday, convertDaysToCrontab } from './choreHelpers.js';
+import { shouldShowChoreToday, convertDaysToCrontab, getDueDateStatus, formatDueDate } from './choreHelpers.js';
 
 describe('choreHelpers utilities', () => {
     let consoleErrorSpy;
@@ -54,5 +54,41 @@ describe('choreHelpers utilities', () => {
 
     it('convertDaysToCrontab maps and sorts day values', () => {
         expect(convertDaysToCrontab(['friday', 'monday', 'sunday'])).toBe('0 0 * * 0,1,5');
+    });
+
+    describe('getDueDateStatus', () => {
+        const today = '2026-05-01';
+
+        it('returns none when there is no due date', () => {
+            expect(getDueDateStatus(null, today, false)).toBe('none');
+            expect(getDueDateStatus('', today, false)).toBe('none');
+        });
+
+        it('returns none when the chore is already completed', () => {
+            expect(getDueDateStatus('2026-05-01', today, true)).toBe('none');
+        });
+
+        it('returns due when the due date is today', () => {
+            expect(getDueDateStatus('2026-05-01', today, false)).toBe('due');
+        });
+
+        it('returns overdue when the due date is in the past', () => {
+            expect(getDueDateStatus('2026-04-30', today, false)).toBe('overdue');
+        });
+
+        it('returns upcoming when the due date is in the future', () => {
+            expect(getDueDateStatus('2026-05-09', today, false)).toBe('upcoming');
+        });
+    });
+
+    describe('formatDueDate', () => {
+        it('formats a valid date as a short label', () => {
+            expect(formatDueDate('2026-07-03')).toBe('Jul 3');
+        });
+
+        it('passes through malformed input', () => {
+            expect(formatDueDate('not-a-date')).toBe('not-a-date');
+            expect(formatDueDate(null)).toBe('');
+        });
     });
 });

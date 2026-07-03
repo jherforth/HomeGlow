@@ -16,6 +16,15 @@ coverage/
 # sounds live in server/assets/ and ARE tracked; seeded copies land here.
 server/uploads/
 
+# Local SQLite database (runtime data, initialized by migrations)
+server/data/*.db
+server/data/*.db-journal
+server/data/*.db-wal
+server/data/*.db-shm
+
+# Generated encryption key (secret, do not commit)
+server/data/.encryption-key
+
 package-lock.json
 
 .vscode/
