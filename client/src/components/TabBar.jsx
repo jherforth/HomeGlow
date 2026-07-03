@@ -320,7 +320,7 @@ const TabBar = ({
                   }}
                 >
                   <img
-                    src="/HomeGlowLogo.png"
+                    src="/HomeGlowLogo.svg"
                     alt="HomeGlow"
                     style={{
                       height: '32px',
