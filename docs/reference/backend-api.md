@@ -13,13 +13,14 @@ server/
 ├── migrations/           # See docs/architecture/database.md
 ├── services/
 │   ├── calendarSync.js       # Periodic ICS/CalDAV/Google sync into calendar_events_cache
-│   ├── googleConnection.js   # Google OAuth account linking + token storage
-│   ├── googleCalendar.js     # Google Calendar API access
-│   ├── googlePhotos.js       # Google Photos access
-│   ├── googlePhotosPicker.js # Google Photos Picker session flow
+│   ├── googleConnection.js   # Google OAuth account linking, token storage, and createGoogleFetch factory
+│   ├── googleCalendar.js     # Google Calendar API access (uses shared googleFetch from googleConnection)
+│   ├── googlePhotos.js       # Google Photos Library API access (uses shared googleFetch)
+│   ├── googlePhotosPicker.js # Google Photos Picker session + download (uses shared googleFetch)
 │   └── appleCalDAV.js        # Apple/CalDAV calendar access
 ├── utils/
-│   └── encryption.js         # AES key management + status (newer code path)
+│   ├── encryption.js         # AES key management + status
+│   └── assignmentSync.js     # Shared syncWidgetAssignments helper for client-side widget sync
 ├── widgets/              # Uploaded custom widget HTML + widgets_registry.json + authoring README
 ├── tests/                # node:test suites + runner
 └── data/tasks.db         # SQLite database (created at runtime)
@@ -64,6 +65,15 @@ Runs at local midnight and also exposed manually via
 per-source interval timer, fetches events (ICS via `node-ical`, CalDAV via
 `appleCalDAV`, Google via `googleCalendar`), normalizes all-day/multi-day events,
 and upserts them into `calendar_events_cache`, updating `calendar_sync_status`.
+
+### Google API client pattern
+All three Google service files (`googleCalendar.js`, `googlePhotos.js`,
+`googlePhotosPicker.js`) share a common authenticated fetch pattern provided by
+`googleConnection.createGoogleFetch(apiBase, serviceLabel)`. This factory returns
+a configured `googleFetch(db, accountId, method, pathAndQuery, body)` that handles:
+access token retrieval, URL construction, Bearer auth, JSON parsing, 204 responses,
+and structured error objects (`{ message, status, details }`). Each service
+file instantiates its own copy with the appropriate API base URL and label.
 
 ## REST API surface
 

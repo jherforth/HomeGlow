@@ -32,6 +32,10 @@ CI runs the frontend and backend test suites on every push
   `Suspense` + idle-warmup pattern in [`app.jsx`](../../client/src/app.jsx).
 - **Secrets** (calendar/Google credentials) must be encrypted before storage; use the
   existing encryption helpers.
+- **Google API calls** use the shared `googleConnection.createGoogleFetch(apiBase, label)`
+  factory rather than writing raw `fetch` calls. This handles token lifecycle,
+  Bearer auth, JSON parsing, and structured error objects. Add new Google
+  integrations by instantiating a configured `googleFetch` from the factory.
 - Add **error handling** and keep touch/mouse parity for interactive UI.
 
 ## Testing

@@ -53,6 +53,10 @@ the system, and the technology choices.
 - Routing is intentionally minimal: [`main.jsx`](../../client/src/main.jsx) does
   path-based rendering — `/photos` renders the upload page, everything else
   renders the dashboard `App`. There is no React Router.
+- Reusable components (`DeleteConfirmationDialog`, `LoadingBackdrop`,
+  `RefreshIntervalSelect`, `ScreensaverIntervalSlider`, `AdminFormSection`,
+  `VersionInfoCard`) are factored out of `AdminPanel.jsx` and shared across
+  widgets. See [Frontend Reference](../reference/frontend.md).
 
 ### Backend (`server/`)
 - **Fastify 5** HTTP server, entirely contained in
@@ -66,6 +70,11 @@ the system, and the technology choices.
     periodically fetches ICS/CalDAV/Google calendars into a local cache table.
 - **File handling**: uploads (user avatars, photos, custom widgets) are written to
   `server/uploads/` and `server/widgets/` and served statically.
+- **Google API integration**: All three Google service modules
+  (`googleCalendar.js`, `googlePhotos.js`, `googlePhotosPicker.js`) share a single
+  authenticated fetch implementation via `googleConnection.createGoogleFetch()`,
+  which handles token lifecycle, Bearer auth, JSON parsing, and error
+  normalization. See [Backend Reference](../reference/backend-api.md#google-api-client-pattern).
 
 ### Database
 - A single SQLite file at `server/data/tasks.db`.

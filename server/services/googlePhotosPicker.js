@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const googleConnection = require('./googleConnection');
 
 const API_BASE = 'https://photospicker.googleapis.com/v1';
+const googleFetch = googleConnection.createGoogleFetch(API_BASE, 'Google Photos Picker API');
 
 function getMediaRoot() {
     const root = path.resolve(__dirname, '..', 'data', 'google-photos');
@@ -19,47 +20,16 @@ function sourceDir(sourceId) {
     return dir;
 }
 
-async function pickerFetch(db, accountId, method, pathAndQuery, body) {
-    const accessToken = await googleConnection.getValidAccessToken(db, accountId);
-    const url = pathAndQuery.startsWith('http') ? pathAndQuery : `${API_BASE}${pathAndQuery}`;
-    const init = {
-        method,
-        headers: {
-            Authorization: `Bearer ${accessToken}`,
-            Accept: 'application/json',
-        },
-    };
-    if (body !== undefined) {
-        init.headers['Content-Type'] = 'application/json';
-        init.body = JSON.stringify(body);
-    }
-    const res = await fetch(url, init);
-    if (res.status === 204) return {};
-    const text = await res.text();
-    let parsed = null;
-    if (text) {
-        try { parsed = JSON.parse(text); } catch (_) { parsed = { raw: text }; }
-    }
-    if (!res.ok) {
-        const msg = parsed && parsed.error && parsed.error.message ? parsed.error.message : `Google Photos Picker API error ${res.status}`;
-        const err = new Error(msg);
-        err.status = res.status;
-        err.details = parsed;
-        throw err;
-    }
-    return parsed || {};
-}
-
 async function createSession(db, accountId) {
-    return await pickerFetch(db, accountId, 'POST', '/sessions', {});
+    return await googleFetch(db, accountId, 'POST', '/sessions', {});
 }
 
 async function getSession(db, accountId, sessionId) {
-    return await pickerFetch(db, accountId, 'GET', `/sessions/${encodeURIComponent(sessionId)}`);
+    return await googleFetch(db, accountId, 'GET', `/sessions/${encodeURIComponent(sessionId)}`);
 }
 
 async function deleteSession(db, accountId, sessionId) {
-    return await pickerFetch(db, accountId, 'DELETE', `/sessions/${encodeURIComponent(sessionId)}`);
+    return await googleFetch(db, accountId, 'DELETE', `/sessions/${encodeURIComponent(sessionId)}`);
 }
 
 async function listPickedMediaItems(db, accountId, sessionId) {
@@ -68,7 +38,7 @@ async function listPickedMediaItems(db, accountId, sessionId) {
     do {
         const params = new URLSearchParams({ sessionId, pageSize: '100' });
         if (pageToken) params.set('pageToken', pageToken);
-        const data = await pickerFetch(db, accountId, 'GET', `/mediaItems?${params.toString()}`);
+        const data = await googleFetch(db, accountId, 'GET', `/mediaItems?${params.toString()}`);
         if (Array.isArray(data.mediaItems)) items.push(...data.mediaItems);
         pageToken = data.nextPageToken;
     } while (pageToken);

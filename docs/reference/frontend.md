@@ -71,6 +71,12 @@ custom properties.
 | `GoogleAccountConnection.jsx` | Google OAuth linking UI (calendar/photos). |
 | `PinModal.jsx` | On-screen + keyboard PIN entry for Admin Panel lock. |
 | `ColorPickerPopover.jsx` | Reusable color picker (`react-color`) for theme/gradient/source colors. |
+| `DeleteConfirmationDialog.jsx` | Reusable delete confirmation modal with Warning icon, alert, and Cancel/Delete actions (used for Tabs, Devices, Users). |
+| `AdminFormSection.jsx` | Thin wrapper for admin form sections: title, subtitle, bordered container, children. |
+| `VersionInfoCard.jsx` | Version info card showing label, version chip, commit link, repo link, and Git tags (used in About tab). |
+| `LoadingBackdrop.jsx` | Shared glass-morphism loading backdrop with 3 bouncing clam emojis (used in AdminPanel + ChoreWidget). |
+| `RefreshIntervalSelect.jsx` | Reusable refresh interval dropdown (FormControl + Select + Timer icon). |
+| `ScreensaverIntervalSlider.jsx` | Reusable interval slider with label, value display, and marks (used for Photo and Tab cycle modes). |
 | `ExampleWidgetUsage.jsx` | Reference/demo component for widget authors. |
 
 ### Pages (`client/src/pages/`)
@@ -88,6 +94,17 @@ custom properties.
 | `timezone.js` | Fetch and cache the server timezone (`initTimezone`, `getServerTimezoneSync`) so client date math matches the backend. |
 | `choreHelpers.js` | Cron/day-of-week helpers, "should this chore show today", today's date string in server TZ. |
 | `colorContrast.js` | Contrast calculations for readable text on colored backgrounds. |
+| `widgetSettings.js` | Shared `BASE_WIDGET_SETTINGS` defaults + `normalizeWidgetSettings(raw, defaults)` used by AdminPanel and app.jsx. |
+| `assignmentSync.js` | Shared `syncWidgetAssignments(API_DEVICE_URL, assignments, currentAssignments)` diff-and-apply helper for widget/plugin tab assignments. |
+| `responsiveTable.js` | Shared `stackableTableSx` style for mobile-friendly stacked table layouts. |
+
+## Hooks (`client/src/hooks/`)
+
+| Hook | Role |
+| --- | --- |
+| `useIsMobile.js` | Returns `true` below 600px viewport width; used for mobile-adaptive layouts and fullScreen dialogs. |
+| `useFetchTabs.js` | Shared `fetchTabs` hook returning `{ tabs, setTabs, fetchTabs }`; used by AdminPanel and available for the main dashboard. |
+| `useChoreSoundScheduler.js` | Manages chore due-time sound playback scheduling (imported in app.jsx). |
 
 Each of these has a matching `*.test.js` (Vitest).
 

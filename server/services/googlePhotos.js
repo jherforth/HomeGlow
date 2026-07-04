@@ -1,36 +1,7 @@
 const googleConnection = require('./googleConnection');
 
 const API_BASE = 'https://photoslibrary.googleapis.com/v1';
-
-async function googleFetch(db, accountId, method, pathAndQuery, body) {
-    const accessToken = await googleConnection.getValidAccessToken(db, accountId);
-    const url = pathAndQuery.startsWith('http') ? pathAndQuery : `${API_BASE}${pathAndQuery}`;
-    const init = {
-        method,
-        headers: {
-            Authorization: `Bearer ${accessToken}`,
-            Accept: 'application/json',
-        },
-    };
-    if (body !== undefined) {
-        init.headers['Content-Type'] = 'application/json';
-        init.body = JSON.stringify(body);
-    }
-    const res = await fetch(url, init);
-    const text = await res.text();
-    let parsed = null;
-    if (text) {
-        try { parsed = JSON.parse(text); } catch (_) { parsed = { raw: text }; }
-    }
-    if (!res.ok) {
-        const msg = parsed && parsed.error && parsed.error.message ? parsed.error.message : `Google Photos API error ${res.status}`;
-        const err = new Error(msg);
-        err.status = res.status;
-        err.details = parsed;
-        throw err;
-    }
-    return parsed || {};
-}
+const googleFetch = googleConnection.createGoogleFetch(API_BASE, 'Google Photos API');
 
 async function listAlbumsFrom(db, accountId, endpoint, collection) {
     const out = [];

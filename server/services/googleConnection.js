@@ -255,6 +255,39 @@ async function revokeAndDisconnect(db, accountId) {
     db.prepare('DELETE FROM google_accounts WHERE id = ?').run(accountId);
 }
 
+function createGoogleFetch(apiBase, serviceLabel) {
+    return async function googleFetch(db, accountId, method, pathAndQuery, body) {
+        const accessToken = await getValidAccessToken(db, accountId);
+        const url = pathAndQuery.startsWith('http') ? pathAndQuery : `${apiBase}${pathAndQuery}`;
+        const init = {
+            method,
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                Accept: 'application/json',
+            },
+        };
+        if (body !== undefined) {
+            init.headers['Content-Type'] = 'application/json';
+            init.body = JSON.stringify(body);
+        }
+        const res = await fetch(url, init);
+        if (res.status === 204) return null;
+        const text = await res.text();
+        let parsed = null;
+        if (text) {
+            try { parsed = JSON.parse(text); } catch (_) { parsed = { raw: text }; }
+        }
+        if (!res.ok) {
+            const msg = parsed && parsed.error && parsed.error.message ? parsed.error.message : `${serviceLabel} error ${res.status}`;
+            const err = new Error(msg);
+            err.status = res.status;
+            err.details = parsed;
+            throw err;
+        }
+        return parsed || {};
+    };
+}
+
 module.exports = {
     GOOGLE_SCOPES,
     getOAuthStatus,
@@ -271,4 +304,5 @@ module.exports = {
     refreshAccessToken,
     getValidAccessToken,
     revokeAndDisconnect,
+    createGoogleFetch,
 };

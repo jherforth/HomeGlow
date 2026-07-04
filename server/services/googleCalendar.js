@@ -1,37 +1,7 @@
 const googleConnection = require('./googleConnection');
 
 const API_BASE = 'https://www.googleapis.com/calendar/v3';
-
-async function googleFetch(db, accountId, method, pathAndQuery, body) {
-    const accessToken = await googleConnection.getValidAccessToken(db, accountId);
-    const url = pathAndQuery.startsWith('http') ? pathAndQuery : `${API_BASE}${pathAndQuery}`;
-    const init = {
-        method,
-        headers: {
-            Authorization: `Bearer ${accessToken}`,
-            Accept: 'application/json',
-        },
-    };
-    if (body !== undefined) {
-        init.headers['Content-Type'] = 'application/json';
-        init.body = JSON.stringify(body);
-    }
-    const res = await fetch(url, init);
-    if (res.status === 204) return null;
-    const text = await res.text();
-    let parsed = null;
-    if (text) {
-        try { parsed = JSON.parse(text); } catch (_) { parsed = { raw: text }; }
-    }
-    if (!res.ok) {
-        const msg = parsed && parsed.error && parsed.error.message ? parsed.error.message : `Google API error ${res.status}`;
-        const err = new Error(msg);
-        err.status = res.status;
-        err.details = parsed;
-        throw err;
-    }
-    return parsed;
-}
+const googleFetch = googleConnection.createGoogleFetch(API_BASE, 'Google Calendar API');
 
 async function listCalendars(db, accountId) {
     const items = [];
