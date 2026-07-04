@@ -1,13 +1,17 @@
-# Multi-stage build for optimized production image
-FROM node:20-alpine AS builder
+# Multi-stage build for optimized production image.
+# --platform=$BUILDPLATFORM: the Vite build output (dist/) is architecture-
+# independent static files, so the builder always runs natively on the build
+# host instead of under QEMU emulation — only the nginx runtime stage below is
+# built per target architecture (amd64/arm64).
+FROM --platform=$BUILDPLATFORM node:24-alpine AS builder
 
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
-# Install ALL dependencies (including devDependencies needed for build)
-RUN npm install
+# Install ALL dependencies (devDependencies included — Vite is needed for the build)
+RUN npm ci --no-audit --no-fund
 
 # Copy source code
 COPY . .

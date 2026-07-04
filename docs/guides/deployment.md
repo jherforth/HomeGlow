@@ -54,8 +54,11 @@ and [`server/Dockerfile`](../../server/Dockerfile). See
 ## How the images are built
 
 - **Frontend** ([`client/Dockerfile`](../../client/Dockerfile)): multi-stage —
-  `node:20-alpine` builds the Vite bundle, then `nginx:alpine` serves `dist/`. An
-  entrypoint runs `envsubst` on [`nginx.conf`](../../client/nginx.conf) so
+  `node:24-alpine` builds the Vite bundle (`npm ci`, pinned to the committed
+  lockfile; the builder runs on the build host's native architecture since
+  `dist/` is architecture-independent), then `nginx:alpine` serves `dist/`.
+  Published for `linux/amd64` and `linux/arm64`. An entrypoint runs `envsubst`
+  on [`nginx.conf`](../../client/nginx.conf) so
   `FRONTEND_PORT`/`BACKEND_SERVICE`/`BACKEND_PORT` are applied at container start.
 - **Backend** ([`server/Dockerfile`](../../server/Dockerfile)): multi-stage —
   a `node:24-slim` builder installs production dependencies (with a C++ toolchain

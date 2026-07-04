@@ -31,7 +31,7 @@ jobs:
             context: ./client
             dockerfile: ./client/Dockerfile
             image: homeglow-frontend
-            platforms: linux/amd64
+            platforms: linux/amd64,linux/arm64
           - name: backend
             context: ./server
             dockerfile: ./server/Dockerfile
