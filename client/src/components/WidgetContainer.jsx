@@ -510,6 +510,32 @@ const WidgetContainer = ({
             const canIncreaseLeft = currentLayout && currentLayout.x > 0;
             const canIncreaseTop = currentLayout && currentLayout.y > 0;
 
+            // One resize handle: a ➖/➕ box that dispatches a resize on pointer-down.
+            // `enabled` gates the affordance — grayed out and not-allowed when the
+            // widget can't resize further in that direction.
+            const renderResizeButton = ({ direction, decrement, enabled, symbol }) => (
+              <Box
+                className="resize-button"
+                onPointerDown={handleResizePointerDown(widget.id, direction, decrement)}
+                sx={{
+                  ...resizeButtonBaseStyle,
+                  cursor: enabled ? 'pointer' : 'not-allowed',
+                  opacity: enabled ? 1 : 0.3,
+                  '&:hover': {
+                    transform: enabled ? 'scale(1.2)' : 'none',
+                    filter: enabled
+                      ? 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4))'
+                      : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
+                  },
+                  '&:active': {
+                    transform: enabled ? 'scale(1.1)' : 'none',
+                  },
+                }}
+              >
+                {symbol}
+              </Box>
+            );
+
             return (
               <Box
                 key={widget.id}
@@ -596,42 +622,8 @@ const WidgetContainer = ({
                         pointerEvents: 'auto',
                       }}
                     >
-                      <Box
-                        className="resize-button"
-                        onPointerDown={handleResizePointerDown(widget.id, 'top', true)}
-                        sx={{
-                          ...resizeButtonBaseStyle,
-                          cursor: canDecreaseHeight ? 'pointer' : 'not-allowed',
-                          opacity: canDecreaseHeight ? 1 : 0.3,
-                          '&:hover': {
-                            transform: canDecreaseHeight ? 'scale(1.2)' : 'none',
-                            filter: canDecreaseHeight ? 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4))' : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
-                          },
-                          '&:active': {
-                            transform: canDecreaseHeight ? 'scale(1.1)' : 'none',
-                          }
-                        }}
-                      >
-                        ➖
-                      </Box>
-                      <Box
-                        className="resize-button"
-                        onPointerDown={handleResizePointerDown(widget.id, 'top', false)}
-                        sx={{
-                          ...resizeButtonBaseStyle,
-                          cursor: canIncreaseTop ? 'pointer' : 'not-allowed',
-                          opacity: canIncreaseTop ? 1 : 0.3,
-                          '&:hover': {
-                            transform: canIncreaseTop ? 'scale(1.2)' : 'none',
-                            filter: canIncreaseTop ? 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4))' : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
-                          },
-                          '&:active': {
-                            transform: canIncreaseTop ? 'scale(1.1)' : 'none',
-                          }
-                        }}
-                      >
-                        ➕
-                      </Box>
+                      {renderResizeButton({ direction: 'top', decrement: true, enabled: canDecreaseHeight, symbol: '➖' })}
+                      {renderResizeButton({ direction: 'top', decrement: false, enabled: canIncreaseTop, symbol: '➕' })}
                     </Box>
 
                     {/* Right Resize Buttons */}
@@ -648,42 +640,8 @@ const WidgetContainer = ({
                         pointerEvents: 'auto',
                       }}
                     >
-                      <Box
-                        className="resize-button"
-                        onPointerDown={handleResizePointerDown(widget.id, 'right', true)}
-                        sx={{
-                          ...resizeButtonBaseStyle,
-                          cursor: canDecreaseWidth ? 'pointer' : 'not-allowed',
-                          opacity: canDecreaseWidth ? 1 : 0.3,
-                          '&:hover': {
-                            transform: canDecreaseWidth ? 'scale(1.2)' : 'none',
-                            filter: canDecreaseWidth ? 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4))' : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
-                          },
-                          '&:active': {
-                            transform: canDecreaseWidth ? 'scale(1.1)' : 'none',
-                          }
-                        }}
-                      >
-                        ➖
-                      </Box>
-                      <Box
-                        className="resize-button"
-                        onPointerDown={handleResizePointerDown(widget.id, 'right', false)}
-                        sx={{
-                          ...resizeButtonBaseStyle,
-                          cursor: canIncreaseWidth ? 'pointer' : 'not-allowed',
-                          opacity: canIncreaseWidth ? 1 : 0.3,
-                          '&:hover': {
-                            transform: canIncreaseWidth ? 'scale(1.2)' : 'none',
-                            filter: canIncreaseWidth ? 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4))' : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
-                          },
-                          '&:active': {
-                            transform: canIncreaseWidth ? 'scale(1.1)' : 'none',
-                          }
-                        }}
-                      >
-                        ➕
-                      </Box>
+                      {renderResizeButton({ direction: 'right', decrement: true, enabled: canDecreaseWidth, symbol: '➖' })}
+                      {renderResizeButton({ direction: 'right', decrement: false, enabled: canIncreaseWidth, symbol: '➕' })}
                     </Box>
 
                     {/* Bottom Resize Buttons */}
@@ -699,41 +657,8 @@ const WidgetContainer = ({
                         pointerEvents: 'auto',
                       }}
                     >
-                      <Box
-                        className="resize-button"
-                        onPointerDown={handleResizePointerDown(widget.id, 'bottom', true)}
-                        sx={{
-                          ...resizeButtonBaseStyle,
-                          cursor: canDecreaseHeight ? 'pointer' : 'not-allowed',
-                          opacity: canDecreaseHeight ? 1 : 0.3,
-                          '&:hover': {
-                            transform: canDecreaseHeight ? 'scale(1.2)' : 'none',
-                            filter: canDecreaseHeight ? 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4))' : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
-                          },
-                          '&:active': {
-                            transform: canDecreaseHeight ? 'scale(1.1)' : 'none',
-                          }
-                        }}
-                      >
-                        ➖
-                      </Box>
-                      <Box
-                        className="resize-button"
-                        onPointerDown={handleResizePointerDown(widget.id, 'bottom', false)}
-                        sx={{
-                          ...resizeButtonBaseStyle,
-                          cursor: 'pointer',
-                          '&:hover': {
-                            transform: 'scale(1.2)',
-                            filter: 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4))',
-                          },
-                          '&:active': {
-                            transform: 'scale(1.1)',
-                          }
-                        }}
-                      >
-                        ➕
-                      </Box>
+                      {renderResizeButton({ direction: 'bottom', decrement: true, enabled: canDecreaseHeight, symbol: '➖' })}
+                      {renderResizeButton({ direction: 'bottom', decrement: false, enabled: true, symbol: '➕' })}
                     </Box>
 
                     {/* Left Resize Buttons */}
@@ -750,42 +675,8 @@ const WidgetContainer = ({
                         pointerEvents: 'auto',
                       }}
                     >
-                      <Box
-                        className="resize-button"
-                        onPointerDown={handleResizePointerDown(widget.id, 'left', true)}
-                        sx={{
-                          ...resizeButtonBaseStyle,
-                          cursor: canDecreaseWidth ? 'pointer' : 'not-allowed',
-                          opacity: canDecreaseWidth ? 1 : 0.3,
-                          '&:hover': {
-                            transform: canDecreaseWidth ? 'scale(1.2)' : 'none',
-                            filter: canDecreaseWidth ? 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4))' : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
-                          },
-                          '&:active': {
-                            transform: canDecreaseWidth ? 'scale(1.1)' : 'none',
-                          }
-                        }}
-                      >
-                        ➖
-                      </Box>
-                      <Box
-                        className="resize-button"
-                        onPointerDown={handleResizePointerDown(widget.id, 'left', false)}
-                        sx={{
-                          ...resizeButtonBaseStyle,
-                          cursor: canIncreaseLeft ? 'pointer' : 'not-allowed',
-                          opacity: canIncreaseLeft ? 1 : 0.3,
-                          '&:hover': {
-                            transform: canIncreaseLeft ? 'scale(1.2)' : 'none',
-                            filter: canIncreaseLeft ? 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4))' : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
-                          },
-                          '&:active': {
-                            transform: canIncreaseLeft ? 'scale(1.1)' : 'none',
-                          }
-                        }}
-                      >
-                        ➕
-                      </Box>
+                      {renderResizeButton({ direction: 'left', decrement: true, enabled: canDecreaseWidth, symbol: '➖' })}
+                      {renderResizeButton({ direction: 'left', decrement: false, enabled: canIncreaseLeft, symbol: '➕' })}
                     </Box>
 
                     {/* Invisible Drag Handle - Covers entire widget when selected and unlocked */}
