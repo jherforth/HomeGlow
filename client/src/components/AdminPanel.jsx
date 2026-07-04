@@ -77,39 +77,26 @@ import ClamValueModal from './ClamValueModal';
 import SoundPicker from './SoundPicker';
 import useIsMobile from '../hooks/useIsMobile.js';
 import { stackableTableSx } from '../utils/responsiveTable.js';
+import {
+  INTERFACE_COLORS_STORAGE_KEY,
+  SCREENSAVER_SETTINGS_STORAGE_KEY,
+  AUTO_DARK_MODE_SETTINGS_STORAGE_KEY,
+  DEFAULT_INTERFACE_COLORS,
+  normalizeInterfaceColors,
+  normalizeScreensaverSettings,
+  readLocalInterfaceColors,
+  readLocalScreensaverSettings,
+  readLocalAutoDarkModeSettings,
+} from '../utils/interfaceSettings.js';
 
 const USERS_UPDATED_EVENT = 'homeglow:users-updated';
 const DEVICE_SETTINGS_UPDATED_EVENT = 'homeglow:device-settings-updated';
 const INTERFACE_SETTINGS_UPDATED_EVENT = 'homeglow:interface-settings-updated';
-const INTERFACE_COLORS_STORAGE_KEY = 'interfaceColors';
-const INTERFACE_SCREENSAVER_STORAGE_KEY = 'screensaverSettings';
-const INTERFACE_AUTO_DARK_MODE_STORAGE_KEY = 'autoDarkModeSettings';
-const DEFAULT_AUTO_DARK_MODE_SETTINGS = {
-  enabled: false,
-  locationQuery: '',
-  lat: null,
-  lon: null,
-  resolvedName: '',
-};
-
 const DEFAULT_WIDGET_SETTINGS = {
-  chores: { enabled: false, transparent: false, refreshInterval: 0 },
-  calendar: { enabled: false, transparent: false, refreshInterval: 0 },
-  photos: { enabled: false, transparent: false, refreshInterval: 0 },
-  weather: { enabled: false, transparent: false, refreshInterval: 0 },
-};
-
-const DEFAULT_INTERFACE_COLORS = {
-  primary: '#f5f5f5',
-  secondary: '#38bdf8',
-  accent: '#f472b6',
-};
-
-const DEFAULT_SCREENSAVER_SETTINGS = {
-  enabled: false,
-  mode: 'tabs',
-  timeout: 5,
-  slideshowInterval: 10
+  chores: { enabled: false, refreshInterval: 0 },
+  calendar: { enabled: false, refreshInterval: 0 },
+  photos: { enabled: false, refreshInterval: 0 },
+  weather: { enabled: false, refreshInterval: 0 },
 };
 
 const normalizeWidgetSettings = (raw) => ({
@@ -119,49 +106,6 @@ const normalizeWidgetSettings = (raw) => ({
   photos: { ...DEFAULT_WIDGET_SETTINGS.photos, ...(raw?.photos || {}) },
   weather: { ...DEFAULT_WIDGET_SETTINGS.weather, ...(raw?.weather || {}) },
 });
-
-const normalizeScreensaverSettings = (raw) => ({
-  ...DEFAULT_SCREENSAVER_SETTINGS,
-  ...(raw && typeof raw === 'object' ? raw : {}),
-});
-
-const normalizeInterfaceColors = (raw) => ({
-  ...DEFAULT_INTERFACE_COLORS,
-  ...(raw && typeof raw === 'object' ? raw : {}),
-});
-
-const readLocalInterfaceColors = () => {
-  try {
-    const raw = localStorage.getItem(INTERFACE_COLORS_STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_INTERFACE_COLORS };
-    return normalizeInterfaceColors(JSON.parse(raw));
-  } catch {
-    return { ...DEFAULT_INTERFACE_COLORS };
-  }
-};
-
-const readLocalScreensaverSettings = () => {
-  try {
-    const raw = localStorage.getItem(INTERFACE_SCREENSAVER_STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_SCREENSAVER_SETTINGS };
-    return normalizeScreensaverSettings(JSON.parse(raw));
-  } catch {
-    return { ...DEFAULT_SCREENSAVER_SETTINGS };
-  }
-};
-
-const readLocalAutoDarkModeSettings = () => {
-  try {
-    const raw = localStorage.getItem(INTERFACE_AUTO_DARK_MODE_STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_AUTO_DARK_MODE_SETTINGS };
-    return {
-      ...DEFAULT_AUTO_DARK_MODE_SETTINGS,
-      ...JSON.parse(raw),
-    };
-  } catch {
-    return { ...DEFAULT_AUTO_DARK_MODE_SETTINGS };
-  }
-};
 
 const DEFAULT_HOMEGLOW_REPOSITORY = 'jherforth/HomeGlow';
 const FRONTEND_VERSION = (import.meta.env.VITE_APP_VERSION || 'dev').trim();
@@ -1094,7 +1038,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     try {
       setIsLoading(true);
       const normalizedScreensaver = normalizeScreensaverSettings(screensaverSettings);
-      localStorage.setItem(INTERFACE_SCREENSAVER_STORAGE_KEY, JSON.stringify(normalizedScreensaver));
+      localStorage.setItem(SCREENSAVER_SETTINGS_STORAGE_KEY, JSON.stringify(normalizedScreensaver));
       window.dispatchEvent(new Event(INTERFACE_SETTINGS_UPDATED_EVENT));
       setSaveMessage({ show: true, type: 'success', text: 'Screensaver settings saved for this display.' });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
@@ -1170,7 +1114,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         ...autoDarkModeSettings,
         locationQuery: trimmedLocation,
       };
-      localStorage.setItem(INTERFACE_AUTO_DARK_MODE_STORAGE_KEY, JSON.stringify(nextSettings));
+      localStorage.setItem(AUTO_DARK_MODE_SETTINGS_STORAGE_KEY, JSON.stringify(nextSettings));
       window.dispatchEvent(new Event(INTERFACE_SETTINGS_UPDATED_EVENT));
       setAutoDarkModeSettings(nextSettings);
       setSaveMessage({ show: true, type: 'success', text: 'Auto dark mode disabled for this display.' });
@@ -1210,7 +1154,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         resolvedName: resolved.resolvedName,
       };
 
-      localStorage.setItem(INTERFACE_AUTO_DARK_MODE_STORAGE_KEY, JSON.stringify(nextSettings));
+      localStorage.setItem(AUTO_DARK_MODE_SETTINGS_STORAGE_KEY, JSON.stringify(nextSettings));
       window.dispatchEvent(new Event(INTERFACE_SETTINGS_UPDATED_EVENT));
       setAutoDarkModeSettings(nextSettings);
       setSaveMessage({
@@ -1856,16 +1800,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                           }
                           label="Enabled"
                         />
-                        <FormControlLabel
-                          control={
-                            <Switch
-                              checked={config.transparent}
-                              onChange={() => handleWidgetToggle(widget, 'transparent')}
-                            />
-                          }
-                          label="Transparent Background"
-                          sx={{ ml: 2 }}
-                        />
                       </Grid>
 
                       <Grid size={{ xs: 12, sm: 6 }}>
@@ -1942,16 +1876,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                           />
                         }
                         label="Enabled"
-                      />
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={widgetSettings.weather?.transparent || false}
-                            onChange={() => handleWidgetToggle('weather', 'transparent')}
-                          />
-                        }
-                        label="Transparent Background"
-                        sx={{ ml: 2 }}
                       />
                     </Grid>
 

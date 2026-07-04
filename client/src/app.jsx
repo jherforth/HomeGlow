@@ -13,6 +13,11 @@ import { getDeviceApiBase } from './utils/deviceName.js';
 import { unlockAudio } from './utils/choreSound.js';
 import useChoreSoundScheduler from './hooks/useChoreSoundScheduler.js';
 import useIsMobile from './hooks/useIsMobile.js';
+import {
+  readLocalInterfaceColors,
+  readLocalScreensaverSettings,
+  readLocalAutoDarkModeSettings,
+} from './utils/interfaceSettings.js';
 import './index.css';
 
 const loadAdminPanel = () => import('./components/AdminPanel.jsx');
@@ -27,8 +32,6 @@ const MAX_IDLE_WARM_IMPORTS = 3;
 const WIDGETS_LOCKED_STORAGE_KEY = 'widgetsLocked';
 const THEME_STORAGE_KEY = 'theme';
 const THEME_MODE_STORAGE_KEY = 'themeMode';
-const INTERFACE_COLORS_STORAGE_KEY = 'interfaceColors';
-const SCREENSAVER_SETTINGS_STORAGE_KEY = 'screensaverSettings';
 
 const shouldSkipWarmupForConnection = () => {
   if (typeof navigator === 'undefined') return false;
@@ -66,7 +69,6 @@ const TabIconModal = lazy(loadTabIconModal);
 const ScreenSaver = lazy(loadScreenSaver);
 
 // region #98 - expected to get removed in the future (localStorage migration bridge)
-const AUTO_DARK_MODE_STORAGE_KEY = 'autoDarkModeSettings';
 const DEVICE_SETTINGS_UPDATED_EVENT = 'homeglow:device-settings-updated';
 const INTERFACE_SETTINGS_UPDATED_EVENT = 'homeglow:interface-settings-updated';
 const DEVICE_SETTINGS_MIGRATION_KEY_PATTERN = /^(enabledWidgets|widgetSettings|pluginSettings|weatherZipCode|weatherTempUnit)$/;
@@ -74,24 +76,11 @@ const DEVICE_SETTINGS_MIGRATION_KEY_PATTERN = /^(enabledWidgets|widgetSettings|p
 const isAllowedDeviceSettingsMigrationKey = (key) => DEVICE_SETTINGS_MIGRATION_KEY_PATTERN.test(key);
 // endRegion #98
 
-const DEFAULT_SCREENSAVER_SETTINGS = {
-  enabled: false,
-  mode: 'tabs',
-  timeout: 5,
-  slideshowInterval: 10,
-};
-
-const DEFAULT_INTERFACE_COLORS = {
-  primary: '#f5f5f5',
-  secondary: '#38bdf8',
-  accent: '#f472b6',
-};
-
 const DEFAULT_WIDGET_SETTINGS = {
-  chores: { enabled: false, transparent: false },
-  calendar: { enabled: false, transparent: false },
-  photos: { enabled: false, transparent: false },
-  weather: { enabled: false, transparent: false },
+  chores: { enabled: false },
+  calendar: { enabled: false },
+  photos: { enabled: false },
+  weather: { enabled: false },
   lightGradientStart: '#00ddeb',
   lightGradientEnd: '#ff6b6b',
   darkGradientStart: '#2e2767',
@@ -111,38 +100,6 @@ const normalizeWidgetSettings = (raw) => ({
   weather: { ...DEFAULT_WIDGET_SETTINGS.weather, ...(raw?.weather || {}) },
 });
 
-const normalizeScreensaverSettings = (raw) => ({
-  ...DEFAULT_SCREENSAVER_SETTINGS,
-  ...(raw && typeof raw === 'object' ? raw : {}),
-});
-const DEFAULT_AUTO_DARK_MODE_SETTINGS = {
-  enabled: false,
-  locationQuery: '',
-  lat: null,
-  lon: null,
-  resolvedName: '',
-};
-
-const normalizeAutoDarkModeSettings = (raw) => {
-  if (!raw || typeof raw !== 'object') {
-    return { ...DEFAULT_AUTO_DARK_MODE_SETTINGS };
-  }
-
-  return {
-    ...DEFAULT_AUTO_DARK_MODE_SETTINGS,
-    ...raw,
-    locationQuery: (raw.locationQuery || '').trim(),
-    lat: typeof raw.lat === 'number' ? raw.lat : null,
-    lon: typeof raw.lon === 'number' ? raw.lon : null,
-    resolvedName: raw.resolvedName || '',
-  };
-};
-
-const normalizeInterfaceColors = (raw) => ({
-  ...DEFAULT_INTERFACE_COLORS,
-  ...(raw && typeof raw === 'object' ? raw : {}),
-});
-
 const readLocalTheme = () => {
   const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
   return savedTheme === 'dark' ? 'dark' : 'light';
@@ -155,36 +112,6 @@ const readLocalThemeMode = (fallbackTheme) => {
   }
 
   return fallbackTheme === 'dark' ? 'dark' : 'light';
-};
-
-const readLocalInterfaceColors = () => {
-  try {
-    const raw = localStorage.getItem(INTERFACE_COLORS_STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_INTERFACE_COLORS };
-    return normalizeInterfaceColors(JSON.parse(raw));
-  } catch {
-    return { ...DEFAULT_INTERFACE_COLORS };
-  }
-};
-
-const readLocalScreensaverSettings = () => {
-  try {
-    const raw = localStorage.getItem(SCREENSAVER_SETTINGS_STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_SCREENSAVER_SETTINGS };
-    return normalizeScreensaverSettings(JSON.parse(raw));
-  } catch {
-    return { ...DEFAULT_SCREENSAVER_SETTINGS };
-  }
-};
-
-const readLocalAutoDarkModeSettings = () => {
-  try {
-    const raw = localStorage.getItem(AUTO_DARK_MODE_STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_AUTO_DARK_MODE_SETTINGS };
-    return normalizeAutoDarkModeSettings(JSON.parse(raw));
-  } catch {
-    return { ...DEFAULT_AUTO_DARK_MODE_SETTINGS };
-  }
 };
 
 const readLocalWidgetsLocked = () => {
@@ -234,7 +161,6 @@ const App = () => {
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [apiKeys, setApiKeys] = useState({
     WEATHER_API_KEY: '',
-    ICS_CALENDAR_URL: '',
   });
   const [apiKeysLoaded, setApiKeysLoaded] = useState(false);
   const [installedPlugins, setInstalledPlugins] = useState([]);
@@ -796,8 +722,6 @@ const App = () => {
         content: (
           <Suspense fallback={<WidgetLoadingFallback label="calendar" />}>
             <CalendarWidget
-              transparentBackground={widgetSettings.calendar.transparent}
-              icsCalendarUrl={apiKeys.ICS_CALENDAR_URL}
               refreshInterval={widgetSettings.calendar.refreshInterval || 0}
               activeTab={activeTab}
               activeTabConfigJson={tabs.find((tab) => tab.number === activeTab)?.config_json || null}
@@ -819,7 +743,6 @@ const App = () => {
         content: (
           <Suspense fallback={<WidgetLoadingFallback label="weather" />}>
             <WeatherWidget
-              transparentBackground={widgetSettings.weather.transparent}
               weatherApiKey={apiKeys.WEATHER_API_KEY}
               refreshInterval={widgetSettings.weather.refreshInterval || 0}
               activeTab={activeTab}
@@ -843,7 +766,6 @@ const App = () => {
         content: (
           <Suspense fallback={<WidgetLoadingFallback label="chores" />}>
             <ChoreWidget
-              transparentBackground={widgetSettings.chores.transparent}
               refreshInterval={widgetSettings.chores.refreshInterval || 0}
             />
           </Suspense>
@@ -863,7 +785,6 @@ const App = () => {
         content: (
           <Suspense fallback={<WidgetLoadingFallback label="photos" />}>
             <PhotoWidget
-              transparentBackground={widgetSettings.photos.transparent}
               refreshInterval={widgetSettings.photos.refreshInterval || 0}
             />
           </Suspense>
@@ -945,7 +866,6 @@ const App = () => {
           <Box sx={{ display: 'none' }}>
             <Suspense fallback={null}>
               <WeatherWidget
-                transparentBackground={widgetSettings.weather.transparent}
                 weatherApiKey={apiKeys.WEATHER_API_KEY}
                 refreshInterval={widgetSettings.weather.refreshInterval || 0}
                 activeTab={activeTab}

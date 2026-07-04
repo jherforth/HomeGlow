@@ -122,8 +122,6 @@ const readCalendarTabSpecificSettingsFromTabConfig = (configJson) => {
 };
 
 const CalendarWidget = ({
-  transparentBackground,
-  icsCalendarUrl,
   refreshInterval = 0,
   activeTab = 1,
   activeTabConfigJson = null,

@@ -42,7 +42,6 @@ const isValidCoordinates = (candidate) => {
 };
 
 const WeatherWidget = ({
-  transparentBackground,
   weatherApiKey,
   refreshInterval = 0,
   widgetSize = { width: 4, height: 4 },

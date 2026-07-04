@@ -44,7 +44,7 @@ const formatDueTime = (dueTime) => {
   return `${hour}:${minute} ${period}`;
 };
 
-const ChoreWidget = ({ transparentBackground, refreshInterval = 0 }) => {
+const ChoreWidget = ({ refreshInterval = 0 }) => {
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [users, setUsers] = useState([]);
   const [chores, setChores] = useState([]);

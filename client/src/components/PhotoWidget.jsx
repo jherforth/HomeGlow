@@ -4,7 +4,7 @@ import { Settings, Add, Delete, Edit, Refresh, ChevronLeft, ChevronRight, PlayAr
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 
-const PhotoWidget = ({ transparentBackground, refreshInterval = 0 }) => {
+const PhotoWidget = ({ refreshInterval = 0 }) => {
   const [photos, setPhotos] = useState([]);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [loading, setLoading] = useState(true);
