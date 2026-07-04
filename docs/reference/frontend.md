@@ -103,10 +103,11 @@ custom properties.
 | Hook | Role |
 | --- | --- |
 | `useIsMobile.js` | Returns `true` below 600px viewport width; used for mobile-adaptive layouts and fullScreen dialogs. |
-| `useFetchTabs.js` | Shared `fetchTabs` hook returning `{ tabs, setTabs, fetchTabs }`; used by AdminPanel and available for the main dashboard. |
+| `useFetchTabs.js` | Shared `fetchTabs` hook returning `{ tabs, setTabs, fetchTabs }`; used by both app.jsx and AdminPanel. |
 | `useChoreSoundScheduler.js` | Manages chore due-time sound playback scheduling (imported in app.jsx). |
 
-Each of these has a matching `*.test.js` (Vitest).
+Most utilities have a matching `*.test.js` (Vitest); pure-logic modules like
+`widgetSettings.js` should keep theirs up to date when behavior changes.
 
 ## Build & test
 

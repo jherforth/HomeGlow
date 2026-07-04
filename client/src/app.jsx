@@ -12,6 +12,7 @@ import { API_BASE_URL } from './utils/apiConfig.js';
 import { getDeviceApiBase } from './utils/deviceName.js';
 import { unlockAudio } from './utils/choreSound.js';
 import useChoreSoundScheduler from './hooks/useChoreSoundScheduler.js';
+import useFetchTabs from './hooks/useFetchTabs.js';
 import useIsMobile from './hooks/useIsMobile.js';
 import {
   readLocalInterfaceColors,
@@ -154,7 +155,7 @@ const App = () => {
   const [apiKeysLoaded, setApiKeysLoaded] = useState(false);
   const [installedPlugins, setInstalledPlugins] = useState([]);
   const [activeTab, setActiveTab] = useState(1);
-  const [tabs, setTabs] = useState([]);
+  const { tabs, fetchTabs } = useFetchTabs(API_DEVICE_URL);
   const [widgetAssignments, setWidgetAssignments] = useState({});
   const [showTabIconModal, setShowTabIconModal] = useState(false);
   const [deviceSettingsLoaded, setDeviceSettingsLoaded] = useState(false);
@@ -176,7 +177,7 @@ const App = () => {
   }, []);
 
   const hydrateFromDeviceSettings = useCallback((settings) => {
-    const widgetSettingsFromServer = normalizeWidgetSettings(settings?.widgetSettings);
+    const widgetSettingsFromServer = normalizeWidgetSettings(settings?.widgetSettings, DEFAULT_WIDGET_SETTINGS);
     const pluginSettingsFromServer = settings?.pluginSettings && typeof settings.pluginSettings === 'object'
       ? settings.pluginSettings
       : {};
@@ -225,7 +226,7 @@ const App = () => {
       if (Object.prototype.hasOwnProperty.call(sanitizedWidgetSettings, 'widgetGallery')) {
         delete sanitizedWidgetSettings.widgetGallery;
       }
-      localPayload.widgetSettings = normalizeWidgetSettings(sanitizedWidgetSettings);
+      localPayload.widgetSettings = normalizeWidgetSettings(sanitizedWidgetSettings, DEFAULT_WIDGET_SETTINGS);
     }
 
     const pluginSettingsRaw = parseJsonKey('pluginSettings');
@@ -327,16 +328,6 @@ const App = () => {
     void initialize();
   }, [fetchDeviceSettings, migrateLocalDeviceSettingsToServer]);
   // endRegion #98
-
-  const fetchTabs = async () => {
-    try {
-      const response = await axios.get(`${API_DEVICE_URL}/tabs`);
-      setTabs(Array.isArray(response.data) ? response.data : []);
-    } catch (error) {
-      console.error('Error fetching tabs:', error);
-      setTabs([]);
-    }
-  };
 
   const fetchWidgetAssignments = async () => {
     try {

@@ -257,7 +257,8 @@ async function revokeAndDisconnect(db, accountId) {
 
 function createGoogleFetch(apiBase, serviceLabel) {
     return async function googleFetch(db, accountId, method, pathAndQuery, body) {
-        const accessToken = await getValidAccessToken(db, accountId);
+        // Call through module.exports so tests can stub getValidAccessToken.
+        const accessToken = await module.exports.getValidAccessToken(db, accountId);
         const url = pathAndQuery.startsWith('http') ? pathAndQuery : `${apiBase}${pathAndQuery}`;
         const init = {
             method,

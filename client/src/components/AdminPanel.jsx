@@ -36,7 +36,6 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Backdrop,
   RadioGroup,
   Radio,
   Autocomplete,
@@ -61,8 +60,7 @@ import {
   Tab as TabIcon,
   DragIndicator,
   PhotoLibrary,
-  Info,
-  OpenInNew
+  Info
 } from '@mui/icons-material';
 import ColorPickerPopover from './ColorPickerPopover';
 import axios from 'axios';
@@ -81,8 +79,10 @@ import ScreensaverIntervalSlider from './ScreensaverIntervalSlider';
 import GoogleAccountConnection from './GoogleAccountConnection';
 import ClamValueModal from './ClamValueModal';
 import SoundPicker from './SoundPicker';
+import useFetchTabs from '../hooks/useFetchTabs.js';
 import useIsMobile from '../hooks/useIsMobile.js';
 import { syncWidgetAssignments } from '../utils/assignmentSync.js';
+import { normalizeWidgetSettings as normalizeSharedWidgetSettings } from '../utils/widgetSettings.js';
 import { stackableTableSx } from '../utils/responsiveTable.js';
 import {
   INTERFACE_COLORS_STORAGE_KEY,
@@ -106,13 +106,7 @@ const DEFAULT_WIDGET_SETTINGS = {
   weather: { enabled: false, refreshInterval: 0 },
 };
 
-const normalizeWidgetSettings = (raw) => ({
-  ...DEFAULT_WIDGET_SETTINGS,
-  chores: { ...DEFAULT_WIDGET_SETTINGS.chores, ...(raw?.chores || {}) },
-  calendar: { ...DEFAULT_WIDGET_SETTINGS.calendar, ...(raw?.calendar || {}) },
-  photos: { ...DEFAULT_WIDGET_SETTINGS.photos, ...(raw?.photos || {}) },
-  weather: { ...DEFAULT_WIDGET_SETTINGS.weather, ...(raw?.weather || {}) },
-});
+const normalizeWidgetSettings = (raw) => normalizeSharedWidgetSettings(raw, DEFAULT_WIDGET_SETTINGS);
 
 const DEFAULT_HOMEGLOW_REPOSITORY = 'jherforth/HomeGlow';
 const FRONTEND_VERSION = (import.meta.env.VITE_APP_VERSION || 'dev').trim();
@@ -154,7 +148,6 @@ const buildTagUrl = (repository, tagName) => {
   return `https://github.com/${repository}/releases/tag/${encodeURIComponent(tagName)}`;
 };
 
-const toShortCommit = (commitSha) => (commitSha ? commitSha.slice(0, 7) : 'Unknown');
 
 const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const isMobile = useIsMobile();
@@ -201,7 +194,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const [pinModal, setPinModal] = useState({ open: false, mode: 'verify', title: '' });
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [checkingPin, setCheckingPin] = useState(true);
-  const [tabs, setTabs] = useState([]);
+  const { tabs, fetchTabs } = useFetchTabs(API_DEVICE_URL);
   const [widgetAssignments, setWidgetAssignments] = useState({});
   const [pluginSettings, setPluginSettings] = useState({});
   const [pluginAssignments, setPluginAssignments] = useState({});
@@ -394,16 +387,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     } catch (error) {
       console.error('Error fetching uploaded widgets:', error);
       setUploadedWidgets([]);
-    }
-  };
-
-  const fetchTabs = async () => {
-    try {
-      const response = await axios.get(`${API_DEVICE_URL}/tabs`);
-      setTabs(Array.isArray(response.data) ? response.data : []);
-    } catch (error) {
-      console.error('Error fetching tabs:', error);
-      setTabs([]);
     }
   };
 

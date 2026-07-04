@@ -19,8 +19,7 @@ server/
 │   ├── googlePhotosPicker.js # Google Photos Picker session + download (uses shared googleFetch)
 │   └── appleCalDAV.js        # Apple/CalDAV calendar access
 ├── utils/
-│   ├── encryption.js         # AES key management + status
-│   └── assignmentSync.js     # Shared syncWidgetAssignments helper for client-side widget sync
+│   └── encryption.js         # AES key management + status
 ├── widgets/              # Uploaded custom widget HTML + widgets_registry.json + authoring README
 ├── tests/                # node:test suites + runner
 └── data/tasks.db         # SQLite database (created at runtime)

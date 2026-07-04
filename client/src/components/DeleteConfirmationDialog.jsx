@@ -38,7 +38,7 @@ const DeleteConfirmationDialog = ({
     >
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Warning color="error" />
+          <Warning color={confirmColor} />
           <Typography variant="h6">{title}</Typography>
         </Box>
       </DialogTitle>
