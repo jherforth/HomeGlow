@@ -207,6 +207,17 @@ and essentially all cross-`schema*` clusters. **Treat as noise.**
     to a `validatePrizeBody(body)` helper colocated with the prize routes. Verified: all 39 server
     tests pass, including the existing `prize endpoints validate and support CRUD lifecycle` test
     that drives invalid (400) + valid create/update through the real server.
+  - [x] ✅ **DONE (2026-07-04) — Google Photos picker guards** (`source`/`account` cluster). The
+    three picker endpoints (create / poll / ingest a `picker-session`) each repeated an identical
+    "load source + assert GooglePhotos type → 404" guard and an identical "get connected account →
+    400" guard. Extracted `loadGooglePhotoSourceOr404(sourceId, reply)` and
+    `loadConnectedGoogleAccountOr400(reply)` (send-reply-then-`return null`, so behavior is
+    byte-identical). The endpoint-specific `picker_session_id` checks stay inline (they differ:
+    200 null-session vs 400 "No active picker session"). Verified: 39 server tests pass **plus** a
+    live probe of all 7 branches — absent/wrong-type source → 404, no-account create/poll/ingest →
+    400, and the preserved no-session branches (200 null-session, 400 "No active picker session").
+    **Follow-up:** the same account guard also appears verbatim in 3 Google-connection routes
+    (~3346/3366/3386); left out of this scoped change — could reuse the same helper later.
 
 ### 5D. Low value — likely coincidental, leave alone
 

@@ -4074,15 +4074,34 @@ fastify.delete('/api/photo-sources/:sourceId/picked/:mediaRowId', async (request
   }
 });
 
+// Loads a Google Photos photo source by id. On miss (absent or wrong type),
+// sends a 404 and returns null so the caller can `if (!source) return;`.
+const loadGooglePhotoSourceOr404 = (sourceId, reply) => {
+  const source = db.prepare('SELECT * FROM photo_sources WHERE id = ?').get(sourceId);
+  if (!source || source.type !== 'GooglePhotos') {
+    reply.status(404).send({ error: 'Google Photos source not found' });
+    return null;
+  }
+  return source;
+};
+
+// Returns the connected Google account, or sends a 400 and returns null.
+const loadConnectedGoogleAccountOr400 = (reply) => {
+  const account = googleConnection.getConnectedAccount(db);
+  if (!account) {
+    reply.status(400).send({ error: 'No Google account connected.' });
+    return null;
+  }
+  return account;
+};
+
 fastify.post('/api/photo-sources/:sourceId/picker-session', async (request, reply) => {
   const { sourceId } = request.params;
   try {
-    const source = db.prepare('SELECT * FROM photo_sources WHERE id = ?').get(sourceId);
-    if (!source || source.type !== 'GooglePhotos') {
-      return reply.status(404).send({ error: 'Google Photos source not found' });
-    }
-    const account = googleConnection.getConnectedAccount(db);
-    if (!account) return reply.status(400).send({ error: 'No Google account connected.' });
+    const source = loadGooglePhotoSourceOr404(sourceId, reply);
+    if (!source) return;
+    const account = loadConnectedGoogleAccountOr400(reply);
+    if (!account) return;
 
     const session = await googlePhotosPicker.createSession(db, account.id);
     db.prepare(
@@ -4105,15 +4124,13 @@ fastify.post('/api/photo-sources/:sourceId/picker-session', async (request, repl
 fastify.get('/api/photo-sources/:sourceId/picker-session', async (request, reply) => {
   const { sourceId } = request.params;
   try {
-    const source = db.prepare('SELECT * FROM photo_sources WHERE id = ?').get(sourceId);
-    if (!source || source.type !== 'GooglePhotos') {
-      return reply.status(404).send({ error: 'Google Photos source not found' });
-    }
+    const source = loadGooglePhotoSourceOr404(sourceId, reply);
+    if (!source) return;
     if (!source.picker_session_id) {
       return { sessionId: null, mediaItemsSet: false };
     }
-    const account = googleConnection.getConnectedAccount(db);
-    if (!account) return reply.status(400).send({ error: 'No Google account connected.' });
+    const account = loadConnectedGoogleAccountOr400(reply);
+    if (!account) return;
 
     const session = await googlePhotosPicker.getSession(db, account.id, source.picker_session_id);
     return {
@@ -4135,15 +4152,13 @@ fastify.get('/api/photo-sources/:sourceId/picker-session', async (request, reply
 fastify.post('/api/photo-sources/:sourceId/picker-session/ingest', async (request, reply) => {
   const { sourceId } = request.params;
   try {
-    const source = db.prepare('SELECT * FROM photo_sources WHERE id = ?').get(sourceId);
-    if (!source || source.type !== 'GooglePhotos') {
-      return reply.status(404).send({ error: 'Google Photos source not found' });
-    }
+    const source = loadGooglePhotoSourceOr404(sourceId, reply);
+    if (!source) return;
     if (!source.picker_session_id) {
       return reply.status(400).send({ error: 'No active picker session' });
     }
-    const account = googleConnection.getConnectedAccount(db);
-    if (!account) return reply.status(400).send({ error: 'No Google account connected.' });
+    const account = loadConnectedGoogleAccountOr400(reply);
+    if (!account) return;
 
     const session = await googlePhotosPicker.getSession(db, account.id, source.picker_session_id);
     if (!session.mediaItemsSet) {
