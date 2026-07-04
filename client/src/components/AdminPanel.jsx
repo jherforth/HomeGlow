@@ -72,6 +72,9 @@ import PinModal from './PinModal';
 import ChoreSchedulesTab from './ChoreSchedulesTab';
 import ChoreHistoryTab from './ChoreHistoryTab';
 import TabIconModal from './TabIconModal';
+import DeleteConfirmationDialog from './DeleteConfirmationDialog';
+import AdminFormSection from './AdminFormSection';
+import VersionInfoCard from './VersionInfoCard';
 import GoogleAccountConnection from './GoogleAccountConnection';
 import ClamValueModal from './ClamValueModal';
 import SoundPicker from './SoundPicker';
@@ -2663,10 +2666,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       {activeTab === 2 && (
         <Card>
           <CardContent>
-            <Typography variant="h6" gutterBottom>User Management</Typography>
-
-            <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
-              <Typography variant="subtitle1" sx={{ mb: 2 }}>Add New User</Typography>
+            <AdminFormSection title="User Management" subtitle="Add New User">
               <Box
                 component="form"
                 onSubmit={(event) => {
@@ -2705,7 +2705,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                   </Grid>
                 </Grid>
               </Box>
-            </Box>
+            </AdminFormSection>
 
             <TableContainer component={Paper}>
               <Table sx={stackableTableSx}>
@@ -2945,10 +2945,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       {activeTab === 4 && (
         <Card>
           <CardContent>
-            <Typography variant="h6" gutterBottom>Prize Management</Typography>
-
-            <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
-              <Typography variant="subtitle1" sx={{ mb: 2 }}>Add New Prize</Typography>
+            <AdminFormSection title="Prize Management" subtitle="Add New Prize">
               <Box
                 component="form"
                 onSubmit={(event) => {
@@ -2987,7 +2984,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                   </Grid>
                 </Grid>
               </Box>
-            </Box>
+            </AdminFormSection>
 
             <List>
               {prizes.map((prize) => (
@@ -3235,157 +3232,29 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, md: 6 }}>
-                <Paper variant="outlined" sx={{ p: 2, height: '100%' }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
-                    Frontend
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    Version
-                  </Typography>
-                  <Chip label={FRONTEND_VERSION || 'Unknown'} color="primary" size="small" sx={{ mb: 2 }} />
-
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    Commit
-                  </Typography>
-                  {frontendCommitUrl ? (
-                    <Button
-                      component="a"
-                      href={frontendCommitUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      variant="text"
-                      size="small"
-                      endIcon={<OpenInNew fontSize="small" />}
-                      sx={{ p: 0, minWidth: 0, textTransform: 'none', mb: 2 }}
-                    >
-                      {toShortCommit(FRONTEND_GIT_COMMIT)}
-                    </Button>
-                  ) : (
-                    <Typography variant="body2" sx={{ mb: 2 }}>Unknown</Typography>
-                  )}
-
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    Repository
-                  </Typography>
-                  <Button
-                    component="a"
-                    href={`https://github.com/${frontendRepository}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    variant="text"
-                    size="small"
-                    endIcon={<OpenInNew fontSize="small" />}
-                    sx={{ p: 0, minWidth: 0, textTransform: 'none', mb: 2 }}
-                  >
-                    {frontendRepository}
-                  </Button>
-
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    Tags for this commit
-                  </Typography>
-                  {aboutTagsLoading ? (
-                    <CircularProgress size={16} />
-                  ) : frontendCommitTags.length > 0 ? (
-                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                      {frontendCommitTags.map((tagName) => {
-                        const tagUrl = buildTagUrl(frontendRepository, tagName);
-                        return tagUrl ? (
-                          <Chip
-                            key={`frontend-tag-${tagName}`}
-                            label={tagName}
-                            component="a"
-                            href={tagUrl}
-                            clickable
-                            target="_blank"
-                            rel="noreferrer"
-                            size="small"
-                          />
-                        ) : (
-                          <Chip key={`frontend-tag-${tagName}`} label={tagName} size="small" />
-                        );
-                      })}
-                    </Box>
-                  ) : (
-                    <Typography variant="body2" color="text.secondary">No tags found for this commit.</Typography>
-                  )}
-                </Paper>
+                <VersionInfoCard
+                  label="Frontend"
+                  version={FRONTEND_VERSION}
+                  commitUrl={frontendCommitUrl}
+                  commitHash={FRONTEND_GIT_COMMIT}
+                  repository={frontendRepository}
+                  tags={frontendCommitTags}
+                  tagsLoading={aboutTagsLoading}
+                  buildTagUrl={buildTagUrl}
+                />
               </Grid>
 
               <Grid size={{ xs: 12, md: 6 }}>
-                <Paper variant="outlined" sx={{ p: 2, height: '100%' }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
-                    Backend
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    Version
-                  </Typography>
-                  <Chip label={backendStats?.version || 'Unknown'} color="primary" size="small" sx={{ mb: 2 }} />
-
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    Commit
-                  </Typography>
-                  {backendCommitUrl ? (
-                    <Button
-                      component="a"
-                      href={backendCommitUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      variant="text"
-                      size="small"
-                      endIcon={<OpenInNew fontSize="small" />}
-                      sx={{ p: 0, minWidth: 0, textTransform: 'none', mb: 2 }}
-                    >
-                      {toShortCommit(backendStats?.commit)}
-                    </Button>
-                  ) : (
-                    <Typography variant="body2" sx={{ mb: 2 }}>Unknown</Typography>
-                  )}
-
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    Repository
-                  </Typography>
-                  <Button
-                    component="a"
-                    href={`https://github.com/${backendRepository}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    variant="text"
-                    size="small"
-                    endIcon={<OpenInNew fontSize="small" />}
-                    sx={{ p: 0, minWidth: 0, textTransform: 'none', mb: 2 }}
-                  >
-                    {backendRepository}
-                  </Button>
-
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    Tags for this commit
-                  </Typography>
-                  {aboutTagsLoading ? (
-                    <CircularProgress size={16} />
-                  ) : backendCommitTags.length > 0 ? (
-                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                      {backendCommitTags.map((tagName) => {
-                        const tagUrl = buildTagUrl(backendRepository, tagName);
-                        return tagUrl ? (
-                          <Chip
-                            key={`backend-tag-${tagName}`}
-                            label={tagName}
-                            component="a"
-                            href={tagUrl}
-                            clickable
-                            target="_blank"
-                            rel="noreferrer"
-                            size="small"
-                          />
-                        ) : (
-                          <Chip key={`backend-tag-${tagName}`} label={tagName} size="small" />
-                        );
-                      })}
-                    </Box>
-                  ) : (
-                    <Typography variant="body2" color="text.secondary">No tags found for this commit.</Typography>
-                  )}
-                </Paper>
+                <VersionInfoCard
+                  label="Backend"
+                  version={backendStats?.version}
+                  commitUrl={backendCommitUrl}
+                  commitHash={backendStats?.commit}
+                  repository={backendRepository}
+                  tags={backendCommitTags}
+                  tagsLoading={aboutTagsLoading}
+                  buildTagUrl={buildTagUrl}
+                />
               </Grid>
             </Grid>
           </CardContent>
@@ -3402,36 +3271,15 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         initialData={tabIconModalState.initialData}
       />
 
-      <Dialog
+      <DeleteConfirmationDialog
         open={deleteTabDialog.open}
         onClose={() => setDeleteTabDialog({ open: false, tab: null })}
-        maxWidth="sm"
-        fullWidth
-        fullScreen={isMobile}
-      >
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Warning color="error" />
-            <Typography variant="h6">Delete Tab</Typography>
-          </Box>
-        </DialogTitle>
-        <DialogContent>
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            Widgets assigned to this tab will be moved by the server rules for deleted tabs.
-          </Alert>
-          <Typography>
-            Are you sure you want to delete <strong>{deleteTabDialog.tab?.label}</strong>?
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteTabDialog({ open: false, tab: null })} variant="outlined">
-            Cancel
-          </Button>
-          <Button onClick={confirmDeleteTab} variant="contained" color="error" startIcon={<Delete />}>
-            Delete Tab
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onConfirm={confirmDeleteTab}
+        title="Delete Tab"
+        itemName={deleteTabDialog.tab?.label}
+        itemLabel="Tab"
+        warningMessage="Widgets assigned to this tab will be moved by the server rules for deleted tabs."
+      />
 
       <Dialog
         open={copyDeviceDialog.open}
@@ -3505,79 +3353,31 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         </DialogActions>
       </Dialog>
 
-      <Dialog
+      <DeleteConfirmationDialog
         open={deleteDeviceDialog.open}
         onClose={() => setDeleteDeviceDialog({ open: false, device: null })}
-        maxWidth="sm"
-        fullWidth
-        fullScreen={isMobile}
-      >
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Warning color="error" />
-            <Typography variant="h6">Delete Device</Typography>
-          </Box>
-        </DialogTitle>
-        <DialogContent>
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            This action cannot be undone.
-          </Alert>
-          <Typography>
-            Are you sure you want to delete device <strong>{deleteDeviceDialog.device?.name}</strong>?
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDeviceDialog({ open: false, device: null })} variant="outlined">
-            Cancel
-          </Button>
-          <Button onClick={confirmDeleteDevice} variant="contained" color="error" startIcon={<Delete />}>
-            Delete Device
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onConfirm={confirmDeleteDevice}
+        title="Delete Device"
+        itemName={deleteDeviceDialog.device?.name}
+        itemLabel="Device"
+        warningMessage="This action cannot be undone."
+      />
 
       {/* User Delete Confirmation Dialog */}
-      <Dialog
+      <DeleteConfirmationDialog
         open={deleteUserDialog.open}
         onClose={() => setDeleteUserDialog({ open: false, user: null })}
-        maxWidth="sm"
-        fullWidth
-        fullScreen={isMobile}
+        onConfirm={() => deleteUser(deleteUserDialog.user?.id)}
+        title="Delete User"
+        itemName={deleteUserDialog.user?.username}
+        itemLabel="User"
+        warningMessage="This action cannot be undone!"
+        confirmLabel="Delete User & Chores"
       >
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Warning color="error" />
-            <Typography variant="h6">Delete User</Typography>
-          </Box>
-        </DialogTitle>
-        <DialogContent>
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            This action cannot be undone!
-          </Alert>
-          <Typography variant="body1" sx={{ mb: 2 }}>
-            Are you sure you want to delete user <strong>{deleteUserDialog.user?.username}</strong>?
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            This will also delete all {getUserChoreCount(deleteUserDialog.user?.id || 0)} chores assigned to this user.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => setDeleteUserDialog({ open: false, user: null })}
-            variant="outlined"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={() => deleteUser(deleteUserDialog.user?.id)}
-            variant="contained"
-            color="error"
-            startIcon={<Delete />}
-          >
-            Delete User & Chores
-          </Button>
-        </DialogActions>
-      </Dialog>
+        <Typography variant="body2" color="text.secondary">
+          This will also delete all {getUserChoreCount(deleteUserDialog.user?.id || 0)} chores assigned to this user.
+        </Typography>
+      </DeleteConfirmationDialog>
 
       {/* User Chores Modal */}
       <Dialog
