@@ -12,6 +12,12 @@ data
 uploads
 widgets/
 
+# Not needed at runtime: tests run in CI, scripts are dev-time tooling.
+tests
+scripts
+Dockerfile
+.dockerignore
+
 # Misc
 .env
 **/.env

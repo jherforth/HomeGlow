@@ -57,9 +57,13 @@ and [`server/Dockerfile`](../../server/Dockerfile). See
   `node:20-alpine` builds the Vite bundle, then `nginx:alpine` serves `dist/`. An
   entrypoint runs `envsubst` on [`nginx.conf`](../../client/nginx.conf) so
   `FRONTEND_PORT`/`BACKEND_SERVICE`/`BACKEND_PORT` are applied at container start.
-- **Backend** ([`server/Dockerfile`](../../server/Dockerfile)): `node:24`, installs
-  build tooling, `npm install`, rebuilds `better-sqlite3` from source, and runs
-  `node index.js`. `uploads/` and `widgets/` are created with open permissions.
+- **Backend** ([`server/Dockerfile`](../../server/Dockerfile)): multi-stage —
+  a `node:24-slim` builder installs production dependencies (with a C++ toolchain
+  available only in that stage as a fallback if `better-sqlite3` has no prebuilt
+  binary), then a clean `node:24-slim` runtime copies `node_modules` + app code and
+  runs `node index.js`. Final image is ~300MB (vs ~1.4GB before the multi-stage
+  split). Published for `linux/amd64` and `linux/arm64` (Raspberry Pi capable).
+  `uploads/` and `widgets/` are created with open permissions.
 
 ## CI/CD (GitHub Actions)
 
