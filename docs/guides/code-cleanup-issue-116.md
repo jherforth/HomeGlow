@@ -201,6 +201,12 @@ and essentially all cross-`schema*` clusters. **Treat as noise.**
   token-refresh blocks (`settings`, `photos`, `response`, `push`, `source`, `sourceId`,
   `account`, `deviceName`, `chore_schedule_id`, `clam_cost`). The file is ~4400 lines
   (monolithic Fastify routes); extract helpers incrementally — **high-touch, highest risk.**
+  Do these one at a time, each behind existing endpoint tests.
+  - [x] ✅ **DONE (2026-07-04) — prize body validation** (`clam_cost` cluster). The POST and
+    PATCH `/api/prizes` handlers shared an identical name/clam_cost destructure + guard; extracted
+    to a `validatePrizeBody(body)` helper colocated with the prize routes. Verified: all 39 server
+    tests pass, including the existing `prize endpoints validate and support CRUD lifecycle` test
+    that drives invalid (400) + valid create/update through the real server.
 
 ### 5D. Low value — likely coincidental, leave alone
 

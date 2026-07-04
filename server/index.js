@@ -3128,6 +3128,17 @@ fastify.get('/api/proxy', async (request, reply) => {
 });
 
 // Prize routes
+
+// Shared validation for the prize create/update body. Returns { error } on
+// failure, or the parsed { name, clam_cost } on success.
+const validatePrizeBody = (body) => {
+  const { name, clam_cost } = body || {};
+  if (!name || !clam_cost || clam_cost <= 0) {
+    return { error: 'Prize name and a positive clam cost are required.' };
+  }
+  return { name, clam_cost };
+};
+
 fastify.get('/api/prizes', async (request, reply) => {
   try {
     const rows = db.prepare('SELECT * FROM prizes').all();
@@ -3139,9 +3150,9 @@ fastify.get('/api/prizes', async (request, reply) => {
 });
 
 fastify.post('/api/prizes', async (request, reply) => {
-  const { name, clam_cost } = request.body;
-  if (!name || !clam_cost || clam_cost <= 0) {
-    return reply.status(400).send({ error: 'Prize name and a positive clam cost are required.' });
+  const { name, clam_cost, error: validationError } = validatePrizeBody(request.body);
+  if (validationError) {
+    return reply.status(400).send({ error: validationError });
   }
   try {
     const stmt = db.prepare('INSERT INTO prizes (name, clam_cost) VALUES (?, ?)');
@@ -3155,9 +3166,9 @@ fastify.post('/api/prizes', async (request, reply) => {
 
 fastify.patch('/api/prizes/:id', async (request, reply) => {
   const { id } = request.params;
-  const { name, clam_cost } = request.body;
-  if (!name || !clam_cost || clam_cost <= 0) {
-    return reply.status(400).send({ error: 'Prize name and a positive clam cost are required.' });
+  const { name, clam_cost, error: validationError } = validatePrizeBody(request.body);
+  if (validationError) {
+    return reply.status(400).send({ error: validationError });
   }
   try {
     const stmt = db.prepare('UPDATE prizes SET name = ?, clam_cost = ? WHERE id = ?');
