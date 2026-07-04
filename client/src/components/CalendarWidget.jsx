@@ -59,6 +59,50 @@ const clampInteger = (value, min, max, fallback) => {
   return Math.min(max, Math.max(min, parsed));
 };
 
+// A multi-day event is one whose start and end land on different calendar days.
+const isMultiDaySpanning = (event) =>
+  !moment(event.start).isSame(moment(event.end), 'day');
+
+// Order multi-day events longest-first, then by earliest start, so the widest
+// bars claim lanes first when packing them into rows.
+const compareByDurationThenStart = (a, b) => {
+  const aDur = moment(a.end).diff(moment(a.start), 'days');
+  const bDur = moment(b.end).diff(moment(b.start), 'days');
+  if (bDur !== aDur) return bDur - aDur;
+  return moment(a.start) - moment(b.start);
+};
+
+// Greedy first-fit lane packing: each event drops into the first lane whose
+// events it doesn't overlap; otherwise a new lane opens. Returns the number of
+// lanes used and a lookup from an event to its lane index.
+const packEventsIntoLanes = (events) => {
+  const lanes = [];
+  events.forEach((event) => {
+    let placed = false;
+    for (let s = 0; s < lanes.length; s++) {
+      const overlaps = lanes[s].some((laneEvent) =>
+        moment(event.start).isBefore(moment(laneEvent.end)) &&
+        moment(event.end).isAfter(moment(laneEvent.start))
+      );
+      if (!overlaps) {
+        lanes[s].push(event);
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) lanes.push([event]);
+  });
+
+  const getLane = (event) => {
+    for (let s = 0; s < lanes.length; s++) {
+      if (lanes[s].includes(event)) return s;
+    }
+    return -1;
+  };
+
+  return { laneCount: lanes.length, getLane };
+};
+
 const TAB_CALENDAR_VIEW_MODES = new Set(['month', 'week']);
 const VALID_WEEK_VIEW_STARTS = new Set(['today', 'yesterday', ...WEEKDAY_OPTIONS.map((option) => option.value)]);
 const VALID_MONTH_VIEW_STARTS = new Set(['today', 'yesterday', 'first-day-of-month', ...WEEKDAY_OPTIONS.map((option) => option.value)]);
@@ -904,46 +948,11 @@ const CalendarWidget = ({
       return eventStart.isSameOrBefore(weekEnd) && eventEnd.isSameOrAfter(weekStart);
     });
 
-    const isMultiDaySpanning = (event) => {
-      return event.all_day
-        ? !moment(event.start).isSame(moment(event.end), 'day')
-        : !moment(event.start).isSame(moment(event.end), 'day');
-    };
-
     const multiDayEvents = weekEvents
       .filter(e => isMultiDaySpanning(e))
-      .sort((a, b) => {
-        const aDur = moment(a.end).diff(moment(a.start), 'days');
-        const bDur = moment(b.end).diff(moment(b.start), 'days');
-        if (bDur !== aDur) return bDur - aDur;
-        return moment(a.start) - moment(b.start);
-      });
+      .sort(compareByDurationThenStart);
 
-    const slots = [];
-    multiDayEvents.forEach(event => {
-      let placed = false;
-      for (let s = 0; s < slots.length; s++) {
-        const overlaps = slots[s].some(slotEvent => {
-          return moment(event.start).isBefore(moment(slotEvent.end)) &&
-            moment(event.end).isAfter(moment(slotEvent.start));
-        });
-        if (!overlaps) {
-          slots[s].push(event);
-          placed = true;
-          break;
-        }
-      }
-      if (!placed) slots.push([event]);
-    });
-
-    const multiDaySlotCount = slots.length;
-
-    const getMultiDaySlot = (event) => {
-      for (let s = 0; s < slots.length; s++) {
-        if (slots[s].includes(event)) return s;
-      }
-      return -1;
-    };
+    const { laneCount: multiDaySlotCount, getLane: getMultiDaySlot } = packEventsIntoLanes(multiDayEvents);
 
     return dates.map(date => {
       const dayMultiDay = multiDayEvents.filter(e => eventSpansDay(e, date));
@@ -1251,12 +1260,6 @@ const CalendarWidget = ({
               });
             })();
 
-            const isMultiDaySpanning = (event) => {
-              return event.all_day
-                ? !moment(event.start).isSame(moment(event.end), 'day')
-                : !moment(event.start).isSame(moment(event.end), 'day');
-            };
-
             const allWeekCells = [];
             rows.forEach(({ rowDates, rowKey }) => {
               const validRowDates = rowDates.filter(Boolean);
@@ -1265,38 +1268,9 @@ const CalendarWidget = ({
 
               const rowMultiDayEvents = events
                 .filter(e => isMultiDaySpanning(e) && moment(e.start).isSameOrBefore(rowEnd.clone().endOf('day')) && moment(e.end).isSameOrAfter(rowStart.clone().startOf('day')))
-                .sort((a, b) => {
-                  const aDur = moment(a.end).diff(moment(a.start), 'days');
-                  const bDur = moment(b.end).diff(moment(b.start), 'days');
-                  if (bDur !== aDur) return bDur - aDur;
-                  return moment(a.start) - moment(b.start);
-                });
+                .sort(compareByDurationThenStart);
 
-              const slots = [];
-              rowMultiDayEvents.forEach(event => {
-                let placed = false;
-                for (let s = 0; s < slots.length; s++) {
-                  const overlaps = slots[s].some(se =>
-                    moment(event.start).isBefore(moment(se.end)) && moment(event.end).isAfter(moment(se.start))
-                  );
-                  if (!overlaps) {
-                    slots[s].push(event);
-                    placed = true;
-                    break;
-                  }
-                }
-                if (!placed) slots.push([event]);
-              });
-
-              const multiDaySlotCount = slots.length;
-              const getSlot = (event) => {
-                for (let s = 0; s < slots.length; s++) {
-                  if (slots[s].includes(event)) {
-                    return s;
-                  }
-                }
-                return -1;
-              };
+              const { laneCount: multiDaySlotCount, getLane: getSlot } = packEventsIntoLanes(rowMultiDayEvents);
 
               rowDates.forEach((day, dayIdx) => {
                 if (!day) {

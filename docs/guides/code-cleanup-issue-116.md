@@ -178,9 +178,19 @@ and essentially all cross-`schema*` clusters. **Treat as noise.**
   `googleHttp.js`. Do this **after** removing the dead googlePhotos functions in §2a.
 - [ ] **WidgetContainer width/height symmetry** — `canDecreaseHeight` (601-619) mirrors
   `canDecreaseWidth` (653-671), same at 704-722 / 755-773. → parameterize by axis.
-- [ ] **CalendarWidget internal repetition** — several self-duplicated date-cell renders and
-  `moment` formatting blocks (931-948/1282-1301, 1405-1420/1489-1504, 907-922/1254-1262) plus
-  overlap with [MonthDayCell.jsx](../../client/src/components/MonthDayCell.jsx). → extract date helpers.
+- [x] ✅ **DONE (2026-07-04) — multi-day event lane-packing de-duplicated.** The week-view and
+  month-view renders in [CalendarWidget.jsx](../../client/src/components/CalendarWidget.jsx) each
+  carried an identical copy of: an `isMultiDaySpanning` helper (with a no-op `all_day ? X : X`
+  ternary), a "sort by duration desc then start asc" comparator, and a greedy first-fit
+  lane-packing loop. Extracted to three module-level helpers — `isMultiDaySpanning` (simplified),
+  `compareByDurationThenStart`, and `packEventsIntoLanes(events) → { laneCount, getLane }` — and
+  pointed both render paths at them. Verified: build + 38 tests pass; in-browser with seeded
+  overlapping multi-day events, **both** month view (per-row packing) and week view (week packing)
+  render correct 3-lane stacking, lane reuse for non-overlapping events, continuation arrows, and
+  correct exclusion of timed/single-day events — zero console errors.
+- [ ] **CalendarWidget internal repetition (remaining)** — other self-duplicated date-cell renders
+  and `moment` formatting blocks (e.g. 1405-1420/1489-1504) plus overlap with
+  [MonthDayCell.jsx](../../client/src/components/MonthDayCell.jsx). → extract date helpers.
 - [ ] **Cross-widget UI blocks** — ChoreWidget:604-624 ↔ PhotoWidget:251-264, and
   CalendarWidget:600-608 ↔ PhotoWidget:189-197 (likely shared loading/empty states).
 - [ ] **AdminPanel repeated MUI patterns** — `option` (Select MenuItem blocks, 3×), `tagName`
