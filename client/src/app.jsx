@@ -18,6 +18,7 @@ import {
   readLocalScreensaverSettings,
   readLocalAutoDarkModeSettings,
 } from './utils/interfaceSettings.js';
+import { normalizeWidgetSettings, BASE_WIDGET_SETTINGS } from './utils/widgetSettings.js';
 import './index.css';
 
 const loadAdminPanel = () => import('./components/AdminPanel.jsx');
@@ -77,10 +78,7 @@ const isAllowedDeviceSettingsMigrationKey = (key) => DEVICE_SETTINGS_MIGRATION_K
 // endRegion #98
 
 const DEFAULT_WIDGET_SETTINGS = {
-  chores: { enabled: false },
-  calendar: { enabled: false },
-  photos: { enabled: false },
-  weather: { enabled: false },
+  ...BASE_WIDGET_SETTINGS,
   lightGradientStart: '#00ddeb',
   lightGradientEnd: '#ff6b6b',
   darkGradientStart: '#2e2767',
@@ -90,15 +88,6 @@ const DEFAULT_WIDGET_SETTINGS = {
   darkButtonGradientStart: '#2e2767',
   darkButtonGradientEnd: '#620808',
 };
-
-const normalizeWidgetSettings = (raw) => ({
-  ...DEFAULT_WIDGET_SETTINGS,
-  ...(raw && typeof raw === 'object' ? raw : {}),
-  chores: { ...DEFAULT_WIDGET_SETTINGS.chores, ...(raw?.chores || {}) },
-  calendar: { ...DEFAULT_WIDGET_SETTINGS.calendar, ...(raw?.calendar || {}) },
-  photos: { ...DEFAULT_WIDGET_SETTINGS.photos, ...(raw?.photos || {}) },
-  weather: { ...DEFAULT_WIDGET_SETTINGS.weather, ...(raw?.weather || {}) },
-});
 
 const readLocalTheme = () => {
   const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);

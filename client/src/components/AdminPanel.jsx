@@ -75,10 +75,14 @@ import TabIconModal from './TabIconModal';
 import DeleteConfirmationDialog from './DeleteConfirmationDialog';
 import AdminFormSection from './AdminFormSection';
 import VersionInfoCard from './VersionInfoCard';
+import LoadingBackdrop from './LoadingBackdrop';
+import RefreshIntervalSelect from './RefreshIntervalSelect';
+import ScreensaverIntervalSlider from './ScreensaverIntervalSlider';
 import GoogleAccountConnection from './GoogleAccountConnection';
 import ClamValueModal from './ClamValueModal';
 import SoundPicker from './SoundPicker';
 import useIsMobile from '../hooks/useIsMobile.js';
+import { syncWidgetAssignments } from '../utils/assignmentSync.js';
 import { stackableTableSx } from '../utils/responsiveTable.js';
 import {
   INTERFACE_COLORS_STORAGE_KEY,
@@ -627,24 +631,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       const currentResponse = await axios.get(`${API_DEVICE_URL}/widget-assignments`);
       const currentAssignments = Array.isArray(currentResponse.data) ? currentResponse.data : [];
 
-      for (const [widgetName, desiredTabNumbers] of Object.entries(widgetAssignments)) {
-        const existing = currentAssignments.filter(a => a.widget_name === widgetName);
-        const existingTabNumbers = existing.map(a => a.tab_number);
-
-        const toRemove = existing.filter(a => !desiredTabNumbers.includes(a.tab_number));
-        const toAdd = desiredTabNumbers.filter(number => !existingTabNumbers.includes(number));
-
-        for (const assignment of toRemove) {
-          await axios.delete(`${API_DEVICE_URL}/widget-assignments/${assignment.id}`);
-        }
-
-        for (const tabNumber of toAdd) {
-          await axios.post(`${API_DEVICE_URL}/widget-assignments`, {
-            widget_name: widgetName,
-            tabNumber: tabNumber,
-          });
-        }
-      }
+      await syncWidgetAssignments(API_DEVICE_URL, widgetAssignments, currentAssignments);
 
       if (onTabsChanged) {
         await onTabsChanged();
@@ -676,24 +663,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       const currentResponse = await axios.get(`${API_DEVICE_URL}/widget-assignments`);
       const currentAssignments = Array.isArray(currentResponse.data) ? currentResponse.data : [];
 
-      for (const [pluginWidgetName, desiredTabNumbers] of Object.entries(pluginAssignments)) {
-        const existing = currentAssignments.filter(a => a.widget_name === pluginWidgetName);
-        const existingTabNumbers = existing.map(a => a.tab_number);
-
-        const toRemove = existing.filter(a => !desiredTabNumbers.includes(a.tab_number));
-        const toAdd = desiredTabNumbers.filter(number => !existingTabNumbers.includes(number));
-
-        for (const assignment of toRemove) {
-          await axios.delete(`${API_DEVICE_URL}/widget-assignments/${assignment.id}`);
-        }
-
-        for (const tabNumber of toAdd) {
-          await axios.post(`${API_DEVICE_URL}/widget-assignments`, {
-            widget_name: pluginWidgetName,
-            tabNumber: tabNumber,
-          });
-        }
-      }
+      await syncWidgetAssignments(API_DEVICE_URL, pluginAssignments, currentAssignments);
 
       if (onTabsChanged) {
         await onTabsChanged();
@@ -1806,26 +1776,12 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                       </Grid>
 
                       <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormControl fullWidth size="small">
-                          <InputLabel id={`${widget}-refresh-label`}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Timer fontSize="small" />
-                              Auto-Refresh Interval
-                            </Box>
-                          </InputLabel>
-                          <Select
-                            labelId={`${widget}-refresh-label`}
-                            value={config.refreshInterval || 0}
-                            onChange={(e) => handleRefreshIntervalChange(widget, e.target.value)}
-                            label="Auto-Refresh Interval"
-                          >
-                            {refreshIntervalOptions.map((option) => (
-                              <MenuItem key={option.value} value={option.value}>
-                                {option.label}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
+                        <RefreshIntervalSelect
+                          labelId={`${widget}-refresh-label`}
+                          value={config.refreshInterval}
+                          onChange={(value) => handleRefreshIntervalChange(widget, value)}
+                          options={refreshIntervalOptions}
+                        />
                       </Grid>
                     </Grid>
 
@@ -1883,26 +1839,12 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                     </Grid>
 
                     <Grid size={{ xs: 12, sm: 6 }}>
-                      <FormControl fullWidth size="small">
-                        <InputLabel id="weather-refresh-label">
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Timer fontSize="small" />
-                            Auto-Refresh Interval
-                          </Box>
-                        </InputLabel>
-                        <Select
-                          labelId="weather-refresh-label"
-                          value={widgetSettings.weather?.refreshInterval || 0}
-                          onChange={(e) => handleRefreshIntervalChange('weather', e.target.value)}
-                          label="Auto-Refresh Interval"
-                        >
-                          {refreshIntervalOptions.map((option) => (
-                            <MenuItem key={option.value} value={option.value}>
-                              {option.label}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
+                      <RefreshIntervalSelect
+                        labelId="weather-refresh-label"
+                        value={widgetSettings.weather?.refreshInterval}
+                        onChange={(value) => handleRefreshIntervalChange('weather', value)}
+                        options={refreshIntervalOptions}
+                      />
                     </Grid>
                   </Grid>
 
@@ -2088,31 +2030,17 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                             </Grid>
 
                             <Grid size={{ xs: 12, sm: 6 }}>
-                              <FormControl fullWidth size="small">
-                                <InputLabel id={`plugin-${plugin.filename}-refresh-label`}>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <Timer fontSize="small" />
-                                    Auto-Refresh Interval
-                                  </Box>
-                                </InputLabel>
-                                <Select
-                                  labelId={`plugin-${plugin.filename}-refresh-label`}
-                                  value={pSettings.refreshInterval || 0}
-                                  onChange={(e) => {
-                                    setPluginSettings(prev => ({
-                                      ...prev,
-                                      [plugin.filename]: { ...prev[plugin.filename], refreshInterval: e.target.value }
-                                    }));
-                                  }}
-                                  label="Auto-Refresh Interval"
-                                >
-                                  {refreshIntervalOptions.map((option) => (
-                                    <MenuItem key={option.value} value={option.value}>
-                                      {option.label}
-                                    </MenuItem>
-                                  ))}
-                                </Select>
-                              </FormControl>
+                              <RefreshIntervalSelect
+                                labelId={`plugin-${plugin.filename}-refresh-label`}
+                                value={pSettings.refreshInterval}
+                                onChange={(value) => {
+                                  setPluginSettings(prev => ({
+                                    ...prev,
+                                    [plugin.filename]: { ...prev[plugin.filename], refreshInterval: value }
+                                  }));
+                                }}
+                                options={refreshIntervalOptions}
+                              />
                             </Grid>
                           </Grid>
 
@@ -2524,45 +2452,35 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
               />
 
               {screensaverSettings.mode === 'photos' && (
-                <>
-                  <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                    Photo Slideshow Interval: {screensaverSettings.slideshowInterval} second{screensaverSettings.slideshowInterval !== 1 ? 's' : ''}
-                  </Typography>
-                  <Slider
-                    value={screensaverSettings.slideshowInterval}
-                    onChange={(e, value) => setScreensaverSettings(prev => ({ ...prev, slideshowInterval: value }))}
-                    min={3}
-                    max={60}
-                    marks={[
-                      { value: 3, label: '3s' },
-                      { value: 10, label: '10s' },
-                      { value: 30, label: '30s' },
-                      { value: 60, label: '60s' }
-                    ]}
-                    sx={{ mb: 4 }}
-                  />
-                </>
+                <ScreensaverIntervalSlider
+                  label="Photo Slideshow Interval"
+                  value={screensaverSettings.slideshowInterval}
+                  onChange={(value) => setScreensaverSettings(prev => ({ ...prev, slideshowInterval: value }))}
+                  min={3}
+                  max={60}
+                  marks={[
+                    { value: 3, label: '3s' },
+                    { value: 10, label: '10s' },
+                    { value: 30, label: '30s' },
+                    { value: 60, label: '60s' }
+                  ]}
+                />
               )}
 
               {screensaverSettings.mode === 'tabs' && (
-                <>
-                  <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                    Tab Cycle Interval: {screensaverSettings.slideshowInterval} second{screensaverSettings.slideshowInterval !== 1 ? 's' : ''}
-                  </Typography>
-                  <Slider
-                    value={screensaverSettings.slideshowInterval}
-                    onChange={(e, value) => setScreensaverSettings(prev => ({ ...prev, slideshowInterval: value }))}
-                    min={5}
-                    max={120}
-                    marks={[
-                      { value: 5, label: '5s' },
-                      { value: 30, label: '30s' },
-                      { value: 60, label: '60s' },
-                      { value: 120, label: '2m' }
-                    ]}
-                    sx={{ mb: 4 }}
-                  />
-                </>
+                <ScreensaverIntervalSlider
+                  label="Tab Cycle Interval"
+                  value={screensaverSettings.slideshowInterval}
+                  onChange={(value) => setScreensaverSettings(prev => ({ ...prev, slideshowInterval: value }))}
+                  min={5}
+                  max={120}
+                  marks={[
+                    { value: 5, label: '5s' },
+                    { value: 30, label: '30s' },
+                    { value: 60, label: '60s' },
+                    { value: 120, label: '2m' }
+                  ]}
+                />
               )}
 
               <Button
@@ -3480,87 +3398,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       </Dialog>
 
       {/* Loading Indicator */}
-      <Backdrop
-        sx={{
-          color: '#fff',
-          zIndex: (theme) => theme.zIndex.drawer + 1,
-          backdropFilter: 'blur(10px)',
-          backgroundColor: 'rgba(0, 0, 0, 0.3)',
-        }}
-        open={isLoading}
-      >
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 3,
-            p: 4,
-            borderRadius: 3,
-            background: 'rgba(255, 255, 255, 0.1)',
-            backdropFilter: 'blur(20px)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
-          }}
-        >
-          <Box
-            sx={{
-              position: 'relative',
-              width: 80,
-              height: 80,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            {[0, 1, 2].map((index) => (
-              <Box
-                key={index}
-                sx={{
-                  position: 'absolute',
-                  fontSize: '2rem',
-                  animation: `clamBounce 1.5s ease-in-out ${index * 0.2}s infinite`,
-                  '@keyframes clamBounce': {
-                    '0%, 80%, 100%': {
-                      transform: 'scale(0.8) translateY(0)',
-                      opacity: 0.6,
-                    },
-                    '40%': {
-                      transform: 'scale(1.2) translateY(-20px)',
-                      opacity: 1,
-                    },
-                  },
-                }}
-              >
-                🥟
-              </Box>
-            ))}
-          </Box>
-
-          <Typography
-            variant="h6"
-            sx={{
-              color: 'white',
-              fontWeight: 'bold',
-              textAlign: 'center',
-              textShadow: '0 2px 4px rgba(0, 0, 0, 0.5)',
-            }}
-          >
-            Processing...
-          </Typography>
-
-          <CircularProgress
-            size={40}
-            thickness={2}
-            sx={{
-              color: 'rgba(255, 255, 255, 0.7)',
-              '& .MuiCircularProgress-circle': {
-                strokeLinecap: 'round',
-              },
-            }}
-          />
-        </Box>
-      </Backdrop>
+      <LoadingBackdrop open={isLoading} />
 
       {/* PIN Modal */}
       <PinModal
