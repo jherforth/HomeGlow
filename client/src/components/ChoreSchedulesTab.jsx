@@ -116,6 +116,81 @@ function formatScheduleInterval(interval) {
   return `${count} ${unitLabel}${count === '1' ? '' : 's'}`;
 }
 
+const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+function parseDateOnly(dateString) {
+  if (typeof dateString !== 'string' || !DATE_ONLY_REGEX.test(dateString)) {
+    return null;
+  }
+  const [year, month, day] = dateString.split('-').map(Number);
+  const parsed = new Date(year, month - 1, day, 0, 0, 0, 0);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  if (parsed.getFullYear() !== year || parsed.getMonth() !== month - 1 || parsed.getDate() !== day) {
+    return null;
+  }
+  return parsed;
+}
+
+function formatDateOnly(dateObj) {
+  return `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
+}
+
+function toDateOnlyString(value) {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (DATE_ONLY_REGEX.test(trimmed)) {
+      return trimmed;
+    }
+    const match = trimmed.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) {
+      return match[1];
+    }
+    return null;
+  }
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return formatDateOnly(value);
+  }
+
+  return null;
+}
+
+function getDueDaysOffset(createdAt, dueDate) {
+  const createdAtDateOnly = toDateOnlyString(createdAt);
+  const dueDateOnly = toDateOnlyString(dueDate);
+  if (!createdAtDateOnly || !dueDateOnly) {
+    return '';
+  }
+
+  const created = parseDateOnly(createdAtDateOnly);
+  const due = parseDateOnly(dueDateOnly);
+  if (!created || !due) {
+    return '';
+  }
+
+  const days = Math.round((due.getTime() - created.getTime()) / (24 * 60 * 60 * 1000));
+  return Number.isInteger(days) && days >= 0 ? String(days) : '';
+}
+
+function buildDueDateFromOffset(createdAt, dueDays) {
+  const parsedDays = Number.parseInt(dueDays, 10);
+  if (!Number.isInteger(parsedDays) || parsedDays < 0) {
+    return null;
+  }
+
+  const baseDateOnly = toDateOnlyString(createdAt) || formatDateOnly(new Date());
+  const baseDate = parseDateOnly(baseDateOnly);
+  if (!baseDate) {
+    return null;
+  }
+
+  const target = new Date(baseDate);
+  target.setDate(target.getDate() + parsedDays);
+  return formatDateOnly(target);
+}
+
 const defaultScheduleForm = {
   chore_id: '',
   user_id: '',
@@ -129,6 +204,7 @@ const defaultScheduleForm = {
   sleepUnit: 'd',
   visible: true,
   due_date: '',
+  due_days: '',
   due_time: '',
   sound_enabled: false,
   sound: '',
@@ -246,6 +322,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
       sleepUnit: schedule.interval ? (schedule.interval.match(/[dwmy]$/i)?.[0].toLowerCase() || 'd') : 'd',
       visible: !!schedule.visible,
       due_date: schedule.due_date || '',
+      due_days: !isOneTime ? getDueDaysOffset(schedule.created_at, schedule.due_date) : '',
       due_time: schedule.due_time || '',
       sound_enabled: !!schedule.sound_enabled,
       sound: schedule.sound || '',
@@ -271,6 +348,17 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
         ? `${scheduleForm.sleepCount}${scheduleForm.sleepUnit}`
         : null;
 
+      const normalizedDueDate = scheduleForm.isOneTime
+        ? (scheduleForm.due_date || null)
+        : (scheduleForm.due_days === ''
+          ? null
+          : buildDueDateFromOffset(editingSchedule?.created_at || new Date(), scheduleForm.due_days));
+
+      if (!scheduleForm.isOneTime && scheduleForm.due_days !== '' && !normalizedDueDate) {
+        showMessage('error', 'Days until due must be a non-negative whole number.');
+        return;
+      }
+
       const payload = {
         chore_id: scheduleForm.chore_id,
         user_id: scheduleForm.user_id === '' ? null : scheduleForm.user_id,
@@ -278,7 +366,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
         duration: !scheduleForm.isOneTime ? scheduleForm.duration : 'day-of',
         interval: normalizedInterval,
         visible: scheduleForm.visible ? 1 : 0,
-        due_date: scheduleForm.due_date || null,
+        due_date: normalizedDueDate,
         due_time: scheduleForm.due_time || null,
         sound_enabled: scheduleForm.sound_enabled ? 1 : 0,
         sound: scheduleForm.sound_enabled ? (scheduleForm.sound || null) : null,
@@ -391,11 +479,17 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
     && scheduleForm.duration === 'once-completed'
     && !(Number.isInteger(Number.parseInt(scheduleForm.sleepCount, 10)) && Number.parseInt(scheduleForm.sleepCount, 10) > 0);
 
+  const parsedDueDays = Number.parseInt(scheduleForm.due_days, 10);
+  const hasInvalidDueDays = !scheduleForm.isOneTime
+    && scheduleForm.due_days !== ''
+    && (!Number.isInteger(parsedDueDays) || parsedDueDays < 0);
+
   const isScheduleSaveDisabled = savingSchedule
     || !scheduleForm.chore_id
     || (!scheduleForm.isOneTime && !!crontabError)
     || (!scheduleForm.isOneTime && scheduleForm.scheduleMode === 'custom' && !scheduleForm.customCrontab.trim())
-    || isOnceCompletedMissingInterval;
+    || isOnceCompletedMissingInterval
+    || hasInvalidDueDays;
 
   if (loading) {
     return (
@@ -938,16 +1032,41 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
 
             <Divider />
 
-            <TextField
-              label="Due date (optional)"
-              type="date"
-              size="small"
-              value={scheduleForm.due_date}
-              onChange={(e) => updateScheduleForm({ due_date: e.target.value })}
-              InputLabelProps={{ shrink: true }}
-              helperText="Calendar deadline (best for one-time tasks). The chore turns yellow when due, red when overdue."
-              sx={{ maxWidth: 260 }}
-            />
+            {scheduleForm.isOneTime ? (
+              <TextField
+                label="Due date (optional)"
+                type="date"
+                size="small"
+                value={scheduleForm.due_date}
+                onChange={(e) => updateScheduleForm({ due_date: e.target.value })}
+                slotProps={{
+                  inputLabel: { shrink: true },
+                  htmlInput: { placeholder: '' }
+                }}
+                helperText="Calendar deadline. The chore turns yellow when due, red when overdue."
+                sx={{
+                  maxWidth: 260,
+                  '& input[type="date"]:not(:focus):invalid::-webkit-datetime-edit': {
+                    color: 'transparent'
+                  }
+                }}
+              />
+            ) : (
+              <TextField
+                label="Days until chore is due"
+                type="number"
+                size="small"
+                value={scheduleForm.due_days}
+                onChange={(e) => {
+                  const nextValue = e.target.value.replace(/\D/g, '');
+                  updateScheduleForm({ due_days: nextValue });
+                }}
+                helperText="Leave blank for no due date. This sets a relative due-date offset for recurring chores."
+                error={hasInvalidDueDays}
+                slotProps={{ htmlInput: { min: 0, step: 1, inputMode: 'numeric', pattern: '[0-9]*' } }}
+                sx={{ maxWidth: 280 }}
+              />
+            )}
 
             <TextField
               label="Due time (optional)"
@@ -955,9 +1074,17 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
               size="small"
               value={scheduleForm.due_time}
               onChange={(e) => updateScheduleForm({ due_time: e.target.value })}
-              InputLabelProps={{ shrink: true }}
+              slotProps={{
+                inputLabel: { shrink: true },
+                htmlInput: { placeholder: '' }
+              }}
               helperText="Time of day this chore is due. Required to play a sound."
-              sx={{ maxWidth: 220 }}
+              sx={{
+                maxWidth: 220,
+                '& input[type="time"]:not(:focus):invalid::-webkit-datetime-edit': {
+                  color: 'transparent'
+                }
+              }}
             />
 
             <FormControlLabel
@@ -979,6 +1106,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                   onChange={(sound) => updateScheduleForm({ sound })}
                   includeNoneOption
                   noneLabel="Use default sound"
+                  hideEmptyDisplay
                   allowDelete
                 />
                 <TextField

@@ -25,6 +25,7 @@ const SoundPicker = ({
   allowDelete = false,
   includeNoneOption = false,
   noneLabel = 'Use default',
+  hideEmptyDisplay = false,
   size = 'small',
   disabled = false,
 }) => {
@@ -122,7 +123,14 @@ const SoundPicker = ({
           label={label}
           value={sounds.some((s) => s.filename === value) ? value : ''}
           onChange={(e) => onChange && onChange(e.target.value)}
-          displayEmpty={includeNoneOption}
+          displayEmpty={includeNoneOption || hideEmptyDisplay}
+          renderValue={(selected) => {
+            if (!selected) {
+              return hideEmptyDisplay ? '' : <em>{noneLabel}</em>;
+            }
+            const selectedOption = sounds.find((s) => s.filename === selected);
+            return selectedOption ? selectedOption.name : '';
+          }}
         >
           {includeNoneOption && (
             <MenuItem value="">

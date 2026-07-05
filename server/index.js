@@ -195,6 +195,66 @@ function parseDateOnlyToLocalDate(dateString) {
 
 const DUE_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
+function formatDateOnlyLocal(dateObj) {
+  return `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
+}
+
+function extractDateOnlyString(value) {
+  if (typeof value === 'string') {
+    const normalized = value.trim();
+    if (DUE_DATE_REGEX.test(normalized)) {
+      return normalized;
+    }
+    const match = normalized.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) {
+      return match[1];
+    }
+    return null;
+  }
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return formatDateOnlyLocal(value);
+  }
+
+  return null;
+}
+
+function calculateDateOffsetDays(startDateValue, endDateValue) {
+  const startDateOnly = extractDateOnlyString(startDateValue);
+  const endDateOnly = extractDateOnlyString(endDateValue);
+  if (!startDateOnly || !endDateOnly) {
+    return null;
+  }
+
+  const startDate = parseDateOnlyToLocalDate(startDateOnly);
+  const endDate = parseDateOnlyToLocalDate(endDateOnly);
+  if (!startDate || !endDate) {
+    return null;
+  }
+
+  return Math.round((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000));
+}
+
+function addDaysToDateOnly(baseDateValue, dayOffset) {
+  if (!Number.isInteger(dayOffset)) {
+    return null;
+  }
+
+  const baseDateOnly = extractDateOnlyString(baseDateValue);
+  if (!baseDateOnly) {
+    return null;
+  }
+
+  const baseDate = parseDateOnlyToLocalDate(baseDateOnly);
+  if (!baseDate) {
+    return null;
+  }
+
+  const resultDate = new Date(baseDate);
+  resultDate.setDate(resultDate.getDate() + dayOffset);
+  return formatDateOnlyLocal(resultDate);
+}
+
 // Returns { valid, value } where value is a normalized 'YYYY-MM-DD' string or null.
 // Rejects malformed strings and impossible calendar dates (e.g. 2026-02-30).
 function normalizeDueDate(dueDate) {
@@ -1079,7 +1139,8 @@ async function dailyBackgroundProcessing() {
 
     // Handle sticky schedules: create one-time children for until-completed and once-completed parents that trigger today.
     const stickyParentSchedules = db.prepare(`
-      SELECT cs.id, cs.chore_id, cs.user_id, cs.crontab, cs.duration, cs.interval
+      SELECT cs.id, cs.chore_id, cs.user_id, cs.crontab, cs.duration, cs.interval,
+             cs.created_at, cs.due_date, cs.due_time, cs.sound_enabled, cs.sound, cs.reminder_interval_minutes
       FROM chore_schedules cs
       WHERE cs.crontab IS NOT NULL
         AND cs.duration IN ('until-completed', 'once-completed')
@@ -1123,11 +1184,28 @@ async function dailyBackgroundProcessing() {
       }
 
       if (today === next) {
+        const dueDateOffset = calculateDateOffsetDays(schedule.created_at, schedule.due_date);
+        const childDueDate = dueDateOffset === null
+          ? (schedule.due_date || null)
+          : addDaysToDateOnly(today, dueDateOffset);
+
         const scheduleResult = db.prepare(`
-          INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, visible, parent_schedule_id)
-          VALUES (?, ?, NULL, 'day-of', 1, ?)
+          INSERT INTO chore_schedules (
+            chore_id, user_id, crontab, duration, visible, parent_schedule_id,
+            due_date, due_time, sound_enabled, sound, reminder_interval_minutes
+          )
+          VALUES (?, ?, NULL, 'day-of', 1, ?, ?, ?, ?, ?, ?)
           RETURNING *
-        `).get(schedule.chore_id, schedule.user_id, schedule.id);
+        `).get(
+          schedule.chore_id,
+          schedule.user_id,
+          schedule.id,
+          childDueDate,
+          schedule.due_time || null,
+          schedule.sound_enabled ? 1 : 0,
+          schedule.sound || null,
+          schedule.reminder_interval_minutes || null
+        );
 
         triggeredSchedules.push(scheduleResult);
         stickySchedulesCreated++;
