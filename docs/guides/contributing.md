@@ -36,6 +36,11 @@ CI runs the frontend and backend test suites on every push
   factory rather than writing raw `fetch` calls. This handles token lifecycle,
   Bearer auth, JSON parsing, and structured error objects. Add new Google
   integrations by instantiating a configured `googleFetch` from the factory.
+- **Endpoint guards & validation** follow a send-reply-then-`return null` convention:
+  helpers like `loadGooglePhotoSourceOr404(id, reply)` or `validatePrizeBody(body, reply)`
+  send the error response and return `null`, and the handler does `if (!x) return;`.
+  Prefer extracting/reusing one of these over re-inlining the same lookup-or-404 /
+  validate-or-400 guard in a new route.
 - Add **error handling** and keep touch/mouse parity for interactive UI.
 
 ## Testing

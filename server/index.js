@@ -92,6 +92,15 @@ const schemaMigrations = [
 const ALLOWED_SCHEDULE_DURATIONS = new Set(['day-of', 'until-completed', 'once-completed']);
 const SCHEDULE_INTERVAL_REGEX = /^([1-9]\d*)([dwmy])$/;
 
+// Fisher-Yates in-place shuffle. Mutates and returns the array.
+const shuffleInPlace = (array) => {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+};
+
 // GitHub API configuration
 const GITHUB_REPO_OWNER = 'jherforth';
 const GITHUB_REPO_NAME = 'HomeGlowPlugins';
@@ -207,6 +216,29 @@ function normalizeDueDate(dueDate) {
   }
   return { valid: true, value: normalized };
 }
+
+// Validates the shared schedule due_time / due_date / reminder fields. On the
+// first failure it sends a 400 and returns null; otherwise it returns the three
+// normalized results. Used by the create + bulk-create schedule handlers. The
+// PATCH handler keeps its own guards because it only validates provided fields.
+const validateScheduleDateFields = ({ due_time, due_date, reminder_interval_minutes }, reply) => {
+  const dueTimeResult = normalizeDueTime(due_time);
+  if (!dueTimeResult.valid) {
+    reply.status(400).send({ error: 'due_time must be in HH:MM 24-hour format' });
+    return null;
+  }
+  const dueDateResult = normalizeDueDate(due_date);
+  if (!dueDateResult.valid) {
+    reply.status(400).send({ error: 'due_date must be a valid YYYY-MM-DD date' });
+    return null;
+  }
+  const reminderResult = normalizeReminderInterval(reminder_interval_minutes);
+  if (!reminderResult.valid) {
+    reply.status(400).send({ error: 'reminder_interval_minutes must be a non-negative integer' });
+    return null;
+  }
+  return { dueTimeResult, dueDateResult, reminderResult };
+};
 
 function addMonthsCalendarAware(baseDate, monthCount) {
   const result = new Date(baseDate);
@@ -1595,18 +1627,9 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
       return reply.status(400).send({ error: 'chore_id is required' });
     }
 
-    const dueTimeResult = normalizeDueTime(due_time);
-    if (!dueTimeResult.valid) {
-      return reply.status(400).send({ error: 'due_time must be in HH:MM 24-hour format' });
-    }
-    const dueDateResult = normalizeDueDate(due_date);
-    if (!dueDateResult.valid) {
-      return reply.status(400).send({ error: 'due_date must be a valid YYYY-MM-DD date' });
-    }
-    const reminderResult = normalizeReminderInterval(reminder_interval_minutes);
-    if (!reminderResult.valid) {
-      return reply.status(400).send({ error: 'reminder_interval_minutes must be a non-negative integer' });
-    }
+    const dateFields = validateScheduleDateFields(request.body, reply);
+    if (!dateFields) return;
+    const { dueTimeResult, dueDateResult, reminderResult } = dateFields;
 
     const normalizedDuration = normalizeScheduleDuration(duration);
     if (!ALLOWED_SCHEDULE_DURATIONS.has(normalizedDuration)) {
@@ -1675,18 +1698,9 @@ fastify.post('/api/chore-schedules/bulk', async (request, reply) => {
       return reply.status(400).send({ error: 'chore_id and user_ids array are required' });
     }
 
-    const dueTimeResult = normalizeDueTime(due_time);
-    if (!dueTimeResult.valid) {
-      return reply.status(400).send({ error: 'due_time must be in HH:MM 24-hour format' });
-    }
-    const dueDateResult = normalizeDueDate(due_date);
-    if (!dueDateResult.valid) {
-      return reply.status(400).send({ error: 'due_date must be a valid YYYY-MM-DD date' });
-    }
-    const reminderResult = normalizeReminderInterval(reminder_interval_minutes);
-    if (!reminderResult.valid) {
-      return reply.status(400).send({ error: 'reminder_interval_minutes must be a non-negative integer' });
-    }
+    const dateFields = validateScheduleDateFields(request.body, reply);
+    if (!dateFields) return;
+    const { dueTimeResult, dueDateResult, reminderResult } = dateFields;
 
     if (crontab) {
       try {
@@ -2395,17 +2409,20 @@ function deserializeSettingValue(value) {
   }
 }
 
+// Convert an array of {key, value} settings rows into a single {key: value}
+// object, deserializing any JSON-encoded values.
+const rowsToSettingsObject = (rows) => rows.reduce((acc, row) => {
+  acc[row.key] = deserializeSettingValue(row.value);
+  return acc;
+}, {});
+
 // NEW: API Endpoints for Settings (including API keys)
 fastify.get('/api/settings', async (request, reply) => {
   try {
     console.log('=== FETCHING SETTINGS ===');
     const rows = db.prepare('SELECT key, value FROM settings').all();
     console.log('Raw settings from database:', rows);
-    // Convert array of {key, value} objects to a single object {key: value}
-    const settings = rows.reduce((acc, row) => {
-      acc[row.key] = deserializeSettingValue(row.value);
-      return acc;
-    }, {});
+    const settings = rowsToSettingsObject(rows);
     console.log('Processed settings object:', settings);
     return settings;
   } catch (error) {
@@ -2429,11 +2446,7 @@ fastify.post('/api/settings/search', async (request, reply) => {
     }
     const rows = db.prepare(query).all(...keys.map(key => key.replaceAll('*', '%')));
     console.log('Raw settings from database:', rows);
-    // Convert array of {key, value} objects to a single object {key: value}
-    const settings = rows.reduce((acc, row) => {
-      acc[row.key] = deserializeSettingValue(row.value);
-      return acc;
-    }, {});
+    const settings = rowsToSettingsObject(rows);
     console.log('Processed settings object:', settings);
     return settings;
   } catch (error) {
@@ -3334,16 +3347,28 @@ fastify.get('/api/connections/google/calendars', async (request, reply) => {
   }
 });
 
+// Loads a calendar source by id, asserting it's a writable Google source.
+// Sends a 404 (missing) or 400 (read-only, non-Google) and returns null on failure.
+const loadGoogleCalendarSource = (id, reply) => {
+  const source = db.prepare('SELECT * FROM calendar_sources WHERE id = ?').get(id);
+  if (!source) {
+    reply.status(404).send({ error: 'Calendar source not found' });
+    return null;
+  }
+  if (source.type !== 'Google') {
+    reply.status(400).send({ error: 'This calendar type is read-only.' });
+    return null;
+  }
+  return source;
+};
+
 fastify.post('/api/calendar-sources/:id/events', async (request, reply) => {
   try {
     const { id } = request.params;
-    const source = db.prepare('SELECT * FROM calendar_sources WHERE id = ?').get(id);
-    if (!source) return reply.status(404).send({ error: 'Calendar source not found' });
-    if (source.type !== 'Google') {
-      return reply.status(400).send({ error: 'This calendar type is read-only.' });
-    }
-    const account = googleConnection.getConnectedAccount(db);
-    if (!account) return reply.status(400).send({ error: 'No Google account connected.' });
+    const source = loadGoogleCalendarSource(id, reply);
+    if (!source) return;
+    const account = loadConnectedGoogleAccountOr400(reply);
+    if (!account) return;
 
     const created = await googleCalendar.createEvent(db, account.id, source.url, request.body || {});
     if (calendarSyncService) calendarSyncService.syncSource(source.id).catch(() => { });
@@ -3357,13 +3382,10 @@ fastify.post('/api/calendar-sources/:id/events', async (request, reply) => {
 fastify.patch('/api/calendar-sources/:id/events/:eventId', async (request, reply) => {
   try {
     const { id, eventId } = request.params;
-    const source = db.prepare('SELECT * FROM calendar_sources WHERE id = ?').get(id);
-    if (!source) return reply.status(404).send({ error: 'Calendar source not found' });
-    if (source.type !== 'Google') {
-      return reply.status(400).send({ error: 'This calendar type is read-only.' });
-    }
-    const account = googleConnection.getConnectedAccount(db);
-    if (!account) return reply.status(400).send({ error: 'No Google account connected.' });
+    const source = loadGoogleCalendarSource(id, reply);
+    if (!source) return;
+    const account = loadConnectedGoogleAccountOr400(reply);
+    if (!account) return;
 
     const updated = await googleCalendar.updateEvent(db, account.id, source.url, eventId, request.body || {});
     if (calendarSyncService) calendarSyncService.syncSource(source.id).catch(() => { });
@@ -3377,13 +3399,10 @@ fastify.patch('/api/calendar-sources/:id/events/:eventId', async (request, reply
 fastify.delete('/api/calendar-sources/:id/events/:eventId', async (request, reply) => {
   try {
     const { id, eventId } = request.params;
-    const source = db.prepare('SELECT * FROM calendar_sources WHERE id = ?').get(id);
-    if (!source) return reply.status(404).send({ error: 'Calendar source not found' });
-    if (source.type !== 'Google') {
-      return reply.status(400).send({ error: 'This calendar type is read-only.' });
-    }
-    const account = googleConnection.getConnectedAccount(db);
-    if (!account) return reply.status(400).send({ error: 'No Google account connected.' });
+    const source = loadGoogleCalendarSource(id, reply);
+    if (!source) return;
+    const account = loadConnectedGoogleAccountOr400(reply);
+    if (!account) return;
 
     await googleCalendar.deleteEvent(db, account.id, source.url, eventId);
     if (calendarSyncService) calendarSyncService.syncSource(source.id).catch(() => { });
@@ -3921,14 +3940,23 @@ fastify.get('/api/photo-proxy/:sourceId/:assetId', async (request, reply) => {
   }
 });
 
+// Loads a HomeGlow Photos source by id, asserting its type. On miss, sends a
+// 404 and returns null so the caller can `if (!source) return;`.
+const loadHomeGlowPhotoSourceOr404 = (sourceId, reply) => {
+  const source = db.prepare('SELECT id, type FROM photo_sources WHERE id = ?').get(sourceId);
+  if (!source || source.type !== 'HomeGlowPhotos') {
+    reply.status(404).send({ error: 'HomeGlow Photos source not found' });
+    return null;
+  }
+  return source;
+};
+
 // HomeGlow Photos - list uploaded photos for a source
 fastify.get('/api/photo-sources/:sourceId/uploaded', async (request, reply) => {
   const { sourceId } = request.params;
   try {
-    const source = db.prepare('SELECT id, type FROM photo_sources WHERE id = ?').get(sourceId);
-    if (!source || source.type !== 'HomeGlowPhotos') {
-      return reply.status(404).send({ error: 'HomeGlow Photos source not found' });
-    }
+    const source = loadHomeGlowPhotoSourceOr404(sourceId, reply);
+    if (!source) return;
     const rows = db.prepare(
       'SELECT id, filename, original_name, mime_type, size, uploaded_at FROM homeglow_photos WHERE source_id = ? ORDER BY uploaded_at DESC'
     ).all(sourceId);
@@ -3966,10 +3994,8 @@ fastify.get('/api/photo-sources/:sourceId/uploaded/:photoId/file', async (reques
 fastify.post('/api/photo-sources/:sourceId/uploaded', async (request, reply) => {
   const { sourceId } = request.params;
   try {
-    const source = db.prepare('SELECT id, type FROM photo_sources WHERE id = ?').get(sourceId);
-    if (!source || source.type !== 'HomeGlowPhotos') {
-      return reply.status(404).send({ error: 'HomeGlow Photos source not found' });
-    }
+    const source = loadHomeGlowPhotoSourceOr404(sourceId, reply);
+    if (!source) return;
     const uploadDir = path.join(__dirname, 'uploads', 'homeglow-photos', String(sourceId));
     await fs.mkdir(uploadDir, { recursive: true });
 
@@ -4272,10 +4298,7 @@ fastify.get('/api/photo-items', async (request, reply) => {
               assets.push(...(bucket.items || []));
               page = bucket.nextPage ? Number(bucket.nextPage) : null;
             }
-            for (let i = assets.length - 1; i > 0; i--) {
-              const j = Math.floor(Math.random() * (i + 1));
-              [assets[i], assets[j]] = [assets[j], assets[i]];
-            }
+            shuffleInPlace(assets);
             assets = assets.slice(0, 100);
           } else {
             const response = await axios.post(`${apiBase}/search/random`,
@@ -4310,10 +4333,7 @@ fastify.get('/api/photo-items', async (request, reply) => {
             source_name: source.name,
             source_type: 'GooglePhotos',
           }));
-          for (let i = photos.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [photos[i], photos[j]] = [photos[j], photos[i]];
-          }
+          shuffleInPlace(photos);
           return photos;
         } else if (source.type === 'HomeGlowPhotos') {
           const rows = db.prepare(
@@ -4328,10 +4348,7 @@ fastify.get('/api/photo-items', async (request, reply) => {
             source_name: source.name,
             source_type: 'HomeGlowPhotos',
           }));
-          for (let i = photos.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [photos[i], photos[j]] = [photos[j], photos[i]];
-          }
+          shuffleInPlace(photos);
           return photos;
         }
       } catch (error) {
@@ -4347,10 +4364,7 @@ fastify.get('/api/photo-items', async (request, reply) => {
     const results = await Promise.all(fetchPromises);
     const allPhotos = results.flat();
 
-    for (let i = allPhotos.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [allPhotos[i], allPhotos[j]] = [allPhotos[j], allPhotos[i]];
-    }
+    shuffleInPlace(allPhotos);
 
     return allPhotos;
   } catch (error) {
