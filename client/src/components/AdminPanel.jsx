@@ -60,7 +60,8 @@ import {
   Tab as TabIcon,
   DragIndicator,
   PhotoLibrary,
-  Info
+  Info,
+  OpenInNew
 } from '@mui/icons-material';
 import ColorPickerPopover from './ColorPickerPopover';
 import axios from 'axios';
@@ -1916,10 +1917,33 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                         onClick={fetchGithubWidgets}
                         startIcon={loadingGithub ? <CircularProgress size={16} /> : <Refresh />}
                         disabled={loadingGithub}
+                        variant="contained"
+                        color="primary"
                       >
-                        Refresh
+                        Refresh to Show Available Plugins
                       </Button>
                     </Box>
+
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        Browse and contribute plugins at{' '}
+                        <a
+                          href="https://github.com/jherforth/HomeGlowPlugins"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: 'inherit', textDecoration: 'underline' }}
+                        >
+                          github.com/jherforth/HomeGlowPlugins
+                          <OpenInNew sx={{ fontSize: '0.875rem', ml: 0.25, verticalAlign: 'middle' }} />
+                        </a>
+                      </Typography>
+                    </Box>
+
+                    {githubWidgets.length === 0 && !loadingGithub && (
+                      <Alert severity="info" sx={{ mb: 2 }} icon={<Refresh />}>
+                        Click the <strong>"Refresh to Show Available Plugins"</strong> button above to load the list of plugins available for installation.
+                      </Alert>
+                    )}
 
                     <List sx={{ maxHeight: 400, overflowY: 'auto' }}>
                       {githubWidgets.map((widget) => (
