@@ -1920,28 +1920,26 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                         variant="contained"
                         color="primary"
                       >
-                        Refresh to Show Available Plugins
+                        REFRESH AVAILABLE PLUGINS
                       </Button>
                     </Box>
 
-                    <Box sx={{ mb: 2 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Browse and contribute plugins at{' '}
-                        <a
-                          href="https://github.com/jherforth/HomeGlowPlugins"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{ color: 'inherit', textDecoration: 'underline' }}
-                        >
-                          github.com/jherforth/HomeGlowPlugins
-                          <OpenInNew sx={{ fontSize: '0.875rem', ml: 0.25, verticalAlign: 'middle' }} />
-                        </a>
-                      </Typography>
-                    </Box>
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                      Browse and contribute plugins at{' '}
+                      <a
+                        href="https://github.com/jherforth/HomeGlowPlugins"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ fontWeight: 'bold' }}
+                      >
+                        github.com/jherforth/HomeGlowPlugins
+                        <OpenInNew sx={{ fontSize: '0.875rem', ml: 0.25, verticalAlign: 'middle' }} />
+                      </a>
+                    </Alert>
 
                     {githubWidgets.length === 0 && !loadingGithub && (
                       <Alert severity="info" sx={{ mb: 2 }} icon={<Refresh />}>
-                        Click the <strong>"Refresh to Show Available Plugins"</strong> button above to load the list of plugins available for installation.
+                        Click the <strong>"REFRESH AVAILABLE PLUGINS"</strong> button above to load the list of plugins available for installation.
                       </Alert>
                     )}
 
