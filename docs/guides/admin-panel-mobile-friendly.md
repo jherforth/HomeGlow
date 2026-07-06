@@ -4,6 +4,8 @@
 > `utils/responsiveTable.js`) and all three patterns below are wired up across the
 > Admin Panel, its embedded tabs, and the shared modals. The primitives are the
 > app-wide groundwork: any future mobile work (Phase 2) should reuse them.
+> Phase 2 — the whole-app mobile experience — is designed in
+> [Mobile Experience (Phase 2)](../architecture/mobile-experience.md) (issue #118).
 
 ## Motivation
 
