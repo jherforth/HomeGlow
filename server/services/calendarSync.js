@@ -4,6 +4,7 @@ const node_ical = require('node-ical');
 const googleConnection = require('./googleConnection');
 const googleCalendar = require('./googleCalendar');
 const appleCalDAV = require('./appleCalDAV');
+const { dedupeCalendarEvents } = require('../utils/calendarDedup');
 
 class CalendarSyncService {
   constructor(db, decryptPassword) {
@@ -286,7 +287,7 @@ class CalendarSyncService {
 
     const rows = this.db.prepare(query).all(...params);
 
-    return rows.map(row => {
+    const events = rows.map(row => {
       const source = sourceMap.get(row.source_id);
       return {
         id: row.event_uid,
@@ -301,6 +302,22 @@ class CalendarSyncService {
         source_color: source?.color || '#6e44ff'
       };
     });
+
+    // Opt-in: merge the same event synced from multiple calendars (off by
+    // default so no events silently disappear for existing installs).
+    if (this.isDedupEnabled()) {
+      return dedupeCalendarEvents(events);
+    }
+    return events;
+  }
+
+  isDedupEnabled() {
+    try {
+      const row = this.db.prepare("SELECT value FROM settings WHERE key = 'CALENDAR_DEDUP_ENABLED'").get();
+      return row?.value === 'true';
+    } catch {
+      return false;
+    }
   }
 
   getSyncStatus(sourceId) {

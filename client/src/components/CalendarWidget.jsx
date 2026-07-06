@@ -187,6 +187,7 @@ const CalendarWidget = ({
   const [calendarSettingsLoaded, setCalendarSettingsLoaded] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState({ background: false, text: false });
   const [calendarSources, setCalendarSources] = useState([]);
+  const [dedupEnabled, setDedupEnabled] = useState(false);
   const [showCalendarDialog, setShowCalendarDialog] = useState(false);
   const [editingCalendar, setEditingCalendar] = useState(null);
   const [calendarForm, setCalendarForm] = useState({
@@ -237,6 +238,7 @@ const CalendarWidget = ({
     fetchCalendarSources();
     fetchCalendarEvents();
     fetchSyncStatus();
+    fetchDedupSetting();
   }, []);
 
   // Auto-refresh functionality
@@ -400,6 +402,30 @@ const CalendarWidget = ({
       setCalendarSources(response.data);
     } catch (error) {
       console.error('Error fetching calendar sources:', error);
+    }
+  };
+
+  const fetchDedupSetting = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/settings`);
+      setDedupEnabled(response.data?.CALENDAR_DEDUP_ENABLED === 'true');
+    } catch (error) {
+      console.error('Error fetching dedup setting:', error);
+    }
+  };
+
+  const handleToggleDedup = async (event) => {
+    const enabled = event.target.checked;
+    setDedupEnabled(enabled);
+    try {
+      await axios.post(`${API_BASE_URL}/api/settings`, {
+        key: 'CALENDAR_DEDUP_ENABLED',
+        value: enabled ? 'true' : 'false',
+      });
+      await fetchCalendarEvents();
+    } catch (error) {
+      console.error('Error saving dedup setting:', error);
+      setDedupEnabled(!enabled); // revert on failure
     }
   };
 
@@ -1962,6 +1988,17 @@ const CalendarWidget = ({
               </Button>
             )}
           </Box>
+
+          <Divider sx={{ my: 2 }} />
+
+          <FormControlLabel
+            control={<Switch checked={dedupEnabled} onChange={handleToggleDedup} />}
+            label="Merge duplicate events across calendars"
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+            When the same event appears on more than one calendar (even with slightly
+            different titles), show it only once.
+          </Typography>
 
           <Divider sx={{ my: 2 }} />
 
