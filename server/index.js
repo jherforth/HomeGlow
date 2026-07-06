@@ -2,6 +2,22 @@
 require('dotenv').config();
 
 const APP_TIMEZONE = process.env.TZ || 'America/New_York';
+
+// Demo mode: a single opt-in flag for running a public, throwaway demo
+// instance. It uses an in-memory database (wiped on container stop), disables
+// the admin PIN, seeds sample data (re-seeded every DEMO_RESET_HOURS), and
+// blocks routes that a public visitor could abuse (uploads, outbound fetch
+// proxies, OAuth credential storage). Never enabled unless DEMO_MODE=true.
+const DEMO_MODE = process.env.DEMO_MODE === 'true';
+const DEMO_RESET_HOURS = 6;
+
+// Guard for routes disabled in demo mode. Sends a 403 and returns true when
+// the request should stop (send-reply-then-return convention).
+const demoBlocked = (reply) => {
+  if (!DEMO_MODE) return false;
+  reply.status(403).send({ error: 'This feature is disabled in demo mode.' });
+  return true;
+};
 process.env.TZ = APP_TIMEZONE;
 
 const fastify = require('fastify')({ logger: true });
@@ -661,6 +677,7 @@ async function saveWidgetRegistry(registry) {
 
 // Endpoint: Upload a widget (HTML file)
 fastify.post('/api/widgets/upload', async (request, reply) => {
+  if (demoBlocked(reply)) return;
   try {
     const data = await request.file();
     if (!data || !data.filename.endsWith('.html')) {
@@ -703,6 +720,7 @@ fastify.get('/api/widgets', async (request, reply) => {
 
 // Endpoint: Delete a widget
 fastify.delete('/api/widgets/:filename', async (request, reply) => {
+  if (demoBlocked(reply)) return;
   const { filename } = request.params;
   try {
     const filePath = path.join(__dirname, 'widgets', filename);
@@ -745,6 +763,7 @@ fastify.get('/api/sounds', async (request, reply) => {
 
 // Endpoint: Upload a custom sound
 fastify.post('/api/sounds/upload', async (request, reply) => {
+  if (demoBlocked(reply)) return;
   try {
     const data = await request.file();
     if (!data) {
@@ -775,6 +794,7 @@ fastify.post('/api/sounds/upload', async (request, reply) => {
 
 // Endpoint: Delete an uploaded sound (bundled defaults are protected)
 fastify.delete('/api/sounds/:filename', async (request, reply) => {
+  if (demoBlocked(reply)) return;
   const { filename } = request.params;
   try {
     if (getDefaultSoundFilenames().has(filename)) {
@@ -920,6 +940,7 @@ fastify.get('/api/widgets/github', async (request, reply) => {
 
 // Endpoint: Install a widget from GitHub repository
 fastify.post('/api/widgets/github/install', async (request, reply) => {
+  if (demoBlocked(reply)) return;
   try {
     const { download_url, filename, name } = request.body;
 
@@ -982,17 +1003,22 @@ fastify.post('/api/widgets/github/install', async (request, reply) => {
   }
 });
 
-// Initialize database
-const dbPath = process.env.DB_PATH
-  ? path.resolve(process.env.DB_PATH)
-  : path.resolve(__dirname, 'data', 'tasks.db');
+// Initialize database. Demo mode uses an in-memory database so all data is
+// discarded when the container stops.
+const dbPath = DEMO_MODE
+  ? ':memory:'
+  : (process.env.DB_PATH
+    ? path.resolve(process.env.DB_PATH)
+    : path.resolve(__dirname, 'data', 'tasks.db'));
 console.log('Database path:', dbPath);
 let db; // Declare db variable outside to hold the single instance
 
 async function ConnectOrCreateDb() {
   try {
-    await fs.mkdir(path.dirname(dbPath), { recursive: true });
-    await fs.chmod(path.dirname(dbPath), 0o777);
+    if (dbPath !== ':memory:') {
+      await fs.mkdir(path.dirname(dbPath), { recursive: true });
+      await fs.chmod(path.dirname(dbPath), 0o777);
+    }
 
     const newDb = new Database(dbPath, { verbose: console.log });
     newDb.pragma('foreign_keys = ON');
@@ -2342,6 +2368,7 @@ fastify.patch('/api/users/:id', async (request, reply) => {
 
 // NEW: Endpoint to upload user profile picture
 fastify.post('/api/users/:id/upload-picture', async (request, reply) => {
+  if (demoBlocked(reply)) return;
   try {
     const { id } = request.params;
     console.log(`Upload picture request for user ${id}`);
@@ -2467,6 +2494,11 @@ fastify.get('/api/calendar/ics', async (request, reply) => {
 
 fastify.get('/api/timezone', async (request, reply) => {
   return reply.send({ timezone: APP_TIMEZONE });
+});
+
+// Demo-mode status for the client (banner, first-run seeding, PIN skip).
+fastify.get('/api/demo', async () => {
+  return { demo: DEMO_MODE, resetHours: DEMO_MODE ? DEMO_RESET_HOURS : null };
 });
 
 function deserializeSettingValue(value) {
@@ -3080,6 +3112,7 @@ fastify.post('/api/test-api-key', async (request, reply) => {
 
 // NEW: Generic CORS Proxy Endpoint
 fastify.get('/api/proxy', async (request, reply) => {
+  if (demoBlocked(reply)) return;
   console.log('=== PROXY REQUEST RECEIVED ===');
   console.log('Query params:', request.query);
   console.log('Headers:', request.headers);
@@ -3322,6 +3355,7 @@ fastify.get('/api/connections/google/status', async (request, reply) => {
 });
 
 fastify.post('/api/connections/google/config', async (request, reply) => {
+  if (demoBlocked(reply)) return;
   try {
     if (!isEncryptionConfigured()) {
       return reply.status(400).send({ error: 'ENCRYPTION_KEY is not configured on the server.' });
@@ -3340,6 +3374,7 @@ fastify.post('/api/connections/google/config', async (request, reply) => {
 });
 
 fastify.get('/api/connections/google/authorize', async (request, reply) => {
+  if (demoBlocked(reply)) return;
   try {
     if (!isEncryptionConfigured()) {
       return reply.status(400).send({ error: 'ENCRYPTION_KEY is not configured on the server.' });
@@ -3360,6 +3395,7 @@ fastify.get('/api/connections/google/authorize', async (request, reply) => {
 });
 
 fastify.get('/api/connections/google/callback', async (request, reply) => {
+  if (demoBlocked(reply)) return;
   const { code, state, error: oauthError } = request.query || {};
   const renderPage = (title, message, ok) => {
     reply.header('Content-Type', 'text/html; charset=utf-8');
@@ -3492,6 +3528,7 @@ fastify.delete('/api/calendar-sources/:id/events/:eventId', async (request, repl
 });
 
 fastify.delete('/api/connections/google/account', async (request, reply) => {
+  if (demoBlocked(reply)) return;
   try {
     const account = googleConnection.getConnectedAccount(db);
     if (!account) {
@@ -3507,6 +3544,7 @@ fastify.delete('/api/connections/google/account', async (request, reply) => {
 
 // Apple Calendar (iCloud CalDAV) connection routes
 fastify.post('/api/connections/apple/calendars', async (request, reply) => {
+  if (demoBlocked(reply)) return;
   try {
     const { appleId, appPassword } = request.body || {};
     if (!appleId || !appPassword) {
@@ -3645,6 +3683,7 @@ fastify.delete('/api/calendar-sources/:id', async (request, reply) => {
 });
 
 fastify.post('/api/calendar-sources/:id/test', async (request, reply) => {
+  if (demoBlocked(reply)) return;
   const { id } = request.params;
   try {
     const source = db.prepare('SELECT * FROM calendar_sources WHERE id = ?').get(id);
@@ -3730,6 +3769,7 @@ fastify.get('/api/calendar-sync/status/:sourceId', async (request, reply) => {
 
 // Trigger manual sync for a specific source
 fastify.post('/api/calendar-sync/:sourceId', async (request, reply) => {
+  if (demoBlocked(reply)) return;
   try {
     const { sourceId } = request.params;
     if (!calendarSyncService) {
@@ -3745,6 +3785,7 @@ fastify.post('/api/calendar-sync/:sourceId', async (request, reply) => {
 
 // Trigger manual sync for all sources
 fastify.post('/api/calendar-sync/all', async (request, reply) => {
+  if (demoBlocked(reply)) return;
   try {
     if (!calendarSyncService) {
       return reply.status(503).send({ error: 'Calendar sync service not initialized' });
@@ -3759,6 +3800,7 @@ fastify.post('/api/calendar-sync/all', async (request, reply) => {
 
 // Set sync interval for a specific source
 fastify.patch('/api/calendar-sync/:sourceId/interval', async (request, reply) => {
+  if (demoBlocked(reply)) return;
   try {
     const { sourceId } = request.params;
     const { interval_minutes } = request.body;
@@ -4070,6 +4112,7 @@ fastify.get('/api/photo-sources/:sourceId/uploaded/:photoId/file', async (reques
 
 // HomeGlow Photos - upload one or more photos (multipart)
 fastify.post('/api/photo-sources/:sourceId/uploaded', async (request, reply) => {
+  if (demoBlocked(reply)) return;
   const { sourceId } = request.params;
   try {
     const source = loadHomeGlowPhotoSourceOr404(sourceId, reply);
@@ -4454,6 +4497,12 @@ fastify.get('/api/photo-items', async (request, reply) => {
 // Admin PIN routes
 fastify.get('/api/admin-pin/exists', async (request, reply) => {
   try {
+    // Demo mode: report no PIN so the Admin Panel opens without prompting;
+    // the set/verify/delete routes below are blocked so a visitor can't
+    // lock others out by creating one.
+    if (DEMO_MODE) {
+      return { exists: false, demo: true };
+    }
     const pin = db.prepare('SELECT id FROM admin_pin WHERE id = 1').get();
     return { exists: !!pin };
   } catch (error) {
@@ -4463,6 +4512,7 @@ fastify.get('/api/admin-pin/exists', async (request, reply) => {
 });
 
 fastify.post('/api/admin-pin/set', async (request, reply) => {
+  if (demoBlocked(reply)) return;
   const { pin } = request.body;
 
   if (!pin || typeof pin !== 'string') {
@@ -4497,6 +4547,7 @@ fastify.post('/api/admin-pin/set', async (request, reply) => {
 });
 
 fastify.delete('/api/admin-pin', async (request, reply) => {
+  if (demoBlocked(reply)) return;
   try {
     db.prepare('DELETE FROM admin_pin WHERE id = 1').run();
     return { success: true, message: 'PIN cleared successfully' };
@@ -4507,6 +4558,7 @@ fastify.delete('/api/admin-pin', async (request, reply) => {
 });
 
 fastify.post('/api/admin-pin/verify', async (request, reply) => {
+  if (demoBlocked(reply)) return;
   const { pin } = request.body;
 
   if (!pin || typeof pin !== 'string') {
@@ -4553,6 +4605,19 @@ const start = async () => {
     const currentSchemaId = getCurrentSchemaVersion();
     await applySchemaMigrations(currentSchemaId);
 
+    if (DEMO_MODE) {
+      const { resetDemoData } = require('./utils/demoSeed');
+      console.log(`DEMO MODE enabled: in-memory database, PIN disabled, sample data resets every ${DEMO_RESET_HOURS}h`);
+      resetDemoData(db);
+      setInterval(() => {
+        try {
+          resetDemoData(db);
+        } catch (err) {
+          console.error('Demo reset failed:', err);
+        }
+      }, DEMO_RESET_HOURS * 60 * 60 * 1000).unref();
+    }
+
     if (process.env.HOMEGLOW_DISABLE_BACKGROUND_JOBS !== '1') {
       startNightlyCronJob(); // Start the nightly chore pruning job
     } else {
@@ -4568,8 +4633,14 @@ const start = async () => {
     // Seed bundled default chore notification sounds into the persisted uploads volume
     await seedDefaultSounds();
 
-    // Initialize calendar sync service
-    if (process.env.HOMEGLOW_DISABLE_CALENDAR_SYNC !== '1') {
+    // Initialize calendar sync service. Demo mode constructs it (so cached
+    // demo events are readable) but never initializes the sync jobs, and the
+    // manual-sync routes are demo-blocked — visitor-entered calendar URLs are
+    // never fetched (SSRF guard).
+    if (DEMO_MODE) {
+      calendarSyncService = new CalendarSyncService(db, decryptPassword);
+      console.log('Calendar sync jobs disabled in demo mode (cached events only)');
+    } else if (process.env.HOMEGLOW_DISABLE_CALENDAR_SYNC !== '1') {
       calendarSyncService = new CalendarSyncService(db, decryptPassword);
       calendarSyncService.initialize();
       console.log('Calendar sync service started');

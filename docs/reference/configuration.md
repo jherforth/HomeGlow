@@ -16,6 +16,7 @@ database). This page covers both.
 | `NODE_ENV` | — | `production` / `development`. |
 | `HOMEGLOW_DISABLE_BACKGROUND_JOBS` | `0` | Set to `1` to disable the nightly chore-pruning cron (useful in tests). |
 | `HOMEGLOW_DISABLE_CALENDAR_SYNC` | `0` | Set to `1` to disable the calendar sync service. |
+| `DEMO_MODE` | `false` | Set to `true` to run a **public demo instance**: in-memory DB (wiped on stop), admin PIN disabled, sample data seeded and reset every 6h, and abuse-prone routes (uploads, CORS proxy, OAuth, outbound calendar fetches) return 403. See [Deployment → Demo mode](../guides/deployment.md#running-a-public-demo-instance-demo-mode). |
 | `BACKEND_VERSION` / `BACKEND_GIT_COMMIT` / `BACKEND_GITHUB_REPOSITORY` | build metadata | Surfaced by `GET /api/stats`; set by CI. |
 
 If `ENCRYPTION_KEY` is missing or invalid, the server logs a warning at startup and

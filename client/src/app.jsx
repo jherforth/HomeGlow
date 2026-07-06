@@ -161,6 +161,7 @@ const App = () => {
   const [deviceSettingsLoaded, setDeviceSettingsLoaded] = useState(false);
   const [isFirstRunClient, setIsFirstRunClient] = useState(false);
   const [choreSoundDeviceEnabled, setChoreSoundDeviceEnabled] = useState(true);
+  const [demoStatus, setDemoStatus] = useState({ demo: false, resetHours: null });
 
   const fetchInstalledPlugins = async () => {
     try {
@@ -314,8 +315,18 @@ const App = () => {
       }
     };
 
+    const fetchDemoStatus = async () => {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/api/demo`);
+        if (response.data?.demo) setDemoStatus(response.data);
+      } catch {
+        // Older servers have no /api/demo; treat as non-demo.
+      }
+    };
+
     const initialize = async () => {
       await migrateLocalDeviceSettingsToServer();
+      await fetchDemoStatus();
       await fetchDeviceSettings();
       await Promise.all([
         fetchTabs(),
@@ -328,6 +339,39 @@ const App = () => {
     void initialize();
   }, [fetchDeviceSettings, migrateLocalDeviceSettingsToServer]);
   // endRegion #98
+
+  // Demo mode: each visitor's browser is a fresh "device", which normally
+  // lands on the empty first-run welcome screen. Seed this device with the
+  // chore + calendar widgets on the Home tab so the demo is instantly alive.
+  useEffect(() => {
+    if (!demoStatus.demo || !isFirstRunClient || !deviceSettingsLoaded) return;
+
+    const seedDemoDevice = async () => {
+      try {
+        await axios.patch(`${API_DEVICE_URL}/settings`, {
+          widgetSettings: {
+            chores: { enabled: true },
+            calendar: { enabled: true },
+            photos: { enabled: false },
+            weather: { enabled: false },
+          },
+        });
+        for (const widgetName of ['chores', 'calendar']) {
+          await axios.post(`${API_DEVICE_URL}/widget-assignments`, {
+            widget_name: widgetName,
+            tabNumber: 1,
+          });
+        }
+        await fetchDeviceSettings();
+        await fetchTabs();
+        await fetchWidgetAssignments();
+      } catch (error) {
+        console.error('Error seeding demo device:', error);
+      }
+    };
+
+    void seedDemoDevice();
+  }, [demoStatus.demo, isFirstRunClient, deviceSettingsLoaded]);
 
   const fetchWidgetAssignments = async () => {
     try {
@@ -832,6 +876,28 @@ const App = () => {
   return (
     <>
       <Box sx={{ width: '100%', minHeight: '100vh', position: 'relative', pb: '80px' }}>
+        {demoStatus.demo && (
+          <Box
+            sx={{
+              position: 'fixed',
+              top: 8,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 1200,
+              px: 2,
+              py: 0.5,
+              borderRadius: '16px',
+              backgroundColor: 'var(--accent)',
+              color: '#fff',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+              pointerEvents: 'none',
+            }}
+          >
+            Demo Mode — sample data resets every {demoStatus.resetHours || 6} hours
+          </Box>
+        )}
         {widgets.length > 0 && (
           <WidgetContainer
             widgets={widgets}

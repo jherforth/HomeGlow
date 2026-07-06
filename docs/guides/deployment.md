@@ -41,6 +41,32 @@ docker compose up -d
 docker compose pull && docker compose up -d
 ```
 
+## Running a public demo instance (demo mode)
+
+Set `DEMO_MODE=true` in the `.env` (or environment) of the backend container to
+turn an install into a throwaway public demo:
+
+```env
+DEMO_MODE=true
+```
+
+What it changes:
+
+- **In-memory database** — all data lives in RAM and is wiped when the
+  container stops; `DB_PATH` is ignored.
+- **Admin PIN disabled** — the Admin Panel opens without a prompt, and the
+  PIN set/verify/delete routes return 403 so a visitor can't lock others out.
+- **Sample data** — a demo household (users, chores, schedules, clam history,
+  prizes, a week of calendar events) is seeded at boot and re-seeded every
+  6 hours; new visitor devices auto-enable the chore + calendar widgets.
+- **Abuse-prone routes return 403** — all uploads (widgets/sounds/avatars/
+  photos), widget install/delete, the `/api/proxy` CORS proxy, Google/Apple
+  connection setup, and calendar test/sync triggers (visitor-supplied URLs
+  are never fetched — the calendar sync service stays off).
+- A "Demo Mode" banner is shown in the client.
+
+Normal installs are unaffected: `DEMO_MODE` defaults to `false` everywhere.
+
 ## Building from source
 
 ```bash
