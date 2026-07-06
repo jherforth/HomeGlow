@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Typography, Box, IconButton, Popover, Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Switch, FormControlLabel, Select, MenuItem, FormControl, InputLabel, List, ListItem, ListItemText, ListItemSecondaryAction, CircularProgress, Alert, Chip } from '@mui/material';
 import { Settings, Add, Delete, Edit, Refresh, ChevronLeft, ChevronRight, PlayArrow, Pause, CloudUpload } from '@mui/icons-material';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 
-const PhotoWidget = ({ refreshInterval = 0 }) => {
+const PhotoWidget = ({ refreshNonce = 0, isActive = true }) => {
   const [photos, setPhotos] = useState([]);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -71,33 +71,26 @@ const PhotoWidget = ({ refreshInterval = 0 }) => {
     }
   };
 
-  // Auto-refresh functionality
+  // Auto/manual refresh: WidgetContainer's countdown ring owns the schedule
+  // and bumps refreshNonce; refetch in place instead of remounting.
+  const lastRefreshNonceRef = useRef(refreshNonce);
   useEffect(() => {
-    if (refreshInterval > 0) {
-      console.log(`PhotoWidget: Auto-refresh enabled (${refreshInterval}ms)`);
+    if (refreshNonce === lastRefreshNonceRef.current) return;
+    lastRefreshNonceRef.current = refreshNonce;
+    fetchPhotos();
+  }, [refreshNonce]);
 
-      const intervalId = setInterval(() => {
-        console.log('PhotoWidget: Auto-refreshing data...');
-        fetchPhotos();
-      }, refreshInterval);
-
-      return () => {
-        console.log('PhotoWidget: Clearing auto-refresh interval');
-        clearInterval(intervalId);
-      };
-    }
-  }, [refreshInterval]);
-
-  // Slideshow timer
+  // Slideshow timer — paused while nobody can see the widget (hidden tab or
+  // photos-mode screensaver covering the dashboard).
   useEffect(() => {
-    if (!isPlaying || photos.length <= photosPerView) return;
+    if (!isActive || !isPlaying || photos.length <= photosPerView) return;
 
     const timer = setInterval(() => {
       setCurrentPhotoIndex((prev) => (prev + photosPerView) % photos.length);
     }, slideshowInterval);
 
     return () => clearInterval(timer);
-  }, [isPlaying, photos.length, slideshowInterval, currentPhotoIndex, photosPerView]);
+  }, [isActive, isPlaying, photos.length, slideshowInterval, currentPhotoIndex, photosPerView]);
 
   const fetchPhotoSources = async () => {
     try {

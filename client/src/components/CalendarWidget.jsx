@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, Typography, Box, List, ListItem, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, Button, IconButton, Popover, ToggleButton, ToggleButtonGroup, TextField, Switch, FormControlLabel, Select, MenuItem, FormControl, InputLabel, Chip, Divider, CircularProgress, Alert, Tooltip } from '@mui/material';
 import { Settings, ViewModule, ViewWeek, ChevronLeft, ChevronRight, Add, Delete, Edit, Refresh, Remove, Sync, Schedule } from '@mui/icons-material';
 import { Calendar, momentLocalizer } from 'react-big-calendar';
@@ -166,7 +166,7 @@ const readCalendarTabSpecificSettingsFromTabConfig = (configJson) => {
 };
 
 const CalendarWidget = ({
-  refreshInterval = 0,
+  refreshNonce = 0,
   activeTab = 1,
   activeTabConfigJson = null,
 }) => {
@@ -241,23 +241,15 @@ const CalendarWidget = ({
     fetchDedupSetting();
   }, []);
 
-  // Auto-refresh functionality
+  // Auto/manual refresh: WidgetContainer's countdown ring owns the schedule
+  // and bumps refreshNonce; refetch in place instead of remounting.
+  const lastRefreshNonceRef = useRef(refreshNonce);
   useEffect(() => {
-    if (refreshInterval > 0) {
-      console.log(`CalendarWidget: Auto-refresh enabled (${refreshInterval}ms)`);
-
-      const intervalId = setInterval(() => {
-        console.log('CalendarWidget: Auto-refreshing data...');
-        fetchCalendarSources();
-        fetchCalendarEvents();
-      }, refreshInterval);
-
-      return () => {
-        console.log('CalendarWidget: Clearing auto-refresh interval');
-        clearInterval(intervalId);
-      };
-    }
-  }, [refreshInterval]);
+    if (refreshNonce === lastRefreshNonceRef.current) return;
+    lastRefreshNonceRef.current = refreshNonce;
+    fetchCalendarSources();
+    fetchCalendarEvents();
+  }, [refreshNonce]);
 
   useEffect(() => {
     const loadCalendarWidgetSettings = async () => {

@@ -3,8 +3,10 @@ import { Box, IconButton, Typography } from '@mui/material';
 import { Close, ChevronLeft, ChevronRight } from '@mui/icons-material';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
+import { usePageVisibility } from '../hooks/useScreenActivity.js';
 
 const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange }) => {
+  const pageVisible = usePageVisibility();
   const [photos, setPhotos] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -35,8 +37,11 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange }) => 
     }
   };
 
+  // Advance timer — frozen while the page is hidden so a backgrounded kiosk
+  // doesn't keep cycling photos, or worse, cycling tabs (each tab switch
+  // mounts that tab's widgets and triggers their fetches).
   useEffect(() => {
-    if (loading) return;
+    if (loading || !pageVisible) return;
 
     const interval = setInterval(() => {
       if (mode === 'photos' && photos.length > 0) {
@@ -53,7 +58,7 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange }) => 
     }, slideshowInterval * 1000);
 
     return () => clearInterval(interval);
-  }, [mode, photos.length, tabs, slideshowInterval, loading, onTabChange]);
+  }, [mode, photos.length, tabs, slideshowInterval, loading, onTabChange, pageVisible]);
 
   useEffect(() => {
     if ('wakeLock' in navigator) {

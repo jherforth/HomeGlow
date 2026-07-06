@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import useDataRefresh from '../hooks/useDataRefresh.js';
 import {
   Typography,
   Box,
@@ -50,6 +51,7 @@ const WeatherWidget = ({
   allTabConfigs = [],
   prefetchOnly = false,
   refreshNonce = 0,
+  isActive = true,
 }) => {
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [weatherData, setWeatherData] = useState(null);
@@ -546,107 +548,93 @@ const WeatherWidget = ({
     }
   }, [locationQuery, weatherApiKey, tempUnit, settingsLoaded, shouldFetchNow]);
 
-  useEffect(() => {
-    if (!settingsLoaded || !weatherApiKey) {
+  const collectTargets = () => {
+    const targetsByKey = new Map();
+
+    const activeSettings = getEffectiveWeatherSettingsForTab(activeTab, activeTabConfigJson);
+    const includeActiveTarget = !!activeSettings?.locationQuery || !prefetchOnly;
+
+    if (includeActiveTarget && locationQuery) {
+      const currentKey = buildWeatherCacheKey(locationQuery, tempUnit);
+      targetsByKey.set(currentKey, {
+        tabNumber: Number(activeTab),
+        locationQuery,
+        tempUnit,
+        layoutMode: layoutMode || 'auto',
+        coordinates: isValidCoordinates(coordinates) ? coordinates : null,
+      });
+    }
+
+    const tabsList = Array.isArray(allTabConfigs) ? allTabConfigs : [];
+    for (const tab of tabsList) {
+      const weatherSettings = getEffectiveWeatherSettingsForTab(tab?.number, tab?.config_json || null);
+      if (!weatherSettings?.locationQuery) {
+        continue;
+      }
+      const key = buildWeatherCacheKey(weatherSettings.locationQuery, weatherSettings.tempUnit);
+      targetsByKey.set(key, {
+        tabNumber: Number(tab.number),
+        locationQuery: weatherSettings.locationQuery,
+        tempUnit: weatherSettings.tempUnit,
+        layoutMode: weatherSettings.layoutMode || 'auto',
+        coordinates: isValidCoordinates(weatherSettings.coordinates) ? weatherSettings.coordinates : null,
+      });
+    }
+
+    return Array.from(targetsByKey.values());
+  };
+
+  const prefetchAllTargets = async () => {
+    const targets = collectTargets();
+    if (targets.length === 0) {
       return;
     }
 
-    const collectTargets = () => {
-      const targetsByKey = new Map();
-
-      const activeSettings = getEffectiveWeatherSettingsForTab(activeTab, activeTabConfigJson);
-      const includeActiveTarget = !!activeSettings?.locationQuery || !prefetchOnly;
-
-      if (includeActiveTarget && locationQuery) {
-        const currentKey = buildWeatherCacheKey(locationQuery, tempUnit);
-        targetsByKey.set(currentKey, {
-          tabNumber: Number(activeTab),
-          locationQuery,
-          tempUnit,
-          layoutMode: layoutMode || 'auto',
-          coordinates: isValidCoordinates(coordinates) ? coordinates : null,
+    await Promise.all(targets.map(async (target) => {
+      try {
+        const payload = await resolvePayloadFromCacheOrApi(target.locationQuery, target.tempUnit, {
+          forceRefresh: true,
+          targetCoordinates: target.coordinates,
         });
-      }
 
-      const tabsList = Array.isArray(allTabConfigs) ? allTabConfigs : [];
-      for (const tab of tabsList) {
-        const weatherSettings = getEffectiveWeatherSettingsForTab(tab?.number, tab?.config_json || null);
-        if (!weatherSettings?.locationQuery) {
-          continue;
-        }
-        const key = buildWeatherCacheKey(weatherSettings.locationQuery, weatherSettings.tempUnit);
-        targetsByKey.set(key, {
-          tabNumber: Number(tab.number),
-          locationQuery: weatherSettings.locationQuery,
-          tempUnit: weatherSettings.tempUnit,
-          layoutMode: weatherSettings.layoutMode || 'auto',
-          coordinates: isValidCoordinates(weatherSettings.coordinates) ? weatherSettings.coordinates : null,
-        });
-      }
-
-      return Array.from(targetsByKey.values());
-    };
-
-    const prefetchAllTargets = async () => {
-      const targets = collectTargets();
-      if (targets.length === 0) {
-        return;
-      }
-
-      await Promise.all(targets.map(async (target) => {
-        try {
-          const payload = await resolvePayloadFromCacheOrApi(target.locationQuery, target.tempUnit, {
-            forceRefresh: true,
-            targetCoordinates: target.coordinates,
+        if (
+          Number.isFinite(target.tabNumber)
+          && !isValidCoordinates(target.coordinates)
+          && isValidCoordinates(payload?.coordinates)
+        ) {
+          await saveInstanceSettingsToTab(target.tabNumber, {
+            locationQuery: target.locationQuery,
+            tempUnit: target.tempUnit,
+            layoutMode: target.layoutMode || 'auto',
+            lat: payload.coordinates.lat,
+            lon: payload.coordinates.lon,
+            ...(payload.resolvedName ? { resolvedName: payload.resolvedName } : {}),
           });
-
-          if (
-            Number.isFinite(target.tabNumber)
-            && !isValidCoordinates(target.coordinates)
-            && isValidCoordinates(payload?.coordinates)
-          ) {
-            await saveInstanceSettingsToTab(target.tabNumber, {
-              locationQuery: target.locationQuery,
-              tempUnit: target.tempUnit,
-              layoutMode: target.layoutMode || 'auto',
-              lat: payload.coordinates.lat,
-              lon: payload.coordinates.lon,
-              ...(payload.resolvedName ? { resolvedName: payload.resolvedName } : {}),
-            });
-          }
-        } catch {
-          // Keep prefetch failures non-blocking.
         }
-      }));
-    };
+      } catch {
+        // Keep prefetch failures non-blocking.
+      }
+    }));
+  };
 
-    void prefetchAllTargets();
+  // Cache-warming prefetch for every tab with weather configured. Timestamp
+  // based: fully paused while the screen is inactive, catches up once on
+  // resume instead of stacking missed runs.
+  useDataRefresh(
+    settingsLoaded && weatherApiKey
+      ? (refreshInterval > 0 ? refreshInterval : WEATHER_CACHE_FALLBACK_REFRESH_MS)
+      : 0,
+    () => { void prefetchAllTargets(); },
+    { isActive, fireImmediately: true }
+  );
 
-    const intervalMs = refreshInterval > 0 ? refreshInterval : WEATHER_CACHE_FALLBACK_REFRESH_MS;
-    const intervalId = setInterval(() => {
-      void prefetchAllTargets();
-    }, intervalMs);
-
-    return () => {
-      clearInterval(intervalId);
-    };
-  }, [allTabConfigs, activeTab, activeTabConfigJson, prefetchOnly, locationQuery, tempUnit, layoutMode, settingsLoaded, weatherApiKey, refreshInterval]);
-
-  useEffect(() => {
-    if (!settingsLoaded) {
-      return;
-    }
-
-    if (refreshInterval > 0) {
-      const intervalId = setInterval(() => {
-        void refreshCurrentWeather();
-      }, refreshInterval);
-
-      return () => {
-        clearInterval(intervalId);
-      };
-    }
-  }, [refreshInterval, settingsLoaded, weatherApiKey, locationQuery, tempUnit]);
+  // Refresh the displayed weather on the configured cadence, same pause and
+  // catch-up semantics.
+  useDataRefresh(
+    settingsLoaded && refreshInterval > 0 ? refreshInterval : 0,
+    () => { void refreshCurrentWeather(); },
+    { isActive }
+  );
 
   const fetchWeatherData = async () => {
     if (!weatherApiKey) {

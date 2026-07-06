@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { Suspense, useState, useEffect, useRef, useCallback } from 'react';
 import { Box, IconButton } from '@mui/material';
 import GridLayout from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
@@ -21,6 +21,16 @@ const resolveWidgetName = (widgetId) => {
   return null;
 };
 
+// Core widgets arrive Suspense-wrapped (they're lazy-loaded). Props cloned
+// onto a Suspense boundary are silently dropped, so inject them into the
+// widget element itself.
+const injectWidgetProps = (element, props) => {
+  if (React.isValidElement(element) && element.type === Suspense) {
+    return React.cloneElement(element, {}, React.cloneElement(element.props.children, props));
+  }
+  return React.cloneElement(element, props);
+};
+
 const WidgetContainer = ({
   children,
   widgets = [],
@@ -30,6 +40,7 @@ const WidgetContainer = ({
   activeTabId = 1,
   deviceWidgetSettings = {},
   devicePluginSettings = {},
+  isActive = true,
 }) => {
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [containerWidth, setContainerWidth] = useState(1200);
@@ -428,12 +439,15 @@ const WidgetContainer = ({
     return 0;
   };
 
-  const handleWidgetRefresh = (widgetId) => {
+  // Bumping the nonce tells the widget to refetch in place. It must NOT be
+  // used as a React key — that force-remounts the widget, re-running its
+  // mount fetch and restarting its timers (the churn bug in issue #75).
+  const handleWidgetRefresh = useCallback((widgetId) => {
     setRefreshKeys(prev => ({
       ...prev,
       [widgetId]: (prev[widgetId] || 0) + 1
     }));
-  };
+  }, []);
 
   const resizeButtonBaseStyle = {
     fontSize: '1.5rem',
@@ -698,11 +712,13 @@ const WidgetContainer = ({
                   </>
                 )}
 
-                {/* Countdown Circle Indicator */}
+                {/* Countdown ring: the per-widget refresh scheduler. Paused
+                    (no ticking, no refreshes) while the screen is inactive;
+                    fires an immediate catch-up refresh on resume if overdue. */}
                 <CountdownCircle
-                  key={refreshKeys[widget.id] || 0}
                   refreshInterval={getWidgetRefreshInterval(widget.id)}
                   onRefresh={() => handleWidgetRefresh(widget.id)}
+                  isActive={isActive}
                 />
 
                 {/* Widget Content */}
@@ -717,10 +733,10 @@ const WidgetContainer = ({
                     flexDirection: 'column',
                   }}
                 >
-                  {React.cloneElement(widget.content, {
-                    key: refreshKeys[widget.id] || 0,
+                  {injectWidgetProps(widget.content, {
                     widgetId: widget.id,
                     refreshNonce: refreshKeys[widget.id] || 0,
+                    isActive,
                     activeTabId,
                     widgetSize: {
                       width: effectiveLayout.w,

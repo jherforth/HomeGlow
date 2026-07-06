@@ -14,6 +14,7 @@ import { unlockAudio } from './utils/choreSound.js';
 import useChoreSoundScheduler from './hooks/useChoreSoundScheduler.js';
 import useFetchTabs from './hooks/useFetchTabs.js';
 import useIsMobile from './hooks/useIsMobile.js';
+import useScreenActivity from './hooks/useScreenActivity.js';
 import {
   readLocalInterfaceColors,
   readLocalScreensaverSettings,
@@ -641,6 +642,16 @@ const App = () => {
     setActiveTab(tabNumber);
   }, []);
 
+  // "Could someone plausibly be looking at the widgets right now?" Combines
+  // the Page Visibility API with app state the browser can't see on its own.
+  // In photos-mode the screensaver fully covers the dashboard, so widget
+  // refreshes are pure waste; tabs-mode displays the widgets, so they stay
+  // active. Future signals (e.g. Home Assistant presence, issue #57) plug in
+  // here as additional entries.
+  const widgetsActive = useScreenActivity({
+    widgetsVisible: !(screensaverActive && screensaverSettings.mode === 'photos'),
+  });
+
   const toggleTheme = () => {
     const hasCoordinates = typeof autoDarkModeSettings.lat === 'number' && typeof autoDarkModeSettings.lon === 'number';
     const includeAutoMode = autoDarkModeSettings.enabled && hasCoordinates && (Boolean(apiKeys.WEATHER_API_KEY) || !apiKeysLoaded);
@@ -746,7 +757,6 @@ const App = () => {
         content: (
           <Suspense fallback={<WidgetLoadingFallback label="calendar" />}>
             <CalendarWidget
-              refreshInterval={widgetSettings.calendar.refreshInterval || 0}
               activeTab={activeTab}
               activeTabConfigJson={tabs.find((tab) => tab.number === activeTab)?.config_json || null}
             />
@@ -789,9 +799,7 @@ const App = () => {
         savedLayout: dbLayout,
         content: (
           <Suspense fallback={<WidgetLoadingFallback label="chores" />}>
-            <ChoreWidget
-              refreshInterval={widgetSettings.chores.refreshInterval || 0}
-            />
+            <ChoreWidget />
           </Suspense>
         ),
       });
@@ -808,9 +816,7 @@ const App = () => {
         savedLayout: dbLayout,
         content: (
           <Suspense fallback={<WidgetLoadingFallback label="photos" />}>
-            <PhotoWidget
-              refreshInterval={widgetSettings.photos.refreshInterval || 0}
-            />
+            <PhotoWidget />
           </Suspense>
         ),
       });
@@ -906,6 +912,7 @@ const App = () => {
             activeTabId={activeTabId}
             deviceWidgetSettings={widgetSettings}
             devicePluginSettings={pluginSettings}
+            isActive={widgetsActive}
           />
         )}
         {shouldRunWeatherBackgroundPrefetch && (
@@ -918,6 +925,7 @@ const App = () => {
                 activeTabConfigJson={tabs.find((tab) => tab.number === activeTab)?.config_json || null}
                 allTabConfigs={tabs}
                 prefetchOnly
+                isActive={widgetsActive}
               />
             </Suspense>
           </Box>

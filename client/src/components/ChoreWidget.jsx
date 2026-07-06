@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Typography,
   Button,
@@ -44,7 +44,7 @@ const formatDueTime = (dueTime) => {
   return `${hour}:${minute} ${period}`;
 };
 
-const ChoreWidget = ({ refreshInterval = 0 }) => {
+const ChoreWidget = ({ refreshNonce = 0 }) => {
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [users, setUsers] = useState([]);
   const [chores, setChores] = useState([]);
@@ -97,21 +97,14 @@ const ChoreWidget = ({ refreshInterval = 0 }) => {
     void loadDeviceWidgetSettings();
   }, [API_DEVICE_URL]);
 
+  // Auto/manual refresh: WidgetContainer's countdown ring owns the schedule
+  // and bumps refreshNonce; refetch in place instead of remounting.
+  const lastRefreshNonceRef = useRef(refreshNonce);
   useEffect(() => {
-    if (refreshInterval > 0) {
-      console.log(`ChoreWidget: Auto-refresh enabled (${refreshInterval}ms)`);
-
-      const intervalId = setInterval(() => {
-        console.log('ChoreWidget: Auto-refreshing data...');
-        fetchData();
-      }, refreshInterval);
-
-      return () => {
-        console.log('ChoreWidget: Clearing auto-refresh interval');
-        clearInterval(intervalId);
-      };
-    }
-  }, [refreshInterval]);
+    if (refreshNonce === lastRefreshNonceRef.current) return;
+    lastRefreshNonceRef.current = refreshNonce;
+    fetchData();
+  }, [refreshNonce]);
 
   useEffect(() => {
     if (!deviceSettingsLoaded) {

@@ -1,40 +1,52 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Box } from '@mui/material';
 import AutorenewIcon from '@mui/icons-material/Autorenew';
 
-const CountdownCircle = ({ refreshInterval, onRefresh }) => {
+const CountdownCircle = ({ refreshInterval, onRefresh, isActive = true }) => {
   const [progress, setProgress] = useState(0);
   const [cycleKey, setCycleKey] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
 
+  // The cycle clock lives in refs so pausing (isActive false) stops the
+  // ticking without resetting elapsed time — wall-clock time keeps counting,
+  // which is what makes the overdue catch-up on resume work.
+  const cycleStartRef = useRef(Date.now());
+  const onRefreshRef = useRef(onRefresh);
+  onRefreshRef.current = onRefresh;
+
   useEffect(() => {
-    if (!refreshInterval || refreshInterval === 0) {
+    cycleStartRef.current = Date.now();
+    setProgress(0);
+  }, [cycleKey]);
+
+  useEffect(() => {
+    if (!refreshInterval || refreshInterval === 0 || !isActive) {
       return;
     }
 
-    const startTime = Date.now();
-
     const updateProgress = () => {
-      const elapsed = Date.now() - startTime;
+      const elapsed = Date.now() - cycleStartRef.current;
       const progressPercent = (elapsed / refreshInterval) * 100;
 
       setProgress(Math.min(progressPercent, 100));
 
       if (progressPercent >= 100) {
-        if (onRefresh) {
-          onRefresh();
+        if (onRefreshRef.current) {
+          onRefreshRef.current();
         }
         setCycleKey(prev => prev + 1);
       }
     };
 
+    // Runs immediately so a cycle that became overdue while paused fires its
+    // refresh as soon as the widget is active again.
     updateProgress();
     const intervalId = setInterval(updateProgress, 100);
 
     return () => {
       clearInterval(intervalId);
     };
-  }, [refreshInterval, onRefresh, cycleKey]);
+  }, [refreshInterval, cycleKey, isActive]);
 
   if (!refreshInterval || refreshInterval === 0) {
     return null;
