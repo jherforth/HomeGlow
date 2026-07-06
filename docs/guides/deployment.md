@@ -41,6 +41,18 @@ docker compose up -d
 docker compose pull && docker compose up -d
 ```
 
+## Proxmox VE (LXC)
+
+On a Proxmox host you can create a Docker-enabled Debian LXC and deploy HomeGlow
+in one command:
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/jherforth/HomeGlow/main/proxmox/install-homeglow.sh)"
+```
+
+See [`proxmox/README.md`](../../proxmox/README.md) for details, updating, and the
+path to the official community-scripts listing.
+
 ## Running a public demo instance (demo mode)
 
 Set `DEMO_MODE=true` in the `.env` (or environment) of the backend container to

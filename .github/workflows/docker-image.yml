@@ -79,6 +79,11 @@ jobs:
           tags: |
             type=ref,event=tag
             type=raw,value=latest-test
+            # Publish :latest only on a v* tag release, never on the frequent
+            # workflow_dispatch test builds (those keep publishing only
+            # :latest-test). Keeps :latest == the newest stable release, which
+            # docker-compose.yml and the Proxmox install script both pull.
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.title=${{ matrix.image }}

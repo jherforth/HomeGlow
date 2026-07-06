@@ -1,0 +1,44 @@
+{
+  "name": "HomeGlow",
+  "slug": "homeglow",
+  "categories": [
+    22
+  ],
+  "date_created": "2026-07-06",
+  "type": "ct",
+  "updateable": true,
+  "privileged": false,
+  "interface_port": 3000,
+  "documentation": "https://github.com/jherforth/HomeGlow/blob/main/docs/README.md",
+  "config_path": "/opt/homeglow/.env",
+  "website": "https://github.com/jherforth/HomeGlow",
+  "logo": "https://raw.githubusercontent.com/jherforth/HomeGlow/main/client/public/HomeGlowLogo.svg",
+  "description": "HomeGlow is a self-hosted, touch-first dashboard for wall-mounted home displays: chores with a clam reward system, calendar sync (ICS/CalDAV/Google/Apple), weather, photos, a screensaver, and custom HTML widgets. Runs as two Docker containers (Fastify + SQLite backend, React frontend) inside a Debian LXC.",
+  "install_methods": [
+    {
+      "type": "default",
+      "script": "ct/homeglow.sh",
+      "resources": {
+        "cpu": 2,
+        "ram": 2048,
+        "hdd": 6,
+        "os": "debian",
+        "version": "12"
+      }
+    }
+  ],
+  "default_credentials": {
+    "username": null,
+    "password": null
+  },
+  "notes": [
+    {
+      "text": "First run has no login; set an optional Admin PIN in the Admin Panel. Do not expose HomeGlow directly to the public internet.",
+      "type": "warning"
+    },
+    {
+      "text": "ENCRYPTION_KEY is generated once in /opt/homeglow/.env. Keep it stable — changing it invalidates stored third-party credentials.",
+      "type": "info"
+    }
+  ]
+}

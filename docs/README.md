@@ -31,7 +31,7 @@ stays relevant.
 
 ### Guides
 - [Getting Started (Local Dev)](guides/getting-started.md)
-- [Deployment](guides/deployment.md) — Docker Compose, Portainer, and updating.
+- [Deployment](guides/deployment.md) — Docker Compose, Portainer, Proxmox LXC, and updating.
 - [Configuration](reference/configuration.md) — environment variables and admin-panel settings.
 - [Custom Widget Development](guides/custom-widgets.md) — build and publish your own HTML widgets.
 - [Contributing](guides/contributing.md) — workflow, testing, conventions, and how to add a migration.
