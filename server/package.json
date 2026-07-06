@@ -21,10 +21,10 @@
     "cron-parser": "^5.5.0",
     "dotenv": "^17.4.2",
     "fast-xml-parser": "5.9.3",
-    "fastify": "^5.8.5",
+    "fastify": "^5.10.0",
     "ical-generator": "^10.2.0",
     "ical.js": "^2.2.1",
-    "node-cron": "^4.2.1",
+    "node-cron": "^4.6.0",
     "node-ical": "^0.26.0"
   }
 }

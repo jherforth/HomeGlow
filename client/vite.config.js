@@ -44,8 +44,7 @@ export default defineConfig({
             inPackage(id, 'react-rnd') ||
             inPackage(id, 'react-resizable') ||
             inPackage(id, 'react-draggable') ||
-            inPackage(id, 'react-color') ||
-            inPackage(id, 'hammerjs')
+            inPackage(id, 'react-color')
           ) {
             return 'layout';
           }
