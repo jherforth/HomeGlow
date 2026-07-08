@@ -1,3 +1,40 @@
+# HomeGlow v 1.6.1 Changelog
+
+## 🎉 Recent Updates
+
+A small follow-up to v1.6 that polishes calendar deduplication and rounds out the
+demo experience with proper documentation and a richer sample set.
+
+## New Features
+
+### Calendar Deduplication On by Default (#123)
+Merging the same event across multiple calendars is now **enabled by default** —
+the feature proved reliable in v1.6, so new and existing installs get cleaner
+calendars out of the box. You can still turn it off anytime in the calendar
+widget settings; anyone who had explicitly disabled it keeps their choice.
+
+### Demo Mode Documentation & Richer Sample Data (#124)
+- A dedicated [Demo Mode guide](docs/guides/demo-mode.md) (plus a wiki page)
+  explains what demo mode does, what it seeds, and how to run your own.
+- The demo sample set is more robust: a third family member and a wider mix of
+  chores — including everyday routines with **no clam value** (make your bed,
+  brush teeth) alongside the reward chores — to show that clams are optional
+  per chore.
+
+---
+
+## Summary
+A polish release: calendar dedup defaults on, and demo mode is now documented and
+seeded with a more illustrative sample household.
+
+---
+
+## 📝 Notes
+
+For questions or issues, please visit our [GitHub Issues](https://github.com/jherforth/HomeGlow/issues) page.
+
+---
+
 # HomeGlow v 1.6 Changelog
 
 ## 🎉 Recent Updates
