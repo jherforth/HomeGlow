@@ -126,12 +126,31 @@ function seedUsersAndChores(db) {
   insertPrize.run('30 min extra screen time', 15);
 }
 
+// Real public ICS feeds synced live in demo mode (calendar sync runs for these;
+// visitors can't add/edit sources — those routes are demo-blocked, so only this
+// curated list is ever fetched). Several overlap on purpose: the two Town of
+// Chili feeds share events, which shows off cross-calendar deduplication.
+const DEMO_CALENDAR_FEEDS = [
+  { name: 'US Federal Holidays', url: 'https://www.opm.gov/policy-data-oversight/pay-leave/federal-holidays/holidays.ics', color: '#2a9d8f' },
+  { name: 'Arizona Diamondbacks', url: 'https://ics.calendarlabs.com/99/df8470ee/Arizona_Diamondbacks_-_MLB.ics', color: '#a4133c' },
+  { name: 'Town of Chili — Calendar', url: 'https://www.chiliny.gov/common/modules/iCalendar/iCalendar.aspx?catID=14&feed=calendar', color: '#457b9d' },
+  { name: 'Town of Chili — Community Events', url: 'https://www.chiliny.gov/common/modules/iCalendar/iCalendar.aspx?catID=30&feed=calendar', color: '#8338ec' },
+];
+
 function seedCalendar(db) {
-  // Calendar sync never runs in demo mode, so this ICS source is only a label
-  // for the cached events below (the URL is never fetched).
+  // The Family Calendar's .invalid URL is a placeholder that is never fetched
+  // (the sync service skips reserved-TLD hosts); its events are the baked
+  // cache entries below, so the demo has content the instant it boots.
   const sourceId = db.prepare(
     "INSERT INTO calendar_sources (name, type, url, color, enabled, sort_order) VALUES ('Family Calendar', 'ICS', 'https://demo.invalid/family.ics', '#6e44ff', 1, 0)"
   ).run().lastInsertRowid;
+
+  const insertSource = db.prepare(
+    'INSERT INTO calendar_sources (name, type, url, color, enabled, sort_order) VALUES (?, ?, ?, ?, 1, ?)'
+  );
+  DEMO_CALENDAR_FEEDS.forEach((feed, index) => {
+    insertSource.run(feed.name, 'ICS', feed.url, feed.color, index + 1);
+  });
 
   const insertEvent = db.prepare(
     'INSERT INTO calendar_events_cache (source_id, event_uid, title, start_time, end_time, description, location, all_day) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'

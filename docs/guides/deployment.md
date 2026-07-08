@@ -73,12 +73,14 @@ What it changes:
 - **Admin PIN disabled** — the Admin Panel opens without a prompt, and the
   PIN set/verify/delete routes return 403 so a visitor can't lock others out.
 - **Sample data** — a demo household (users, chores, schedules, clam history,
-  prizes, a week of calendar events) is seeded at boot and re-seeded every
-  6 hours; new visitor devices auto-enable the chore + calendar widgets.
+  prizes, family calendar events, live public calendar feeds, and a static
+  weather snapshot) is seeded at boot and re-seeded every 6 hours; new visitor
+  devices auto-enable the chore, calendar, and weather widgets.
 - **Abuse-prone routes return 403** — all uploads (widgets/sounds/avatars/
   photos), widget install/delete, the `/api/proxy` CORS proxy, Google/Apple
-  connection setup, and calendar test/sync triggers (visitor-supplied URLs
-  are never fetched — the calendar sync service stays off).
+  connection setup, and all calendar source add/edit/delete/test/sync routes.
+  Calendar sync runs, but only for the seeded demo feeds — visitor-supplied
+  URLs are never fetched.
 - A "Demo Mode" banner is shown in the client.
 
 Normal installs are unaffected: `DEMO_MODE` defaults to `false` everywhere.

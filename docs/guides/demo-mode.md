@@ -43,7 +43,9 @@ DEMO MODE enabled: in-memory database, PIN disabled, sample data resets every 6h
 | --- | --- | --- |
 | **Database** | SQLite file at `server/data/tasks.db` (persistent) | **In-memory** — wiped when the container stops; `DB_PATH` is ignored |
 | **Admin PIN** | Optional PIN gate on the Admin Panel | **Disabled** — panel opens freely; PIN set/verify/delete return `403` so no visitor can lock others out |
-| **Sample data** | Empty first-run welcome screen | A demo household is **seeded at boot and re-seeded every 6 hours**; new visitor devices auto-enable the chore + calendar widgets |
+| **Sample data** | Empty first-run welcome screen | A demo household is **seeded at boot and re-seeded every 6 hours**; new visitor devices auto-enable the chore, calendar, and weather widgets |
+| **Calendar sync** | Syncs whatever sources you configure | Runs **only for the curated demo feeds** seeded at boot; source add/edit/delete routes are blocked so visitor URLs are never fetched |
+| **Weather** | Live OpenWeatherMap data (your API key) | A **static snapshot of Chili, NY** served from `GET /api/demo/weather` — no API key involved |
 | **Abuse-prone routes** | Available | Return `403` (see below) |
 | **Client banner** | — | A **"Demo Mode — sample data resets every N hours"** banner is shown |
 
@@ -58,9 +60,10 @@ mode." }`:
 - **The `/api/proxy` CORS proxy** — so it can't be used as an open relay.
 - **Google & Apple connection setup** — OAuth config, authorize/callback, account
   delete, CalDAV calendar listing.
-- **Calendar test & sync triggers** — visitor-supplied calendar URLs are **never
-  fetched**; the calendar sync service stays off entirely and the seeded events
-  are shown from cache.
+- **Calendar source management and manual sync triggers** — adding, editing, or
+  deleting calendar sources is blocked, as are the test/sync endpoints. The sync
+  service *does* run in demo mode, but only ever fetches the curated feeds
+  seeded below — a visitor-supplied URL can never reach it (SSRF guard).
 
 Everyday interactive routes **still work**, so the demo feels live: completing and
 un-completing chores, moving and resizing widgets, switching tabs, and adjusting
@@ -86,13 +89,25 @@ and is designed to make an empty dashboard feel like a real family command cente
   chores post clams, routine chores post zero.
 - **Prizes** to spend clams on — Movie night pick (50), Ice cream trip (30),
   30 min extra screen time (15).
-- **A week of calendar events** — soccer practice, pizza night, a dentist
+- **A week of family calendar events** — soccer practice, pizza night, a dentist
   appointment, an overnight trip to Grandma's, a piano recital, and a
-  library-books-due reminder. Calendar sync never runs; these come from the event
-  cache under a placeholder "Family Calendar" source that is never fetched.
+  library-books-due reminder. These are baked into the event cache under a
+  placeholder "Family Calendar" source (a reserved `.invalid` URL the sync
+  service knows to skip), so they're on screen the instant the demo boots.
+- **Four live public calendar feeds**, synced for real by the calendar sync
+  service so the demo shows genuine multi-calendar behavior:
+  - **US Federal Holidays** (OPM)
+  - **Arizona Diamondbacks** (MLB schedule)
+  - **Town of Chili — Calendar** and **Town of Chili — Community Events** — two
+    overlapping town feeds, which double as a live demonstration of
+    cross-calendar event deduplication.
+- **A weather snapshot for Chili, NY** — the demo has no OpenWeatherMap key, so
+  the weather widget renders a static real-conditions snapshot (current temp,
+  3-day outlook, hourly chart, air quality) served by `GET /api/demo/weather`.
 
 Because the whole set is re-seeded on a timer (every 6 hours by default) and the
-database is in-memory, the demo always returns to this known-good state.
+database is in-memory, the demo always returns to this known-good state; each
+reset also restarts the feed sync jobs and refetches the live calendars.
 
 ## How the reset works
 

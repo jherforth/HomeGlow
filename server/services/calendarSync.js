@@ -57,6 +57,14 @@ class CalendarSyncService {
         return { success: false, error: 'Source not found or disabled' };
       }
 
+      // Placeholder sources on the RFC 2606 reserved ".invalid" TLD can never
+      // resolve (the demo's baked "Family Calendar" uses one to carry its
+      // pre-cached events). Skip them silently instead of recording a
+      // misleading error status.
+      if (this.isPlaceholderUrl(source.url)) {
+        return { skipped: true };
+      }
+
       console.log(`Starting sync for calendar source: ${source.name} (${source.type})`);
       const startTime = Date.now();
 
@@ -247,6 +255,14 @@ class CalendarSyncService {
       });
     }
     return out;
+  }
+
+  isPlaceholderUrl(url) {
+    try {
+      return new URL(url).hostname.toLowerCase().endsWith('.invalid');
+    } catch {
+      return false;
+    }
   }
 
   async syncAllSources() {

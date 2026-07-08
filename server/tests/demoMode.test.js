@@ -70,6 +70,8 @@ test.before(async () => {
             DEMO_MODE: 'true',
             TZ: 'UTC',
             HOMEGLOW_DISABLE_BACKGROUND_JOBS: '1',
+            // Demo mode syncs its curated calendar feeds; keep tests offline.
+            HOMEGLOW_DISABLE_CALENDAR_SYNC: '1',
             ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
         },
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -142,6 +144,29 @@ test('sample data is seeded (users, chores, prizes, calendar events)', async () 
     const events = await api('/api/calendar-events');
     assert.equal(events.status, 200);
     assert.ok(events.body.length >= 4);
+
+    // Family Calendar placeholder + the 4 curated live ICS feeds.
+    const sources = await api('/api/calendar-sources');
+    assert.equal(sources.status, 200);
+    assert.ok(sources.body.length >= 5);
+    const sourceNames = sources.body.map((s) => s.name);
+    assert.ok(sourceNames.includes('US Federal Holidays'));
+    assert.ok(sourceNames.includes('Arizona Diamondbacks'));
+});
+
+test('demo weather snapshot is served in both unit systems', async () => {
+    const imperial = await api('/api/demo/weather');
+    assert.equal(imperial.status, 200);
+    assert.equal(imperial.body.weatherData.name, 'Chili');
+    assert.equal(typeof imperial.body.weatherData.main.temp, 'number');
+    assert.ok(Array.isArray(imperial.body.forecastData) && imperial.body.forecastData.length === 3);
+    assert.ok(Array.isArray(imperial.body.chartData) && imperial.body.chartData.length === 8);
+    assert.ok(imperial.body.airQualityData.list[0].main.aqi >= 1);
+
+    const metric = await api('/api/demo/weather?units=metric');
+    assert.equal(metric.status, 200);
+    assert.ok(metric.body.weatherData.main.temp < imperial.body.weatherData.main.temp,
+        'metric temperature should be the Celsius conversion of the imperial snapshot');
 });
 
 test('abuse-prone routes are blocked with 403', async () => {
@@ -158,6 +183,9 @@ test('abuse-prone routes are blocked with 403', async () => {
         ['GET', '/api/connections/google/callback'],
         ['DELETE', '/api/connections/google/account'],
         ['POST', '/api/connections/apple/calendars'],
+        ['POST', '/api/calendar-sources'],
+        ['PATCH', '/api/calendar-sources/1'],
+        ['DELETE', '/api/calendar-sources/1'],
         ['POST', '/api/calendar-sources/1/test'],
         ['POST', '/api/photo-sources/1/uploaded'],
         ['POST', '/api/calendar-sync/1'],

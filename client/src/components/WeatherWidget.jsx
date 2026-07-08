@@ -52,6 +52,7 @@ const WeatherWidget = ({
   prefetchOnly = false,
   refreshNonce = 0,
   isActive = true,
+  demoMode = false,
 }) => {
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [weatherData, setWeatherData] = useState(null);
@@ -536,6 +537,29 @@ const WeatherWidget = ({
     setSettingsLoaded(false);
     applyResolvedTabSettings(tabSettings);
   }, [activeTab, activeTabConfigJson, refreshNonce]);
+
+  // Demo mode: no OpenWeatherMap key exists, so instead of the normal fetch
+  // pipeline the server hands us a static snapshot (Chili, NY). Writing it into
+  // the payload cache means every later settings re-apply finds it there.
+  useEffect(() => {
+    if (!demoMode || !settingsLoaded) return undefined;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const units = tempUnit === 'C' ? 'metric' : 'imperial';
+        const response = await axios.get(`${API_BASE_URL}/api/demo/weather?units=${units}`);
+        if (cancelled || !response.data?.weatherData) return;
+        writeCachedPayloadFor(locationQuery, tempUnit, response.data);
+        applyWeatherPayloadToState(response.data);
+        setError(null);
+      } catch {
+        // Demo snapshot unavailable; leave the widget in its default state.
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [demoMode, settingsLoaded, locationQuery, tempUnit]);
 
   useEffect(() => {
     if (!settingsLoaded || !shouldFetchNow) {

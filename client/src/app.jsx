@@ -354,10 +354,12 @@ const App = () => {
             chores: { enabled: true },
             calendar: { enabled: true },
             photos: { enabled: false },
-            weather: { enabled: false },
+            // Weather renders from the server's static demo snapshot
+            // (/api/demo/weather) — no OpenWeatherMap key needed.
+            weather: { enabled: true },
           },
         });
-        for (const widgetName of ['chores', 'calendar']) {
+        for (const widgetName of ['chores', 'calendar', 'weather']) {
           await axios.post(`${API_DEVICE_URL}/widget-assignments`, {
             widget_name: widgetName,
             tabNumber: 1,
@@ -782,6 +784,7 @@ const App = () => {
               activeTab={activeTab}
               activeTabConfigJson={tabs.find((tab) => tab.number === activeTab)?.config_json || null}
               allTabConfigs={tabs}
+              demoMode={demoStatus.demo}
             />
           </Suspense>
         ),
@@ -847,7 +850,7 @@ const App = () => {
     });
 
     return result;
-  }, [widgetSettings, pluginSettings, activeTab, apiKeys, widgetAssignments, installedPlugins, theme]);
+  }, [widgetSettings, pluginSettings, activeTab, apiKeys, widgetAssignments, installedPlugins, theme, demoStatus.demo]);
 
   const activeTabId = useMemo(() => {
     const active = tabs.find(tab => tab.number === activeTab);

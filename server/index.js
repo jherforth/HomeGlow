@@ -2501,6 +2501,16 @@ fastify.get('/api/demo', async () => {
   return { demo: DEMO_MODE, resetHours: DEMO_MODE ? DEMO_RESET_HOURS : null };
 });
 
+// Static weather snapshot for the demo weather widget (no OpenWeatherMap key
+// in demo mode). ?units=metric converts the imperial snapshot.
+fastify.get('/api/demo/weather', async (request, reply) => {
+  if (!DEMO_MODE) {
+    return reply.status(404).send({ error: 'Not available outside demo mode.' });
+  }
+  const { buildDemoWeatherPayload } = require('./utils/demoWeather');
+  return buildDemoWeatherPayload(request.query.units === 'metric' ? 'metric' : 'imperial');
+});
+
 function deserializeSettingValue(value) {
   if (typeof value !== 'string') {
     return value;
@@ -3570,6 +3580,9 @@ fastify.get('/api/calendar-sources', async (request, reply) => {
 });
 
 fastify.post('/api/calendar-sources', async (request, reply) => {
+  // Demo-blocked: with the sync service running in demo mode, a visitor-added
+  // source would be fetched server-side (SSRF). Only the seeded feeds sync.
+  if (demoBlocked(reply)) return;
   const { name, type, url, username, password, color } = request.body;
   if (!name || !type || !url) {
     return reply.status(400).send({ error: 'Name, type, and URL are required.' });
@@ -3606,6 +3619,9 @@ fastify.post('/api/calendar-sources', async (request, reply) => {
 });
 
 fastify.patch('/api/calendar-sources/:id', async (request, reply) => {
+  // Demo-blocked: editing a source's URL would make the sync service fetch a
+  // visitor-supplied address (SSRF).
+  if (demoBlocked(reply)) return;
   const { id } = request.params;
   const { name, type, url, username, password, color, enabled } = request.body;
 
@@ -3664,6 +3680,8 @@ fastify.patch('/api/calendar-sources/:id', async (request, reply) => {
 });
 
 fastify.delete('/api/calendar-sources/:id', async (request, reply) => {
+  // Demo-blocked so one visitor can't remove the curated demo feeds for the next.
+  if (demoBlocked(reply)) return;
   const { id } = request.params;
   try {
     if (calendarSyncService) {
@@ -4612,6 +4630,13 @@ const start = async () => {
       setInterval(() => {
         try {
           resetDemoData(db);
+          // Reseeding assigns new source ids, so the running sync jobs point
+          // at rows that no longer exist. Restart them (this also kicks off an
+          // immediate syncAllSources to refill the wiped event cache).
+          if (calendarSyncService && process.env.HOMEGLOW_DISABLE_CALENDAR_SYNC !== '1') {
+            calendarSyncService.stopAllSyncJobs();
+            calendarSyncService.startAllSyncJobs();
+          }
         } catch (err) {
           console.error('Demo reset failed:', err);
         }
@@ -4633,13 +4658,19 @@ const start = async () => {
     // Seed bundled default chore notification sounds into the persisted uploads volume
     await seedDefaultSounds();
 
-    // Initialize calendar sync service. Demo mode constructs it (so cached
-    // demo events are readable) but never initializes the sync jobs, and the
-    // manual-sync routes are demo-blocked — visitor-entered calendar URLs are
-    // never fetched (SSRF guard).
+    // Initialize calendar sync service. Demo mode runs sync too, but ONLY for
+    // the curated feeds in demoSeed.js: every route that could add or edit a
+    // source URL is demo-blocked, so visitor-entered addresses are never
+    // fetched (SSRF guard). The seeded "Family Calendar" placeholder
+    // (.invalid host) is skipped by the service itself.
     if (DEMO_MODE) {
       calendarSyncService = new CalendarSyncService(db, decryptPassword);
-      console.log('Calendar sync jobs disabled in demo mode (cached events only)');
+      if (process.env.HOMEGLOW_DISABLE_CALENDAR_SYNC !== '1') {
+        calendarSyncService.initialize();
+        console.log('Calendar sync enabled in demo mode (seeded demo feeds only; source management is demo-blocked)');
+      } else {
+        console.log('Calendar sync jobs disabled in demo mode by HOMEGLOW_DISABLE_CALENDAR_SYNC=1 (cached events only)');
+      }
     } else if (process.env.HOMEGLOW_DISABLE_CALENDAR_SYNC !== '1') {
       calendarSyncService = new CalendarSyncService(db, decryptPassword);
       calendarSyncService.initialize();
