@@ -187,7 +187,7 @@ const CalendarWidget = ({
   const [calendarSettingsLoaded, setCalendarSettingsLoaded] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState({ background: false, text: false });
   const [calendarSources, setCalendarSources] = useState([]);
-  const [dedupEnabled, setDedupEnabled] = useState(false);
+  const [dedupEnabled, setDedupEnabled] = useState(true);
   const [showCalendarDialog, setShowCalendarDialog] = useState(false);
   const [editingCalendar, setEditingCalendar] = useState(null);
   const [calendarForm, setCalendarForm] = useState({
@@ -400,7 +400,8 @@ const CalendarWidget = ({
   const fetchDedupSetting = async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/settings`);
-      setDedupEnabled(response.data?.CALENDAR_DEDUP_ENABLED === 'true');
+      // On by default: only an explicit 'false' disables (matches server default).
+      setDedupEnabled(response.data?.CALENDAR_DEDUP_ENABLED !== 'false');
     } catch (error) {
       console.error('Error fetching dedup setting:', error);
     }

@@ -55,6 +55,10 @@ path to the official community-scripts listing.
 
 ## Running a public demo instance (demo mode)
 
+> For the full picture — what gets seeded, how the reset works, and every route
+> that's disabled — see the dedicated [Demo Mode](demo-mode.md) guide. This is the
+> short ops version.
+
 Set `DEMO_MODE=true` in the `.env` (or environment) of the backend container to
 turn an install into a throwaway public demo:
 

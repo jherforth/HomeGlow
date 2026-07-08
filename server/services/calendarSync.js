@@ -303,8 +303,8 @@ class CalendarSyncService {
       };
     });
 
-    // Opt-in: merge the same event synced from multiple calendars (off by
-    // default so no events silently disappear for existing installs).
+    // On by default: merge the same event synced from multiple calendars.
+    // Users can opt out by explicitly setting CALENDAR_DEDUP_ENABLED='false'.
     if (this.isDedupEnabled()) {
       return dedupeCalendarEvents(events);
     }
@@ -314,9 +314,10 @@ class CalendarSyncService {
   isDedupEnabled() {
     try {
       const row = this.db.prepare("SELECT value FROM settings WHERE key = 'CALENDAR_DEDUP_ENABLED'").get();
-      return row?.value === 'true';
+      // Absent setting means default (enabled); only an explicit 'false' disables.
+      return row?.value !== 'false';
     } catch {
-      return false;
+      return true;
     }
   }
 

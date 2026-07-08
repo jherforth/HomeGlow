@@ -58,23 +58,55 @@ function seedUsersAndChores(db) {
   const insertUser = db.prepare('INSERT INTO users (username, email) VALUES (?, ?)');
   const emmaId = insertUser.run('Emma', 'emma@demo.homeglow').lastInsertRowid;
   const liamId = insertUser.run('Liam', 'liam@demo.homeglow').lastInsertRowid;
+  const noahId = insertUser.run('Noah', 'noah@demo.homeglow').lastInsertRowid;
 
+  // A believable household mixes two kinds of chores, and the demo shows both:
+  //  - Reward chores worth "clams" (clam_value > 0) that build toward prizes.
+  //  - Everyday routines with NO clam value (clam_value 0) — brush teeth, make
+  //    your bed — tracked as responsibilities without paying out. This is the
+  //    key thing the sample set demonstrates: clams are optional per chore.
   const insertChore = db.prepare('INSERT INTO chores (title, description, clam_value) VALUES (?, ?, ?)');
+  // Reward chores (earn clams)
   const dishes = insertChore.run('Dishes', 'Load and run the dishwasher after dinner', 5).lastInsertRowid;
   const vacuum = insertChore.run('Vacuum living room', 'Including under the couch cushions', 10).lastInsertRowid;
   const trash = insertChore.run('Take out trash', 'Bins to the curb on pickup nights', 3).lastInsertRowid;
   const laundry = insertChore.run('Fold laundry', 'Fold and put away your basket', 5).lastInsertRowid;
+  const dog = insertChore.run('Walk the dog', 'Around the block, morning and evening', 4).lastInsertRowid;
+  const plants = insertChore.run('Water the plants', 'Kitchen and porch pots', 2).lastInsertRowid;
+  const car = insertChore.run('Wash the car', 'Weekend bonus — first one to grab it!', 15).lastInsertRowid;
+  // Routine chores (no clam value — responsibilities, not rewards)
+  const bed = insertChore.run('Make your bed', 'Every morning before school', 0).lastInsertRowid;
+  const teeth = insertChore.run('Brush teeth', 'Morning and night', 0).lastInsertRowid;
+  const tidyRoom = insertChore.run('Tidy your room', 'Clothes in the hamper, toys away', 0).lastInsertRowid;
+  const homework = insertChore.run('Homework', 'Finish before screen time', 0).lastInsertRowid;
 
   const insertSchedule = db.prepare(
     'INSERT INTO chore_schedules (chore_id, user_id, crontab, visible, duration) VALUES (?, ?, ?, 1, ?)'
   );
-  insertSchedule.run(dishes, emmaId, '0 0 * * *', 'day-of');
+  const EVERY_DAY = '0 0 * * *';
+  const WEEKDAYS = '0 0 * * 1-5';
+  const WEEKENDS = '0 0 * * 0,6';
+  // Emma
+  insertSchedule.run(dishes, emmaId, EVERY_DAY, 'day-of');
   insertSchedule.run(laundry, emmaId, '0 0 * * 1,4', 'until-completed');
-  insertSchedule.run(vacuum, liamId, '0 0 * * 1-5', 'day-of');
-  insertSchedule.run(trash, liamId, '0 0 * * *', 'day-of');
-  insertSchedule.run(vacuum, null, '0 0 * * 0,6', 'day-of'); // weekend bonus chore
+  insertSchedule.run(bed, emmaId, EVERY_DAY, 'day-of');
+  insertSchedule.run(teeth, emmaId, EVERY_DAY, 'day-of');
+  // Liam
+  insertSchedule.run(vacuum, liamId, WEEKDAYS, 'day-of');
+  insertSchedule.run(trash, liamId, EVERY_DAY, 'day-of');
+  insertSchedule.run(dog, liamId, EVERY_DAY, 'day-of');
+  insertSchedule.run(homework, liamId, WEEKDAYS, 'until-completed');
+  // Noah (younger — mostly routines, one small reward)
+  insertSchedule.run(bed, noahId, EVERY_DAY, 'day-of');
+  insertSchedule.run(teeth, noahId, EVERY_DAY, 'day-of');
+  insertSchedule.run(tidyRoom, noahId, EVERY_DAY, 'day-of');
+  insertSchedule.run(plants, noahId, '0 0 * * 2,5', 'day-of');
+  // Unassigned bonus chores anyone can grab
+  insertSchedule.run(vacuum, null, WEEKENDS, 'day-of');
+  insertSchedule.run(car, null, WEEKENDS, 'day-of');
 
-  // A few days of completions so clam totals look lived-in.
+  // A few days of completions so clam totals look lived-in. Only the reward
+  // chores post clams; routines are completed too but pay out nothing.
   const insertHistory = db.prepare(
     'INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title) VALUES (?, NULL, ?, ?, ?)'
   );
@@ -82,7 +114,10 @@ function seedUsersAndChores(db) {
   for (let daysAgo = 1; daysAgo <= 4; daysAgo++) {
     const date = formatDateOnly(new Date(today.getTime() - daysAgo * DAY_MS));
     insertHistory.run(emmaId, date, 5, 'Dishes');
+    insertHistory.run(emmaId, date, 0, 'Make your bed');
     if (daysAgo % 2 === 0) insertHistory.run(liamId, date, 10, 'Vacuum living room');
+    insertHistory.run(liamId, date, 4, 'Walk the dog');
+    insertHistory.run(noahId, date, 0, 'Brush teeth');
   }
 
   const insertPrize = db.prepare('INSERT INTO prizes (name, clam_cost) VALUES (?, ?)');
