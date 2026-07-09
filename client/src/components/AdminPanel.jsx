@@ -2763,6 +2763,28 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
               </Alert>
             )}
 
+            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+              <Tabs
+                value={choresSubTab}
+                onChange={(_, v) => setChoresSubTab(v)}
+                size="small"
+                variant="scrollable"
+                scrollButtons="auto"
+                allowScrollButtonsMobile
+              >
+                <Tab label="Chores" />
+                <Tab label="History" />
+                <Tab label="Settings" />
+              </Tabs>
+            </Box>
+            {choresSubTab === 0 && (
+              <ChoreSchedulesTab saveMessage={saveMessage} setSaveMessage={setSaveMessage} />
+            )}
+            {choresSubTab === 1 && (
+              <ChoreHistoryTab />
+            )}
+            {choresSubTab === 2 && (
+              <>
             <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
               <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600 }}>
                 Rewards
@@ -2840,25 +2862,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 </Button>
               </Box>
             </Box>
-
-            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-              <Tabs
-                value={choresSubTab}
-                onChange={(_, v) => setChoresSubTab(v)}
-                size="small"
-                variant="scrollable"
-                scrollButtons="auto"
-                allowScrollButtonsMobile
-              >
-                <Tab label="Chores" />
-                <Tab label="History" />
-              </Tabs>
-            </Box>
-            {choresSubTab === 0 && (
-              <ChoreSchedulesTab saveMessage={saveMessage} setSaveMessage={setSaveMessage} />
-            )}
-            {choresSubTab === 1 && (
-              <ChoreHistoryTab />
+              </>
             )}
           </CardContent>
         </Card>

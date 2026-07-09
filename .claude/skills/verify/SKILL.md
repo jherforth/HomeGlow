@@ -39,6 +39,12 @@ Useful handles:
   before load; exit by clicking the overlay.
 - Track data churn with `page.on('request')` filtered to `localhost:5001`.
 
+- Chore cards (`.chore-card`, `[data-schedule-id]`) have a long-press/right-click
+  context menu; `locator.click({ button: 'right' })` opens it. Long-press via CDP
+  `Input.dispatchTouchEvent` (context needs `hasTouch: true`), hold ~900ms.
+  PIN-gated flows need a non-demo server (file `DB_PATH`) with a PIN set via
+  `POST /api/admin-pin/set`; PinModal accepts keyboard digits + Enter.
+
 ## Worth driving
 
 - Widget auto-refresh cadence and the countdown ring (in-place, no remount:

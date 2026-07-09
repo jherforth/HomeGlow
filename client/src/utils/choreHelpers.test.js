@@ -36,6 +36,23 @@ describe('choreHelpers utilities', () => {
         expect(shouldShowChoreToday({ visible: true, crontab: 'invalid cron' })).toBe(false);
     });
 
+    describe('snoozed_until', () => {
+        // System time is frozen at 2026-05-01T12:00:00Z in beforeAll.
+        it('hides a schedule snoozed into the future, even one-time schedules', () => {
+            expect(shouldShowChoreToday({ visible: true, crontab: '0 0 * * *', snoozed_until: '2026-05-02T00:00:00.000Z' })).toBe(false);
+            expect(shouldShowChoreToday({ visible: true, crontab: null, snoozed_until: '2026-05-02T00:00:00.000Z' })).toBe(false);
+        });
+
+        it('shows a schedule whose snooze has passed', () => {
+            expect(shouldShowChoreToday({ visible: true, crontab: '0 0 * * *', snoozed_until: '2026-05-01T08:00:00.000Z' })).toBe(true);
+        });
+
+        it('ignores null/absent snoozed_until', () => {
+            expect(shouldShowChoreToday({ visible: true, crontab: '0 0 * * *', snoozed_until: null })).toBe(true);
+            expect(shouldShowChoreToday({ visible: true, crontab: '0 0 * * *' })).toBe(true);
+        });
+    });
+
     it('convertDaysToCrontab returns null for empty input', () => {
         expect(convertDaysToCrontab([])).toBe(null);
     });

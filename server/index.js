@@ -103,6 +103,7 @@ const schemaMigrations = [
   { schemaId: 14, migrationPath: './migrations/schema14-deviceAndTabJsonStorage', },
   { schemaId: 15, migrationPath: './migrations/schema15-choreDueTimeSound', },
   { schemaId: 16, migrationPath: './migrations/schema16-choreDueDate', },
+  { schemaId: 17, migrationPath: './migrations/schema17-choreTransferSnooze', },
 ];
 
 const ALLOWED_SCHEDULE_DURATIONS = new Set(['day-of', 'until-completed', 'once-completed']);
@@ -291,6 +292,19 @@ function normalizeDueDate(dueDate) {
     return { valid: false, value: null };
   }
   return { valid: true, value: normalized };
+}
+
+// Snoozed-until is stored as an ISO UTC datetime so server and client compare
+// it against "now" without timezone drift. Empty/null clears the snooze.
+function normalizeSnoozedUntil(snoozedUntil) {
+  if (snoozedUntil === undefined || snoozedUntil === null || snoozedUntil === '') {
+    return { valid: true, value: null };
+  }
+  const parsed = new Date(snoozedUntil);
+  if (Number.isNaN(parsed.getTime())) {
+    return { valid: false, value: null };
+  }
+  return { valid: true, value: parsed.toISOString() };
 }
 
 // Validates the shared schedule due_time / due_date / reminder fields. On the
@@ -1725,7 +1739,7 @@ fastify.get('/api/chore-schedules/:id', async (request, reply) => {
 });
 
 fastify.post('/api/chore-schedules', async (request, reply) => {
-  const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date } = request.body;
+  const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until } = request.body;
   try {
     if (!chore_id) {
       return reply.status(400).send({ error: 'chore_id is required' });
@@ -1734,6 +1748,11 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
     const dateFields = validateScheduleDateFields(request.body, reply);
     if (!dateFields) return;
     const { dueTimeResult, dueDateResult, reminderResult } = dateFields;
+
+    const snoozedUntilResult = normalizeSnoozedUntil(snoozed_until);
+    if (snoozed_until !== undefined && !snoozedUntilResult.valid) {
+      return reply.status(400).send({ error: 'snoozed_until must be a valid date/time' });
+    }
 
     const normalizedDuration = normalizeScheduleDuration(duration);
     if (!ALLOWED_SCHEDULE_DURATIONS.has(normalizedDuration)) {
@@ -1773,7 +1792,7 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
       normalizedParentScheduleId = parsedParentScheduleId;
     }
 
-    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     const info = stmt.run(
       chore_id,
       user_id || null,
@@ -1786,7 +1805,10 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
       sound || null,
       sound_enabled ? 1 : 0,
       reminderResult.value,
-      dueDateResult.value
+      dueDateResult.value,
+      transferable !== undefined ? (transferable ? 1 : 0) : 1,
+      can_snooze !== undefined ? (can_snooze ? 1 : 0) : 1,
+      snoozedUntilResult.value
     );
     return { id: info.lastInsertRowid, success: true };
   } catch (error) {
@@ -1796,7 +1818,7 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
 });
 
 fastify.post('/api/chore-schedules/bulk', async (request, reply) => {
-  const { chore_id, user_ids, crontab, visible, due_time, sound, sound_enabled, reminder_interval_minutes, due_date } = request.body;
+  const { chore_id, user_ids, crontab, visible, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze } = request.body;
   try {
     if (!chore_id || !user_ids || !Array.isArray(user_ids)) {
       return reply.status(400).send({ error: 'chore_id and user_ids array are required' });
@@ -1814,11 +1836,11 @@ fastify.post('/api/chore-schedules/bulk', async (request, reply) => {
       }
     }
 
-    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, visible, due_time, sound, sound_enabled, reminder_interval_minutes, due_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, visible, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     const ids = [];
 
     for (const user_id of user_ids) {
-      const info = stmt.run(chore_id, user_id, crontab || null, visible !== undefined ? visible : 1, dueTimeResult.value, sound || null, sound_enabled ? 1 : 0, reminderResult.value, dueDateResult.value);
+      const info = stmt.run(chore_id, user_id, crontab || null, visible !== undefined ? visible : 1, dueTimeResult.value, sound || null, sound_enabled ? 1 : 0, reminderResult.value, dueDateResult.value, transferable !== undefined ? (transferable ? 1 : 0) : 1, can_snooze !== undefined ? (can_snooze ? 1 : 0) : 1);
       ids.push(info.lastInsertRowid);
     }
 
@@ -1831,7 +1853,7 @@ fastify.post('/api/chore-schedules/bulk', async (request, reply) => {
 
 fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
   const { id } = request.params;
-  const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date } = request.body;
+  const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until, revoke_daily_bonus, transfer_bonus_clams } = request.body;
   try {
     const dueTimeResult = normalizeDueTime(due_time);
     if (due_time !== undefined && !dueTimeResult.valid) {
@@ -1840,6 +1862,17 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
     const dueDateResult = normalizeDueDate(due_date);
     if (due_date !== undefined && !dueDateResult.valid) {
       return reply.status(400).send({ error: 'due_date must be a valid YYYY-MM-DD date' });
+    }
+    const snoozedUntilResult = normalizeSnoozedUntil(snoozed_until);
+    if (snoozed_until !== undefined && !snoozedUntilResult.valid) {
+      return reply.status(400).send({ error: 'snoozed_until must be a valid date/time' });
+    }
+    let normalizedTransferBonus = null;
+    if (transfer_bonus_clams !== undefined) {
+      normalizedTransferBonus = parseInt(transfer_bonus_clams, 10);
+      if (Number.isNaN(normalizedTransferBonus) || normalizedTransferBonus < 0) {
+        return reply.status(400).send({ error: 'transfer_bonus_clams must be a non-negative integer' });
+      }
     }
     const reminderResult = normalizeReminderInterval(reminder_interval_minutes);
     if (reminder_interval_minutes !== undefined && !reminderResult.valid) {
@@ -1854,7 +1887,7 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
       }
     }
 
-    const existingSchedule = db.prepare('SELECT id, user_id, crontab, duration, interval FROM chore_schedules WHERE id = ?').get(id);
+    const existingSchedule = db.prepare('SELECT id, user_id, crontab, duration, interval, snoozed_until FROM chore_schedules WHERE id = ?').get(id);
     if (!existingSchedule) {
       return reply.status(404).send({ error: 'Schedule not found' });
     }
@@ -1913,6 +1946,10 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
     if (sound_enabled !== undefined) { updates.push('sound_enabled = ?'); params.push(sound_enabled ? 1 : 0); }
     if (reminder_interval_minutes !== undefined) { updates.push('reminder_interval_minutes = ?'); params.push(reminderResult.value); }
     if (due_date !== undefined) { updates.push('due_date = ?'); params.push(dueDateResult.value); }
+    if (transferable !== undefined) { updates.push('transferable = ?'); params.push(transferable ? 1 : 0); }
+    if (can_snooze !== undefined) { updates.push('can_snooze = ?'); params.push(can_snooze ? 1 : 0); }
+    if (snoozed_until !== undefined) { updates.push('snoozed_until = ?'); params.push(snoozedUntilResult.value); }
+    if (transfer_bonus_clams !== undefined) { updates.push('transfer_bonus_clams = ?'); params.push(normalizedTransferBonus); }
 
     if (updates.length === 0) {
       return reply.status(400).send({ error: 'No fields to update' });
@@ -1929,7 +1966,12 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
     // When a chore is reassigned to a different person, re-check the daily "all
     // regular chores done" bonus for both the previous and new owner. Losing a
     // chore can make someone newly all-done, so this awards the bonus they've
-    // earned. It never removes points, so no one loses their score on a move.
+    // earned. By default no one loses points on a move; the transfer dialog can
+    // explicitly send `revoke_daily_bonus` (the parent's "revoke current reward
+    // and assign" choice, issue #122) to take back the receiver's already-earned
+    // daily bonus. The alternative "keep reward" choice persists
+    // `transfer_bonus_clams` (threaded above), paid out when the moved chore is
+    // completed.
     if (user_id !== undefined) {
       const previousUserId = existingSchedule.user_id;
       const nextUserId = user_id || null;
@@ -1939,8 +1981,23 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
           awardDailyRegularBonusIfDue(previousUserId, today);
         }
         if (nextUserId) {
+          if (revoke_daily_bonus === true) {
+            revokeDailyRegularBonus(nextUserId, today);
+          }
+          // Revoke-then-award is idempotent: if the receiver's due set is
+          // somehow still complete, the bonus is immediately re-awarded.
           awardDailyRegularBonusIfDue(nextUserId, today);
         }
+      }
+    }
+
+    // Snoozing defers a chore out of today's required set — if that was the
+    // assignee's last open chore, their day is now complete. Award-only:
+    // un-snoozing never takes points back.
+    if (snoozed_until !== undefined) {
+      const assigneeId = user_id !== undefined ? (user_id || null) : existingSchedule.user_id;
+      if (assigneeId) {
+        awardDailyRegularBonusIfDue(assigneeId, getTodayLocalDateString());
       }
     }
 
@@ -2102,7 +2159,11 @@ function getTodaysRegularChoresForUser(userId, today) {
       )
   `).all(today, userId);
 
-  const regularChores = allUserSchedules.filter(s => s.clam_value === 0);
+  const regularChores = allUserSchedules
+    .filter(s => s.clam_value === 0)
+    // Snoozed chores are deferred: hidden from the dashboard and neither
+    // required for nor counted toward the daily completion bonus.
+    .filter(s => !s.snoozed_until || new Date(s.snoozed_until) <= new Date());
 
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
@@ -2157,6 +2218,27 @@ function awardDailyRegularBonusIfDue(userId, date) {
   }
 }
 
+// Deletes the user's daily-completion bonus row for the given date, if present.
+// Used when uncompleting a regular chore, and by the transfer dialog's explicit
+// "revoke current reward and assign" option (issue #122).
+function revokeDailyRegularBonus(userId, date) {
+  const dailyRewardSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('daily_completion_clam_reward');
+  const dailyReward = dailyRewardSetting ? parseInt(dailyRewardSetting.value, 10) : 2;
+
+  const bonusEntry = db.prepare(`
+      SELECT id FROM chore_history
+      WHERE user_id = ?
+      AND date = ?
+      AND chore_schedule_id IS NULL
+      AND clam_value = ?
+      AND title = ?
+    `).get(userId, date, dailyReward, 'Regular chores');
+
+  if (bonusEntry) {
+    db.prepare('DELETE FROM chore_history WHERE id = ?').run(bonusEntry.id);
+  }
+}
+
 // Chore completion endpoints
 fastify.post('/api/chores/complete', async (request, reply) => {
   const { chore_schedule_id, user_id, date } = request.body;
@@ -2180,6 +2262,14 @@ fastify.post('/api/chores/complete', async (request, reply) => {
     }
 
     db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title) VALUES (?, ?, ?, ?, ?)').run(user_id, chore_schedule_id, date, schedule.clam_value, schedule.title);
+
+    // Pay out a pending transfer bonus (attached by the parent when moving
+    // this chore to a kid whose day was already complete) and clear it so it
+    // pays only once.
+    if (schedule.transfer_bonus_clams > 0) {
+      db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title) VALUES (?, ?, ?, ?, ?)').run(user_id, chore_schedule_id, date, schedule.transfer_bonus_clams, 'Transfer bonus');
+      db.prepare('UPDATE chore_schedules SET transfer_bonus_clams = 0 WHERE id = ?').run(chore_schedule_id);
+    }
 
     if (schedule.parent_schedule_id) {
       const parentSchedule = db.prepare('SELECT id, duration, interval FROM chore_schedules WHERE id = ?').get(schedule.parent_schedule_id);
@@ -2214,30 +2304,26 @@ fastify.post('/api/chores/uncomplete', async (request, reply) => {
       return reply.status(400).send({ error: 'chore_schedule_id, user_id, and date are required' });
     }
 
-    const history = db.prepare('SELECT id, clam_value FROM chore_history WHERE chore_schedule_id = ? AND user_id = ? AND date = ?').get(chore_schedule_id, user_id, date);
+    // Exclude 'Transfer bonus' payout rows so this reliably finds the actual
+    // completion record for the schedule/user/date.
+    const history = db.prepare("SELECT id, clam_value FROM chore_history WHERE chore_schedule_id = ? AND user_id = ? AND date = ? AND title <> 'Transfer bonus'").get(chore_schedule_id, user_id, date);
     if (!history) {
       return reply.status(404).send({ error: 'Completion record not found' });
     }
 
     db.prepare('DELETE FROM chore_history WHERE id = ?').run(history.id);
 
+    // If completing this chore paid out a transfer bonus, take the payout back
+    // and re-arm it on the schedule so re-completing pays again.
+    const transferBonusRow = db.prepare("SELECT id, clam_value FROM chore_history WHERE chore_schedule_id = ? AND user_id = ? AND date = ? AND title = 'Transfer bonus'").get(chore_schedule_id, user_id, date);
+    if (transferBonusRow) {
+      db.prepare('DELETE FROM chore_history WHERE id = ?').run(transferBonusRow.id);
+      db.prepare('UPDATE chore_schedules SET transfer_bonus_clams = ? WHERE id = ?').run(transferBonusRow.clam_value, chore_schedule_id);
+    }
+
     // if the uncompleted chore was a bonus chore (has clam value), don't remove the daily bonus when uncompleting
     if (!history.clam_value) {
-      const dailyRewardSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('daily_completion_clam_reward');
-      const dailyReward = dailyRewardSetting ? parseInt(dailyRewardSetting.value, 10) : 2;
-
-      const bonusEntry = db.prepare(`
-      SELECT id FROM chore_history
-      WHERE user_id = ?
-      AND date = ?
-      AND chore_schedule_id IS NULL
-      AND clam_value = ?
-      AND title = ?
-    `).get(user_id, date, dailyReward, 'Regular chores');
-
-      if (bonusEntry) {
-        db.prepare('DELETE FROM chore_history WHERE id = ?').run(bonusEntry.id);
-      }
+      revokeDailyRegularBonus(user_id, date);
     }
 
     const totalResult = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(user_id);

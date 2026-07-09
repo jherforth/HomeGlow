@@ -118,9 +118,13 @@ const SoundPicker = ({
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
       <FormControl size={size} sx={{ minWidth: { xs: 120, sm: 160 }, flex: 1 }} disabled={disabled}>
-        <InputLabel>{label}</InputLabel>
+        {/* When the empty value renders visible content ("(none)"), MUI doesn't
+            know the input "has a value", so the label must be forced to float
+            or it overlaps the text (issue #122). */}
+        <InputLabel shrink={includeNoneOption && !hideEmptyDisplay ? true : undefined}>{label}</InputLabel>
         <Select
           label={label}
+          notched={includeNoneOption && !hideEmptyDisplay ? true : undefined}
           value={sounds.some((s) => s.filename === value) ? value : ''}
           onChange={(e) => onChange && onChange(e.target.value)}
           displayEmpty={includeNoneOption || hideEmptyDisplay}

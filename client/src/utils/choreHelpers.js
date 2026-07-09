@@ -6,6 +6,12 @@ export function shouldShowChoreToday(schedule) {
     return false;
   }
 
+  // Snoozed chores stay hidden until the snooze passes (ISO UTC comparison,
+  // mirrors the server's daily-bonus filtering).
+  if (schedule.snoozed_until && new Date(schedule.snoozed_until) > new Date()) {
+    return false;
+  }
+
   if (!schedule.crontab) {
     return true;
   }

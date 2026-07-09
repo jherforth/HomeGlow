@@ -208,7 +208,9 @@ const defaultScheduleForm = {
   due_time: '',
   sound_enabled: false,
   sound: '',
-  reminder_interval_minutes: ''
+  reminder_interval_minutes: '',
+  transferable: true,
+  can_snooze: true
 };
 
 const defaultChoreForm = { title: '', description: '', clam_value: 0 };
@@ -326,7 +328,10 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
       due_time: schedule.due_time || '',
       sound_enabled: !!schedule.sound_enabled,
       sound: schedule.sound || '',
-      reminder_interval_minutes: schedule.reminder_interval_minutes ? String(schedule.reminder_interval_minutes) : ''
+      reminder_interval_minutes: schedule.reminder_interval_minutes ? String(schedule.reminder_interval_minutes) : '',
+      // Pre-migration rows may lack these columns; treat missing as enabled.
+      transferable: schedule.transferable === undefined ? true : !!schedule.transferable,
+      can_snooze: schedule.can_snooze === undefined ? true : !!schedule.can_snooze
     });
     setCrontabError(null);
     setScheduleDialogOpen(true);
@@ -372,7 +377,9 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
         sound: scheduleForm.sound_enabled ? (scheduleForm.sound || null) : null,
         reminder_interval_minutes: scheduleForm.sound_enabled && scheduleForm.reminder_interval_minutes
           ? parseInt(scheduleForm.reminder_interval_minutes, 10)
-          : null
+          : null,
+        transferable: scheduleForm.transferable ? 1 : 0,
+        can_snooze: scheduleForm.can_snooze ? 1 : 0
       };
 
       if (editingSchedule) {
@@ -633,7 +640,6 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
             <TableRow>
               <TableCell>Chore</TableCell>
               <TableCell>Assigned To</TableCell>
-              <TableCell>Crontab</TableCell>
               <TableCell>Next Occurrence</TableCell>
               <TableCell>Duration</TableCell>
               <TableCell>Clams</TableCell>
@@ -644,7 +650,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
           <TableBody>
             {filteredSchedules.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
                   <Typography color="text.secondary">No schedules found.</Typography>
                 </TableCell>
               </TableRow>
@@ -667,11 +673,9 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                       color={s.user_id ? 'primary' : 'default'}
                     />
                   </TableCell>
-                  <TableCell data-label="Crontab">
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
-                      {s.crontab || <em style={{ opacity: 0.6 }}>one-time</em>}
-                    </Typography>
-                  </TableCell>
+                  {/* Crontab column removed (issue #122): the raw expression is
+                      redundant next to Next Occurrence and still visible when
+                      editing the schedule. */}
                   <TableCell data-label="Next Occurrence">
                     <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
                       {getNextOccurrence(s.crontab)}
@@ -1121,6 +1125,35 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                 />
               </Box>
             )}
+
+            <Divider />
+
+            {/* Gates for the dashboard long-press menu (issue #122). */}
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={scheduleForm.transferable}
+                  onChange={(e) => updateScheduleForm({ transferable: e.target.checked })}
+                />
+              }
+              label="Transferable"
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ mt: -1.5, ml: 6 }}>
+              Allows reassignment from the dashboard.
+            </Typography>
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={scheduleForm.can_snooze}
+                  onChange={(e) => updateScheduleForm({ can_snooze: e.target.checked })}
+                />
+              }
+              label="Can snooze/defer"
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ mt: -1.5, ml: 6 }}>
+              Allows the scheduled time to be deferred by a set time.
+            </Typography>
 
             <Divider />
 

@@ -579,6 +579,145 @@ test('chore schedule rejects an invalid due_time', async () => {
     assert.match(createRes.body.error, /due_time/);
 });
 
+test('chore schedule persists transferable, can_snooze, and snoozed_until (issue #122)', async () => {
+    const choreRes = await api('/api/chores', {
+        method: 'POST',
+        body: JSON.stringify({ title: 'Water garden', description: '', clam_value: 0 }),
+    });
+    const choreId = choreRes.body.id;
+
+    const snoozeIso = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const createRes = await api('/api/chore-schedules', {
+        method: 'POST',
+        body: JSON.stringify({ chore_id: choreId, crontab: '0 0 * * *', duration: 'day-of', transferable: 0, can_snooze: 0, snoozed_until: snoozeIso }),
+    });
+    assert.equal(createRes.status, 200);
+    const scheduleId = createRes.body.id;
+
+    const afterCreate = await api(`/api/chore-schedules/${scheduleId}`);
+    assert.equal(afterCreate.body.transferable, 0);
+    assert.equal(afterCreate.body.can_snooze, 0);
+    assert.equal(afterCreate.body.snoozed_until, snoozeIso);
+
+    // Omitted fields default to enabled / not snoozed.
+    const defaultsCreate = await api('/api/chore-schedules', {
+        method: 'POST',
+        body: JSON.stringify({ chore_id: choreId, crontab: '0 0 * * *', duration: 'day-of' }),
+    });
+    const defaults = await api(`/api/chore-schedules/${defaultsCreate.body.id}`);
+    assert.equal(defaults.body.transferable, 1);
+    assert.equal(defaults.body.can_snooze, 1);
+    assert.equal(defaults.body.snoozed_until, null);
+
+    // PATCH round-trips; an empty string clears the snooze.
+    const patchRes = await api(`/api/chore-schedules/${scheduleId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ transferable: 1, can_snooze: 1, snoozed_until: '' }),
+    });
+    assert.equal(patchRes.status, 200);
+    const afterPatch = await api(`/api/chore-schedules/${scheduleId}`);
+    assert.equal(afterPatch.body.transferable, 1);
+    assert.equal(afterPatch.body.can_snooze, 1);
+    assert.equal(afterPatch.body.snoozed_until, null);
+
+    const badRes = await api(`/api/chore-schedules/${scheduleId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ snoozed_until: 'not-a-date' }),
+    });
+    assert.equal(badRes.status, 400);
+    assert.match(badRes.body.error, /snoozed_until/);
+});
+
+test('transfer onto a completed day supports revoke and keep-with-bonus paths (issue #122)', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+
+    const giverRes = await api('/api/users', { method: 'POST', body: JSON.stringify({ username: 'Giver Gwen' }) });
+    const receiverRes = await api('/api/users', { method: 'POST', body: JSON.stringify({ username: 'Receiver Rae' }) });
+    const giverId = giverRes.body.id;
+    const receiverId = receiverRes.body.id;
+
+    const makeRegularChoreSchedule = async (title, userId) => {
+        const chore = await api('/api/chores', { method: 'POST', body: JSON.stringify({ title, description: '', clam_value: 0 }) });
+        const schedule = await api('/api/chore-schedules', {
+            method: 'POST',
+            body: JSON.stringify({ chore_id: chore.body.id, user_id: userId, crontab: '0 0 * * *', duration: 'day-of', visible: 1 }),
+        });
+        return schedule.body.id;
+    };
+    const clamsOf = async (userId) => (await api(`/api/users/${userId}/clams`)).body.clam_total;
+
+    // Receiver completes their only regular chore -> earns the daily bonus (default 2).
+    const receiverChore = await makeRegularChoreSchedule('Rae dishes', receiverId);
+    await api('/api/chores/complete', { method: 'POST', body: JSON.stringify({ chore_schedule_id: receiverChore, user_id: receiverId, date: today }) });
+    assert.equal(await clamsOf(receiverId), 2, 'receiver should hold the daily completion bonus');
+
+    // REVOKE path: moving an open chore onto the completed day takes the bonus back.
+    const revokeChore = await makeRegularChoreSchedule('Gwen laundry', giverId);
+    const revokeRes = await api(`/api/chore-schedules/${revokeChore}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ user_id: receiverId, visible: 1, revoke_daily_bonus: true }),
+    });
+    assert.equal(revokeRes.status, 200);
+    assert.equal(await clamsOf(receiverId), 0, 'revoke_daily_bonus should delete the receiver bonus row');
+
+    // Completing the transferred chore re-completes the day and re-awards once.
+    await api('/api/chores/complete', { method: 'POST', body: JSON.stringify({ chore_schedule_id: revokeChore, user_id: receiverId, date: today }) });
+    assert.equal(await clamsOf(receiverId), 2);
+
+    // KEEP path: bonus stays and the pending transfer bonus pays on completion.
+    const keepChore = await makeRegularChoreSchedule('Gwen vacuum', giverId);
+    const keepRes = await api(`/api/chore-schedules/${keepChore}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ user_id: receiverId, visible: 1, transfer_bonus_clams: 3 }),
+    });
+    assert.equal(keepRes.status, 200);
+    assert.equal(await clamsOf(receiverId), 2, 'keep path must not touch the daily bonus');
+    assert.equal((await api(`/api/chore-schedules/${keepChore}`)).body.transfer_bonus_clams, 3);
+
+    await api('/api/chores/complete', { method: 'POST', body: JSON.stringify({ chore_schedule_id: keepChore, user_id: receiverId, date: today }) });
+    assert.equal(await clamsOf(receiverId), 5, 'completion should pay the 3-clam transfer bonus without double daily bonus');
+    assert.equal((await api(`/api/chore-schedules/${keepChore}`)).body.transfer_bonus_clams, 0, 'payout clears the pending bonus');
+
+    // Uncompleting takes the payout back, re-arms it, and revokes the daily bonus.
+    await api('/api/chores/uncomplete', { method: 'POST', body: JSON.stringify({ chore_schedule_id: keepChore, user_id: receiverId, date: today }) });
+    assert.equal(await clamsOf(receiverId), 0);
+    assert.equal((await api(`/api/chore-schedules/${keepChore}`)).body.transfer_bonus_clams, 3, 'uncomplete re-arms the pending bonus');
+});
+
+test('snoozing the last open chore awards the daily bonus, un-snoozing never revokes (issue #122)', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+
+    const userRes = await api('/api/users', { method: 'POST', body: JSON.stringify({ username: 'Snoozy Sam' }) });
+    const userId = userRes.body.id;
+
+    const makeSchedule = async (title) => {
+        const chore = await api('/api/chores', { method: 'POST', body: JSON.stringify({ title, description: '', clam_value: 0 }) });
+        const schedule = await api('/api/chore-schedules', {
+            method: 'POST',
+            body: JSON.stringify({ chore_id: chore.body.id, user_id: userId, crontab: '0 0 * * *', duration: 'day-of', visible: 1 }),
+        });
+        return schedule.body.id;
+    };
+    const clamsOf = async () => (await api(`/api/users/${userId}/clams`)).body.clam_total;
+
+    const doneChore = await makeSchedule('Sam bed');
+    const openChore = await makeSchedule('Sam homework');
+    await api('/api/chores/complete', { method: 'POST', body: JSON.stringify({ chore_schedule_id: doneChore, user_id: userId, date: today }) });
+    assert.equal(await clamsOf(), 0, 'no bonus while a regular chore is still open');
+
+    // Snoozing the open chore defers it out of today's required set.
+    const snoozeRes = await api(`/api/chore-schedules/${openChore}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ snoozed_until: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() }),
+    });
+    assert.equal(snoozeRes.status, 200);
+    assert.equal(await clamsOf(), 2, 'snoozing the last open chore completes the day');
+
+    // Un-snoozing reopens the chore but never claws the bonus back.
+    await api(`/api/chore-schedules/${openChore}`, { method: 'PATCH', body: JSON.stringify({ snoozed_until: '' }) });
+    assert.equal(await clamsOf(), 2, 'award-only: un-snooze does not revoke');
+});
+
 test('chore schedule persists and updates due_date', async () => {
     const choreRes = await api('/api/chores', {
         method: 'POST',

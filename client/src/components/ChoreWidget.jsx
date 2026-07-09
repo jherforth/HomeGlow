@@ -21,11 +21,18 @@ import {
   DialogActions,
   CircularProgress,
   Menu,
-  ListItemText
+  ListItemText,
+  ListItemIcon,
+  List,
+  ListItemButton,
+  ListItemAvatar,
+  Radio,
+  RadioGroup
 } from '@mui/material';
-import { Edit, Save, Cancel, Add, Delete, Check, Undo, SwapHoriz } from '@mui/icons-material';
+import { Edit, Save, Cancel, Add, Delete, Check, Undo, SwapHoriz, Snooze } from '@mui/icons-material';
 import axios from 'axios';
 import LoadingBackdrop from './LoadingBackdrop';
+import PinModal from './PinModal';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
 import { shouldShowChoreToday, getTodayDateString, convertDaysToCrontab, getDueDateStatus, formatDueDate } from '../utils/choreHelpers.js';
@@ -67,8 +74,15 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
   const [deviceSettingsLoaded, setDeviceSettingsLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [dailyClamReward, setDailyClamReward] = useState(2);
-  const [reassignAnchor, setReassignAnchor] = useState(null);
-  const [reassignSchedule, setReassignSchedule] = useState(null);
+  // Long-press / right-click chore menu and its follow-up dialogs (issue #122).
+  const [choreMenu, setChoreMenu] = useState({ position: null, schedule: null });
+  const [transferDialog, setTransferDialog] = useState({ open: false, schedule: null, targetUserId: null, mode: 'keep', bonus: 1 });
+  const [snoozeDialog, setSnoozeDialog] = useState({ open: false, schedule: null, until: '' });
+  const [pinGate, setPinGate] = useState({ open: false, onSuccess: null });
+  const longPressTimerRef = useRef(null);
+  const longPressFiredRef = useRef(false);
+  const longPressStartRef = useRef(null);
+  const choreMenuOpenedAtRef = useRef(0);
 
   const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
@@ -279,7 +293,7 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
     }
   };
 
-  const reassignChore = async (scheduleId, newUserId) => {
+  const reassignChore = async (scheduleId, newUserId, extraFields = {}) => {
     const schedule = schedules.find(s => s.id === scheduleId);
     if (!schedule || schedule.user_id === newUserId) {
       return;
@@ -289,7 +303,8 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
       setIsLoading(true);
       await axios.patch(`${API_BASE_URL}/api/chore-schedules/${scheduleId}`, {
         user_id: newUserId,
-        visible: 1
+        visible: 1,
+        ...extraFields
       });
       await fetchData();
     } catch (error) {
@@ -300,23 +315,184 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
     }
   };
 
-  const openReassignMenu = (event, schedule) => {
-    event.stopPropagation();
-    setReassignAnchor(event.currentTarget);
-    setReassignSchedule(schedule);
+  // ---- Long-press / right-click chore menu (issue #122) -------------------
+  // Desktop: right-click (native context menu suppressed). Android: long-press
+  // fires `contextmenu` natively. iOS: no contextmenu event, so a pointer
+  // timer provides the long-press.
+
+  const openChoreMenu = (clientX, clientY, schedule) => {
+    if (choreMenu.schedule) return; // already open (Android contextmenu + timer double-fire guard)
+    const canTransfer = schedule.transferable !== 0 && users.filter(u => u.id !== 0 && u.id !== schedule.user_id).length > 0;
+    const canSnooze = schedule.can_snooze !== 0;
+    if (!canTransfer && !canSnooze) return;
+    choreMenuOpenedAtRef.current = Date.now();
+    setChoreMenu({ position: { top: clientY, left: clientX }, schedule });
   };
 
-  const closeReassignMenu = () => {
-    setReassignAnchor(null);
-    setReassignSchedule(null);
-  };
+  const closeChoreMenu = () => setChoreMenu({ position: null, schedule: null });
 
-  const handleReassignSelect = (newUserId) => {
-    const scheduleId = reassignSchedule?.id;
-    closeReassignMenu();
-    if (scheduleId) {
-      reassignChore(scheduleId, newUserId);
+  // When a long-press opens the menu while the finger is still down, lifting
+  // the finger fires a click that lands on the menu backdrop and would close
+  // it instantly. Ignore backdrop clicks that arrive right after opening.
+  const handleChoreMenuClose = (event, reason) => {
+    if (reason === 'backdropClick' && Date.now() - choreMenuOpenedAtRef.current < 700) {
+      return;
     }
+    closeChoreMenu();
+  };
+
+  const clearLongPressTimer = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const handleCardPointerDown = (event, schedule) => {
+    longPressFiredRef.current = false;
+    // Mouse users reach the menu via right-click; the timer is the touch/pen path.
+    if (event.pointerType === 'mouse') return;
+    longPressStartRef.current = { x: event.clientX, y: event.clientY };
+    const { clientX, clientY } = event;
+    clearLongPressTimer();
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTimerRef.current = null;
+      longPressFiredRef.current = true;
+      openChoreMenu(clientX, clientY, schedule);
+    }, 600);
+  };
+
+  const handleCardPointerMove = (event) => {
+    if (!longPressTimerRef.current || !longPressStartRef.current) return;
+    const dx = event.clientX - longPressStartRef.current.x;
+    const dy = event.clientY - longPressStartRef.current.y;
+    if (Math.hypot(dx, dy) > 10) clearLongPressTimer(); // treat as scroll/drag
+  };
+
+  const handleCardPointerEnd = () => clearLongPressTimer();
+
+  const handleCardContextMenu = (event, schedule) => {
+    // Always suppress the native browser menu on chore cards so right-click
+    // (and Android long-press) opens the chore menu instead.
+    event.preventDefault();
+    // A long-press-generated contextmenu (button 0) is often followed by a
+    // synthetic click; swallow it. Desktop right-click (button 2) produces no
+    // click, so leave the ref alone there.
+    if (event.button !== 2) {
+      longPressFiredRef.current = true;
+    }
+    openChoreMenu(event.clientX, event.clientY, schedule);
+  };
+
+  const handleCardClickCapture = (event) => {
+    if (longPressFiredRef.current) {
+      event.preventDefault();
+      event.stopPropagation();
+      longPressFiredRef.current = false;
+    }
+  };
+
+  // Mirrors the server's daily-bonus rule: a user's day is complete when they
+  // have at least one regular (zero-clam) chore today and none are open.
+  const isUserDayComplete = (userId) => {
+    const regular = getUserChoresForToday(userId).filter(c => c.clam_value === 0);
+    return regular.length > 0 && regular.every(c => c.completed);
+  };
+
+  // Runs `action` immediately when no admin PIN is configured (incl. demo
+  // mode); otherwise opens the PIN modal and runs it after verification.
+  const requirePin = async (action) => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/admin-pin/exists`);
+      if (response.data?.exists) {
+        setPinGate({ open: true, onSuccess: action });
+      } else {
+        action();
+      }
+    } catch (error) {
+      console.error('Error checking admin PIN:', error);
+      alert('Could not confirm admin PIN status. Please try again.');
+    }
+  };
+
+  const handlePinVerify = async (pin) => {
+    const response = await axios.post(`${API_BASE_URL}/api/admin-pin/verify`, { pin });
+    if (!response.data?.valid) {
+      throw new Error('Incorrect PIN. Please try again.');
+    }
+    const action = pinGate.onSuccess;
+    setPinGate({ open: false, onSuccess: null });
+    if (action) action();
+  };
+
+  const openTransferDialog = () => {
+    const schedule = choreMenu.schedule;
+    closeChoreMenu();
+    if (schedule) {
+      setTransferDialog({ open: true, schedule, targetUserId: null, mode: 'keep', bonus: 1 });
+    }
+  };
+
+  const confirmTransfer = () => {
+    const { schedule, targetUserId, mode, bonus } = transferDialog;
+    if (!schedule || !targetUserId) return;
+    const extras = {};
+    // The revoke/keep choice only applies when the receiver's day is already
+    // complete (and therefore rewarded).
+    if (isUserDayComplete(targetUserId)) {
+      if (mode === 'revoke') {
+        extras.revoke_daily_bonus = true;
+      } else {
+        extras.transfer_bonus_clams = Math.max(0, parseInt(bonus, 10) || 0);
+      }
+    }
+    setTransferDialog(prev => ({ ...prev, open: false }));
+    requirePin(() => reassignChore(schedule.id, targetUserId, extras));
+  };
+
+  const toDatetimeLocalString = (date) => {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  };
+
+  const snoozePresetValue = (daysFromNow) => {
+    const d = new Date();
+    d.setDate(d.getDate() + daysFromNow);
+    d.setHours(0, 0, 0, 0);
+    return toDatetimeLocalString(d);
+  };
+
+  const openSnoozeDialog = () => {
+    const schedule = choreMenu.schedule;
+    closeChoreMenu();
+    if (schedule) {
+      setSnoozeDialog({ open: true, schedule, until: snoozePresetValue(1) });
+    }
+  };
+
+  const confirmSnooze = () => {
+    const { schedule, until } = snoozeDialog;
+    if (!schedule) return;
+    const parsed = new Date(until);
+    if (!until || Number.isNaN(parsed.getTime())) {
+      alert('Enter a valid date and time to snooze until.');
+      return;
+    }
+    setSnoozeDialog(prev => ({ ...prev, open: false }));
+    requirePin(async () => {
+      try {
+        setIsLoading(true);
+        await axios.patch(`${API_BASE_URL}/api/chore-schedules/${schedule.id}`, {
+          snoozed_until: parsed.toISOString()
+        });
+        await fetchData();
+      } catch (error) {
+        console.error('Error snoozing chore:', error);
+        alert(error.response?.data?.error || 'Failed to snooze chore');
+      } finally {
+        setIsLoading(false);
+      }
+    });
   };
 
   const saveChore = async () => {
@@ -482,6 +658,15 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
     return (
       <Box
         key={schedule.id}
+        className="chore-card"
+        data-schedule-id={schedule.id}
+        onContextMenu={(e) => handleCardContextMenu(e, schedule)}
+        onPointerDown={(e) => handleCardPointerDown(e, schedule)}
+        onPointerMove={handleCardPointerMove}
+        onPointerUp={handleCardPointerEnd}
+        onPointerLeave={handleCardPointerEnd}
+        onPointerCancel={handleCardPointerEnd}
+        onClickCapture={handleCardClickCapture}
         sx={{
           p: 1.5,
           border: '1px solid var(--card-border)',
@@ -490,7 +675,11 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
           bgcolor: rowBgColor,
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center'
+          alignItems: 'center',
+          // Keep long-press from triggering text selection / iOS callout.
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          WebkitTouchCallout: 'none'
         }}
       >
         <Box sx={{ flex: 1 }}>
@@ -546,25 +735,6 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
           >
             {schedule.completed ? <Undo fontSize="small" /> : <Check fontSize="small" />}
           </IconButton>
-          {users.length > 1 && (
-            <IconButton
-              onClick={(e) => openReassignMenu(e, schedule)}
-              size="small"
-              title="Reassign to another person"
-              sx={{
-                minWidth: 'auto',
-                width: 32,
-                height: 32,
-                color: 'var(--accent)',
-                border: '1px solid var(--card-border)',
-                '&:hover': {
-                  bgcolor: 'rgba(var(--accent-rgb), 0.1)'
-                }
-              }}
-            >
-              <SwapHoriz fontSize="small" />
-            </IconButton>
-          )}
         </Box>
       </Box>
     );
@@ -936,24 +1106,133 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
           </DialogActions>
         </Dialog>
 
+        {/* Long-press / right-click chore menu */}
         <Menu
-          anchorEl={reassignAnchor}
-          open={Boolean(reassignAnchor)}
-          onClose={closeReassignMenu}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-          transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          open={Boolean(choreMenu.position)}
+          onClose={handleChoreMenuClose}
+          anchorReference="anchorPosition"
+          anchorPosition={choreMenu.position || undefined}
         >
-          <MenuItem disabled sx={{ opacity: 0.7, fontSize: '0.8rem' }}>
-            Reassign to…
-          </MenuItem>
-          {users
-            .filter(user => user.id !== reassignSchedule?.user_id)
-            .map(user => (
-              <MenuItem key={user.id} onClick={() => handleReassignSelect(user.id)}>
-                <ListItemText primary={user.username} />
-              </MenuItem>
-            ))}
+          {choreMenu.schedule?.transferable !== 0 && users.filter(u => u.id !== 0 && u.id !== choreMenu.schedule?.user_id).length > 0 && (
+            <MenuItem onClick={openTransferDialog}>
+              <ListItemIcon><SwapHoriz fontSize="small" /></ListItemIcon>
+              <ListItemText primary="Transfer chore" />
+            </MenuItem>
+          )}
+          {choreMenu.schedule?.can_snooze !== 0 && (
+            <MenuItem onClick={openSnoozeDialog}>
+              <ListItemIcon><Snooze fontSize="small" /></ListItemIcon>
+              <ListItemText primary="Snooze due date" />
+            </MenuItem>
+          )}
         </Menu>
+
+        {/* Transfer chore dialog */}
+        <Dialog
+          open={transferDialog.open}
+          onClose={() => setTransferDialog(prev => ({ ...prev, open: false }))}
+          maxWidth="xs"
+          fullWidth
+        >
+          <DialogTitle>Transfer "{transferDialog.schedule?.title}"</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              Who should take over this chore?
+            </Typography>
+            <List dense>
+              {users
+                .filter(user => user.id !== 0 && user.id !== transferDialog.schedule?.user_id)
+                .map(user => (
+                  <ListItemButton
+                    key={user.id}
+                    selected={transferDialog.targetUserId === user.id}
+                    onClick={() => setTransferDialog(prev => ({ ...prev, targetUserId: user.id }))}
+                  >
+                    <ListItemAvatar>
+                      <Avatar sx={{ width: 32, height: 32, bgcolor: 'var(--accent)' }}>
+                        {user.username?.charAt(0).toUpperCase()}
+                      </Avatar>
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={user.username}
+                      secondary={isUserDayComplete(user.id) ? 'All chores done today' : null}
+                    />
+                  </ListItemButton>
+                ))}
+            </List>
+            {transferDialog.targetUserId && isUserDayComplete(transferDialog.targetUserId) && (
+              <Box sx={{ mt: 1, p: 1.5, border: '1px solid var(--card-border)', borderRadius: 2 }}>
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  They already finished today's chores and earned the daily reward.
+                </Typography>
+                <RadioGroup
+                  value={transferDialog.mode}
+                  onChange={(e) => setTransferDialog(prev => ({ ...prev, mode: e.target.value }))}
+                >
+                  <FormControlLabel value="revoke" control={<Radio size="small" />} label="Revoke current reward and assign" />
+                  <FormControlLabel value="keep" control={<Radio size="small" />} label="Keep current reward and assign" />
+                </RadioGroup>
+                {transferDialog.mode === 'keep' && (
+                  <TextField
+                    type="number"
+                    size="small"
+                    label="🥟 Bonus when completed"
+                    value={transferDialog.bonus}
+                    onChange={(e) => setTransferDialog(prev => ({ ...prev, bonus: e.target.value }))}
+                    inputProps={{ min: 0 }}
+                    sx={{ mt: 1 }}
+                  />
+                )}
+              </Box>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setTransferDialog(prev => ({ ...prev, open: false }))}>Cancel</Button>
+            <Button variant="contained" disabled={!transferDialog.targetUserId} onClick={confirmTransfer}>
+              Transfer
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Snooze chore dialog */}
+        <Dialog
+          open={snoozeDialog.open}
+          onClose={() => setSnoozeDialog(prev => ({ ...prev, open: false }))}
+          maxWidth="xs"
+          fullWidth
+        >
+          <DialogTitle>Snooze "{snoozeDialog.schedule?.title}"</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              The chore stays hidden and isn't required for the daily reward until this time.
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+              <Chip label="Tomorrow" size="small" onClick={() => setSnoozeDialog(prev => ({ ...prev, until: snoozePresetValue(1) }))} />
+              <Chip label="In 3 days" size="small" onClick={() => setSnoozeDialog(prev => ({ ...prev, until: snoozePresetValue(3) }))} />
+              <Chip label="Next week" size="small" onClick={() => setSnoozeDialog(prev => ({ ...prev, until: snoozePresetValue(7) }))} />
+            </Box>
+            <TextField
+              fullWidth
+              type="datetime-local"
+              label="Snooze until"
+              value={snoozeDialog.until}
+              onChange={(e) => setSnoozeDialog(prev => ({ ...prev, until: e.target.value }))}
+              InputLabelProps={{ shrink: true }}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setSnoozeDialog(prev => ({ ...prev, open: false }))}>Cancel</Button>
+            <Button variant="contained" onClick={confirmSnooze}>Snooze</Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Admin PIN confirmation for transfer/snooze */}
+        <PinModal
+          open={pinGate.open}
+          onClose={() => setPinGate({ open: false, onSuccess: null })}
+          onVerify={handlePinVerify}
+          title="Confirm with Admin PIN"
+        />
       </Box>
 
       <LoadingBackdrop open={isLoading} />
