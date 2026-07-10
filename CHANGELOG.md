@@ -1,3 +1,59 @@
+# HomeGlow v 1.6.2 Changelog
+
+## 🎉 Recent Updates
+
+A chores-focused release: reassigning and snoozing chores moves to a long-press
+context menu right on the dashboard card, with new admin controls to gate that
+per chore. Demo mode also grows a weather widget and real multi-calendar sync.
+
+---
+
+## New Features
+
+### Chore Long-Press Menu: Transfer & Snooze (#122)
+- The dashboard reassign button is replaced by a **long-press (or right-click)
+  context menu** on each chore card, freeing up space on the card itself and
+  matching how the swap felt clunky before.
+- **Transfer** a chore to someone else, choosing whether the mover keeps credit
+  for today (a "transfer bonus" that pays out when the new assignee completes
+  it) or the chore simply moves with no bonus.
+- **Snooze** a chore for a day or a week — snoozed chores are hidden from the
+  dashboard and excluded from the daily-completion bonus until they resurface.
+- New **Chore Settings** sub-tab in the Admin Panel (alongside Chores and
+  History) holds the reward configuration, plus new **Transferable** and
+  **Can snooze** toggles on each schedule so specific chores can opt out of
+  dashboard reassignment or snoozing entirely — useful behind a PIN-gated
+  admin panel.
+- Fixed the due-time sound label overlapping its "(none)" placeholder text.
+
+### Demo Mode: Weather Widget & Live Multi-Calendar Sync
+- The demo now seeds a **weather widget** with a static real-conditions
+  snapshot of Chili, NY (current temp, 3-day outlook, hourly chart, air
+  quality) served from `GET /api/demo/weather`, since the demo has no
+  OpenWeatherMap API key.
+- Calendar sync now runs for real in demo mode against **four curated public
+  feeds** — US Federal Holidays, the Arizona Diamondbacks schedule, and two
+  overlapping Town of Chili feeds — giving visitors a live look at
+  cross-calendar event deduplication. Visitor-supplied calendar URLs remain
+  blocked entirely (SSRF guard); only the seeded feeds are ever fetched.
+- See the updated [Demo Mode guide](docs/guides/demo-mode.md) for the full
+  breakdown of what's seeded and how sync behaves.
+
+---
+
+## Summary
+A chore-workflow rework (long-press transfer/snooze menu, per-chore admin
+gates) plus a richer, more alive demo mode (live weather and multi-calendar
+sync).
+
+---
+
+## 📝 Notes
+
+For questions or issues, please visit our [GitHub Issues](https://github.com/jherforth/HomeGlow/issues) page.
+
+---
+
 # HomeGlow v 1.6.1 Changelog
 
 ## 🎉 Recent Updates
