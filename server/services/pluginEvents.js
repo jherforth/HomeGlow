@@ -9,9 +9,10 @@
 // listed here (validated at install time), so a typo'd subscription fails
 // loudly instead of never firing. Grow it additively.
 const PLUGIN_EVENT_CATALOG = Object.freeze([
-    'clam.deposited',   // { userId, amount, newTotal }
-    'clam.withdrawn',   // { userId, amount, newTotal }
-    'chore.completed',  // { userId, choreId, scheduleId, clamValue, date }
+    'clam.deposited',    // { userId, amount, newTotal }
+    'clam.withdrawn',    // { userId, amount, newTotal }
+    'chore.completed',   // { userId, choreId, scheduleId, clamValue, date }
+    'chore.uncompleted', // { userId, choreId, scheduleId, clamValue, date } — mirror of chore.completed
 ]);
 
 const catalogSet = new Set(PLUGIN_EVENT_CATALOG);

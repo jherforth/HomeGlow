@@ -218,6 +218,7 @@ const off = HomeGlow.on('clam.withdrawn', (payload, meta) => {
 | `clam.deposited` | clams added to a user | `{ userId, amount, newTotal }` |
 | `clam.withdrawn` | clams reduced from a user | `{ userId, amount, newTotal }` |
 | `chore.completed` | a chore is completed | `{ userId, choreId, scheduleId, clamValue, date }` |
+| `chore.uncompleted` | a completion is undone | `{ userId, choreId, scheduleId, clamValue, date }` |
 
 Declaring an event not in the catalog rejects the install — typos fail loudly.
 Only declared events are ever delivered to your iframe.
@@ -254,9 +255,26 @@ setting to `total` inside my `give-pool` storage document.*
 | `action` | `"increment"` (the only action today). |
 | `key` / `path` | Storage document and dot-path to the number (created on demand). |
 | `delta` | A literal number, `{ "setting": "<key>" }` (a declared **household number** setting — resolved live at fire time), or `{ "payload": "<field>" }` (a numeric field from the event payload, e.g. `amount`). |
+| `factor` | Optional multiplier on the resolved delta (default `1`). `factor: -1` builds a **mirror reaction** that compensates an undo event. |
 
 Requires `"storage": true`. The increment is atomic; a failed reaction is
 logged server-side and never breaks the triggering action or other plugins.
+
+**Pair do/undo events.** If you react to `chore.completed`, declare the mirror
+on `chore.uncompleted` with `factor: -1` — otherwise complete → uncomplete →
+re-complete double-counts your increment:
+
+```json
+"reactions": [
+  { "on": "chore.completed",   "action": "increment", "key": "bank", "path": "tally",
+    "delta": { "payload": "clamValue" } },
+  { "on": "chore.uncompleted", "action": "increment", "key": "bank", "path": "tally",
+    "delta": { "payload": "clamValue" }, "factor": -1 }
+]
+```
+
+(Clam withdrawals have no undo event, so `clam.withdrawn` reactions like the
+siphon need no mirror.)
 
 ## 7. Worked example: clam buckets (spend / save / give)
 
@@ -383,7 +401,10 @@ How the pieces cooperate:
 - **Behavior settings → household scope; presentation settings → device
   scope.**
 - **Pick your `id` once.** Storage and settings are keyed by it; renaming it
-  orphans existing data. Deleting a plugin keeps its stored data, so a
-  reinstall under the same id picks up where it left off.
+  orphans existing data. Deleting a plugin keeps its stored data by default, so
+  a reinstall under the same id picks up where it left off — the Admin Panel
+  offers to purge the data on delete (`DELETE /api/widgets/:filename?purgeData=true`),
+  which you should accept before installing a *different* plugin that uses the
+  same id.
 - Plugins are **fully trusted** in HomeGlow's self-hosted model (no auth) —
   install plugins you've read or trust the source of.

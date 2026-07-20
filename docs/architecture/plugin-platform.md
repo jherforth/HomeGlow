@@ -303,6 +303,7 @@ need:
 | `clam.withdrawn` | `POST /api/users/:id/clams/reduce` succeeds | `{ userId, amount, newTotal }` |
 | `clam.deposited` | `POST /api/users/:id/clams/add` succeeds | `{ userId, amount, newTotal }` |
 | `chore.completed` | `POST /api/chores/complete` succeeds | `{ userId, choreId, scheduleId, clamValue, date }` |
+| `chore.uncompleted` | `POST /api/chores/uncomplete` succeeds | `{ userId, choreId, scheduleId, clamValue, date }` — mirror event so reactions can compensate (see `factor` below) |
 
 Events are named `domain.pastTenseVerb`. New events are additive. The catalog
 lives in [`server/services/pluginEvents.js`](../../server/services/pluginEvents.js)
@@ -346,14 +347,18 @@ update regardless of which device is showing the plugin). Three delivery models:
 > code) is explicitly deferred and may never be needed.
 >
 > As implemented, a reaction is
-> `{ on, action: "increment", key, path, delta }` where `delta` is a literal
-> number, `{ "setting": "<household number setting>" }` (resolved live at fire
-> time), or `{ "payload": "<numeric field>" }`. Reactions require
-> `"storage": true`, are validated at install (event against the catalog,
-> setting reference against the declared schema), and run **once per event at
-> emission** — before SSE fan-out, independent of how many dashboards are
-> connected. A failed reaction is logged and never breaks the core mutation or
-> other plugins.
+> `{ on, action: "increment", key, path, delta, factor? }` where `delta` is a
+> literal number, `{ "setting": "<household number setting>" }` (resolved live
+> at fire time through the same `resolveEffectiveSettings` helper the settings
+> GET route uses, so the two can never drift), or
+> `{ "payload": "<numeric field>" }`; the optional `factor` multiplies the
+> resolved delta (`factor: -1` builds a mirror reaction on an undo event like
+> `chore.uncompleted`, preventing complete → uncomplete → re-complete from
+> double-counting). Reactions require `"storage": true`, are validated at
+> install (event against the catalog, setting reference against the declared
+> schema), and run **once per event at emission** — before SSE fan-out,
+> independent of how many dashboards are connected. A failed reaction is logged
+> and never breaks the core mutation or other plugins.
 
 ### 7.4 Participating vs. reacting
 

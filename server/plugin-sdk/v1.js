@@ -11,13 +11,19 @@
 (function () {
   'use strict';
 
-  var plugin = window.__HOMEGLOW_PLUGIN__ || null;
   var API_BASE = '/api/plugin/v1';
   // The dashboard passes the display's device name on the iframe URL so
   // device-scoped settings resolve correctly.
   var deviceName = new URLSearchParams(window.location.search).get('device');
 
+  // Resolved lazily so the SDK works no matter where its <script> tag sits
+  // relative to the server-injected identity script.
+  function getPlugin() {
+    return window.__HOMEGLOW_PLUGIN__ || null;
+  }
+
   function requirePluginId() {
+    var plugin = getPlugin();
     if (!plugin || !plugin.id) {
       throw new Error('HomeGlow SDK: this widget has no plugin manifest, so it has no platform namespace.');
     }
@@ -28,12 +34,15 @@
     return deviceName ? path + '?device=' + encodeURIComponent(deviceName) : path;
   }
 
-  // Core events (issue #105 Phase 3) arrive from the dashboard bridge as
-  // same-origin postMessages; only events declared in the plugin manifest are
-  // forwarded, so HomeGlow.on() never sees undeclared events.
+  // Core events (issue #105 Phase 3) arrive as postMessages from the dashboard
+  // that embeds this widget. The dashboard and API may be different origins
+  // (dev mode, split deployments), so the trust check is "sent by my embedding
+  // parent", not an origin string comparison. Only events declared in the
+  // plugin manifest are forwarded, so HomeGlow.on() never sees undeclared
+  // events.
   var eventHandlers = {};
   window.addEventListener('message', function (messageEvent) {
-    if (messageEvent.origin !== window.location.origin) return;
+    if (messageEvent.source !== window.parent) return;
     var data = messageEvent.data;
     if (!data || data.type !== 'homeglow:event' || typeof data.event !== 'string') return;
     var handlers = eventHandlers[data.event];
@@ -73,7 +82,10 @@
 
   window.HomeGlow = {
     apiVersion: 'v1',
-    pluginId: plugin ? plugin.id : null,
+    get pluginId() {
+      var plugin = getPlugin();
+      return plugin ? plugin.id : null;
+    },
 
     /**
      * Subscribe to a core event declared in the plugin manifest, e.g.

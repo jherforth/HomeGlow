@@ -169,7 +169,7 @@ const off = HomeGlow.on('clam.withdrawn', (payload) => {
 ```
 
 Current catalog: `clam.deposited` / `clam.withdrawn`
-(`{ userId, amount, newTotal }`) and `chore.completed`
+(`{ userId, amount, newTotal }`) and `chore.completed` / `chore.uncompleted`
 (`{ userId, choreId, scheduleId, clamValue, date }`). Only events named in your
 manifest are delivered. Events are live UI signals — they fire only while your
 widget is mounted, so keep durable state in plugin storage (server-side

@@ -140,10 +140,23 @@ test('uploading a widget with a valid embedded manifest registers its pluginId',
     assert.equal(entry.name, 'Clam Buckets (test)');
 });
 
-test('served manifest plugin HTML gets its identity injected', async () => {
+test('served manifest plugin HTML gets its identity injected at the start of head', async () => {
     const served = await api('/widgets/manifest-widget.html?theme=dark');
     assert.equal(served.status, 200);
     assert.ok(served.body.includes(`window.__HOMEGLOW_PLUGIN__={id:"${PLUGIN_ID}",apiVersion:"v1"}`));
+    // The identity script must run before any plugin script in <head> — an SDK
+    // <script src> placed early in head would otherwise see no identity.
+    assert.ok(
+        served.body.indexOf('__HOMEGLOW_PLUGIN__') < served.body.indexOf('homeglow-manifest'),
+        'identity injection must precede in-head plugin content'
+    );
+});
+
+test('widget serving rejects traversal-shaped filenames', async () => {
+    const encoded = await api('/widgets/..%2f..%2fpackage.json');
+    assert.equal(encoded.status, 404);
+    const dotted = await api('/widgets/..%5c..%5cpackage.json');
+    assert.equal(dotted.status, 404);
 });
 
 test('legacy widgets (no manifest) are served without identity injection', async () => {
@@ -407,6 +420,9 @@ async function openEventStream() {
     const response = await fetch(`${baseUrl}/api/plugin/v1/events/stream`, { signal: controller.signal });
     assert.equal(response.status, 200);
     assert.match(response.headers.get('content-type'), /text\/event-stream/);
+    // reply.hijack() bypasses @fastify/cors — the route must set this itself
+    // or cross-origin EventSources (dev mode) are blocked.
+    assert.equal(response.headers.get('access-control-allow-origin'), '*');
 
     const messages = [];
     const reader = response.body.getReader();
@@ -496,6 +512,17 @@ test('clam and chore mutations are delivered over the event stream', async () =>
         assert.equal(completed.payload.choreId, chore.body.id);
         assert.equal(completed.payload.scheduleId, schedule.body.id);
         assert.equal(completed.payload.clamValue, 3);
+
+        // Uncompleting emits the mirror event so plugins can compensate.
+        await api('/api/chores/uncomplete', {
+            method: 'POST',
+            body: JSON.stringify({ chore_schedule_id: schedule.body.id, user_id: userId, date: '2026-07-20' }),
+        });
+        const uncompleted = await stream.waitFor((m) => m.event === 'chore.uncompleted');
+        assert.equal(uncompleted.payload.userId, userId);
+        assert.equal(uncompleted.payload.choreId, chore.body.id);
+        assert.equal(uncompleted.payload.scheduleId, schedule.body.id);
+        assert.equal(uncompleted.payload.clamValue, 3);
     } finally {
         stream.close();
     }
@@ -623,6 +650,88 @@ test('reaction declarations are validated at install time', async () => {
     assert.match(upload2.body.error, /must be a known event/);
     assert.match(upload2.body.error, /action must be 'increment'/);
     assert.match(upload2.body.error, /household number setting/);
+
+    // Non-numeric factor.
+    const badFactor = {
+        manifestVersion: 1,
+        id: 'reaction-bad-factor',
+        storage: true,
+        reactions: [{ on: 'clam.withdrawn', action: 'increment', key: 'k', path: 'p', delta: 1, factor: 'minus one' }],
+    };
+    const upload3 = await uploadWidget('reaction-bad-factor.html', widgetHtml(badFactor));
+    assert.equal(upload3.status, 400);
+    assert.match(upload3.body.error, /factor must be a finite number/);
+});
+
+test('a factor:-1 mirror reaction compensates uncomplete, so re-completing does not double-count', async () => {
+    const tallyManifest = {
+        manifestVersion: 1,
+        id: 'tally-test-plugin',
+        storage: true,
+        reactions: [
+            { on: 'chore.completed', action: 'increment', key: 'bank', path: 'tally', delta: { payload: 'clamValue' } },
+            { on: 'chore.uncompleted', action: 'increment', key: 'bank', path: 'tally', delta: { payload: 'clamValue' }, factor: -1 },
+        ],
+    };
+    const upload = await uploadWidget('tally-plugin.html', widgetHtml(tallyManifest));
+    assert.equal(upload.status, 200);
+
+    const user = await api('/api/users', {
+        method: 'POST',
+        body: JSON.stringify({ username: `tally-kid-${process.pid}`, email: 'tally@example.com' }),
+    });
+    const userId = user.body.id;
+    const chore = await api('/api/chores', {
+        method: 'POST',
+        body: JSON.stringify({ title: 'Water plants', clam_value: 4 }),
+    });
+    const schedule = await api('/api/chore-schedules', {
+        method: 'POST',
+        body: JSON.stringify({ chore_id: chore.body.id, user_id: userId, duration: 'day-of' }),
+    });
+    const completeBody = { chore_schedule_id: schedule.body.id, user_id: userId, date: '2026-07-19' };
+
+    await api('/api/chores/complete', { method: 'POST', body: JSON.stringify(completeBody) });
+    let bank = await api('/api/plugin/v1/storage/tally-test-plugin/bank');
+    assert.equal(bank.body.tally, 4);
+
+    // Uncomplete compensates via the mirror reaction (factor -1)...
+    await api('/api/chores/uncomplete', { method: 'POST', body: JSON.stringify(completeBody) });
+    bank = await api('/api/plugin/v1/storage/tally-test-plugin/bank');
+    assert.equal(bank.body.tally, 0);
+
+    // ...so re-completing yields exactly one net completion.
+    await api('/api/chores/complete', { method: 'POST', body: JSON.stringify(completeBody) });
+    bank = await api('/api/plugin/v1/storage/tally-test-plugin/bank');
+    assert.equal(bank.body.tally, 4);
+});
+
+test('DELETE with purgeData wipes the plugin\'s storage and settings', async () => {
+    const purgeManifest = {
+        manifestVersion: 1,
+        id: 'purge-test-plugin',
+        storage: true,
+        settings: [{ key: 'threshold', label: 'Threshold', type: 'number', default: 1 }],
+    };
+    await uploadWidget('purge-plugin.html', widgetHtml(purgeManifest));
+    await api('/api/plugin/v1/storage/purge-test-plugin/state', {
+        method: 'PUT',
+        body: JSON.stringify({ total: 42 }),
+    });
+    await api('/api/plugin/v1/settings/purge-test-plugin', {
+        method: 'PUT',
+        body: JSON.stringify({ threshold: 9 }),
+    });
+
+    const del = await api('/api/widgets/purge-plugin.html?purgeData=true', { method: 'DELETE' });
+    assert.equal(del.status, 200);
+
+    // Reinstalling the same id starts from a clean slate.
+    await uploadWidget('purge-plugin.html', widgetHtml(purgeManifest));
+    const storage = await api('/api/plugin/v1/storage/purge-test-plugin');
+    assert.deepEqual(storage.body, {});
+    const settings = await api('/api/plugin/v1/settings/purge-test-plugin');
+    assert.equal(settings.body.threshold, 1);
 });
 
 // --- SDK ---

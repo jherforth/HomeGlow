@@ -470,10 +470,19 @@ fastify.register(require('@fastify/static'), {
   decorateReply: false
 });
 
+// Widget filenames are restricted to this charset at upload/install time; the
+// serve route enforces the same rule so encoded ../ segments can never reach
+// the disk-fallback path.join below (path traversal guard).
+const WIDGET_FILENAME_REGEX = /^[a-zA-Z0-9-._]+$/;
+
 // Serve widget HTML from the DB-backed plugin store (issue #105 Phase 0), with
 // a read-only disk fallback for files that predate the plugins table.
 fastify.get('/widgets/:filename', async (request, reply) => {
   const { filename } = request.params;
+
+  if (!WIDGET_FILENAME_REGEX.test(filename) || filename.includes('..')) {
+    return reply.status(404).send(`Widget file not found: ${filename}`);
+  }
 
   try {
     let content;
@@ -498,8 +507,11 @@ fastify.get('/widgets/:filename', async (request, reply) => {
     if (pluginId) {
       injection += `<script>window.__HOMEGLOW_PLUGIN__={id:"${pluginId}",apiVersion:"v1"};</script>`;
     }
-    if (content.includes('</head>')) {
-      content = content.replace('</head>', `${injection}</head>`);
+    // Inject at the START of <head> so the identity script runs before any
+    // plugin script — including an SDK <script src> placed early in head.
+    const headOpen = content.match(/<head\b[^>]*>/i);
+    if (headOpen) {
+      content = content.replace(headOpen[0], `${headOpen[0]}${injection}`);
     } else if (content.includes('<body')) {
       content = content.replace('<body', `${injection}<body`);
     } else {
@@ -784,6 +796,12 @@ function extractPluginManifest(htmlContent) {
             reaction.path.split('.').some((segment) => segment.length === 0)) {
           errors.push(`reactions[${index}].path must be a non-empty dot-separated path.`);
         }
+        // Optional multiplier applied to the resolved delta — factor: -1 lets a
+        // mirror reaction (e.g. on chore.uncompleted) compensate a setting- or
+        // payload-driven increment that cannot be negated in the manifest.
+        if (reaction.factor !== undefined && (typeof reaction.factor !== 'number' || !Number.isFinite(reaction.factor))) {
+          errors.push(`reactions[${index}].factor must be a finite number.`);
+        }
         const delta = reaction.delta;
         const deltaValid = (typeof delta === 'number' && Number.isFinite(delta)) ||
           (delta && typeof delta === 'object' && !Array.isArray(delta) &&
@@ -950,12 +968,38 @@ fastify.get('/api/widgets', async (request, reply) => {
   }
 });
 
-// Endpoint: Delete a widget
+// Endpoint: Delete a widget.
+// By default the plugin's platform state (storage, settings) is KEPT so a
+// reinstall under the same id picks up where it left off. Pass
+// ?purgeData=true to also wipe it — recommended before installing a
+// *different* plugin that declares the same id, which would otherwise
+// silently inherit the predecessor's data.
 fastify.delete('/api/widgets/:filename', async (request, reply) => {
   if (demoBlocked(reply)) return;
   const { filename } = request.params;
+  const purgeData = request.query.purgeData === 'true';
   try {
+    const pluginRow = db.prepare('SELECT plugin_id FROM plugins WHERE filename = ?').get(filename);
     const result = db.prepare('DELETE FROM plugins WHERE filename = ?').run(filename);
+
+    if (purgeData && pluginRow?.plugin_id) {
+      const pluginId = pluginRow.plugin_id;
+      db.prepare('DELETE FROM plugin_storage WHERE plugin_id = ?').run(pluginId);
+      db.prepare('DELETE FROM settings WHERE key = ?').run(pluginHouseholdSettingsKey(pluginId));
+      // Sweep device-scoped values out of every device blob.
+      const devices = db.prepare('SELECT name, device_settings_json FROM devices').all();
+      for (const device of devices) {
+        const deviceSettings = parseJsonObject(device.device_settings_json, {});
+        const platformSettings = deviceSettings.pluginPlatformSettings;
+        if (platformSettings && typeof platformSettings === 'object' && platformSettings[pluginId] !== undefined) {
+          delete platformSettings[pluginId];
+          db.prepare('UPDATE devices SET device_settings_json = ?, updateTime = CURRENT_TIMESTAMP WHERE name = ?').run(
+            JSON.stringify(deviceSettings),
+            device.name
+          );
+        }
+      }
+    }
 
     // Best-effort cleanup of a pre-migration file on disk.
     let removedFromDisk = false;
@@ -1226,13 +1270,11 @@ function validatePluginSettingValue(setting, value) {
   }
 }
 
-fastify.get('/api/plugin/v1/settings/:pluginId', async (request, reply) => {
-  const { pluginId } = request.params;
-  const manifest = requireManifestPlugin(pluginId, reply);
-  if (!manifest) return;
-
+// The single source of truth for effective setting values (manifest default <-
+// stored value at the key's scope). Used by the GET route AND the declarative
+// reaction executor so the two can never drift.
+function resolveEffectiveSettings(pluginId, manifest, deviceName = null) {
   const declared = Array.isArray(manifest.settings) ? manifest.settings : [];
-  const deviceName = typeof request.query.device === 'string' && request.query.device ? request.query.device : null;
   const household = readHouseholdPluginSettings(pluginId);
   const deviceValues = deviceName ? readDevicePluginSettings(pluginId, deviceName) : {};
 
@@ -1243,6 +1285,15 @@ fastify.get('/api/plugin/v1/settings/:pluginId', async (request, reply) => {
     merged[setting.key] = value === undefined ? null : value;
   }
   return merged;
+}
+
+fastify.get('/api/plugin/v1/settings/:pluginId', async (request, reply) => {
+  const { pluginId } = request.params;
+  const manifest = requireManifestPlugin(pluginId, reply);
+  if (!manifest) return;
+
+  const deviceName = typeof request.query.device === 'string' && request.query.device ? request.query.device : null;
+  return resolveEffectiveSettings(pluginId, manifest, deviceName);
 });
 
 fastify.put('/api/plugin/v1/settings/:pluginId', async (request, reply) => {
@@ -1321,6 +1372,10 @@ fastify.get('/api/plugin/v1/events/stream', (request, reply) => {
     'Connection': 'keep-alive',
     // Tell the Nginx reverse proxy not to buffer the stream.
     'X-Accel-Buffering': 'no',
+    // reply.hijack() bypasses @fastify/cors, so mirror its policy (origin '*',
+    // see the cors registration above) or cross-origin EventSources (dev mode)
+    // are blocked by the browser.
+    'Access-Control-Allow-Origin': '*',
   });
   reply.raw.write(': connected\n\n');
 
@@ -1354,11 +1409,9 @@ function resolveReactionDelta(deltaSpec, manifest, pluginId, payload) {
   }
   if (deltaSpec && typeof deltaSpec === 'object') {
     if (typeof deltaSpec.setting === 'string') {
-      const declared = (Array.isArray(manifest.settings) ? manifest.settings : [])
-        .find((setting) => setting && setting.key === deltaSpec.setting);
-      if (!declared) return null;
-      const household = readHouseholdPluginSettings(pluginId);
-      const value = household[deltaSpec.setting] !== undefined ? household[deltaSpec.setting] : declared.default;
+      // Same resolution the settings GET route serves — via the shared helper,
+      // so Admin-Panel-visible values and reaction deltas can never disagree.
+      const value = resolveEffectiveSettings(pluginId, manifest)[deltaSpec.setting];
       return typeof value === 'number' && Number.isFinite(value) ? value : null;
     }
     if (typeof deltaSpec.payload === 'string') {
@@ -1379,8 +1432,11 @@ function runDeclarativeReactions(message) {
       const reactions = Array.isArray(manifest.reactions) ? manifest.reactions : [];
       for (const reaction of reactions) {
         if (reaction.on !== message.event) continue;
-        const delta = resolveReactionDelta(reaction.delta, manifest, row.plugin_id, message.payload);
-        if (delta === null || delta === 0) continue;
+        const resolved = resolveReactionDelta(reaction.delta, manifest, row.plugin_id, message.payload);
+        if (resolved === null) continue;
+        const factor = typeof reaction.factor === 'number' && Number.isFinite(reaction.factor) ? reaction.factor : 1;
+        const delta = resolved * factor;
+        if (delta === 0) continue;
         try {
           const pathSegments = String(reaction.path).split('.');
           const applyReaction = db.transaction(
@@ -2988,6 +3044,18 @@ fastify.post('/api/chores/uncomplete', async (request, reply) => {
     }
 
     const totalResult = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(user_id);
+
+    // Mirror of chore.completed so plugins (and declarative reactions with a
+    // negative factor) can compensate — without this, complete → uncomplete →
+    // re-complete double-counts durable reaction effects.
+    const uncompletedSchedule = db.prepare('SELECT chore_id FROM chore_schedules WHERE id = ?').get(chore_schedule_id);
+    pluginEvents.emit('chore.uncompleted', {
+      userId: user_id,
+      choreId: uncompletedSchedule?.chore_id ?? null,
+      scheduleId: chore_schedule_id,
+      clamValue: history.clam_value,
+      date,
+    });
 
     return { success: true, clam_total: totalResult.total };
   } catch (error) {

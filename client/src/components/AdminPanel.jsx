@@ -202,6 +202,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   // Values for settings a plugin declared in its manifest (issue #105 Phase 2),
   // keyed by pluginId. Saved via /api/plugin/v1/settings, not the device blob.
   const [pluginDeclaredValues, setPluginDeclaredValues] = useState({});
+  // Which declared-setting keys the user actually edited. Only dirty keys are
+  // PUT on save, so untouched manifest defaults are never materialized into
+  // stored values (a stored default would pin the household against future
+  // manifest default changes).
+  const [pluginDeclaredDirty, setPluginDeclaredDirty] = useState({});
   const [photoSources, setPhotoSources] = useState([]);
   const [screensaverSettings, setScreensaverSettings] = useState(readLocalScreensaverSettings);
   const [autoDarkModeSettings, setAutoDarkModeSettings] = useState(readLocalAutoDarkModeSettings);
@@ -413,6 +418,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       }
     }));
     setPluginDeclaredValues(Object.fromEntries(entries));
+    // Freshly loaded server values are clean by definition.
+    setPluginDeclaredDirty({});
   };
 
   const fetchWidgetAssignments = async () => {
@@ -669,22 +676,36 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       await patchDeviceSettings({ pluginSettings });
 
       // Save declared (manifest) settings through the plugin platform API so
-      // household-scoped values are shared across displays.
+      // household-scoped values are shared across displays. Only keys the
+      // user actually edited are written, failures are collected instead of
+      // aborting the rest of the save, and the server's specific validation
+      // message is surfaced.
       const manifestPlugins = uploadedWidgets.filter(
         (widget) => widget.pluginId && Array.isArray(widget.manifest?.settings) && widget.manifest.settings.length > 0
       );
-      await Promise.all(manifestPlugins.map((widget) => {
-        // Drop empty entries (e.g. a cleared number field) — they mean
-        // "no change", and the server would reject them as type errors.
+      const declaredSettingsErrors = [];
+      await Promise.all(manifestPlugins.map(async (widget) => {
+        const dirtyKeys = pluginDeclaredDirty[widget.pluginId] || {};
+        const declaredByKey = new Map(widget.manifest.settings.map((setting) => [setting.key, setting]));
         const values = Object.fromEntries(
-          Object.entries(pluginDeclaredValues[widget.pluginId] || {})
-            .filter(([, value]) => value !== '' && value !== null && value !== undefined)
+          Object.entries(pluginDeclaredValues[widget.pluginId] || {}).filter(([key, value]) => {
+            if (!dirtyKeys[key]) return false;
+            if (value === null || value === undefined) return false;
+            // A cleared number/select field means "no change"; an empty
+            // string is a legitimate value for string settings.
+            if (value === '' && declaredByKey.get(key)?.type !== 'string') return false;
+            return true;
+          })
         );
-        if (Object.keys(values).length === 0) return Promise.resolve();
-        return axios.put(
-          `${API_BASE_URL}/api/plugin/v1/settings/${widget.pluginId}?device=${encodeURIComponent(currentDeviceName)}`,
-          values
-        );
+        if (Object.keys(values).length === 0) return;
+        try {
+          await axios.put(
+            `${API_BASE_URL}/api/plugin/v1/settings/${widget.pluginId}?device=${encodeURIComponent(currentDeviceName)}`,
+            values
+          );
+        } catch (error) {
+          declaredSettingsErrors.push(`${widget.name}: ${error.response?.data?.error || error.message}`);
+        }
       }));
 
       const currentResponse = await axios.get(`${API_DEVICE_URL}/widget-assignments`);
@@ -697,8 +718,18 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       }
 
       if (onPluginsChanged) onPluginsChanged();
-      setSaveMessage({ show: true, type: 'success', text: 'Plugin settings saved successfully.' });
-      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+      if (declaredSettingsErrors.length > 0) {
+        setSaveMessage({
+          show: true,
+          type: 'error',
+          text: `Saved, but some plugin options were rejected — ${declaredSettingsErrors.join('; ')}`,
+        });
+        setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 6000);
+      } else {
+        setPluginDeclaredDirty({});
+        setSaveMessage({ show: true, type: 'success', text: 'Plugin settings saved successfully.' });
+        setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+      }
     } catch (error) {
       console.error('Error saving plugin settings:', error);
       setSaveMessage({ show: true, type: 'error', text: 'Failed to save plugin settings. Please try again.' });
@@ -1413,9 +1444,16 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
   const deleteWidget = async (filename) => {
     if (window.confirm('Are you sure you want to delete this widget?')) {
+      // Platform plugins own server-side storage/settings. Keeping them lets a
+      // reinstall of the SAME plugin resume; purging prevents a different
+      // plugin that claims the same id from inheriting the data.
+      const widgetEntry = uploadedWidgets.find((widget) => widget.filename === filename);
+      const purgeData = Boolean(widgetEntry?.pluginId) && window.confirm(
+        "Also delete this plugin's stored data and settings?\n\nChoose Cancel to keep them (e.g. if you plan to reinstall the same plugin later)."
+      );
       try {
         setIsLoading(true);
-        await axios.delete(`${API_BASE_URL}/api/widgets/${filename}`);
+        await axios.delete(`${API_BASE_URL}/api/widgets/${filename}${purgeData ? '?purgeData=true' : ''}`);
         const pluginWidgetName = `plugin:${filename}`;
         await axios.delete(`${API_DEVICE_URL}/widget-assignments/widget/${encodeURIComponent(pluginWidgetName)}`).catch(() => { });
         let nextPluginSettings = {};
@@ -2099,10 +2137,16 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                                 {plugin.manifest.settings.map((setting) => {
                                   const declaredValues = pluginDeclaredValues[plugin.pluginId] || {};
                                   const value = declaredValues[setting.key];
-                                  const setValue = (next) => setPluginDeclaredValues((prev) => ({
-                                    ...prev,
-                                    [plugin.pluginId]: { ...prev[plugin.pluginId], [setting.key]: next },
-                                  }));
+                                  const setValue = (next) => {
+                                    setPluginDeclaredValues((prev) => ({
+                                      ...prev,
+                                      [plugin.pluginId]: { ...prev[plugin.pluginId], [setting.key]: next },
+                                    }));
+                                    setPluginDeclaredDirty((prev) => ({
+                                      ...prev,
+                                      [plugin.pluginId]: { ...prev[plugin.pluginId], [setting.key]: true },
+                                    }));
+                                  };
                                   const label = setting.label || setting.key;
                                   const controlId = `plugin-${plugin.pluginId}-${setting.key}`;
                                   return (
@@ -2155,7 +2199,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                                       )}
                                       {setting.scope === 'device' && (
                                         <Typography variant="caption" color="text.secondary">
-                                          This device only
+                                          Per device — applies to the device you're editing from
                                         </Typography>
                                       )}
                                     </Grid>
