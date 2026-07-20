@@ -199,6 +199,9 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const [widgetAssignments, setWidgetAssignments] = useState({});
   const [pluginSettings, setPluginSettings] = useState({});
   const [pluginAssignments, setPluginAssignments] = useState({});
+  // Values for settings a plugin declared in its manifest (issue #105 Phase 2),
+  // keyed by pluginId. Saved via /api/plugin/v1/settings, not the device blob.
+  const [pluginDeclaredValues, setPluginDeclaredValues] = useState({});
   const [photoSources, setPhotoSources] = useState([]);
   const [screensaverSettings, setScreensaverSettings] = useState(readLocalScreensaverSettings);
   const [autoDarkModeSettings, setAutoDarkModeSettings] = useState(readLocalAutoDarkModeSettings);
@@ -384,11 +387,32 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const fetchUploadedWidgets = async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/widgets`);
-      setUploadedWidgets(Array.isArray(response.data) ? response.data : []);
+      const widgets = Array.isArray(response.data) ? response.data : [];
+      setUploadedWidgets(widgets);
+      await fetchPluginDeclaredValues(widgets);
     } catch (error) {
       console.error('Error fetching uploaded widgets:', error);
       setUploadedWidgets([]);
     }
+  };
+
+  // Load effective values for each manifest plugin's declared settings.
+  const fetchPluginDeclaredValues = async (widgets) => {
+    const manifestPlugins = (widgets || []).filter(
+      (widget) => widget.pluginId && Array.isArray(widget.manifest?.settings) && widget.manifest.settings.length > 0
+    );
+    const entries = await Promise.all(manifestPlugins.map(async (widget) => {
+      try {
+        const response = await axios.get(
+          `${API_BASE_URL}/api/plugin/v1/settings/${widget.pluginId}?device=${encodeURIComponent(currentDeviceName)}`
+        );
+        return [widget.pluginId, response.data && typeof response.data === 'object' ? response.data : {}];
+      } catch (error) {
+        console.error(`Error fetching settings for plugin ${widget.pluginId}:`, error);
+        return [widget.pluginId, {}];
+      }
+    }));
+    setPluginDeclaredValues(Object.fromEntries(entries));
   };
 
   const fetchWidgetAssignments = async () => {
@@ -643,6 +667,25 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     setIsLoading(true);
     try {
       await patchDeviceSettings({ pluginSettings });
+
+      // Save declared (manifest) settings through the plugin platform API so
+      // household-scoped values are shared across displays.
+      const manifestPlugins = uploadedWidgets.filter(
+        (widget) => widget.pluginId && Array.isArray(widget.manifest?.settings) && widget.manifest.settings.length > 0
+      );
+      await Promise.all(manifestPlugins.map((widget) => {
+        // Drop empty entries (e.g. a cleared number field) — they mean
+        // "no change", and the server would reject them as type errors.
+        const values = Object.fromEntries(
+          Object.entries(pluginDeclaredValues[widget.pluginId] || {})
+            .filter(([, value]) => value !== '' && value !== null && value !== undefined)
+        );
+        if (Object.keys(values).length === 0) return Promise.resolve();
+        return axios.put(
+          `${API_BASE_URL}/api/plugin/v1/settings/${widget.pluginId}?device=${encodeURIComponent(currentDeviceName)}`,
+          values
+        );
+      }));
 
       const currentResponse = await axios.get(`${API_DEVICE_URL}/widget-assignments`);
       const currentAssignments = Array.isArray(currentResponse.data) ? currentResponse.data : [];
@@ -2048,6 +2091,79 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                               />
                             </Grid>
                           </Grid>
+
+                          {plugin.pluginId && Array.isArray(plugin.manifest?.settings) && plugin.manifest.settings.length > 0 && (
+                            <Box sx={{ mt: 2 }}>
+                              <Typography variant="subtitle2" sx={{ mb: 1 }}>Plugin Options</Typography>
+                              <Grid container spacing={2}>
+                                {plugin.manifest.settings.map((setting) => {
+                                  const declaredValues = pluginDeclaredValues[plugin.pluginId] || {};
+                                  const value = declaredValues[setting.key];
+                                  const setValue = (next) => setPluginDeclaredValues((prev) => ({
+                                    ...prev,
+                                    [plugin.pluginId]: { ...prev[plugin.pluginId], [setting.key]: next },
+                                  }));
+                                  const label = setting.label || setting.key;
+                                  const controlId = `plugin-${plugin.pluginId}-${setting.key}`;
+                                  return (
+                                    <Grid size={{ xs: 12, sm: 6 }} key={setting.key}>
+                                      {setting.type === 'boolean' ? (
+                                        <FormControlLabel
+                                          control={
+                                            <Switch
+                                              checked={Boolean(value)}
+                                              onChange={() => setValue(!value)}
+                                            />
+                                          }
+                                          label={label}
+                                        />
+                                      ) : setting.type === 'select' ? (
+                                        <FormControl fullWidth size="small">
+                                          <InputLabel id={`${controlId}-label`}>{label}</InputLabel>
+                                          <Select
+                                            labelId={`${controlId}-label`}
+                                            label={label}
+                                            value={value ?? ''}
+                                            onChange={(event) => setValue(event.target.value)}
+                                          >
+                                            {(setting.options || []).map((option) => (
+                                              <MenuItem key={option} value={option}>{option}</MenuItem>
+                                            ))}
+                                          </Select>
+                                        </FormControl>
+                                      ) : setting.type === 'number' ? (
+                                        <TextField
+                                          fullWidth
+                                          size="small"
+                                          type="number"
+                                          label={label}
+                                          value={value ?? ''}
+                                          inputProps={{ min: setting.min, max: setting.max }}
+                                          onChange={(event) => {
+                                            const parsed = Number(event.target.value);
+                                            setValue(event.target.value === '' || Number.isNaN(parsed) ? '' : parsed);
+                                          }}
+                                        />
+                                      ) : (
+                                        <TextField
+                                          fullWidth
+                                          size="small"
+                                          label={label}
+                                          value={value ?? ''}
+                                          onChange={(event) => setValue(event.target.value)}
+                                        />
+                                      )}
+                                      {setting.scope === 'device' && (
+                                        <Typography variant="caption" color="text.secondary">
+                                          This device only
+                                        </Typography>
+                                      )}
+                                    </Grid>
+                                  );
+                                })}
+                              </Grid>
+                            </Box>
+                          )}
 
                           <Box sx={{ mt: 2 }}>
                             <Autocomplete

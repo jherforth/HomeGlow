@@ -46,6 +46,9 @@ run in ascending order. The registry lives in `schemaMigrations` in
 | 14 | `schema14-deviceAndTabJsonStorage.js` | Moves widget layout into `tabs.config_json` and device settings into `devices.device_settings_json`; **drops** `widget_tab_assignments`. |
 | 15 | `schema15-choreDueTimeSound.js` | Adds `due_time`, `sound`, `sound_enabled`, `reminder_interval_minutes` to `chore_schedules` (chore due-time notification sounds). |
 | 16 | `schema16-choreDueDate.js` | Adds `due_date` to `chore_schedules` (calendar deadline with urgency coloring, issue #97). |
+| 17 | `schema17-choreTransferSnooze.js` | Adds `transferable`, `can_snooze`, `snoozed_until`, `transfer_bonus_clams` to `chore_schedules` (dashboard long-press transfer/snooze, issue #122). |
+| 18 | `schema18-pluginsTable.js` | Adds the `plugins` table (DB-backed plugin store, issue #105 Phase 0) and imports any on-disk `widgets/*.html` + `widgets_registry.json` entries. |
+| 19 | `schema19-pluginStorage.js` | Adds the `plugin_storage` table (namespaced KV store for manifest plugins, issue #105 Phase 1). |
 
 Each versioned migration runs inside a transaction, reads its context from
 `globalThis.__HOMEGLOW_SCHEMA_MIGRATION_CONTEXT`, and writes the new
@@ -101,7 +104,9 @@ id, username, email, profile_picture
 id, name, clam_cost
 ```
 
-**`settings`** — global key/value store (API keys, `SYSTEM_SCHEMA_ID`, migration flags).
+**`settings`** — global key/value store (API keys, `SYSTEM_SCHEMA_ID`, migration
+flags; also household-scoped plugin settings under `plugin:<pluginId>:settings`,
+issue #105 Phase 2).
 ```
 key (PK), value
 ```
@@ -122,6 +127,28 @@ id, name (UNIQUE), updateTime, device_settings_json  -- JSON blob of widget/plug
 ```
 id, device_name ─▶ devices(name) CASCADE, number, label, icon, show_label,
 created_at, config_json  -- JSON: { widgetName: {layout_x, layout_y, layout_w, layout_h} }
+```
+
+### Plugins (custom widgets)
+
+**`plugins`** — DB-backed plugin store (issue #105 Phase 0). Widget HTML lives
+here — not on the container filesystem — so installed plugins survive image
+upgrades. `plugin_id`/`manifest_json` are reserved for manifest plugins
+(issue #105 Phase 1) and are NULL for plain HTML widgets.
+```
+id, plugin_id (UNIQUE, nullable), filename (UNIQUE), name,
+content,               -- the widget HTML, served at /widgets/:filename
+manifest_json,         -- parsed embedded plugin manifest; NULL for legacy widgets
+source ('upload' | 'github'), original_url, installed_at, updated_at
+```
+
+**`plugin_storage`** — namespaced key/value documents for manifest plugins that
+declare `"storage": true` (issue #105 Phase 1). Accessed via
+`/api/plugin/v1/storage/:pluginId/...`; capped at 64 KB per value, 500 keys per
+plugin.
+```
+id, plugin_id, key, value_json, updated_at
+UNIQUE(plugin_id, key)
 ```
 
 ### Calendar

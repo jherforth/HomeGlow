@@ -83,6 +83,7 @@ const googlePhotosPicker = require('./services/googlePhotosPicker');
 const { isEncryptionConfigured, getEncryptionStatus } = require('./utils/encryption');
 let calendarSyncService = null;
 
+const pluginEvents = require('./services/pluginEvents');
 const initializeDatabase = require('./migrations/initializeDatabase');
 const migrateChoresDatabase = require('./migrations/migrateChoresDatabase');
 const migrateClamsToHistory = require('./migrations/migrateClamsToHistory');
@@ -104,6 +105,8 @@ const schemaMigrations = [
   { schemaId: 15, migrationPath: './migrations/schema15-choreDueTimeSound', },
   { schemaId: 16, migrationPath: './migrations/schema16-choreDueDate', },
   { schemaId: 17, migrationPath: './migrations/schema17-choreTransferSnooze', },
+  { schemaId: 18, migrationPath: './migrations/schema18-pluginsTable', },
+  { schemaId: 19, migrationPath: './migrations/schema19-pluginStorage', },
 ];
 
 const ALLOWED_SCHEDULE_DURATIONS = new Set(['day-of', 'until-completed', 'once-completed']);
@@ -467,32 +470,40 @@ fastify.register(require('@fastify/static'), {
   decorateReply: false
 });
 
-// Add debugging for widget file requests
+// Serve widget HTML from the DB-backed plugin store (issue #105 Phase 0), with
+// a read-only disk fallback for files that predate the plugins table.
 fastify.get('/widgets/:filename', async (request, reply) => {
   const { filename } = request.params;
-  const filePath = path.join(__dirname, 'widgets', filename);
-
-  console.log(`Widget request for: ${filename}`);
-  console.log(`Looking for file at: ${filePath}`);
 
   try {
-    const stats = await fs.stat(filePath);
-    console.log(`File exists, size: ${stats.size} bytes`);
-
-    let content = await fs.readFile(filePath, 'utf-8');
-    console.log(`File content preview: ${content.substring(0, 100)}...`);
+    let content;
+    let pluginId = null;
+    const row = db.prepare('SELECT content, plugin_id FROM plugins WHERE filename = ?').get(filename);
+    if (row) {
+      content = row.content;
+      pluginId = row.plugin_id;
+    } else {
+      const filePath = path.join(__dirname, 'widgets', filename);
+      content = await fs.readFile(filePath, 'utf-8');
+    }
 
     content = content.replace(/window\.location\.origin\.replace\(['"`]:\d+['"`],\s*['"`]:\d+['"`]\)/g, 'window.location.origin');
     content = content.replace(/\$\{window\.location\.protocol\}\/\/\$\{window\.location\.hostname\}:\d+/g, '${window.location.origin}');
     content = content.replace(/window\.location\.protocol\s*\+\s*'\/\/'\s*\+\s*window\.location\.hostname\s*\+\s*':\d+'/g, 'window.location.origin');
 
-    const overflowFix = `<style>html,body{max-width:100%!important;overflow-x:hidden!important;box-sizing:border-box;}*{box-sizing:border-box;}</style>`;
+    let injection = `<style>html,body{max-width:100%!important;overflow-x:hidden!important;box-sizing:border-box;}*{box-sizing:border-box;}</style>`;
+    // Manifest plugins get their identity injected so /plugin-sdk/v1.js knows
+    // which storage/settings namespace to talk to. plugin_id is validated to
+    // [a-z0-9-] at install time, so it is safe to embed verbatim.
+    if (pluginId) {
+      injection += `<script>window.__HOMEGLOW_PLUGIN__={id:"${pluginId}",apiVersion:"v1"};</script>`;
+    }
     if (content.includes('</head>')) {
-      content = content.replace('</head>', `${overflowFix}</head>`);
+      content = content.replace('</head>', `${injection}</head>`);
     } else if (content.includes('<body')) {
-      content = content.replace('<body', `${overflowFix}<body`);
+      content = content.replace('<body', `${injection}<body`);
     } else {
-      content = overflowFix + content;
+      content = injection + content;
     }
 
     reply.header('Content-Type', 'text/html');
@@ -500,6 +511,23 @@ fastify.get('/widgets/:filename', async (request, reply) => {
   } catch (error) {
     console.error(`Error serving widget ${filename}:`, error);
     reply.status(404).send(`Widget file not found: ${filename}`);
+  }
+});
+
+// Serve the plugin SDK (issue #105). Cached after first read; versioned by
+// path so a future v2 can coexist with v1.
+let pluginSdkV1Cache = null;
+fastify.get('/plugin-sdk/v1.js', async (request, reply) => {
+  try {
+    if (!pluginSdkV1Cache) {
+      pluginSdkV1Cache = await fs.readFile(path.join(__dirname, 'plugin-sdk', 'v1.js'), 'utf-8');
+    }
+    reply.header('Content-Type', 'application/javascript');
+    reply.header('Cache-Control', 'public, max-age=3600');
+    return pluginSdkV1Cache;
+  } catch (error) {
+    console.error('Error serving plugin SDK:', error);
+    reply.status(500).send('// plugin SDK unavailable');
   }
 });
 
@@ -672,9 +700,191 @@ fastify.get('/index.css', async (request, reply) => {
   }
 });
 
-// --- Widget Upload Endpoint and Registry ---
+// --- Widget Upload Endpoints and Plugin Store ---
+// Plugins live in the `plugins` table (issue #105 Phase 0) so they survive image
+// upgrades; the old widgets_registry.json is only read once by migration 18.
 
-// Helper: Load widget registry
+// A plugin may embed a manifest in its HTML to opt into platform capabilities
+// (issue #105 Phase 1). Plain widgets simply omit the block and work as before.
+//   <script type="application/json" id="homeglow-manifest">{ ... }</script>
+const PLUGIN_MANIFEST_REGEX = /<script[^>]*id=["']homeglow-manifest["'][^>]*>([\s\S]*?)<\/script>/i;
+const PLUGIN_ID_REGEX = /^[a-z0-9][a-z0-9-]{0,63}$/;
+const PLUGIN_SETTING_KEY_REGEX = /^[a-zA-Z][a-zA-Z0-9]{0,63}$/;
+const PLUGIN_SETTING_TYPES = new Set(['number', 'string', 'boolean', 'select']);
+const PLUGIN_SETTING_SCOPES = new Set(['household', 'device']);
+
+// Returns { manifest: object|null, errors: string[] }. A missing block is not
+// an error (legacy widget); a present-but-invalid block is, so a typo'd
+// manifest fails the upload loudly instead of silently installing as legacy.
+function extractPluginManifest(htmlContent) {
+  const match = htmlContent.match(PLUGIN_MANIFEST_REGEX);
+  if (!match) {
+    return { manifest: null, errors: [] };
+  }
+
+  let manifest;
+  try {
+    manifest = JSON.parse(match[1]);
+  } catch (parseError) {
+    return { manifest: null, errors: [`Manifest is not valid JSON: ${parseError.message}`] };
+  }
+
+  const errors = [];
+  if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
+    return { manifest: null, errors: ['Manifest must be a JSON object.'] };
+  }
+  if (manifest.manifestVersion !== 1) {
+    errors.push('manifestVersion must be 1.');
+  }
+  if (typeof manifest.id !== 'string' || !PLUGIN_ID_REGEX.test(manifest.id)) {
+    errors.push('id is required and must be a lowercase slug (a-z, 0-9, hyphens, max 64 chars).');
+  }
+  if (manifest.name !== undefined && typeof manifest.name !== 'string') {
+    errors.push('name must be a string.');
+  }
+  if (manifest.apiVersion !== undefined && manifest.apiVersion !== 'v1') {
+    errors.push("apiVersion must be 'v1'.");
+  }
+  if (manifest.storage !== undefined && typeof manifest.storage !== 'boolean') {
+    errors.push('storage must be a boolean.');
+  }
+  if (manifest.events !== undefined) {
+    if (!Array.isArray(manifest.events) || manifest.events.some((event) => typeof event !== 'string')) {
+      errors.push('events must be an array of strings.');
+    } else {
+      for (const event of manifest.events) {
+        if (!pluginEvents.isKnownEvent(event)) {
+          errors.push(`events: "${event}" is not a known event (catalog: ${pluginEvents.PLUGIN_EVENT_CATALOG.join(', ')}).`);
+        }
+      }
+    }
+  }
+  if (manifest.reactions !== undefined) {
+    if (!Array.isArray(manifest.reactions)) {
+      errors.push('reactions must be an array.');
+    } else {
+      if (manifest.reactions.length > 0 && manifest.storage !== true) {
+        errors.push('reactions require "storage": true (they write to plugin storage).');
+      }
+      manifest.reactions.forEach((reaction, index) => {
+        if (!reaction || typeof reaction !== 'object') {
+          errors.push(`reactions[${index}] must be an object.`);
+          return;
+        }
+        if (typeof reaction.on !== 'string' || !pluginEvents.isKnownEvent(reaction.on)) {
+          errors.push(`reactions[${index}].on must be a known event (catalog: ${pluginEvents.PLUGIN_EVENT_CATALOG.join(', ')}).`);
+        }
+        if (reaction.action !== 'increment') {
+          errors.push(`reactions[${index}].action must be 'increment' (the only supported action).`);
+        }
+        if (typeof reaction.key !== 'string' || !PLUGIN_STORAGE_KEY_REGEX.test(reaction.key)) {
+          errors.push(`reactions[${index}].key must be a valid storage key.`);
+        }
+        if (typeof reaction.path !== 'string' || reaction.path.length === 0 ||
+            reaction.path.split('.').some((segment) => segment.length === 0)) {
+          errors.push(`reactions[${index}].path must be a non-empty dot-separated path.`);
+        }
+        const delta = reaction.delta;
+        const deltaValid = (typeof delta === 'number' && Number.isFinite(delta)) ||
+          (delta && typeof delta === 'object' && !Array.isArray(delta) &&
+            (typeof delta.setting === 'string' || typeof delta.payload === 'string'));
+        if (!deltaValid) {
+          errors.push(`reactions[${index}].delta must be a number, { "setting": "<key>" }, or { "payload": "<field>" }.`);
+        } else if (delta && typeof delta === 'object' && typeof delta.setting === 'string') {
+          const declared = Array.isArray(manifest.settings)
+            ? manifest.settings.find((setting) => setting && setting.key === delta.setting)
+            : null;
+          // Device-scoped settings are excluded: a server-side reaction has no
+          // device context to resolve them against.
+          if (!declared || declared.type !== 'number' || declared.scope === 'device') {
+            errors.push(`reactions[${index}].delta.setting must reference a declared household number setting.`);
+          }
+        }
+      });
+    }
+  }
+  if (manifest.settings !== undefined) {
+    if (!Array.isArray(manifest.settings)) {
+      errors.push('settings must be an array.');
+    } else {
+      manifest.settings.forEach((setting, index) => {
+        if (!setting || typeof setting !== 'object') {
+          errors.push(`settings[${index}] must be an object.`);
+          return;
+        }
+        if (typeof setting.key !== 'string' || !PLUGIN_SETTING_KEY_REGEX.test(setting.key)) {
+          errors.push(`settings[${index}].key must be an alphanumeric identifier.`);
+        }
+        if (!PLUGIN_SETTING_TYPES.has(setting.type)) {
+          errors.push(`settings[${index}].type must be one of: ${[...PLUGIN_SETTING_TYPES].join(', ')}.`);
+        }
+        if (setting.scope !== undefined && !PLUGIN_SETTING_SCOPES.has(setting.scope)) {
+          errors.push(`settings[${index}].scope must be 'household' or 'device'.`);
+        }
+        if (setting.type === 'select' && (
+          !Array.isArray(setting.options) || setting.options.length === 0 ||
+          setting.options.some((option) => typeof option !== 'string')
+        )) {
+          errors.push(`settings[${index}].options must be a non-empty array of strings for select settings.`);
+        }
+        if (setting.min !== undefined && typeof setting.min !== 'number') {
+          errors.push(`settings[${index}].min must be a number.`);
+        }
+        if (setting.max !== undefined && typeof setting.max !== 'number') {
+          errors.push(`settings[${index}].max must be a number.`);
+        }
+      });
+    }
+  }
+
+  return { manifest: errors.length === 0 ? manifest : null, errors };
+}
+
+// Shared by upload and GitHub install: validate any embedded manifest and
+// upsert the plugin row. Returns an { error, status } object on rejection.
+function installPluginRow({ filename, fallbackName, content, source, originalUrl = null }) {
+  const { manifest, errors } = extractPluginManifest(content);
+  if (errors.length > 0) {
+    return { error: `Invalid plugin manifest: ${errors.join(' ')}`, status: 400 };
+  }
+
+  const pluginId = manifest ? manifest.id : null;
+  if (pluginId) {
+    const conflict = db.prepare('SELECT filename FROM plugins WHERE plugin_id = ? AND filename != ?')
+      .get(pluginId, filename);
+    if (conflict) {
+      return {
+        error: `Plugin id "${pluginId}" is already used by ${conflict.filename}.`,
+        status: 409,
+      };
+    }
+  }
+
+  db.prepare(`
+    INSERT INTO plugins (filename, name, content, source, original_url, plugin_id, manifest_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(filename) DO UPDATE SET
+      content = excluded.content,
+      name = excluded.name,
+      source = excluded.source,
+      original_url = excluded.original_url,
+      plugin_id = excluded.plugin_id,
+      manifest_json = excluded.manifest_json,
+      updated_at = CURRENT_TIMESTAMP
+  `).run(
+    filename,
+    (manifest && manifest.name) || fallbackName,
+    content,
+    source,
+    originalUrl,
+    pluginId,
+    manifest ? JSON.stringify(manifest) : null
+  );
+
+  return { pluginId };
+}
+
+// Helper: Load legacy on-disk widget registry (kept for the debug endpoint)
 async function loadWidgetRegistry() {
   try {
     const data = await fs.readFile(widgetRegistryPath, 'utf-8');
@@ -684,9 +894,19 @@ async function loadWidgetRegistry() {
   }
 }
 
-// Helper: Save widget registry
-async function saveWidgetRegistry(registry) {
-  await fs.writeFile(widgetRegistryPath, JSON.stringify(registry, null, 2), 'utf-8');
+// Helper: List installed plugins in the legacy registry response shape
+function listInstalledPlugins() {
+  return db.prepare(
+    'SELECT filename, name, source, original_url, plugin_id, manifest_json, installed_at FROM plugins ORDER BY installed_at, filename'
+  ).all().map((row) => ({
+    name: row.name,
+    filename: row.filename,
+    uploadedAt: row.installed_at,
+    source: row.source,
+    ...(row.original_url ? { originalUrl: row.original_url } : {}),
+    ...(row.plugin_id ? { pluginId: row.plugin_id } : {}),
+    ...(row.manifest_json ? { manifest: parseJsonObject(row.manifest_json, null) } : {}),
+  }));
 }
 
 // Endpoint: Upload a widget (HTML file)
@@ -699,23 +919,21 @@ fastify.post('/api/widgets/upload', async (request, reply) => {
     }
 
     const widgetName = data.filename.replace(/[^a-zA-Z0-9-._]/g, '_');
-    const savePath = path.join(__dirname, 'widgets', widgetName);
+    const content = (await data.toBuffer()).toString('utf-8');
 
-    // Save the file
-    await fs.writeFile(savePath, await data.toBuffer());
-
-    // Update registry
-    const registry = await loadWidgetRegistry();
-    if (!registry.find(w => w.filename === widgetName)) {
-      registry.push({
-        name: widgetName.replace('.html', ''),
-        filename: widgetName,
-        uploadedAt: new Date().toISOString()
-      });
-      await saveWidgetRegistry(registry);
+    // Re-uploading the same filename replaces the content (matches the old
+    // overwrite-the-file behavior); an embedded manifest is validated first.
+    const result = installPluginRow({
+      filename: widgetName,
+      fallbackName: widgetName.replace('.html', ''),
+      content,
+      source: 'upload',
+    });
+    if (result.error) {
+      return reply.status(result.status).send({ error: result.error });
     }
 
-    return { success: true, message: 'Widget uploaded!', widget: widgetName };
+    return { success: true, message: 'Widget uploaded!', widget: widgetName, pluginId: result.pluginId || null };
   } catch (err) {
     console.error('Widget upload error:', err);
     reply.status(500).send({ error: 'Failed to upload widget.' });
@@ -725,9 +943,9 @@ fastify.post('/api/widgets/upload', async (request, reply) => {
 // Endpoint: List widgets
 fastify.get('/api/widgets', async (request, reply) => {
   try {
-    const registry = await loadWidgetRegistry();
-    return registry;
+    return listInstalledPlugins();
   } catch (err) {
+    console.error('Error listing plugins:', err);
     reply.status(500).send({ error: 'Failed to load widget registry.' });
   }
 });
@@ -737,19 +955,451 @@ fastify.delete('/api/widgets/:filename', async (request, reply) => {
   if (demoBlocked(reply)) return;
   const { filename } = request.params;
   try {
-    const filePath = path.join(__dirname, 'widgets', filename);
-    await fs.unlink(filePath);
+    const result = db.prepare('DELETE FROM plugins WHERE filename = ?').run(filename);
 
-    // Update registry
-    let registry = await loadWidgetRegistry();
-    registry = registry.filter(w => w.filename !== filename);
-    await saveWidgetRegistry(registry);
+    // Best-effort cleanup of a pre-migration file on disk.
+    let removedFromDisk = false;
+    try {
+      await fs.unlink(path.join(__dirname, 'widgets', filename));
+      removedFromDisk = true;
+    } catch {
+      // Nothing on disk — expected for DB-backed plugins.
+    }
+
+    if (result.changes === 0 && !removedFromDisk) {
+      return reply.status(404).send({ error: 'Widget not found.' });
+    }
 
     return { success: true, message: 'Widget deleted.' };
   } catch (err) {
+    console.error('Widget delete error:', err);
     reply.status(500).send({ error: 'Failed to delete widget.' });
   }
 });
+
+// --- Plugin Platform v1 API: storage (issue #105 Phase 1, capability c) ---
+// Namespaced key/value documents for manifest plugins. Everything under
+// /api/plugin/v1 is the versioned contract plugins may rely on; see
+// docs/architecture/plugin-platform.md.
+
+const PLUGIN_STORAGE_MAX_VALUE_BYTES = 64 * 1024;
+const PLUGIN_STORAGE_MAX_KEYS = 500;
+const PLUGIN_STORAGE_KEY_REGEX = /^[A-Za-z0-9:_.-]{1,128}$/;
+
+// Guard: the pluginId must belong to an installed manifest plugin that declared
+// `"storage": true`. Sends the error reply and returns null on failure.
+function requireStoragePlugin(pluginId, reply) {
+  const row = db.prepare('SELECT manifest_json FROM plugins WHERE plugin_id = ?').get(pluginId);
+  if (!row) {
+    reply.status(403).send({ error: `Unknown plugin id "${pluginId}".` });
+    return null;
+  }
+  const manifest = parseJsonObject(row.manifest_json, {});
+  if (manifest.storage !== true) {
+    reply.status(403).send({ error: `Plugin "${pluginId}" does not declare storage in its manifest.` });
+    return null;
+  }
+  return manifest;
+}
+
+function validStorageKey(key, reply) {
+  if (!PLUGIN_STORAGE_KEY_REGEX.test(key)) {
+    reply.status(400).send({ error: 'Storage keys must be 1-128 chars of A-Za-z0-9 : _ . -' });
+    return false;
+  }
+  return true;
+}
+
+fastify.get('/api/plugin/v1/storage/:pluginId', async (request, reply) => {
+  const { pluginId } = request.params;
+  if (!requireStoragePlugin(pluginId, reply)) return;
+
+  const rows = db.prepare('SELECT key, value_json FROM plugin_storage WHERE plugin_id = ? ORDER BY key').all(pluginId);
+  const values = {};
+  for (const row of rows) {
+    try {
+      values[row.key] = JSON.parse(row.value_json);
+    } catch {
+      values[row.key] = null;
+    }
+  }
+  return values;
+});
+
+fastify.get('/api/plugin/v1/storage/:pluginId/:key', async (request, reply) => {
+  const { pluginId, key } = request.params;
+  if (!requireStoragePlugin(pluginId, reply)) return;
+  if (!validStorageKey(key, reply)) return;
+
+  const row = db.prepare('SELECT value_json FROM plugin_storage WHERE plugin_id = ? AND key = ?').get(pluginId, key);
+  if (!row) {
+    return reply.status(404).send({ error: 'Key not found.' });
+  }
+  reply.header('Content-Type', 'application/json');
+  return row.value_json;
+});
+
+fastify.put('/api/plugin/v1/storage/:pluginId/:key', async (request, reply) => {
+  if (demoBlocked(reply)) return;
+  const { pluginId, key } = request.params;
+  if (!requireStoragePlugin(pluginId, reply)) return;
+  if (!validStorageKey(key, reply)) return;
+
+  const valueJson = JSON.stringify(request.body === undefined ? null : request.body);
+  if (Buffer.byteLength(valueJson, 'utf-8') > PLUGIN_STORAGE_MAX_VALUE_BYTES) {
+    return reply.status(413).send({ error: `Value exceeds ${PLUGIN_STORAGE_MAX_VALUE_BYTES / 1024} KB limit.` });
+  }
+
+  const exists = db.prepare('SELECT 1 FROM plugin_storage WHERE plugin_id = ? AND key = ?').get(pluginId, key);
+  if (!exists) {
+    const { count } = db.prepare('SELECT COUNT(*) AS count FROM plugin_storage WHERE plugin_id = ?').get(pluginId);
+    if (count >= PLUGIN_STORAGE_MAX_KEYS) {
+      return reply.status(413).send({ error: `Plugin storage is limited to ${PLUGIN_STORAGE_MAX_KEYS} keys.` });
+    }
+  }
+
+  db.prepare(`
+    INSERT INTO plugin_storage (plugin_id, key, value_json)
+    VALUES (?, ?, ?)
+    ON CONFLICT(plugin_id, key) DO UPDATE SET
+      value_json = excluded.value_json,
+      updated_at = CURRENT_TIMESTAMP
+  `).run(pluginId, key, valueJson);
+
+  return { success: true };
+});
+
+fastify.delete('/api/plugin/v1/storage/:pluginId/:key', async (request, reply) => {
+  if (demoBlocked(reply)) return;
+  const { pluginId, key } = request.params;
+  if (!requireStoragePlugin(pluginId, reply)) return;
+  if (!validStorageKey(key, reply)) return;
+
+  const result = db.prepare('DELETE FROM plugin_storage WHERE plugin_id = ? AND key = ?').run(pluginId, key);
+  if (result.changes === 0) {
+    return reply.status(404).send({ error: 'Key not found.' });
+  }
+  return { success: true };
+});
+
+// Atomic numeric delta on a JSON path inside a stored document — the primitive
+// the clam-bucket siphon needs ("add N to the give pool") without a general
+// transaction API. Creates the key/path if missing. Body: { path, delta }.
+const incrementPluginStorage = (pluginId, key, pathSegments, delta) => {
+  const row = db.prepare('SELECT value_json FROM plugin_storage WHERE plugin_id = ? AND key = ?').get(pluginId, key);
+  let doc = {};
+  if (row) {
+    try {
+      doc = JSON.parse(row.value_json);
+    } catch {
+      doc = {};
+    }
+    if (!doc || typeof doc !== 'object' || Array.isArray(doc)) {
+      throw Object.assign(new Error('Stored value is not a JSON object.'), { statusCode: 409 });
+    }
+  }
+
+  let target = doc;
+  for (const segment of pathSegments.slice(0, -1)) {
+    if (target[segment] === undefined) {
+      target[segment] = {};
+    }
+    if (!target[segment] || typeof target[segment] !== 'object' || Array.isArray(target[segment])) {
+      throw Object.assign(new Error(`Path segment "${segment}" is not an object.`), { statusCode: 409 });
+    }
+    target = target[segment];
+  }
+
+  const leaf = pathSegments[pathSegments.length - 1];
+  const current = target[leaf] === undefined ? 0 : target[leaf];
+  if (typeof current !== 'number' || !Number.isFinite(current)) {
+    throw Object.assign(new Error(`Value at path is not a number.`), { statusCode: 409 });
+  }
+  target[leaf] = current + delta;
+
+  const valueJson = JSON.stringify(doc);
+  if (Buffer.byteLength(valueJson, 'utf-8') > PLUGIN_STORAGE_MAX_VALUE_BYTES) {
+    throw Object.assign(new Error('Value exceeds size limit.'), { statusCode: 413 });
+  }
+
+  db.prepare(`
+    INSERT INTO plugin_storage (plugin_id, key, value_json)
+    VALUES (?, ?, ?)
+    ON CONFLICT(plugin_id, key) DO UPDATE SET
+      value_json = excluded.value_json,
+      updated_at = CURRENT_TIMESTAMP
+  `).run(pluginId, key, valueJson);
+
+  return { result: target[leaf], value: doc };
+};
+
+fastify.post('/api/plugin/v1/storage/:pluginId/:key/increment', async (request, reply) => {
+  if (demoBlocked(reply)) return;
+  const { pluginId, key } = request.params;
+  if (!requireStoragePlugin(pluginId, reply)) return;
+  if (!validStorageKey(key, reply)) return;
+
+  const { path: incrementPath, delta } = request.body || {};
+  if (typeof incrementPath !== 'string' || incrementPath.length === 0) {
+    return reply.status(400).send({ error: 'path is required (dot-separated, e.g. "buckets.give").' });
+  }
+  if (typeof delta !== 'number' || !Number.isFinite(delta)) {
+    return reply.status(400).send({ error: 'delta must be a finite number.' });
+  }
+  const pathSegments = incrementPath.split('.');
+  if (pathSegments.some((segment) => segment.length === 0)) {
+    return reply.status(400).send({ error: 'path segments must be non-empty.' });
+  }
+
+  try {
+    // better-sqlite3 is synchronous and this transaction runs in one tick, so
+    // concurrent HTTP requests cannot interleave a read-modify-write here.
+    const applyIncrement = db.transaction(() => incrementPluginStorage(pluginId, key, pathSegments, delta));
+    const { result, value } = applyIncrement();
+    return { success: true, result, value };
+  } catch (error) {
+    if (error.statusCode) {
+      return reply.status(error.statusCode).send({ error: error.message });
+    }
+    console.error('Plugin storage increment error:', error);
+    return reply.status(500).send({ error: 'Failed to apply increment.' });
+  }
+});
+
+// --- Plugin Platform v1 API: settings (issue #105 Phase 2, capability d) ---
+// Values for the settings a plugin declared in its manifest. Each key lives at
+// exactly one scope: 'household' (default; global `settings` table under
+// plugin:<id>:settings) or 'device' (per-device blob under
+// device_settings_json.pluginPlatformSettings[<id>]). GET returns the merged
+// effective values: manifest default <- stored value for the key's scope.
+
+function requireManifestPlugin(pluginId, reply) {
+  const row = db.prepare('SELECT manifest_json FROM plugins WHERE plugin_id = ?').get(pluginId);
+  if (!row) {
+    reply.status(403).send({ error: `Unknown plugin id "${pluginId}".` });
+    return null;
+  }
+  return parseJsonObject(row.manifest_json, {});
+}
+
+function pluginHouseholdSettingsKey(pluginId) {
+  return `plugin:${pluginId}:settings`;
+}
+
+function readHouseholdPluginSettings(pluginId) {
+  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(pluginHouseholdSettingsKey(pluginId));
+  return parseJsonObject(row?.value, {});
+}
+
+function readDevicePluginSettings(pluginId, deviceName) {
+  const row = db.prepare('SELECT device_settings_json FROM devices WHERE name = ?').get(deviceName);
+  const deviceSettings = parseJsonObject(row?.device_settings_json, {});
+  const platformSettings = deviceSettings.pluginPlatformSettings;
+  const values = platformSettings && typeof platformSettings === 'object' && !Array.isArray(platformSettings)
+    ? platformSettings[pluginId]
+    : undefined;
+  return values && typeof values === 'object' && !Array.isArray(values) ? values : {};
+}
+
+// Returns a problem string or null.
+function validatePluginSettingValue(setting, value) {
+  switch (setting.type) {
+    case 'number':
+      if (typeof value !== 'number' || !Number.isFinite(value)) return 'must be a finite number';
+      if (typeof setting.min === 'number' && value < setting.min) return `must be >= ${setting.min}`;
+      if (typeof setting.max === 'number' && value > setting.max) return `must be <= ${setting.max}`;
+      return null;
+    case 'string':
+      if (typeof value !== 'string') return 'must be a string';
+      if (value.length > 1024) return 'must be at most 1024 characters';
+      return null;
+    case 'boolean':
+      return typeof value === 'boolean' ? null : 'must be a boolean';
+    case 'select':
+      if (typeof value !== 'string') return 'must be a string';
+      if (Array.isArray(setting.options) && !setting.options.includes(value)) {
+        return `must be one of: ${setting.options.join(', ')}`;
+      }
+      return null;
+    default:
+      return 'has an unsupported type';
+  }
+}
+
+fastify.get('/api/plugin/v1/settings/:pluginId', async (request, reply) => {
+  const { pluginId } = request.params;
+  const manifest = requireManifestPlugin(pluginId, reply);
+  if (!manifest) return;
+
+  const declared = Array.isArray(manifest.settings) ? manifest.settings : [];
+  const deviceName = typeof request.query.device === 'string' && request.query.device ? request.query.device : null;
+  const household = readHouseholdPluginSettings(pluginId);
+  const deviceValues = deviceName ? readDevicePluginSettings(pluginId, deviceName) : {};
+
+  const merged = {};
+  for (const setting of declared) {
+    const stored = setting.scope === 'device' ? deviceValues[setting.key] : household[setting.key];
+    const value = stored !== undefined ? stored : setting.default;
+    merged[setting.key] = value === undefined ? null : value;
+  }
+  return merged;
+});
+
+fastify.put('/api/plugin/v1/settings/:pluginId', async (request, reply) => {
+  if (demoBlocked(reply)) return;
+  const { pluginId } = request.params;
+  const manifest = requireManifestPlugin(pluginId, reply);
+  if (!manifest) return;
+
+  const body = request.body;
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return reply.status(400).send({ error: 'Body must be an object of { settingKey: value }.' });
+  }
+
+  const declared = Array.isArray(manifest.settings) ? manifest.settings : [];
+  const declaredByKey = new Map(declared.map((setting) => [setting.key, setting]));
+  const deviceName = typeof request.query.device === 'string' && request.query.device ? request.query.device : null;
+
+  const householdUpdates = {};
+  const deviceUpdates = {};
+  for (const [key, value] of Object.entries(body)) {
+    const setting = declaredByKey.get(key);
+    if (!setting) {
+      return reply.status(400).send({ error: `"${key}" is not declared in the plugin manifest.` });
+    }
+    const problem = validatePluginSettingValue(setting, value);
+    if (problem) {
+      return reply.status(400).send({ error: `"${key}" ${problem}.` });
+    }
+    if (setting.scope === 'device') {
+      deviceUpdates[key] = value;
+    } else {
+      householdUpdates[key] = value;
+    }
+  }
+
+  if (Object.keys(deviceUpdates).length > 0 && !deviceName) {
+    return reply.status(400).send({ error: 'A ?device= query parameter is required to write device-scoped settings.' });
+  }
+
+  if (Object.keys(householdUpdates).length > 0) {
+    const current = readHouseholdPluginSettings(pluginId);
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(
+      pluginHouseholdSettingsKey(pluginId),
+      JSON.stringify({ ...current, ...householdUpdates })
+    );
+  }
+
+  if (Object.keys(deviceUpdates).length > 0) {
+    db.prepare('INSERT OR IGNORE INTO devices (name, device_settings_json) VALUES (?, ?)').run(deviceName, '{}');
+    const row = db.prepare('SELECT device_settings_json FROM devices WHERE name = ?').get(deviceName);
+    const deviceSettings = parseJsonObject(row?.device_settings_json, {});
+    const platformSettings = (deviceSettings.pluginPlatformSettings && typeof deviceSettings.pluginPlatformSettings === 'object')
+      ? deviceSettings.pluginPlatformSettings
+      : {};
+    platformSettings[pluginId] = { ...(platformSettings[pluginId] || {}), ...deviceUpdates };
+    deviceSettings.pluginPlatformSettings = platformSettings;
+    db.prepare('UPDATE devices SET device_settings_json = ?, updateTime = CURRENT_TIMESTAMP WHERE name = ?').run(
+      JSON.stringify(deviceSettings),
+      deviceName
+    );
+  }
+
+  return { success: true };
+});
+
+// --- Plugin Platform v1 API: event stream (issue #105 Phase 3, capability b) ---
+// One SSE connection per dashboard; every catalog event is sent as a `data:`
+// message ({ event, payload, emittedAt }) and the client bridge filters per
+// plugin against its declared events. Delivery is ephemeral by design (no
+// replay) — durable state belongs in plugin storage.
+fastify.get('/api/plugin/v1/events/stream', (request, reply) => {
+  reply.hijack();
+  reply.raw.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+    // Tell the Nginx reverse proxy not to buffer the stream.
+    'X-Accel-Buffering': 'no',
+  });
+  reply.raw.write(': connected\n\n');
+
+  const unsubscribe = pluginEvents.subscribe((message) => {
+    reply.raw.write(`data: ${JSON.stringify(message)}\n\n`);
+  });
+  // Comment-only heartbeat keeps idle connections alive through proxies.
+  const heartbeat = setInterval(() => {
+    reply.raw.write(': ping\n\n');
+  }, 25000);
+
+  request.raw.on('close', () => {
+    clearInterval(heartbeat);
+    unsubscribe();
+  });
+});
+
+// --- Plugin Platform: declarative reactions (issue #105 Phase 4, Model C) ---
+// A manifest may declare reactions — bounded, validated storage increments the
+// server executes when a core event fires, e.g. the clam-bucket siphon:
+//   { "on": "clam.withdrawn", "action": "increment",
+//     "key": "give-pool", "path": "total", "delta": { "setting": "siphonAmount" } }
+// This runs at emission, exactly once per event, regardless of how many (or
+// zero) dashboards have the plugin mounted — no arbitrary plugin code ever runs
+// on the server, only the declared increment. Reaction failures are logged and
+// never break the core mutation or other plugins' reactions.
+
+function resolveReactionDelta(deltaSpec, manifest, pluginId, payload) {
+  if (typeof deltaSpec === 'number' && Number.isFinite(deltaSpec)) {
+    return deltaSpec;
+  }
+  if (deltaSpec && typeof deltaSpec === 'object') {
+    if (typeof deltaSpec.setting === 'string') {
+      const declared = (Array.isArray(manifest.settings) ? manifest.settings : [])
+        .find((setting) => setting && setting.key === deltaSpec.setting);
+      if (!declared) return null;
+      const household = readHouseholdPluginSettings(pluginId);
+      const value = household[deltaSpec.setting] !== undefined ? household[deltaSpec.setting] : declared.default;
+      return typeof value === 'number' && Number.isFinite(value) ? value : null;
+    }
+    if (typeof deltaSpec.payload === 'string') {
+      const value = payload ? payload[deltaSpec.payload] : undefined;
+      return typeof value === 'number' && Number.isFinite(value) ? value : null;
+    }
+  }
+  return null;
+}
+
+function runDeclarativeReactions(message) {
+  try {
+    const rows = db.prepare(
+      'SELECT plugin_id, manifest_json FROM plugins WHERE plugin_id IS NOT NULL AND manifest_json IS NOT NULL'
+    ).all();
+    for (const row of rows) {
+      const manifest = parseJsonObject(row.manifest_json, {});
+      const reactions = Array.isArray(manifest.reactions) ? manifest.reactions : [];
+      for (const reaction of reactions) {
+        if (reaction.on !== message.event) continue;
+        const delta = resolveReactionDelta(reaction.delta, manifest, row.plugin_id, message.payload);
+        if (delta === null || delta === 0) continue;
+        try {
+          const pathSegments = String(reaction.path).split('.');
+          const applyReaction = db.transaction(
+            () => incrementPluginStorage(row.plugin_id, reaction.key, pathSegments, delta)
+          );
+          applyReaction();
+        } catch (error) {
+          console.error(`Plugin reaction failed (${row.plugin_id} on ${message.event}):`, error.message);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Declarative reaction executor failed:', error);
+  }
+}
+
+// Subscribed at module load, before any SSE connection can attach, so
+// reactions run (and storage is up to date) before clients are notified.
+pluginEvents.subscribe(runDeclarativeReactions);
 
 // --- Chore notification sound bank ---
 
@@ -826,41 +1476,49 @@ fastify.delete('/api/sounds/:filename', async (request, reply) => {
   }
 });
 
-// Debug endpoint to list widget files
+// Debug endpoint to list installed plugins (DB) and any legacy on-disk files
 fastify.get('/api/widgets/debug', async (request, reply) => {
   try {
     const widgetsDir = path.join(__dirname, 'widgets');
-    console.log(`Checking widgets directory: ${widgetsDir}`);
 
-    const files = await fs.readdir(widgetsDir);
-    console.log(`Files in widgets directory:`, files);
-
-    const fileDetails = [];
-    for (const file of files) {
-      const filePath = path.join(widgetsDir, file);
-      try {
-        const stats = await fs.stat(filePath);
-        fileDetails.push({
-          name: file,
-          size: stats.size,
-          isFile: stats.isFile(),
-          modified: stats.mtime
-        });
-      } catch (err) {
-        fileDetails.push({
-          name: file,
-          error: err.message
-        });
+    let fileDetails = [];
+    try {
+      const files = await fs.readdir(widgetsDir);
+      for (const file of files) {
+        const filePath = path.join(widgetsDir, file);
+        try {
+          const stats = await fs.stat(filePath);
+          fileDetails.push({
+            name: file,
+            size: stats.size,
+            isFile: stats.isFile(),
+            modified: stats.mtime
+          });
+        } catch (err) {
+          fileDetails.push({
+            name: file,
+            error: err.message
+          });
+        }
       }
+    } catch (dirError) {
+      fileDetails = [{ error: dirError.message }];
     }
 
+    const plugins = db.prepare(`
+      SELECT filename, name, source, original_url, LENGTH(content) AS content_length,
+             manifest_json IS NOT NULL AS has_manifest, installed_at, updated_at
+      FROM plugins ORDER BY installed_at, filename
+    `).all();
+
     return {
-      directory: widgetsDir,
-      files: fileDetails,
-      registry: await loadWidgetRegistry()
+      plugins,
+      legacyDirectory: widgetsDir,
+      legacyFiles: fileDetails,
+      legacyRegistry: await loadWidgetRegistry()
     };
   } catch (error) {
-    console.error('Error reading widgets directory:', error);
+    console.error('Error reading plugin store:', error);
     return { error: error.message };
   }
 });
@@ -975,24 +1633,19 @@ fastify.post('/api/widgets/github/install', async (request, reply) => {
 
     // Sanitize filename
     const sanitizedFilename = filename.replace(/[^a-zA-Z0-9-._]/g, '_');
-    const savePath = path.join(__dirname, 'widgets', sanitizedFilename);
+    const content = typeof response.data === 'string' ? response.data : String(response.data);
 
-    // Save the widget file
-    await fs.writeFile(savePath, response.data, 'utf-8');
-
-    // Update registry
-    const registry = await loadWidgetRegistry();
-    const existingWidget = registry.find(w => w.filename === sanitizedFilename);
-
-    if (!existingWidget) {
-      registry.push({
-        name: name || sanitizedFilename.replace('.html', ''),
-        filename: sanitizedFilename,
-        uploadedAt: new Date().toISOString(),
-        source: 'github',
-        originalUrl: download_url
-      });
-      await saveWidgetRegistry(registry);
+    // Reinstalling refreshes the content in place; provenance is kept so a
+    // future "update available" check knows where the plugin came from.
+    const result = installPluginRow({
+      filename: sanitizedFilename,
+      fallbackName: name || sanitizedFilename.replace('.html', ''),
+      content,
+      source: 'github',
+      originalUrl: download_url,
+    });
+    if (result.error) {
+      return reply.status(result.status).send({ error: result.error });
     }
 
     console.log(`Successfully installed widget: ${sanitizedFilename}`);
@@ -2290,6 +2943,14 @@ fastify.post('/api/chores/complete', async (request, reply) => {
 
     const totalResult = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(user_id);
 
+    pluginEvents.emit('chore.completed', {
+      userId: user_id,
+      choreId: schedule.chore_id,
+      scheduleId: chore_schedule_id,
+      clamValue: schedule.clam_value,
+      date,
+    });
+
     return { success: true, clam_total: totalResult.total };
   } catch (error) {
     console.error('Error completing chore:', error);
@@ -2359,6 +3020,7 @@ fastify.post('/api/users/:id/clams/add', async (request, reply) => {
     db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title) VALUES (?, NULL, ?, ?, ?)').run(id, useDate, amount, 'Adjustment');
 
     const result = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(id);
+    pluginEvents.emit('clam.deposited', { userId: parseInt(id), amount, newTotal: result.total });
     return { success: true, clam_total: result.total };
   } catch (error) {
     console.error('Error adding clams:', error);
@@ -2395,6 +3057,7 @@ fastify.post('/api/users/:id/clams/reduce', async (request, reply) => {
     }
 
     const result = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(id);
+    pluginEvents.emit('clam.withdrawn', { userId: parseInt(id), amount, newTotal: result.total });
     return { success: true, clam_total: result.total };
   } catch (error) {
     console.error('Error reducing clams:', error);

@@ -68,8 +68,10 @@ the system, and the technology choices.
     chores and generates recurring "sticky" chore instances.
   - The **Calendar Sync Service** ([`services/calendarSync.js`](../../server/services/calendarSync.js))
     periodically fetches ICS/CalDAV/Google calendars into a local cache table.
-- **File handling**: uploads (user avatars, photos, custom widgets) are written to
-  `server/uploads/` and `server/widgets/` and served statically.
+- **File handling**: uploads (user avatars, photos) are written to
+  `server/uploads/` and served statically. Custom widgets are stored in the
+  database (`plugins` table) and served at `/widgets/:filename`, so they survive
+  image upgrades — see [Plugin Platform](plugin-platform.md).
 - **Google API integration**: All three Google service modules
   (`googleCalendar.js`, `googlePhotos.js`, `googlePhotosPicker.js`) share a single
   authenticated fetch implementation via `googleConnection.createGoogleFetch()`,

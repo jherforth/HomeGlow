@@ -36,6 +36,7 @@ stays relevant.
 - [Demo Mode](guides/demo-mode.md) — run a public, self-resetting showcase instance with sample data.
 - [Configuration](reference/configuration.md) — environment variables and admin-panel settings.
 - [Custom Widget Development](guides/custom-widgets.md) — build and publish your own HTML widgets.
+- [Plugin Development](guides/plugin-development.md) — the full guide: manifest, storage, settings, events, reactions, and a complete worked example.
 - [Contributing](guides/contributing.md) — workflow, testing, conventions, and how to add a migration.
 
 ## 🗺️ Repository layout at a glance

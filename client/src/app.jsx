@@ -845,6 +845,7 @@ const App = () => {
           name={plugin.name}
           theme={theme}
           transparentBackground={pSettings.transparent || false}
+          events={plugin.manifest?.events || []}
         />,
       });
     });

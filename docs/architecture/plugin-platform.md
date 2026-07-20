@@ -1,8 +1,16 @@
 # Plugin Platform Architecture (Issue #105)
 
-> **Status:** Proposed design. Nothing here is implemented yet — this is the
-> planning spec for issue [#105 "feat: Plugin extensibility"](https://github.com/jherforth/HomeGlow/issues/105),
-> milestone 1.7. The database-flexibility half of the original discussion (external
+> **Status: all planned phases (0–4) are implemented** for issue
+> [#105 "feat: Plugin extensibility"](https://github.com/jherforth/HomeGlow/issues/105),
+> milestone 1.7: the DB-backed plugin store (§10, migrations 18–19), embedded
+> manifests + `/api/plugin/v1/storage` with atomic increment (§4–§6), declared
+> settings with household/device scoping + Admin Panel rendering (§8), the event
+> system's client delivery (§7, Model B), and declarative server-side reactions
+> (§7.3 Model C) — covered by `server/tests/pluginStore.test.js` and
+> `server/tests/pluginPlatform.test.js`, with the author-facing
+> [Plugin Development guide](../guides/plugin-development.md). Remaining
+> deferred items are listed in §13 (phasing item 6) and §14. The
+> database-flexibility half of the original discussion (external
 > Postgres/MariaDB, ORM adoption) was split out to #119 and is **out of scope** here.
 
 This document describes how to evolve HomeGlow's current "static HTML in an iframe"
@@ -18,7 +26,7 @@ deliberately minimal:
 | Piece | Today |
 | --- | --- |
 | **Format** | A single `.html` file uploaded via Admin Panel → Plugins, or installed from the `jherforth/HomeGlowPlugins` GitHub repo. |
-| **Storage on disk** | `server/widgets/<file>.html`, tracked in `server/widgets_registry.json` (`[{ name, filename }]`). |
+| **Storage** | ~~`server/widgets/<file>.html` + `widgets_registry.json`~~ → now the `plugins` table in `tasks.db` (§10, implemented). |
 | **Serving** | `GET /widgets/:filename` — backend rewrites `localhost:PORT` to the live origin and injects an overflow-fix `<style>`. |
 | **Rendering** | [`PluginWidgetWrapper.jsx`](../../client/src/components/PluginWidgetWrapper.jsx) renders an `<iframe sandbox="allow-scripts allow-same-origin allow-forms allow-popups">` at `/widgets/<file>?theme=<t>`. |
 | **API access** | Because the iframe is **same-origin**, a plugin can already `fetch()` the entire REST API, including the CORS proxy at `GET /api/proxy`. There is no auth — plugins are fully trusted. |
@@ -73,11 +81,23 @@ Today a plugin is one HTML file plus a two-field registry entry. The platform
 replaces that with a **manifest** — a small JSON descriptor a plugin ships
 alongside its HTML.
 
-### 4.1 Format
+### 4.1 Format (✅ implemented — embedded)
 
-A manifest is `<pluginId>.plugin.json`, uploaded next to (or embedded in) the
-widget HTML. `pluginId` is a slug (`[a-z0-9-]+`), stable across versions, and is
-the namespace key for storage, settings, and event subscriptions.
+The manifest is **embedded in the widget HTML** as a JSON script block — this
+keeps plugins single-file, so upload, GitHub install, and the DB store all work
+unchanged, and basic widgets simply omit the block:
+
+```html
+<script type="application/json" id="homeglow-manifest">
+  { "manifestVersion": 1, "id": "clam-buckets", ... }
+</script>
+```
+
+`id` is a slug (`[a-z0-9-]+`, max 64 chars), stable across versions and unique
+across installed plugins, and is the namespace key for storage, settings, and
+event subscriptions. A present-but-invalid manifest **rejects the upload with a
+400/409 and the validation errors** — a typo'd manifest never silently installs
+as a legacy widget. Manifest contents:
 
 ```jsonc
 {
@@ -85,17 +105,16 @@ the namespace key for storage, settings, and event subscriptions.
   "id": "clam-buckets",
   "name": "Clam Buckets",
   "version": "1.0.0",
-  "entry": "clam-buckets.html",
   "apiVersion": "v1",            // which /api/plugin/vN contract it targets
-  "storage": true,               // plugin uses the storage surface
-  "events": [                    // domain events it subscribes to
+  "storage": true,               // plugin uses the storage surface (enforced: 403 without it)
+  "events": [                    // domain events it subscribes to (accepted + stored; used in Phase 3)
     "clam.withdrawn"
   ],
-  "settings": [                  // declared, Admin-Panel-rendered settings
+  "settings": [                  // declared settings (accepted + stored; rendered in Phase 2)
     {
       "key": "siphonAmount",
       "label": "Give-bucket siphon (clams per withdrawal)",
-      "type": "number",
+      "type": "number",          // number | string | boolean | select
       "default": 2,
       "min": 0,
       "scope": "household"       // "household" (default) | "device"
@@ -103,6 +122,20 @@ the namespace key for storage, settings, and event subscriptions.
   ]
 }
 ```
+
+A manifest may also declare **`reactions`** (§7.3 Model C, implemented) —
+bounded server-side storage increments run when an event fires:
+
+```jsonc
+"reactions": [
+  { "on": "clam.withdrawn", "action": "increment",
+    "key": "give-pool", "path": "total", "delta": { "setting": "siphonAmount" } }
+]
+```
+
+When the server serves a manifest plugin, it injects
+`window.__HOMEGLOW_PLUGIN__ = { id, apiVersion }` into the HTML so the plugin
+(and `/plugin-sdk/v1.js`) knows its own namespace without parsing its manifest.
 
 ### 4.2 Backwards compatibility
 
@@ -196,7 +229,8 @@ A single new table — a namespaced key/value store, with values as JSON documen
 This is the smallest thing that satisfies "keep bucket balances server-side,
 surviving devices and reloads."
 
-**`plugin_storage`** (new, schema migration **18**):
+**`plugin_storage`** (✅ implemented in
+[`schema19-pluginStorage.js`](../../server/migrations/schema19-pluginStorage.js)):
 ```
 id            INTEGER PRIMARY KEY
 plugin_id     TEXT NOT NULL          -- namespace; matches registry pluginId
@@ -213,22 +247,28 @@ UNIQUE(plugin_id, key)
 > the same `tasks.db`). If a plugin needs relational queries, that is a strong
 > signal it should be a core feature, not a plugin.
 
-### 6.2 API (under the v1 contract)
+### 6.2 API (under the v1 contract) — ✅ implemented
 
 ```
 GET    /api/plugin/v1/storage/:pluginId              -> { key: value, ... }  (list all keys)
 GET    /api/plugin/v1/storage/:pluginId/:key         -> value | 404
-PUT    /api/plugin/v1/storage/:pluginId/:key         body: JSON value  -> upsert
-DELETE /api/plugin/v1/storage/:pluginId/:key         -> 204
+PUT    /api/plugin/v1/storage/:pluginId/:key         body: JSON value  -> upsert (413 over caps)
+DELETE /api/plugin/v1/storage/:pluginId/:key         -> { success } | 404
+POST   /api/plugin/v1/storage/:pluginId/:key/increment  body: { path, delta }  (see 6.3a)
 ```
 
-- Values are arbitrary JSON up to a per-value size cap (e.g. 64 KB) and a
-  per-plugin key cap (e.g. 500 keys) to bound abuse of the shared DB.
+- Values are arbitrary JSON up to a **64 KB** per-value cap and a **500-key**
+  per-plugin cap (413 when exceeded) to bound abuse of the shared DB.
+- Keys are `[A-Za-z0-9:_.-]`, 1–128 chars (e.g. `buckets:user:3`).
 - Writes are single-statement upserts (`INSERT ... ON CONFLICT(plugin_id,key) DO
   UPDATE`), so they inherit better-sqlite3's synchronous atomicity.
-- `pluginId` in the path must exist in the registry as a manifest plugin with
+- `pluginId` in the path must exist as an installed manifest plugin with
   `storage: true`, else `403` — this keeps legacy widgets and typo'd namespaces
   out of the table.
+- Mutations (`PUT`/`DELETE`/`increment`) are blocked in demo mode.
+- Plugins call this directly or via the **SDK** (`/plugin-sdk/v1.js`):
+  `HomeGlow.storage.list/get/set/remove/increment`, namespaced automatically via
+  the injected `window.__HOMEGLOW_PLUGIN__`.
 
 ### 6.3 Atomic mutations for the siphon
 
@@ -236,10 +276,11 @@ The reference use case needs to move clams into the give bucket **atomically**
 with the withdrawal. Plain KV upserts have a read-modify-write race if two
 withdrawals land together. Two options:
 
-- **6.3a (recommended for 1.7):** a small **atomic-increment** helper endpoint —
+- **6.3a (✅ implemented):** a small **atomic-increment** helper endpoint —
   `POST /api/plugin/v1/storage/:pluginId/:key/increment` with `{ path, delta }` —
-  that applies a numeric delta to a JSON path inside `value_json` inside one
-  better-sqlite3 transaction. Covers "add N to the give bucket" without exposing a
+  that applies a numeric delta to a dot-separated JSON path inside `value_json`
+  in one better-sqlite3 transaction (missing keys/paths are created; non-numeric
+  targets are a 409). Covers "add N to the give bucket" without exposing a
   general transaction API.
 - **6.3b (deferred):** a general "participating event handler" that runs
   server-side inside the withdrawal transaction (see §7.4). More powerful, much
@@ -261,19 +302,23 @@ need:
 | --- | --- | --- |
 | `clam.withdrawn` | `POST /api/users/:id/clams/reduce` succeeds | `{ userId, amount, newTotal }` |
 | `clam.deposited` | `POST /api/users/:id/clams/add` succeeds | `{ userId, amount, newTotal }` |
-| `chore.completed` | a chore is marked complete | `{ userId, choreId, scheduleId, clamValue }` |
+| `chore.completed` | `POST /api/chores/complete` succeeds | `{ userId, choreId, scheduleId, clamValue, date }` |
 
-Events are named `domain.pastTenseVerb`. New events are additive; the catalog is
-documented in the Backend Reference.
+Events are named `domain.pastTenseVerb`. New events are additive. The catalog
+lives in [`server/services/pluginEvents.js`](../../server/services/pluginEvents.js)
+and is the contract manifests are validated against: declaring an event not in
+the catalog rejects the install, so a typo'd subscription fails loudly instead
+of never firing.
 
-### 7.2 Emission — a tiny in-process bus
+### 7.2 Emission — a tiny in-process bus (✅ implemented)
 
-Add a minimal internal emitter in the backend (a thin wrapper over Node's
-`EventEmitter`, or a hand-rolled `dispatch(eventName, payload)` in a new
-`server/services/pluginEvents.js`). Core mutation routes call
-`pluginEvents.emit('clam.withdrawn', payload)` **after** their DB transaction
-commits. This is one line at each emission site and has no effect if no plugin
-subscribes.
+A minimal hand-rolled emitter in
+[`server/services/pluginEvents.js`](../../server/services/pluginEvents.js)
+(`emit`/`subscribe`, no persistence or replay — events are ephemeral UI signals;
+durable state belongs in plugin storage). Core mutation routes call
+`pluginEvents.emit('clam.withdrawn', payload)` **after** their DB write
+succeeds. One line per emission site; no effect if nothing subscribes, and a
+failing subscriber can never break the core mutation.
 
 ### 7.3 Delivery to plugins — the design fork
 
@@ -289,47 +334,69 @@ update regardless of which device is showing the plugin). Three delivery models:
 | **C. Server SSE fan-out + plugin-owned reaction endpoint** | Core pushes events to a lightweight **server-side reducer per plugin** that only does declared, safe operations (storage writes/increments) | No arbitrary code on server; works without an iframe | Reducer expressiveness is limited to declared ops |
 
 > **Recommendation:**
-> **Ship Model B first** (client postMessage bridge) — it is the smallest,
-> safest, and unlocks reactive *UI* immediately. Then add a **constrained Model C**
+> **Ship Model B first** (client postMessage bridge — ✅ implemented as Phase 3) —
+> it is the smallest, safest, and unlocks reactive *UI* immediately. Then add a
+> **constrained Model C** (✅ implemented as Phase 4)
 > for the "must update even when unmounted" case: the manifest declares a
 > **declarative reaction** (e.g. "on `clam.withdrawn`, increment
 > `storage[give-pool]` by `settings.siphonAmount`"), which core executes via the
-> atomic-increment primitive from §6.3a inside the emission transaction. This gets
+> atomic-increment primitive from §6.3a at emission time. This gets
 > the clam-bucket siphon working **server-side and atomically without ever running
 > arbitrary plugin code on the server.** Full Model A (arbitrary server-side plugin
 > code) is explicitly deferred and may never be needed.
+>
+> As implemented, a reaction is
+> `{ on, action: "increment", key, path, delta }` where `delta` is a literal
+> number, `{ "setting": "<household number setting>" }` (resolved live at fire
+> time), or `{ "payload": "<numeric field>" }`. Reactions require
+> `"storage": true`, are validated at install (event against the catalog,
+> setting reference against the declared schema), and run **once per event at
+> emission** — before SSE fan-out, independent of how many dashboards are
+> connected. A failed reaction is logged and never breaks the core mutation or
+> other plugins.
 
 ### 7.4 Participating vs. reacting
 
 The issue asks whether handlers can *participate* (alter the withdrawal, e.g. take
 the siphon atomically) or only *react*.
 
-- **1.7 answer:** the declarative reaction in Model C **participates in effect** —
-  the siphon is applied atomically with the withdrawal via the increment
+- **1.7 answer (✅ implemented):** the declarative reaction in Model C
+  **participates in effect** — the siphon is applied synchronously at emission
+  (before the mutation's HTTP response returns) via the atomic increment
   primitive — without a plugin being able to *veto or alter the core mutation
   itself*. The withdrawal still happens exactly as core defines it; the plugin
-  adds a bounded, declared side effect.
+  adds a bounded, declared side effect. (Honest nuance: the reaction runs in its
+  own transaction immediately after the mutation's write, not inside it — a
+  reaction failure is logged and leaves the withdrawal standing.)
 - **Deferred:** letting a plugin change the primary mutation (e.g. reject a
   withdrawal, change its amount) requires synchronous in-transaction plugin code
   (Model A) and a rollback contract. Out of scope for 1.7.
 
-### 7.5 The client bridge concretely
+### 7.5 The client bridge concretely (✅ implemented)
 
-`PluginWidgetWrapper` opens one SSE stream (`GET /api/plugin/v1/events/stream`,
-new) for the whole dashboard, filters events against each mounted plugin's
-declared `events`, and forwards matching ones into the iframe:
+The dashboard keeps **one** SSE connection to `GET /api/plugin/v1/events/stream`
+(the shared singleton in
+[`client/src/utils/pluginEventBridge.js`](../../client/src/utils/pluginEventBridge.js),
+opened lazily with the first subscribing plugin and closed with the last). The
+server sends every catalog event as a `data:` message with a comment heartbeat
+every 25s and `X-Accel-Buffering: no` so the Nginx proxy doesn't buffer the
+stream. Each mounted
+[`PluginWidgetWrapper`](../../client/src/components/PluginWidgetWrapper.jsx)
+filters against its plugin's declared `events` (passed down from the widget
+list's `manifest`) and forwards matches into the iframe:
 
 ```js
 iframe.contentWindow.postMessage(
-  { type: 'homeglow:event', event: 'clam.withdrawn', payload },
+  { type: 'homeglow:event', event: 'clam.withdrawn', payload, emittedAt },
   window.location.origin      // same-origin target, never "*"
 );
 ```
 
-The plugin listens with `window.addEventListener('message', ...)`, verifying
-`origin === window.location.origin`. A small documented JS shim
-(`/plugin-sdk/v1.js`, served by the backend) can wrap this so plugins write
-`HomeGlow.on('clam.withdrawn', cb)` instead of raw postMessage.
+The plugin listens via the SDK — `HomeGlow.on('clam.withdrawn', cb)` (returns an
+unsubscribe function; `HomeGlow.off` also available) — which verifies
+`event.origin === window.location.origin` under the hood. Because the wrapper
+only forwards declared events, an undeclared event never reaches a plugin even
+if it registers a handler for it.
 
 ---
 
@@ -341,39 +408,47 @@ The Admin Panel renders a fixed control set. The manifest's `settings[]` array
 (see §4.1) lets a plugin declare its own — a typed schema of
 `{ key, label, type, default, ... }`.
 
-### 8.2 Storage — household vs. device
+### 8.2 Storage — household vs. device (✅ implemented)
 
 The issue notes platform settings like the siphon amount are "probably
 household-wide rather than per-device." The current `pluginSettings` blob is
-per-device. Design:
+per-device. As implemented, **each declared key lives at exactly one scope**:
 
-- **`scope: "device"`** settings continue to live in
-  `devices.device_settings_json → pluginSettings[pluginId]` (existing path).
-- **`scope: "household"`** settings (the default for declared settings) live in a
-  new global store so every display agrees on the siphon amount. Reuse the
-  existing global `settings` KV table with a namespaced key:
-  `plugin:<pluginId>:settings` → JSON blob. No new table needed.
+- **`scope: "household"`** (the default) — global `settings` KV table under the
+  namespaced key `plugin:<pluginId>:settings` → JSON blob. Every display agrees
+  on the siphon amount. No new table needed.
+- **`scope: "device"`** — per-device blob under
+  `devices.device_settings_json → pluginPlatformSettings[pluginId]` (a separate
+  top-level key so the existing `pluginSettings` enabled/transparent/refresh blob
+  stays untouched).
 
-### 8.3 API (under the v1 contract)
+### 8.3 API (under the v1 contract) — ✅ implemented
 
 ```
-GET  /api/plugin/v1/settings/:pluginId    -> merged { key: value } (defaults <- household <- device overrides)
-PUT  /api/plugin/v1/settings/:pluginId    body: { key: value, ... }  (validated against manifest schema, scope-routed)
+GET  /api/plugin/v1/settings/:pluginId?device=<name>   -> effective { key: value } (manifest default <- stored value at the key's scope)
+PUT  /api/plugin/v1/settings/:pluginId?device=<name>   body: { key: value, ... }  (validated against manifest schema, scope-routed)
 ```
 
-- Values are **validated against the manifest schema** on write (type, min/max),
-  rejecting unknown keys — this is the one place plugin input is typed.
-- The iframe reads its settings either via this endpoint or via a `settings` field
-  the bridge injects at load, mirroring how `theme` is passed today.
+- Values are **validated against the manifest schema** on write (type, min/max,
+  select options), rejecting unknown keys — this is the one place plugin input is
+  typed. Validation is all-or-nothing: one bad key rejects the whole write.
+- Writing a device-scoped key without `?device=` is a 400; mutations are blocked
+  in demo mode.
+- The dashboard passes the display's device name on the iframe URL
+  (`PluginWidgetWrapper` appends `&device=<name>`), and the SDK exposes
+  `HomeGlow.settings.get()` / `HomeGlow.settings.set(values)` which forward it
+  automatically.
 
-### 8.4 Admin Panel rendering
+### 8.4 Admin Panel rendering — ✅ implemented
 
 The existing **Plugins** sub-tab (`AdminPanel.jsx`, `widgetsSubTab === 1`) gains,
-per manifest plugin, a settings section generated from `manifest.settings[]`:
-number/text/toggle/select controls bound to `PUT /api/plugin/v1/settings/:id`.
-Legacy widgets show only the existing enabled/transparent/refresh controls,
-unchanged. Reuse `AdminFormSection` and the existing control components so the
-look matches core settings.
+per manifest plugin, a **"Plugin Options"** section generated from
+`manifest.settings[]`: number/text/toggle/select controls (device-scoped ones
+labeled "This device only") bound to `PUT /api/plugin/v1/settings/:id` on the
+same Save action as the rest of the card. Legacy widgets show only the existing
+enabled/transparent/refresh controls, unchanged. The widget list
+(`GET /api/widgets`) now includes each plugin's parsed `manifest` so the panel
+can render without extra round-trips.
 
 ---
 
@@ -443,21 +518,24 @@ means making those three survive too.
 
 ### 10.2 Two approaches
 
-**Approach A — put the plugin store in the database (recommended).**
+**Approach A — put the plugin store in the database (recommended, ✅ implemented).**
 Stop treating the container filesystem as plugin storage. Store each plugin's
 **HTML content and manifest as rows in `tasks.db`**, and serve `/widgets/:filename`
 from the DB instead of from `/app/widgets`. A new table replaces both the on-disk
 files and `widgets_registry.json`:
 
-**`plugins`** (new, schema migration **19**):
+**`plugins`** (implemented in
+[`schema18-pluginsTable.js`](../../server/migrations/schema18-pluginsTable.js)):
 ```
-plugin_id     TEXT PRIMARY KEY        -- slug; null-safe legacy id = filename for manifest-less widgets
+id            INTEGER PRIMARY KEY
+plugin_id     TEXT UNIQUE             -- manifest slug (Phase 1); NULL for legacy widgets
 filename      TEXT NOT NULL UNIQUE    -- served path: /widgets/<filename>
 name          TEXT NOT NULL
 content       TEXT NOT NULL           -- the widget HTML (served from here)
-manifest_json TEXT                    -- parsed manifest, or NULL for legacy widgets
-source        TEXT,                   -- 'upload' | 'github:<path>' — provenance, powers "update available"
-installed_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+manifest_json TEXT                    -- parsed manifest (Phase 1), or NULL for legacy widgets
+source        TEXT DEFAULT 'upload'   -- 'upload' | 'github' — provenance, powers "update available"
+original_url  TEXT                    -- GitHub download URL when source = 'github'
+installed_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ```
 
@@ -504,6 +582,11 @@ table runs **inside the new container**, whose `/app/widgets` is already the emp
 image copy — the old container (with the user's plugins) is gone by then. So the
 migration cannot recover plugins that only ever lived on the ephemeral layer.
 
+> Migration 18 **does** import whatever is on disk when it first runs — so a
+> restart (rather than an image upgrade) into the new version, or a local-dev
+> setup, loses nothing. Orphaned registry entries whose HTML is gone are logged
+> by name so the operator knows exactly what to re-install.
+
 Mitigations, in order of preference:
 1. **Document a pre-upgrade export** for the release that introduces this: "before
    upgrading to vX, copy your `homeglow/.../widgets` out, or note which GitHub
@@ -537,14 +620,15 @@ New/changed persistence, all additive:
 
 | Change | Where | Migration |
 | --- | --- | --- |
-| `plugin_storage` table (KV per plugin) | `tasks.db` | new schema migration **18** |
-| `plugins` table (files + manifest + provenance) — makes plugins survive upgrades (§10) | `tasks.db` | new schema migration **19** |
+| `plugins` table (files + manifest + provenance) — makes plugins survive upgrades (§10) | `tasks.db` | schema migration **18** ✅ implemented |
+| `plugin_storage` table (KV per plugin) | `tasks.db` | schema migration **19** ✅ implemented |
 | Global household settings | reuse existing `settings` table, key `plugin:<id>:settings` | none (KV reuse) |
 | Device-scoped plugin settings | existing `devices.device_settings_json → pluginSettings` | none |
-| Legacy `widgets_registry.json` | retired; imported into `plugins` where possible | one-time import |
+| Legacy `widgets_registry.json` | retired; imported into `plugins` where possible | one-time import (part of 18) ✅ |
 
-> Current latest schema migration is **17** (`schema17-choreTransferSnooze.js`),
-> so `plugin_storage` lands at **18** and `plugins` at **19**. Follow
+> Because Phase 0 ships first, the `plugins` table landed at **18**
+> ([`schema18-pluginsTable.js`](../../server/migrations/schema18-pluginsTable.js));
+> `plugin_storage` takes **19** when Phase 1 lands. Follow
 > [`migrationTemplate.js`](../../server/migrations/migrationTemplate.js) and the
 > [Contributing → adding a migration](../guides/contributing.md#adding-a-database-migration)
 > steps: register each in the `schemaMigrations` map in `server/index.js`, wrap it
@@ -556,16 +640,22 @@ New/changed persistence, all additive:
 
 | Area | File(s) | Change |
 | --- | --- | --- |
-| Storage table | `server/migrations/schema18-pluginStorage.js` (new) | Create `plugin_storage`. |
-| DB-backed plugin store | `server/migrations/schema19-pluginsTable.js` (new) | Create `plugins`; import any on-disk `widgets/*.html` + registry. |
-| Event bus | `server/services/pluginEvents.js` (new) | In-process emitter + declarative-reaction executor. |
-| Emission sites | `server/index.js` clam add/reduce & chore-complete routes | One `pluginEvents.emit(...)` after commit. |
-| v1 API | `server/index.js` (or a new `server/routes/pluginV1.js` if the single file is split) | `/api/plugin/v1/storage`, `/settings`, `/events/stream`, curated domain subset. |
-| Widget serving | `server/index.js` `/widgets/:filename` + upload/install/delete routes | Serve HTML from the `plugins` table; writes become row upserts (§10.2). |
-| Manifest handling | `server/index.js` upload/install/list widget routes | Parse + validate manifest, store in `plugins.manifest_json`. |
-| Plugin SDK shim | `server/` static + `client/public` | `/plugin-sdk/v1.js` — `HomeGlow.on/off`, storage/settings helpers. |
+| DB-backed plugin store ✅ | [`server/migrations/schema18-pluginsTable.js`](../../server/migrations/schema18-pluginsTable.js) | Create `plugins`; import any on-disk `widgets/*.html` + registry. **Implemented.** |
+| Widget serving ✅ | `server/index.js` `/widgets/:filename` + upload/install/delete/debug routes | Serve HTML from the `plugins` table; writes are row upserts (§10.2); read-only disk fallback for pre-migration files. **Implemented**, tested in [`server/tests/pluginStore.test.js`](../../server/tests/pluginStore.test.js). |
+| Storage table ✅ | [`server/migrations/schema19-pluginStorage.js`](../../server/migrations/schema19-pluginStorage.js) | Create `plugin_storage`. **Implemented.** |
+| Storage API ✅ | `server/index.js` `/api/plugin/v1/storage/...` routes | CRUD + atomic increment, caps, `storage: true` guard. **Implemented**, tested in [`pluginPlatform.test.js`](../../server/tests/pluginPlatform.test.js). |
+| Manifest handling ✅ | `server/index.js` `installPluginRow` / `extractPluginManifest` | Parse + validate embedded manifest, store in `plugins.manifest_json`. **Implemented.** |
+| Plugin SDK ✅ | [`server/plugin-sdk/v1.js`](../../server/plugin-sdk/v1.js), served at `/plugin-sdk/v1.js` | `HomeGlow.storage.*` + `HomeGlow.settings.*` helpers. **Implemented** (event helpers land with Phase 3). |
+| Settings API ✅ | `server/index.js` `/api/plugin/v1/settings/:pluginId` routes | Merged GET, scope-routed validated PUT. **Implemented**, tested in [`pluginPlatform.test.js`](../../server/tests/pluginPlatform.test.js). |
+| Admin settings UI ✅ | [`AdminPanel.jsx`](../../client/src/components/AdminPanel.jsx) Plugins sub-tab | "Plugin Options" controls generated from `manifest.settings[]`. **Implemented.** |
+| Device context ✅ | [`PluginWidgetWrapper.jsx`](../../client/src/components/PluginWidgetWrapper.jsx) | Appends `&device=<name>` to the iframe URL for device-scoped settings. **Implemented.** |
+| Event bus ✅ | [`server/services/pluginEvents.js`](../../server/services/pluginEvents.js) | In-process emitter + event catalog. **Implemented.** |
+| Reaction executor ✅ | `server/index.js` `runDeclarativeReactions` (bus subscriber) | Executes declared increments once per event at emission; delta from literal / household setting / payload field. **Implemented.** |
+| Emission sites ✅ | `server/index.js` clam add/reduce & chore-complete routes | One `pluginEvents.emit(...)` after the DB write. **Implemented.** |
+| SSE stream ✅ | `server/index.js` `GET /api/plugin/v1/events/stream` | Hijacked reply, heartbeat, proxy-buffering disabled. **Implemented.** |
+| Client event bridge ✅ | [`client/src/utils/pluginEventBridge.js`](../../client/src/utils/pluginEventBridge.js) + [`PluginWidgetWrapper.jsx`](../../client/src/components/PluginWidgetWrapper.jsx) | Shared EventSource; per-plugin filtering; same-origin postMessage. **Implemented.** |
+| v1 API (rest) | `server/index.js` (or a new `server/routes/pluginV1.js` if the single file is split) | Curated domain subset (capability a hardening). |
 | Client bridge | [`PluginWidgetWrapper.jsx`](../../client/src/components/PluginWidgetWrapper.jsx) | SSE subscription + `postMessage` forwarding, filtered by declared events. |
-| Admin settings UI | [`AdminPanel.jsx`](../../client/src/components/AdminPanel.jsx) Plugins sub-tab | Render `manifest.settings[]` controls. |
 | Docs | `docs/guides/custom-widgets.md`, `server/widgets/README.md`, `docs/reference/backend-api.md` | Document manifest, SDK, v1 contract, events. |
 
 ---
@@ -574,25 +664,35 @@ New/changed persistence, all additive:
 
 Ship in order of dependency and risk; each phase is independently useful.
 
-1. **Phase 0 — DB-backed plugin store (§10, prerequisite).** The `plugins` table,
-   serve `/widgets/:filename` from the DB, upload/install/delete as row writes,
-   one-time import of any on-disk widgets. Do this **first** — it makes everything
-   that follows survive upgrades, and there is no point persisting plugin *data* if
-   the plugin *file* vanishes on the next `docker pull`. *Reference: an installed
-   plugin is still there after upgrading.*
-2. **Phase 1 — Manifest + v1 storage (a, c).** Manifest format, validation,
-   `plugins.manifest_json`, `plugin_storage` table, `/api/plugin/v1/storage` +
-   atomic increment, SDK storage helpers. *Reference use case: buckets persist.*
-3. **Phase 2 — Declared settings (d).** Manifest `settings[]`, household/device
-   scoping, `/api/plugin/v1/settings`, Admin Panel rendering. *Reference: siphon
-   amount is configurable.*
-4. **Phase 3 — Events, client delivery (b, Model B).** Event bus, emission sites,
-   SSE stream, `PluginWidgetWrapper` bridge, `HomeGlow.on`. *Reference: plugin UI
-   reacts live to withdrawals.*
-5. **Phase 4 — Declarative server-side reactions (b, Model C + §6.3a).** Manifest
-   declares a reaction; core executes the siphon atomically on withdrawal even
-   with no iframe mounted. *Reference: siphon is correct and atomic regardless of
-   device.*
+1. **Phase 0 — DB-backed plugin store (§10, prerequisite). ✅ Implemented.** The
+   `plugins` table (migration 18), `/widgets/:filename` served from the DB,
+   upload/install/delete as row writes, one-time import of any on-disk widgets.
+   Done **first** — it makes everything that follows survive upgrades, and there
+   is no point persisting plugin *data* if the plugin *file* vanishes on the next
+   `docker pull`. *Reference: an installed plugin is still there after upgrading —
+   proven by the restart-with-wiped-widgets-dir test in
+   [`pluginStore.test.js`](../../server/tests/pluginStore.test.js).*
+2. **Phase 1 — Manifest + v1 storage (a, c). ✅ Implemented.** Embedded manifest
+   format + validation, `plugins.manifest_json`, `plugin_storage` table
+   (migration 19), `/api/plugin/v1/storage` + atomic increment, SDK storage
+   helpers at `/plugin-sdk/v1.js`. *Reference use case: buckets persist —
+   covered by [`pluginPlatform.test.js`](../../server/tests/pluginPlatform.test.js).*
+3. **Phase 2 — Declared settings (d). ✅ Implemented.** Manifest `settings[]`,
+   household/device scoping, `/api/plugin/v1/settings`, Admin Panel "Plugin
+   Options" rendering, `HomeGlow.settings` SDK helpers. *Reference: siphon
+   amount is configurable — covered by
+   [`pluginPlatform.test.js`](../../server/tests/pluginPlatform.test.js).*
+4. **Phase 3 — Events, client delivery (b, Model B). ✅ Implemented.** Event bus
+   + catalog, emission sites, SSE stream, shared-EventSource bridge with
+   per-plugin filtering, `HomeGlow.on`/`off`. *Reference: plugin UI reacts live
+   to withdrawals — SSE delivery of all three events covered by
+   [`pluginPlatform.test.js`](../../server/tests/pluginPlatform.test.js).*
+5. **Phase 4 — Declarative server-side reactions (b, Model C + §6.3a).
+   ✅ Implemented.** Manifest declares a reaction; core executes the siphon
+   atomically on withdrawal even with no iframe mounted, with the delta resolved
+   from a literal, a live household setting, or the event payload. *Reference:
+   siphon is correct and atomic regardless of device — covered by
+   [`pluginPlatform.test.js`](../../server/tests/pluginPlatform.test.js).*
 6. **Deferred / future:** Model A (arbitrary server-side plugin code),
    participating handlers that alter/veto core mutations, and the per-plugin
    permission-token enforcement (#105 mentions as an off-ramp, not a 1.7
@@ -605,12 +705,15 @@ Ship in order of dependency and risk; each phase is independently useful.
   namespace? Likely a per-plugin token injected at load and required on
   `/api/plugin/v1`. Deferred, but the manifest/namespace shape should not
   foreclose it.
-- **Reaction expressiveness (§7.3 Model C):** is "increment a JSON path by a
-  settings-derived delta" enough for the plugins we expect, or do we need a small
-  declarative expression grammar? Start with increment; revisit with real plugins.
-- **GitHub plugin distribution:** the `jherforth/HomeGlowPlugins` install flow
-  must learn to fetch and validate the `.plugin.json` alongside the HTML.
-- **Event delivery when multiple devices are open:** SSE fan-out is per-connection;
-  the declarative reaction (Model C) must run **once** on the server per event, not
-  once per connected device — the reaction executor lives at emission, not in the
-  bridge.
+- **Reaction expressiveness (§7.3 Model C):** implemented as `increment` with
+  three delta forms (literal / household setting / payload field). Is that
+  enough for the plugins we expect, or will real plugins need more actions
+  (e.g. `set`, conditionals)? Revisit with real community plugins before
+  growing the grammar.
+- **GitHub plugin distribution:** ~~fetch a separate `.plugin.json`~~ resolved
+  by embedding the manifest in the HTML — the existing single-file install flow
+  validates it automatically. Remaining nice-to-have: an "update available"
+  check using the stored `source`/`original_url` provenance.
+- **Event delivery when multiple devices are open:** ~~open~~ resolved as
+  designed — the reaction executor is a bus subscriber at emission (runs once
+  per event, before SSE fan-out), not part of the per-connection bridge.
