@@ -147,7 +147,8 @@ const existed = await HomeGlow.storage.remove('buckets:user:3');
 const { result, value } = await HomeGlow.storage.increment('give-pool', 'total', 2);
 ```
 
-Limits: 64 KB per value, 500 keys per plugin. Writes are disabled in demo mode.
+Limits: 64 KB per value, 500 keys per plugin. (Storage works in demo mode too —
+it just resets with the demo cycle.)
 
 Raw endpoints (if you prefer `fetch`):
 

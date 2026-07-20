@@ -170,11 +170,11 @@ test('demo weather snapshot is served in both unit systems', async () => {
 });
 
 test('abuse-prone routes are blocked with 403', async () => {
+    // Note: widget upload/install/delete and the plugin platform APIs are
+    // deliberately NOT blocked — plugins are a showcase feature and their
+    // state lives in the in-memory demo DB, wiped on the reset cycle.
     const blocked = [
         ['GET', '/api/proxy?url=https://example.com'],
-        ['POST', '/api/widgets/upload'],
-        ['DELETE', '/api/widgets/some-widget.html'],
-        ['POST', '/api/widgets/github/install'],
         ['POST', '/api/sounds/upload'],
         ['DELETE', '/api/sounds/some-sound.mp3'],
         ['POST', '/api/users/1/upload-picture'],
@@ -198,6 +198,39 @@ test('abuse-prone routes are blocked with 403', async () => {
         assert.equal(res.status, 403, `${method} ${pathname} expected 403, got ${res.status}`);
         assert.match(res.body.error, /demo mode/i);
     }
+});
+
+test('plugins can be installed and exercised end-to-end in demo mode', async () => {
+    const manifest = {
+        manifestVersion: 1,
+        id: 'demo-trial-plugin',
+        storage: true,
+        settings: [{ key: 'threshold', label: 'Threshold', type: 'number', default: 3 }],
+    };
+    const html = `<html><head><title>demo</title><script type="application/json" id="homeglow-manifest">${JSON.stringify(manifest)}</script></head><body>demo plugin</body></html>`;
+
+    const form = new FormData();
+    form.append('file', new Blob([html], { type: 'text/html' }), 'demo-trial-plugin.html');
+    const upload = await fetch(`${baseUrl}/api/widgets/upload`, { method: 'POST', body: form });
+    assert.equal(upload.status, 200);
+
+    const served = await api('/widgets/demo-trial-plugin.html');
+    assert.equal(served.status, 200);
+
+    // Storage and settings mutations work too (state is in the in-memory DB).
+    const put = await api('/api/plugin/v1/storage/demo-trial-plugin/state', {
+        method: 'PUT',
+        body: JSON.stringify({ tries: 1 }),
+    });
+    assert.equal(put.status, 200);
+    const settings = await api('/api/plugin/v1/settings/demo-trial-plugin', {
+        method: 'PUT',
+        body: JSON.stringify({ threshold: 5 }),
+    });
+    assert.equal(settings.status, 200);
+
+    const del = await api('/api/widgets/demo-trial-plugin.html?purgeData=true', { method: 'DELETE' });
+    assert.equal(del.status, 200);
 });
 
 test('normal interactive routes still work (chore completion round-trip)', async () => {

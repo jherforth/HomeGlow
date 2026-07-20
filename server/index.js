@@ -928,8 +928,10 @@ function listInstalledPlugins() {
 }
 
 // Endpoint: Upload a widget (HTML file)
+// Deliberately NOT demo-blocked: plugins are a showcase feature, and since the
+// plugin store moved into the database (issue #105 Phase 0) demo installs live
+// in the in-memory DB and vanish on the demo reset cycle — nothing persists.
 fastify.post('/api/widgets/upload', async (request, reply) => {
-  if (demoBlocked(reply)) return;
   try {
     const data = await request.file();
     if (!data || !data.filename.endsWith('.html')) {
@@ -974,8 +976,8 @@ fastify.get('/api/widgets', async (request, reply) => {
 // ?purgeData=true to also wipe it — recommended before installing a
 // *different* plugin that declares the same id, which would otherwise
 // silently inherit the predecessor's data.
+// Not demo-blocked — see the widget upload endpoint.
 fastify.delete('/api/widgets/:filename', async (request, reply) => {
-  if (demoBlocked(reply)) return;
   const { filename } = request.params;
   const purgeData = request.query.purgeData === 'true';
   try {
@@ -1083,8 +1085,10 @@ fastify.get('/api/plugin/v1/storage/:pluginId/:key', async (request, reply) => {
   return row.value_json;
 });
 
+// Plugin platform mutations are not demo-blocked: they only write to the
+// plugin's own namespace in the (in-memory, self-resetting) demo DB, and demo
+// visitors should be able to try plugins end-to-end.
 fastify.put('/api/plugin/v1/storage/:pluginId/:key', async (request, reply) => {
-  if (demoBlocked(reply)) return;
   const { pluginId, key } = request.params;
   if (!requireStoragePlugin(pluginId, reply)) return;
   if (!validStorageKey(key, reply)) return;
@@ -1114,7 +1118,6 @@ fastify.put('/api/plugin/v1/storage/:pluginId/:key', async (request, reply) => {
 });
 
 fastify.delete('/api/plugin/v1/storage/:pluginId/:key', async (request, reply) => {
-  if (demoBlocked(reply)) return;
   const { pluginId, key } = request.params;
   if (!requireStoragePlugin(pluginId, reply)) return;
   if (!validStorageKey(key, reply)) return;
@@ -1178,7 +1181,6 @@ const incrementPluginStorage = (pluginId, key, pathSegments, delta) => {
 };
 
 fastify.post('/api/plugin/v1/storage/:pluginId/:key/increment', async (request, reply) => {
-  if (demoBlocked(reply)) return;
   const { pluginId, key } = request.params;
   if (!requireStoragePlugin(pluginId, reply)) return;
   if (!validStorageKey(key, reply)) return;
@@ -1297,7 +1299,6 @@ fastify.get('/api/plugin/v1/settings/:pluginId', async (request, reply) => {
 });
 
 fastify.put('/api/plugin/v1/settings/:pluginId', async (request, reply) => {
-  if (demoBlocked(reply)) return;
   const { pluginId } = request.params;
   const manifest = requireManifestPlugin(pluginId, reply);
   if (!manifest) return;
@@ -1667,8 +1668,8 @@ fastify.get('/api/widgets/github', async (request, reply) => {
 });
 
 // Endpoint: Install a widget from GitHub repository
+// Not demo-blocked — see the widget upload endpoint.
 fastify.post('/api/widgets/github/install', async (request, reply) => {
-  if (demoBlocked(reply)) return;
   try {
     const { download_url, filename, name } = request.body;
 

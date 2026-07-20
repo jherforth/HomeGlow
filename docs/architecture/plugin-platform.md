@@ -265,7 +265,9 @@ POST   /api/plugin/v1/storage/:pluginId/:key/increment  body: { path, delta }  (
 - `pluginId` in the path must exist as an installed manifest plugin with
   `storage: true`, else `403` — this keeps legacy widgets and typo'd namespaces
   out of the table.
-- Mutations (`PUT`/`DELETE`/`increment`) are blocked in demo mode.
+- Plugin install and platform mutations work **even in demo mode** — plugin
+  state lives in demo's in-memory, self-resetting DB, so visitors can try the
+  system with nothing persisting.
 - Plugins call this directly or via the **SDK** (`/plugin-sdk/v1.js`):
   `HomeGlow.storage.list/get/set/remove/increment`, namespaced automatically via
   the injected `window.__HOMEGLOW_PLUGIN__`.
@@ -437,8 +439,7 @@ PUT  /api/plugin/v1/settings/:pluginId?device=<name>   body: { key: value, ... }
 - Values are **validated against the manifest schema** on write (type, min/max,
   select options), rejecting unknown keys — this is the one place plugin input is
   typed. Validation is all-or-nothing: one bad key rejects the whole write.
-- Writing a device-scoped key without `?device=` is a 400; mutations are blocked
-  in demo mode.
+- Writing a device-scoped key without `?device=` is a 400.
 - The dashboard passes the display's device name on the iframe URL
   (`PluginWidgetWrapper` appends `&device=<name>`), and the SDK exposes
   `HomeGlow.settings.get()` / `HomeGlow.settings.set(values)` which forward it

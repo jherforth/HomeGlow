@@ -18,7 +18,8 @@ services:
       - PORT=${BACKEND_PORT:-5000}
       - TZ=${TZ:-America/New_York}
       # Public demo instance: in-memory DB, no PIN, sample data, uploads/proxy
-      # disabled. Leave unset (false) for normal installs.
+      # disabled (plugins remain installable — they reset with the demo cycle).
+      # Leave unset (false) for normal installs.
       - DEMO_MODE=${DEMO_MODE:-false}
     networks:
       - homeglow-network

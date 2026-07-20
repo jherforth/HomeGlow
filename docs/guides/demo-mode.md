@@ -55,8 +55,7 @@ Anything that writes to the host, reaches out to the network, or stores
 credentials is blocked with a `403 { "error": "This feature is disabled in demo
 mode." }`:
 
-- **All uploads** — custom widgets, sounds, user avatars, photos.
-- **Widget install/delete** — including GitHub widget installs.
+- **Uploads that touch the host filesystem** — sounds, user avatars, photos.
 - **The `/api/proxy` CORS proxy** — so it can't be used as an open relay.
 - **Google & Apple connection setup** — OAuth config, authorize/callback, account
   delete, CalDAV calendar listing.
@@ -68,6 +67,13 @@ mode." }`:
 Everyday interactive routes **still work**, so the demo feels live: completing and
 un-completing chores, moving and resizing widgets, switching tabs, and adjusting
 per-device settings all behave normally (they just reset on the next cycle).
+
+**Plugins work in demo mode too** — upload, GitHub install, delete, and the full
+plugin platform (storage, settings, events, reactions) are deliberately *not*
+blocked, so visitors can try the plugin system end-to-end. This is safe because
+the plugin store lives in the database (issue #105 Phase 0), which in demo mode
+is in-memory and wiped on every reset cycle — a visitor-installed plugin never
+touches the host filesystem and disappears within hours.
 
 ## What gets seeded
 
