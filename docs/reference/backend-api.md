@@ -99,6 +99,25 @@ segment (the browser's `localStorage` UUID).
 | GET | `/api/widgets/github` | List widgets available in the `HomeGlowPlugins` GitHub repo. |
 | POST | `/api/widgets/github/install` | Install a widget from GitHub. |
 | GET | `/widgets/:filename` | Serve a widget's HTML (theme-aware, sandboxed). |
+| GET | `/plugin-sdk/v1.js` | Serve the plugin SDK (`window.HomeGlow`) loaded by manifest plugins. |
+
+### Plugin platform API (`/api/plugin/v1`)
+The **stable, versioned contract** that manifest plugins may rely on (issue #105).
+Unlike the rest of this surface, these routes are frozen — a breaking change means
+a new `vN`. Storage/settings mutations are namespaced per plugin and are *not*
+blocked in demo mode. See the [Plugin Development guide](../guides/plugin-development.md)
+for the developer-facing detail and the `HomeGlow.*` SDK wrappers.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/plugin/v1/storage/:pluginId` | All key/value docs for the plugin. |
+| GET | `/api/plugin/v1/storage/:pluginId/:key` | One stored value (404 if absent). |
+| PUT | `/api/plugin/v1/storage/:pluginId/:key` | Upsert a JSON value (64 KB / 500-key caps). |
+| DELETE | `/api/plugin/v1/storage/:pluginId/:key` | Delete a key. |
+| POST | `/api/plugin/v1/storage/:pluginId/:key/increment` | Atomic `{ path, delta }` numeric increment. |
+| GET | `/api/plugin/v1/settings/:pluginId` | Effective declared settings (`?device=` for device scope). |
+| PUT | `/api/plugin/v1/settings/:pluginId` | Write declared settings (validated against the manifest). |
+| GET | `/api/plugin/v1/events/stream` | SSE stream of core events (`clam.*`, `chore.*`). |
 
 ### Chore notification sounds
 | Method | Path | Purpose |

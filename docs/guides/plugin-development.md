@@ -80,6 +80,10 @@ assign it to a tab. Test both themes with `?theme=dark` / `?theme=light` while
 developing. For external services without CORS headers, use the proxy:
 `GET /api/proxy?url=...`.
 
+> **Which endpoints can I call?** See the [API reference](#10-api-reference)
+> (§10) for the data endpoints a plugin commonly reads and the stable plugin
+> platform API.
+
 Widgets are stored in HomeGlow's database, so they (and everything below)
 survive app upgrades.
 
@@ -409,3 +413,102 @@ How the pieces cooperate:
   same id.
 - Plugins are **fully trusted** in HomeGlow's self-hosted model (no auth) —
   install plugins you've read or trust the source of.
+
+## 10. API reference
+
+Plugins run in a **same-origin, unauthenticated** iframe, so they can `fetch()`
+any HomeGlow endpoint directly. There are two tiers, and the difference matters:
+
+- **The plugin platform API (`/api/plugin/v1/*`)** — a **stable, versioned
+  contract**. It is frozen: a breaking change would ship as `/api/plugin/v2`,
+  with v1 kept through a deprecation window. **Build on this.**
+- **The core REST API (every other `/api/*` route)** — callable, but
+  **unversioned and subject to change without notice**. It's the app's internal
+  API; a core refactor can rename a field or route. Read from it freely, but
+  **pin anything you depend on into your own plugin storage** rather than
+  assuming shapes stay put.
+
+All responses are JSON. Errors are uniformly `{ "error": "<message>" }` with an
+appropriate HTTP status.
+
+### 10.1 Plugin platform API (`/api/plugin/v1`) — the stable contract
+
+The SDK (`HomeGlow.storage`, `HomeGlow.settings`, `HomeGlow.on`) wraps these —
+see §3–§5. The raw endpoints:
+
+| Method | Path | Body / response |
+| --- | --- | --- |
+| `GET` | `/api/plugin/v1/storage/:pluginId` | → `{ key: value, ... }` (all your docs) |
+| `GET` | `/api/plugin/v1/storage/:pluginId/:key` | → the stored JSON value, or `404` |
+| `PUT` | `/api/plugin/v1/storage/:pluginId/:key` | body: any JSON → `{ success }` (64 KB/value, 500 keys/plugin; `413` over cap) |
+| `DELETE` | `/api/plugin/v1/storage/:pluginId/:key` | → `{ success }`, or `404` |
+| `POST` | `/api/plugin/v1/storage/:pluginId/:key/increment` | body: `{ path, delta }` → `{ success, result, value }` (atomic) |
+| `GET` | `/api/plugin/v1/settings/:pluginId?device=<name>` | → `{ settingKey: value }` (manifest default ← stored value) |
+| `PUT` | `/api/plugin/v1/settings/:pluginId?device=<name>` | body: `{ settingKey: value }` → `{ success }` (validated; `?device=` required for device-scoped keys) |
+| `GET` | `/api/plugin/v1/events/stream` | SSE: `data: { event, payload, emittedAt }` per event |
+
+`:pluginId` must match your manifest `id`, and storage/settings require
+`"storage": true` / declared `settings` respectively (else `403`).
+
+### 10.2 Core data endpoints (call at your own risk)
+
+The read endpoints and clam mutations a plugin most often integrates with.
+Shapes are current as of this writing — treat them as unversioned.
+
+**Users & clams** — a user's clam total is the sum of their `chore_history` rows.
+
+| Method | Path | Body / response |
+| --- | --- | --- |
+| `GET` | `/api/users` | → `[{ id, username, email, profile_picture, clam_total }]` |
+| `GET` | `/api/users/:id/clams` | → `{ user_id, clam_total }` |
+| `POST` | `/api/users/:id/clams/add` | body: `{ amount, date? }` → `{ success, clam_total }` — emits `clam.deposited` |
+| `POST` | `/api/users/:id/clams/reduce` | body: `{ amount }` → `{ success, clam_total }` (`400` if insufficient) — emits `clam.withdrawn` |
+
+**Chore history** — the clam ledger.
+
+| Method | Path | Body / response |
+| --- | --- | --- |
+| `GET` | `/api/chore-history?user_id=&date=&date_from=&date_to=` | → history rows (all filters optional) |
+| `GET` | `/api/chore-history/user/:userId` | → all rows for a user |
+| `GET` | `/api/chore-history/summary/:userId` | → `{ user_id, clam_total }` |
+| `GET` | `/api/chore-history/recent?days=7` | → `[{ id, date, clam_value, title, created_at, username }]` (nonzero entries) |
+
+**Chores & schedules**
+
+| Method | Path | Body / response |
+| --- | --- | --- |
+| `GET` | `/api/chores` | → `[{ id, title, description, clam_value }]` |
+| `GET` | `/api/chore-schedules?user_id=&visible=&chore_id=` | → schedule rows joined with `title, description, clam_value` |
+| `POST` | `/api/chores/complete` | body: `{ chore_schedule_id, user_id, date }` → `{ success, clam_total }` (`409` if already done) — emits `chore.completed` |
+| `POST` | `/api/chores/uncomplete` | body: `{ chore_schedule_id, user_id, date }` → `{ success, clam_total }` — emits `chore.uncompleted` |
+
+**Prizes, settings, calendar, photos**
+
+| Method | Path | Body / response |
+| --- | --- | --- |
+| `GET` | `/api/prizes` | → `[{ id, name, clam_cost }]` |
+| `GET` | `/api/settings` | → `{ KEY: value, ... }` (global app settings) |
+| `POST` | `/api/settings/search` | body: `["KEY", "PREFIX_*"]` → matching settings object (`*` wildcards) |
+| `GET` | `/api/calendar-events?start=&end=` | → cached synced calendar events in the window |
+| `GET` | `/api/calendar` | → locally-created events |
+| `GET` | `/api/photo-items` | → `[{ id, url, thumbnail, type, source_id, source_name, source_type }]` |
+
+The four endpoints marked "emits …" fire [events](#5-events--react-live-to-what-happens-in-homeglow)
+your plugin can subscribe to (§5) and drive [reactions](#6-reactions--server-side-logic-without-server-side-code) (§6).
+
+### 10.3 The CORS proxy (`/api/proxy`)
+
+To reach an external service that lacks CORS headers, route the request through
+`GET /api/proxy?url=<encoded-url>`. Two constraints:
+
+- The target host must be in the `PROXY_WHITELIST` setting (an admin adds it) —
+  otherwise `403`.
+- It is **disabled in demo mode** (so the demo can't be used as an open relay).
+
+### Beyond this list
+
+This is the plugin-relevant subset. For the complete backend REST surface —
+device/tab configuration, calendar-source management, Google/Apple connections,
+photo-source setup, admin — see the [Backend Reference](../reference/backend-api.md).
+Remember those routes are unversioned: prefer the platform API (§10.1) wherever
+it covers your need.
