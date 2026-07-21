@@ -57,6 +57,7 @@ import {
   Timer,
   Lock,
   Nightlight,
+  BeachAccess,
   Tab as TabIcon,
   DragIndicator,
   PhotoLibrary,
@@ -89,12 +90,15 @@ import {
   INTERFACE_COLORS_STORAGE_KEY,
   SCREENSAVER_SETTINGS_STORAGE_KEY,
   AUTO_DARK_MODE_SETTINGS_STORAGE_KEY,
+  VACATION_MODE_STORAGE_KEY,
   DEFAULT_INTERFACE_COLORS,
   normalizeInterfaceColors,
   normalizeScreensaverSettings,
+  normalizeVacationModeSettings,
   readLocalInterfaceColors,
   readLocalScreensaverSettings,
   readLocalAutoDarkModeSettings,
+  readLocalVacationModeSettings,
 } from '../utils/interfaceSettings.js';
 
 const USERS_UPDATED_EVENT = 'homeglow:users-updated';
@@ -209,6 +213,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const [pluginDeclaredDirty, setPluginDeclaredDirty] = useState({});
   const [photoSources, setPhotoSources] = useState([]);
   const [screensaverSettings, setScreensaverSettings] = useState(readLocalScreensaverSettings);
+  const [vacationModeSettings, setVacationModeSettings] = useState(readLocalVacationModeSettings);
   const [autoDarkModeSettings, setAutoDarkModeSettings] = useState(readLocalAutoDarkModeSettings);
   const [isSavingAutoDarkMode, setIsSavingAutoDarkMode] = useState(false);
   const [autoDarkModeSunTimes, setAutoDarkModeSunTimes] = useState({
@@ -263,6 +268,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     if (isAuthenticated) {
       setInterfaceColors(readLocalInterfaceColors());
       setScreensaverSettings(readLocalScreensaverSettings());
+      setVacationModeSettings(readLocalVacationModeSettings());
       setAutoDarkModeSettings(readLocalAutoDarkModeSettings());
       fetchSettings();
       fetchDeviceSettings();
@@ -1076,6 +1082,23 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     } catch (error) {
       console.error('Error saving screensaver settings:', error);
       setSaveMessage({ show: true, type: 'error', text: 'Failed to save screensaver settings. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const saveVacationModeSettings = async () => {
+    try {
+      setIsLoading(true);
+      const normalizedVacationMode = normalizeVacationModeSettings(vacationModeSettings);
+      localStorage.setItem(VACATION_MODE_STORAGE_KEY, JSON.stringify(normalizedVacationMode));
+      window.dispatchEvent(new Event(INTERFACE_SETTINGS_UPDATED_EVENT));
+      setSaveMessage({ show: true, type: 'success', text: 'Vacation mode settings saved for this display.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error saving vacation mode settings:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to save vacation mode settings. Please try again.' });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } finally {
       setIsLoading(false);
@@ -2656,6 +2679,52 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 sx={{ mt: 2 }}
               >
                 Save Screensaver Settings
+              </Button>
+
+              <Divider sx={{ my: 4 }} />
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                <BeachAccess />
+                <Typography variant="h6">Vacation Mode</Typography>
+              </Box>
+
+              <Alert severity="info" sx={{ mb: 2 }}>
+                While on vacation, chore due-time chimes are muted and the screensaver becomes a
+                fun vacation animation. Settings apply to this display and persist until you turn
+                vacation mode off.
+              </Alert>
+
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={vacationModeSettings.enabled}
+                    onChange={(e) => setVacationModeSettings(prev => ({ ...prev, enabled: e.target.checked }))}
+                  />
+                }
+                label="Enable Vacation Mode"
+                sx={{ mb: 1, display: 'block' }}
+              />
+
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={vacationModeSettings.muteSounds}
+                    disabled={!vacationModeSettings.enabled}
+                    onChange={(e) => setVacationModeSettings(prev => ({ ...prev, muteSounds: e.target.checked }))}
+                  />
+                }
+                label="Mute chore sounds while on vacation"
+                sx={{ mb: 1, display: 'block' }}
+              />
+
+              <Button
+                variant="contained"
+                onClick={saveVacationModeSettings}
+                startIcon={<Save />}
+                fullWidth
+                sx={{ mt: 2 }}
+              >
+                Save Vacation Mode Settings
               </Button>
 
               <Divider sx={{ my: 4 }} />

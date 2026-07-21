@@ -143,8 +143,22 @@ API key stored via `/api/settings`.
 
 - After a configurable idle timeout, an overlay activates in one of two modes:
   cycling through tabs, or a photo slideshow. Optionally goes full-screen.
+- Not mounted on mobile (phones lock themselves; see
+  [Mobile Experience](../architecture/mobile-experience.md)).
 
 **Code:** `ScreenSaver.jsx`, `ScreensaverCountdown.jsx`, timer logic in `app.jsx`.
+
+## Vacation mode
+
+- A per-display toggle (Admin Panel → Interface, issue #121) for when the family
+  is away: chore due-time chimes are muted and the screensaver becomes a playful
+  vacation animation — vacation emoji pop up from behind the dock like popcorn
+  and fall back out of view. A subtle 🏖️ badge shows top-right while active.
+- Stored in `localStorage` (`vacationModeSettings`) alongside the screensaver
+  settings; the mute can be toggled independently of the screensaver swap.
+
+**Code:** `VacationScreensaver.jsx`, settings in `utils/interfaceSettings.js`,
+gates in `app.jsx` (sound scheduler + screensaver render), UI in `AdminPanel.jsx`.
 
 ## Custom widgets (plugins)
 

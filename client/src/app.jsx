@@ -20,6 +20,7 @@ import {
   readLocalInterfaceColors,
   readLocalScreensaverSettings,
   readLocalAutoDarkModeSettings,
+  readLocalVacationModeSettings,
 } from './utils/interfaceSettings.js';
 import { normalizeWidgetSettings, BASE_WIDGET_SETTINGS } from './utils/widgetSettings.js';
 import { buildMobileWidgetList } from './utils/mobileWidgets.js';
@@ -32,6 +33,7 @@ const loadWeatherWidget = () => import('./components/WeatherWidget.jsx');
 const loadChoreWidget = () => import('./components/ChoreWidget.jsx');
 const loadTabIconModal = () => import('./components/TabIconModal.jsx');
 const loadScreenSaver = () => import('./components/ScreenSaver.jsx');
+const loadVacationScreensaver = () => import('./components/VacationScreensaver.jsx');
 
 const MAX_IDLE_WARM_IMPORTS = 3;
 const WIDGETS_LOCKED_STORAGE_KEY = 'widgetsLocked';
@@ -72,6 +74,7 @@ const WeatherWidget = lazy(loadWeatherWidget);
 const ChoreWidget = lazy(loadChoreWidget);
 const TabIconModal = lazy(loadTabIconModal);
 const ScreenSaver = lazy(loadScreenSaver);
+const VacationScreensaver = lazy(loadVacationScreensaver);
 
 // region #98 - expected to get removed in the future (localStorage migration bridge)
 const DEVICE_SETTINGS_UPDATED_EVENT = 'homeglow:device-settings-updated';
@@ -147,6 +150,7 @@ const App = () => {
   const [widgetsLocked, setWidgetsLocked] = useState(readLocalWidgetsLocked);
   const [screensaverActive, setScreensaverActive] = useState(false);
   const [screensaverSettings, setScreensaverSettings] = useState(readLocalScreensaverSettings);
+  const [vacationModeSettings, setVacationModeSettings] = useState(readLocalVacationModeSettings);
   const inactivityTimerRef = useRef(null);
   const lastActivityRef = useRef(Date.now());
   const [widgetSettings, setWidgetSettings] = useState({ ...DEFAULT_WIDGET_SETTINGS });
@@ -500,6 +504,7 @@ const App = () => {
       setInterfaceColors(readLocalInterfaceColors());
       setScreensaverSettings(readLocalScreensaverSettings());
       setAutoDarkModeSettings(readLocalAutoDarkModeSettings());
+      setVacationModeSettings(readLocalVacationModeSettings());
 
       const localTheme = readLocalTheme();
       const localThemeMode = readLocalThemeMode(localTheme);
@@ -588,7 +593,7 @@ const App = () => {
       !!widgetSettings?.chores?.enabled && loadChoreWidget,
       !!widgetSettings?.weather?.enabled && loadWeatherWidget,
       !!widgetSettings?.photos?.enabled && loadPhotoWidget,
-      !!screensaverSettings?.enabled && loadScreenSaver,
+      !!screensaverSettings?.enabled && (vacationModeSettings?.enabled ? loadVacationScreensaver : loadScreenSaver),
     ]
       .filter(Boolean)
       .slice(0, MAX_IDLE_WARM_IMPORTS);
@@ -606,6 +611,7 @@ const App = () => {
     widgetSettings?.weather?.enabled,
     widgetSettings?.photos?.enabled,
     screensaverSettings?.enabled,
+    vacationModeSettings?.enabled,
   ]);
 
   const screensaverActiveRef = useRef(false);
@@ -924,7 +930,9 @@ const App = () => {
     enabled:
       widgetSettings.chores.enabled &&
       choreSoundGlobalEnabled &&
-      choreSoundDeviceEnabled,
+      choreSoundDeviceEnabled &&
+      // Vacation mode (issue #121) mutes chore due-time sounds.
+      !(vacationModeSettings.enabled && vacationModeSettings.muteSounds),
     defaultSound: apiKeys.CHORE_SOUND_DEFAULT || null,
     volume: Number.isFinite(parsedSoundVolume) ? parsedSoundVolume / 100 : 1,
   });
@@ -952,6 +960,32 @@ const App = () => {
             }}
           >
             Demo Mode — sample data resets every {demoStatus.resetHours || 6} hours
+          </Box>
+        )}
+        {vacationModeSettings.enabled && (
+          <Box
+            aria-label="Vacation mode active"
+            sx={{
+              position: 'fixed',
+              top: 8,
+              right: 8,
+              zIndex: 1200,
+              px: 1.5,
+              py: 0.5,
+              borderRadius: '16px',
+              backgroundColor: 'var(--card-bg)',
+              border: '1px solid var(--card-border)',
+              color: 'var(--text-color)',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              boxShadow: 'var(--shadow)',
+              pointerEvents: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.5,
+            }}
+          >
+            🏖️ Vacation Mode
           </Box>
         )}
         {/* The one mobile/kiosk fork (issue #118): below 600px the grid —
@@ -1095,13 +1129,19 @@ const App = () => {
 
       {!isMobile && screensaverActive && screensaverSettings.enabled && (
         <Suspense fallback={null}>
-          <ScreenSaver
-            mode={screensaverSettings.mode}
-            slideshowInterval={screensaverSettings.slideshowInterval}
-            tabs={tabs}
-            onExit={handleExitScreensaver}
-            onTabChange={handleScreensaverTabChange}
-          />
+          {vacationModeSettings.enabled ? (
+            // Vacation mode (issue #121) replaces the standard screensaver
+            // with the popcorn vacation-emoji one.
+            <VacationScreensaver onExit={handleExitScreensaver} />
+          ) : (
+            <ScreenSaver
+              mode={screensaverSettings.mode}
+              slideshowInterval={screensaverSettings.slideshowInterval}
+              tabs={tabs}
+              onExit={handleExitScreensaver}
+              onTabChange={handleScreensaverTabChange}
+            />
+          )}
         </Suspense>
       )}
     </>
