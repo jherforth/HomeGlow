@@ -23,7 +23,7 @@ stays relevant.
 - [Database & Migrations](architecture/database.md) — SQLite schema, tables, and the migration system.
 - [Backend Reference](reference/backend-api.md) — server structure, services, and the full REST API surface.
 - [Frontend Reference](reference/frontend.md) — React component map, state, and data flow.
-- [Mobile Experience (Phase 2)](architecture/mobile-experience.md) — proposed architecture for a phone-native view that leaves the kiosk untouched.
+- [Mobile Experience (Phase 2)](architecture/mobile-experience.md) — the phone-native view (vertical stack, week calendar, no grid) that leaves the kiosk untouched.
 - [Plugin Platform (Issue #105)](architecture/plugin-platform.md) — proposed design for advanced plugins: manifest, versioned API, events, storage, and settings.
 - [Chores Refactor History](architecture/chores-refactor-history.md) — the (implemented) original design spec for the three-table chore system.
 

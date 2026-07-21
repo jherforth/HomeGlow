@@ -6,6 +6,7 @@ import { Close } from '@mui/icons-material';
 import axios from 'axios';
 import PluginWidgetWrapper from './components/PluginWidgetWrapper.jsx';
 import WidgetContainer from './components/WidgetContainer.jsx';
+import MobileDashboard from './components/MobileDashboard.jsx';
 import TabBar from './components/TabBar.jsx';
 import ScreensaverCountdown from './components/ScreensaverCountdown.jsx';
 import { API_BASE_URL } from './utils/apiConfig.js';
@@ -21,6 +22,7 @@ import {
   readLocalAutoDarkModeSettings,
 } from './utils/interfaceSettings.js';
 import { normalizeWidgetSettings, BASE_WIDGET_SETTINGS } from './utils/widgetSettings.js';
+import { buildMobileWidgetList } from './utils/mobileWidgets.js';
 import './index.css';
 
 const loadAdminPanel = () => import('./components/AdminPanel.jsx');
@@ -376,6 +378,41 @@ const App = () => {
     void seedDemoDevice();
   }, [demoStatus.demo, isFirstRunClient, deviceSettingsLoaded]);
 
+  // Mobile first-run (issue #118): a phone's first visit is its own fresh
+  // device and would land on the empty welcome screen. Seed it with chores +
+  // calendar + weather on the Home tab so the phone is instantly useful; the
+  // user can adjust everything in Settings afterward. Demo mode has its own
+  // seeding above; the kiosk (≥600px) first-run flow is unchanged.
+  useEffect(() => {
+    if (!isMobile || demoStatus.demo || !isFirstRunClient || !deviceSettingsLoaded) return;
+
+    const seedMobileDevice = async () => {
+      try {
+        await axios.patch(`${API_DEVICE_URL}/settings`, {
+          widgetSettings: {
+            chores: { enabled: true },
+            calendar: { enabled: true },
+            weather: { enabled: true },
+            photos: { enabled: false },
+          },
+        });
+        for (const widgetName of ['chores', 'calendar', 'weather']) {
+          await axios.post(`${API_DEVICE_URL}/widget-assignments`, {
+            widget_name: widgetName,
+            tabNumber: 1,
+          });
+        }
+        await fetchDeviceSettings();
+        await fetchTabs();
+        await fetchWidgetAssignments();
+      } catch (error) {
+        console.error('Error seeding mobile device defaults:', error);
+      }
+    };
+
+    void seedMobileDevice();
+  }, [isMobile, demoStatus.demo, isFirstRunClient, deviceSettingsLoaded]);
+
   const fetchWidgetAssignments = async () => {
     try {
       const response = await axios.get(`${API_DEVICE_URL}/widget-assignments`);
@@ -600,7 +637,9 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    if (!screensaverSettings.enabled) {
+    // The screensaver is a kiosk ambient feature — phones lock themselves, so
+    // on mobile the inactivity timers never start (issue #118).
+    if (!screensaverSettings.enabled || isMobile) {
       if (inactivityTimerRef.current) {
         clearTimeout(inactivityTimerRef.current);
       }
@@ -629,7 +668,7 @@ const App = () => {
         clearTimeout(inactivityTimerRef.current);
       }
     };
-  }, [screensaverSettings.enabled, screensaverSettings.timeout, startInactivityTimer]);
+  }, [screensaverSettings.enabled, screensaverSettings.timeout, startInactivityTimer, isMobile]);
 
   const handleExitScreensaver = useCallback(() => {
     screensaverActiveRef.current = false;
@@ -853,6 +892,13 @@ const App = () => {
     return result;
   }, [widgetSettings, pluginSettings, activeTab, apiKeys, widgetAssignments, installedPlugins, theme, demoStatus.demo]);
 
+  // Mobile stack (issue #118): same widget content nodes, fixed order, photos
+  // excluded, grid metadata ignored.
+  const mobileWidgets = useMemo(
+    () => (isMobile ? buildMobileWidgetList(widgets) : []),
+    [isMobile, widgets]
+  );
+
   const activeTabId = useMemo(() => {
     const active = tabs.find(tab => tab.number === activeTab);
     return active?.id ?? 1;
@@ -908,7 +954,12 @@ const App = () => {
             Demo Mode — sample data resets every {demoStatus.resetHours || 6} hours
           </Box>
         )}
-        {widgets.length > 0 && (
+        {/* The one mobile/kiosk fork (issue #118): below 600px the grid —
+            react-grid-layout, drag/resize, lock — never mounts. */}
+        {isMobile && mobileWidgets.length > 0 && (
+          <MobileDashboard widgets={mobileWidgets} />
+        )}
+        {!isMobile && widgets.length > 0 && (
           <WidgetContainer
             widgets={widgets}
             locked={widgetsLocked}
@@ -1021,12 +1072,15 @@ const App = () => {
         theme={theme}
         themeMode={themeMode}
         screensaverCountdown={
-          <ScreensaverCountdown
-            enabled={screensaverSettings.enabled}
-            timeoutMinutes={screensaverSettings.timeout}
-            lastActivityRef={lastActivityRef}
-            screensaverActive={screensaverActive}
-          />
+          // No screensaver on mobile — don't show a countdown that never fires.
+          isMobile ? null : (
+            <ScreensaverCountdown
+              enabled={screensaverSettings.enabled}
+              timeoutMinutes={screensaverSettings.timeout}
+              lastActivityRef={lastActivityRef}
+              screensaverActive={screensaverActive}
+            />
+          )
         }
       />
       )}
@@ -1039,7 +1093,7 @@ const App = () => {
         />
       </Suspense>
 
-      {screensaverActive && screensaverSettings.enabled && (
+      {!isMobile && screensaverActive && screensaverSettings.enabled && (
         <Suspense fallback={null}>
           <ScreenSaver
             mode={screensaverSettings.mode}

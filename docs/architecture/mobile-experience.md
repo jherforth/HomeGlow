@@ -1,11 +1,14 @@
 # Mobile Experience (Phase 2) — Architecture
 
-> **Status: proposed / not yet implemented.** This is the design for
-> [issue #118](https://github.com/jherforth/HomeGlow/issues/118) — giving phone
-> users a native-feeling HomeGlow experience — building on the completed
+> **Status: implemented** (Phases 2a + 2b core). This is the design — now the
+> record — for [issue #118](https://github.com/jherforth/HomeGlow/issues/118),
+> building on the completed
 > [Phase 1 admin-panel work](../guides/admin-panel-mobile-friendly.md)
-> (issue #99). It documents the chosen architecture and a phased checklist so
-> the work can be picked up incrementally.
+> (issue #99). The shell lives in
+> [`MobileDashboard.jsx`](../../client/src/components/MobileDashboard.jsx) with
+> ordering in [`utils/mobileWidgets.js`](../../client/src/utils/mobileWidgets.js)
+> (unit-tested); verified end-to-end with a Playwright walk at 360×740 plus a
+> kiosk regression pass at 1280×800.
 
 ## Motivation & requirements
 
@@ -140,17 +143,24 @@ part of the initial pass.
 
 ## Phasing
 
-- **Phase 2a — the shell (core of issue #118):**
-  - [ ] `MobileDashboard.jsx` + the `isMobile` fork in `app.jsx`
-  - [ ] Vertical stack per tab with fixed ordering (chores → calendar →
+- **Phase 2a — the shell (core of issue #118):** ✅ implemented
+  - [x] `MobileDashboard.jsx` + the `isMobile` fork in `app.jsx`
+  - [x] Vertical stack per tab with fixed ordering (chores → calendar →
         weather → plugins); pure ordering/filtering helper with unit tests
-  - [ ] Photos excluded on mobile
-  - [ ] Plugins full-width at fixed height
-  - [ ] Mobile first-run defaults (chores/calendar/weather → Home tab)
-  - [ ] Dock: hide Move/Resize on mobile
+        (`utils/mobileWidgets.js` + `mobileWidgets.test.js`)
+  - [x] Photos excluded on mobile
+  - [x] Plugins full-width at fixed height (60vh, min 360px — calendar cards
+        get the same treatment since both size to their container)
+  - [x] Mobile first-run defaults (chores/calendar/weather → Home tab; skipped
+        in demo mode, which has its own seeding)
+  - [x] Dock: hide Move/Resize on mobile (and the screensaver countdown, since
+        the screensaver never mounts on mobile)
 - **Phase 2b — polish:**
-  - [ ] Calendar defaults to week view on mobile
-  - [ ] Widget card spacing/typography pass at 360px, both themes
+  - [x] Calendar defaults to week view on mobile (explicit per-tab override
+        still wins and persists as usual)
+  - [ ] Widget card spacing/typography pass at 360px, both themes — the shell
+        cards are done; `ChoreWidget`'s internal multi-user columns are cramped
+        at 360px and are the main remaining candidate
   - [ ] Per-plugin mobile height setting (if needed in practice)
 - **Phase 2c — later / out of scope for #118:**
   - Agenda/list calendar view

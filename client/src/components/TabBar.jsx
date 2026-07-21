@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Box, IconButton, Tooltip, Typography, ClickAwayListener } from '@mui/material';
 import { Close, Add } from '@mui/icons-material';
+import useIsMobile from '../hooks/useIsMobile.js';
 
 const TabIcon = ({ name, size = 24, color = 'currentColor' }) => {
   const icons = {
@@ -236,6 +237,7 @@ const TabBar = ({
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuAnchorRef = useRef(null);
+  const isMobile = useIsMobile();
 
   const defaultHomeTab = {
     id: 1,
@@ -261,7 +263,10 @@ const TabBar = ({
   const menuItems = [
     { id: 'refresh', icon: 'refresh', label: 'Refresh', action: onRefresh },
     { id: 'settings', icon: 'settings', label: 'Settings', action: onOpenSettings },
-    { id: 'lock', icon: 'move', label: widgetsLocked ? 'Move/Resize' : 'Lock Layout', action: onToggleLock },
+    // On mobile there is no grid to rearrange (issue #118), so no lock toggle.
+    ...(isMobile
+      ? []
+      : [{ id: 'lock', icon: 'move', label: widgetsLocked ? 'Move/Resize' : 'Lock Layout', action: onToggleLock }]),
     { id: 'theme', icon: getThemeIconName(), label: getThemeLabel(), action: onToggleTheme },
   ];
 

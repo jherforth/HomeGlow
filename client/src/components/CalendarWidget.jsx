@@ -8,6 +8,7 @@ import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
 import { getEventPillPalette, getPreferredColorMode } from '../utils/colorContrast.js';
+import useIsMobile from '../hooks/useIsMobile.js';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import MonthDayCell from './MonthDayCell.jsx';
 
@@ -171,6 +172,11 @@ const CalendarWidget = ({
   activeTabConfigJson = null,
 }) => {
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
+  // On phones the week view reads best (issue #118), so it is the default
+  // whenever the tab has no explicit view override. The month/week toggle
+  // still works and an explicit choice is persisted per tab as usual.
+  const isMobile = useIsMobile();
+  const defaultViewMode = isMobile ? 'week' : 'month';
   const [events, setEvents] = useState([]);
   const [upcomingEvents, setUpcomingEvents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -305,10 +311,10 @@ const CalendarWidget = ({
   useEffect(() => {
     const inMemoryViewMode = readCalendarViewModeFromTabConfig(activeTabConfigJson);
     const inMemoryTabSettings = readCalendarTabSpecificSettingsFromTabConfig(activeTabConfigJson);
-    setViewMode(inMemoryViewMode || 'month');
+    setViewMode(inMemoryViewMode || defaultViewMode);
     setDayOfWeekSettings(inMemoryTabSettings?.dayOfWeekSettings || { ...DEFAULT_CALENDAR_DAY_OF_WEEK_SETTINGS });
     setDisplaySettings(inMemoryTabSettings?.displaySettings || { ...DEFAULT_CALENDAR_DISPLAY_SETTINGS });
-  }, [activeTab, activeTabConfigJson]);
+  }, [activeTab, activeTabConfigJson, defaultViewMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -322,7 +328,7 @@ const CalendarWidget = ({
         const dbTabSettings = readCalendarTabSpecificSettingsFromTabConfig(activeTabRow?.config_json || null);
 
         if (!cancelled) {
-          setViewMode(dbViewMode || 'month');
+          setViewMode(dbViewMode || defaultViewMode);
           setDayOfWeekSettings(dbTabSettings?.dayOfWeekSettings || { ...DEFAULT_CALENDAR_DAY_OF_WEEK_SETTINGS });
           setDisplaySettings(dbTabSettings?.displaySettings || { ...DEFAULT_CALENDAR_DISPLAY_SETTINGS });
         }
@@ -336,7 +342,7 @@ const CalendarWidget = ({
     return () => {
       cancelled = true;
     };
-  }, [API_DEVICE_URL, activeTab]);
+  }, [API_DEVICE_URL, activeTab, defaultViewMode]);
 
   const persistViewModeForTab = async (tabNumber, nextViewMode) => {
     try {
