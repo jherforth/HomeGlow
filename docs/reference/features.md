@@ -109,6 +109,12 @@ done" bonus for **both** the previous and new owner and never removes points.
   caches events in `calendar_events_cache`; the widget reads the cache, so the UI
   stays fast and works offline between syncs.
 - Handles all-day and multi-day events; month and week views.
+- **Cross-calendar dedup**: the same real-world event synced from several
+  sources is merged at read time (fuzzy title + time-tolerance match in
+  `server/utils/calendarDedup.js`). In the day view, the merged event's bullet
+  becomes a **pie of the calendars' colors** (winning calendar first, up to
+  four wedges) with a tooltip naming them, while the text bubble keeps the
+  winning calendar's color (issue #125).
 - Credentials are encrypted at rest.
 
 **Code:** `CalendarWidget.jsx`, `MonthDayCell.jsx`; backend

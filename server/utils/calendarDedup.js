@@ -106,8 +106,10 @@ function dedupeCalendarEvents(events, options = {}) {
   const output = clusters.map((c) => {
     const survivor = { ...c.survivor };
     if (c.absorbed.length > 0) {
+      // source_color rides along so the client can render the merged-calendar
+      // pie dot (issue #125) without re-joining against the sources list.
       survivor.merged_from = c.absorbed
-        .map((e) => ({ source_id: e.source_id, source_name: e.source_name }))
+        .map((e) => ({ source_id: e.source_id, source_name: e.source_name, source_color: e.source_color ?? null }))
         .sort((x, y) => x.source_id - y.source_id);
     }
     return survivor;

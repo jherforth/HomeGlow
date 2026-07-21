@@ -8,6 +8,7 @@ import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
 import { getEventPillPalette, getPreferredColorMode } from '../utils/colorContrast.js';
+import { buildMergedDotColors, buildMergedDotBackground, describeMergedCalendars } from '../utils/calendarMergeColors.js';
 import useIsMobile from '../hooks/useIsMobile.js';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import MonthDayCell from './MonthDayCell.jsx';
@@ -515,7 +516,10 @@ const CalendarWidget = ({
           all_day: event.all_day || false,
           source_id: event.source_id,
           source_name: event.source_name,
-          source_color: event.source_color
+          source_color: event.source_color,
+          // Cross-calendar dedup metadata (issue #125): which other calendars
+          // this event was merged from — drives the pie dot in the day view.
+          merged_from: Array.isArray(event.merged_from) ? event.merged_from : undefined
         }));
 
         setEvents(formattedEvents);
@@ -1614,6 +1618,12 @@ const CalendarWidget = ({
             <List>
               {selectedDateEvents.map((event, index) => {
                 const eventPalette = getEventPillPalette(event.source_color || eventColors.backgroundColor, colorMode);
+                // Cross-calendar dedup (issue #125): the dot becomes a pie of
+                // every calendar this event appears on (winner first, up to
+                // four); the text chip keeps the winning calendar's color.
+                const mergedDotColors = buildMergedDotColors(event, eventColors.backgroundColor)
+                  .map((color) => getEventPillPalette(color, colorMode).backgroundColor);
+                const mergedSummary = describeMergedCalendars(event);
                 return (
                   <ListItem
                     key={event.id || index}
@@ -1629,15 +1639,18 @@ const CalendarWidget = ({
                     }}
                   >
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, width: '100%' }}>
-                      <Box
-                        sx={{
-                          width: 16,
-                          height: 16,
-                          borderRadius: '50%',
-                          backgroundColor: eventPalette.backgroundColor,
-                          flexShrink: 0
-                        }}
-                      />
+                      <Tooltip title={mergedSummary || ''} disableHoverListener={!mergedSummary}>
+                        <Box
+                          aria-label={mergedSummary || undefined}
+                          sx={{
+                            width: 16,
+                            height: 16,
+                            borderRadius: '50%',
+                            background: buildMergedDotBackground(mergedDotColors),
+                            flexShrink: 0
+                          }}
+                        />
+                      </Tooltip>
                       <Chip
                         label={event.source_name || 'Unknown Calendar'}
                         size="small"

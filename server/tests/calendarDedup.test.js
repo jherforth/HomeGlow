@@ -4,10 +4,10 @@ const { dedupeCalendarEvents, normalizeTitle, titleSimilarity } = require('../ut
 
 const BASE = new Date('2026-07-10T15:00:00.000Z').getTime();
 
-function ev(id, sourceId, sourceName, title, startOffsetMin = 0, durationMin = 60) {
+function ev(id, sourceId, sourceName, title, startOffsetMin = 0, durationMin = 60, sourceColor = null) {
   const start = new Date(BASE + startOffsetMin * 60000);
   const end = new Date(start.getTime() + durationMin * 60000);
-  return { id, source_id: sourceId, source_name: sourceName, title, start, end };
+  return { id, source_id: sourceId, source_name: sourceName, source_color: sourceColor, title, start, end };
 }
 
 test('normalizeTitle strips calendar prefix, punctuation, and case', () => {
@@ -31,7 +31,22 @@ test('merges the same event across two different sources', () => {
   assert.equal(out.length, 1);
   assert.equal(out[0].source_id, 1, 'lowest source_id survives');
   assert.equal(out[0].title, 'Soccer practice');
-  assert.deepEqual(out[0].merged_from, [{ source_id: 2, source_name: 'Google' }]);
+  assert.deepEqual(out[0].merged_from, [{ source_id: 2, source_name: 'Google', source_color: null }]);
+});
+
+test('merged_from carries each absorbed source color for the pie dot (issue #125)', () => {
+  const events = [
+    ev('c1', 1, 'Family', 'Flight to Denver', 0, 60, '#6e44ff'),
+    ev('c2', 2, 'Mom', 'Flight to Denver', 0, 60, '#e91e63'),
+    ev('c3', 3, 'Dad', 'Flight to Denver', 0, 60, '#ff9800'),
+  ];
+  const out = dedupeCalendarEvents(events);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].source_color, '#6e44ff', 'winning source color untouched');
+  assert.deepEqual(
+    out[0].merged_from.map((m) => m.source_color),
+    ['#e91e63', '#ff9800']
+  );
 });
 
 test('never merges two events from the same source', () => {
