@@ -10,6 +10,8 @@ services:
   homeglow-backend:
     container_name: homeglow-backend
     image: ghcr.io/jherforth/homeglow-backend:latest
+    # Ensures SIGTERM reaches Node
+    init: true
     volumes:
       - ./homeglow/data:/app/data
       - ./homeglow/uploads:/app/uploads
