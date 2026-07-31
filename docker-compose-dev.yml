@@ -18,6 +18,8 @@ services:
       dockerfile: Dockerfile
       args:
         - PORT=${DEV_BACKEND_PORT:-5001}
+    # Ensures SIGTERM reaches Node
+    init: true
     ports:
       - "${DEV_BACKEND_PORT:-5001}:${DEV_BACKEND_PORT:-5001}"
     volumes:

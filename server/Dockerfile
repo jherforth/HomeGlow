@@ -46,5 +46,5 @@ RUN mkdir -p /app/uploads/users /app/widgets && chmod -R 777 /app/uploads /app/w
 
 # Expose the port
 EXPOSE ${PORT}
-
-CMD ["node", "index.js"]
+ENTRYPOINT ["node"]
+CMD ["index.js"]
