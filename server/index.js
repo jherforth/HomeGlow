@@ -1746,6 +1746,11 @@ async function ConnectOrCreateDb() {
 
     const newDb = new Database(dbPath, { verbose: console.log });
     newDb.pragma('foreign_keys = ON');
+    // WAL lets readers proceed while a writer is active (better-sqlite3 is still
+    // single-threaded, but this avoids POSIX lock stalls across connections).
+    if (dbPath !== ':memory:') {
+      newDb.pragma('journal_mode = WAL');
+    }
     return newDb;
   } catch (error) {
     console.error('Failed to connect or create database:', error);
