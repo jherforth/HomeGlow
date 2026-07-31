@@ -1,12 +1,20 @@
 import React, { Suspense, useState, useEffect, useRef, useCallback } from 'react';
 import { Box, IconButton } from '@mui/material';
-import GridLayout from 'react-grid-layout';
+import GridLayout, { getCompactor } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
+import {
+  layoutItemFromNormalized,
+  layoutItemToNormalized,
+  scaleLayoutItem,
+} from '../utils/gridLayout.js';
 import CountdownCircle from './CountdownCircle';
+
+// No auto-compaction; block overlaps (same as compactType={null} + preventCollision).
+const GRID_COMPACTOR = getCompactor(null, false, true);
 
 const CORE_WIDGET_ID_TO_NAME = {
   'calendar-widget': 'calendar',
@@ -51,25 +59,30 @@ const WidgetContainer = ({
   const [refreshKeys, setRefreshKeys] = useState({});
   const containerRef = useRef(null);
   const prevWidgetIdsRef = useRef('');
+  const prevGridColsRef = useRef(null);
   const lockedRef = useRef(locked);
   const prevLockedRef = useRef(locked);
   const hasInitializedLockEffectRef = useRef(false);
   const saveTimerRef = useRef(null);
   const resizeTapGuardRef = useRef(new Map());
 
-  const saveLayoutsToApi = useCallback((layoutItems, tabNumber) => {
+  const saveLayoutsToApi = useCallback((layoutItems, tabNumber, cols) => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
+      // Persist in normalized (12-col) units so layouts round-trip across breakpoints.
       const layouts = layoutItems
         .filter(item => resolveWidgetName(item.i))
-        .map(item => ({
-          widget_name: resolveWidgetName(item.i),
-          tabNumber: tabNumber,
-          layout_x: item.x,
-          layout_y: item.y,
-          layout_w: item.w,
-          layout_h: item.h,
-        }));
+        .map(item => {
+          const stored = layoutItemToNormalized(item, cols);
+          return {
+            widget_name: resolveWidgetName(item.i),
+            tabNumber: tabNumber,
+            layout_x: stored.x,
+            layout_y: stored.y,
+            layout_w: stored.w,
+            layout_h: stored.h,
+          };
+        });
 
       if (layouts.length > 0) {
         axios.patch(`${API_DEVICE_URL}/widget-assignments/layout/bulk`, { layouts }).catch(() => { });
@@ -110,61 +123,102 @@ const WidgetContainer = ({
 
   useEffect(() => {
     const currentCacheKey = `${activeTab}:${widgets.map(w => w.id).sort().join(',')}`;
-    if (currentCacheKey === prevWidgetIdsRef.current) return;
-    prevWidgetIdsRef.current = currentCacheKey;
+    const widgetsChanged = currentCacheKey !== prevWidgetIdsRef.current;
+    const prevCols = prevGridColsRef.current;
+    const colsChanged = prevCols != null && prevCols !== gridCols;
 
-    const cols = gridCols;
-    const placed = [];
+    // First paint / widget-set changes rebuild from saved (12-col) layouts.
+    // Column-only changes rescale the live layout so resize affordances stay correct.
+    if (!widgetsChanged && !colsChanged) {
+      prevGridColsRef.current = gridCols;
+      return;
+    }
 
-    const collides = (x, y, w, h) => {
-      return placed.some(p =>
-        x < p.x + p.w && x + w > p.x && y < p.y + p.h && y + h > p.y
-      );
-    };
+    if (widgetsChanged) {
+      prevWidgetIdsRef.current = currentCacheKey;
 
-    const findFreePosition = (w, h) => {
-      for (let row = 0; row < 200; row++) {
-        for (let col = 0; col <= cols - w; col++) {
-          if (!collides(col, row, w, h)) return { x: col, y: row };
+      const cols = gridCols;
+      const placed = [];
+
+      const collides = (x, y, w, h) => {
+        return placed.some(p =>
+          x < p.x + p.w && x + w > p.x && y < p.y + p.h && y + h > p.y
+        );
+      };
+
+      const findFreePosition = (w, h) => {
+        for (let row = 0; row < 200; row++) {
+          for (let col = 0; col <= cols - w; col++) {
+            if (!collides(col, row, w, h)) return { x: col, y: row };
+          }
         }
-      }
-      return { x: 0, y: 0 };
-    };
+        return { x: 0, y: 0 };
+      };
 
-    const initialLayout = widgets.map((widget) => {
-      const w = widget.defaultSize.width;
-      const h = widget.defaultSize.height;
-      let item;
+      const initialLayout = widgets.map((widget) => {
+        const minW = widget.minWidth || 3;
+        const minH = widget.minHeight || 2;
+        let item;
 
-      if (widget.savedLayout) {
-        item = {
-          i: widget.id,
-          x: widget.savedLayout.x ?? widget.defaultPosition.x,
-          y: widget.savedLayout.y ?? widget.defaultPosition.y,
-          w: widget.savedLayout.w || w,
-          h: widget.savedLayout.h || h,
-          minW: widget.minWidth || 3,
-          minH: widget.minHeight || 2,
+        if (widget.savedLayout) {
+          const scaled = layoutItemFromNormalized(
+            {
+              x: widget.savedLayout.x ?? widget.defaultPosition.x,
+              y: widget.savedLayout.y ?? widget.defaultPosition.y,
+              w: widget.savedLayout.w || widget.defaultSize.width,
+              h: widget.savedLayout.h || widget.defaultSize.height,
+              minW,
+              minH,
+            },
+            cols
+          );
+          item = {
+            i: widget.id,
+            ...scaled,
+            static: lockedRef.current,
+          };
+        } else {
+          const scaledDefault = layoutItemFromNormalized(
+            {
+              x: widget.defaultPosition.x,
+              y: widget.defaultPosition.y,
+              w: widget.defaultSize.width,
+              h: widget.defaultSize.height,
+              minW,
+              minH,
+            },
+            cols
+          );
+          const pos = findFreePosition(scaledDefault.w, scaledDefault.h);
+          item = {
+            i: widget.id,
+            x: pos.x,
+            y: pos.y,
+            w: scaledDefault.w,
+            h: scaledDefault.h,
+            minW: scaledDefault.minW,
+            minH: scaledDefault.minH,
+            static: lockedRef.current,
+          };
+        }
+
+        placed.push({ x: item.x, y: item.y, w: item.w, h: item.h });
+        return item;
+      });
+      setLayout(initialLayout);
+    } else if (colsChanged) {
+      setLayout((currentLayout) => {
+        const nextLayout = currentLayout.map((item) => ({
+          ...scaleLayoutItem(item, prevCols, gridCols),
           static: lockedRef.current,
-        };
-      } else {
-        const pos = findFreePosition(w, h);
-        item = {
-          i: widget.id,
-          x: pos.x,
-          y: pos.y,
-          w,
-          h,
-          minW: widget.minWidth || 3,
-          minH: widget.minHeight || 2,
-          static: lockedRef.current,
-        };
-      }
+        }));
+        const calendarBefore = currentLayout.find((item) => item.i === 'calendar-widget');
+        const calendarAfter = nextLayout.find((item) => item.i === 'calendar-widget');
+        return nextLayout;
+      });
+    }
 
-      placed.push({ x: item.x, y: item.y, w: item.w, h: item.h });
-      return item;
-    });
-    setLayout(initialLayout);
+    prevGridColsRef.current = gridCols;
   }, [widgets, activeTab, gridCols]);
 
   useEffect(() => {
@@ -181,7 +235,7 @@ const WidgetContainer = ({
 
       const shouldPersistLockedLayouts = hasInitializedLockEffectRef.current && !wasLocked && locked;
       if (shouldPersistLockedLayouts) {
-        saveLayoutsToApi(updatedLayout, activeTab);
+        saveLayoutsToApi(updatedLayout, activeTab, gridCols);
       }
 
       return updatedLayout;
@@ -205,16 +259,10 @@ const WidgetContainer = ({
     }
   }, [locked]);
 
-  const layoutRef = useRef(layout);
-  useEffect(() => {
-    layoutRef.current = layout;
-  }, [layout]);
-
   const handleLayoutChange = (newLayout) => {
     if (locked) return;
 
-    const currentLayout = layoutRef.current;
-    const currentLayoutById = new Map(currentLayout.map(item => [item.i, item]));
+    const currentLayoutById = new Map(layout.map(item => [item.i, item]));
     const safeLayout = newLayout.map((item) => {
       const existing = currentLayoutById.get(item.i);
       const minW = existing?.minW ?? item.minW ?? 2;
@@ -229,7 +277,7 @@ const WidgetContainer = ({
     });
 
     const hasChanged = safeLayout.some(item => {
-      const existing = currentLayout.find(l => l.i === item.i);
+      const existing = currentLayoutById.get(item.i);
       if (!existing) return true;
       return existing.x !== item.x || existing.y !== item.y || existing.w !== item.w || existing.h !== item.h;
     });
@@ -242,9 +290,8 @@ const WidgetContainer = ({
     }));
 
     setLayout(updatedLayout);
-    layoutRef.current = updatedLayout;
 
-    saveLayoutsToApi(updatedLayout, activeTab);
+    saveLayoutsToApi(updatedLayout, activeTab, gridCols);
 
     if (onLayoutChangeCallback) {
       onLayoutChangeCallback(updatedLayout);
@@ -317,24 +364,19 @@ const WidgetContainer = ({
               break;
           }
 
-          const layoutData = {
-            x: updatedItem.x,
-            y: updatedItem.y,
-            w: updatedItem.w,
-            h: updatedItem.h,
-          };
-
           return updatedItem;
         }
         return { ...item, static: locked };
       });
 
+      const before = currentLayout.find((item) => item.i === widgetId);
+      const after = newLayout.find((item) => item.i === widgetId);
+
       if (onLayoutChangeCallback) {
         onLayoutChangeCallback(newLayout);
       }
 
-      saveLayoutsToApi(newLayout, activeTab);
-      layoutRef.current = newLayout;
+      saveLayoutsToApi(newLayout, activeTab, gridCols);
       return newLayout;
     });
   };
@@ -489,32 +531,39 @@ const WidgetContainer = ({
       {layout.length > 0 && (
         <GridLayout
           className="layout"
-          layout={layout}
-          cols={gridCols}
-          rowHeight={100}
           width={containerWidth}
+          layout={layout}
+          gridConfig={{
+            cols: gridCols,
+            rowHeight: 100,
+            margin: [16, 16],
+            containerPadding: [0, 0],
+          }}
+          dragConfig={{
+            enabled: !locked,
+            handle: '.drag-handle',
+            cancel: '.widget-content',
+          }}
+          resizeConfig={{ enabled: false }}
+          compactor={GRID_COMPACTOR}
           onLayoutChange={handleLayoutChange}
-          isDraggable={!locked}
-          isResizable={false}
-          compactType={null}
-          preventCollision={true}
-          margin={[16, 16]}
-          containerPadding={[0, 0]}
-          useCSSTransforms={true}
-          draggableHandle=".drag-handle"
-          draggableCancel=".widget-content"
         >
           {widgets.map((widget) => {
             const isSelected = !locked && selectedWidget === widget.id;
             const currentLayout = layout.find(l => l.i === widget.id);
             const fallbackLayout = {
               i: widget.id,
-              x: widget.defaultPosition.x,
-              y: widget.defaultPosition.y,
-              w: widget.defaultSize.width,
-              h: widget.defaultSize.height,
-              minW: widget.minWidth || 3,
-              minH: widget.minHeight || 2,
+              ...layoutItemFromNormalized(
+                {
+                  x: widget.defaultPosition.x,
+                  y: widget.defaultPosition.y,
+                  w: widget.defaultSize.width,
+                  h: widget.defaultSize.height,
+                  minW: widget.minWidth || 3,
+                  minH: widget.minHeight || 2,
+                },
+                gridCols
+              ),
               static: locked,
             };
             const effectiveLayout = currentLayout || fallbackLayout;
@@ -554,7 +603,6 @@ const WidgetContainer = ({
               <Box
                 key={widget.id}
                 className={`widget-wrapper ${isSelected ? 'selected' : ''}`}
-                data-grid={{ ...effectiveLayout }}
                 onPointerDownCapture={(e) => {
                   if (!locked && !isSelected && !e.target.closest('.drag-handle') && !e.target.closest('.resize-button')) {
                     if (isInteractiveTarget(e.target)) {

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Box } from '@mui/material';
-import GridLayout from 'react-grid-layout';
+import GridLayout, { getCompactor } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
+
+const GRID_COMPACTOR = getCompactor(null, false, true);
 
 const DraggableWidget = ({
   id,
@@ -109,18 +111,17 @@ const DraggableWidget = ({
       <GridLayout
         className="layout"
         layout={layout}
-        cols={gridCols}
-        rowHeight={rowHeight}
         width={containerWidth}
+        gridConfig={{
+          cols: gridCols,
+          rowHeight,
+          margin: [16, 16],
+          containerPadding: [0, 0],
+        }}
+        dragConfig={{ enabled: isSelected }}
+        resizeConfig={{ enabled: isSelected, handles: ['s'] }}
+        compactor={GRID_COMPACTOR}
         onLayoutChange={handleLayoutChange}
-        isDraggable={isSelected}
-        isResizable={isSelected}
-        compactType={null}
-        preventCollision={true}
-        margin={[16, 16]}
-        containerPadding={[0, 0]}
-        useCSSTransforms={true}
-        resizeHandles={['s']}
       >
         <Box
           key={id}
