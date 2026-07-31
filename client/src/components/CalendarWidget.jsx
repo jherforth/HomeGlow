@@ -12,6 +12,7 @@ import { buildMergedDotColors, buildMergedDotBackground, describeMergedCalendars
 import useIsMobile from '../hooks/useIsMobile.js';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import MonthDayCell from './MonthDayCell.jsx';
+import ColorPickerPopover from './ColorPickerPopover.jsx';
 
 const localizer = momentLocalizer(moment);
 
@@ -192,6 +193,7 @@ const CalendarWidget = ({
   const [dayOfWeekSettings, setDayOfWeekSettings] = useState({ ...DEFAULT_CALENDAR_DAY_OF_WEEK_SETTINGS });
   const [calendarSettingsLoaded, setCalendarSettingsLoaded] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState({ background: false, text: false });
+  const [calendarColorPickerAnchor, setCalendarColorPickerAnchor] = useState(null);
   const [calendarSources, setCalendarSources] = useState([]);
   const [dedupEnabled, setDedupEnabled] = useState(true);
   const [showCalendarDialog, setShowCalendarDialog] = useState(false);
@@ -743,6 +745,7 @@ const CalendarWidget = ({
       await fetchCalendarSources();
       await fetchCalendarEvents();
       setShowCalendarDialog(false);
+      setCalendarColorPickerAnchor(null);
     } catch (error) {
       console.error('Error saving calendar:', error);
       setCalendarFormError(error?.response?.data?.error || 'Failed to save calendar. Please try again.');
@@ -1136,6 +1139,11 @@ const CalendarWidget = ({
       </Box>
     );
   }
+
+  const closeColorPickerDialog = () => {
+    setShowCalendarDialog(false);
+    setCalendarColorPickerAnchor(null);
+  };
 
   return (
     <Box sx={{
@@ -2281,7 +2289,7 @@ const CalendarWidget = ({
 
       <Dialog
         open={showCalendarDialog}
-        onClose={() => setShowCalendarDialog(false)}
+        onClose={closeColorPickerDialog}
         maxWidth="sm"
         fullWidth
         slotProps={{
@@ -2506,7 +2514,7 @@ const CalendarWidget = ({
                     borderRadius: 1,
                     cursor: 'pointer'
                   }}
-                  onClick={() => setShowColorPicker({ ...showColorPicker, calendar: !showColorPicker.calendar })}
+                  onClick={(e)=>setCalendarColorPickerAnchor(prev=>(prev ? null : e.currentTarget))}
                 />
                 <TextField
                   size="small"
@@ -2515,19 +2523,9 @@ const CalendarWidget = ({
                   sx={{ flex: 1 }}
                 />
               </Box>
-              {showColorPicker.calendar && (
-                <Box sx={{ position: 'absolute', zIndex: 1000, mt: 1 }}>
-                  <Box
-                    sx={{ position: 'fixed', top: 0, right: 0, bottom: 0, left: 0 }}
-                    onClick={() => setShowColorPicker({ ...showColorPicker, calendar: false })}
-                  />
-                  <SketchPicker
-                    color={calendarForm.color}
-                    onChange={(color) => setCalendarForm({ ...calendarForm, color: color.hex })}
-                    disableAlpha
-                  />
-                </Box>
-              )}
+              <ColorPickerPopover anchorEl={calendarColorPickerAnchor} color={calendarForm.color}
+                onChange={(color) => setCalendarForm({ ...calendarForm, color: color.hex })}
+                onClose={() => setCalendarColorPickerAnchor(null)} />
             </Box>
 
             {editingCalendar && (
@@ -2551,7 +2549,9 @@ const CalendarWidget = ({
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button type="button" onClick={() => setShowCalendarDialog(false)}>Cancel</Button>
+          <Button type="button" onClick={closeColorPickerDialog}>
+            Cancel
+          </Button>
           <Button
             type="submit"
             variant="contained"
