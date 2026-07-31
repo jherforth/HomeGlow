@@ -179,7 +179,6 @@ const CalendarWidget = ({
   const isMobile = useIsMobile();
   const defaultViewMode = isMobile ? 'week' : 'month';
   const [events, setEvents] = useState([]);
-  const [upcomingEvents, setUpcomingEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
@@ -243,7 +242,6 @@ const CalendarWidget = ({
   // Initial data fetch
   useEffect(() => {
     fetchCalendarSources();
-    fetchCalendarEvents();
     fetchSyncStatus();
     fetchDedupSetting();
   }, []);
@@ -257,6 +255,12 @@ const CalendarWidget = ({
     fetchCalendarSources();
     fetchCalendarEvents();
   }, [refreshNonce]);
+
+  // Refetch only when the visible month (or view mode) changes to keep the fetch small.
+  const eventsRangeKey = `${viewMode}:${moment(currentDate).format('YYYY-MM')}`;
+  useEffect(() => {
+    fetchCalendarEvents();
+  }, [eventsRangeKey]);
 
   useEffect(() => {
     const loadCalendarWidgetSettings = async () => {
@@ -503,7 +507,14 @@ const CalendarWidget = ({
       setLoading(true);
       setError(null);
 
-      const response = await axios.get(`${API_BASE_URL}/api/calendar-events`);
+      // Limit the query to the visible range (+ padding). Fetching the entire
+      // multi-year cache can be big and blocks every other API request.
+      const start = moment(currentDate).startOf(viewMode).subtract(1, 'month').toISOString();
+      const end = moment(currentDate).endOf(viewMode).add(2, 'months').toISOString();
+
+      const response = await axios.get(`${API_BASE_URL}/api/calendar-events`, {
+        params: { start, end },
+      });
 
       if (Array.isArray(response.data)) {
         const formattedEvents = response.data.map(event => ({
@@ -523,31 +534,17 @@ const CalendarWidget = ({
         }));
 
         setEvents(formattedEvents);
-
-        const now = new Date();
-        const nextWeek = new Date();
-        nextWeek.setDate(now.getDate() + 7);
-
-        const upcoming = formattedEvents
-          .filter(event => event.start >= now && event.start <= nextWeek)
-          .sort((a, b) => a.start - b.start)
-          .slice(0, 5);
-
-        setUpcomingEvents(upcoming);
       } else {
         setEvents([]);
-        setUpcomingEvents([]);
       }
     } catch (error) {
       console.error('Error fetching calendar events:', error);
       setError('Failed to load calendar events. Please configure calendars in settings.');
       setEvents([]);
-      setUpcomingEvents([]);
     } finally {
       setLoading(false);
     }
   };
-
   const loadGoogleCalendars = async () => {
     setGoogleCalendarsLoading(true);
     setGoogleCalendarsError('');
