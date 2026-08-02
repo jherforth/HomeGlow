@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Card, Typography, Box, List, ListItem, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, Button, IconButton, Popover, ToggleButton, ToggleButtonGroup, TextField, Switch, FormControlLabel, Select, MenuItem, FormControl, InputLabel, Chip, Divider, CircularProgress, Alert, Tooltip } from '@mui/material';
+import { Card, Typography, Box, List, ListItem, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, Button, IconButton, Popover, ToggleButton, ToggleButtonGroup, TextField, Switch, Checkbox, FormControlLabel, Select, MenuItem, FormControl, InputLabel, Chip, Divider, CircularProgress, Alert, Tooltip } from '@mui/material';
 import { Settings, ViewModule, ViewWeek, ChevronLeft, ChevronRight, Add, Delete, Edit, Refresh, Remove, Sync, Schedule } from '@mui/icons-material';
 import { Calendar, momentLocalizer } from 'react-big-calendar';
 import moment from 'moment';
@@ -47,9 +47,15 @@ const DEFAULT_CALENDAR_DISPLAY_SETTINGS = {
   bulletSize: 10,
   showStartTimes: false,
 };
+// "Start calendar with current week" (issue #127): when the month view starts
+// on a fixed weekday, optionally anchor the grid to the current-or-most-recent
+// occurrence of that weekday and show a fixed number of weeks.
+const DEFAULT_MONTH_VIEW_WEEKS_TO_SHOW = 4;
 const DEFAULT_CALENDAR_DAY_OF_WEEK_SETTINGS = {
   weekViewStart: 'today',
   monthViewStart: 'sunday',
+  monthViewCurrentWeekFirst: false,
+  monthViewWeeksToShow: DEFAULT_MONTH_VIEW_WEEKS_TO_SHOW,
   monthViewDaysToShow: DEFAULT_MONTH_VIEW_DAYS_TO_SHOW,
   monthViewDaysPerRow: DEFAULT_MONTH_VIEW_DAYS_PER_ROW,
 };
@@ -145,6 +151,15 @@ const readCalendarTabSpecificSettingsFromTabConfig = (configJson) => {
       monthViewStart: VALID_MONTH_VIEW_STARTS.has(calendarEntry.monthViewStart)
         ? calendarEntry.monthViewStart
         : DEFAULT_CALENDAR_DAY_OF_WEEK_SETTINGS.monthViewStart,
+      monthViewCurrentWeekFirst: typeof calendarEntry.monthViewCurrentWeekFirst === 'boolean'
+        ? calendarEntry.monthViewCurrentWeekFirst
+        : DEFAULT_CALENDAR_DAY_OF_WEEK_SETTINGS.monthViewCurrentWeekFirst,
+      monthViewWeeksToShow: clampInteger(
+        calendarEntry.monthViewWeeksToShow,
+        1,
+        8,
+        DEFAULT_MONTH_VIEW_WEEKS_TO_SHOW,
+      ),
       monthViewDaysToShow: clampInteger(
         calendarEntry.monthViewDaysToShow,
         1,
@@ -228,6 +243,18 @@ const CalendarWidget = ({
   const monthViewDaysToShow = clampInteger(dayOfWeekSettings.monthViewDaysToShow, 1, 32, DEFAULT_MONTH_VIEW_DAYS_TO_SHOW);
   const monthViewDaysPerRow = clampInteger(dayOfWeekSettings.monthViewDaysPerRow, 1, 14, DEFAULT_MONTH_VIEW_DAYS_PER_ROW);
   const isRollingMonthView = dayOfWeekSettings.monthViewStart === 'today' || dayOfWeekSettings.monthViewStart === 'yesterday';
+  // Issue #127: only meaningful when the month view starts on a fixed weekday.
+  const isWeekdayMonthStart = !isRollingMonthView && dayOfWeekSettings.monthViewStart !== 'first-day-of-month';
+  const isCurrentWeekFirstMonthView = isWeekdayMonthStart && dayOfWeekSettings.monthViewCurrentWeekFirst === true;
+  const monthViewWeeksToShow = clampInteger(dayOfWeekSettings.monthViewWeeksToShow, 1, 8, DEFAULT_MONTH_VIEW_WEEKS_TO_SHOW);
+
+  // Current-or-most-recent occurrence of the selected weekday, relative to the
+  // (navigable) currentDate — today itself counts when the weekday matches.
+  const getCurrentWeekFirstStart = () => {
+    const firstDayIndex = WEEKDAY_INDEX[dayOfWeekSettings.monthViewStart] ?? 0;
+    const base = moment(currentDate).startOf('day');
+    return base.subtract((base.day() - firstDayIndex + 7) % 7, 'days');
+  };
 
   const syncIntervalOptions = [
     { label: 'Disabled', value: 0 },
@@ -374,6 +401,8 @@ const CalendarWidget = ({
         settings: {
           weekViewStart: nextDayOfWeekSettings.weekViewStart,
           monthViewStart: nextDayOfWeekSettings.monthViewStart,
+          monthViewCurrentWeekFirst: nextDayOfWeekSettings.monthViewCurrentWeekFirst === true,
+          monthViewWeeksToShow: clampInteger(nextDayOfWeekSettings.monthViewWeeksToShow, 1, 8, DEFAULT_MONTH_VIEW_WEEKS_TO_SHOW),
           monthViewDaysToShow: clampInteger(nextDayOfWeekSettings.monthViewDaysToShow, 1, 32, DEFAULT_MONTH_VIEW_DAYS_TO_SHOW),
           monthViewDaysPerRow: clampInteger(nextDayOfWeekSettings.monthViewDaysPerRow, 1, 14, DEFAULT_MONTH_VIEW_DAYS_PER_ROW),
           textSize: clampInteger(nextDisplaySettings.textSize, 8, 24, DEFAULT_CALENDAR_DISPLAY_SETTINGS.textSize),
@@ -1047,6 +1076,8 @@ const CalendarWidget = ({
       const newDate = new Date(currentDate);
       if (isRollingMonthView) {
         newDate.setDate(newDate.getDate() - monthViewDaysToShow);
+      } else if (isCurrentWeekFirstMonthView) {
+        newDate.setDate(newDate.getDate() - monthViewWeeksToShow * 7);
       } else {
         newDate.setMonth(newDate.getMonth() - 1);
       }
@@ -1063,6 +1094,8 @@ const CalendarWidget = ({
       const newDate = new Date(currentDate);
       if (isRollingMonthView) {
         newDate.setDate(newDate.getDate() + monthViewDaysToShow);
+      } else if (isCurrentWeekFirstMonthView) {
+        newDate.setDate(newDate.getDate() + monthViewWeeksToShow * 7);
       } else {
         newDate.setMonth(newDate.getMonth() + 1);
       }
@@ -1074,23 +1107,30 @@ const CalendarWidget = ({
     }
   };
 
+  const formatDateRangeLabel = (start, end) => {
+    if (start.year() !== end.year()) {
+      return `${start.format('MMM D, YYYY')} - ${end.format('MMM D, YYYY')}`;
+    }
+
+    if (start.month() === end.month()) {
+      return `${start.format('MMM D')}-${end.format('D, YYYY')}`;
+    }
+
+    return `${start.format('MMM D')} - ${end.format('MMM D, YYYY')}`;
+  };
+
   const getCurrentPeriodLabel = () => {
     if (viewMode === 'month') {
       if (isRollingMonthView) {
         const start = dayOfWeekSettings.monthViewStart === 'yesterday'
           ? moment(currentDate).startOf('day').subtract(1, 'day')
           : moment(currentDate).startOf('day');
-        const end = start.clone().add(monthViewDaysToShow - 1, 'days');
+        return formatDateRangeLabel(start, start.clone().add(monthViewDaysToShow - 1, 'days'));
+      }
 
-        if (start.year() !== end.year()) {
-          return `${start.format('MMM D, YYYY')} - ${end.format('MMM D, YYYY')}`;
-        }
-
-        if (start.month() === end.month()) {
-          return `${start.format('MMM D')}-${end.format('D, YYYY')}`;
-        }
-
-        return `${start.format('MMM D')} - ${end.format('MMM D, YYYY')}`;
+      if (isCurrentWeekFirstMonthView) {
+        const start = getCurrentWeekFirstStart();
+        return formatDateRangeLabel(start, start.clone().add(monthViewWeeksToShow * 7 - 1, 'days'));
       }
 
       return moment(currentDate).format('MMMM YYYY');
@@ -1260,6 +1300,12 @@ const CalendarWidget = ({
                   return monthStart.clone();
                 }
 
+                // Issue #127: anchor to the current-or-most-recent selected
+                // weekday instead of padding out the calendar month.
+                if (isCurrentWeekFirstMonthView) {
+                  return getCurrentWeekFirstStart();
+                }
+
                 const firstDayIndex = WEEKDAY_INDEX[dayOfWeekSettings.monthViewStart] ?? 0;
                 const offset = (monthStart.day() - firstDayIndex + 7) % 7;
                 return monthStart.clone().subtract(offset, 'days');
@@ -1268,6 +1314,10 @@ const CalendarWidget = ({
               const endDate = (() => {
                 if (isFirstDayOfMonthMode) {
                   return monthEnd.clone();
+                }
+
+                if (isCurrentWeekFirstMonthView) {
+                  return startDate.clone().add(monthViewWeeksToShow * 7 - 1, 'days');
                 }
 
                 const firstDayIndex = WEEKDAY_INDEX[dayOfWeekSettings.monthViewStart] ?? 0;
@@ -1322,7 +1372,11 @@ const CalendarWidget = ({
                 }
 
                 const dayDate = day.toDate();
-                const isCurrentMonth = isRollingMonthView ? true : day.month() === moment(currentDate).month();
+                // Rolling and current-week-first windows intentionally span
+                // months, so no day is "outside" — never dim them.
+                const isCurrentMonth = (isRollingMonthView || isCurrentWeekFirstMonthView)
+                  ? true
+                  : day.month() === moment(currentDate).month();
                 const isToday = day.isSame(moment(), 'day');
 
                 const dayMultiDay = rowMultiDayEvents.filter(e => eventSpansDay(e, dayDate));
@@ -2052,6 +2106,44 @@ const CalendarWidget = ({
                 <MenuItem value="today">Today</MenuItem>
               </Select>
             </FormControl>
+
+            {isWeekdayMonthStart && (
+              <>
+                <FormControlLabel
+                  control={(
+                    <Checkbox
+                      checked={dayOfWeekSettings.monthViewCurrentWeekFirst === true}
+                      onChange={(e) => setDayOfWeekSettings(prev => ({ ...prev, monthViewCurrentWeekFirst: e.target.checked }))}
+                    />
+                  )}
+                  label="Start calendar with current week"
+                  sx={{ mt: 0.5 }}
+                />
+
+                {isCurrentWeekFirstMonthView && (
+                  <TextField
+                    fullWidth
+                    size="small"
+                    type="number"
+                    label="Weeks to show"
+                    value={monthViewWeeksToShow}
+                    onChange={(e) => {
+                      const nextValue = clampInteger(e.target.value, 1, 8, DEFAULT_MONTH_VIEW_WEEKS_TO_SHOW);
+                      setDayOfWeekSettings(prev => ({ ...prev, monthViewWeeksToShow: nextValue }));
+                    }}
+                    sx={{ mt: 1 }}
+                    slotProps={{
+                      htmlInput: {
+                        min: 1,
+                        max: 8,
+                        step: 1,
+                      }
+                    }}
+                    helperText="Range: 1-8"
+                  />
+                )}
+              </>
+            )}
 
             {(dayOfWeekSettings.monthViewStart === 'today' || dayOfWeekSettings.monthViewStart === 'yesterday') && (
               <>

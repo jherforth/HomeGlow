@@ -108,7 +108,10 @@ done" bonus for **both** the previous and new owner and never removes points.
 - A background **Calendar Sync Service** fetches each source on an interval and
   caches events in `calendar_events_cache`; the widget reads the cache, so the UI
   stays fast and works offline between syncs.
-- Handles all-day and multi-day events; month and week views.
+- Handles all-day and multi-day events; month and week views. When the month
+  view starts on a fixed weekday, an optional **"Start calendar with current
+  week"** mode (issue #127) anchors the grid to the current week and shows a
+  configurable 1–8 weeks (default 4) instead of the padded calendar month.
 - **Cross-calendar dedup**: the same real-world event synced from several
   sources is merged at read time (fuzzy title + time-tolerance match in
   `server/utils/calendarDedup.js`). In the day view, the merged event's bullet
