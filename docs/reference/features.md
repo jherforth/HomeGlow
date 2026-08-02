@@ -47,7 +47,17 @@ The chore system uses a **three-table model** (see [Database](../architecture/da
   by summing `chore_history` (no denormalized total). Completing *all* of a user's
   daily chores awards a bonus. **Bonus chores** carry a custom clam value and reset
   to unassigned each night; only one uncompleted bonus chore per user at a time.
-- **Prizes** can be "bought" with clams (`/api/prizes`, `clams/reduce`).
+- **The prize store** (spending mechanism): `prizes` is the definitions ledger
+  in Prize Management; parents stock the store with **one-time offers**
+  (`prize_offers`). Kids browse the 🛍️ Prize Store on the dashboard and
+  **request** an offer; a parent **approves or declines** right there
+  (PIN-gated when a PIN is set). Approval deducts the cost as a named `spent`
+  ledger row, consumes the offer (the definition stays in management), and
+  fires a **full-screen confetti celebration + chime** on every display via the
+  `prize.redeemed` event.
+- **Avatar quick-spend**: tapping a kid's profile picture opens "Redeem clams" —
+  a parent records off-store spending (e.g. a toy bought while out) with an
+  optional note that lands in the ledger and metrics.
 
 **Code:** `ChoreWidget.jsx`, `ChoreSchedulesTab.jsx`, `ChoreHistoryTab.jsx`,
 `utils/choreHelpers.js`; backend chore routes + `dailyBackgroundProcessing()` in

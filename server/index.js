@@ -108,6 +108,7 @@ const schemaMigrations = [
   { schemaId: 18, migrationPath: './migrations/schema18-pluginsTable', },
   { schemaId: 19, migrationPath: './migrations/schema19-pluginStorage', },
   { schemaId: 20, migrationPath: './migrations/schema20-choreHistoryKind', },
+  { schemaId: 21, migrationPath: './migrations/schema21-prizeOffers', },
 ];
 
 const ALLOWED_SCHEDULE_DURATIONS = new Set(['day-of', 'until-completed', 'once-completed']);
@@ -3184,7 +3185,7 @@ fastify.post('/api/users/:id/clams/add', async (request, reply) => {
 
 fastify.post('/api/users/:id/clams/reduce', async (request, reply) => {
   const { id } = request.params;
-  const { amount, kind } = request.body;
+  const { amount, kind, title } = request.body;
   try {
     if (!amount || amount <= 0) {
       return reply.status(400).send({ error: 'Valid positive amount is required' });
@@ -3195,6 +3196,9 @@ fastify.post('/api/users/:id/clams/reduce', async (request, reply) => {
     if (rowKind !== 'spent' && rowKind !== 'adjustment') {
       return reply.status(400).send({ error: "kind must be 'spent' or 'adjustment'" });
     }
+    // Optional note recording WHAT was spent on (e.g. "Toy store" from the
+    // avatar quick-spend) — lands in the ledger and metrics.
+    const trimmedTitle = typeof title === 'string' ? title.trim().slice(0, 120) : '';
 
     const currentResult = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(id);
     if (currentResult.total < amount) {
@@ -3210,7 +3214,7 @@ fastify.post('/api/users/:id/clams/reduce', async (request, reply) => {
       id,
       useDate,
       -amount,
-      rowKind === 'spent' ? 'Spent' : 'Adjustment',
+      trimmedTitle || (rowKind === 'spent' ? 'Spent' : 'Adjustment'),
       rowKind
     );
 
@@ -4236,6 +4240,174 @@ fastify.delete('/api/prizes/:id', async (request, reply) => {
   } catch (error) {
     console.error('Error deleting prize:', error);
     reply.status(500).send({ error: 'Failed to delete prize' });
+  }
+});
+
+// --- Prize store (prize spending mechanism) ---
+// `prizes` is the definitions ledger; a prize_offers row is one redeemable
+// instance a parent placed in the store — mirroring chores/chore_schedules.
+// Request-queue lifecycle: available → requested (kid asks on the kiosk) →
+// redeemed (parent approves: clams deducted via a kind='spent' ledger row,
+// offer leaves the store — one-time). Decline/cancel returns to available.
+
+// List store offers (everything not yet redeemed), joined with the live prize
+// definition and the requesting kid.
+fastify.get('/api/prize-offers', async (request, reply) => {
+  try {
+    return db.prepare(`
+      SELECT po.id, po.prize_id, po.status, po.requested_by, po.requested_at, po.created_at,
+             p.name, p.clam_cost,
+             u.username AS requested_by_name
+      FROM prize_offers po
+      JOIN prizes p ON po.prize_id = p.id
+      LEFT JOIN users u ON po.requested_by = u.id
+      WHERE po.status != 'redeemed'
+      ORDER BY po.created_at ASC, po.id ASC
+    `).all();
+  } catch (error) {
+    console.error('Error listing prize offers:', error);
+    reply.status(500).send({ error: 'Failed to list prize offers' });
+  }
+});
+
+// Parent: place a prize from the ledger into the store.
+fastify.post('/api/prize-offers', async (request, reply) => {
+  const { prize_id } = request.body;
+  try {
+    const prize = db.prepare('SELECT id FROM prizes WHERE id = ?').get(prize_id);
+    if (!prize) {
+      return reply.status(404).send({ error: 'Prize not found' });
+    }
+    const info = db.prepare("INSERT INTO prize_offers (prize_id, status) VALUES (?, 'available')").run(prize_id);
+    return { id: info.lastInsertRowid, success: true };
+  } catch (error) {
+    console.error('Error creating prize offer:', error);
+    reply.status(500).send({ error: 'Failed to add prize to the store' });
+  }
+});
+
+// Parent: take an unredeemed offer back out of the store.
+fastify.delete('/api/prize-offers/:id', async (request, reply) => {
+  const { id } = request.params;
+  try {
+    const info = db.prepare("DELETE FROM prize_offers WHERE id = ? AND status != 'redeemed'").run(id);
+    if (info.changes === 0) {
+      return reply.status(404).send({ error: 'Offer not found (or already redeemed)' });
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Error removing prize offer:', error);
+    reply.status(500).send({ error: 'Failed to remove prize offer' });
+  }
+});
+
+// Kid: request an available offer (goes to the parent approval queue).
+fastify.post('/api/prize-offers/:id/request', async (request, reply) => {
+  const { id } = request.params;
+  const { user_id } = request.body;
+  try {
+    if (!user_id) {
+      return reply.status(400).send({ error: 'user_id is required' });
+    }
+    const user = db.prepare('SELECT id FROM users WHERE id = ?').get(user_id);
+    if (!user) {
+      return reply.status(404).send({ error: 'User not found' });
+    }
+    const info = db.prepare(`
+      UPDATE prize_offers SET status = 'requested', requested_by = ?, requested_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND status = 'available'
+    `).run(user_id, id);
+    if (info.changes === 0) {
+      return reply.status(409).send({ error: 'Offer is not available (already requested or redeemed)' });
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Error requesting prize offer:', error);
+    reply.status(500).send({ error: 'Failed to request prize' });
+  }
+});
+
+// Cancel (kid withdraws) and decline (parent refuses) are the same
+// transition: requested → back on the store shelf.
+const returnOfferToStore = (offerId, reply) => {
+  const info = db.prepare(`
+    UPDATE prize_offers SET status = 'available', requested_by = NULL, requested_at = NULL
+    WHERE id = ? AND status = 'requested'
+  `).run(offerId);
+  if (info.changes === 0) {
+    reply.status(409).send({ error: 'Offer has no pending request' });
+    return null;
+  }
+  return { success: true };
+};
+
+fastify.post('/api/prize-offers/:id/cancel-request', async (request, reply) => {
+  try {
+    return returnOfferToStore(request.params.id, reply);
+  } catch (error) {
+    console.error('Error cancelling prize request:', error);
+    reply.status(500).send({ error: 'Failed to cancel request' });
+  }
+});
+
+fastify.post('/api/prize-offers/:id/decline', async (request, reply) => {
+  try {
+    return returnOfferToStore(request.params.id, reply);
+  } catch (error) {
+    console.error('Error declining prize request:', error);
+    reply.status(500).send({ error: 'Failed to decline request' });
+  }
+});
+
+// Parent: approve a pending request. Deducts the prize's CURRENT cost as a
+// negative kind='spent' ledger row (title = prize name), consumes the offer,
+// and emits clam.withdrawn + prize.redeemed (drives the kiosk celebration).
+// Insufficient balance leaves the request pending so the parent sees why.
+fastify.post('/api/prize-offers/:id/approve', async (request, reply) => {
+  const { id } = request.params;
+  try {
+    const offer = db.prepare(`
+      SELECT po.id, po.prize_id, po.requested_by, p.name, p.clam_cost,
+             u.username AS requested_by_name
+      FROM prize_offers po
+      JOIN prizes p ON po.prize_id = p.id
+      LEFT JOIN users u ON po.requested_by = u.id
+      WHERE po.id = ? AND po.status = 'requested'
+    `).get(id);
+    if (!offer) {
+      return reply.status(409).send({ error: 'Offer has no pending request' });
+    }
+
+    const balance = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(offer.requested_by);
+    if (balance.total < offer.clam_cost) {
+      return reply.status(400).send({
+        error: `Insufficient clams: ${offer.requested_by_name || 'the requester'} has ${balance.total}, prize costs ${offer.clam_cost}`,
+      });
+    }
+
+    const redeem = db.transaction(() => {
+      db.prepare(
+        "INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind) VALUES (?, NULL, ?, ?, ?, 'spent')"
+      ).run(offer.requested_by, getTodayLocalDateString(), -offer.clam_cost, offer.name);
+      db.prepare("UPDATE prize_offers SET status = 'redeemed', redeemed_at = CURRENT_TIMESTAMP WHERE id = ?").run(offer.id);
+    });
+    redeem();
+
+    const result = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(offer.requested_by);
+    pluginEvents.emit('clam.withdrawn', { userId: offer.requested_by, amount: offer.clam_cost, newTotal: result.total });
+    pluginEvents.emit('prize.redeemed', {
+      userId: offer.requested_by,
+      prizeId: offer.prize_id,
+      offerId: offer.id,
+      prizeName: offer.name,
+      cost: offer.clam_cost,
+      newTotal: result.total,
+    });
+
+    return { success: true, clam_total: result.total, prize: offer.name };
+  } catch (error) {
+    console.error('Error approving prize request:', error);
+    reply.status(500).send({ error: 'Failed to approve prize request' });
   }
 });
 

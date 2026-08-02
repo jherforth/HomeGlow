@@ -187,6 +187,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const [editingPrize, setEditingPrize] = useState(null);
   const [newUser, setNewUser] = useState({ username: '', email: '', profile_picture: '' });
   const [newPrize, setNewPrize] = useState({ name: '', clam_cost: 0 });
+  const [prizeOffers, setPrizeOffers] = useState([]);
   const [uploadedWidgets, setUploadedWidgets] = useState([]);
   const [githubWidgets, setGithubWidgets] = useState([]);
   const [loadingGithub, setLoadingGithub] = useState(false);
@@ -392,6 +393,35 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     } catch (error) {
       console.error('Error fetching prizes:', error);
       setPrizes([]);
+    }
+    try {
+      const offersResponse = await axios.get(`${API_BASE_URL}/api/prize-offers`);
+      setPrizeOffers(Array.isArray(offersResponse.data) ? offersResponse.data : []);
+    } catch (error) {
+      console.error('Error fetching prize offers:', error);
+      setPrizeOffers([]);
+    }
+  };
+
+  // Prize store: place a ledger prize in the store as a one-time redeemable
+  // offer (kids request it on the kiosk; a parent approves there).
+  const addPrizeToStore = async (prizeId) => {
+    try {
+      await axios.post(`${API_BASE_URL}/api/prize-offers`, { prize_id: prizeId });
+      await fetchPrizes();
+    } catch (error) {
+      console.error('Error adding prize to store:', error);
+      alert('Failed to add the prize to the store.');
+    }
+  };
+
+  const removePrizeOffer = async (offerId) => {
+    try {
+      await axios.delete(`${API_BASE_URL}/api/prize-offers/${offerId}`);
+      await fetchPrizes();
+    } catch (error) {
+      console.error('Error removing prize offer:', error);
+      alert('Failed to remove the offer.');
     }
   };
 
@@ -3216,6 +3246,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                         secondary={`Cost: ${prize.clam_cost} 🥟`}
                       />
                       <ListItemSecondaryAction>
+                        <Tooltip title="Add to store (one-time redeemable offer)">
+                          <IconButton onClick={() => addPrizeToStore(prize.id)} color="primary">
+                            <Add />
+                          </IconButton>
+                        </Tooltip>
                         <IconButton onClick={() => setEditingPrize({ ...prize })} color="primary">
                           <Edit />
                         </IconButton>
@@ -3228,6 +3263,39 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 </ListItem>
               ))}
             </List>
+
+            <AdminFormSection
+              title="Prize Store"
+              subtitle="One-time offers kids can request on the dashboard; approve requests there (PIN-gated when set)"
+            >
+              {prizeOffers.length === 0 ? (
+                <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
+                  The store is empty. Use ➕ next to a prize above to stock it.
+                </Typography>
+              ) : (
+                <List>
+                  {prizeOffers.map((offer) => (
+                    <ListItem key={offer.id} sx={{ border: '1px solid var(--card-border)', borderRadius: 1, mb: 1 }}>
+                      <ListItemText
+                        primary={`${offer.name} — ${offer.clam_cost} 🥟`}
+                        secondary={
+                          offer.status === 'requested'
+                            ? `Requested by ${offer.requested_by_name || 'unknown'} — approve or decline on the dashboard`
+                            : 'On the shelf'
+                        }
+                      />
+                      <ListItemSecondaryAction>
+                        <Tooltip title={offer.status === 'requested' ? 'Decline request and remove from store' : 'Remove from store'}>
+                          <IconButton onClick={() => removePrizeOffer(offer.id)} color="error">
+                            <Delete />
+                          </IconButton>
+                        </Tooltip>
+                      </ListItemSecondaryAction>
+                    </ListItem>
+                  ))}
+                </List>
+              )}
+            </AdminFormSection>
           </CardContent>
         </Card>
       )}

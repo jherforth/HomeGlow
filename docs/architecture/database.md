@@ -50,6 +50,7 @@ run in ascending order. The registry lives in `schemaMigrations` in
 | 18 | `schema18-pluginsTable.js` | Adds the `plugins` table (DB-backed plugin store, issue #105 Phase 0) and imports any on-disk `widgets/*.html` + `widgets_registry.json` entries. |
 | 19 | `schema19-pluginStorage.js` | Adds the `plugin_storage` table (namespaced KV store for manifest plugins, issue #105 Phase 1). |
 | 20 | `schema20-choreHistoryKind.js` | Adds `chore_history.kind` (`completion`/`daily_bonus`/`transfer_bonus`/`adjustment`/`missed`/`spent`) with magic-string backfill + a partial unique index for idempotent missed-chore logging (issue #72). |
+| 21 | `schema21-prizeOffers.js` | Adds `prize_offers` (the prize store: one-time redeemable instances of ledger prizes with the available → requested → redeemed request queue). |
 
 Each versioned migration runs inside a transaction, reads its context from
 `globalThis.__HOMEGLOW_SCHEMA_MIGRATION_CONTEXT`, and writes the new
@@ -108,9 +109,20 @@ deleting earned history — so metrics never shrink retroactively.
 id, username, email, profile_picture
 ```
 
-**`prizes`** — rewards purchasable with clams.
+**`prizes`** — the prize definitions ledger (kept forever in Prize Management).
 ```
 id, name, clam_cost
+```
+
+**`prize_offers`** — the prize store: one-time redeemable instances of ledger
+prizes, mirroring the chores/chore_schedules split. Request queue: a kid
+requests on the kiosk; a parent approves (PIN-gated when set) → clams deducted
+as a negative `kind='spent'` history row titled with the prize name, offer
+consumed, `prize.redeemed` event fires (kiosk confetti celebration).
+```
+id, prize_id ─▶ prizes(id) CASCADE,
+status ('available' | 'requested' | 'redeemed'),
+requested_by ─▶ users(id) SET NULL, requested_at, redeemed_at, created_at
 ```
 
 **`settings`** — global key/value store (API keys, `SYSTEM_SCHEMA_ID`, migration

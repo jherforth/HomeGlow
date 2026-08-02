@@ -13,6 +13,7 @@ const PLUGIN_EVENT_CATALOG = Object.freeze([
     'clam.withdrawn',    // { userId, amount, newTotal }
     'chore.completed',   // { userId, choreId, scheduleId, clamValue, date }
     'chore.uncompleted', // { userId, choreId, scheduleId, clamValue, date } — mirror of chore.completed
+    'prize.redeemed',    // { userId, prizeId, offerId, prizeName, cost, newTotal }
 ]);
 
 const catalogSet = new Set(PLUGIN_EVENT_CATALOG);

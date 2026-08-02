@@ -26,6 +26,7 @@ const DOMAIN_TABLES = [
   'chore_history',
   'chore_schedules',
   'chores',
+  'prize_offers',
   'prizes',
   'calendar_events_cache',
   'calendar_sync_status',
@@ -134,8 +135,15 @@ function seedUsersAndChores(db) {
 
   const insertPrize = db.prepare('INSERT INTO prizes (name, clam_cost) VALUES (?, ?)');
   insertPrize.run('Movie night pick', 50);
-  insertPrize.run('Ice cream trip', 30);
-  insertPrize.run('30 min extra screen time', 15);
+  const iceCream = insertPrize.run('Ice cream trip', 30).lastInsertRowid;
+  const screenTime = insertPrize.run('30 min extra screen time', 15).lastInsertRowid;
+
+  // Prize store showcase: one offer on the shelf, one pending parent approval.
+  const insertOffer = db.prepare(
+    "INSERT INTO prize_offers (prize_id, status, requested_by, requested_at) VALUES (?, ?, ?, ?)"
+  );
+  insertOffer.run(iceCream, 'available', null, null);
+  insertOffer.run(screenTime, 'requested', liamId, new Date().toISOString());
 }
 
 // Real public ICS feeds synced live in demo mode (calendar sync runs for these;

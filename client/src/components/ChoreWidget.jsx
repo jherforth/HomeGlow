@@ -36,6 +36,9 @@ import PinModal from './PinModal';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
 import { shouldShowChoreToday, getTodayDateString, convertDaysToCrontab, getDueDateStatus, formatDueDate } from '../utils/choreHelpers.js';
+import { subscribePluginEvents } from '../utils/pluginEventBridge.js';
+import { playSound, soundUrl } from '../utils/choreSound.js';
+import PrizeCelebration from './PrizeCelebration.jsx';
 
 const USERS_UPDATED_EVENT = 'homeglow:users-updated';
 
@@ -79,6 +82,11 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
   const [transferDialog, setTransferDialog] = useState({ open: false, schedule: null, targetUserId: null, mode: 'keep', bonus: 1 });
   const [snoozeDialog, setSnoozeDialog] = useState({ open: false, schedule: null, until: '' });
   const [pinGate, setPinGate] = useState({ open: false, onSuccess: null });
+  // Prize store (spending mechanism): one-time offers, request queue, and the
+  // avatar quick-spend dialog for off-store purchases.
+  const [prizeOffers, setPrizeOffers] = useState([]);
+  const [quickSpend, setQuickSpend] = useState({ open: false, user: null, amount: '', note: '' });
+  const [celebration, setCelebration] = useState(null); // { username, prizeName }
   const longPressTimerRef = useRef(null);
   const longPressFiredRef = useRef(false);
   const longPressStartRef = useRef(null);
@@ -152,6 +160,29 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
     };
   }, []);
 
+  // Prize redemptions celebrate on every display showing the chore widget:
+  // the approval emits prize.redeemed on the server bus, delivered over the
+  // same SSE stream the plugin platform uses. Confetti + a chime (chime only
+  // when this device's chore sounds are on).
+  useEffect(() => {
+    return subscribePluginEvents((message) => {
+      if (message.event !== 'prize.redeemed') return;
+      const user = users.find((u) => u.id === message.payload.userId);
+      setCelebration({
+        username: user?.username || 'Someone',
+        prizeName: message.payload.prizeName,
+      });
+      if (soundEnabled) {
+        try {
+          playSound(soundUrl('chime.wav'), 0.8);
+        } catch { /* sound is best-effort */ }
+      }
+      // Balances and the store changed server-side.
+      void fetchUsers();
+      void fetchPrizeOffers();
+    });
+  }, [users, soundEnabled]);
+
   const fetchData = async () => {
     try {
       await Promise.all([
@@ -160,6 +191,7 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
         fetchSchedules(),
         fetchHistory(),
         fetchPrizes(),
+        fetchPrizeOffers(),
         fetchSettings()
       ]);
       setLoading(false);
@@ -224,6 +256,81 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
     } catch (error) {
       console.error('Error fetching prizes:', error);
     }
+  };
+
+  const fetchPrizeOffers = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/prize-offers`);
+      setPrizeOffers(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Error fetching prize offers:', error);
+      setPrizeOffers([]);
+    }
+  };
+
+  // --- Prize store actions ---
+  const requestPrizeOffer = async (offerId, userId) => {
+    try {
+      await axios.post(`${API_BASE_URL}/api/prize-offers/${offerId}/request`, { user_id: userId });
+      await fetchPrizeOffers();
+    } catch (error) {
+      alert(error?.response?.data?.error || 'Could not request this prize.');
+      await fetchPrizeOffers();
+    }
+  };
+
+  const cancelPrizeRequest = async (offerId) => {
+    try {
+      await axios.post(`${API_BASE_URL}/api/prize-offers/${offerId}/cancel-request`);
+    } catch (error) {
+      console.error('Error cancelling prize request:', error);
+    }
+    await fetchPrizeOffers();
+  };
+
+  // Parent actions — PIN-gated like transfers when an admin PIN is set.
+  const approvePrizeOffer = (offerId) => {
+    requirePin(async () => {
+      try {
+        await axios.post(`${API_BASE_URL}/api/prize-offers/${offerId}/approve`);
+        // Celebration + balances arrive via the prize.redeemed event.
+        await Promise.all([fetchPrizeOffers(), fetchUsers()]);
+      } catch (error) {
+        alert(error?.response?.data?.error || 'Could not approve this prize.');
+        await fetchPrizeOffers();
+      }
+    });
+  };
+
+  const declinePrizeOffer = (offerId) => {
+    requirePin(async () => {
+      try {
+        await axios.post(`${API_BASE_URL}/api/prize-offers/${offerId}/decline`);
+      } catch (error) {
+        console.error('Error declining prize request:', error);
+      }
+      await fetchPrizeOffers();
+    });
+  };
+
+  // Avatar quick-spend: parent records an off-store purchase ("toy from the
+  // store") straight from the kid's profile picture.
+  const confirmQuickSpend = () => {
+    const { user, amount, note } = quickSpend;
+    const parsed = parseInt(amount, 10);
+    if (!user || !Number.isFinite(parsed) || parsed <= 0) return;
+    requirePin(async () => {
+      try {
+        await axios.post(`${API_BASE_URL}/api/users/${user.id}/clams/reduce`, {
+          amount: parsed,
+          title: note.trim() || 'Spent',
+        });
+        setQuickSpend({ open: false, user: null, amount: '', note: '' });
+        await fetchUsers();
+      } catch (error) {
+        alert(error?.response?.data?.error || 'Could not redeem clams.');
+      }
+    });
   };
 
   const toggleChoreCompletion = async (schedule, isCompleted) => {
@@ -580,7 +687,11 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
     }
 
     return (
-      <Box sx={{ position: 'relative', display: 'inline-block' }}>
+      <Box
+        sx={{ position: 'relative', display: 'inline-block', cursor: 'pointer' }}
+        title={`Redeem clams for ${user.username}`}
+        onClick={() => setQuickSpend({ open: true, user, amount: '', note: '' })}
+      >
         {imageUrl ? (
           <>
             <img
@@ -951,43 +1062,84 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
         <Dialog open={showPrizesModal} onClose={() => setShowPrizesModal(false)} maxWidth="sm" fullWidth>
           <DialogTitle>
             <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              🛍️ Available Prizes
+              🛍️ Prize Store
             </Typography>
           </DialogTitle>
           <DialogContent>
-            {prizes.length === 0 ? (
+            {prizeOffers.length === 0 ? (
               <Typography variant="body1" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
-                No prizes available. Ask an admin to add some prizes!
+                The store is empty right now. Parents can stock it from Settings → Prize Management.
               </Typography>
             ) : (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-                {prizes.map((prize) => (
+                {prizeOffers.filter((offer) => offer.status === 'requested').length > 0 && (
+                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', opacity: 0.7 }}>
+                    Waiting for a parent
+                  </Typography>
+                )}
+                {prizeOffers.filter((offer) => offer.status === 'requested').map((offer) => (
                   <Box
-                    key={prize.id}
+                    key={offer.id}
+                    sx={{
+                      p: 2,
+                      border: '1px solid var(--accent)',
+                      borderRadius: 2,
+                      bgcolor: 'rgba(var(--accent-rgb), 0.1)'
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{offer.name}</Typography>
+                      <Chip label={`${offer.clam_cost} 🥟`} sx={{ bgcolor: 'var(--accent)', color: 'white', fontWeight: 'bold' }} />
+                    </Box>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                      Requested by <strong>{offer.requested_by_name}</strong>
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Button size="small" variant="contained" startIcon={<Check />} onClick={() => approvePrizeOffer(offer.id)}>
+                        Approve
+                      </Button>
+                      <Button size="small" variant="outlined" color="error" onClick={() => declinePrizeOffer(offer.id)}>
+                        Decline
+                      </Button>
+                      <Button size="small" onClick={() => cancelPrizeRequest(offer.id)} sx={{ ml: 'auto', opacity: 0.7 }}>
+                        Cancel request
+                      </Button>
+                    </Box>
+                  </Box>
+                ))}
+
+                {prizeOffers.filter((offer) => offer.status === 'available').length > 0 && (
+                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', opacity: 0.7 }}>
+                    On the shelf
+                  </Typography>
+                )}
+                {prizeOffers.filter((offer) => offer.status === 'available').map((offer) => (
+                  <Box
+                    key={offer.id}
                     sx={{
                       p: 2,
                       border: '1px solid var(--card-border)',
                       borderRadius: 2,
-                      bgcolor: 'rgba(var(--accent-rgb), 0.05)',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center'
+                      bgcolor: 'rgba(var(--accent-rgb), 0.05)'
                     }}
                   >
-                    <Box>
-                      <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-                        {prize.name}
-                      </Typography>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{offer.name}</Typography>
+                      <Chip label={`${offer.clam_cost} 🥟`} sx={{ bgcolor: 'var(--accent)', color: 'white', fontWeight: 'bold' }} />
                     </Box>
-                    <Chip
-                      label={`${prize.clam_cost} 🥟`}
-                      sx={{
-                        bgcolor: 'var(--accent)',
-                        color: 'white',
-                        fontWeight: 'bold',
-                        fontSize: '0.9rem'
-                      }}
-                    />
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                      <Typography variant="body2" color="text.secondary">Request for:</Typography>
+                      {users.map((user) => (
+                        <Chip
+                          key={user.id}
+                          label={`${user.username} (${user.clam_total || 0})`}
+                          size="small"
+                          variant={(user.clam_total || 0) >= offer.clam_cost ? 'filled' : 'outlined'}
+                          onClick={() => requestPrizeOffer(offer.id, user.id)}
+                          sx={{ cursor: 'pointer' }}
+                        />
+                      ))}
+                    </Box>
                   </Box>
                 ))}
               </Box>
@@ -999,6 +1151,53 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
             </Button>
           </DialogActions>
         </Dialog>
+
+        <Dialog open={quickSpend.open} onClose={() => setQuickSpend({ open: false, user: null, amount: '', note: '' })} maxWidth="xs" fullWidth>
+          <DialogTitle>
+            🥟 Redeem clams — {quickSpend.user?.username}
+          </DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Balance: <strong>{quickSpend.user?.clam_total || 0} clams</strong>. Record clams spent
+              outside the store (e.g. a toy bought while out).
+            </Typography>
+            <TextField
+              fullWidth
+              autoFocus
+              type="number"
+              label="Clams to redeem"
+              value={quickSpend.amount}
+              onChange={(e) => setQuickSpend((prev) => ({ ...prev, amount: e.target.value }))}
+              slotProps={{ htmlInput: { min: 1 } }}
+              sx={{ mb: 2 }}
+            />
+            <TextField
+              fullWidth
+              label="What for? (optional)"
+              placeholder="Toy store"
+              value={quickSpend.note}
+              onChange={(e) => setQuickSpend((prev) => ({ ...prev, note: e.target.value }))}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setQuickSpend({ open: false, user: null, amount: '', note: '' })}>Cancel</Button>
+            <Button
+              variant="contained"
+              disabled={!quickSpend.amount || parseInt(quickSpend.amount, 10) <= 0}
+              onClick={confirmQuickSpend}
+            >
+              Redeem Clams
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {celebration && (
+          <PrizeCelebration
+            username={celebration.username}
+            prizeName={celebration.prizeName}
+            onDismiss={() => setCelebration(null)}
+          />
+        )}
 
         <Dialog
           open={showAddDialog}

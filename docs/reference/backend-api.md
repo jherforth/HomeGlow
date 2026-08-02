@@ -182,11 +182,17 @@ static route.
 | POST | `/api/users/:id/clams/add` | Add clams (admin adjustment). |
 | POST | `/api/users/:id/clams/reduce` | Reduce clams (e.g. prize purchase) — inserts a negative `kind='spent'` ledger row (non-destructive; optional body `kind: 'adjustment'` for corrections). |
 
-### Prizes
+### Prizes & the prize store
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET/POST | `/api/prizes` | List / create prizes. |
-| PATCH/DELETE | `/api/prizes/:id` | Update / delete a prize. |
+| GET/POST | `/api/prizes` | List / create prize definitions (the ledger). |
+| PATCH/DELETE | `/api/prizes/:id` | Update / delete a prize definition. |
+| GET/POST | `/api/prize-offers` | List store offers / place a ledger prize in the store (one-time). |
+| DELETE | `/api/prize-offers/:id` | Remove an unredeemed offer from the store. |
+| POST | `/api/prize-offers/:id/request` | Kid requests an available offer (`{ user_id }`). |
+| POST | `/api/prize-offers/:id/cancel-request` | Withdraw a pending request. |
+| POST | `/api/prize-offers/:id/decline` | Parent declines; offer returns to the shelf. |
+| POST | `/api/prize-offers/:id/approve` | Parent approves: deducts the prize cost as a `spent` ledger row, consumes the offer, emits `clam.withdrawn` + `prize.redeemed`. |
 
 ### Settings & API keys
 | Method | Path | Purpose |

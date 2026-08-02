@@ -224,6 +224,7 @@ const off = HomeGlow.on('clam.withdrawn', (payload, meta) => {
 | `clam.withdrawn` | clams reduced from a user | `{ userId, amount, newTotal }` |
 | `chore.completed` | a chore is completed | `{ userId, choreId, scheduleId, clamValue, date }` |
 | `chore.uncompleted` | a completion is undone | `{ userId, choreId, scheduleId, clamValue, date }` |
+| `prize.redeemed` | a prize-store request is approved | `{ userId, prizeId, offerId, prizeName, cost, newTotal }` |
 
 Declaring an event not in the catalog rejects the install — typos fail loudly.
 Only declared events are ever delivered to your iframe.
