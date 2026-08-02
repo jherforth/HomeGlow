@@ -103,6 +103,22 @@ export const normalizeVacationModeSettings = (raw) => ({
   ...(raw && typeof raw === 'object' ? raw : {}),
 });
 
+// Whether vacation mode applies right now: enabled, and today falls inside the
+// optional date range (empty dates = unbounded). Local 'YYYY-MM-DD' comparison
+// mirrors the server's isVacationActiveOn, and gives bounded vacations
+// client-side auto-expiry — chimes and the vacation screensaver come back on
+// their own the day after endDate.
+export const isVacationModeActiveToday = (settings, today = null) => {
+  if (!settings || settings.enabled !== true) return false;
+  const d = today || (() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  })();
+  if (settings.startDate && d < settings.startDate) return false;
+  if (settings.endDate && d > settings.endDate) return false;
+  return true;
+};
+
 export const readLocalVacationModeSettings = () => {
   try {
     const raw = localStorage.getItem(VACATION_MODE_STORAGE_KEY);

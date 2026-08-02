@@ -21,6 +21,7 @@ import {
   readLocalScreensaverSettings,
   readLocalAutoDarkModeSettings,
   readLocalVacationModeSettings,
+  isVacationModeActiveToday,
 } from './utils/interfaceSettings.js';
 import { normalizeWidgetSettings, BASE_WIDGET_SETTINGS } from './utils/widgetSettings.js';
 import { buildMobileWidgetList } from './utils/mobileWidgets.js';
@@ -151,6 +152,10 @@ const App = () => {
   const [screensaverActive, setScreensaverActive] = useState(false);
   const [screensaverSettings, setScreensaverSettings] = useState(readLocalScreensaverSettings);
   const [vacationModeSettings, setVacationModeSettings] = useState(readLocalVacationModeSettings);
+  // Range-aware (issue #121 v2): with dates set, vacation activates/expires on
+  // its own; recomputed each render, which the kiosk's periodic refreshes keep
+  // current across midnight.
+  const vacationActiveToday = isVacationModeActiveToday(vacationModeSettings);
   const inactivityTimerRef = useRef(null);
   const lastActivityRef = useRef(Date.now());
   const [widgetSettings, setWidgetSettings] = useState({ ...DEFAULT_WIDGET_SETTINGS });
@@ -931,8 +936,8 @@ const App = () => {
       widgetSettings.chores.enabled &&
       choreSoundGlobalEnabled &&
       choreSoundDeviceEnabled &&
-      // Vacation mode (issue #121) mutes chore due-time sounds.
-      !(vacationModeSettings.enabled && vacationModeSettings.muteSounds),
+      // Vacation mode (issue #121) mutes chore due-time sounds while active.
+      !(vacationActiveToday && vacationModeSettings.muteSounds),
     defaultSound: apiKeys.CHORE_SOUND_DEFAULT || null,
     volume: Number.isFinite(parsedSoundVolume) ? parsedSoundVolume / 100 : 1,
   });
@@ -962,7 +967,7 @@ const App = () => {
             Demo Mode — sample data resets every {demoStatus.resetHours || 6} hours
           </Box>
         )}
-        {vacationModeSettings.enabled && (
+        {vacationActiveToday && (
           <Box
             aria-label="Vacation mode active"
             sx={{
@@ -1129,7 +1134,7 @@ const App = () => {
 
       {!isMobile && screensaverActive && screensaverSettings.enabled && (
         <Suspense fallback={null}>
-          {vacationModeSettings.enabled ? (
+          {vacationActiveToday ? (
             // Vacation mode (issue #121) replaces the standard screensaver
             // with the popcorn vacation-emoji one.
             <VacationScreensaver onExit={handleExitScreensaver} />

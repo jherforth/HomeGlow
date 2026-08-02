@@ -2729,6 +2729,36 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 sx={{ mb: 1, display: 'block' }}
               />
 
+              {vacationModeSettings.enabled && (
+                <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
+                  <TextField
+                    size="small"
+                    type="date"
+                    label="Start date (optional)"
+                    value={vacationModeSettings.startDate || ''}
+                    onChange={(e) => setVacationModeSettings(prev => ({ ...prev, startDate: e.target.value }))}
+                    slotProps={{ inputLabel: { shrink: true } }}
+                    sx={{ flex: 1 }}
+                  />
+                  <TextField
+                    size="small"
+                    type="date"
+                    label="End date (optional)"
+                    value={vacationModeSettings.endDate || ''}
+                    onChange={(e) => setVacationModeSettings(prev => ({ ...prev, endDate: e.target.value }))}
+                    slotProps={{ inputLabel: { shrink: true } }}
+                    sx={{ flex: 1 }}
+                  />
+                </Box>
+              )}
+              {vacationModeSettings.enabled && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                  With dates set, vacation starts and ends automatically, missed-chore tracking pauses
+                  for those days, and streaks bridge across them permanently. Without dates, vacation
+                  stays on until you turn it off.
+                </Typography>
+              )}
+
               <Button
                 variant="contained"
                 onClick={saveVacationModeSettings}

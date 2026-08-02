@@ -13,6 +13,7 @@ import {
     DEFAULT_VACATION_MODE_SETTINGS,
     normalizeVacationModeSettings,
     readLocalVacationModeSettings,
+    isVacationModeActiveToday,
 } from './interfaceSettings.js';
 
 describe('normalizeVacationModeSettings', () => {
@@ -53,5 +54,31 @@ describe('readLocalVacationModeSettings', () => {
             enabled: true,
             muteSounds: false,
         });
+    });
+});
+
+describe('isVacationModeActiveToday', () => {
+    const TODAY = '2026-07-21';
+
+    it('is false when disabled or missing', () => {
+        expect(isVacationModeActiveToday(null, TODAY)).toBe(false);
+        expect(isVacationModeActiveToday({ enabled: false }, TODAY)).toBe(false);
+    });
+
+    it('unbounded toggle is active whenever enabled', () => {
+        expect(isVacationModeActiveToday({ enabled: true, startDate: '', endDate: '' }, TODAY)).toBe(true);
+    });
+
+    it('respects the date range, inclusive of both ends', () => {
+        const range = { enabled: true, startDate: '2026-07-20', endDate: '2026-07-25' };
+        expect(isVacationModeActiveToday(range, '2026-07-19')).toBe(false);
+        expect(isVacationModeActiveToday(range, '2026-07-20')).toBe(true);
+        expect(isVacationModeActiveToday(range, '2026-07-25')).toBe(true);
+        expect(isVacationModeActiveToday(range, '2026-07-26')).toBe(false);
+    });
+
+    it('auto-expires: enabled with a past endDate is inactive (and a future startDate is not yet active)', () => {
+        expect(isVacationModeActiveToday({ enabled: true, startDate: '', endDate: '2026-07-01' }, TODAY)).toBe(false);
+        expect(isVacationModeActiveToday({ enabled: true, startDate: '2026-08-01', endDate: '' }, TODAY)).toBe(false);
     });
 });

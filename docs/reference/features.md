@@ -186,11 +186,14 @@ API key stored via `/api/settings`.
   and fall back out of view. A subtle 🏖️ badge shows top-right while active.
 - Stored in `localStorage` (`vacationModeSettings`) alongside the screensaver
   settings; the mute can be toggled independently of the screensaver swap.
+- **Optional date range**: start/end pickers appear when enabled. A bounded
+  vacation activates and **auto-expires** on its own (chimes, badge, and the
+  vacation screensaver all key off "active today", not just the toggle).
 - **Metrics-aware** (issue #72): saving also writes a household-wide
   `vacation_mode` server setting. While active, the nightly job **skips
   missed-chore logging** (days off never count against completion rates) and
-  the Chore Metrics plugin treats vacation days as neutral, **bridging streaks**
-  across them. Note: only date-bounded vacations bridge past gaps permanently —
+  the Chore Metrics plugin treats vacation days as neutral, **bridging
+  streaks** across them. Date-bounded vacations bridge past gaps permanently;
   the plain toggle protects streaks while it stays on.
 
 **Code:** `VacationScreensaver.jsx`, settings in `utils/interfaceSettings.js`,
