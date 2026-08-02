@@ -462,16 +462,21 @@ Shapes are current as of this writing — treat them as unversioned.
 | `GET` | `/api/users` | → `[{ id, username, email, profile_picture, clam_total }]` |
 | `GET` | `/api/users/:id/clams` | → `{ user_id, clam_total }` |
 | `POST` | `/api/users/:id/clams/add` | body: `{ amount, date? }` → `{ success, clam_total }` — emits `clam.deposited` |
-| `POST` | `/api/users/:id/clams/reduce` | body: `{ amount }` → `{ success, clam_total }` (`400` if insufficient) — emits `clam.withdrawn` |
+| `POST` | `/api/users/:id/clams/reduce` | body: `{ amount, kind? }` → `{ success, clam_total }` (`400` if insufficient) — records a **negative `spent` history row** (non-destructive; `kind: 'adjustment'` marks corrections) — emits `clam.withdrawn` |
 
-**Chore history** — the clam ledger.
+**Chore history** — the clam ledger. Every row carries a **`kind`**:
+`completion` (a chore done), `daily_bonus` (all regular chores done that day —
+consecutive dates = streaks), `transfer_bonus`, `adjustment`, `missed` (logged
+nightly for due-but-uncompleted regular chores, `clam_value` 0), or `spent`
+(negative `clam_value`). Completion rate = completions / (completions + missed);
+earned = sum of positive values; spent = −sum of `spent` rows.
 
 | Method | Path | Body / response |
 | --- | --- | --- |
-| `GET` | `/api/chore-history?user_id=&date=&date_from=&date_to=` | → history rows (all filters optional) |
+| `GET` | `/api/chore-history?user_id=&date=&date_from=&date_to=` | → history rows incl. `kind` (all filters optional) |
 | `GET` | `/api/chore-history/user/:userId` | → all rows for a user |
 | `GET` | `/api/chore-history/summary/:userId` | → `{ user_id, clam_total }` |
-| `GET` | `/api/chore-history/recent?days=7` | → `[{ id, date, clam_value, title, created_at, username }]` (nonzero entries) |
+| `GET` | `/api/chore-history/recent?days=7` | → `[{ id, date, clam_value, title, kind, created_at, username }]` (nonzero entries) |
 
 **Chores & schedules**
 

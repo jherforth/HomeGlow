@@ -49,6 +49,7 @@ run in ascending order. The registry lives in `schemaMigrations` in
 | 17 | `schema17-choreTransferSnooze.js` | Adds `transferable`, `can_snooze`, `snoozed_until`, `transfer_bonus_clams` to `chore_schedules` (dashboard long-press transfer/snooze, issue #122). |
 | 18 | `schema18-pluginsTable.js` | Adds the `plugins` table (DB-backed plugin store, issue #105 Phase 0) and imports any on-disk `widgets/*.html` + `widgets_registry.json` entries. |
 | 19 | `schema19-pluginStorage.js` | Adds the `plugin_storage` table (namespaced KV store for manifest plugins, issue #105 Phase 1). |
+| 20 | `schema20-choreHistoryKind.js` | Adds `chore_history.kind` (`completion`/`daily_bonus`/`transfer_bonus`/`adjustment`/`missed`/`spent`) with magic-string backfill + a partial unique index for idempotent missed-chore logging (issue #72). |
 
 Each versioned migration runs inside a transaction, reads its context from
 `globalThis.__HOMEGLOW_SCHEMA_MIGRATION_CONTEXT`, and writes the new
@@ -86,11 +87,19 @@ due_date,                     -- 'YYYY-MM-DD' calendar deadline (nullable; drive
 visible, created_at
 ```
 
-**`chore_history`** — completion / clam ledger (source of truth for balances).
+**`chore_history`** — completion / clam ledger (source of truth for balances;
+a balance is always `SUM(clam_value)` for the user).
 ```
 id, user_id, chore_schedule_id ─▶ chore_schedules(id) ON DELETE SET NULL,
-date, clam_value, created_at
+date,          -- local 'YYYY-MM-DD'
+clam_value,    -- negative for kind='spent' rows (non-destructive spending, #72)
+title,
+kind,          -- completion | daily_bonus | transfer_bonus | adjustment | missed | spent
+created_at     -- UTC; use `date` for day bucketing
 ```
+The nightly job logs `kind='missed'` rows (clam_value 0) for due-but-uncompleted
+regular chores, and spending inserts negative `kind='spent'` rows instead of
+deleting earned history — so metrics never shrink retroactively.
 
 ### Users, prizes, settings
 

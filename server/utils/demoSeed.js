@@ -108,17 +108,29 @@ function seedUsersAndChores(db) {
   // A few days of completions so clam totals look lived-in. Only the reward
   // chores post clams; routines are completed too but pay out nothing.
   const insertHistory = db.prepare(
-    'INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title) VALUES (?, NULL, ?, ?, ?)'
+    "INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind) VALUES (?, NULL, ?, ?, ?, ?)"
   );
   const today = new Date();
   for (let daysAgo = 1; daysAgo <= 4; daysAgo++) {
     const date = formatDateOnly(new Date(today.getTime() - daysAgo * DAY_MS));
-    insertHistory.run(emmaId, date, 5, 'Dishes');
-    insertHistory.run(emmaId, date, 0, 'Make your bed');
-    if (daysAgo % 2 === 0) insertHistory.run(liamId, date, 10, 'Vacuum living room');
-    insertHistory.run(liamId, date, 4, 'Walk the dog');
-    insertHistory.run(noahId, date, 0, 'Brush teeth');
+    insertHistory.run(emmaId, date, 5, 'Dishes', 'completion');
+    insertHistory.run(emmaId, date, 0, 'Make your bed', 'completion');
+    if (daysAgo % 2 === 0) insertHistory.run(liamId, date, 10, 'Vacuum living room', 'completion');
+    insertHistory.run(liamId, date, 4, 'Walk the dog', 'completion');
+    insertHistory.run(noahId, date, 0, 'Brush teeth', 'completion');
   }
+
+  // Metrics showcase rows (issue #72): a streak for Emma (consecutive
+  // daily-bonus days), a prize redemption (negative 'spent' row), and a couple
+  // of missed chores for Liam — so the Chore Metrics plugin demos every tile
+  // out of the box. Emma's total stays positive (20 earned - 10 spent + 6 bonus).
+  for (let daysAgo = 1; daysAgo <= 3; daysAgo++) {
+    const date = formatDateOnly(new Date(today.getTime() - daysAgo * DAY_MS));
+    insertHistory.run(emmaId, date, 2, 'Regular chores', 'daily_bonus');
+  }
+  insertHistory.run(emmaId, formatDateOnly(new Date(today.getTime() - 2 * DAY_MS)), -10, 'Spent', 'spent');
+  insertHistory.run(liamId, formatDateOnly(new Date(today.getTime() - 1 * DAY_MS)), 0, 'Take out trash', 'missed');
+  insertHistory.run(liamId, formatDateOnly(new Date(today.getTime() - 3 * DAY_MS)), 0, 'Vacuum living room', 'missed');
 
   const insertPrize = db.prepare('INSERT INTO prizes (name, clam_cost) VALUES (?, ?)');
   insertPrize.run('Movie night pick', 50);

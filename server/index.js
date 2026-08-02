@@ -107,6 +107,7 @@ const schemaMigrations = [
   { schemaId: 17, migrationPath: './migrations/schema17-choreTransferSnooze', },
   { schemaId: 18, migrationPath: './migrations/schema18-pluginsTable', },
   { schemaId: 19, migrationPath: './migrations/schema19-pluginStorage', },
+  { schemaId: 20, migrationPath: './migrations/schema20-choreHistoryKind', },
 ];
 
 const ALLOWED_SCHEDULE_DURATIONS = new Set(['day-of', 'until-completed', 'once-completed']);
@@ -518,7 +519,7 @@ fastify.get('/widgets/:filename', async (request, reply) => {
       content = injection + content;
     }
 
-    reply.header('Content-Type', 'text/html');
+    reply.header('Content-Type', 'text/html; charset=utf-8');
     return content;
   } catch (error) {
     console.error(`Error serving widget ${filename}:`, error);
@@ -1815,7 +1816,45 @@ async function dailyBackgroundProcessing() {
     let results = {};
     const today = getTodayLocalDateString();
 
-    // We want to delete schedules that are completed and will never run again to avoid clutter
+    // Missed-chore logging (issue #72): record yesterday's due-but-uncompleted
+    // regular chores BEFORE any pruning below deletes their schedules. Runs
+    // first, in its own try/catch — metrics capture must never block the rest
+    // of the nightly housekeeping. Idempotent via the partial unique index on
+    // (user_id, chore_schedule_id, date) WHERE kind='missed', so the midnight
+    // cron and the manual /api/system/backgroundTasks trigger can both run.
+    try {
+      const missedDate = addDaysToDateOnly(today, -1);
+      const endOfMissedDay = parseDateOnlyToLocalDate(missedDate);
+      endOfMissedDay.setHours(23, 59, 59, 999);
+
+      const insertMissed = db.prepare(
+        "INSERT OR IGNORE INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind) VALUES (?, ?, ?, 0, ?, 'missed')"
+      );
+
+      let missedLoggedCount = 0;
+      const missedRows = [];
+      const allUsers = db.prepare('SELECT id FROM users WHERE id != 0').all();
+      for (const user of allUsers) {
+        const dueChores = getTodaysRegularChoresForUser(user.id, missedDate, endOfMissedDay);
+        for (const schedule of dueChores) {
+          if (schedule.completed_today) continue;
+          const info = insertMissed.run(user.id, schedule.id, missedDate, schedule.title);
+          if (info.changes > 0) {
+            missedLoggedCount++;
+            missedRows.push({ userId: user.id, scheduleId: schedule.id, title: schedule.title, date: missedDate });
+          }
+        }
+      }
+      console.log(`Logged ${missedLoggedCount} missed chore(s) for ${missedDate}`);
+      results = { ...results, missedLoggedCount, missedChores: missedRows };
+    } catch (missedError) {
+      console.error('Missed-chore logging failed (continuing with housekeeping):', missedError);
+      results = { ...results, missedLoggedCount: 0, missedLoggingError: missedError.message };
+    }
+
+    // We want to delete schedules that are completed and will never run again to avoid clutter.
+    // kind = 'completion' is load-bearing (issue #72): a 'missed' row must not
+    // make an UNcompleted one-time chore look completed and get it pruned.
     const schedulesToPrune = db.prepare(`
       SELECT cs.id, cs.chore_id, cs.user_id, c.title
       FROM chore_schedules cs
@@ -1825,6 +1864,7 @@ async function dailyBackgroundProcessing() {
         AND EXISTS (
           SELECT 1 FROM chore_history ch
           WHERE ch.chore_schedule_id = cs.id
+            AND ch.kind = 'completion'
         )
     `).all();
     console.log(`Found ${schedulesToPrune.length} completed one-time chores to prune`);
@@ -2799,15 +2839,21 @@ fastify.get('/api/chore-history/summary/:userId', async (request, reply) => {
   }
 });
 
+const CHORE_HISTORY_KINDS = new Set(['completion', 'daily_bonus', 'transfer_bonus', 'adjustment', 'missed', 'spent']);
+
 fastify.post('/api/chore-history', async (request, reply) => {
-  const { user_id, chore_schedule_id, date, clam_value } = request.body;
+  const { user_id, chore_schedule_id, date, clam_value, kind } = request.body;
   try {
     if (!user_id || !date) {
       return reply.status(400).send({ error: 'user_id and date are required' });
     }
+    if (kind !== undefined && !CHORE_HISTORY_KINDS.has(kind)) {
+      return reply.status(400).send({ error: `kind must be one of: ${[...CHORE_HISTORY_KINDS].join(', ')}` });
+    }
+    const rowKind = kind || (chore_schedule_id ? 'completion' : 'adjustment');
 
-    const stmt = db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value) VALUES (?, ?, ?, ?)');
-    const info = stmt.run(user_id, chore_schedule_id || null, date, clam_value || 0);
+    const stmt = db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, kind) VALUES (?, ?, ?, ?, ?)');
+    const info = stmt.run(user_id, chore_schedule_id || null, date, clam_value || 0, rowKind);
     return { id: info.lastInsertRowid, success: true };
   } catch (error) {
     console.error('Error adding history entry:', error);
@@ -2822,7 +2868,7 @@ fastify.get('/api/chore-history/recent', async (request, reply) => {
     since.setDate(since.getDate() - days);
     const sinceStr = `${since.getFullYear()}-${String(since.getMonth() + 1).padStart(2, '0')}-${String(since.getDate()).padStart(2, '0')}`;
     const rows = db.prepare(`
-      SELECT ch.id, ch.date, ch.clam_value, ch.title, ch.created_at,
+      SELECT ch.id, ch.date, ch.clam_value, ch.title, ch.kind, ch.created_at,
              u.username
       FROM chore_history ch
       LEFT JOIN users u ON ch.user_id = u.id
@@ -2851,17 +2897,23 @@ fastify.delete('/api/chore-history/:id', async (request, reply) => {
   }
 });
 
-// Returns the list of a user's regular (non-bonus) chore schedules that are due today.
-function getTodaysRegularChoresForUser(userId, today) {
+// Returns the list of a user's regular (non-bonus) chore schedules that were
+// due on `dateStr` ('YYYY-MM-DD' local). `referenceNow` anchors the snooze
+// check: the award path uses real now (default); the nightly missed logger
+// passes end-of-that-day so "snoozed through the day" excludes the chore
+// (issue #72).
+function getTodaysRegularChoresForUser(userId, dateStr, referenceNow = new Date()) {
   const allUserSchedules = db.prepare(`
     SELECT cs.*,
      c.clam_value,
+     c.title,
      EXISTS (
          SELECT 1
          FROM chore_history ch
          WHERE ch.chore_schedule_id = cs.id
            AND ch.user_id = cs.user_id
            AND ch.date = ?
+           AND ch.kind = 'completion'
      ) AS completed_today
     FROM chore_schedules cs
     JOIN chores c
@@ -2872,18 +2924,21 @@ function getTodaysRegularChoresForUser(userId, today) {
         cs.crontab IS NOT NULL
         AND cs.duration IN ('until-completed', 'once-completed')
       )
-  `).all(today, userId);
+  `).all(dateStr, userId);
 
   const regularChores = allUserSchedules
     .filter(s => s.clam_value === 0)
     // Snoozed chores are deferred: hidden from the dashboard and neither
     // required for nor counted toward the daily completion bonus.
-    .filter(s => !s.snoozed_until || new Date(s.snoozed_until) <= new Date());
+    .filter(s => !s.snoozed_until || new Date(s.snoozed_until) <= referenceNow);
 
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-  const justBeforeToday = new Date(startOfToday.getTime() - 1);
-  const options = { currentDate: justBeforeToday, utc: false };
+  // Anchor the cron replay to the target date, not the wall clock, so the
+  // helper works for past dates too. For today this is byte-identical to the
+  // old new Date()-based anchor.
+  const startOfDay = parseDateOnlyToLocalDate(dateStr) || new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  const justBeforeDay = new Date(startOfDay.getTime() - 1);
+  const options = { currentDate: justBeforeDay, utc: false };
 
   const todaysChores = [];
   for (const schedule of regularChores) {
@@ -2896,7 +2951,7 @@ function getTodaysRegularChoresForUser(userId, today) {
     // ensure only chores that are due today are part of today's chores
     const interval = CronExpressionParser.parse(schedule.crontab, options);
     const next = interval.next().toISOString().split('T')[0];
-    if (today === next) {
+    if (dateStr === next) {
       todaysChores.push(schedule);
     }
   }
@@ -2919,17 +2974,17 @@ function awardDailyRegularBonusIfDue(userId, date) {
   const dailyRewardSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('daily_completion_clam_reward');
   const dailyReward = dailyRewardSetting ? parseInt(dailyRewardSetting.value, 10) : 2;
 
+  // kind-based lookup (issue #72): unlike the old (clam_value = current
+  // setting) tuple, this still matches bonuses awarded under an older reward.
   const bonusAlreadyAwarded = db.prepare(`
       SELECT id FROM chore_history
       WHERE user_id = ?
       AND date = ?
-      AND chore_schedule_id IS NULL
-      AND clam_value = ?
-      AND title = ?
-    `).get(userId, date, dailyReward, 'Regular chores');
+      AND kind = 'daily_bonus'
+    `).get(userId, date);
 
   if (!bonusAlreadyAwarded) {
-    db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title) VALUES (?, NULL, ?, ?, ?)').run(userId, date, dailyReward, 'Regular chores');
+    db.prepare("INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind) VALUES (?, NULL, ?, ?, ?, 'daily_bonus')").run(userId, date, dailyReward, 'Regular chores');
   }
 }
 
@@ -2937,17 +2992,12 @@ function awardDailyRegularBonusIfDue(userId, date) {
 // Used when uncompleting a regular chore, and by the transfer dialog's explicit
 // "revoke current reward and assign" option (issue #122).
 function revokeDailyRegularBonus(userId, date) {
-  const dailyRewardSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('daily_completion_clam_reward');
-  const dailyReward = dailyRewardSetting ? parseInt(dailyRewardSetting.value, 10) : 2;
-
   const bonusEntry = db.prepare(`
       SELECT id FROM chore_history
       WHERE user_id = ?
       AND date = ?
-      AND chore_schedule_id IS NULL
-      AND clam_value = ?
-      AND title = ?
-    `).get(userId, date, dailyReward, 'Regular chores');
+      AND kind = 'daily_bonus'
+    `).get(userId, date);
 
   if (bonusEntry) {
     db.prepare('DELETE FROM chore_history WHERE id = ?').run(bonusEntry.id);
@@ -2971,18 +3021,21 @@ fastify.post('/api/chores/complete', async (request, reply) => {
       return reply.status(400).send({ error: 'Schedule is not visible' });
     }
 
-    const existing = db.prepare('SELECT id FROM chore_history WHERE chore_schedule_id = ? AND user_id = ? AND date = ?').get(chore_schedule_id, user_id, date);
+    // A 'missed' row must not block completion (retroactive catch-up is
+    // legitimate); it is replaced by the completion below (issue #72).
+    const existing = db.prepare("SELECT id FROM chore_history WHERE chore_schedule_id = ? AND user_id = ? AND date = ? AND kind <> 'missed'").get(chore_schedule_id, user_id, date);
     if (existing) {
       return reply.status(409).send({ error: 'Chore already completed for this date' });
     }
 
-    db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title) VALUES (?, ?, ?, ?, ?)').run(user_id, chore_schedule_id, date, schedule.clam_value, schedule.title);
+    db.prepare("DELETE FROM chore_history WHERE chore_schedule_id = ? AND user_id = ? AND date = ? AND kind = 'missed'").run(chore_schedule_id, user_id, date);
+    db.prepare("INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind) VALUES (?, ?, ?, ?, ?, 'completion')").run(user_id, chore_schedule_id, date, schedule.clam_value, schedule.title);
 
     // Pay out a pending transfer bonus (attached by the parent when moving
     // this chore to a kid whose day was already complete) and clear it so it
     // pays only once.
     if (schedule.transfer_bonus_clams > 0) {
-      db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title) VALUES (?, ?, ?, ?, ?)').run(user_id, chore_schedule_id, date, schedule.transfer_bonus_clams, 'Transfer bonus');
+      db.prepare("INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind) VALUES (?, ?, ?, ?, ?, 'transfer_bonus')").run(user_id, chore_schedule_id, date, schedule.transfer_bonus_clams, 'Transfer bonus');
       db.prepare('UPDATE chore_schedules SET transfer_bonus_clams = 0 WHERE id = ?').run(chore_schedule_id);
     }
 
@@ -3027,9 +3080,9 @@ fastify.post('/api/chores/uncomplete', async (request, reply) => {
       return reply.status(400).send({ error: 'chore_schedule_id, user_id, and date are required' });
     }
 
-    // Exclude 'Transfer bonus' payout rows so this reliably finds the actual
-    // completion record for the schedule/user/date.
-    const history = db.prepare("SELECT id, clam_value FROM chore_history WHERE chore_schedule_id = ? AND user_id = ? AND date = ? AND title <> 'Transfer bonus'").get(chore_schedule_id, user_id, date);
+    // kind-based lookup finds the actual completion record, never a transfer
+    // payout or a stale missed row (issue #72).
+    const history = db.prepare("SELECT id, clam_value FROM chore_history WHERE chore_schedule_id = ? AND user_id = ? AND date = ? AND kind = 'completion'").get(chore_schedule_id, user_id, date);
     if (!history) {
       return reply.status(404).send({ error: 'Completion record not found' });
     }
@@ -3038,7 +3091,7 @@ fastify.post('/api/chores/uncomplete', async (request, reply) => {
 
     // If completing this chore paid out a transfer bonus, take the payout back
     // and re-arm it on the schedule so re-completing pays again.
-    const transferBonusRow = db.prepare("SELECT id, clam_value FROM chore_history WHERE chore_schedule_id = ? AND user_id = ? AND date = ? AND title = 'Transfer bonus'").get(chore_schedule_id, user_id, date);
+    const transferBonusRow = db.prepare("SELECT id, clam_value FROM chore_history WHERE chore_schedule_id = ? AND user_id = ? AND date = ? AND kind = 'transfer_bonus'").get(chore_schedule_id, user_id, date);
     if (transferBonusRow) {
       db.prepare('DELETE FROM chore_history WHERE id = ?').run(transferBonusRow.id);
       db.prepare('UPDATE chore_schedules SET transfer_bonus_clams = ? WHERE id = ?').run(transferBonusRow.clam_value, chore_schedule_id);
@@ -3091,7 +3144,7 @@ fastify.post('/api/users/:id/clams/add', async (request, reply) => {
     }
 
     const useDate = date || getTodayLocalDateString();
-    db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title) VALUES (?, NULL, ?, ?, ?)').run(id, useDate, amount, 'Adjustment');
+    db.prepare("INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind) VALUES (?, NULL, ?, ?, ?, 'adjustment')").run(id, useDate, amount, 'Adjustment');
 
     const result = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(id);
     pluginEvents.emit('clam.deposited', { userId: parseInt(id), amount, newTotal: result.total });
@@ -3104,10 +3157,16 @@ fastify.post('/api/users/:id/clams/add', async (request, reply) => {
 
 fastify.post('/api/users/:id/clams/reduce', async (request, reply) => {
   const { id } = request.params;
-  const { amount } = request.body;
+  const { amount, kind } = request.body;
   try {
     if (!amount || amount <= 0) {
       return reply.status(400).send({ error: 'Valid positive amount is required' });
+    }
+    // 'spent' = prize redemption / spending (default); 'adjustment' lets the
+    // admin clam editor mark corrections distinctly.
+    const rowKind = kind === undefined ? 'spent' : kind;
+    if (rowKind !== 'spent' && rowKind !== 'adjustment') {
+      return reply.status(400).send({ error: "kind must be 'spent' or 'adjustment'" });
     }
 
     const currentResult = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(id);
@@ -3115,20 +3174,18 @@ fastify.post('/api/users/:id/clams/reduce', async (request, reply) => {
       return reply.status(400).send({ error: 'Insufficient clams' });
     }
 
-    let remaining = amount;
-    const entries = db.prepare('SELECT * FROM chore_history WHERE user_id = ? AND clam_value > 0 ORDER BY created_at ASC').all(id);
-
-    for (const entry of entries) {
-      if (remaining <= 0) break;
-
-      if (entry.clam_value <= remaining) {
-        db.prepare('DELETE FROM chore_history WHERE id = ?').run(entry.id);
-        remaining -= entry.clam_value;
-      } else {
-        db.prepare('UPDATE chore_history SET clam_value = ? WHERE id = ?').run(entry.clam_value - remaining, entry.id);
-        remaining = 0;
-      }
-    }
+    // Non-destructive spend (issue #72): record a negative ledger row instead
+    // of the old FIFO delete/mutate of earned rows. Balances are
+    // SUM(clam_value) everywhere, so totals are unchanged — but history no
+    // longer shrinks retroactively when clams are spent.
+    const useDate = getTodayLocalDateString();
+    db.prepare('INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind) VALUES (?, NULL, ?, ?, ?, ?)').run(
+      id,
+      useDate,
+      -amount,
+      rowKind === 'spent' ? 'Spent' : 'Adjustment',
+      rowKind
+    );
 
     const result = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(id);
     pluginEvents.emit('clam.withdrawn', { userId: parseInt(id), amount, newTotal: result.total });

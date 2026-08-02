@@ -101,6 +101,27 @@ done" bonus for **both** the previous and new owner and never removes points.
 **Code:** reassign UI in `ChoreWidget.jsx`; `PATCH /api/chore-schedules/:id` +
 `awardDailyRegularBonusIfDue` in `server/index.js`.
 
+### Metrics-ready history (issue #72)
+
+Every `chore_history` row carries a **`kind`** (`completion`, `daily_bonus`,
+`transfer_bonus`, `adjustment`, `missed`, `spent`), which makes reporting
+computable:
+
+- The nightly job **logs missed chores** (due-but-uncompleted regular chores get
+  a zero-value `missed` row, before pruning) → completion/missed rates.
+- **Spending is non-destructive**: reducing clams inserts a negative `spent`
+  ledger row instead of deleting earned history, so "earned over time" never
+  shrinks retroactively. Balances stay `SUM(clam_value)`.
+- The metrics UI itself is the **Chore Metrics plugin** — stat tiles, streaks,
+  an activity heatmap, top chores, and earned-vs-spent — built on the plugin
+  platform rather than core and published via
+  [jherforth/HomeGlowPlugins](https://github.com/jherforth/HomeGlowPlugins)
+  (installable from the Admin Panel's GitHub tab).
+
+**Code:** `schema20-choreHistoryKind.js`; missed logging in
+`dailyBackgroundProcessing`; `kind` handling throughout the chore/clam routes
+in `server/index.js`.
+
 ## Calendar
 
 - Supports multiple sources simultaneously: **public ICS** links, **CalDAV**

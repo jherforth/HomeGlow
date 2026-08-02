@@ -54,7 +54,13 @@ server/
 ### Nightly chore processing (`dailyBackgroundProcessing`)
 Runs at local midnight and also exposed manually via
 `GET /api/system/backgroundTasks`. It:
-- Prunes completed one-time chore schedules and orphaned chores.
+- **Logs missed chores first** (issue #72): for each user, yesterday's
+  due-but-uncompleted regular chores get an idempotent
+  `chore_history` row with `kind='missed'` — before any pruning below can
+  delete their schedules. Retroactively completing a chore deletes its
+  missed row.
+- Prunes completed one-time chore schedules (completion = a
+  `kind='completion'` row; a missed row never counts) and orphaned chores.
 - Resets day-to-day **bonus** chores back to unassigned.
 - Generates one-time child instances for `until-completed` / `once-completed`
   "sticky" schedules whose cron fires that day (using `cron-parser`).
@@ -172,7 +178,7 @@ static route.
 | POST | `/api/users/:id/upload-picture` | Upload an avatar. |
 | GET | `/api/users/:id/clams` | Current clam balance. |
 | POST | `/api/users/:id/clams/add` | Add clams (admin adjustment). |
-| POST | `/api/users/:id/clams/reduce` | Reduce clams (e.g. prize purchase). |
+| POST | `/api/users/:id/clams/reduce` | Reduce clams (e.g. prize purchase) — inserts a negative `kind='spent'` ledger row (non-destructive; optional body `kind: 'adjustment'` for corrections). |
 
 ### Prizes
 | Method | Path | Purpose |
