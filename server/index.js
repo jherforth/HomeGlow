@@ -1822,31 +1822,38 @@ async function dailyBackgroundProcessing() {
     // of the nightly housekeeping. Idempotent via the partial unique index on
     // (user_id, chore_schedule_id, date) WHERE kind='missed', so the midnight
     // cron and the manual /api/system/backgroundTasks trigger can both run.
+    // Vacation mode (issue #121) pauses this entirely: days off must not count
+    // against completion rates or streaks.
     try {
       const missedDate = addDaysToDateOnly(today, -1);
-      const endOfMissedDay = parseDateOnlyToLocalDate(missedDate);
-      endOfMissedDay.setHours(23, 59, 59, 999);
+      if (isVacationActiveOn(missedDate)) {
+        console.log(`Vacation mode active for ${missedDate} — skipping missed-chore logging`);
+        results = { ...results, missedLoggedCount: 0, missedSkippedForVacation: true };
+      } else {
+        const endOfMissedDay = parseDateOnlyToLocalDate(missedDate);
+        endOfMissedDay.setHours(23, 59, 59, 999);
 
-      const insertMissed = db.prepare(
-        "INSERT OR IGNORE INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind) VALUES (?, ?, ?, 0, ?, 'missed')"
-      );
+        const insertMissed = db.prepare(
+          "INSERT OR IGNORE INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind) VALUES (?, ?, ?, 0, ?, 'missed')"
+        );
 
-      let missedLoggedCount = 0;
-      const missedRows = [];
-      const allUsers = db.prepare('SELECT id FROM users WHERE id != 0').all();
-      for (const user of allUsers) {
-        const dueChores = getTodaysRegularChoresForUser(user.id, missedDate, endOfMissedDay);
-        for (const schedule of dueChores) {
-          if (schedule.completed_today) continue;
-          const info = insertMissed.run(user.id, schedule.id, missedDate, schedule.title);
-          if (info.changes > 0) {
-            missedLoggedCount++;
-            missedRows.push({ userId: user.id, scheduleId: schedule.id, title: schedule.title, date: missedDate });
+        let missedLoggedCount = 0;
+        const missedRows = [];
+        const allUsers = db.prepare('SELECT id FROM users WHERE id != 0').all();
+        for (const user of allUsers) {
+          const dueChores = getTodaysRegularChoresForUser(user.id, missedDate, endOfMissedDay);
+          for (const schedule of dueChores) {
+            if (schedule.completed_today) continue;
+            const info = insertMissed.run(user.id, schedule.id, missedDate, schedule.title);
+            if (info.changes > 0) {
+              missedLoggedCount++;
+              missedRows.push({ userId: user.id, scheduleId: schedule.id, title: schedule.title, date: missedDate });
+            }
           }
         }
+        console.log(`Logged ${missedLoggedCount} missed chore(s) for ${missedDate}`);
+        results = { ...results, missedLoggedCount, missedChores: missedRows };
       }
-      console.log(`Logged ${missedLoggedCount} missed chore(s) for ${missedDate}`);
-      results = { ...results, missedLoggedCount, missedChores: missedRows };
     } catch (missedError) {
       console.error('Missed-chore logging failed (continuing with housekeeping):', missedError);
       results = { ...results, missedLoggedCount: 0, missedLoggingError: missedError.message };
@@ -2896,6 +2903,26 @@ fastify.delete('/api/chore-history/:id', async (request, reply) => {
     reply.status(500).send({ error: 'Failed to delete history entry' });
   }
 });
+
+// Household vacation state (issues #121/#72): written by the Admin Panel's
+// vacation-mode save as the `vacation_mode` settings key —
+// { enabled, startDate, endDate } ('YYYY-MM-DD', empty = unbounded). While
+// active, the nightly job skips missed-chore logging so days off never count
+// against completion rates, and the metrics plugin bridges streaks across
+// those days.
+function isVacationActiveOn(dateStr) {
+  try {
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('vacation_mode');
+    if (!row || !row.value) return false;
+    const vacation = JSON.parse(row.value);
+    if (!vacation || vacation.enabled !== true) return false;
+    if (vacation.startDate && dateStr < vacation.startDate) return false;
+    if (vacation.endDate && dateStr > vacation.endDate) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 // Returns the list of a user's regular (non-bonus) chore schedules that were
 // due on `dateStr` ('YYYY-MM-DD' local). `referenceNow` anchors the snooze

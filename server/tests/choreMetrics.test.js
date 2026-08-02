@@ -244,6 +244,35 @@ test('snoozed-through chores are not logged as missed', async () => {
     assert.equal(missed.length, 0, 'snoozed chore not counted as missed');
 });
 
+test('vacation mode pauses missed-chore logging; disabling resumes it', async () => {
+    const userId = await createUser('vacation-kid');
+    await createDailyChore(userId, 'Water flowers');
+
+    // Household vacation on (simple toggle, no date bounds).
+    await api('/api/settings', {
+        method: 'POST',
+        body: JSON.stringify({ key: 'vacation_mode', value: JSON.stringify({ enabled: true, startDate: '', endDate: '' }) }),
+    });
+
+    const vacationRun = await api('/api/system/backgroundTasks');
+    assert.equal(vacationRun.body.missedSkippedForVacation, true, 'job reports the vacation skip');
+    assert.equal((await historyFor(userId)).filter((r) => r.kind === 'missed').length, 0, 'no missed rows during vacation');
+
+    // A bounded vacation that ended before yesterday does NOT pause logging.
+    await api('/api/settings', {
+        method: 'POST',
+        body: JSON.stringify({ key: 'vacation_mode', value: JSON.stringify({ enabled: true, startDate: '2020-01-01', endDate: '2020-01-14' }) }),
+    });
+    await api('/api/system/backgroundTasks');
+    assert.equal((await historyFor(userId)).filter((r) => r.kind === 'missed').length, 1, 'expired vacation range no longer pauses logging');
+
+    // Clean up for subsequent tests.
+    await api('/api/settings', {
+        method: 'POST',
+        body: JSON.stringify({ key: 'vacation_mode', value: JSON.stringify({ enabled: false, startDate: '', endDate: '' }) }),
+    });
+});
+
 test('prune-safety: a missed row must not get an uncompleted one-time chore pruned', async () => {
     const userId = await createUser('prune-kid');
     const chore = await api('/api/chores', { method: 'POST', body: JSON.stringify({ title: 'Clean garage', clam_value: 0 }) });

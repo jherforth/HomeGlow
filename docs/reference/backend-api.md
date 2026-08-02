@@ -58,7 +58,9 @@ Runs at local midnight and also exposed manually via
   due-but-uncompleted regular chores get an idempotent
   `chore_history` row with `kind='missed'` — before any pruning below can
   delete their schedules. Retroactively completing a chore deletes its
-  missed row.
+  missed row. **Paused entirely while household vacation mode is active**
+  (the `vacation_mode` settings key, written by the Admin Panel's vacation
+  save — days off never count as missed).
 - Prunes completed one-time chore schedules (completion = a
   `kind='completion'` row; a missed row never counts) and orphaned chores.
 - Resets day-to-day **bonus** chores back to unassigned.

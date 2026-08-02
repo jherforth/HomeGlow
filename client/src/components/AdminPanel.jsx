@@ -1094,6 +1094,18 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       const normalizedVacationMode = normalizeVacationModeSettings(vacationModeSettings);
       localStorage.setItem(VACATION_MODE_STORAGE_KEY, JSON.stringify(normalizedVacationMode));
       window.dispatchEvent(new Event(INTERFACE_SETTINGS_UPDATED_EVENT));
+      // Household-wide vacation state (issues #121/#72): the server pauses
+      // missed-chore logging while active, and the metrics plugin bridges
+      // streaks across vacation days. Display behavior (chime mute,
+      // screensaver) stays per-display via localStorage above.
+      try {
+        await axios.post(`${API_BASE_URL}/api/settings`, {
+          key: 'vacation_mode',
+          value: JSON.stringify(normalizedVacationMode),
+        });
+      } catch (serverError) {
+        console.warn('Vacation mode saved for this display, but the household setting could not be updated:', serverError);
+      }
       setSaveMessage({ show: true, type: 'success', text: 'Vacation mode settings saved for this display.' });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } catch (error) {
