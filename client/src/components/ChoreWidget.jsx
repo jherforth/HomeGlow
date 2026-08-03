@@ -29,7 +29,7 @@ import {
   Radio,
   RadioGroup
 } from '@mui/material';
-import { Edit, Save, Cancel, Add, Delete, Check, Undo, SwapHoriz, Snooze } from '@mui/icons-material';
+import { Edit, Save, Cancel, Add, Delete, Check, Undo, SwapHoriz, Snooze, Backspace } from '@mui/icons-material';
 import axios from 'axios';
 import LoadingBackdrop from './LoadingBackdrop';
 import PinModal from './PinModal';
@@ -356,6 +356,34 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
       }
     });
   };
+
+  // On-screen number pad for the quick-spend amount (kiosk touch screens).
+  const quickSpendDigit = (digit) => {
+    setQuickSpend((prev) => {
+      const next = (prev.amount === '0' ? '' : prev.amount) + digit;
+      if (next.length > 4) return prev;
+      return { ...prev, amount: next };
+    });
+  };
+  const quickSpendBackspace = () => {
+    setQuickSpend((prev) => ({ ...prev, amount: prev.amount.slice(0, -1) }));
+  };
+
+  // Physical keyboard still works — but not while typing in the note field.
+  useEffect(() => {
+    if (!quickSpend.open) return;
+    const handleKeyDown = (event) => {
+      const tag = event.target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      if (event.key >= '0' && event.key <= '9') {
+        quickSpendDigit(event.key);
+      } else if (event.key === 'Backspace') {
+        quickSpendBackspace();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [quickSpend.open]);
 
   const toggleChoreCompletion = async (schedule, isCompleted) => {
     try {
@@ -1246,20 +1274,79 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
             🥟 Redeem clams — {quickSpend.user?.username}
           </DialogTitle>
           <DialogContent>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
               Balance: <strong>{quickSpend.user?.clam_total || 0} clams</strong>. Record clams spent
               outside the store (e.g. a toy bought while out).
             </Typography>
-            <TextField
-              fullWidth
-              autoFocus
-              type="number"
-              label="Clams to redeem"
-              value={quickSpend.amount}
-              onChange={(e) => setQuickSpend((prev) => ({ ...prev, amount: e.target.value }))}
-              slotProps={{ htmlInput: { min: 1 } }}
-              sx={{ mb: 2 }}
-            />
+
+            {(() => {
+              const parsed = parseInt(quickSpend.amount, 10) || 0;
+              const overspent = parsed > (quickSpend.user?.clam_total || 0);
+              return (
+                <Typography
+                  variant="h3"
+                  sx={{
+                    textAlign: 'center',
+                    fontWeight: 'bold',
+                    my: 1,
+                    color: overspent ? 'error.main' : (parsed > 0 ? 'var(--accent)' : 'var(--text-muted)'),
+                    transition: 'color 0.2s ease',
+                  }}
+                >
+                  {parsed > 0 ? `${quickSpend.amount} 🥟` : '0 🥟'}
+                </Typography>
+              );
+            })()}
+
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1.5, mb: 2 }}>
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+                <Button
+                  key={num}
+                  variant="contained"
+                  onClick={() => quickSpendDigit(num.toString())}
+                  sx={{
+                    height: 52,
+                    fontSize: '1.4rem',
+                    fontWeight: 'bold',
+                    background: 'linear-gradient(135deg, var(--accent) 0%, var(--secondary) 100%)',
+                  }}
+                >
+                  {num}
+                </Button>
+              ))}
+              <Button
+                variant="outlined"
+                onClick={() => setQuickSpend((prev) => ({ ...prev, amount: '' }))}
+                sx={{ height: 52, fontWeight: 'bold', borderColor: 'var(--accent)', color: 'var(--accent)' }}
+              >
+                Clear
+              </Button>
+              <Button
+                variant="contained"
+                onClick={() => quickSpendDigit('0')}
+                sx={{
+                  height: 52,
+                  fontSize: '1.4rem',
+                  fontWeight: 'bold',
+                  background: 'linear-gradient(135deg, var(--accent) 0%, var(--secondary) 100%)',
+                }}
+              >
+                0
+              </Button>
+              <IconButton
+                onClick={quickSpendBackspace}
+                aria-label="Backspace"
+                sx={{
+                  height: 52,
+                  borderRadius: 1,
+                  border: '2px solid var(--accent)',
+                  color: 'var(--accent)',
+                }}
+              >
+                <Backspace />
+              </IconButton>
+            </Box>
+
             <TextField
               fullWidth
               label="What for? (optional)"
@@ -1272,7 +1359,11 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
             <Button onClick={() => setQuickSpend({ open: false, user: null, amount: '', note: '' })}>Cancel</Button>
             <Button
               variant="contained"
-              disabled={!quickSpend.amount || parseInt(quickSpend.amount, 10) <= 0}
+              disabled={
+                !quickSpend.amount
+                || parseInt(quickSpend.amount, 10) <= 0
+                || parseInt(quickSpend.amount, 10) > (quickSpend.user?.clam_total || 0)
+              }
               onClick={confirmQuickSpend}
             >
               Redeem Clams
