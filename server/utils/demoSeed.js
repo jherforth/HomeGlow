@@ -56,10 +56,11 @@ function wipeDomainTables(db) {
 }
 
 function seedUsersAndChores(db) {
-  const insertUser = db.prepare('INSERT INTO users (username, email) VALUES (?, ?)');
-  const emmaId = insertUser.run('Emma', 'emma@demo.homeglow').lastInsertRowid;
-  const liamId = insertUser.run('Liam', 'liam@demo.homeglow').lastInsertRowid;
-  const noahId = insertUser.run('Noah', 'noah@demo.homeglow').lastInsertRowid;
+  // Demo users wear default avatars (issue #132) so the bank is showcased.
+  const insertUser = db.prepare('INSERT INTO users (username, email, profile_picture) VALUES (?, ?, ?)');
+  const emmaId = insertUser.run('Emma', 'emma@demo.homeglow', 'defaults/girl-2.svg').lastInsertRowid;
+  const liamId = insertUser.run('Liam', 'liam@demo.homeglow', 'defaults/boy-4.svg').lastInsertRowid;
+  const noahId = insertUser.run('Noah', 'noah@demo.homeglow', 'defaults/dino.svg').lastInsertRowid;
 
   // A believable household mixes two kinds of chores, and the demo shows both:
   //  - Reward chores worth "clams" (clam_value > 0) that build toward prizes.

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+<defs><clipPath id="c"><circle cx="64" cy="64" r="64"/></clipPath></defs>
+<g clip-path="url(#c)">
+<circle cx="64" cy="64" r="64" fill="#F6E3FF"/>
+<polygon points="64,14 57,44 71,44" fill="#F2C14E"/>
+<line x1="60" y1="30" x2="69" y2="26" stroke="#D9A62E" stroke-width="2"/>
+<line x1="58" y1="38" x2="70" y2="34" stroke="#D9A62E" stroke-width="2"/>
+<polygon points="44,50 40,30 56,42" fill="#FDF7FA"/>
+<polygon points="84,50 88,30 72,42" fill="#FDF7FA"/>
+<circle cx="42" cy="52" r="9" fill="#D98BD1"/>
+<circle cx="36" cy="66" r="8" fill="#B77FE0"/>
+<circle cx="34" cy="80" r="7" fill="#8FB8F0"/>
+<circle cx="64" cy="70" r="27" fill="#FDF7FA"/>
+<circle cx="56" cy="64" r="2.8" fill="#33272A"/>
+<circle cx="76" cy="64" r="2.8" fill="#33272A"/>
+<path d="M58 76 Q66 83 74 76" fill="none" stroke="#33272A" stroke-width="2.6" stroke-linecap="round"/>
+<circle cx="52" cy="72" r="4" fill="#FF8FA3" opacity="0.4"/>
+<circle cx="80" cy="72" r="4" fill="#FF8FA3" opacity="0.4"/>
+</g>
+</svg>

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+<defs><clipPath id="c"><circle cx="64" cy="64" r="64"/></clipPath></defs>
+<g clip-path="url(#c)">
+<circle cx="64" cy="64" r="64" fill="#FFF2DE"/>
+<circle cx="46" cy="46" r="12" fill="#58B368"/>
+<circle cx="46" cy="44" r="7" fill="#fff"/>
+<circle cx="46" cy="45" r="3.2" fill="#33272A"/>
+<circle cx="82" cy="46" r="12" fill="#58B368"/>
+<circle cx="82" cy="44" r="7" fill="#fff"/>
+<circle cx="82" cy="45" r="3.2" fill="#33272A"/>
+<ellipse cx="64" cy="76" rx="32" ry="26" fill="#58B368"/>
+<circle cx="56" cy="70" r="2" fill="#33272A"/>
+<circle cx="72" cy="70" r="2" fill="#33272A"/>
+<path d="M48 80 Q64 90 80 80" fill="none" stroke="#33272A" stroke-width="2.6" stroke-linecap="round"/>
+<circle cx="46" cy="80" r="4.5" fill="#FF8FA3" opacity="0.45"/>
+<circle cx="82" cy="80" r="4.5" fill="#FF8FA3" opacity="0.45"/>
+</g>
+</svg>

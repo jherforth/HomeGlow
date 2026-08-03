@@ -186,6 +186,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const [clamModalUser, setClamModalUser] = useState(null);
   const [editingPrize, setEditingPrize] = useState(null);
   const [newUser, setNewUser] = useState({ username: '', email: '', profile_picture: '' });
+  // Default avatar bank (issue #132): picker targets an existing user row, or
+  // the add-user form when userId is null.
+  const [defaultAvatars, setDefaultAvatars] = useState([]);
+  const [avatarPicker, setAvatarPicker] = useState({ open: false, userId: null });
   const [newPrize, setNewPrize] = useState({ name: '', clam_cost: 0, repeatable: false });
   const [prizeOffers, setPrizeOffers] = useState([]);
   const [uploadedWidgets, setUploadedWidgets] = useState([]);
@@ -276,6 +280,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       fetchUsers();
       fetchChores();
       fetchPrizes();
+      fetchDefaultAvatars();
       fetchUploadedWidgets();
       fetchTabs();
       fetchWidgetAssignments();
@@ -1630,6 +1635,33 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     }
   };
 
+  const fetchDefaultAvatars = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/avatars/defaults`);
+      setDefaultAvatars(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Error fetching default avatars:', error);
+      setDefaultAvatars([]);
+    }
+  };
+
+  const chooseDefaultAvatar = async (filename) => {
+    if (avatarPicker.userId === null) {
+      // Add-user form: carried in the create payload.
+      setNewUser((prev) => ({ ...prev, profile_picture: filename }));
+      setAvatarPicker({ open: false, userId: null });
+      return;
+    }
+    try {
+      await axios.post(`${API_BASE_URL}/api/users/${avatarPicker.userId}/avatar`, { filename });
+      setAvatarPicker({ open: false, userId: null });
+      await fetchUsers();
+    } catch (error) {
+      console.error('Error setting default avatar:', error);
+      alert(error?.response?.data?.error || 'Failed to set the avatar.');
+    }
+  };
+
   const UserAvatar = ({ user }) => {
     const [imageError, setImageError] = useState(false);
 
@@ -2928,6 +2960,25 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                       Add User
                     </Button>
                   </Grid>
+                  <Grid size={12}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {newUser.profile_picture ? (
+                        <img
+                          src={`${API_BASE_URL}/Uploads/users/${newUser.profile_picture}`}
+                          alt="Chosen avatar"
+                          style={{ width: 40, height: 40, borderRadius: '50%', border: '2px solid var(--accent)' }}
+                        />
+                      ) : (
+                        <Avatar sx={{ width: 40, height: 40, bgcolor: 'var(--card-border)' }}>?</Avatar>
+                      )}
+                      <Button size="small" variant="outlined" onClick={() => setAvatarPicker({ open: true, userId: null })}>
+                        Choose avatar
+                      </Button>
+                      <Typography variant="caption" color="text.secondary">
+                        Optional — pick from the built-in set, or upload a photo after adding.
+                      </Typography>
+                    </Box>
+                  </Grid>
                 </Grid>
               </Box>
             </AdminFormSection>
@@ -2963,6 +3014,15 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                               onChange={(e) => handleProfilePictureUpload(user.id, e)}
                             />
                           </Button>
+                          <Tooltip title="Pick a built-in avatar">
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => setAvatarPicker({ open: true, userId: user.id })}
+                            >
+                              Choose
+                            </Button>
+                          </Tooltip>
                         </Box>
                       </TableCell>
                       <TableCell data-label="Username">
@@ -3790,6 +3850,62 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         onSave={handleClamSave}
         isSaving={isLoading}
       />
+
+      {/* Default avatar picker (issue #132) */}
+      <Dialog
+        open={avatarPicker.open}
+        onClose={() => setAvatarPicker({ open: false, userId: null })}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Choose an avatar</DialogTitle>
+        <DialogContent>
+          {defaultAvatars.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+              No built-in avatars available.
+            </Typography>
+          ) : (
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))',
+                gap: 1.5,
+                pt: 1,
+              }}
+            >
+              {defaultAvatars.map((avatar) => (
+                <Box
+                  key={avatar.filename}
+                  onClick={() => chooseDefaultAvatar(avatar.filename)}
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    cursor: 'pointer',
+                    borderRadius: 2,
+                    p: 0.75,
+                    '&:hover': { backgroundColor: 'rgba(var(--accent-rgb), 0.12)' },
+                  }}
+                >
+                  <img
+                    src={`${API_BASE_URL}/Uploads/users/${avatar.filename}`}
+                    alt={avatar.name}
+                    loading="lazy"
+                    style={{ width: 56, height: 56, borderRadius: '50%' }}
+                  />
+                  <Typography variant="caption" color="text.secondary">
+                    {avatar.name}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAvatarPicker({ open: false, userId: null })}>Cancel</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

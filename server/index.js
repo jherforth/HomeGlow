@@ -73,6 +73,32 @@ async function seedDefaultSounds() {
   }
 }
 
+// Default profile avatars (issue #132): bundled flat SVG art seeded into the
+// persisted uploads volume under users/defaults/, so a selected default is
+// served by the exact same /Uploads/users/<profile_picture> path the client
+// already uses for uploaded pictures.
+const DEFAULT_AVATARS_DIR = path.join(__dirname, 'assets', 'avatars');
+const AVATARS_UPLOAD_DIR = path.join(__dirname, 'uploads', 'users', 'defaults');
+
+async function seedDefaultAvatars() {
+  await fs.mkdir(AVATARS_UPLOAD_DIR, { recursive: true });
+  let defaults = [];
+  try {
+    defaults = await fs.readdir(DEFAULT_AVATARS_DIR);
+  } catch {
+    return; // No bundled defaults present; nothing to seed.
+  }
+
+  for (const filename of defaults) {
+    const target = path.join(AVATARS_UPLOAD_DIR, filename);
+    try {
+      await fs.access(target);
+    } catch {
+      await fs.copyFile(path.join(DEFAULT_AVATARS_DIR, filename), target);
+    }
+  }
+}
+
 // Calendar sync service
 const CalendarSyncService = require('./services/calendarSync');
 const googleConnection = require('./services/googleConnection');
@@ -3278,6 +3304,66 @@ fastify.patch('/api/users/:id', async (request, reply) => {
   }
 });
 
+// Default avatar bank (issue #132): bundled art users can pick instead of
+// uploading a photo. Listed in a stable, curated order — people first
+// (each in five skin tones), then the fun ones.
+const DEFAULT_AVATAR_ORDER = ['mom', 'dad', 'girl', 'boy', 'cat', 'dog', 'fish', 'alpaca', 'chicken', 'dino', 'robot', 'unicorn', 'frog'];
+
+fastify.get('/api/avatars/defaults', async (request, reply) => {
+  try {
+    let files = [];
+    try {
+      files = fsSync.readdirSync(AVATARS_UPLOAD_DIR).filter((f) => f.endsWith('.svg'));
+    } catch {
+      files = [];
+    }
+    const rank = (f) => {
+      const base = f.replace(/\.svg$/, '');
+      const prefix = base.replace(/-\d+$/, '');
+      const idx = DEFAULT_AVATAR_ORDER.indexOf(prefix);
+      return [idx === -1 ? DEFAULT_AVATAR_ORDER.length : idx, base];
+    };
+    files.sort((a, b) => {
+      const [ra, na] = rank(a);
+      const [rb, nb] = rank(b);
+      return ra - rb || na.localeCompare(nb);
+    });
+    // profile_picture values are relative to /Uploads/users/, so the stored
+    // filename for a default is "defaults/<file>".
+    return files.map((f) => ({
+      filename: `defaults/${f}`,
+      name: f.replace(/\.svg$/, '').replace(/-\d+$/, '').replace(/^./, (c) => c.toUpperCase()),
+    }));
+  } catch (error) {
+    console.error('Error listing default avatars:', error);
+    reply.status(500).send({ error: 'Failed to list default avatars' });
+  }
+});
+
+// Select a default avatar as a user's profile picture. Unlike photo uploads
+// this is safe to allow in demo mode.
+fastify.post('/api/users/:id/avatar', async (request, reply) => {
+  const { id } = request.params;
+  const { filename } = request.body || {};
+  try {
+    if (typeof filename !== 'string' || !/^defaults\/[a-z0-9-]+\.svg$/.test(filename)) {
+      return reply.status(400).send({ error: 'filename must be a default avatar (defaults/<name>.svg)' });
+    }
+    const base = filename.slice('defaults/'.length);
+    if (!fsSync.existsSync(path.join(AVATARS_UPLOAD_DIR, base))) {
+      return reply.status(404).send({ error: 'Unknown default avatar' });
+    }
+    const info = db.prepare('UPDATE users SET profile_picture = ? WHERE id = ?').run(filename, id);
+    if (info.changes === 0) {
+      return reply.status(404).send({ error: 'User not found' });
+    }
+    return { success: true, filename };
+  } catch (error) {
+    console.error('Error setting default avatar:', error);
+    reply.status(500).send({ error: 'Failed to set avatar' });
+  }
+});
+
 // NEW: Endpoint to upload user profile picture
 fastify.post('/api/users/:id/upload-picture', async (request, reply) => {
   if (demoBlocked(reply)) return;
@@ -5788,6 +5874,9 @@ const start = async () => {
 
     // Seed bundled default chore notification sounds into the persisted uploads volume
     await seedDefaultSounds();
+
+    // Seed bundled default profile avatars (issue #132)
+    await seedDefaultAvatars();
 
     // Initialize calendar sync service. Demo mode runs sync too, but ONLY for
     // the curated feeds in demoSeed.js: every route that could add or edit a

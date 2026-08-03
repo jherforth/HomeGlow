@@ -178,6 +178,8 @@ static route.
 | GET/POST | `/api/users` | List / create users. |
 | PATCH/DELETE | `/api/users/:id` | Update / delete a user. |
 | POST | `/api/users/:id/upload-picture` | Upload an avatar. |
+| GET | `/api/avatars/defaults` | List the built-in default avatar bank (people in five skin tones + fun characters). |
+| POST | `/api/users/:id/avatar` | Set a built-in avatar as the profile picture (`{ filename: 'defaults/<name>.svg' }`). |
 | GET | `/api/users/:id/clams` | Current clam balance. |
 | POST | `/api/users/:id/clams/add` | Add clams (admin adjustment). |
 | POST | `/api/users/:id/clams/reduce` | Reduce clams (e.g. prize purchase) — inserts a negative `kind='spent'` ledger row (non-destructive; optional body `kind: 'adjustment'` for corrections). |

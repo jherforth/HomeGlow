@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+<defs><clipPath id="c"><circle cx="64" cy="64" r="64"/></clipPath></defs>
+<g clip-path="url(#c)">
+<circle cx="64" cy="64" r="64" fill="#FFF2DE"/>
+<polygon points="38,52 33,22 60,40" fill="#8E97A8"/>
+<polygon points="90,52 95,22 68,40" fill="#8E97A8"/>
+<polygon points="41,47 38,29 55,41" fill="#F5B8C4"/>
+<polygon points="87,47 90,29 73,41" fill="#F5B8C4"/>
+<circle cx="64" cy="70" r="30" fill="#9AA2B1"/>
+<circle cx="53" cy="64" r="3" fill="#33272A"/>
+<circle cx="75" cy="64" r="3" fill="#33272A"/>
+<polygon points="60,73 68,73 64,78" fill="#F08599"/>
+<path d="M64 78 Q60 84 55 81 M64 78 Q68 84 73 81" fill="none" stroke="#33272A" stroke-width="2.2" stroke-linecap="round"/>
+<g stroke="#6F7684" stroke-width="2" stroke-linecap="round">
+<line x1="24" y1="66" x2="42" y2="68"/><line x1="24" y1="76" x2="42" y2="74"/>
+<line x1="104" y1="66" x2="86" y2="68"/><line x1="104" y1="76" x2="86" y2="74"/>
+</g>
+</g>
+</svg>

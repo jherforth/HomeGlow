@@ -230,5 +230,12 @@ gates in `app.jsx` (sound scheduler + screensaver render), UI in `AdminPanel.jsx
   above.
 - Access can be gated by an optional **PIN** (on-screen pad or keyboard entry),
   hashed in the `admin_pin` table.
+- **Default avatars** (issue #132): besides uploading a photo, users can pick
+  from a built-in bank of flat SVG avatars — mom/dad/girl/boy in five skin
+  tones plus fun characters (cat, dog, fish, alpaca, chicken, dino, robot,
+  unicorn, frog). Bundled in `server/assets/avatars/` (regenerable via
+  `server/scripts/generateDefaultAvatars.js`), seeded into
+  `uploads/users/defaults/` at startup, and picked via the "Choose" buttons in
+  User Management.
 
 **Code:** `AdminPanel.jsx`, `PinModal.jsx`, backend `/api/admin-pin*` routes.

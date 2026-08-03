@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+<defs><clipPath id="c"><circle cx="64" cy="64" r="64"/></clipPath></defs>
+<g clip-path="url(#c)">
+<circle cx="64" cy="64" r="64" fill="#DDF1FF"/>
+<polygon points="82,68 104,50 104,86" fill="#E56F1F"/>
+<ellipse cx="58" cy="68" rx="28" ry="20" fill="#FF8A3C"/>
+<path d="M52 48 Q60 38 70 46 L64 52 Z" fill="#E56F1F"/>
+<path d="M66 52 Q76 60 74 82 Q68 84 64 82" fill="#FFB877" opacity="0.7"/>
+<circle cx="44" cy="62" r="6" fill="#fff"/>
+<circle cx="45" cy="63" r="3" fill="#33272A"/>
+<path d="M36 74 Q40 78 44 75" fill="none" stroke="#98421B" stroke-width="2.2" stroke-linecap="round"/>
+<circle cx="92" cy="36" r="4" fill="none" stroke="#8FC6E8" stroke-width="2"/>
+<circle cx="100" cy="26" r="2.5" fill="none" stroke="#8FC6E8" stroke-width="2"/>
+</g>
+</svg>

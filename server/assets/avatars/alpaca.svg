@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+<defs><clipPath id="c"><circle cx="64" cy="64" r="64"/></clipPath></defs>
+<g clip-path="url(#c)">
+<circle cx="64" cy="64" r="64" fill="#E8F7E9"/>
+<polygon points="52,38 48,20 60,32" fill="#E4D2BC"/>
+<polygon points="76,38 80,20 68,32" fill="#E4D2BC"/>
+<rect x="52" y="52" width="24" height="48" rx="11" fill="#F2E6D8"/>
+<circle cx="46" cy="104" r="11" fill="#F2E6D8"/>
+<circle cx="64" cy="108" r="12" fill="#F2E6D8"/>
+<circle cx="82" cy="104" r="11" fill="#F2E6D8"/>
+<ellipse cx="64" cy="52" rx="18" ry="16" fill="#F2E6D8"/>
+<circle cx="52" cy="36" r="8" fill="#F2E6D8"/>
+<circle cx="64" cy="32" r="9" fill="#F2E6D8"/>
+<circle cx="76" cy="36" r="8" fill="#F2E6D8"/>
+<circle cx="56" cy="50" r="2.6" fill="#33272A"/>
+<circle cx="72" cy="50" r="2.6" fill="#33272A"/>
+<ellipse cx="64" cy="60" rx="8" ry="6" fill="#E4CDB4"/>
+<path d="M60 60 Q64 64 68 60" fill="none" stroke="#8A6B4D" stroke-width="2" stroke-linecap="round"/>
+<circle cx="50" cy="56" r="3.5" fill="#FF8FA3" opacity="0.45"/>
+<circle cx="78" cy="56" r="3.5" fill="#FF8FA3" opacity="0.45"/>
+</g>
+</svg>
