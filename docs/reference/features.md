@@ -48,13 +48,18 @@ The chore system uses a **three-table model** (see [Database](../architecture/da
   daily chores awards a bonus. **Bonus chores** carry a custom clam value and reset
   to unassigned each night; only one uncompleted bonus chore per user at a time.
 - **The prize store** (spending mechanism): `prizes` is the definitions ledger
-  in Prize Management; parents stock the store with **one-time offers**
-  (`prize_offers`). Kids browse the 🛍️ Prize Store on the dashboard and
-  **request** an offer; a parent **approves or declines** right there
-  (PIN-gated when a PIN is set). Approval deducts the cost as a named `spent`
-  ledger row, consumes the offer (the definition stays in management), and
-  fires a **full-screen confetti celebration + chime** on every display via the
-  `prize.redeemed` event.
+  in Prize Management; parents stock the store with offers (`prize_offers`).
+  Kids browse the 🛍️ Prize Store on the dashboard and **request** an offer;
+  a parent **approves or declines** right there (PIN-gated when a PIN is set).
+  Approval deducts the cost as a named `spent` ledger row, consumes the offer
+  (the definition stays in management), and fires a **full-screen confetti
+  celebration + chime** on every display via the `prize.redeemed` event.
+  - **Repeatable prizes** (a toggle on the definition, shown as 🔁): approval
+    returns the offer to the shelf instead of consuming it, for prizes like
+    "movie night" that can be redeemed again and again.
+  - **Cost splitting**: kids sharing a prize pick "👥 Split cost" and select
+    who's in; each participant pays an even `floor(cost / N)` share (the odd
+    remainder is silently discounted) and the celebration names everyone.
 - **Avatar quick-spend**: tapping a kid's profile picture opens "Redeem clams" —
   a parent records off-store spending (e.g. a toy bought while out) with an
   optional note that lands in the ledger and metrics.

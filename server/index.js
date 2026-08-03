@@ -109,6 +109,7 @@ const schemaMigrations = [
   { schemaId: 19, migrationPath: './migrations/schema19-pluginStorage', },
   { schemaId: 20, migrationPath: './migrations/schema20-choreHistoryKind', },
   { schemaId: 21, migrationPath: './migrations/schema21-prizeOffers', },
+  { schemaId: 22, migrationPath: './migrations/schema22-prizeRepeatSplit', },
 ];
 
 const ALLOWED_SCHEDULE_DURATIONS = new Set(['day-of', 'until-completed', 'once-completed']);
@@ -4200,8 +4201,9 @@ fastify.post('/api/prizes', async (request, reply) => {
     return reply.status(400).send({ error: validationError });
   }
   try {
-    const stmt = db.prepare('INSERT INTO prizes (name, clam_cost) VALUES (?, ?)');
-    const info = stmt.run(name, clam_cost);
+    const repeatable = request.body.repeatable === true ? 1 : 0;
+    const stmt = db.prepare('INSERT INTO prizes (name, clam_cost, repeatable) VALUES (?, ?, ?)');
+    const info = stmt.run(name, clam_cost, repeatable);
     return { id: info.lastInsertRowid };
   } catch (error) {
     console.error('Error adding prize:', error);
@@ -4216,8 +4218,10 @@ fastify.patch('/api/prizes/:id', async (request, reply) => {
     return reply.status(400).send({ error: validationError });
   }
   try {
-    const stmt = db.prepare('UPDATE prizes SET name = ?, clam_cost = ? WHERE id = ?');
-    const info = stmt.run(name, clam_cost, id);
+    const repeatable = request.body.repeatable === true ? 1 : (request.body.repeatable === false ? 0 : null);
+    const info = repeatable === null
+      ? db.prepare('UPDATE prizes SET name = ?, clam_cost = ? WHERE id = ?').run(name, clam_cost, id)
+      : db.prepare('UPDATE prizes SET name = ?, clam_cost = ?, repeatable = ? WHERE id = ?').run(name, clam_cost, repeatable, id);
     if (info.changes === 0) {
       return reply.status(404).send({ error: 'Prize not found' });
     }
@@ -4256,14 +4260,19 @@ fastify.get('/api/prize-offers', async (request, reply) => {
   try {
     return db.prepare(`
       SELECT po.id, po.prize_id, po.status, po.requested_by, po.requested_at, po.created_at,
-             p.name, p.clam_cost,
+             po.split_user_ids,
+             p.name, p.clam_cost, p.repeatable,
              u.username AS requested_by_name
       FROM prize_offers po
       JOIN prizes p ON po.prize_id = p.id
       LEFT JOIN users u ON po.requested_by = u.id
       WHERE po.status != 'redeemed'
       ORDER BY po.created_at ASC, po.id ASC
-    `).all();
+    `).all().map((offer) => ({
+      ...offer,
+      repeatable: offer.repeatable === 1,
+      split_user_ids: offer.split_user_ids ? JSON.parse(offer.split_user_ids) : [],
+    }));
   } catch (error) {
     console.error('Error listing prize offers:', error);
     reply.status(500).send({ error: 'Failed to list prize offers' });
@@ -4302,9 +4311,12 @@ fastify.delete('/api/prize-offers/:id', async (request, reply) => {
 });
 
 // Kid: request an available offer (goes to the parent approval queue).
+// Optional split_user_ids: co-spenders sharing the cost evenly with the
+// requester (each pays floor(cost / participants); the remainder of an uneven
+// split is silently discounted).
 fastify.post('/api/prize-offers/:id/request', async (request, reply) => {
   const { id } = request.params;
-  const { user_id } = request.body;
+  const { user_id, split_user_ids } = request.body;
   try {
     if (!user_id) {
       return reply.status(400).send({ error: 'user_id is required' });
@@ -4313,10 +4325,25 @@ fastify.post('/api/prize-offers/:id/request', async (request, reply) => {
     if (!user) {
       return reply.status(404).send({ error: 'User not found' });
     }
+
+    let splitJson = null;
+    if (split_user_ids !== undefined) {
+      if (!Array.isArray(split_user_ids) || split_user_ids.some((sid) => !Number.isInteger(sid))) {
+        return reply.status(400).send({ error: 'split_user_ids must be an array of user ids' });
+      }
+      const distinct = [...new Set(split_user_ids)].filter((sid) => sid !== user_id && sid !== 0);
+      for (const sid of distinct) {
+        if (!db.prepare('SELECT id FROM users WHERE id = ?').get(sid)) {
+          return reply.status(404).send({ error: `Split user ${sid} not found` });
+        }
+      }
+      if (distinct.length > 0) splitJson = JSON.stringify(distinct);
+    }
+
     const info = db.prepare(`
-      UPDATE prize_offers SET status = 'requested', requested_by = ?, requested_at = CURRENT_TIMESTAMP
+      UPDATE prize_offers SET status = 'requested', requested_by = ?, requested_at = CURRENT_TIMESTAMP, split_user_ids = ?
       WHERE id = ? AND status = 'available'
-    `).run(user_id, id);
+    `).run(user_id, splitJson, id);
     if (info.changes === 0) {
       return reply.status(409).send({ error: 'Offer is not available (already requested or redeemed)' });
     }
@@ -4331,7 +4358,7 @@ fastify.post('/api/prize-offers/:id/request', async (request, reply) => {
 // transition: requested → back on the store shelf.
 const returnOfferToStore = (offerId, reply) => {
   const info = db.prepare(`
-    UPDATE prize_offers SET status = 'available', requested_by = NULL, requested_at = NULL
+    UPDATE prize_offers SET status = 'available', requested_by = NULL, requested_at = NULL, split_user_ids = NULL
     WHERE id = ? AND status = 'requested'
   `).run(offerId);
   if (info.changes === 0) {
@@ -4367,7 +4394,7 @@ fastify.post('/api/prize-offers/:id/approve', async (request, reply) => {
   const { id } = request.params;
   try {
     const offer = db.prepare(`
-      SELECT po.id, po.prize_id, po.requested_by, p.name, p.clam_cost,
+      SELECT po.id, po.prize_id, po.requested_by, po.split_user_ids, p.name, p.clam_cost, p.repeatable,
              u.username AS requested_by_name
       FROM prize_offers po
       JOIN prizes p ON po.prize_id = p.id
@@ -4378,33 +4405,58 @@ fastify.post('/api/prize-offers/:id/approve', async (request, reply) => {
       return reply.status(409).send({ error: 'Offer has no pending request' });
     }
 
-    const balance = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(offer.requested_by);
-    if (balance.total < offer.clam_cost) {
+    // Split spending: everyone (requester + co-spenders) pays an equal
+    // floor(cost / N) share; an uneven remainder is silently discounted.
+    const splitIds = offer.split_user_ids ? JSON.parse(offer.split_user_ids) : [];
+    const participantIds = [offer.requested_by, ...splitIds];
+    const share = Math.floor(offer.clam_cost / participantIds.length);
+
+    const balanceStmt = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?');
+    const nameStmt = db.prepare('SELECT username FROM users WHERE id = ?');
+    const short = participantIds.filter((pid) => balanceStmt.get(pid).total < share);
+    if (short.length > 0) {
+      const names = short.map((pid) => nameStmt.get(pid)?.username || `user ${pid}`).join(', ');
       return reply.status(400).send({
-        error: `Insufficient clams: ${offer.requested_by_name || 'the requester'} has ${balance.total}, prize costs ${offer.clam_cost}`,
+        error: `Insufficient clams: ${names} ${short.length === 1 ? 'has' : 'have'} less than the ${share}-clam share`,
       });
     }
 
+    const today = getTodayLocalDateString();
     const redeem = db.transaction(() => {
-      db.prepare(
-        "INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind) VALUES (?, NULL, ?, ?, ?, 'spent')"
-      ).run(offer.requested_by, getTodayLocalDateString(), -offer.clam_cost, offer.name);
-      db.prepare("UPDATE prize_offers SET status = 'redeemed', redeemed_at = CURRENT_TIMESTAMP WHERE id = ?").run(offer.id);
+      for (const pid of participantIds) {
+        db.prepare(
+          "INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind) VALUES (?, NULL, ?, ?, ?, 'spent')"
+        ).run(pid, today, -share, offer.name);
+      }
+      if (offer.repeatable === 1) {
+        // Repeatable prize: back on the shelf for the next redemption.
+        db.prepare("UPDATE prize_offers SET status = 'available', requested_by = NULL, requested_at = NULL, split_user_ids = NULL WHERE id = ?").run(offer.id);
+      } else {
+        db.prepare("UPDATE prize_offers SET status = 'redeemed', redeemed_at = CURRENT_TIMESTAMP WHERE id = ?").run(offer.id);
+      }
     });
     redeem();
 
-    const result = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(offer.requested_by);
-    pluginEvents.emit('clam.withdrawn', { userId: offer.requested_by, amount: offer.clam_cost, newTotal: result.total });
+    const participants = participantIds.map((pid) => ({
+      userId: pid,
+      username: nameStmt.get(pid)?.username || null,
+      share,
+      newTotal: balanceStmt.get(pid).total,
+    }));
+    for (const participant of participants) {
+      pluginEvents.emit('clam.withdrawn', { userId: participant.userId, amount: share, newTotal: participant.newTotal });
+    }
     pluginEvents.emit('prize.redeemed', {
       userId: offer.requested_by,
       prizeId: offer.prize_id,
       offerId: offer.id,
       prizeName: offer.name,
-      cost: offer.clam_cost,
-      newTotal: result.total,
+      cost: share * participantIds.length,
+      newTotal: participants[0].newTotal,
+      participants,
     });
 
-    return { success: true, clam_total: result.total, prize: offer.name };
+    return { success: true, clam_total: participants[0].newTotal, prize: offer.name, share, participants };
   } catch (error) {
     console.error('Error approving prize request:', error);
     reply.status(500).send({ error: 'Failed to approve prize request' });

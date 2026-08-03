@@ -51,6 +51,7 @@ run in ascending order. The registry lives in `schemaMigrations` in
 | 19 | `schema19-pluginStorage.js` | Adds the `plugin_storage` table (namespaced KV store for manifest plugins, issue #105 Phase 1). |
 | 20 | `schema20-choreHistoryKind.js` | Adds `chore_history.kind` (`completion`/`daily_bonus`/`transfer_bonus`/`adjustment`/`missed`/`spent`) with magic-string backfill + a partial unique index for idempotent missed-chore logging (issue #72). |
 | 21 | `schema21-prizeOffers.js` | Adds `prize_offers` (the prize store: one-time redeemable instances of ledger prizes with the available → requested → redeemed request queue). |
+| 22 | `schema22-prizeRepeatSplit.js` | Adds `prizes.repeatable` (approval returns the offer to the shelf instead of consuming it) and `prize_offers.split_user_ids` (co-spenders sharing the cost evenly). |
 
 Each versioned migration runs inside a transaction, reads its context from
 `globalThis.__HOMEGLOW_SCHEMA_MIGRATION_CONTEXT`, and writes the new
@@ -110,19 +111,26 @@ id, username, email, profile_picture
 ```
 
 **`prizes`** — the prize definitions ledger (kept forever in Prize Management).
+`repeatable` prizes stay on the store shelf after each redemption instead of
+being consumed.
 ```
-id, name, clam_cost
+id, name, clam_cost, repeatable (0|1)
 ```
 
-**`prize_offers`** — the prize store: one-time redeemable instances of ledger
+**`prize_offers`** — the prize store: redeemable instances of ledger
 prizes, mirroring the chores/chore_schedules split. Request queue: a kid
 requests on the kiosk; a parent approves (PIN-gated when set) → clams deducted
-as a negative `kind='spent'` history row titled with the prize name, offer
-consumed, `prize.redeemed` event fires (kiosk confetti celebration).
+as negative `kind='spent'` history rows titled with the prize name, offer
+consumed (or returned to the shelf if the prize is repeatable),
+`prize.redeemed` event fires (kiosk confetti celebration). A request may name
+co-spenders (`split_user_ids`, JSON array excluding the requester); each
+participant then pays `floor(cost / participants)` and the remainder of an
+uneven split is silently discounted.
 ```
 id, prize_id ─▶ prizes(id) CASCADE,
 status ('available' | 'requested' | 'redeemed'),
-requested_by ─▶ users(id) SET NULL, requested_at, redeemed_at, created_at
+requested_by ─▶ users(id) SET NULL, requested_at, redeemed_at, created_at,
+split_user_ids (JSON array of co-spender user ids, NULL when solo)
 ```
 
 **`settings`** — global key/value store (API keys, `SYSTEM_SCHEMA_ID`, migration

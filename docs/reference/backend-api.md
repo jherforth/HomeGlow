@@ -185,14 +185,14 @@ static route.
 ### Prizes & the prize store
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET/POST | `/api/prizes` | List / create prize definitions (the ledger). |
-| PATCH/DELETE | `/api/prizes/:id` | Update / delete a prize definition. |
-| GET/POST | `/api/prize-offers` | List store offers / place a ledger prize in the store (one-time). |
+| GET/POST | `/api/prizes` | List / create prize definitions (the ledger). Optional `repeatable: true` — the offer returns to the shelf after each redemption. |
+| PATCH/DELETE | `/api/prizes/:id` | Update / delete a prize definition (PATCH accepts optional `repeatable`). |
+| GET/POST | `/api/prize-offers` | List store offers / place a ledger prize in the store. |
 | DELETE | `/api/prize-offers/:id` | Remove an unredeemed offer from the store. |
-| POST | `/api/prize-offers/:id/request` | Kid requests an available offer (`{ user_id }`). |
-| POST | `/api/prize-offers/:id/cancel-request` | Withdraw a pending request. |
+| POST | `/api/prize-offers/:id/request` | Kid requests an available offer (`{ user_id }`). Optional `split_user_ids: [id, …]` names co-spenders sharing the cost. |
+| POST | `/api/prize-offers/:id/cancel-request` | Withdraw a pending request (clears any split). |
 | POST | `/api/prize-offers/:id/decline` | Parent declines; offer returns to the shelf. |
-| POST | `/api/prize-offers/:id/approve` | Parent approves: deducts the prize cost as a `spent` ledger row, consumes the offer, emits `clam.withdrawn` + `prize.redeemed`. |
+| POST | `/api/prize-offers/:id/approve` | Parent approves: each participant pays `floor(cost / participants)` as a `spent` ledger row (an uneven remainder is silently discounted), the offer is consumed (or returned to the shelf if repeatable), emits `clam.withdrawn` per participant + one `prize.redeemed`. |
 
 ### Settings & API keys
 | Method | Path | Purpose |

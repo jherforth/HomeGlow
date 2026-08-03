@@ -32,3 +32,9 @@ server/data/.encryption-key
 .idea/
 .tool-versions
 /homeglow
+
+# Local workspace for developing enhanced plugins destined for the separate
+# jherforth/HomeGlowPlugins repo. Only the README is tracked; the plugin
+# files themselves are copied out and published from that repo.
+/plugins/*
+!/plugins/README.md

@@ -226,3 +226,107 @@ test('prize.redeemed is delivered over the event stream', async () => {
     assert.equal(redeemed.payload.cost, 40);
     assert.equal(typeof redeemed.payload.newTotal, 'number');
 });
+
+test('repeatable prize returns to the shelf on approval and redeems again', async () => {
+    // richKid is down to 15 clams by now; a cheap repeatable prize fits twice.
+    const repeatPrizeId = (await api('/api/prizes', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'Arcade token', clam_cost: 3, repeatable: true }),
+    })).body.id;
+    const definition = (await api('/api/prizes')).body.find((p) => p.id === repeatPrizeId);
+    assert.equal(definition.repeatable, 1, 'repeatable flag persisted on the definition');
+
+    const offerId = (await api('/api/prize-offers', { method: 'POST', body: JSON.stringify({ prize_id: repeatPrizeId }) })).body.id;
+    assert.equal((await api('/api/prize-offers')).body.find((o) => o.id === offerId).repeatable, true);
+
+    // First redemption: offer goes back to available instead of leaving the store.
+    await api(`/api/prize-offers/${offerId}/request`, { method: 'POST', body: JSON.stringify({ user_id: richKidId }) });
+    assert.equal((await api(`/api/prize-offers/${offerId}/approve`, { method: 'POST' })).status, 200);
+    let offer = (await api('/api/prize-offers')).body.find((o) => o.id === offerId);
+    assert.ok(offer, 'repeatable offer still on the shelf after approval');
+    assert.equal(offer.status, 'available');
+    assert.equal(offer.requested_by, null);
+
+    // Second redemption of the same offer works.
+    await api(`/api/prize-offers/${offerId}/request`, { method: 'POST', body: JSON.stringify({ user_id: richKidId }) });
+    assert.equal((await api(`/api/prize-offers/${offerId}/approve`, { method: 'POST' })).status, 200);
+
+    const history = (await api(`/api/chore-history/user/${richKidId}`)).body;
+    assert.equal(history.filter((r) => r.kind === 'spent' && r.title === 'Arcade token' && r.clam_value === -3).length, 2);
+
+    await api(`/api/prize-offers/${offerId}`, { method: 'DELETE' });
+});
+
+let splitAId;
+let splitBId;
+let boardGameId;
+
+test('split spending: even shares, odd clam silently discounted', async () => {
+    splitAId = (await api('/api/users', { method: 'POST', body: JSON.stringify({ username: 'split-a', email: 'sa@example.com' }) })).body.id;
+    splitBId = (await api('/api/users', { method: 'POST', body: JSON.stringify({ username: 'split-b', email: 'sb@example.com' }) })).body.id;
+    await api(`/api/users/${splitAId}/clams/add`, { method: 'POST', body: JSON.stringify({ amount: 20 }) });
+    await api(`/api/users/${splitBId}/clams/add`, { method: 'POST', body: JSON.stringify({ amount: 20 }) });
+
+    // 15 clams across 2 kids → 7 each; the odd clam is discounted.
+    boardGameId = (await api('/api/prizes', { method: 'POST', body: JSON.stringify({ name: 'Board game', clam_cost: 15 }) })).body.id;
+    const offerId = (await api('/api/prize-offers', { method: 'POST', body: JSON.stringify({ prize_id: boardGameId }) })).body.id;
+
+    const req = await api(`/api/prize-offers/${offerId}/request`, {
+        method: 'POST',
+        body: JSON.stringify({ user_id: splitAId, split_user_ids: [splitBId] }),
+    });
+    assert.equal(req.status, 200);
+    assert.deepEqual((await api('/api/prize-offers')).body.find((o) => o.id === offerId).split_user_ids, [splitBId]);
+
+    const approve = await api(`/api/prize-offers/${offerId}/approve`, { method: 'POST' });
+    assert.equal(approve.status, 200);
+    assert.equal(approve.body.share, 7);
+    assert.equal(approve.body.participants.length, 2);
+
+    for (const [uid, name] of [[splitAId, 'split-a'], [splitBId, 'split-b']]) {
+        const history = (await api(`/api/chore-history/user/${uid}`)).body;
+        const spent = history.find((r) => r.kind === 'spent' && r.title === 'Board game');
+        assert.ok(spent, `${name} has a spent row`);
+        assert.equal(spent.clam_value, -7, `${name} pays the even share`);
+    }
+    const users = (await api('/api/users')).body;
+    assert.equal(users.find((u) => u.id === splitAId).clam_total, 13);
+    assert.equal(users.find((u) => u.id === splitBId).clam_total, 13);
+    assert.ok(!(await api('/api/prize-offers')).body.some((o) => o.id === offerId), 'one-time split offer consumed');
+});
+
+test('split validation: unknown or broke co-spenders are handled; cancel clears the split', async () => {
+    const offerId = (await api('/api/prize-offers', { method: 'POST', body: JSON.stringify({ prize_id: boardGameId }) })).body.id;
+
+    // Unknown co-spender rejected outright.
+    const unknown = await api(`/api/prize-offers/${offerId}/request`, {
+        method: 'POST',
+        body: JSON.stringify({ user_id: splitAId, split_user_ids: [99999] }),
+    });
+    assert.equal(unknown.status, 404);
+
+    // Naming yourself as a co-spender collapses to a solo request.
+    await api(`/api/prize-offers/${offerId}/request`, {
+        method: 'POST',
+        body: JSON.stringify({ user_id: splitAId, split_user_ids: [splitAId] }),
+    });
+    assert.deepEqual((await api('/api/prize-offers')).body.find((o) => o.id === offerId).split_user_ids, []);
+    await api(`/api/prize-offers/${offerId}/cancel-request`, { method: 'POST' });
+
+    // A participant short of the share blocks approval; the request stays pending.
+    const brokeKidId = (await api('/api/users', { method: 'POST', body: JSON.stringify({ username: 'broke-kid', email: 'bk@example.com' }) })).body.id;
+    await api(`/api/prize-offers/${offerId}/request`, {
+        method: 'POST',
+        body: JSON.stringify({ user_id: splitAId, split_user_ids: [brokeKidId] }),
+    });
+    const approve = await api(`/api/prize-offers/${offerId}/approve`, { method: 'POST' });
+    assert.equal(approve.status, 400);
+    assert.match(approve.body.error, /broke-kid/);
+    assert.equal((await api('/api/prize-offers')).body.find((o) => o.id === offerId).status, 'requested');
+
+    // Cancel returns it to the shelf with the split cleared.
+    await api(`/api/prize-offers/${offerId}/cancel-request`, { method: 'POST' });
+    const offer = (await api('/api/prize-offers')).body.find((o) => o.id === offerId);
+    assert.equal(offer.status, 'available');
+    assert.deepEqual(offer.split_user_ids, []);
+});

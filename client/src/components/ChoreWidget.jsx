@@ -87,6 +87,8 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
   const [prizeOffers, setPrizeOffers] = useState([]);
   const [quickSpend, setQuickSpend] = useState({ open: false, user: null, amount: '', note: '' });
   const [celebration, setCelebration] = useState(null); // { username, prizeName }
+  // Cost splitting: which offer is in split-select mode and which kids are in.
+  const [splitDraft, setSplitDraft] = useState({ offerId: null, userIds: [] });
   const longPressTimerRef = useRef(null);
   const longPressFiredRef = useRef(false);
   const longPressStartRef = useRef(null);
@@ -167,9 +169,15 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
   useEffect(() => {
     return subscribePluginEvents((message) => {
       if (message.event !== 'prize.redeemed') return;
+      // Split redemptions celebrate everyone who chipped in.
+      const participantNames = (message.payload.participants || [])
+        .map((p) => p.username)
+        .filter(Boolean);
       const user = users.find((u) => u.id === message.payload.userId);
       setCelebration({
-        username: user?.username || 'Someone',
+        username: participantNames.length > 1
+          ? participantNames.join(' & ')
+          : (participantNames[0] || user?.username || 'Someone'),
         prizeName: message.payload.prizeName,
       });
       if (soundEnabled) {
@@ -269,14 +277,30 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
   };
 
   // --- Prize store actions ---
-  const requestPrizeOffer = async (offerId, userId) => {
+  const requestPrizeOffer = async (offerId, userId, splitUserIds = []) => {
     try {
-      await axios.post(`${API_BASE_URL}/api/prize-offers/${offerId}/request`, { user_id: userId });
+      const body = { user_id: userId };
+      if (splitUserIds.length > 0) body.split_user_ids = splitUserIds;
+      await axios.post(`${API_BASE_URL}/api/prize-offers/${offerId}/request`, body);
+      setSplitDraft({ offerId: null, userIds: [] });
       await fetchPrizeOffers();
     } catch (error) {
       alert(error?.response?.data?.error || 'Could not request this prize.');
       await fetchPrizeOffers();
     }
+  };
+
+  const toggleSplitMode = (offerId) => {
+    setSplitDraft((prev) => (prev.offerId === offerId ? { offerId: null, userIds: [] } : { offerId, userIds: [] }));
+  };
+
+  const toggleSplitUser = (userId) => {
+    setSplitDraft((prev) => ({
+      ...prev,
+      userIds: prev.userIds.includes(userId)
+        ? prev.userIds.filter((id) => id !== userId)
+        : [...prev.userIds, userId],
+    }));
   };
 
   const cancelPrizeRequest = async (offerId) => {
@@ -1059,7 +1083,15 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
           </Box>
         </Box>
 
-        <Dialog open={showPrizesModal} onClose={() => setShowPrizesModal(false)} maxWidth="sm" fullWidth>
+        <Dialog
+          open={showPrizesModal}
+          onClose={() => {
+            setShowPrizesModal(false);
+            setSplitDraft({ offerId: null, userIds: [] });
+          }}
+          maxWidth="sm"
+          fullWidth
+        >
           <DialogTitle>
             <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               🛍️ Prize Store
@@ -1093,6 +1125,13 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
                     </Box>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                       Requested by <strong>{offer.requested_by_name}</strong>
+                      {(offer.split_user_ids || []).length > 0 && (() => {
+                        const coNames = offer.split_user_ids
+                          .map((id) => users.find((u) => u.id === id)?.username)
+                          .filter(Boolean);
+                        const share = Math.floor(offer.clam_cost / (offer.split_user_ids.length + 1));
+                        return <> — splitting with <strong>{coNames.join(', ')}</strong> ({share} 🥟 each)</>;
+                      })()}
                     </Typography>
                     <Box sx={{ display: 'flex', gap: 1 }}>
                       <Button size="small" variant="contained" startIcon={<Check />} onClick={() => approvePrizeOffer(offer.id)}>
@@ -1124,22 +1163,72 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
                     }}
                   >
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{offer.name}</Typography>
+                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                        {offer.name}{offer.repeatable ? ' 🔁' : ''}
+                      </Typography>
                       <Chip label={`${offer.clam_cost} 🥟`} sx={{ bgcolor: 'var(--accent)', color: 'white', fontWeight: 'bold' }} />
                     </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                      <Typography variant="body2" color="text.secondary">Request for:</Typography>
-                      {users.map((user) => (
-                        <Chip
-                          key={user.id}
-                          label={`${user.username} (${user.clam_total || 0})`}
-                          size="small"
-                          variant={(user.clam_total || 0) >= offer.clam_cost ? 'filled' : 'outlined'}
-                          onClick={() => requestPrizeOffer(offer.id, user.id)}
-                          sx={{ cursor: 'pointer' }}
-                        />
-                      ))}
-                    </Box>
+                    {splitDraft.offerId === offer.id ? (() => {
+                      const count = splitDraft.userIds.length;
+                      const share = count > 0 ? Math.floor(offer.clam_cost / count) : offer.clam_cost;
+                      const discounted = count > 0 ? offer.clam_cost - share * count : 0;
+                      return (
+                        <>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                            <Typography variant="body2" color="text.secondary">Splitting between:</Typography>
+                            {users.map((user) => {
+                              const selected = splitDraft.userIds.includes(user.id);
+                              return (
+                                <Chip
+                                  key={user.id}
+                                  label={`${user.username} (${user.clam_total || 0})`}
+                                  size="small"
+                                  color={selected ? 'primary' : 'default'}
+                                  variant={selected ? 'filled' : 'outlined'}
+                                  onClick={() => toggleSplitUser(user.id)}
+                                  sx={{ cursor: 'pointer' }}
+                                />
+                              );
+                            })}
+                          </Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1, flexWrap: 'wrap' }}>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              disabled={count < 2}
+                              onClick={() => requestPrizeOffer(offer.id, splitDraft.userIds[0], splitDraft.userIds.slice(1))}
+                            >
+                              Request split
+                            </Button>
+                            <Button size="small" onClick={() => toggleSplitMode(offer.id)} sx={{ opacity: 0.7 }}>
+                              Cancel
+                            </Button>
+                            <Typography variant="body2" color="text.secondary" sx={{ ml: 'auto' }}>
+                              {count < 2 ? 'Pick at least 2 kids' : `${share} 🥟 each${discounted > 0 ? ` (${discounted} 🥟 discounted)` : ''}`}
+                            </Typography>
+                          </Box>
+                        </>
+                      );
+                    })() : (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                        <Typography variant="body2" color="text.secondary">Request for:</Typography>
+                        {users.map((user) => (
+                          <Chip
+                            key={user.id}
+                            label={`${user.username} (${user.clam_total || 0})`}
+                            size="small"
+                            variant={(user.clam_total || 0) >= offer.clam_cost ? 'filled' : 'outlined'}
+                            onClick={() => requestPrizeOffer(offer.id, user.id)}
+                            sx={{ cursor: 'pointer' }}
+                          />
+                        ))}
+                        {users.length > 1 && (
+                          <Button size="small" onClick={() => toggleSplitMode(offer.id)} sx={{ ml: 'auto', whiteSpace: 'nowrap' }}>
+                            👥 Split cost
+                          </Button>
+                        )}
+                      </Box>
+                    )}
                   </Box>
                 ))}
               </Box>

@@ -186,7 +186,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const [clamModalUser, setClamModalUser] = useState(null);
   const [editingPrize, setEditingPrize] = useState(null);
   const [newUser, setNewUser] = useState({ username: '', email: '', profile_picture: '' });
-  const [newPrize, setNewPrize] = useState({ name: '', clam_cost: 0 });
+  const [newPrize, setNewPrize] = useState({ name: '', clam_cost: 0, repeatable: false });
   const [prizeOffers, setPrizeOffers] = useState([]);
   const [uploadedWidgets, setUploadedWidgets] = useState([]);
   const [githubWidgets, setGithubWidgets] = useState([]);
@@ -1457,10 +1457,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     try {
       setIsLoading(true);
       if (editingPrize) {
-        await axios.patch(`${API_BASE_URL}/api/prizes/${editingPrize.id}`, editingPrize);
+        // repeatable is stored as 0/1; the API expects a boolean.
+        await axios.patch(`${API_BASE_URL}/api/prizes/${editingPrize.id}`, { ...editingPrize, repeatable: !!editingPrize.repeatable });
       } else {
-        await axios.post(`${API_BASE_URL}/api/prizes`, newPrize);
-        setNewPrize({ name: '', clam_cost: 0 });
+        await axios.post(`${API_BASE_URL}/api/prizes`, { ...newPrize, repeatable: !!newPrize.repeatable });
+        setNewPrize({ name: '', clam_cost: 0, repeatable: false });
       }
       setEditingPrize(null);
       fetchPrizes();
@@ -3210,6 +3211,19 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                       Add Prize
                     </Button>
                   </Grid>
+                  <Grid size={12}>
+                    <Tooltip title="A repeatable prize stays on the store shelf after redemption instead of being consumed">
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={!!newPrize.repeatable}
+                            onChange={(e) => setNewPrize({ ...newPrize, repeatable: e.target.checked })}
+                          />
+                        }
+                        label="Repeatable (can be redeemed more than once)"
+                      />
+                    </Tooltip>
+                  </Grid>
                 </Grid>
               </Box>
             </AdminFormSection>
@@ -3232,6 +3246,18 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                         onChange={(e) => setEditingPrize({ ...editingPrize, clam_cost: parseInt(e.target.value) || 0 })}
                         sx={{ width: { xs: '100%', sm: 120 } }}
                       />
+                      <Tooltip title="A repeatable prize stays on the store shelf after redemption">
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={!!editingPrize.repeatable}
+                              onChange={(e) => setEditingPrize({ ...editingPrize, repeatable: e.target.checked })}
+                            />
+                          }
+                          label="Repeatable"
+                          sx={{ mr: 0 }}
+                        />
+                      </Tooltip>
                       <IconButton onClick={savePrize} color="primary">
                         <Save />
                       </IconButton>
@@ -3243,10 +3269,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                     <>
                       <ListItemText
                         primary={prize.name}
-                        secondary={`Cost: ${prize.clam_cost} 🥟`}
+                        secondary={`Cost: ${prize.clam_cost} 🥟${prize.repeatable ? ' · 🔁 Repeatable' : ''}`}
                       />
                       <ListItemSecondaryAction>
-                        <Tooltip title="Add to store (one-time redeemable offer)">
+                        <Tooltip title={prize.repeatable ? 'Add to store (stays on the shelf after each redemption)' : 'Add to store (one-time redeemable offer)'}>
                           <IconButton onClick={() => addPrizeToStore(prize.id)} color="primary">
                             <Add />
                           </IconButton>
@@ -3277,7 +3303,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                   {prizeOffers.map((offer) => (
                     <ListItem key={offer.id} sx={{ border: '1px solid var(--card-border)', borderRadius: 1, mb: 1 }}>
                       <ListItemText
-                        primary={`${offer.name} — ${offer.clam_cost} 🥟`}
+                        primary={`${offer.name} — ${offer.clam_cost} 🥟${offer.repeatable ? ' · 🔁' : ''}`}
                         secondary={
                           offer.status === 'requested'
                             ? `Requested by ${offer.requested_by_name || 'unknown'} — approve or decline on the dashboard`

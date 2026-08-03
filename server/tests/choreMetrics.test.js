@@ -48,11 +48,13 @@ async function api(pathname, options = {}) {
     return { status: response.status, body };
 }
 
-// Local date strings matching the server (tests run TZ=UTC).
+// Date strings matching the spawned server, which runs TZ=UTC. This test
+// process keeps the developer's local zone, so compute in UTC explicitly —
+// otherwise the two disagree on "today" every evening once UTC rolls over.
 const localDate = (daysAgo = 0) => {
     const d = new Date();
-    d.setDate(d.getDate() - daysAgo);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    d.setUTCDate(d.getUTCDate() - daysAgo);
+    return d.toISOString().slice(0, 10);
 };
 
 const createUser = async (name) => {
