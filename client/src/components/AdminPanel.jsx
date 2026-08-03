@@ -3879,9 +3879,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                   onClick={() => chooseDefaultAvatar(avatar.filename)}
                   sx={{
                     display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: 0.5,
+                    justifyContent: 'center',
                     cursor: 'pointer',
                     borderRadius: 2,
                     p: 0.75,
@@ -3894,9 +3892,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                     loading="lazy"
                     style={{ width: 56, height: 56, borderRadius: '50%' }}
                   />
-                  <Typography variant="caption" color="text.secondary">
-                    {avatar.name}
-                  </Typography>
                 </Box>
               ))}
             </Box>
