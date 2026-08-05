@@ -134,3 +134,126 @@ test('getCachedEvents maps cached rows with source metadata', () => {
     assert.equal(mapped[1].source_color, '#6e44ff');
     assert.equal(mapped[1].all_day, true);
 });
+
+test('parseEventColor extracts a valid hex and rejects anything else', () => {
+    const service = new CalendarSyncService({}, () => null);
+
+    assert.equal(service.parseEventColor(JSON.stringify({ eventColor: '#dc2127' })), '#dc2127');
+    assert.equal(service.parseEventColor(JSON.stringify({ eventColor: null })), null);
+    assert.equal(service.parseEventColor(JSON.stringify({ googleEventId: 'x' })), null);
+    assert.equal(service.parseEventColor(JSON.stringify({ eventColor: 'red' })), null);
+    assert.equal(service.parseEventColor('not json'), null);
+    assert.equal(service.parseEventColor(null), null);
+});
+
+test('getCachedEvents surfaces per-event color and leaves it null otherwise', () => {
+    const rows = [
+        {
+            source_id: 1, event_uid: 'recolored', title: 'Recolored',
+            start_time: '2026-05-01T13:00:00.000Z', end_time: '2026-05-01T14:00:00.000Z',
+            description: null, location: null, all_day: 0,
+            raw_data: JSON.stringify({ googleEventId: 'a', colorId: '11', eventColor: '#dc2127' }),
+        },
+        {
+            source_id: 1, event_uid: 'default-color', title: 'Default',
+            start_time: '2026-05-02T13:00:00.000Z', end_time: '2026-05-02T14:00:00.000Z',
+            description: null, location: null, all_day: 0,
+            raw_data: JSON.stringify({ googleEventId: 'b', colorId: null, eventColor: null }),
+        },
+    ];
+
+    const fakeDb = {
+        prepare(query) {
+            // The events query also mentions calendar_sources in a subselect,
+            // so match the cache table first.
+            if (query.includes('FROM calendar_events_cache')) {
+                return { all: () => rows };
+            }
+            if (query.includes('FROM calendar_sources')) {
+                return { all: () => [{ id: 1, name: 'Family', color: '#123456' }] };
+            }
+            throw new Error(`Unexpected query: ${query}`);
+        },
+    };
+
+    const service = new CalendarSyncService(fakeDb, () => null);
+    const mapped = service.getCachedEvents();
+
+    assert.equal(mapped.length, 2);
+    assert.equal(mapped[0].event_color, '#dc2127');
+    assert.equal(mapped[0].source_color, '#123456');
+    assert.equal(mapped[1].event_color, null);
+    assert.equal(mapped[1].source_color, '#123456');
+});
+
+test('fetchGoogleEvents resolves colorId to a hex via the Google palette', async () => {
+    const googleCalendar = require('../services/googleCalendar');
+    const googleConnection = require('../services/googleConnection');
+
+    const originalGetAccount = googleConnection.getConnectedAccount;
+    const originalListEvents = googleCalendar.listEvents;
+    const originalListEventColors = googleCalendar.listEventColors;
+
+    googleConnection.getConnectedAccount = () => ({ id: 'acct-1' });
+    googleCalendar.listEventColors = async () => ({ '11': '#dc2127' });
+    googleCalendar.listEvents = async () => ([
+        {
+            id: 'evt-recolored', status: 'confirmed', summary: 'Recolored',
+            start: { dateTime: '2026-05-01T13:00:00Z' },
+            end: { dateTime: '2026-05-01T14:00:00Z' },
+            colorId: '11',
+        },
+        {
+            id: 'evt-default', status: 'confirmed', summary: 'Default',
+            start: { dateTime: '2026-05-02T13:00:00Z' },
+            end: { dateTime: '2026-05-02T14:00:00Z' },
+        },
+    ]);
+
+    try {
+        const service = new CalendarSyncService({}, () => null);
+        const events = await service.fetchGoogleEvents({ id: 1, url: 'primary' });
+
+        assert.equal(events.length, 2);
+        assert.equal(events[0].raw.colorId, '11');
+        assert.equal(events[0].raw.eventColor, '#dc2127');
+        assert.equal(events[1].raw.colorId, null);
+        assert.equal(events[1].raw.eventColor, null);
+    } finally {
+        googleConnection.getConnectedAccount = originalGetAccount;
+        googleCalendar.listEvents = originalListEvents;
+        googleCalendar.listEventColors = originalListEventColors;
+    }
+});
+
+test('fetchGoogleEvents leaves color null when the palette is unavailable', async () => {
+    const googleCalendar = require('../services/googleCalendar');
+    const googleConnection = require('../services/googleConnection');
+
+    const originalGetAccount = googleConnection.getConnectedAccount;
+    const originalListEvents = googleCalendar.listEvents;
+    const originalListEventColors = googleCalendar.listEventColors;
+
+    googleConnection.getConnectedAccount = () => ({ id: 'acct-1' });
+    googleCalendar.listEventColors = async () => ({});
+    googleCalendar.listEvents = async () => ([
+        {
+            id: 'evt-recolored', status: 'confirmed', summary: 'Recolored',
+            start: { dateTime: '2026-05-01T13:00:00Z' },
+            end: { dateTime: '2026-05-01T14:00:00Z' },
+            colorId: '11',
+        },
+    ]);
+
+    try {
+        const service = new CalendarSyncService({}, () => null);
+        const events = await service.fetchGoogleEvents({ id: 1, url: 'primary' });
+
+        assert.equal(events[0].raw.colorId, '11');
+        assert.equal(events[0].raw.eventColor, null);
+    } finally {
+        googleConnection.getConnectedAccount = originalGetAccount;
+        googleCalendar.listEvents = originalListEvents;
+        googleCalendar.listEventColors = originalListEventColors;
+    }
+});
