@@ -83,7 +83,7 @@ const MonthDayCell = ({
     shownCount++;
     const dayDate = day.toDate();
     const { isStart, isEnd } = getMultiDayPosition(event, dayDate);
-    const palette = getEventPillPalette(event.source_color || eventColors.backgroundColor, colorMode);
+    const palette = getEventPillPalette(event.event_color || event.source_color || eventColors.backgroundColor, colorMode);
     const isContinuing = !isStart;
     return (
       <Box
@@ -159,7 +159,7 @@ const MonthDayCell = ({
         {dayAllDaySingle.map((event, evIdx) => {
           if (shownCount >= maxItems) return null;
           shownCount++;
-          const palette = getEventPillPalette(event.source_color || eventColors.backgroundColor, colorMode);
+          const palette = getEventPillPalette(event.event_color || event.source_color || eventColors.backgroundColor, colorMode);
           return (
             <Box key={`allday-${evIdx}`} onClick={(e) => { e.stopPropagation(); onEventClick(event); }}
               sx={{ mb: 0.25, height: pillHeight, minHeight: pillHeight, display: 'flex', alignItems: 'stretch', cursor: 'pointer' }}>
@@ -184,7 +184,7 @@ const MonthDayCell = ({
         {dayTimed.map((event, evIdx) => {
           if (shownCount >= maxItems) return null;
           shownCount++;
-          const palette = getEventPillPalette(event.source_color || eventColors.backgroundColor, colorMode);
+          const palette = getEventPillPalette(event.event_color || event.source_color || eventColors.backgroundColor, colorMode);
           return (
             <Box key={`timed-${evIdx}`} onClick={(e) => { e.stopPropagation(); onEventClick(event); }}
               sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5, mb: 0.25, cursor: 'pointer', borderRadius: 0.5, px: 0.25, '&:hover': { bgcolor: timedRowHoverColor } }}>

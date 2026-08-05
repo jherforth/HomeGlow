@@ -559,6 +559,9 @@ const CalendarWidget = ({
           source_id: event.source_id,
           source_name: event.source_name,
           source_color: event.source_color,
+          // Per-event color set in Google; null unless the event was
+          // individually recolored, in which case it wins over source_color.
+          event_color: event.event_color || null,
           // Cross-calendar dedup metadata (issue #125): which other calendars
           // this event was merged from — drives the pie dot in the day view.
           merged_from: Array.isArray(event.merged_from) ? event.merged_from : undefined
@@ -1443,7 +1446,7 @@ const CalendarWidget = ({
         <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
           <Box sx={{ display: 'flex', gap: 1, height: '100%' }}>
             {getNext7Days().map((day, index) => {
-              const getPillPalette = (event) => getEventPillPalette(event.source_color || eventColors.backgroundColor, colorMode);
+              const getPillPalette = (event) => getEventPillPalette(event.event_color || event.source_color || eventColors.backgroundColor, colorMode);
               const renderPill = (event, key) => {
                 if (!event) {
                   return (
@@ -1676,7 +1679,7 @@ const CalendarWidget = ({
           ) : (
             <List>
               {selectedDateEvents.map((event, index) => {
-                const eventPalette = getEventPillPalette(event.source_color || eventColors.backgroundColor, colorMode);
+                const eventPalette = getEventPillPalette(event.event_color || event.source_color || eventColors.backgroundColor, colorMode);
                 // Cross-calendar dedup (issue #125): the dot becomes a pie of
                 // every calendar this event appears on (winner first, up to
                 // four); the text chip keeps the winning calendar's color.
