@@ -1,3 +1,111 @@
+# HomeGlow v 1.7 Changelog
+
+## 🎉 Recent Updates
+
+The biggest release yet: a full plugin platform with its own API, storage, and
+event stream; a real spending mechanism for the clam economy (prize store,
+request queue, splitting, celebrations); a complete mobile experience;
+vacation mode; metrics-ready chore history; and a bank of built-in avatars.
+
+---
+
+## New Features
+
+### Plugin Platform (#105)
+- Custom widgets grow into **manifest-based plugins**: an embedded manifest
+  declares an id, settings, and event subscriptions while plain HTML widgets
+  keep working unchanged.
+- New **Plugin API v1** (`/api/plugin/v1`): namespaced **persistent storage**
+  (survives app upgrades — plugins now live in the database, not on disk),
+  **declared settings** (household- or device-scoped, validated against the
+  manifest), and a **live event stream** (SSE) covering clams, chores, and
+  prizes.
+- **Server-side reactions**: a plugin can declare clam side-effects (e.g. a
+  savings siphon) that run even when its widget isn't on screen.
+- A tiny **plugin SDK** (`/plugin-sdk/v1.js`), a new
+  [Plugin Development guide](docs/guides/plugin-development.md) with a curated
+  API reference, and demo-mode support so plugins can be tried on the demo.
+- The **Chore Metrics** plugin (issue #72) is the first enhanced-plugin
+  showcase — stat tiles, streaks, activity heatmap, top chores, and
+  earned-vs-spent, published via
+  [HomeGlowPlugins](https://github.com/jherforth/HomeGlowPlugins).
+
+### The Prize Store: a real spending mechanism
+- `Prize Management` definitions can now be **stocked into a store** kids
+  browse right on the dashboard (🛍️ button on the chore widget).
+- **Request queue**: a kid requests a prize; a parent approves or declines on
+  the spot (PIN-gated when a PIN is set). Approval deducts clams as a named
+  ledger entry and fires a **full-screen confetti celebration + chime** on
+  every display.
+- **Repeatable prizes** (🔁 toggle): approval returns the offer to the shelf
+  instead of consuming it — perfect for "movie night".
+- **Cost splitting**: kids sharing a prize each pay an even
+  `floor(cost / N)` share (the odd clam is silently discounted) and the
+  celebration names everyone.
+- **Avatar quick-spend**: tap a kid's profile picture to record off-store
+  spending with an optional note — now with a **touch-friendly number pad**.
+- Spending is **non-destructive**: reducing clams writes a negative `spent`
+  ledger row instead of deleting earned history, so metrics never shrink.
+
+### Full Mobile Experience (#118)
+- The dashboard becomes a **single-column, touch-first layout** on phones:
+  stacked widgets, mobile-friendly admin tables, no drag grid, and no
+  screensaver (phones lock themselves).
+
+### Vacation Mode (#121)
+- A per-display toggle that mutes chore chimes and swaps the screensaver for a
+  playful vacation animation, with a subtle 🏖️ badge while active.
+- **Optional date range** with automatic activation and expiry.
+- **Metrics-aware**: while active, the nightly job skips missed-chore logging
+  and the Chore Metrics plugin bridges streaks across vacation days.
+
+### Metrics-Ready Chore History (#72)
+- Every history row now carries a **kind** (completion, daily bonus, transfer
+  bonus, adjustment, missed, spent), the nightly job **logs missed chores**,
+  and a long-standing bonus-revoke bug tied to reward-setting changes is
+  fixed.
+
+### Default Avatar Bank (#132)
+- Pick a profile picture from **29 built-in flat avatars** instead of
+  uploading: mom, dad, girl, and boy in **five skin tones each**, plus cat,
+  dog, fish, alpaca, chicken, dino, robot, unicorn, and frog.
+- Choose from the Admin Panel's user rows or the add-user form; the demo
+  family wears them out of the box.
+
+### Calendar Improvements
+- **Cross-calendar dedupe pie dot** (#125): an event synced from several
+  calendars shows a pie-colored bullet naming each source.
+- **Start calendar with current week** (#127): the month view can anchor to
+  the current week and show a configurable 1–8 weeks.
+- **Big performance fix** (#130): the calendar widget now always requests a
+  date range, so the server no longer serializes its entire multi-year cache
+  on every load.
+
+---
+
+## Fixes & Community Contributions
+- Grid layout configuration corrected (#128).
+- Vacation screensaver composition stops promptly when dismissed (#129).
+- Color picker no longer clipped inside widget cells (#131).
+- Calendar events endpoint stall fixed (#130).
+
+---
+
+## Summary
+A platform release: plugins become first-class citizens with storage,
+settings, events, and reactions; the clam economy gets a real store with
+requests, splitting, and celebrations; and the whole app works beautifully on
+phones — plus vacation mode, richer metrics, calendar polish, and built-in
+avatars.
+
+---
+
+## 📝 Notes
+
+For questions or issues, please visit our [GitHub Issues](https://github.com/jherforth/HomeGlow/issues) page.
+
+---
+
 # HomeGlow v 1.6.2 Changelog
 
 ## 🎉 Recent Updates
