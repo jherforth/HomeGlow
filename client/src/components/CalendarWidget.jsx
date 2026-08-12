@@ -1682,7 +1682,9 @@ const CalendarWidget = ({
                 const eventPalette = getEventPillPalette(event.event_color || event.source_color || eventColors.backgroundColor, colorMode);
                 // Cross-calendar dedup (issue #125): the dot becomes a pie of
                 // every calendar this event appears on (winner first, up to
-                // four); the text chip keeps the winning calendar's color.
+                // four), so it always answers "which calendars" in calendar
+                // colors — the chip above follows the event's own color when
+                // one was set in Google.
                 const mergedDotColors = buildMergedDotColors(event, eventColors.backgroundColor)
                   .map((color) => getEventPillPalette(color, colorMode).backgroundColor);
                 const mergedSummary = describeMergedCalendars(event);

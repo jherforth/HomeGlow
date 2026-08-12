@@ -39,21 +39,25 @@ async function listEventColors(db, accountId) {
         return cached.colors;
     }
 
-    let colors = {};
     try {
+        const colors = {};
         const data = await googleFetch(db, accountId, 'GET', '/colors');
         if (data && data.event) {
             for (const [colorId, value] of Object.entries(data.event)) {
                 if (value && value.background) colors[colorId] = value.background;
             }
         }
+        // Only successful fetches are cached. Caching an empty palette after a
+        // transient failure would strip per-event colors for the whole TTL —
+        // and since the hex is resolved into raw_data at sync time, events
+        // synced during that window stay uncolored until a later sync. Retrying
+        // on the next sync costs one request and surfaces the error in the log.
+        eventColorCache.set(accountId, { colors, fetchedAt: Date.now() });
+        return colors;
     } catch (error) {
         console.error('Error fetching Google event colors:', error.message);
-        colors = {};
+        return {};
     }
-
-    eventColorCache.set(accountId, { colors, fetchedAt: Date.now() });
-    return colors;
 }
 
 function parseEventDate(dt) {
