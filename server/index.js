@@ -136,6 +136,7 @@ const schemaMigrations = [
   { schemaId: 20, migrationPath: './migrations/schema20-choreHistoryKind', },
   { schemaId: 21, migrationPath: './migrations/schema21-prizeOffers', },
   { schemaId: 22, migrationPath: './migrations/schema22-prizeRepeatSplit', },
+  { schemaId: 23, migrationPath: './migrations/schema23-userSortOrder', },
 ];
 
 const ALLOWED_SCHEDULE_DURATIONS = new Set(['day-of', 'until-completed', 'once-completed']);
@@ -3258,7 +3259,10 @@ fastify.post('/api/users/:id/clams/reduce', async (request, reply) => {
 // User routes (updated to calculate clam_total from history)
 fastify.get('/api/users', async (request, reply) => {
   try {
-    const users = db.prepare('SELECT id, username, email, profile_picture FROM users').all();
+    // Admin-chosen display order (issue #134). Every consumer — the chore
+    // widget columns, assignment dropdowns, transfer and split pickers —
+    // renders in the order returned here, so this one clause orders them all.
+    const users = db.prepare('SELECT id, username, email, profile_picture, sort_order FROM users ORDER BY sort_order, id').all();
 
     const usersWithClams = users.map(user => {
       const clamResult = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(user.id);
@@ -3278,12 +3282,50 @@ fastify.get('/api/users', async (request, reply) => {
 fastify.post('/api/users', async (request, reply) => {
   const { username, email, profile_picture } = request.body;
   try {
-    const stmt = db.prepare('INSERT INTO users (username, email, profile_picture) VALUES (?, ?, ?)');
-    const info = stmt.run(username, email, profile_picture);
+    // New users land at the end of the display order.
+    const maxOrder = db.prepare('SELECT MAX(sort_order) as max FROM users').get();
+    const stmt = db.prepare('INSERT INTO users (username, email, profile_picture, sort_order) VALUES (?, ?, ?, ?)');
+    const info = stmt.run(username, email, profile_picture, (maxOrder?.max ?? 0) + 1);
     return { id: info.lastInsertRowid };
   } catch (error) {
     console.error('Error adding user:', error);
     reply.status(500).send({ error: 'Failed to add user' });
+  }
+});
+
+// Set the display order (issue #134). The client sends the full desired order
+// and the server just persists it — same contract as the tab reorder endpoint.
+// Registered before /api/users/:id; find-my-way matches the static path first.
+fastify.patch('/api/users/reorder', async (request, reply) => {
+  const { orderedUserIds } = request.body || {};
+  try {
+    if (!Array.isArray(orderedUserIds) || orderedUserIds.some((id) => !Number.isInteger(id))) {
+      return reply.status(400).send({ error: 'orderedUserIds must be an array of user ids' });
+    }
+
+    // The bonus pseudo-user (id 0) never renders on the dashboard and keeps
+    // sort_order 0, so it stays pinned first and is not reorderable.
+    const reorderable = db.prepare('SELECT id FROM users WHERE id != 0').all().map((row) => row.id);
+    const unique = new Set(orderedUserIds);
+    const coversEveryUser = unique.size === orderedUserIds.length
+      && orderedUserIds.length === reorderable.length
+      && reorderable.every((id) => unique.has(id));
+    if (!coversEveryUser) {
+      return reply.status(400).send({ error: 'orderedUserIds must list every reorderable user exactly once' });
+    }
+
+    // Dense 1..n keeps bonus (0) first; no UNIQUE constraint here, so unlike
+    // the tab reorder this needs no temporary-value pass.
+    const applyOrder = db.transaction((ids) => {
+      const stmt = db.prepare('UPDATE users SET sort_order = ? WHERE id = ?');
+      ids.forEach((id, index) => stmt.run(index + 1, id));
+    });
+    applyOrder(orderedUserIds);
+
+    return { success: true, orderedUserIds };
+  } catch (error) {
+    console.error('Error reordering users:', error);
+    reply.status(500).send({ error: 'Failed to reorder users' });
   }
 });
 

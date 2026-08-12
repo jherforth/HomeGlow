@@ -175,7 +175,8 @@ static route.
 ### Users & clams
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET/POST | `/api/users` | List / create users. |
+| GET/POST | `/api/users` | List / create users. Listed in admin-chosen display order (`sort_order`, then `id`); new users append at the end. |
+| PATCH | `/api/users/reorder` | Set the display order: `{ orderedUserIds: [id, …] }` must list every reorderable user exactly once (the `bonus` pseudo-user is pinned and excluded). |
 | PATCH/DELETE | `/api/users/:id` | Update / delete a user. |
 | POST | `/api/users/:id/upload-picture` | Upload an avatar. |
 | GET | `/api/avatars/defaults` | List the built-in default avatar bank (people in five skin tones + fun characters). |

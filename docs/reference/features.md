@@ -238,6 +238,12 @@ gates in `app.jsx` (sound scheduler + screensaver render), UI in `AdminPanel.jsx
   above.
 - Access can be gated by an optional **PIN** (on-screen pad or keyboard entry),
   hashed in the `admin_pin` table.
+- **User display order** (issue #134): the Users tab controls what order family
+  members appear in — drag a row on desktop, or use the up/down arrows, which
+  are the primary control on touch screens since HTML5 drag events never fire
+  there. The order is stored on the user (`sort_order`) and applied by
+  `GET /api/users`, so the dashboard chore columns, assignment dropdowns, and
+  transfer/split pickers all follow it. The `bonus` pseudo-user is pinned.
 - **Default avatars** (issue #132): besides uploading a photo, users can pick
   from a built-in bank of flat SVG avatars — mom/dad/girl/boy in five skin
   tones plus fun characters (cat, dog, fish, alpaca, chicken, dino, robot,

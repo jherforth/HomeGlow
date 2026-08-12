@@ -52,6 +52,7 @@ run in ascending order. The registry lives in `schemaMigrations` in
 | 20 | `schema20-choreHistoryKind.js` | Adds `chore_history.kind` (`completion`/`daily_bonus`/`transfer_bonus`/`adjustment`/`missed`/`spent`) with magic-string backfill + a partial unique index for idempotent missed-chore logging (issue #72). |
 | 21 | `schema21-prizeOffers.js` | Adds `prize_offers` (the prize store: one-time redeemable instances of ledger prizes with the available → requested → redeemed request queue). |
 | 22 | `schema22-prizeRepeatSplit.js` | Adds `prizes.repeatable` (approval returns the offer to the shelf instead of consuming it) and `prize_offers.split_user_ids` (co-spenders sharing the cost evenly). |
+| 23 | `schema23-userSortOrder.js` | Adds `users.sort_order` (admin-chosen display order, issue #134), backfilled from `id` so existing households keep their current order. |
 
 Each versioned migration runs inside a transaction, reads its context from
 `globalThis.__HOMEGLOW_SCHEMA_MIGRATION_CONTEXT`, and writes the new
@@ -106,8 +107,12 @@ deleting earned history — so metrics never shrink retroactively.
 ### Users, prizes, settings
 
 **`users`** — family members. Row `id = 0` is the seeded `bonus` pseudo-user.
+`sort_order` is the admin-chosen display order (issue #134): every read goes
+through `ORDER BY sort_order, id`, so the dashboard columns, assignment
+dropdowns, and transfer/split pickers all follow it. New users append at the
+end; the `bonus` row keeps `sort_order` 0 and stays pinned first.
 ```
-id, username, email, profile_picture
+id, username, email, profile_picture, sort_order
 ```
 
 **`prizes`** — the prize definitions ledger (kept forever in Prize Management).

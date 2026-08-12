@@ -62,7 +62,9 @@ import {
   DragIndicator,
   PhotoLibrary,
   Info,
-  OpenInNew
+  OpenInNew,
+  ArrowUpward,
+  ArrowDownward
 } from '@mui/icons-material';
 import ColorPickerPopover from './ColorPickerPopover';
 import axios from 'axios';
@@ -236,6 +238,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   });
   const [deleteTabDialog, setDeleteTabDialog] = useState({ open: false, tab: null });
   const [draggingTabNumber, setDraggingTabNumber] = useState(null);
+  // User display order (issue #134): drag on desktop, arrows everywhere.
+  const [draggingUserId, setDraggingUserId] = useState(null);
   const [devices, setDevices] = useState([]);
   const [copyDeviceDialog, setCopyDeviceDialog] = useState({ open: false, device: null });
   const [deleteDeviceDialog, setDeleteDeviceDialog] = useState({ open: false, device: null });
@@ -923,6 +927,60 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // --- User display order (issue #134) ---
+  // The bonus pseudo-user (id 0) is pinned and never reorderable, mirroring
+  // how the Home tab is excluded from tab dragging.
+  const reorderableUsers = users.filter((user) => user.id !== 0);
+
+  const saveUserOrder = async (orderedUserIds) => {
+    try {
+      setIsLoading(true);
+      await axios.patch(`${API_BASE_URL}/api/users/reorder`, { orderedUserIds });
+      await fetchUsers();
+      // The dashboard renders users in API order, so it needs to refetch too.
+      window.dispatchEvent(new Event(USERS_UPDATED_EVENT));
+    } catch (error) {
+      console.error('Error reordering users:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Failed to reorder users. Please try again.' });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Touch-friendly alternative to dragging: HTML5 drag events never fire on
+  // phones or the wall tablet, so the arrows are the primary control there.
+  const moveUser = async (userId, delta) => {
+    const ids = reorderableUsers.map((user) => user.id);
+    const from = ids.indexOf(userId);
+    const to = from + delta;
+    if (from === -1 || to < 0 || to >= ids.length) return;
+    const next = [...ids];
+    [next[from], next[to]] = [next[to], next[from]];
+    await saveUserOrder(next);
+  };
+
+  const handleUserDragStart = (userId) => {
+    setDraggingUserId(userId);
+  };
+
+  const handleUserDrop = async (targetUserId) => {
+    if (draggingUserId == null || draggingUserId === targetUserId) {
+      setDraggingUserId(null);
+      return;
+    }
+    const ids = reorderableUsers.map((user) => user.id);
+    const fromIndex = ids.indexOf(draggingUserId);
+    const toIndex = ids.indexOf(targetUserId);
+    setDraggingUserId(null);
+    if (fromIndex === -1 || toIndex === -1) return;
+
+    const next = [...ids];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    await saveUserOrder(next);
   };
 
   const handleTabDragStart = (tabNumber) => {
@@ -2987,6 +3045,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
               <Table sx={stackableTableSx}>
                 <TableHead>
                   <TableRow>
+                    <TableCell width={110}>Order</TableCell>
                     <TableCell>Avatar</TableCell>
                     <TableCell>Username</TableCell>
                     <TableCell>Email</TableCell>
@@ -2996,8 +3055,65 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {users.map((user) => (
-                    <TableRow key={user.id}>
+                  {users.map((user) => {
+                    // Display order (issue #134). Drag works on desktop only —
+                    // HTML5 drag events never fire on touch — so the arrows
+                    // carry the feature on phones and the wall tablet.
+                    const isBonus = user.id === 0;
+                    const orderIndex = reorderableUsers.findIndex((u) => u.id === user.id);
+                    return (
+                    <TableRow
+                      key={user.id}
+                      draggable={!isBonus}
+                      onDragStart={() => handleUserDragStart(user.id)}
+                      onDragOver={(e) => {
+                        if (!isBonus) e.preventDefault();
+                      }}
+                      onDrop={() => {
+                        if (!isBonus) handleUserDrop(user.id);
+                      }}
+                      sx={{
+                        cursor: isBonus ? 'default' : 'grab',
+                        opacity: draggingUserId === user.id ? 0.65 : 1,
+                      }}
+                    >
+                      <TableCell data-label="Order">
+                        {isBonus ? (
+                          <Chip size="small" label="Pinned" />
+                        ) : (
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <DragIndicator fontSize="small" sx={{ opacity: 0.5, display: { xs: 'none', sm: 'block' } }} />
+                            {/* The span is required so the tooltip still works
+                                on a disabled button; the aria-label has to go
+                                on the button itself, since the wrapper would
+                                otherwise swallow the accessible name. */}
+                            <Tooltip title={`Move ${user.username} up`}>
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  aria-label="Move up"
+                                  disabled={orderIndex <= 0}
+                                  onClick={() => moveUser(user.id, -1)}
+                                >
+                                  <ArrowUpward fontSize="small" />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                            <Tooltip title={`Move ${user.username} down`}>
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  aria-label="Move down"
+                                  disabled={orderIndex === -1 || orderIndex >= reorderableUsers.length - 1}
+                                  onClick={() => moveUser(user.id, 1)}
+                                >
+                                  <ArrowDownward fontSize="small" />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          </Box>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <UserAvatar key={`${user.id}-${user.profile_picture}`} user={user} />
@@ -3107,7 +3223,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                         </Box>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>
