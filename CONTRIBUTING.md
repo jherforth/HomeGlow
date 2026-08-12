@@ -7,6 +7,7 @@ We welcome contributions! Here's how to get started:
 3. **Make Your Changes**: Follow the existing code style
 4. **Test Thoroughly**: Ensure both light/dark themes work
 5. **Submit a Pull Request**: Describe your changes clearly
+6. **Post your change description to discord**: This is optional, but let's us know you're human and trying to help.
 
 ## Development Guidelines
 - **Follow existing patterns** for consistency
