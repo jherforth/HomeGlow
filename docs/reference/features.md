@@ -152,8 +152,16 @@ in `server/index.js`.
   sources is merged at read time (fuzzy title + time-tolerance match in
   `server/utils/calendarDedup.js`). In the day view, the merged event's bullet
   becomes a **pie of the calendars' colors** (winning calendar first, up to
-  four wedges) with a tooltip naming them, while the text bubble keeps the
-  winning calendar's color (issue #125).
+  four wedges) with a tooltip naming them (issue #125). The bullet always uses
+  calendar colors, so it keeps answering "which calendars is this on?"
+- **Per-event Google colors** (PR #133): an event individually recolored in
+  Google keeps that color in HomeGlow instead of inheriting its calendar's.
+  Sync resolves the event's `colorId` to a hex through Google's `/colors`
+  palette (cached 24h) and stores it in the existing `raw_data` column, which
+  `getCachedEvents` surfaces as `event_color`. Every view prefers
+  `event_color` and falls back to `source_color`, so events left on a
+  calendar's default color — and all non-Google sources — look exactly as
+  before. No schema migration.
 - Credentials are encrypted at rest.
 
 **Code:** `CalendarWidget.jsx`, `MonthDayCell.jsx`; backend
