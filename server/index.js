@@ -475,9 +475,9 @@ fastify.register(require('@fastify/static'), {
   prefix: '/Uploads/',
   decorateReply: false,
   maxAge: 86400000, // 1 day cache
-  setHeaders: (res, path) => {
+  setHeaders: (reply, path) => {
     // Minimize headers to avoid "Request Header Fields Too Large" error
-    res.setHeader('Cache-Control', 'public, max-age=86400');
+    reply.header('Cache-Control', 'public, max-age=86400');
   }
 });
 
@@ -487,9 +487,9 @@ fastify.register(require('@fastify/static'), {
   prefix: '/Uploads/users/',
   decorateReply: false,
   maxAge: 86400000, // 1 day cache
-  setHeaders: (res, path) => {
+  setHeaders: (reply, path) => {
     // Minimize headers to avoid "Request Header Fields Too Large" error
-    res.setHeader('Cache-Control', 'public, max-age=86400');
+    reply.header('Cache-Control', 'public, max-age=86400');
   }
 });
 
