@@ -10,5 +10,41 @@
   "language": {
     "saved": "Language updated.",
     "switchFailed": "Could not switch language. Please try again."
+  },
+  "tabs": {
+    "createTitle": "Create New Tab",
+    "createButton": "Create Tab",
+    "editTitle": "Edit Tab",
+    "saveChanges": "Save Changes",
+    "tabLabel": "Tab Label",
+    "selectIcon": "Select an Icon"
+  },
+  "icons": {
+    "bell": "Bell",
+    "bookmark": "Bookmark",
+    "building": "Building",
+    "bucket": "Bucket",
+    "calendar": "Calendar",
+    "camera": "Camera",
+    "chart": "Chart",
+    "chat": "Chat",
+    "clipboard": "Clipboard",
+    "clock": "Clock",
+    "clouds": "Clouds",
+    "compass": "Compass",
+    "envelope": "Envelope",
+    "file": "File",
+    "flag": "Flag",
+    "folder": "Folder",
+    "gem": "Gem",
+    "hand": "Hand",
+    "heart": "Heart",
+    "image": "Image",
+    "lightbulb": "Lightbulb",
+    "map": "Map",
+    "money": "Money",
+    "shovel": "Shovel",
+    "star": "Star",
+    "trashcan": "Trashcan"
   }
 }

@@ -3860,8 +3860,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         open={tabIconModalState.open}
         onClose={closeTabEditorDialog}
         onSave={saveTabDefinition}
-        title={tabIconModalState.mode === 'edit' ? 'Edit Tab' : 'Create New Tab'}
-        saveButtonText={tabIconModalState.mode === 'edit' ? 'Save Changes' : 'Create Tab'}
+        title={tabIconModalState.mode === 'edit' ? t('admin:tabs.editTitle') : t('admin:tabs.createTitle')}
+        saveButtonText={tabIconModalState.mode === 'edit' ? t('admin:tabs.saveChanges') : t('admin:tabs.createButton')}
         initialData={tabIconModalState.initialData}
       />
 

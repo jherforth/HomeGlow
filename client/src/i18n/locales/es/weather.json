@@ -1,0 +1,35 @@
+{
+  "widget": {
+    "noData": "No hay datos meteorológicos disponibles",
+    "openSettings": "Abrir ajustes",
+    "openSettingsAria": "Abrir los ajustes del widget del tiempo",
+    "airQuality": "Calidad del aire",
+    "serviceError": "Error del servicio meteorológico: {{status}} {{statusText}}"
+  },
+  "airQuality": {
+    "good": "Buena",
+    "fair": "Aceptable",
+    "moderate": "Moderada",
+    "poor": "Mala",
+    "veryPoor": "Muy mala",
+    "unknown": "Desconocida"
+  },
+  "settings": {
+    "title": "Ajustes del widget del tiempo",
+    "scopeNote": "Estos ajustes se aplican solo al widget del tiempo de esta pestaña.",
+    "location": "Ubicación",
+    "locationHelp": "Ejemplos: Sydney,AU o 14818,US",
+    "temperatureUnit": "Unidad de temperatura",
+    "fahrenheit": "Fahrenheit (°F)",
+    "celsius": "Celsius (°C)",
+    "layoutMode": "Modo de diseño",
+    "layoutAuto": "Automático (según el tamaño del widget)",
+    "layoutCompact": "Compacto",
+    "layoutMedium": "Medio",
+    "layoutFull": "Completo"
+  },
+  "errors": {
+    "enterLocation": "Introduce una ubicación.",
+    "invalidLocation": "Ubicación no válida. Prueba con una ciudad y código de país como \"Sydney,AU\" o un código postal como \"14818,US\"."
+  }
+}

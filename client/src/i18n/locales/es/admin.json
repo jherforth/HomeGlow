@@ -10,5 +10,41 @@
   "language": {
     "saved": "Idioma actualizado.",
     "switchFailed": "No se pudo cambiar el idioma. Inténtalo de nuevo."
+  },
+  "tabs": {
+    "createTitle": "Crear pestaña nueva",
+    "createButton": "Crear pestaña",
+    "editTitle": "Editar pestaña",
+    "saveChanges": "Guardar cambios",
+    "tabLabel": "Nombre de la pestaña",
+    "selectIcon": "Elige un icono"
+  },
+  "icons": {
+    "bell": "Campana",
+    "bookmark": "Marcador",
+    "building": "Edificio",
+    "bucket": "Cubo",
+    "calendar": "Calendario",
+    "camera": "Cámara",
+    "chart": "Gráfico",
+    "chat": "Chat",
+    "clipboard": "Portapapeles",
+    "clock": "Reloj",
+    "clouds": "Nubes",
+    "compass": "Brújula",
+    "envelope": "Sobre",
+    "file": "Archivo",
+    "flag": "Bandera",
+    "folder": "Carpeta",
+    "gem": "Gema",
+    "hand": "Mano",
+    "heart": "Corazón",
+    "image": "Imagen",
+    "lightbulb": "Bombilla",
+    "map": "Mapa",
+    "money": "Dinero",
+    "shovel": "Pala",
+    "star": "Estrella",
+    "trashcan": "Papelera"
   }
 }
