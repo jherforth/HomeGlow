@@ -120,8 +120,29 @@ test('seeded avatars are served from the uploads static root', async () => {
     const response = await fetch(`${baseUrl}/Uploads/users/defaults/cat.svg`);
     assert.equal(response.status, 200);
     assert.match(response.headers.get('content-type') || '', /image\/svg\+xml/);
-    assert.equal(response.headers.get('cache-control'), 'public, max-age=86400');
     assert.match(await response.text(), /<svg/);
+
+    // The day-long cache comes solely from the registration's maxAge (#136
+    // removed the setHeaders callback that only re-set the same value).
+    // Assert the exact string: losing maxAge degrades this to max-age=0
+    // silently rather than erroring, so this line is what pins the policy.
+    // An exact match also proves nothing sets the header twice, since fetch
+    // joins repeated headers with ", ".
+    assert.equal(response.headers.get('cache-control'), 'public, max-age=86400');
+});
+
+test('both upload static roots share one cache policy', async () => {
+    // /Uploads/ and the nested /Uploads/users/ are separate registrations that
+    // used to carry a header callback each — easy to let drift apart. A sound
+    // exercises the outer root; an avatar exercises the nested one.
+    for (const url of [
+        `${baseUrl}/Uploads/sounds/chime.wav`,
+        `${baseUrl}/Uploads/users/defaults/robot.svg`,
+    ]) {
+        const response = await fetch(url);
+        assert.equal(response.status, 200, `${url} served`);
+        assert.equal(response.headers.get('cache-control'), 'public, max-age=86400', `${url} cache policy`);
+    }
 });
 
 test('selecting a default avatar sets profile_picture; bad input is rejected', async () => {

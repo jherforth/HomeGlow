@@ -469,16 +469,20 @@ fastify.addHook('preHandler', (request, reply, done) => {
   done();
 });
 
-// Serve static files for uploads
+// Serve static files for uploads.
+//
+// maxAge alone emits `Cache-Control: public, max-age=86400`, so there is no
+// setHeaders callback here on purpose: the one that used to live here only
+// re-set that identical header. Keeping it bought nothing and cost an outage
+// in #136, where v10 changed the callback's first argument from the Node
+// response to a Fastify Reply and `res.setHeader` became an uncaught
+// TypeError that killed the process on the first file request. Headers are
+// deliberately kept minimal to avoid "Request Header Fields Too Large".
 fastify.register(require('@fastify/static'), {
   root: path.join(__dirname, 'uploads'),
   prefix: '/Uploads/',
   decorateReply: false,
   maxAge: 86400000, // 1 day cache
-  setHeaders: (reply, path) => {
-    // Minimize headers to avoid "Request Header Fields Too Large" error
-    reply.header('Cache-Control', 'public, max-age=86400');
-  }
 });
 
 // Additional static route specifically for user uploads
@@ -487,10 +491,6 @@ fastify.register(require('@fastify/static'), {
   prefix: '/Uploads/users/',
   decorateReply: false,
   maxAge: 86400000, // 1 day cache
-  setHeaders: (reply, path) => {
-    // Minimize headers to avoid "Request Header Fields Too Large" error
-    reply.header('Cache-Control', 'public, max-age=86400');
-  }
 });
 
 // Serve static files for widgets
