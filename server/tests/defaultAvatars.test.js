@@ -120,6 +120,7 @@ test('seeded avatars are served from the uploads static root', async () => {
     const response = await fetch(`${baseUrl}/Uploads/users/defaults/cat.svg`);
     assert.equal(response.status, 200);
     assert.match(response.headers.get('content-type') || '', /image\/svg\+xml/);
+    assert.equal(response.headers.get('cache-control'), 'public, max-age=86400');
     assert.match(await response.text(), /<svg/);
 });
 
