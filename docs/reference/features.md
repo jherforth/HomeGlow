@@ -11,6 +11,10 @@ code, so you know where to look when working on a given domain.
   can drag widgets and resize them with edge +/- buttons.
 - Layout is persisted to the backend via the `widget-assignments/layout` endpoints,
   which store it inside `tabs.config_json` (see [Database](../architecture/database.md)).
+- **Tab order** is managed in Admin → Widgets → Tabs: up/down arrows (the only
+  control that works on touch, since HTML5 drag events never fire there) plus
+  row dragging on desktop. Home is fixed at position 1. Both paths post the
+  full desired order to `PATCH /api/devices/:deviceName/tabs/reorder`.
 - **Copy a device**: `POST /api/devices/:deviceName/copy-from/:sourceDeviceName`
   duplicates tabs + settings — handy for provisioning a new display like an existing one.
 
@@ -241,9 +245,10 @@ gates in `app.jsx` (sound scheduler + screensaver render), UI in `AdminPanel.jsx
 - **User display order** (issue #134): the Users tab controls what order family
   members appear in — drag a row on desktop, or use the up/down arrows, which
   are the primary control on touch screens since HTML5 drag events never fire
-  there. The order is stored on the user (`sort_order`) and applied by
-  `GET /api/users`, so the dashboard chore columns, assignment dropdowns, and
-  transfer/split pickers all follow it. The `bonus` pseudo-user is pinned.
+  there (tab reordering works the same way). The order is stored on the user
+  (`sort_order`) and applied by `GET /api/users`, so the dashboard chore
+  columns, assignment dropdowns, and transfer/split pickers all follow it.
+  The `bonus` pseudo-user is pinned.
 - **Default avatars** (issue #132): besides uploading a photo, users can pick
   from a built-in bank of flat SVG avatars — mom/dad/girl/boy in five skin
   tones plus fun characters (cat, dog, fish, alpaca, chicken, dino, robot,

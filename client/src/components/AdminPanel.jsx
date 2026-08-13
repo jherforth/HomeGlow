@@ -983,6 +983,24 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     await saveUserOrder(next);
   };
 
+  // Tabs are ordered by their number; tab 1 (Home) is fixed, so only the rest
+  // participate. Same touch caveat as the user list — see moveTab below.
+  const draggableTabsInOrder = () => tabs
+    .filter((tab) => tab.number !== 1)
+    .sort((a, b) => a.number - b.number);
+
+  // Touch-friendly counterpart to dragging: HTML5 drag events never fire on
+  // phones or the wall tablet, where this table is a stack of cards.
+  const moveTab = async (tabNumber, delta) => {
+    const numbers = draggableTabsInOrder().map((tab) => tab.number);
+    const from = numbers.indexOf(tabNumber);
+    const to = from + delta;
+    if (from === -1 || to < 0 || to >= numbers.length) return;
+    const next = [...numbers];
+    [next[from], next[to]] = [next[to], next[from]];
+    await saveTabOrder(next);
+  };
+
   const handleTabDragStart = (tabNumber) => {
     setDraggingTabNumber(tabNumber);
   };
@@ -993,9 +1011,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       return;
     }
 
-    const draggableTabs = tabs
-      .filter(tab => tab.number !== 1)
-      .sort((a, b) => a.number - b.number);
+    const draggableTabs = draggableTabsInOrder();
 
     const fromIndex = draggableTabs.findIndex(tab => tab.number === draggingTabNumber);
     const toIndex = draggableTabs.findIndex(tab => tab.number === targetTabNumber);
@@ -2409,7 +2425,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
               <>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                   <Alert severity="info" sx={{ mb: 0, flex: 1, mr: 2 }}>
-                    Manage dashboard tabs. Drag rows to reorder tabs. Home tab cannot be edited or deleted.
+                    Manage dashboard tabs. Reorder with the arrows, or drag rows on a desktop browser. Home tab cannot be edited or deleted.
                   </Alert>
                   <Button variant="contained" startIcon={<Add />} onClick={openCreateTabDialog}>
                     Add Tab
@@ -2420,7 +2436,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                   <Table sx={stackableTableSx}>
                     <TableHead>
                       <TableRow>
-                        <TableCell width={60}>Order</TableCell>
+                        <TableCell width={150}>Order</TableCell>
                         <TableCell>Label</TableCell>
                         <TableCell>Icon</TableCell>
                         <TableCell>Show Label</TableCell>
@@ -2430,6 +2446,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                     <TableBody>
                       {[...tabs].sort((a, b) => a.number - b.number).map((tab) => {
                         const isHome = tab.number === 1;
+                        const orderIndex = draggableTabsInOrder().findIndex((t) => t.number === tab.number);
+                        const lastOrderIndex = draggableTabsInOrder().length - 1;
                         return (
                           <TableRow
                             key={tab.id}
@@ -2451,9 +2469,39 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                             }}
                           >
                             <TableCell data-label="Order">
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                {!isHome && <DragIndicator fontSize="small" />}
-                                <Chip label={tab.number} size="small" />
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                {!isHome && (
+                                  <DragIndicator fontSize="small" sx={{ opacity: 0.5, display: { xs: 'none', sm: 'block' } }} />
+                                )}
+                                <Chip label={tab.number} size="small" sx={{ mr: 0.5 }} />
+                                {!isHome && (
+                                  <>
+                                    <Tooltip title={`Move ${tab.label || 'tab'} up`}>
+                                      <span>
+                                        <IconButton
+                                          size="small"
+                                          aria-label="Move tab up"
+                                          disabled={orderIndex <= 0}
+                                          onClick={() => moveTab(tab.number, -1)}
+                                        >
+                                          <ArrowUpward fontSize="small" />
+                                        </IconButton>
+                                      </span>
+                                    </Tooltip>
+                                    <Tooltip title={`Move ${tab.label || 'tab'} down`}>
+                                      <span>
+                                        <IconButton
+                                          size="small"
+                                          aria-label="Move tab down"
+                                          disabled={orderIndex === -1 || orderIndex >= lastOrderIndex}
+                                          onClick={() => moveTab(tab.number, 1)}
+                                        >
+                                          <ArrowDownward fontSize="small" />
+                                        </IconButton>
+                                      </span>
+                                    </Tooltip>
+                                  </>
+                                )}
                               </Box>
                             </TableCell>
                             <TableCell data-label="Label">
