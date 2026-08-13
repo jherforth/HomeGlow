@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, Typography, Box, List, ListItem, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, Button, IconButton, Popover, ToggleButton, ToggleButtonGroup, TextField, Switch, Checkbox, FormControlLabel, Select, MenuItem, FormControl, InputLabel, Chip, Divider, CircularProgress, Alert, Tooltip } from '@mui/material';
 import { Settings, ViewModule, ViewWeek, ChevronLeft, ChevronRight, Add, Delete, Edit, Refresh, Remove, Sync, Schedule } from '@mui/icons-material';
-import { Calendar, momentLocalizer } from 'react-big-calendar';
 import moment from 'moment';
 import { SketchPicker } from 'react-color';
 import axios from 'axios';
@@ -10,11 +9,8 @@ import { getDeviceApiBase } from '../utils/deviceName.js';
 import { getEventPillPalette, getPreferredColorMode } from '../utils/colorContrast.js';
 import { buildMergedDotColors, buildMergedDotBackground, describeMergedCalendars } from '../utils/calendarMergeColors.js';
 import useIsMobile from '../hooks/useIsMobile.js';
-import 'react-big-calendar/lib/css/react-big-calendar.css';
 import MonthDayCell from './MonthDayCell.jsx';
 import ColorPickerPopover from './ColorPickerPopover.jsx';
-
-const localizer = momentLocalizer(moment);
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const WEEKDAY_OPTIONS = [
