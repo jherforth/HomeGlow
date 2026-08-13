@@ -31,6 +31,7 @@ import {
 } from '@mui/material';
 import { Edit, Save, Cancel, Add, Delete, Check, Undo, SwapHoriz, Snooze, Backspace } from '@mui/icons-material';
 import axios from 'axios';
+import { useTranslation } from 'react-i18next';
 import LoadingBackdrop from './LoadingBackdrop';
 import PinModal from './PinModal';
 import { API_BASE_URL } from '../utils/apiConfig.js';
@@ -38,23 +39,24 @@ import { getDeviceApiBase } from '../utils/deviceName.js';
 import { shouldShowChoreToday, getTodayDateString, convertDaysToCrontab, getDueDateStatus, formatDueDate } from '../utils/choreHelpers.js';
 import { subscribePluginEvents } from '../utils/pluginEventBridge.js';
 import { playSound, soundUrl } from '../utils/choreSound.js';
+import { formatTime } from '../utils/dateUtils.js';
 import PrizeCelebration from './PrizeCelebration.jsx';
 
 const USERS_UPDATED_EVENT = 'homeglow:users-updated';
 
-// Format an 'HH:MM' 24h string as a friendly 12h time (e.g. '3:00 PM').
+// Format an 'HH:MM' 24h string for display. Goes through the date seam so a
+// locale on a 24-hour clock renders '15:00' instead of '3:00 PM'.
 const formatDueTime = (dueTime) => {
   if (typeof dueTime !== 'string') return '';
   const match = dueTime.match(/^(\d{2}):(\d{2})$/);
   if (!match) return dueTime;
-  let hour = parseInt(match[1], 10);
-  const minute = match[2];
-  const period = hour >= 12 ? 'PM' : 'AM';
-  hour = hour % 12 || 12;
-  return `${hour}:${minute} ${period}`;
+  const date = new Date();
+  date.setHours(parseInt(match[1], 10), parseInt(match[2], 10), 0, 0);
+  return formatTime(date);
 };
 
 const ChoreWidget = ({ refreshNonce = 0 }) => {
+  const { t } = useTranslation(['chores', 'common']);
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [users, setUsers] = useState([]);
   const [chores, setChores] = useState([]);
@@ -352,7 +354,7 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
         setQuickSpend({ open: false, user: null, amount: '', note: '' });
         await fetchUsers();
       } catch (error) {
-        alert(error?.response?.data?.error || 'Could not redeem clams.');
+        alert(error?.response?.data?.error || t('chores:quickSpend.failed'));
       }
     });
   };
@@ -434,7 +436,7 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
       });
 
       if (hasUncompletedBonusChoreToday) {
-        alert('User already has an uncompleted bonus chore. Complete it first!');
+        alert(t('chores:bonus.alreadyHasBonus'));
         return;
       }
 
@@ -446,7 +448,7 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
       await fetchData();
     } catch (error) {
       console.error('Error assigning bonus chore:', error);
-      alert(error.response?.data?.error || 'Failed to assign bonus chore');
+      alert(error.response?.data?.error || t('chores:bonus.assignFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -570,7 +572,7 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
       }
     } catch (error) {
       console.error('Error checking admin PIN:', error);
-      alert('Could not confirm admin PIN status. Please try again.');
+      alert(t('common:pin.statusCheckFailed'));
     }
   };
 
@@ -634,7 +636,7 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
     if (!schedule) return;
     const parsed = new Date(until);
     if (!until || Number.isNaN(parsed.getTime())) {
-      alert('Enter a valid date and time to snooze until.');
+      alert(t('chores:snooze.invalidDate'));
       return;
     }
     setSnoozeDialog(prev => ({ ...prev, open: false }));
@@ -741,7 +743,7 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
     return (
       <Box
         sx={{ position: 'relative', display: 'inline-block', cursor: 'pointer' }}
-        title={`Redeem clams for ${user.username}`}
+        title={t('chores:widget.redeemClamsFor', { name: user.username })}
         onClick={() => setQuickSpend({ open: true, user, amount: '', note: '' })}
       >
         {imageUrl ? (
@@ -865,7 +867,9 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
             )}
             {schedule.due_date && (
               <Chip
-                label={`${dueStatus === 'overdue' ? '⚠️ Overdue' : `Due ${formatDueDate(schedule.due_date)}`}`}
+                label={dueStatus === 'overdue'
+                  ? t('chores:widget.overdue')
+                  : t('chores:widget.dueOn', { date: formatDueDate(schedule.due_date) })}
                 size="small"
                 color={dueStatus === 'overdue' ? 'error' : dueStatus === 'due' ? 'warning' : 'default'}
                 variant={dueStatus === 'upcoming' || dueStatus === 'none' ? 'outlined' : 'filled'}
@@ -922,7 +926,7 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
         alignItems: 'center',
         p: 2
       }}>
-        <Typography variant="h6">Loading chores...</Typography>
+        <Typography variant="h6">{t('chores:widget.loading')}</Typography>
       </Box>
     );
   }
@@ -939,14 +943,14 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
         p: 2
       }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6">🥟 Daily Chores</Typography>
+          <Typography variant="h6">{t('chores:widget.title')}</Typography>
           <Box sx={{ display: 'flex', gap: 1 }}>
             <Button
               onClick={() => setShowBonusChores(!showBonusChores)}
               variant={showBonusChores ? "contained" : "outlined"}
               size="small"
               sx={{ minWidth: 'auto', px: 1 }}
-              title={showBonusChores ? "Hide Bonus Chores" : "Show Bonus Chores"}
+              title={showBonusChores ? t('chores:bonus.hide') : t('chores:bonus.show')}
             >
               🥟
             </Button>
@@ -973,7 +977,7 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
               variant="contained"
               size="small"
             >
-              Add Chore
+              {t('chores:widget.addChore')}
             </Button>
           </Box>
         </Box>
@@ -1016,7 +1020,7 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
                     </Typography>
                     {allRegularChoresCompleted && (
                       <Chip
-                        label={`All Done! +${dailyClamReward} 🥟`}
+                        label={t('chores:widget.allDone', { count: dailyClamReward })}
                         color="success"
                         size="small"
                         sx={{ mt: 1 }}
@@ -1027,7 +1031,7 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
                   <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, width: '100%' }}>
                     {userChores.length === 0 ? (
                       <Typography variant="body2" sx={{ textAlign: 'center', py: 1, color: 'var(--text-color)', opacity: 0.6 }}>
-                        No chores for today
+                        {t('chores:widget.noChoresToday')}
                       </Typography>
                     ) : (
                       userChores.map(schedule => renderChoreItem(schedule))
@@ -1053,16 +1057,16 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
                 }}
               >
                 <Typography variant="subtitle1" sx={{ textAlign: 'center', mb: 2, color: 'var(--accent)', fontSize: '0.9rem', fontWeight: 'bold' }}>
-                  🥟 Bonus Chores
+                  {t('chores:bonus.heading')}
                 </Typography>
 
                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                  Available:
+                  {t('chores:bonus.available')}
                 </Typography>
                 <Box sx={{ flex: 1, overflowY: 'auto', mb: 2, minHeight: 0, width: '100%' }}>
                   {availableBonusChores.length === 0 ? (
                     <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
-                      No bonus chores available
+                      {t('chores:bonus.noneAvailable')}
                     </Typography>
                   ) : (
                     availableBonusChores.map(schedule => (
@@ -1122,19 +1126,19 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
         >
           <DialogTitle>
             <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              🛍️ Prize Store
+              {t('chores:prizeStore.title')}
             </Typography>
           </DialogTitle>
           <DialogContent>
             {prizeOffers.length === 0 ? (
               <Typography variant="body1" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
-                The store is empty right now. Parents can stock it from Settings → Prize Management.
+                {t('chores:prizeStore.empty')}
               </Typography>
             ) : (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
                 {prizeOffers.filter((offer) => offer.status === 'requested').length > 0 && (
                   <Typography variant="subtitle2" sx={{ fontWeight: 'bold', opacity: 0.7 }}>
-                    Waiting for a parent
+                    {t('chores:prizeStore.waitingForParent')}
                   </Typography>
                 )}
                 {prizeOffers.filter((offer) => offer.status === 'requested').map((offer) => (
@@ -1152,24 +1156,26 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
                       <Chip label={`${offer.clam_cost} 🥟`} sx={{ bgcolor: 'var(--accent)', color: 'white', fontWeight: 'bold' }} />
                     </Box>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                      Requested by <strong>{offer.requested_by_name}</strong>
+                      {/* Composed from fragments rather than one interpolated
+                          string so the names can stay bold. */}
+                      {t('chores:prizeStore.requestedByLabel')} <strong>{offer.requested_by_name}</strong>
                       {(offer.split_user_ids || []).length > 0 && (() => {
                         const coNames = offer.split_user_ids
                           .map((id) => users.find((u) => u.id === id)?.username)
                           .filter(Boolean);
                         const share = Math.floor(offer.clam_cost / (offer.split_user_ids.length + 1));
-                        return <> — splitting with <strong>{coNames.join(', ')}</strong> ({share} 🥟 each)</>;
+                        return <> {t('chores:prizeStore.splittingWithLabel')} <strong>{coNames.join(', ')}</strong> {t('chores:prizeStore.eachShareSuffix', { share })}</>;
                       })()}
                     </Typography>
                     <Box sx={{ display: 'flex', gap: 1 }}>
                       <Button size="small" variant="contained" startIcon={<Check />} onClick={() => approvePrizeOffer(offer.id)}>
-                        Approve
+                        {t('chores:prizeStore.approve')}
                       </Button>
                       <Button size="small" variant="outlined" color="error" onClick={() => declinePrizeOffer(offer.id)}>
-                        Decline
+                        {t('chores:prizeStore.decline')}
                       </Button>
                       <Button size="small" onClick={() => cancelPrizeRequest(offer.id)} sx={{ ml: 'auto', opacity: 0.7 }}>
-                        Cancel request
+                        {t('chores:prizeStore.cancelRequest')}
                       </Button>
                     </Box>
                   </Box>
@@ -1177,7 +1183,7 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
 
                 {prizeOffers.filter((offer) => offer.status === 'available').length > 0 && (
                   <Typography variant="subtitle2" sx={{ fontWeight: 'bold', opacity: 0.7 }}>
-                    On the shelf
+                    {t('chores:prizeStore.onTheShelf')}
                   </Typography>
                 )}
                 {prizeOffers.filter((offer) => offer.status === 'available').map((offer) => (
@@ -1203,7 +1209,7 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
                       return (
                         <>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                            <Typography variant="body2" color="text.secondary">Splitting between:</Typography>
+                            <Typography variant="body2" color="text.secondary">{t('chores:prizeStore.splittingBetween')}</Typography>
                             {users.map((user) => {
                               const selected = splitDraft.userIds.includes(user.id);
                               return (
@@ -1226,20 +1232,24 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
                               disabled={count < 2}
                               onClick={() => requestPrizeOffer(offer.id, splitDraft.userIds[0], splitDraft.userIds.slice(1))}
                             >
-                              Request split
+                              {t('chores:prizeStore.requestSplit')}
                             </Button>
                             <Button size="small" onClick={() => toggleSplitMode(offer.id)} sx={{ opacity: 0.7 }}>
-                              Cancel
+                              {t('common:actions.cancel')}
                             </Button>
                             <Typography variant="body2" color="text.secondary" sx={{ ml: 'auto' }}>
-                              {count < 2 ? 'Pick at least 2 kids' : `${share} 🥟 each${discounted > 0 ? ` (${discounted} 🥟 discounted)` : ''}`}
+                              {count < 2
+                                ? t('chores:prizeStore.pickTwoKids')
+                                : (discounted > 0
+                                  ? t('chores:prizeStore.eachShareDiscounted', { share, discounted })
+                                  : t('chores:prizeStore.eachShare', { share }))}
                             </Typography>
                           </Box>
                         </>
                       );
                     })() : (
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                        <Typography variant="body2" color="text.secondary">Request for:</Typography>
+                        <Typography variant="body2" color="text.secondary">{t('chores:prizeStore.requestFor')}</Typography>
                         {users.map((user) => (
                           <Chip
                             key={user.id}
@@ -1252,7 +1262,7 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
                         ))}
                         {users.length > 1 && (
                           <Button size="small" onClick={() => toggleSplitMode(offer.id)} sx={{ ml: 'auto', whiteSpace: 'nowrap' }}>
-                            👥 Split cost
+                            {t('chores:prizeStore.splitCost')}
                           </Button>
                         )}
                       </Box>
@@ -1264,19 +1274,18 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setShowPrizesModal(false)} variant="contained">
-              Close
+              {t('common:actions.close')}
             </Button>
           </DialogActions>
         </Dialog>
 
         <Dialog open={quickSpend.open} onClose={() => setQuickSpend({ open: false, user: null, amount: '', note: '' })} maxWidth="xs" fullWidth>
           <DialogTitle>
-            🥟 Redeem clams — {quickSpend.user?.username}
+            {t('chores:quickSpend.title', { name: quickSpend.user?.username || '' })}
           </DialogTitle>
           <DialogContent>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              Balance: <strong>{quickSpend.user?.clam_total || 0} clams</strong>. Record clams spent
-              outside the store (e.g. a toy bought while out).
+              {t('chores:quickSpend.balanceLabel')} <strong>{t('chores:quickSpend.clamCount', { count: quickSpend.user?.clam_total || 0 })}</strong>{t('chores:quickSpend.balanceHint')}
             </Typography>
 
             {(() => {
@@ -1319,7 +1328,7 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
                 onClick={() => setQuickSpend((prev) => ({ ...prev, amount: '' }))}
                 sx={{ height: 52, fontWeight: 'bold', borderColor: 'var(--accent)', color: 'var(--accent)' }}
               >
-                Clear
+                {t('common:actions.clear')}
               </Button>
               <Button
                 variant="contained"
@@ -1335,7 +1344,7 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
               </Button>
               <IconButton
                 onClick={quickSpendBackspace}
-                aria-label="Backspace"
+                aria-label={t('common:actions.backspace')}
                 sx={{
                   height: 52,
                   borderRadius: 1,
@@ -1349,14 +1358,14 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
 
             <TextField
               fullWidth
-              label="What for? (optional)"
-              placeholder="Toy store"
+              label={t('chores:quickSpend.whatFor')}
+              placeholder={t('chores:quickSpend.whatForPlaceholder')}
               value={quickSpend.note}
               onChange={(e) => setQuickSpend((prev) => ({ ...prev, note: e.target.value }))}
             />
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setQuickSpend({ open: false, user: null, amount: '', note: '' })}>Cancel</Button>
+            <Button onClick={() => setQuickSpend({ open: false, user: null, amount: '', note: '' })}>{t('common:actions.cancel')}</Button>
             <Button
               variant="contained"
               disabled={
@@ -1366,7 +1375,7 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
               }
               onClick={confirmQuickSpend}
             >
-              Redeem Clams
+              {t('chores:quickSpend.confirm')}
             </Button>
           </DialogActions>
         </Dialog>
@@ -1394,29 +1403,29 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
             }
           }}
         >
-          <DialogTitle>Add New Chore</DialogTitle>
+          <DialogTitle>{t('chores:add.dialogTitle')}</DialogTitle>
           <DialogContent>
             <TextField
               fullWidth
-              label="Title"
+              label={t('common:labels.title')}
               value={newChore.title}
               onChange={(e) => setNewChore({ ...newChore, title: e.target.value })}
               sx={{ mb: 2, mt: 1 }}
             />
             <TextField
               fullWidth
-              label="Description"
+              label={t('common:labels.description')}
               value={newChore.description}
               onChange={(e) => setNewChore({ ...newChore, description: e.target.value })}
               sx={{ mb: 2 }}
             />
             <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel>Assign to User</InputLabel>
+              <InputLabel>{t('chores:add.assignToUser')}</InputLabel>
               <Select
                 value={newChore.user_id}
                 onChange={(e) => setNewChore({ ...newChore, user_id: e.target.value })}
               >
-                <MenuItem value={0}>Bonus Chore (Unassigned)</MenuItem>
+                <MenuItem value={0}>{t('chores:add.bonusChoreUnassigned')}</MenuItem>
                 {users.map(user => (
                   <MenuItem key={user.id} value={user.id}>
                     {user.username}
@@ -1438,14 +1447,14 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
                     color="primary"
                   />
                 }
-                label="One-time chore (no recurrence)"
+                label={t('chores:add.oneTime')}
               />
             </Box>
 
             {!newChore.is_one_time && (
               <Box sx={{ mb: 2 }}>
                 <FormLabel component="legend" sx={{ mb: 1, display: 'block' }}>
-                  Select Days (choose one or more):
+                  {t('chores:add.selectDays')}
                 </FormLabel>
                 <FormGroup row>
                   {daysOfWeek.map(day => (
@@ -1458,7 +1467,9 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
                           color="primary"
                         />
                       }
-                      label={day.charAt(0).toUpperCase() + day.slice(1)}
+                      // Label is translated; `day` stays the English key that
+                      // crontab conversion and the API depend on.
+                      label={t(`chores:days.${day}`)}
                     />
                   ))}
                 </FormGroup>
@@ -1468,19 +1479,19 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
             <TextField
               fullWidth
               type="number"
-              label="🥟 Clam Value (0 for regular chore)"
+              label={t('chores:add.clamValue')}
               value={newChore.clam_value}
               onChange={(e) => setNewChore({ ...newChore, clam_value: parseInt(e.target.value) || 0 })}
             />
           </DialogContent>
           <DialogActions>
-            <Button type="button" onClick={() => setShowAddDialog(false)}>Cancel</Button>
+            <Button type="button" onClick={() => setShowAddDialog(false)}>{t('common:actions.cancel')}</Button>
             <Button
               type="submit"
               variant="contained"
               disabled={!newChore.is_one_time && newChore.assigned_days_of_week.length === 0}
             >
-              Add Chore
+              {t('chores:widget.addChore')}
             </Button>
           </DialogActions>
         </Dialog>
@@ -1495,13 +1506,13 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
           {choreMenu.schedule?.transferable !== 0 && users.filter(u => u.id !== 0 && u.id !== choreMenu.schedule?.user_id).length > 0 && (
             <MenuItem onClick={openTransferDialog}>
               <ListItemIcon><SwapHoriz fontSize="small" /></ListItemIcon>
-              <ListItemText primary="Transfer chore" />
+              <ListItemText primary={t('chores:transfer.menuItem')} />
             </MenuItem>
           )}
           {choreMenu.schedule?.can_snooze !== 0 && (
             <MenuItem onClick={openSnoozeDialog}>
               <ListItemIcon><Snooze fontSize="small" /></ListItemIcon>
-              <ListItemText primary="Snooze due date" />
+              <ListItemText primary={t('chores:snooze.menuItem')} />
             </MenuItem>
           )}
         </Menu>
@@ -1516,7 +1527,7 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
           <DialogTitle>Transfer "{transferDialog.schedule?.title}"</DialogTitle>
           <DialogContent>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              Who should take over this chore?
+              {t('chores:transfer.dialogTitle')}
             </Typography>
             <List dense>
               {users
@@ -1542,20 +1553,20 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
             {transferDialog.targetUserId && isUserDayComplete(transferDialog.targetUserId) && (
               <Box sx={{ mt: 1, p: 1.5, border: '1px solid var(--card-border)', borderRadius: 2 }}>
                 <Typography variant="body2" sx={{ mb: 1 }}>
-                  They already finished today's chores and earned the daily reward.
+                  {t('chores:transfer.alreadyFinished')}
                 </Typography>
                 <RadioGroup
                   value={transferDialog.mode}
                   onChange={(e) => setTransferDialog(prev => ({ ...prev, mode: e.target.value }))}
                 >
-                  <FormControlLabel value="revoke" control={<Radio size="small" />} label="Revoke current reward and assign" />
-                  <FormControlLabel value="keep" control={<Radio size="small" />} label="Keep current reward and assign" />
+                  <FormControlLabel value="revoke" control={<Radio size="small" />} label={t('chores:transfer.revokeAndAssign')} />
+                  <FormControlLabel value="keep" control={<Radio size="small" />} label={t('chores:transfer.keepAndAssign')} />
                 </RadioGroup>
                 {transferDialog.mode === 'keep' && (
                   <TextField
                     type="number"
                     size="small"
-                    label="🥟 Bonus when completed"
+                    label={t('chores:transfer.bonusWhenCompleted')}
                     value={transferDialog.bonus}
                     onChange={(e) => setTransferDialog(prev => ({ ...prev, bonus: e.target.value }))}
                     inputProps={{ min: 0 }}
@@ -1566,9 +1577,9 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
             )}
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setTransferDialog(prev => ({ ...prev, open: false }))}>Cancel</Button>
+            <Button onClick={() => setTransferDialog(prev => ({ ...prev, open: false }))}>{t('common:actions.cancel')}</Button>
             <Button variant="contained" disabled={!transferDialog.targetUserId} onClick={confirmTransfer}>
-              Transfer
+              {t('chores:transfer.confirm')}
             </Button>
           </DialogActions>
         </Dialog>
@@ -1583,25 +1594,25 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
           <DialogTitle>Snooze "{snoozeDialog.schedule?.title}"</DialogTitle>
           <DialogContent>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              The chore stays hidden and isn't required for the daily reward until this time.
+              {t('chores:snooze.explanation')}
             </Typography>
             <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-              <Chip label="Tomorrow" size="small" onClick={() => setSnoozeDialog(prev => ({ ...prev, until: snoozePresetValue(1) }))} />
-              <Chip label="In 3 days" size="small" onClick={() => setSnoozeDialog(prev => ({ ...prev, until: snoozePresetValue(3) }))} />
-              <Chip label="Next week" size="small" onClick={() => setSnoozeDialog(prev => ({ ...prev, until: snoozePresetValue(7) }))} />
+              <Chip label={t('chores:snooze.tomorrow')} size="small" onClick={() => setSnoozeDialog(prev => ({ ...prev, until: snoozePresetValue(1) }))} />
+              <Chip label={t('chores:snooze.inThreeDays')} size="small" onClick={() => setSnoozeDialog(prev => ({ ...prev, until: snoozePresetValue(3) }))} />
+              <Chip label={t('chores:snooze.nextWeek')} size="small" onClick={() => setSnoozeDialog(prev => ({ ...prev, until: snoozePresetValue(7) }))} />
             </Box>
             <TextField
               fullWidth
               type="datetime-local"
-              label="Snooze until"
+              label={t('chores:snooze.until')}
               value={snoozeDialog.until}
               onChange={(e) => setSnoozeDialog(prev => ({ ...prev, until: e.target.value }))}
               InputLabelProps={{ shrink: true }}
             />
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setSnoozeDialog(prev => ({ ...prev, open: false }))}>Cancel</Button>
-            <Button variant="contained" onClick={confirmSnooze}>Snooze</Button>
+            <Button onClick={() => setSnoozeDialog(prev => ({ ...prev, open: false }))}>{t('common:actions.cancel')}</Button>
+            <Button variant="contained" onClick={confirmSnooze}>{t('chores:snooze.confirm')}</Button>
           </DialogActions>
         </Dialog>
 
@@ -1610,7 +1621,7 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
           open={pinGate.open}
           onClose={() => setPinGate({ open: false, onSuccess: null })}
           onVerify={handlePinVerify}
-          title="Confirm with Admin PIN"
+          title={t('common:pin.confirmWithAdminPin')}
         />
       </Box>
 

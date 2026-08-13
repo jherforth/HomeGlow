@@ -7,6 +7,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "check:i18n": "node scripts/checkTranslations.js",
     "test:watch": "vitest",
     "test:coverage": "npm run test:clean && vitest run --coverage",
     "test:clean": "node -e \"const fs=require('node:fs'); if (fs.existsSync('coverage')) fs.rmSync('coverage',{recursive:true,force:true});\""
@@ -18,11 +19,14 @@
     "@mui/material": "^9.2.0",
     "axios": "^1.15.2",
     "cron-parser": "^5.5.0",
+    "i18next": "^26.3.6",
+    "i18next-browser-languagedetector": "^8.2.1",
     "moment": "^2.30.1",
     "react": "^19.2.1",
     "react-color": "2.19.3",
     "react-dom": "^19.2.1",
     "react-grid-layout": "^2.1.0",
+    "react-i18next": "^17.0.11",
     "react-rnd": "^10.5.2",
     "recharts": "^3.9.2"
   },

@@ -1,0 +1,14 @@
+{
+  "interface": {
+    "languageSection": "Idioma y región",
+    "languageSubtitle": "Idioma de esta pantalla y cómo se organizan las semanas"
+  },
+  "weekStart": {
+    "saved": "Inicio de semana guardado.",
+    "saveFailed": "No se pudo guardar el inicio de semana."
+  },
+  "language": {
+    "saved": "Idioma actualizado.",
+    "switchFailed": "No se pudo cambiar el idioma. Inténtalo de nuevo."
+  }
+}

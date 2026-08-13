@@ -1,0 +1,89 @@
+{
+  "widget": {
+    "title": "🥟 Tareas del día",
+    "loading": "Cargando tareas...",
+    "addChore": "Añadir tarea",
+    "noChoresToday": "No hay tareas para hoy",
+    "allDone": "¡Todo hecho! +{{count}} 🥟",
+    "dueOn": "Para el {{date}}",
+    "overdue": "⚠️ Atrasada",
+    "redeemClamsFor": "Canjear almejas de {{name}}"
+  },
+  "days": {
+    "sunday": "Domingo",
+    "monday": "Lunes",
+    "tuesday": "Martes",
+    "wednesday": "Miércoles",
+    "thursday": "Jueves",
+    "friday": "Viernes",
+    "saturday": "Sábado"
+  },
+  "bonus": {
+    "heading": "🥟 Tareas extra",
+    "show": "Mostrar tareas extra",
+    "hide": "Ocultar tareas extra",
+    "available": "Disponibles:",
+    "noneAvailable": "No hay tareas extra disponibles",
+    "alreadyHasBonus": "Esta persona ya tiene una tarea extra sin terminar. ¡Complétala primero!",
+    "assignFailed": "No se pudo asignar la tarea extra"
+  },
+  "add": {
+    "dialogTitle": "Añadir nueva tarea",
+    "assignToUser": "Asignar a",
+    "bonusChoreUnassigned": "Tarea extra (sin asignar)",
+    "oneTime": "Tarea única (sin repetición)",
+    "selectDays": "Elige los días (uno o más):",
+    "clamValue": "🥟 Valor en almejas (0 para tarea normal)"
+  },
+  "transfer": {
+    "menuItem": "Transferir tarea",
+    "dialogTitle": "¿Quién se encarga de esta tarea?",
+    "alreadyFinished": "Ya terminó las tareas de hoy y ganó la recompensa diaria.",
+    "revokeAndAssign": "Retirar la recompensa actual y asignar",
+    "keepAndAssign": "Mantener la recompensa actual y asignar",
+    "bonusWhenCompleted": "🥟 Bonificación al completar",
+    "confirm": "Transferir"
+  },
+  "snooze": {
+    "menuItem": "Posponer la fecha",
+    "explanation": "La tarea queda oculta y no cuenta para la recompensa diaria hasta esa hora.",
+    "tomorrow": "Mañana",
+    "inThreeDays": "En 3 días",
+    "nextWeek": "La próxima semana",
+    "until": "Posponer hasta",
+    "confirm": "Posponer",
+    "invalidDate": "Introduce una fecha y hora válidas para posponer."
+  },
+  "prizeStore": {
+    "title": "🛍️ Tienda de premios",
+    "empty": "La tienda está vacía. Los padres pueden llenarla desde Ajustes → Gestión de premios.",
+    "waitingForParent": "Esperando a un adulto",
+    "onTheShelf": "En la estantería",
+    "requestedByLabel": "Pedido por",
+    "splittingWithLabel": "— compartido con",
+    "eachShareSuffix": "({{share}} 🥟 cada uno)",
+    "approve": "Aprobar",
+    "decline": "Rechazar",
+    "cancelRequest": "Cancelar petición",
+    "requestFor": "Pedir para:",
+    "splitCost": "👥 Compartir coste",
+    "splittingBetween": "Compartido entre:",
+    "requestSplit": "Pedir compartido",
+    "pickTwoKids": "Elige al menos 2 niños",
+    "eachShare": "{{share}} 🥟 cada uno",
+    "eachShareDiscounted": "{{share}} 🥟 cada uno ({{discounted}} 🥟 de descuento)"
+  },
+  "quickSpend": {
+    "title": "🥟 Canjear almejas — {{name}}",
+    "balanceLabel": "Saldo:",
+    "clamCount": "{{count}} almejas",
+    "balanceHint": ". Registra las almejas gastadas fuera de la tienda (por ejemplo, un juguete comprado por ahí).",
+    "whatFor": "¿Para qué? (opcional)",
+    "whatForPlaceholder": "Juguetería",
+    "confirm": "Canjear almejas",
+    "failed": "No se pudieron canjear las almejas."
+  },
+  "celebration": {
+    "redeemedAPrize": "¡{{name}} canjeó un premio!"
+  }
+}

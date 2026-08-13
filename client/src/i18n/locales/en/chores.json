@@ -1,0 +1,89 @@
+{
+  "widget": {
+    "title": "🥟 Daily Chores",
+    "loading": "Loading chores...",
+    "addChore": "Add Chore",
+    "noChoresToday": "No chores for today",
+    "allDone": "All Done! +{{count}} 🥟",
+    "dueOn": "Due {{date}}",
+    "overdue": "⚠️ Overdue",
+    "redeemClamsFor": "Redeem clams for {{name}}"
+  },
+  "days": {
+    "sunday": "Sunday",
+    "monday": "Monday",
+    "tuesday": "Tuesday",
+    "wednesday": "Wednesday",
+    "thursday": "Thursday",
+    "friday": "Friday",
+    "saturday": "Saturday"
+  },
+  "bonus": {
+    "heading": "🥟 Bonus Chores",
+    "show": "Show Bonus Chores",
+    "hide": "Hide Bonus Chores",
+    "available": "Available:",
+    "noneAvailable": "No bonus chores available",
+    "alreadyHasBonus": "User already has an uncompleted bonus chore. Complete it first!",
+    "assignFailed": "Failed to assign bonus chore"
+  },
+  "add": {
+    "dialogTitle": "Add New Chore",
+    "assignToUser": "Assign to User",
+    "bonusChoreUnassigned": "Bonus Chore (Unassigned)",
+    "oneTime": "One-time chore (no recurrence)",
+    "selectDays": "Select Days (choose one or more):",
+    "clamValue": "🥟 Clam Value (0 for regular chore)"
+  },
+  "transfer": {
+    "menuItem": "Transfer chore",
+    "dialogTitle": "Who should take over this chore?",
+    "alreadyFinished": "They already finished today's chores and earned the daily reward.",
+    "revokeAndAssign": "Revoke current reward and assign",
+    "keepAndAssign": "Keep current reward and assign",
+    "bonusWhenCompleted": "🥟 Bonus when completed",
+    "confirm": "Transfer"
+  },
+  "snooze": {
+    "menuItem": "Snooze due date",
+    "explanation": "The chore stays hidden and isn't required for the daily reward until this time.",
+    "tomorrow": "Tomorrow",
+    "inThreeDays": "In 3 days",
+    "nextWeek": "Next week",
+    "until": "Snooze until",
+    "confirm": "Snooze",
+    "invalidDate": "Enter a valid date and time to snooze until."
+  },
+  "prizeStore": {
+    "title": "🛍️ Prize Store",
+    "empty": "The store is empty right now. Parents can stock it from Settings → Prize Management.",
+    "waitingForParent": "Waiting for a parent",
+    "onTheShelf": "On the shelf",
+    "requestedByLabel": "Requested by",
+    "splittingWithLabel": "— splitting with",
+    "eachShareSuffix": "({{share}} 🥟 each)",
+    "approve": "Approve",
+    "decline": "Decline",
+    "cancelRequest": "Cancel request",
+    "requestFor": "Request for:",
+    "splitCost": "👥 Split cost",
+    "splittingBetween": "Splitting between:",
+    "requestSplit": "Request split",
+    "pickTwoKids": "Pick at least 2 kids",
+    "eachShare": "{{share}} 🥟 each",
+    "eachShareDiscounted": "{{share}} 🥟 each ({{discounted}} 🥟 discounted)"
+  },
+  "quickSpend": {
+    "title": "🥟 Redeem clams — {{name}}",
+    "balanceLabel": "Balance:",
+    "clamCount": "{{count}} clams",
+    "balanceHint": ". Record clams spent outside the store (e.g. a toy bought while out).",
+    "whatFor": "What for? (optional)",
+    "whatForPlaceholder": "Toy store",
+    "confirm": "Redeem Clams",
+    "failed": "Could not redeem clams."
+  },
+  "celebration": {
+    "redeemedAPrize": "{{name}} redeemed a prize!"
+  }
+}

@@ -40,3 +40,10 @@ jobs:
       - name: Run tests (${{ matrix.name }})
         run: npm test
         working-directory: ${{ matrix.path }}
+
+      # Every English key must exist in every other language (issue #137), so a
+      # new string can't ship as untranslated text in a translated UI.
+      - name: Check translation completeness
+        if: matrix.name == 'frontend'
+        run: npm run check:i18n
+        working-directory: ${{ matrix.path }}

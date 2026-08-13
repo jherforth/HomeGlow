@@ -101,7 +101,13 @@ import {
   readLocalScreensaverSettings,
   readLocalAutoDarkModeSettings,
   readLocalVacationModeSettings,
+  readLocalWeekStart,
+  writeLocalWeekStart,
+  normalizeWeekStart,
+  WEEK_START_UPDATED_EVENT,
 } from '../utils/interfaceSettings.js';
+import { useTranslation } from 'react-i18next';
+import { changeLanguage, SUPPORTED_LANGUAGES } from '../i18n/index.js';
 
 const USERS_UPDATED_EVENT = 'homeglow:users-updated';
 const DEVICE_SETTINGS_UPDATED_EVENT = 'homeglow:device-settings-updated';
@@ -157,6 +163,7 @@ const buildTagUrl = (repository, tagName) => {
 
 
 const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
+  const { t, i18n } = useTranslation(['admin', 'common']);
   const isMobile = useIsMobile();
   const [currentDeviceName, setCurrentDeviceName] = useState(() => getDeviceName());
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
@@ -240,6 +247,29 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const [draggingTabNumber, setDraggingTabNumber] = useState(null);
   // User display order (issue #134): drag on desktop, arrows everywhere.
   const [draggingUserId, setDraggingUserId] = useState(null);
+  // Language & week start (issue #137), both per-display.
+  const [weekStart, setWeekStart] = useState(readLocalWeekStart);
+
+  const handleLanguageChange = async (code) => {
+    try {
+      await changeLanguage(code);
+      setSaveMessage({ show: true, type: 'success', text: t('admin:language.saved') });
+    } catch (error) {
+      console.error('Error switching language:', error);
+      setSaveMessage({ show: true, type: 'error', text: t('admin:language.switchFailed') });
+    }
+    setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+  };
+
+  const handleWeekStartChange = (value) => {
+    const normalized = normalizeWeekStart(value);
+    setWeekStart(normalized);
+    writeLocalWeekStart(normalized);
+    // The calendar reads this on mount, so tell any open widget to re-read it.
+    window.dispatchEvent(new Event(WEEK_START_UPDATED_EVENT));
+    setSaveMessage({ show: true, type: 'success', text: t('admin:weekStart.saved') });
+    setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+  };
   const [devices, setDevices] = useState([]);
   const [copyDeviceDialog, setCopyDeviceDialog] = useState({ open: false, device: null });
   const [deleteDeviceDialog, setDeleteDeviceDialog] = useState({ open: false, device: null });
@@ -2642,6 +2672,53 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       {activeTab === 1 && (
         <Card>
           <CardContent>
+            {/* Language & region (issue #137). Language is per-display, like
+                the other interface settings; week start is explicit rather
+                than derived from the language. */}
+            <AdminFormSection
+              title={t('admin:interface.languageSection')}
+              subtitle={t('admin:interface.languageSubtitle')}
+            >
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <FormControl fullWidth>
+                    <InputLabel>{t('common:language.label')}</InputLabel>
+                    <Select
+                      value={i18n.language?.split('-')[0] || 'en'}
+                      label={t('common:language.label')}
+                      onChange={(e) => handleLanguageChange(e.target.value)}
+                    >
+                      {SUPPORTED_LANGUAGES.map((lang) => (
+                        <MenuItem key={lang.code} value={lang.code}>
+                          {lang.endonym}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                      {t('common:language.helper')}
+                    </Typography>
+                  </FormControl>
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <FormControl fullWidth>
+                    <InputLabel>{t('common:weekStart.label')}</InputLabel>
+                    <Select
+                      value={weekStart}
+                      label={t('common:weekStart.label')}
+                      onChange={(e) => handleWeekStartChange(e.target.value)}
+                    >
+                      <MenuItem value={0}>{t('common:weekStart.sunday')}</MenuItem>
+                      <MenuItem value={1}>{t('common:weekStart.monday')}</MenuItem>
+                      <MenuItem value={6}>{t('common:weekStart.saturday')}</MenuItem>
+                    </Select>
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                      {t('common:weekStart.helper')}
+                    </Typography>
+                  </FormControl>
+                </Grid>
+              </Grid>
+            </AdminFormSection>
+
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
               <Typography variant="h6">Accent Colors</Typography>
               <Button
