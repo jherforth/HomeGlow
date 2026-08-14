@@ -14,7 +14,8 @@
     "refresh": "Actualizar",
     "backspace": "Retroceso",
     "moveUp": "Subir",
-    "moveDown": "Bajar"
+    "moveDown": "Bajar",
+    "duplicate": "Duplicar"
   },
   "state": {
     "loading": "Cargando...",

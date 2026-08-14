@@ -517,7 +517,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
         <Typography variant="h6">{t('chores:schedules.definitionsHeading')}</Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button startIcon={<Refresh />} onClick={fetchAll} variant="outlined" size="small">
-            Refresh
+            {t('common:actions.refresh')}
           </Button>
           <Button startIcon={<Add />} onClick={openCreateChore} variant="contained" size="small">
             {t('chores:schedules.newChore')}
@@ -533,11 +533,11 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
         <Table size="small" sx={stackableTableSx}>
           <TableHead>
             <TableRow>
-              <TableCell>Title</TableCell>
-              <TableCell>Description</TableCell>
-              <TableCell>Clams</TableCell>
-              <TableCell>Schedules</TableCell>
-              <TableCell>Actions</TableCell>
+              <TableCell>{t('common:labels.title')}</TableCell>
+              <TableCell>{t('common:labels.description')}</TableCell>
+              <TableCell>{t('chores:schedules.clams')}</TableCell>
+              <TableCell>{t('chores:schedules.schedulesColumn')}</TableCell>
+              <TableCell>{t('common:labels.actions')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -550,20 +550,20 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
             ) : (
               chores.map(c => (
                 <TableRow key={c.id}>
-                  <TableCell data-label="Title">
+                  <TableCell data-label={t('common:labels.title')}>
                     <Typography variant="body2" fontWeight="bold">{c.title}</Typography>
                   </TableCell>
-                  <TableCell data-label="Description">
+                  <TableCell data-label={t('common:labels.description')}>
                     <Typography variant="body2" color="text.secondary">
                       {c.description || <em style={{ opacity: 0.5 }}>{t('chores:schedules.noDescription')}</em>}
                     </Typography>
                   </TableCell>
-                  <TableCell data-label="Clams">
+                  <TableCell data-label={t('chores:schedules.clams')}>
                     {c.clam_value > 0
                       ? <Chip label={`${c.clam_value} 🥟`} size="small" color="primary" />
                       : <Typography variant="caption" color="text.secondary">—</Typography>}
                   </TableCell>
-                  <TableCell data-label="Schedules">
+                  <TableCell data-label={t('chores:schedules.schedulesColumn')}>
                     <Chip
                       label={`${getScheduleCountForChore(c.id)} schedule${getScheduleCountForChore(c.id) !== 1 ? 's' : ''}`}
                       size="small"
@@ -593,7 +593,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
 
       {/* ── SCHEDULES ────────────────────────────────────── */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-        <Typography variant="h6">Schedules</Typography>
+        <Typography variant="h6">{t('chores:schedules.schedulesColumn')}</Typography>
         <Button startIcon={<Add />} onClick={openCreateSchedule} variant="contained" size="small">
           {t('chores:schedules.newSchedule')}
         </Button>
@@ -636,13 +636,13 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
         <Table size="small" sx={stackableTableSx}>
           <TableHead>
             <TableRow>
-              <TableCell>Chore</TableCell>
-              <TableCell>Assigned To</TableCell>
-              <TableCell>Next Occurrence</TableCell>
-              <TableCell>Duration</TableCell>
-              <TableCell>Clams</TableCell>
-              <TableCell>Visible</TableCell>
-              <TableCell>Actions</TableCell>
+              <TableCell>{t('chores:schedules.chore')}</TableCell>
+              <TableCell>{t('chores:schedules.assignedTo')}</TableCell>
+              <TableCell>{t('chores:schedules.nextOccurrence')}</TableCell>
+              <TableCell>{t('chores:schedules.duration')}</TableCell>
+              <TableCell>{t('chores:schedules.clams')}</TableCell>
+              <TableCell>{t('chores:schedules.visible')}</TableCell>
+              <TableCell>{t('common:labels.actions')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -655,7 +655,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
             ) : (
               filteredSchedules.map((s) => (
                 <TableRow key={s.id} sx={{ opacity: s.visible ? 1 : 0.5 }}>
-                  <TableCell data-label="Chore">
+                  <TableCell data-label={t('chores:schedules.chore')}>
                     <Box>
                       <Typography variant="body2" fontWeight="bold">{s.title}</Typography>
                       {s.description && (
@@ -663,7 +663,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                       )}
                     </Box>
                   </TableCell>
-                  <TableCell data-label="Assigned To">
+                  <TableCell data-label={t('chores:schedules.assignedTo')}>
                     <Chip
                       label={getUserName(s.user_id)}
                       size="small"
@@ -674,45 +674,47 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                   {/* Crontab column removed (issue #122): the raw expression is
                       redundant next to Next Occurrence and still visible when
                       editing the schedule. */}
-                  <TableCell data-label="Next Occurrence">
+                  <TableCell data-label={t('chores:schedules.nextOccurrence')}>
                     <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
                       {getNextOccurrence(s.crontab)}
                     </Typography>
                   </TableCell>
-                  <TableCell data-label="Duration">
+                  <TableCell data-label={t('chores:schedules.duration')}>
                     {s.crontab && s.duration === 'until-completed' ? (
                       <Chip label={t('chores:schedules.untilCompleted')} size="small" color="warning" />
                     ) : s.crontab && s.duration === 'once-completed' ? (
-                      <Chip label={`Once Completed${s.interval ? ` (${formatScheduleInterval(s.interval)})` : ''}`} size="small" color="secondary" />
+                      <Chip label={s.interval
+                          ? t('chores:schedules.onceCompletedWithInterval', { interval: formatScheduleInterval(s.interval) })
+                          : t('chores:schedules.onceCompleted')} size="small" color="secondary" />
                     ) : s.crontab ? (
                       <Chip label={t('chores:schedules.dayOf')} size="small" variant="outlined" />
                     ) : (
                       <Typography variant="caption" color="text.secondary">—</Typography>
                     )}
                   </TableCell>
-                  <TableCell data-label="Clams">
+                  <TableCell data-label={t('chores:schedules.clams')}>
                     {s.clam_value > 0
                       ? <Chip label={`${s.clam_value} 🥟`} size="small" color="primary" />
                       : <Typography variant="caption" color="text.secondary">—</Typography>}
                   </TableCell>
-                  <TableCell data-label="Visible">
+                  <TableCell data-label={t('chores:schedules.visible')}>
                     <Tooltip title={s.visible ? 'Click to hide' : 'Click to show'}>
                       <Switch size="small" checked={!!s.visible} onChange={() => handleToggleVisible(s)} />
                     </Tooltip>
                   </TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', gap: 0.5 }}>
-                      <Tooltip title="Edit">
+                      <Tooltip title={t('common:actions.edit')}>
                         <IconButton size="small" color="primary" onClick={() => openEditSchedule(s)}>
                           <Edit fontSize="small" />
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title="Duplicate">
+                      <Tooltip title={t('common:actions.duplicate')}>
                         <IconButton size="small" onClick={() => openCopySchedule(s)}>
                           <ContentCopy fontSize="small" />
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title="Delete">
+                      <Tooltip title={t('common:actions.delete')}>
                         <IconButton size="small" color="error" onClick={() => setDeleteScheduleDialog({ open: true, schedule: s })}>
                           <Delete fontSize="small" />
                         </IconButton>
@@ -749,7 +751,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
             <TextField
               fullWidth
               size="small"
-              label="Title"
+              label={t('common:labels.title')}
               value={choreForm.title}
               onChange={(e) => setChoreForm(f => ({ ...f, title: e.target.value }))}
               required
@@ -757,7 +759,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
             <TextField
               fullWidth
               size="small"
-              label="Description"
+              label={t('common:labels.description')}
               value={choreForm.description}
               onChange={(e) => setChoreForm(f => ({ ...f, description: e.target.value }))}
               multiline
@@ -775,7 +777,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button type="button" onClick={() => setChoreDialogOpen(false)} startIcon={<Cancel />}>Cancel</Button>
+          <Button type="button" onClick={() => setChoreDialogOpen(false)} startIcon={<Cancel />}>{t('common:actions.cancel')}</Button>
           <Button
             type="submit"
             variant="contained"
@@ -797,16 +799,17 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
         </DialogTitle>
         <DialogContent>
           <Alert severity="warning" sx={{ mb: 2 }}>
-            This will permanently delete the chore and all {getScheduleCountForChore(deleteChoreDialog.chore?.id)} schedule(s) linked to it. Completion history is preserved.
+            {t('chores:schedules.deleteChoreWarning', { count: getScheduleCountForChore(deleteChoreDialog.chore?.id) })}
           </Alert>
           <Typography variant="body2">
-            Delete <strong>{deleteChoreDialog.chore?.title}</strong>?
+            {/* Composed so the chore's own title stays bold and untranslated. */}
+            {t('chores:schedules.deleteChorePrompt')} <strong>{deleteChoreDialog.chore?.title}</strong>?
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteChoreDialog({ open: false, chore: null })}>Cancel</Button>
+          <Button onClick={() => setDeleteChoreDialog({ open: false, chore: null })}>{t('common:actions.cancel')}</Button>
           <Button onClick={handleDeleteChore} variant="contained" color="error" startIcon={<Delete />}>
-            Delete
+            {t('common:actions.delete')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -832,10 +835,10 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
             <FormControl fullWidth size="small" required>
-              <InputLabel>Chore</InputLabel>
+              <InputLabel>{t('chores:schedules.chore')}</InputLabel>
               <Select
                 value={scheduleForm.chore_id}
-                label="Chore"
+                label={t('chores:schedules.chore')}
                 onChange={(e) => updateScheduleForm({ chore_id: e.target.value })}
               >
                 {chores.map(c => (
@@ -850,10 +853,10 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
             </FormControl>
 
             <FormControl fullWidth size="small">
-              <InputLabel>Assigned To</InputLabel>
+              <InputLabel>{t('chores:schedules.assignedTo')}</InputLabel>
               <Select
                 value={scheduleForm.user_id}
-                label="Assigned To"
+                label={t('chores:schedules.assignedTo')}
                 onChange={(e) => updateScheduleForm({ user_id: e.target.value })}
               >
                 <MenuItem value="">{t('chores:schedules.unassignedBonusChore')}</MenuItem>
@@ -880,21 +883,21 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                   value={scheduleForm.scheduleMode}
                   onChange={(e) => updateScheduleForm({ scheduleMode: e.target.value })}
                 >
-                  <FormControlLabel value="preset" control={<Radio size="small" />} label="Preset" />
-                  <FormControlLabel value="days" control={<Radio size="small" />} label="Days of Week" />
-                  <FormControlLabel value="custom" control={<Radio size="small" />} label="Custom Crontab" />
+                  <FormControlLabel value="preset" control={<Radio size="small" />} label={t('chores:schedules.modePreset')} />
+                  <FormControlLabel value="days" control={<Radio size="small" />} label={t('chores:schedules.modeDaysOfWeek')} />
+                  <FormControlLabel value="custom" control={<Radio size="small" />} label={t('chores:schedules.modeCustomCrontab')} />
                 </RadioGroup>
 
                 <FormControl fullWidth size="small">
-                  <InputLabel>Duration</InputLabel>
+                  <InputLabel>{t('chores:schedules.duration')}</InputLabel>
                   <Select
                     value={scheduleForm.duration}
-                    label="Duration"
+                    label={t('chores:schedules.duration')}
                     onChange={(e) => updateScheduleForm({ duration: e.target.value })}
                   >
                     <MenuItem value="day-of">{t('chores:schedules.dayOf')}</MenuItem>
                     <MenuItem value="until-completed">{t('chores:schedules.untilCompleted')}</MenuItem>
-                    <MenuItem value="once-completed">Once Completed</MenuItem>
+                    <MenuItem value="once-completed">{t('chores:schedules.onceCompleted')}</MenuItem>
                   </Select>
                   <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, ml: 1.5 }}>
                     {scheduleForm.duration === 'until-completed'
@@ -930,10 +933,10 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                           label={t('chores:schedules.sleepUnit')}
                           onChange={(e) => updateScheduleForm({ sleepUnit: e.target.value })}
                         >
-                          <MenuItem value="d">Days</MenuItem>
-                          <MenuItem value="w">Weeks</MenuItem>
-                          <MenuItem value="m">Months</MenuItem>
-                          <MenuItem value="y">Years</MenuItem>
+                          <MenuItem value="d">{t('chores:schedules.unitDays')}</MenuItem>
+                          <MenuItem value="w">{t('chores:schedules.unitWeeks')}</MenuItem>
+                          <MenuItem value="m">{t('chores:schedules.unitMonths')}</MenuItem>
+                          <MenuItem value="y">{t('chores:schedules.unitYears')}</MenuItem>
                         </Select>
                       </FormControl>
                     </Grid>
@@ -992,7 +995,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                     )}
                     {scheduleForm.selectedDays.length === 0 && (
                       <Alert severity="warning" sx={{ mt: 1 }}>
-                        Select at least one day, or use the "One-time task" toggle above.
+                        {t('chores:schedules.selectAtLeastOneDay')}
                       </Alert>
                     )}
                   </Box>
@@ -1017,7 +1020,9 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
             {!crontabError && (
               <Alert severity={scheduleForm.isOneTime ? 'warning' : 'info'} icon={<Schedule />} sx={{ py: 0.5 }}>
                 <Typography variant="body2">
-                  <strong>{scheduleForm.isOneTime ? 'One-time task' : `Next occurrence: ${nextOccurrence}`}</strong>
+                  <strong>{scheduleForm.isOneTime
+                    ? t('chores:schedules.oneTimeTaskShort')
+                    : t('chores:schedules.nextOccurrenceIs', { when: nextOccurrence })}</strong>
                 </Typography>
                 {!scheduleForm.isOneTime && currentCrontab && (
                   <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
@@ -1103,7 +1108,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
             {scheduleForm.sound_enabled && scheduleForm.due_time && (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pl: 1 }}>
                 <SoundPicker
-                  label="Sound"
+                  label={t('chores:schedules.sound')}
                   value={scheduleForm.sound}
                   onChange={(sound) => updateScheduleForm({ sound })}
                   includeNoneOption
@@ -1167,7 +1172,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button type="button" onClick={() => setScheduleDialogOpen(false)} startIcon={<Cancel />}>Cancel</Button>
+          <Button type="button" onClick={() => setScheduleDialogOpen(false)} startIcon={<Cancel />}>{t('common:actions.cancel')}</Button>
           <Button
             type="submit"
             variant="contained"
@@ -1187,14 +1192,14 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
             {t('chores:schedules.deleteScheduleWarning')}
           </Alert>
           <Typography variant="body2">
-            Delete schedule for <strong>{deleteScheduleDialog.schedule?.title}</strong> assigned to{' '}
+            {t('chores:schedules.deleteScheduleFor')} <strong>{deleteScheduleDialog.schedule?.title}</strong> assigned to{' '}
             <strong>{getUserName(deleteScheduleDialog.schedule?.user_id)}</strong>?
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteScheduleDialog({ open: false, schedule: null })}>Cancel</Button>
+          <Button onClick={() => setDeleteScheduleDialog({ open: false, schedule: null })}>{t('common:actions.cancel')}</Button>
           <Button onClick={handleDeleteSchedule} variant="contained" color="error" startIcon={<Delete />}>
-            Delete
+            {t('common:actions.delete')}
           </Button>
         </DialogActions>
       </Dialog>

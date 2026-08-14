@@ -151,7 +151,11 @@
     "visibleActive": "Visible (active)",
     "deleteSchedule": "Delete Schedule",
     "deleteScheduleWarning": "This will permanently delete this schedule. Completion history is preserved.",
-    "deleteScheduleFor": "Delete schedule for"
+    "deleteScheduleFor": "Delete schedule for",
+    "onceCompletedWithInterval": "Once Completed ({{interval}})",
+    "oneTimeTaskShort": "One-time task",
+    "deleteChoreWarning": "This will permanently delete the chore and all {{count}} schedule(s) linked to it. Completion history is preserved.",
+    "deleteChorePrompt": "Delete"
   },
   "presets": {
     "daily": "Daily",

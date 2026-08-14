@@ -151,7 +151,11 @@
     "visibleActive": "Visible (activa)",
     "deleteSchedule": "Eliminar programación",
     "deleteScheduleWarning": "Esto eliminará esta programación de forma permanente. El historial de finalización se conserva.",
-    "deleteScheduleFor": "Eliminar la programación de"
+    "deleteScheduleFor": "Eliminar la programación de",
+    "onceCompletedWithInterval": "Una vez completada ({{interval}})",
+    "oneTimeTaskShort": "Tarea única",
+    "deleteChoreWarning": "Esto eliminará de forma permanente la tarea y las {{count}} programaciones vinculadas a ella. El historial de finalización se conserva.",
+    "deleteChorePrompt": "Eliminar"
   },
   "presets": {
     "daily": "A diario",

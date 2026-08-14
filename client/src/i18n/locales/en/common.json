@@ -14,7 +14,8 @@
     "refresh": "Refresh",
     "backspace": "Backspace",
     "moveUp": "Move up",
-    "moveDown": "Move down"
+    "moveDown": "Move down",
+    "duplicate": "Duplicate"
   },
   "state": {
     "loading": "Loading...",
