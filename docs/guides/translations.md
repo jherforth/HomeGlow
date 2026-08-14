@@ -81,18 +81,38 @@ an external calendar. They render as-is in every language, by design.
 Where a failure is shown to a person, translate a message on the client for that
 operation rather than displaying the server's text.
 
-## What is translated so far
+## What is translated
 
-| Surface | Status |
-|---|---|
-| Chore widget, prize store, quick spend, celebration | done |
-| Admin Panel — language & week start | done |
-| Admin Panel — everything else | not yet |
-| Calendar, Weather, Photos widgets | not yet |
+Every user-facing surface: the chore, calendar, weather, and photo widgets,
+the prize store, the tab icon picker, and the whole Admin Panel including the
+chore schedules tab.
 
-Untranslated surfaces still render English in every language; they are simply
-not wired to `t()` yet. Convert one file at a time: add its namespace to
-`NAMESPACES` in `i18n/index.js` once its locale files exist.
+Two things are deliberately **not** translated:
+
+- **Server error strings.** The API returns diagnostics, not user copy. Where a
+  failure is shown to a person, the client translates a message for that
+  operation instead of displaying the server's text.
+- **Console logging.** `console.error` calls stay in English so issue reports
+  are searchable regardless of the reporter's language.
+
+## Notes for whoever converts the next component
+
+Two mistakes cost real time here, both worth avoiding:
+
+**Do not bulk-edit source files with PowerShell.** `Set-Content` writes
+Windows-1252 by default and `-Encoding utf8` adds a BOM; either one mangles
+every emoji in the file (`⚠️` becomes `âš ï¸`). Use Node for scripted edits —
+it reads and writes UTF-8 correctly. Note that the file uses CRLF, so
+multi-line patterns need `\r\n`.
+
+**Check for `prop="{t('key')}"` after any bulk pass.** Replacing a bare text
+value that happens to sit inside a quoted JSX prop produces a literal string
+containing braces. It builds cleanly and renders the key to the user. Scan for
+it with:
+
+```bash
+grep -rn '="{t(' client/src
+```
 
 ## Checking your work
 

@@ -272,15 +272,15 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
   // Refresh interval options in milliseconds
   const refreshIntervalOptions = [
-    { label: 'Disabled', value: 0 },
-    { label: '5 minutes', value: 5 * 60 * 1000 },
-    { label: '15 minutes', value: 15 * 60 * 1000 },
-    { label: '30 minutes', value: 30 * 60 * 1000 },
-    { label: '1 hour', value: 60 * 60 * 1000 },
-    { label: '2 hours', value: 2 * 60 * 60 * 1000 },
-    { label: '6 hours', value: 6 * 60 * 60 * 1000 },
-    { label: '12 hours', value: 12 * 60 * 60 * 1000 },
-    { label: '24 hours', value: 24 * 60 * 60 * 1000 }
+    { label: t('admin:refresh.disabled'), value: 0 },
+    { label: t('admin:refresh.min5'), value: 5 * 60 * 1000 },
+    { label: t('admin:refresh.min15'), value: 15 * 60 * 1000 },
+    { label: t('admin:refresh.min30'), value: 30 * 60 * 1000 },
+    { label: t('admin:refresh.hour1'), value: 60 * 60 * 1000 },
+    { label: t('admin:refresh.hour2'), value: 2 * 60 * 60 * 1000 },
+    { label: t('admin:refresh.hour6'), value: 6 * 60 * 60 * 1000 },
+    { label: t('admin:refresh.hour12'), value: 12 * 60 * 60 * 1000 },
+    { label: t('admin:refresh.hour24'), value: 24 * 60 * 60 * 1000 }
   ];
 
   useEffect(() => {
@@ -345,7 +345,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       setPinExists(response.data.exists);
 
       if (response.data.exists) {
-        setPinModal({ open: true, mode: 'verify', title: 'Enter Admin PIN' });
+        setPinModal({ open: true, mode: 'verify', title: t('admin:pin.enter') });
       } else {
         setIsAuthenticated(true);
       }
@@ -434,7 +434,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       await fetchPrizes();
     } catch (error) {
       console.error('Error adding prize to store:', error);
-      alert('Failed to add the prize to the store.');
+      alert(t('admin:messages.prizeAddToStoreFailed'));
     }
   };
 
@@ -444,7 +444,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       await fetchPrizes();
     } catch (error) {
       console.error('Error removing prize offer:', error);
-      alert('Failed to remove the offer.');
+      alert(t('admin:messages.prizeRemoveOfferFailed'));
     }
   };
 
@@ -587,13 +587,13 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       await axios.post(`${API_BASE_URL}/api/settings`, { key, value });
       setSettings(prev => ({ ...prev, [key]: value }));
       if (showMessage) {
-        setSaveMessage({ show: true, type: 'success', text: 'Setting saved successfully!' });
+        setSaveMessage({ show: true, type: 'success', text: t('admin:messages.settingSaved') });
         setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
       }
     } catch (error) {
       console.error(`Error saving ${key}:`, error);
       if (showMessage) {
-        setSaveMessage({ show: true, type: 'error', text: 'Failed to save setting. Please try again.' });
+        setSaveMessage({ show: true, type: 'error', text: t('admin:messages.settingSaveFailed') });
         setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
       }
       throw error;
@@ -607,11 +607,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         key: 'daily_completion_clam_reward',
         value: settings.daily_completion_clam_reward || '2',
       });
-      setSaveMessage({ show: true, type: 'success', text: 'Daily completion clam reward saved.' });
+      setSaveMessage({ show: true, type: 'success', text: t('admin:messages.clamRewardSaved') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } catch (error) {
       console.error('Error saving clam reward:', error);
-      setSaveMessage({ show: true, type: 'error', text: 'Failed to save clam reward. Please try again.' });
+      setSaveMessage({ show: true, type: 'error', text: t('admin:messages.clamRewardFailed') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } finally {
       setIsLoading(false);
@@ -626,11 +626,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         axios.post(`${API_BASE_URL}/api/settings`, { key: 'CHORE_SOUND_DEFAULT', value: settings.CHORE_SOUND_DEFAULT || '' }),
         axios.post(`${API_BASE_URL}/api/settings`, { key: 'CHORE_SOUND_VOLUME', value: String(settings.CHORE_SOUND_VOLUME ?? '100') }),
       ]);
-      setSaveMessage({ show: true, type: 'success', text: 'Chore sound settings saved.' });
+      setSaveMessage({ show: true, type: 'success', text: t('admin:messages.choreSoundsSaved') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } catch (error) {
       console.error('Error saving chore sound settings:', error);
-      setSaveMessage({ show: true, type: 'error', text: 'Failed to save chore sound settings.' });
+      setSaveMessage({ show: true, type: 'error', text: t('admin:messages.choreSoundsFailed') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } finally {
       setIsLoading(false);
@@ -644,11 +644,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         axios.post(`${API_BASE_URL}/api/settings`, { key: 'WEATHER_API_KEY', value: settings.WEATHER_API_KEY || '' }),
         axios.post(`${API_BASE_URL}/api/settings`, { key: 'PROXY_WHITELIST', value: settings.PROXY_WHITELIST || '' })
       ]);
-      setSaveMessage({ show: true, type: 'success', text: 'All settings saved successfully!' });
+      setSaveMessage({ show: true, type: 'success', text: t('admin:messages.allSettingsSaved') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } catch (error) {
       console.error('Error saving API settings:', error);
-      setSaveMessage({ show: true, type: 'error', text: 'Failed to save some settings. Please try again.' });
+      setSaveMessage({ show: true, type: 'error', text: t('admin:messages.someSettingsFailed') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } finally {
       setIsLoading(false);
@@ -690,7 +690,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const saveWidgetSettings = async () => {
     const missingEnabledWidgets = getMissingEnabledCoreWidgetAssignments(widgetSettings, widgetAssignments);
     if (missingEnabledWidgets.length > 0) {
-      setSaveMessage({ show: true, type: 'error', text: 'Each enabled widget must have at least one tab selected.' });
+      setSaveMessage({ show: true, type: 'error', text: t('admin:messages.widgetNeedsTab') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 4000);
       return;
     }
@@ -711,11 +711,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         await onTabsChanged();
       }
 
-      setSaveMessage({ show: true, type: 'success', text: 'Widget settings saved successfully.' });
+      setSaveMessage({ show: true, type: 'success', text: t('admin:messages.widgetSettingsSaved') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } catch (error) {
       console.error('Error saving widget settings:', error);
-      setSaveMessage({ show: true, type: 'error', text: 'Failed to save widget settings. Please try again.' });
+      setSaveMessage({ show: true, type: 'error', text: t('admin:messages.widgetSettingsFailed') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } finally {
       setIsLoading(false);
@@ -725,7 +725,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const savePluginSettings = async () => {
     const missingEnabledPlugins = getMissingEnabledPluginAssignments(pluginSettings, pluginAssignments, uploadedWidgets);
     if (missingEnabledPlugins.length > 0) {
-      setSaveMessage({ show: true, type: 'error', text: 'Each enabled plugin must have at least one tab selected.' });
+      setSaveMessage({ show: true, type: 'error', text: t('admin:messages.pluginNeedsTab') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 4000);
       return;
     }
@@ -781,17 +781,17 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         setSaveMessage({
           show: true,
           type: 'error',
-          text: `Saved, but some plugin options were rejected — ${declaredSettingsErrors.join('; ')}`,
+          text: t('admin:messages.pluginOptionsRejected', { errors: declaredSettingsErrors.join('; ') }),
         });
         setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 6000);
       } else {
         setPluginDeclaredDirty({});
-        setSaveMessage({ show: true, type: 'success', text: 'Plugin settings saved successfully.' });
+        setSaveMessage({ show: true, type: 'success', text: t('admin:messages.pluginSettingsSaved') });
         setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
       }
     } catch (error) {
       console.error('Error saving plugin settings:', error);
-      setSaveMessage({ show: true, type: 'error', text: 'Failed to save plugin settings. Please try again.' });
+      setSaveMessage({ show: true, type: 'error', text: t('admin:messages.pluginSettingsFailed') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } finally {
       setIsLoading(false);
@@ -834,7 +834,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const saveTabDefinition = async (tabData) => {
     const trimmedLabel = (tabData.label || '').trim();
     if (!trimmedLabel) {
-      setSaveMessage({ show: true, type: 'error', text: 'Tab label is required.' });
+      setSaveMessage({ show: true, type: 'error', text: t('admin:messages.tabLabelRequired') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
       return;
     }
@@ -860,11 +860,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       if (onTabsChanged) {
         await onTabsChanged();
       }
-      setSaveMessage({ show: true, type: 'success', text: `Tab ${tabIconModalState.mode === 'edit' ? 'updated' : 'created'} successfully.` });
+      setSaveMessage({ show: true, type: 'success', text: tabIconModalState.mode === 'edit' ? t('admin:messages.tabUpdated') : t('admin:messages.tabCreated') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } catch (error) {
       console.error('Error saving tab:', error);
-      setSaveMessage({ show: true, type: 'error', text: 'Failed to save tab. Please try again.' });
+      setSaveMessage({ show: true, type: 'error', text: t('admin:messages.tabSaveFailed') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } finally {
       setIsLoading(false);
@@ -889,11 +889,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       if (onTabsChanged) {
         await onTabsChanged();
       }
-      setSaveMessage({ show: true, type: 'success', text: 'Tab deleted successfully.' });
+      setSaveMessage({ show: true, type: 'success', text: t('admin:messages.tabDeleted') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } catch (error) {
       console.error('Error deleting tab:', error);
-      setSaveMessage({ show: true, type: 'error', text: 'Failed to delete tab. Please try again.' });
+      setSaveMessage({ show: true, type: 'error', text: t('admin:messages.tabDeleteFailed') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } finally {
       setIsLoading(false);
@@ -911,7 +911,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       }
     } catch (error) {
       console.error('Error reordering tabs:', error);
-      setSaveMessage({ show: true, type: 'error', text: 'Failed to reorder tabs. Please try again.' });
+      setSaveMessage({ show: true, type: 'error', text: t('admin:messages.tabReorderFailed') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } finally {
       setIsLoading(false);
@@ -932,11 +932,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         await onTabsChanged();
       }
 
-      setSaveMessage({ show: true, type: 'success', text: 'Tab label visibility updated.' });
+      setSaveMessage({ show: true, type: 'success', text: t('admin:messages.tabLabelVisibilityUpdated') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } catch (error) {
       console.error('Error updating tab label visibility:', error);
-      setSaveMessage({ show: true, type: 'error', text: 'Failed to update tab label visibility.' });
+      setSaveMessage({ show: true, type: 'error', text: t('admin:messages.tabLabelVisibilityFailed') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } finally {
       setIsLoading(false);
@@ -957,7 +957,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       window.dispatchEvent(new Event(USERS_UPDATED_EVENT));
     } catch (error) {
       console.error('Error reordering users:', error);
-      setSaveMessage({ show: true, type: 'error', text: 'Failed to reorder users. Please try again.' });
+      setSaveMessage({ show: true, type: 'error', text: t('admin:messages.userReorderFailed') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } finally {
       setIsLoading(false);
@@ -1066,11 +1066,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         await onTabsChanged();
       }
 
-      setSaveMessage({ show: true, type: 'success', text: 'Device tabs and widget settings copied successfully.' });
+      setSaveMessage({ show: true, type: 'success', text: t('admin:messages.deviceCopied') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } catch (error) {
       console.error('Error copying device settings:', error);
-      setSaveMessage({ show: true, type: 'error', text: 'Failed to copy device settings. Please try again.' });
+      setSaveMessage({ show: true, type: 'error', text: t('admin:messages.deviceCopyFailed') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } finally {
       setIsLoading(false);
@@ -1112,7 +1112,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       setCurrentDeviceName(nextName);
       setRenameDeviceDialog({ open: false, currentName: '', newName: '', error: '' });
       await fetchDevices();
-      setSaveMessage({ show: true, type: 'success', text: 'Device Name updated. Reloading to apply changes.' });
+      setSaveMessage({ show: true, type: 'success', text: t('admin:messages.deviceRenamed') });
       setTimeout(() => {
         window.location.reload();
       }, 400);
@@ -1132,7 +1132,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     }
 
     if (deviceName === currentDeviceName) {
-      setSaveMessage({ show: true, type: 'error', text: 'You cannot delete the current device.' });
+      setSaveMessage({ show: true, type: 'error', text: t('admin:messages.cannotDeleteCurrentDevice') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
       setDeleteDeviceDialog({ open: false, device: null });
       return;
@@ -1143,11 +1143,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       await axios.delete(`${API_BASE_URL}/api/devices/${encodeURIComponent(deviceName)}`);
       setDeleteDeviceDialog({ open: false, device: null });
       await fetchDevices();
-      setSaveMessage({ show: true, type: 'success', text: 'Device deleted successfully.' });
+      setSaveMessage({ show: true, type: 'success', text: t('admin:messages.deviceDeleted') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } catch (error) {
       console.error('Error deleting device:', error);
-      setSaveMessage({ show: true, type: 'error', text: 'Failed to delete device. Please try again.' });
+      setSaveMessage({ show: true, type: 'error', text: t('admin:messages.deviceDeleteFailed') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } finally {
       setIsLoading(false);
@@ -1164,11 +1164,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       applyAccentColors();
       window.dispatchEvent(new Event(INTERFACE_SETTINGS_UPDATED_EVENT));
 
-      setSaveMessage({ show: true, type: 'success', text: 'Accent colors saved for this display.' });
+      setSaveMessage({ show: true, type: 'success', text: t('admin:messages.colorsSaved') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } catch (error) {
       console.error('Error saving accent colors:', error);
-      setSaveMessage({ show: true, type: 'error', text: 'Failed to save accent colors. Please try again.' });
+      setSaveMessage({ show: true, type: 'error', text: t('admin:messages.colorsFailed') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } finally {
       setIsLoading(false);
@@ -1190,7 +1190,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
   const resetToDefaults = () => {
     setInterfaceColors({ ...DEFAULT_INTERFACE_COLORS });
-    setSaveMessage({ show: true, type: 'info', text: 'Reset to default colors. Click Save to apply.' });
+    setSaveMessage({ show: true, type: 'info', text: t('admin:messages.colorsReset') });
     setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
   };
 
@@ -1200,11 +1200,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       const normalizedScreensaver = normalizeScreensaverSettings(screensaverSettings);
       localStorage.setItem(SCREENSAVER_SETTINGS_STORAGE_KEY, JSON.stringify(normalizedScreensaver));
       window.dispatchEvent(new Event(INTERFACE_SETTINGS_UPDATED_EVENT));
-      setSaveMessage({ show: true, type: 'success', text: 'Screensaver settings saved for this display.' });
+      setSaveMessage({ show: true, type: 'success', text: t('admin:messages.screensaverSaved') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } catch (error) {
       console.error('Error saving screensaver settings:', error);
-      setSaveMessage({ show: true, type: 'error', text: 'Failed to save screensaver settings. Please try again.' });
+      setSaveMessage({ show: true, type: 'error', text: t('admin:messages.screensaverFailed') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } finally {
       setIsLoading(false);
@@ -1229,11 +1229,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       } catch (serverError) {
         console.warn('Vacation mode saved for this display, but the household setting could not be updated:', serverError);
       }
-      setSaveMessage({ show: true, type: 'success', text: 'Vacation mode settings saved for this display.' });
+      setSaveMessage({ show: true, type: 'success', text: t('admin:messages.vacationSaved') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } catch (error) {
       console.error('Error saving vacation mode settings:', error);
-      setSaveMessage({ show: true, type: 'error', text: 'Failed to save vacation mode settings. Please try again.' });
+      setSaveMessage({ show: true, type: 'error', text: t('admin:messages.vacationFailed') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } finally {
       setIsLoading(false);
@@ -1306,7 +1306,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       localStorage.setItem(AUTO_DARK_MODE_SETTINGS_STORAGE_KEY, JSON.stringify(nextSettings));
       window.dispatchEvent(new Event(INTERFACE_SETTINGS_UPDATED_EVENT));
       setAutoDarkModeSettings(nextSettings);
-      setSaveMessage({ show: true, type: 'success', text: 'Auto dark mode disabled for this display.' });
+      setSaveMessage({ show: true, type: 'success', text: t('admin:messages.autoDarkDisabled') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
       return;
     }
@@ -1315,7 +1315,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       setSaveMessage({
         show: true,
         type: 'error',
-        text: 'Add and save your OpenWeather API key in Connections before enabling auto dark mode.',
+        text: t('admin:messages.autoDarkNeedsKey'),
       });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3500);
       return;
@@ -1325,7 +1325,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       setSaveMessage({
         show: true,
         type: 'error',
-        text: 'Enter a location before enabling auto dark mode.',
+        text: t('admin:messages.autoDarkNeedsLocation'),
       });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
       return;
@@ -1349,7 +1349,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       setSaveMessage({
         show: true,
         type: 'success',
-        text: 'Auto dark mode saved for this display. Use the bottom-bar theme button until the half sun/half moon icon appears.',
+        text: t('admin:messages.autoDarkSaved'),
       });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 4500);
     } catch (error) {
@@ -1510,7 +1510,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       setDeleteUserDialog({ open: false, user: null });
     } catch (error) {
       console.error('Error deleting user:', error);
-      alert('Failed to delete user. Please try again.');
+      alert(t('admin:messages.userDeleteFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -1566,7 +1566,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   };
 
   const deletePrize = async (prizeId) => {
-    if (window.confirm('Are you sure you want to delete this prize?')) {
+    if (window.confirm(t('admin:confirm.deletePrize'))) {
       try {
         setIsLoading(true);
         await axios.delete(`${API_BASE_URL}/api/prizes/${prizeId}`);
@@ -1595,20 +1595,20 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       if (onPluginsChanged) onPluginsChanged();
     } catch (error) {
       console.error('Error uploading widget:', error);
-      alert('Failed to upload widget. Please try again.');
+      alert(t('admin:messages.widgetUploadFailed'));
     } finally {
       setIsLoading(false);
     }
   };
 
   const deleteWidget = async (filename) => {
-    if (window.confirm('Are you sure you want to delete this widget?')) {
+    if (window.confirm(t('admin:confirm.deleteWidget'))) {
       // Platform plugins own server-side storage/settings. Keeping them lets a
       // reinstall of the SAME plugin resume; purging prevents a different
       // plugin that claims the same id from inheriting the data.
       const widgetEntry = uploadedWidgets.find((widget) => widget.filename === filename);
       const purgeData = Boolean(widgetEntry?.pluginId) && window.confirm(
-        "Also delete this plugin's stored data and settings?\n\nChoose Cancel to keep them (e.g. if you plan to reinstall the same plugin later)."
+        t('admin:confirm.purgePluginData')
       );
       try {
         setIsLoading(true);
@@ -1648,10 +1648,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       });
       fetchUploadedWidgets();
       if (onPluginsChanged) onPluginsChanged();
-      alert(`Widget "${widget.name}" installed successfully!`);
+      alert(t('admin:messages.widgetInstalled', { name: widget.name }));
     } catch (error) {
       console.error('Error installing GitHub widget:', error);
-      alert('Failed to install widget. Please try again.');
+      alert(t('admin:messages.widgetInstallFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -1667,7 +1667,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   };
 
   const deleteChore = async (scheduleId) => {
-    if (window.confirm('Are you sure you want to remove this chore schedule?')) {
+    if (window.confirm(t('admin:confirm.deleteSchedule'))) {
       try {
         setIsLoading(true);
         await axios.delete(`${API_BASE_URL}/api/chore-schedules/${scheduleId}`);
@@ -1680,7 +1680,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         }
       } catch (error) {
         console.error('Error deleting chore schedule:', error);
-        alert('Failed to delete chore schedule. Please try again.');
+        alert(t('admin:messages.scheduleDeleteFailed'));
       } finally {
         setIsLoading(false);
       }
@@ -1701,7 +1701,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
     try {
       setIsLoading(true);
-      console.log(`Uploading picture for user ${userId}...`);
+      console.log(t('admin:messages.uploadingPicture'));
 
       const response = await axios.post(
         `${API_BASE_URL}/api/users/${userId}/upload-picture`,
@@ -1716,7 +1716,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     } catch (error) {
       console.error('Error uploading profile picture:', error);
       console.error('Error details:', error.response?.data);
-      alert('Failed to upload profile picture. Please try again.');
+      alert(t('admin:messages.pictureUploadFailed'));
     } finally {
       setIsLoading(false);
       event.target.value = '';
@@ -1800,7 +1800,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         setPinExists(true);
         setIsAuthenticated(true);
         setPinModal({ open: false, mode: 'verify', title: '' });
-        setSaveMessage({ show: true, type: 'success', text: 'Admin PIN set successfully!' });
+        setSaveMessage({ show: true, type: 'success', text: t('admin:messages.pinSet') });
         setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
       } else {
         const response = await axios.post(`${API_BASE_URL}/api/admin-pin/verify`, { pin });
@@ -1827,22 +1827,22 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   };
 
   const handleUpdatePin = () => {
-    setPinModal({ open: true, mode: 'set', title: 'Update Admin PIN' });
+    setPinModal({ open: true, mode: 'set', title: t('admin:pin.update') });
   };
 
   const handleClearPin = async () => {
-    if (!window.confirm('Are you sure you want to remove the admin PIN? Anyone will be able to access the admin panel without a PIN.')) {
+    if (!window.confirm(t('admin:confirm.removePin'))) {
       return;
     }
     try {
       setIsLoading(true);
       await axios.delete(`${API_BASE_URL}/api/admin-pin`);
       setPinExists(false);
-      setSaveMessage({ show: true, type: 'success', text: 'Admin PIN removed. Admin panel is now unprotected.' });
+      setSaveMessage({ show: true, type: 'success', text: t('admin:messages.pinRemoved') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 4000);
     } catch (error) {
       console.error('Error clearing PIN:', error);
-      setSaveMessage({ show: true, type: 'error', text: 'Failed to remove PIN. Please try again.' });
+      setSaveMessage({ show: true, type: 'error', text: t('admin:messages.pinRemoveFailed') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } finally {
       setIsLoading(false);
@@ -1897,7 +1897,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
   const getRefreshIntervalLabel = (interval) => {
     const option = refreshIntervalOptions.find(opt => opt.value === interval);
-    return option ? option.label : 'Disabled';
+    return option ? option.label : t('admin:refresh.disabled');
   };
 
   const adminTabs = [
@@ -1976,10 +1976,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 scrollButtons="auto"
                 allowScrollButtonsMobile
               >
-                <Tab label="Widgets" />
-                <Tab label="Plugins" />
-                <Tab label="Tabs" />
-                <Tab label="Devices" />
+                <Tab label={t('admin:subTabs.widgets')} />
+                <Tab label={t('admin:subTabs.plugins')} />
+                <Tab label={t('admin:subTabs.tabs')} />
+                <Tab label={t('admin:subTabs.devices')} />
               </Tabs>
             </Box>
 
@@ -1999,7 +1999,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 }}
               >
                 <Alert severity="info" sx={{ mb: 2 }}>
-                  Enable widgets to show them on the dashboard. Click to select a widget, then drag to move or resize from corners.
+                  {t('admin:widgets.help')}
                 </Alert>
 
                 {Object.entries(widgetSettings).filter(([key]) =>
@@ -2022,7 +2022,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                               onChange={() => handleWidgetToggle(widget, 'enabled')}
                             />
                           }
-                          label="Enabled"
+                          label={t('common:labels.enabled')}
                         />
                       </Grid>
 
@@ -2048,10 +2048,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                         renderInput={(params) => (
                           <TextField
                             {...params}
-                            label="Show on Tabs"
+                            label={t('admin:widgets.showOnTabs')}
                             required={Boolean(config.enabled)}
                             error={hasRequiredTabsError}
-                            placeholder="Select tabs..."
+                            placeholder={t('admin:widgets.selectTabs')}
                             helperText={
                               hasRequiredTabsError
                                 ? 'Required: select at least one tab when this widget is enabled.'
@@ -2073,7 +2073,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
                 <Box sx={{ mb: 3, p: 2, border: '2px solid var(--accent)', borderRadius: 1, backgroundColor: 'rgba(158, 127, 255, 0.05)' }}>
                   <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>
-                    Weather Widget
+                    {t('admin:widgets.weatherWidget')}
                   </Typography>
 
                   <Grid container spacing={2} sx={{ alignItems: 'center' }}>
@@ -2085,7 +2085,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                             onChange={() => handleWidgetToggle('weather', 'enabled')}
                           />
                         }
-                        label="Enabled"
+                        label={t('common:labels.enabled')}
                       />
                     </Grid>
 
@@ -2111,10 +2111,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                       renderInput={(params) => (
                         <TextField
                           {...params}
-                          label="Show on Tabs"
+                          label={t('admin:widgets.showOnTabs')}
                           required={Boolean(widgetSettings.weather?.enabled)}
                           error={weatherHasRequiredTabsError}
-                          placeholder="Select tabs..."
+                          placeholder={t('admin:widgets.selectTabs')}
                           helperText={
                             weatherHasRequiredTabsError
                               ? 'Required: select at least one tab when this widget is enabled.'
@@ -2133,7 +2133,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 </Box>
 
                 <Button type="submit" variant="contained" sx={{ mt: 2 }} startIcon={<Save />}>
-                  Save Widget Settings
+                  {t('admin:widgets.saveSettings')}
                 </Button>
               </Box>
             )}
@@ -2142,7 +2142,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
               <>
                 <Grid container spacing={3}>
                   <Grid size={{ xs: 12, md: 6 }}>
-                    <Typography variant="subtitle1" gutterBottom>Upload Custom Widget</Typography>
+                    <Typography variant="subtitle1" gutterBottom>{t('admin:widgets.uploadCustom')}</Typography>
                     <Button
                       variant="contained"
                       component="label"
@@ -2150,7 +2150,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                       fullWidth
                       sx={{ mb: 2 }}
                     >
-                      Upload HTML Widget
+                      {t('admin:widgets.uploadHtml')}
                       <input
                         type="file"
                         hidden
@@ -2159,13 +2159,13 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                       />
                     </Button>
 
-                    <Typography variant="subtitle1" gutterBottom>Uploaded Widgets</Typography>
+                    <Typography variant="subtitle1" gutterBottom>{t('admin:widgets.uploaded')}</Typography>
                     <List>
                       {uploadedWidgets.map((widget) => (
                         <ListItem key={widget.filename} sx={{ border: '1px solid var(--card-border)', borderRadius: 1, mb: 1 }}>
                           <ListItemText
                             primary={widget.name}
-                            secondary={`File: ${widget.filename}`}
+                            secondary={t('admin:widgets.fileName', { filename: widget.filename })}
                           />
                           <ListItemSecondaryAction>
                             <IconButton onClick={() => deleteWidget(widget.filename)} color="error">
@@ -2179,7 +2179,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
                   <Grid size={{ xs: 12, md: 6 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                      <Typography variant="subtitle1">GitHub Widget Repository</Typography>
+                      <Typography variant="subtitle1">{t('admin:widgets.githubRepo')}</Typography>
                       <Button
                         onClick={fetchGithubWidgets}
                         startIcon={loadingGithub ? <CircularProgress size={16} /> : <Refresh />}
@@ -2187,7 +2187,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                         variant="contained"
                         color="primary"
                       >
-                        REFRESH AVAILABLE PLUGINS
+                        {t('admin:widgets.refreshAvailable')}
                       </Button>
                     </Box>
 
@@ -2206,7 +2206,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
                     {githubWidgets.length === 0 && !loadingGithub && (
                       <Alert severity="info" sx={{ mb: 2 }} icon={<Refresh />}>
-                        Click the <strong>"REFRESH AVAILABLE PLUGINS"</strong> button above to load the list of plugins available for installation.
+                        {t('admin:widgets.clickThe')} <strong>{t('admin:widgets.refreshAvailable')}</strong> {t('admin:widgets.buttonAboveToLoad')}
                       </Alert>
                     )}
 
@@ -2224,7 +2224,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                               size="small"
                               variant="outlined"
                             >
-                              Install
+                              {t('admin:widgets.install')}
                             </Button>
                           </ListItemSecondaryAction>
                         </ListItem>
@@ -2243,9 +2243,9 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                     }}
                   >
                     <Divider sx={{ my: 3 }} />
-                    <Typography variant="h6" gutterBottom>Plugin Settings</Typography>
+                    <Typography variant="h6" gutterBottom>{t('admin:plugins.settings')}</Typography>
                     <Alert severity="info" sx={{ mb: 2 }}>
-                      Configure each installed plugin below. Enable them, set transparency, refresh intervals, and assign to tabs just like core widgets.
+                      {t('admin:plugins.settingsHelp')}
                     </Alert>
 
                     {uploadedWidgets.map((plugin) => {
@@ -2282,7 +2282,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                                     }}
                                   />
                                 }
-                                label="Enabled"
+                                label={t('common:labels.enabled')}
                               />
                               <FormControlLabel
                                 control={
@@ -2296,7 +2296,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                                     }}
                                   />
                                 }
-                                label="Transparent Background"
+                                label={t('admin:plugins.transparentBackground')}
                                 sx={{ ml: 2 }}
                               />
                             </Grid>
@@ -2318,7 +2318,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
                           {plugin.pluginId && Array.isArray(plugin.manifest?.settings) && plugin.manifest.settings.length > 0 && (
                             <Box sx={{ mt: 2 }}>
-                              <Typography variant="subtitle2" sx={{ mb: 1 }}>Plugin Options</Typography>
+                              <Typography variant="subtitle2" sx={{ mb: 1 }}>{t('admin:plugins.options')}</Typography>
                               <Grid container spacing={2}>
                                 {plugin.manifest.settings.map((setting) => {
                                   const declaredValues = pluginDeclaredValues[plugin.pluginId] || {};
@@ -2385,7 +2385,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                                       )}
                                       {setting.scope === 'device' && (
                                         <Typography variant="caption" color="text.secondary">
-                                          Per device — applies to the device you're editing from
+                                          {t('admin:plugins.perDevice')}
                                         </Typography>
                                       )}
                                     </Grid>
@@ -2410,10 +2410,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                               renderInput={(params) => (
                                 <TextField
                                   {...params}
-                                  label="Show on Tabs"
+                                  label={t('admin:widgets.showOnTabs')}
                                   required={Boolean(pSettings.enabled)}
                                   error={hasRequiredTabsError}
-                                  placeholder="Select tabs..."
+                                  placeholder={t('admin:widgets.selectTabs')}
                                   helperText={
                                     hasRequiredTabsError
                                       ? 'Required: select at least one tab when this plugin is enabled.'
@@ -2428,7 +2428,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                     })}
 
                     <Button type="submit" variant="contained" sx={{ mt: 2 }} startIcon={<Save />}>
-                      Save Plugin Settings
+                      {t('admin:plugins.saveSettings')}
                     </Button>
                   </Box>
                 )}
@@ -2439,10 +2439,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
               <>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                   <Alert severity="info" sx={{ mb: 0, flex: 1, mr: 2 }}>
-                    Manage dashboard tabs. Reorder with the arrows, or drag rows on a desktop browser. Home tab cannot be edited or deleted.
+                    {t('admin:tabs.manageHelp')}
                   </Alert>
                   <Button variant="contained" startIcon={<Add />} onClick={openCreateTabDialog}>
-                    Add Tab
+                    {t('admin:tabs.addTab')}
                   </Button>
                 </Box>
 
@@ -2450,11 +2450,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                   <Table sx={stackableTableSx}>
                     <TableHead>
                       <TableRow>
-                        <TableCell width={150}>Order</TableCell>
-                        <TableCell>Label</TableCell>
-                        <TableCell>Icon</TableCell>
-                        <TableCell>Show Label</TableCell>
-                        <TableCell width={120}>Actions</TableCell>
+                        <TableCell width={150}>{t('admin:tabs.order')}</TableCell>
+                        <TableCell>{t('admin:tabs.label')}</TableCell>
+                        <TableCell>{t('admin:tabs.icon')}</TableCell>
+                        <TableCell>{t('admin:tabs.showLabel')}</TableCell>
+                        <TableCell width={120}>{t('common:labels.actions')}</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -2482,7 +2482,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                               opacity: draggingTabNumber === tab.number ? 0.65 : 1,
                             }}
                           >
-                            <TableCell data-label="Order">
+                            <TableCell data-label={t('admin:tabs.order')}>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                                 {!isHome && (
                                   <DragIndicator fontSize="small" sx={{ opacity: 0.5, display: { xs: 'none', sm: 'block' } }} />
@@ -2490,11 +2490,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                                 <Chip label={tab.number} size="small" sx={{ mr: 0.5 }} />
                                 {!isHome && (
                                   <>
-                                    <Tooltip title={`Move ${tab.label || 'tab'} up`}>
+                                    <Tooltip title={t('admin:tabs.moveUpNamed', { name: tab.label || t('admin:tabs.label') })}>
                                       <span>
                                         <IconButton
                                           size="small"
-                                          aria-label="Move tab up"
+                                          aria-label={t('admin:tabs.moveTabUp')}
                                           disabled={orderIndex <= 0}
                                           onClick={() => moveTab(tab.number, -1)}
                                         >
@@ -2502,11 +2502,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                                         </IconButton>
                                       </span>
                                     </Tooltip>
-                                    <Tooltip title={`Move ${tab.label || 'tab'} down`}>
+                                    <Tooltip title={t('admin:tabs.moveDownNamed', { name: tab.label || t('admin:tabs.label') })}>
                                       <span>
                                         <IconButton
                                           size="small"
-                                          aria-label="Move tab down"
+                                          aria-label={t('admin:tabs.moveTabDown')}
                                           disabled={orderIndex === -1 || orderIndex >= lastOrderIndex}
                                           onClick={() => moveTab(tab.number, 1)}
                                         >
@@ -2518,22 +2518,22 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                                 )}
                               </Box>
                             </TableCell>
-                            <TableCell data-label="Label">
+                            <TableCell data-label={t('admin:tabs.label')}>
                               {tab.label}
                               {isHome && (
-                                <Chip size="small" label="Home" color="primary" sx={{ ml: 1 }} />
+                                <Chip size="small" label={t('admin:tabs.home')} color="primary" sx={{ ml: 1 }} />
                               )}
                             </TableCell>
-                            <TableCell data-label="Icon">
+                            <TableCell data-label={t('admin:tabs.icon')}>
                               <Chip size="small" label={tab.icon} />
                             </TableCell>
-                            <TableCell data-label="Show Label">
+                            <TableCell data-label={t('admin:tabs.showLabel')}>
                               <Switch
                                 checked={Boolean(tab.show_label)}
                                 onClick={(e) => e.stopPropagation()}
                                 onChange={() => toggleTabShowLabel(tab)}
                                 disabled={isLoading}
-                                slotProps={{ input: { 'aria-label': `Toggle show label for ${tab.label}` } }}
+                                slotProps={{ input: { 'aria-label': t('admin:tabs.toggleShowLabel', { name: tab.label }) } }}
                               />
                             </TableCell>
                             <TableCell>
@@ -2566,15 +2566,15 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
             {widgetsSubTab === 3 && (
               <>
                 <Alert severity="info" sx={{ mb: 2 }}>
-                  Manage devices and copy tabs/widget settings between them. Copying will overwrite the current device tabs and widget assignments.
+                  {t('admin:devices.manageHelp')}
                 </Alert>
 
                 <Box sx={{ mb: 2, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
                   <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
-                    Current Device Name
+                    {t('admin:devices.currentName')}
                   </Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                    <Chip label="Current" color="primary" size="small" />
+                    <Chip label={t('admin:devices.current')} color="primary" size="small" />
                     <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
                       {currentDeviceName}
                     </Typography>
@@ -2585,10 +2585,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                   <Table sx={stackableTableSx}>
                     <TableHead>
                       <TableRow>
-                        <TableCell>Name</TableCell>
-                        <TableCell>Last Updated</TableCell>
-                        <TableCell>Widgets</TableCell>
-                        <TableCell width={120}>Actions</TableCell>
+                        <TableCell>{t('common:labels.name')}</TableCell>
+                        <TableCell>{t('admin:devices.lastUpdated')}</TableCell>
+                        <TableCell>{t('admin:subTabs.widgets')}</TableCell>
+                        <TableCell width={120}>{t('common:labels.actions')}</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -2596,18 +2596,18 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                         const isCurrent = device.name === currentDeviceName;
                         return (
                           <TableRow key={device.name}>
-                            <TableCell data-label="Name">
+                            <TableCell data-label={t('common:labels.name')}>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                                {isCurrent && <Chip label="Current" color="primary" size="small" />}
+                                {isCurrent && <Chip label={t('admin:devices.current')} color="primary" size="small" />}
                                 <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
                                   {device.name}
                                 </Typography>
                               </Box>
                             </TableCell>
-                            <TableCell data-label="Last Updated">
+                            <TableCell data-label={t('admin:devices.lastUpdated')}>
                               {device.updateTime ? new Date(device.updateTime).toLocaleString() : 'Unknown'}
                             </TableCell>
-                            <TableCell data-label="Widgets">
+                            <TableCell data-label={t('admin:subTabs.widgets')}>
                               <Chip label={Number(device.widgets) || 0} size="small" />
                             </TableCell>
                             <TableCell>
@@ -2616,7 +2616,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                                   onClick={openRenameDeviceDialog}
                                   color="primary"
                                   size="small"
-                                  title="Rename current device"
+                                  title={t('admin:devices.renameCurrent')}
                                 >
                                   <Edit />
                                 </IconButton>
@@ -2625,7 +2625,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                                   onClick={() => openCopyDeviceDialog(device)}
                                   color="primary"
                                   size="small"
-                                  title="Copy this device to current"
+                                  title={t('admin:devices.copyToCurrent')}
                                 >
                                   <ContentCopy />
                                 </IconButton>
@@ -2634,7 +2634,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                                 onClick={() => openDeleteDeviceDialog(device)}
                                 color="error"
                                 size="small"
-                                title="Delete device"
+                                title={t('admin:devices.deleteDevice')}
                                 disabled={isCurrent}
                               >
                                 <Delete />
@@ -2688,14 +2688,14 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
             </AdminFormSection>
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-              <Typography variant="h6">Accent Colors</Typography>
+              <Typography variant="h6">{t('admin:colors.heading')}</Typography>
               <Button
                 variant="outlined"
                 startIcon={<RestartAlt />}
                 onClick={resetToDefaults}
                 size="small"
               >
-                Reset to Defaults
+                {t('admin:colors.resetDefaults')}
               </Button>
             </Box>
 
@@ -2706,7 +2706,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
             )}
 
             <Alert severity="info" sx={{ mb: 3 }}>
-              Background color applies to light mode only. Accent color is used throughout the dashboard for highlights and interactive elements.
+              {t('admin:colors.help')}
             </Alert>
 
             <Box sx={{ maxWidth: 600, mx: 'auto' }}>
@@ -2722,7 +2722,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 startIcon={<Save />}
                 size="large"
               >
-                Save Accent Colors
+                {t('admin:colors.save')}
               </Button>
               <Button
                 variant="outlined"
@@ -2730,7 +2730,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 startIcon={<Refresh />}
                 size="large"
               >
-                Refresh Page
+                {t('admin:colors.refreshPage')}
               </Button>
             </Box>
 
@@ -2738,11 +2738,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
               <Nightlight />
-              <Typography variant="h6">Screensaver</Typography>
+              <Typography variant="h6">{t('admin:screensaver.heading')}</Typography>
             </Box>
 
             <Alert severity="info" sx={{ mb: 3 }}>
-              The screensaver activates after a period of inactivity, cycling through tabs or displaying a photo slideshow.
+              {t('admin:screensaver.help')}
             </Alert>
 
             <Box sx={{ maxWidth: 600, mx: 'auto' }}>
@@ -2753,12 +2753,12 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                     onChange={(e) => setScreensaverSettings(prev => ({ ...prev, enabled: e.target.checked }))}
                   />
                 }
-                label="Enable Screensaver"
+                label={t('admin:screensaver.enable')}
                 sx={{ mb: 3 }}
               />
 
               <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold' }}>
-                Screensaver Mode
+                {t('admin:screensaver.mode')}
               </Typography>
 
               <RadioGroup
@@ -2784,19 +2784,19 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                               color: !hasTabsCreated ? 'text.disabled' : 'inherit'
                             }}
                           >
-                            Cycle Through Tabs
+                            {t('admin:screensaver.cycleTabs')}
                           </Typography>
                           <Typography
                             variant="caption"
                             color={!hasTabsCreated ? 'text.disabled' : 'text.secondary'}
                           >
                             {hasTabsCreated
-                              ? `Automatically switch between ${tabs.length} tab${tabs.length !== 1 ? 's' : ''}`
+                              ? t('admin:screensaver.cycleTabsHelp', { count: tabs.length })
                               : 'No tabs created yet'}
                           </Typography>
                         </Box>
                         {!hasTabsCreated && (
-                          <Tooltip title="Create tabs in the Tab Bar to enable this feature">
+                          <Tooltip title={t('admin:screensaver.cycleTabsDisabled')}>
                             <Info fontSize="small" color="disabled" />
                           </Tooltip>
                         )}
@@ -2824,7 +2824,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                               color: !hasImmichConfigured ? 'text.disabled' : 'inherit'
                             }}
                           >
-                            Immich Photo Slideshow
+                            {t('admin:screensaver.immichSlideshow')}
                           </Typography>
                           <Typography
                             variant="caption"
@@ -2836,7 +2836,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                           </Typography>
                         </Box>
                         {!hasImmichConfigured && (
-                          <Tooltip title="Configure an Immich photo source in the Photos widget to enable this feature">
+                          <Tooltip title={t('admin:screensaver.immichDisabled')}>
                             <Info fontSize="small" color="disabled" />
                           </Tooltip>
                         )}
@@ -2867,7 +2867,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
               {screensaverSettings.mode === 'photos' && (
                 <ScreensaverIntervalSlider
-                  label="Photo Slideshow Interval"
+                  label={t('admin:screensaver.photoInterval')}
                   value={screensaverSettings.slideshowInterval}
                   onChange={(value) => setScreensaverSettings(prev => ({ ...prev, slideshowInterval: value }))}
                   min={3}
@@ -2883,7 +2883,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
               {screensaverSettings.mode === 'tabs' && (
                 <ScreensaverIntervalSlider
-                  label="Tab Cycle Interval"
+                  label={t('admin:screensaver.tabInterval')}
                   value={screensaverSettings.slideshowInterval}
                   onChange={(value) => setScreensaverSettings(prev => ({ ...prev, slideshowInterval: value }))}
                   min={5}
@@ -2904,18 +2904,18 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 fullWidth
                 sx={{ mt: 2 }}
               >
-                Save Screensaver Settings
+                {t('admin:screensaver.save')}
               </Button>
 
               <Divider sx={{ my: 4 }} />
 
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
                 <BeachAccess />
-                <Typography variant="h6">Vacation Mode</Typography>
+                <Typography variant="h6">{t('admin:vacation.heading')}</Typography>
               </Box>
 
               <Alert severity="info" sx={{ mb: 2 }}>
-                While on vacation, chore due-time chimes are muted and the screensaver becomes a
+                {t('admin:vacation.help')}
                 fun vacation animation. Settings apply to this display and persist until you turn
                 vacation mode off.
               </Alert>
@@ -2927,7 +2927,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                     onChange={(e) => setVacationModeSettings(prev => ({ ...prev, enabled: e.target.checked }))}
                   />
                 }
-                label="Enable Vacation Mode"
+                label={t('admin:vacation.enable')}
                 sx={{ mb: 1, display: 'block' }}
               />
 
@@ -2939,7 +2939,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                     onChange={(e) => setVacationModeSettings(prev => ({ ...prev, muteSounds: e.target.checked }))}
                   />
                 }
-                label="Mute chore sounds while on vacation"
+                label={t('admin:vacation.muteSounds')}
                 sx={{ mb: 1, display: 'block' }}
               />
 
@@ -2948,7 +2948,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                   <TextField
                     size="small"
                     type="date"
-                    label="Start date (optional)"
+                    label={t('admin:vacation.startDate')}
                     value={vacationModeSettings.startDate || ''}
                     onChange={(e) => setVacationModeSettings(prev => ({ ...prev, startDate: e.target.value }))}
                     slotProps={{ inputLabel: { shrink: true } }}
@@ -2957,7 +2957,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                   <TextField
                     size="small"
                     type="date"
-                    label="End date (optional)"
+                    label={t('admin:vacation.endDate')}
                     value={vacationModeSettings.endDate || ''}
                     onChange={(e) => setVacationModeSettings(prev => ({ ...prev, endDate: e.target.value }))}
                     slotProps={{ inputLabel: { shrink: true } }}
@@ -2967,7 +2967,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
               )}
               {vacationModeSettings.enabled && (
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                  With dates set, vacation starts and ends automatically, missed-chore tracking pauses
+                  {t('admin:vacation.dateHelp')}
                   for those days, and streaks bridge across them permanently. Without dates, vacation
                   stays on until you turn it off.
                 </Typography>
@@ -2980,23 +2980,23 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 fullWidth
                 sx={{ mt: 2 }}
               >
-                Save Vacation Mode Settings
+                {t('admin:vacation.save')}
               </Button>
 
               <Divider sx={{ my: 4 }} />
 
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
                 <Nightlight />
-                <Typography variant="h6">Daylight Auto Dark Mode</Typography>
+                <Typography variant="h6">{t('admin:autoDark.heading')}</Typography>
               </Box>
 
               <Alert severity="info" sx={{ mb: 2 }}>
-                To enable auto mode: save an OpenWeather API key in Connections, enter a location here, save this section, then press the bottom-bar theme button until the half sun/half moon icon appears.
+                {t('admin:autoDark.help')}
               </Alert>
 
               {!settings.WEATHER_API_KEY?.trim() && (
                 <Alert severity="warning" sx={{ mb: 2 }}>
-                  OpenWeather API key is not set yet. Add it in the Connections tab first.
+                  {t('admin:autoDark.noApiKey')}
                 </Alert>
               )}
 
@@ -3012,13 +3012,13 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                     }}
                   />
                 }
-                label="Enable Daylight Auto Dark Mode"
+                label={t('admin:autoDark.enable')}
                 sx={{ mb: 2 }}
               />
 
               <TextField
                 fullWidth
-                label="Location"
+                label={t('admin:autoDark.location')}
                 value={autoDarkModeSettings.locationQuery}
                 onChange={(e) => {
                   const nextValue = e.target.value;
@@ -3027,7 +3027,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                     locationQuery: nextValue,
                   }));
                 }}
-                helperText="Examples: Dallas,TX,US, London,UK, or ZIP code like 76034"
+                helperText={t('admin:autoDark.locationHelp')}
                 sx={{ mb: 2 }}
               />
 
@@ -3039,7 +3039,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                     </Typography>
                     {autoDarkModeSunTimesLoading && (
                       <Typography variant="body2" sx={{ mt: 0.5 }}>
-                        Loading today's sunrise and sunset...
+                        {t('admin:autoDark.loadingSun')}
                       </Typography>
                     )}
                     {!autoDarkModeSunTimesLoading && autoDarkModeSunTimes.sunrise && autoDarkModeSunTimes.sunset && (
@@ -3074,7 +3074,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       {activeTab === 2 && (
         <Card>
           <CardContent>
-            <AdminFormSection title="User Management" subtitle="Add New User">
+            <AdminFormSection title={t('admin:users.management')} subtitle={t('admin:users.addNew')}>
               <Box
                 component="form"
                 onSubmit={(event) => {
@@ -3086,7 +3086,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                   <Grid size={{ xs: 12, sm: 4 }}>
                     <TextField
                       fullWidth
-                      label="Username"
+                      label={t('admin:users.username')}
                       value={newUser.username}
                       onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
                     />
@@ -3094,7 +3094,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                   <Grid size={{ xs: 12, sm: 4 }}>
                     <TextField
                       fullWidth
-                      label="Email"
+                      label={t('admin:users.email')}
                       type="email"
                       value={newUser.email}
                       onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
@@ -3108,7 +3108,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                       fullWidth
                       sx={{ height: '56px' }}
                     >
-                      Add User
+                      {t('admin:users.addUser')}
                     </Button>
                   </Grid>
                   <Grid size={12}>
@@ -3116,17 +3116,17 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                       {newUser.profile_picture ? (
                         <img
                           src={`${API_BASE_URL}/Uploads/users/${newUser.profile_picture}`}
-                          alt="Chosen avatar"
+                          alt={t('admin:users.chosenAvatar')}
                           style={{ width: 40, height: 40, borderRadius: '50%', border: '2px solid var(--accent)' }}
                         />
                       ) : (
                         <Avatar sx={{ width: 40, height: 40, bgcolor: 'var(--card-border)' }}>?</Avatar>
                       )}
                       <Button size="small" variant="outlined" onClick={() => setAvatarPicker({ open: true, userId: null })}>
-                        Choose avatar
+                        {t('admin:users.chooseAvatar')}
                       </Button>
                       <Typography variant="caption" color="text.secondary">
-                        Optional — pick from the built-in set, or upload a photo after adding.
+                        {t('admin:users.avatarHelp')}
                       </Typography>
                     </Box>
                   </Grid>
@@ -3138,13 +3138,13 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
               <Table sx={stackableTableSx}>
                 <TableHead>
                   <TableRow>
-                    <TableCell width={110}>Order</TableCell>
-                    <TableCell>Avatar</TableCell>
-                    <TableCell>Username</TableCell>
-                    <TableCell>Email</TableCell>
-                    <TableCell>Clam Total</TableCell>
-                    <TableCell>Chores</TableCell>
-                    <TableCell>Actions</TableCell>
+                    <TableCell width={110}>{t('admin:tabs.order')}</TableCell>
+                    <TableCell>{t('admin:users.avatar')}</TableCell>
+                    <TableCell>{t('admin:users.username')}</TableCell>
+                    <TableCell>{t('admin:users.email')}</TableCell>
+                    <TableCell>{t('admin:users.clamTotal')}</TableCell>
+                    <TableCell>{t('admin:users.chores')}</TableCell>
+                    <TableCell>{t('common:labels.actions')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -3170,9 +3170,9 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                         opacity: draggingUserId === user.id ? 0.65 : 1,
                       }}
                     >
-                      <TableCell data-label="Order">
+                      <TableCell data-label={t('admin:tabs.order')}>
                         {isBonus ? (
-                          <Chip size="small" label="Pinned" />
+                          <Chip size="small" label={t('admin:users.pinned')} />
                         ) : (
                           <Box sx={{ display: 'flex', alignItems: 'center' }}>
                             <DragIndicator fontSize="small" sx={{ opacity: 0.5, display: { xs: 'none', sm: 'block' } }} />
@@ -3180,11 +3180,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                                 on a disabled button; the aria-label has to go
                                 on the button itself, since the wrapper would
                                 otherwise swallow the accessible name. */}
-                            <Tooltip title={`Move ${user.username} up`}>
+                            <Tooltip title={t('admin:users.moveUpNamed', { name: user.username })}>
                               <span>
                                 <IconButton
                                   size="small"
-                                  aria-label="Move up"
+                                  aria-label={t('common:actions.moveUp')}
                                   disabled={orderIndex <= 0}
                                   onClick={() => moveUser(user.id, -1)}
                                 >
@@ -3192,11 +3192,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                                 </IconButton>
                               </span>
                             </Tooltip>
-                            <Tooltip title={`Move ${user.username} down`}>
+                            <Tooltip title={t('admin:users.moveDownNamed', { name: user.username })}>
                               <span>
                                 <IconButton
                                   size="small"
-                                  aria-label="Move down"
+                                  aria-label={t('common:actions.moveDown')}
                                   disabled={orderIndex === -1 || orderIndex >= reorderableUsers.length - 1}
                                   onClick={() => moveUser(user.id, 1)}
                                 >
@@ -3215,7 +3215,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                             size="small"
                             variant="outlined"
                           >
-                            Upload
+                            {t('common:actions.upload')}
                             <input
                               type="file"
                               hidden
@@ -3223,18 +3223,18 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                               onChange={(e) => handleProfilePictureUpload(user.id, e)}
                             />
                           </Button>
-                          <Tooltip title="Pick a built-in avatar">
+                          <Tooltip title={t('admin:users.pickBuiltIn')}>
                             <Button
                               size="small"
                               variant="outlined"
                               onClick={() => setAvatarPicker({ open: true, userId: user.id })}
                             >
-                              Choose
+                              {t('common:actions.choose')}
                             </Button>
                           </Tooltip>
                         </Box>
                       </TableCell>
-                      <TableCell data-label="Username">
+                      <TableCell data-label={t('admin:users.username')}>
                         {editingUser?.id === user.id ? (
                           <TextField
                             value={editingUser.username}
@@ -3245,7 +3245,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                           user.username
                         )}
                       </TableCell>
-                      <TableCell data-label="Email" sx={{ '@media (max-width:599.95px)': { wordBreak: 'break-all' } }}>
+                      <TableCell data-label={t('admin:users.email')} sx={{ '@media (max-width:599.95px)': { wordBreak: 'break-all' } }}>
                         {editingUser?.id === user.id ? (
                           <TextField
                             value={editingUser.email}
@@ -3256,14 +3256,14 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                           user.email
                         )}
                       </TableCell>
-                      <TableCell data-label="Clam Total">
+                      <TableCell data-label={t('admin:users.clamTotal')}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <Chip
                             label={`${user.clam_total || 0} 🥟`}
                             color="primary"
                             size="small"
                           />
-                          <Tooltip title="Edit clams">
+                          <Tooltip title={t('admin:users.editClams')}>
                             <IconButton
                               onClick={() => setClamModalUser(user)}
                               color="primary"
@@ -3274,7 +3274,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                           </Tooltip>
                         </Box>
                       </TableCell>
-                      <TableCell data-label="Chores">
+                      <TableCell data-label={t('admin:users.chores')}>
                         <Button
                           variant="outlined"
                           size="small"
@@ -3344,9 +3344,9 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 scrollButtons="auto"
                 allowScrollButtonsMobile
               >
-                <Tab label="Chores" />
-                <Tab label="History" />
-                <Tab label="Settings" />
+                <Tab label={t('admin:users.chores')} />
+                <Tab label={t('admin:chores.history')} />
+                <Tab label={t('admin:chores.settings')} />
               </Tabs>
             </Box>
             {choresSubTab === 0 && (
@@ -3359,15 +3359,15 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
               <>
             <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
               <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600 }}>
-                Rewards
+                {t('admin:chores.rewards')}
               </Typography>
               <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, alignItems: { sm: 'flex-start' } }}>
                 <TextField
-                  label="Daily Completion Clam Reward"
+                  label={t('admin:chores.dailyReward')}
                   type="number"
                   value={settings.daily_completion_clam_reward || '2'}
                   onChange={(e) => setSettings(prev => ({ ...prev, daily_completion_clam_reward: e.target.value }))}
-                  helperText="Clams awarded when a user completes all their daily chores"
+                  helperText={t('admin:chores.dailyRewardHelp')}
                   slotProps={{ htmlInput: { min: 0, max: 100 } }}
                   sx={{ maxWidth: 340, flex: 1 }}
                 />
@@ -3385,7 +3385,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
             <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
               <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600 }}>
-                Chore Due-Time Sounds
+                {t('admin:chores.soundsHeading')}
               </Typography>
               <FormControlLabel
                 control={
@@ -3394,15 +3394,15 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                     onChange={(e) => setSettings(prev => ({ ...prev, CHORE_SOUND_ENABLED: e.target.checked ? 'true' : 'false' }))}
                   />
                 }
-                label="Enable chore due-time sounds (household-wide master switch)"
+                label={t('admin:chores.soundsEnable')}
               />
               <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 3, alignItems: { sm: 'flex-start' }, mt: 1 }}>
                 <Box sx={{ flex: 1, minWidth: 240 }}>
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                    Default sound (used when a chore doesn't pick its own)
+                    {t('admin:chores.defaultSoundHelp')}
                   </Typography>
                   <SoundPicker
-                    label="Default sound"
+                    label={t('admin:chores.defaultSound')}
                     value={settings.CHORE_SOUND_DEFAULT || ''}
                     onChange={(sound) => setSettings(prev => ({ ...prev, CHORE_SOUND_DEFAULT: sound }))}
                     volume={(Number(settings.CHORE_SOUND_VOLUME) || 100) / 100}
@@ -3444,7 +3444,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       {activeTab === 4 && (
         <Card>
           <CardContent>
-            <AdminFormSection title="Prize Management" subtitle="Add New Prize">
+            <AdminFormSection title={t('admin:prizes.management')} subtitle={t('admin:prizes.addNew')}>
               <Box
                 component="form"
                 onSubmit={(event) => {
@@ -3456,7 +3456,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
                       fullWidth
-                      label="Prize Name"
+                      label={t('admin:prizes.name')}
                       value={newPrize.name}
                       onChange={(e) => setNewPrize({ ...newPrize, name: e.target.value })}
                     />
@@ -3464,7 +3464,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                   <Grid size={{ xs: 12, sm: 3 }}>
                     <TextField
                       fullWidth
-                      label="Clam Cost"
+                      label={t('admin:prizes.cost')}
                       type="number"
                       value={newPrize.clam_cost}
                       onChange={(e) => setNewPrize({ ...newPrize, clam_cost: parseInt(e.target.value) || 0 })}
@@ -3478,11 +3478,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                       fullWidth
                       sx={{ height: '56px' }}
                     >
-                      Add Prize
+                      {t('admin:prizes.add')}
                     </Button>
                   </Grid>
                   <Grid size={12}>
-                    <Tooltip title="A repeatable prize stays on the store shelf after redemption instead of being consumed">
+                    <Tooltip title={t('admin:prizes.repeatableTooltip')}>
                       <FormControlLabel
                         control={
                           <Switch
@@ -3490,7 +3490,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                             onChange={(e) => setNewPrize({ ...newPrize, repeatable: e.target.checked })}
                           />
                         }
-                        label="Repeatable (can be redeemed more than once)"
+                        label={t('admin:prizes.repeatableLabel')}
                       />
                     </Tooltip>
                   </Grid>
@@ -3504,19 +3504,19 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                   {editingPrize?.id === prize.id ? (
                     <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, width: '100%', alignItems: { xs: 'stretch', sm: 'center' } }}>
                       <TextField
-                        label="Prize Name"
+                        label={t('admin:prizes.name')}
                         value={editingPrize.name}
                         onChange={(e) => setEditingPrize({ ...editingPrize, name: e.target.value })}
                         sx={{ flex: 1 }}
                       />
                       <TextField
-                        label="Clam Cost"
+                        label={t('admin:prizes.cost')}
                         type="number"
                         value={editingPrize.clam_cost}
                         onChange={(e) => setEditingPrize({ ...editingPrize, clam_cost: parseInt(e.target.value) || 0 })}
                         sx={{ width: { xs: '100%', sm: 120 } }}
                       />
-                      <Tooltip title="A repeatable prize stays on the store shelf after redemption">
+                      <Tooltip title={t('admin:prizes.repeatableShortTooltip')}>
                         <FormControlLabel
                           control={
                             <Switch
@@ -3524,7 +3524,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                               onChange={(e) => setEditingPrize({ ...editingPrize, repeatable: e.target.checked })}
                             />
                           }
-                          label="Repeatable"
+                          label={t('admin:prizes.repeatableShort')}
                           sx={{ mr: 0 }}
                         />
                       </Tooltip>
@@ -3539,7 +3539,9 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                     <>
                       <ListItemText
                         primary={prize.name}
-                        secondary={`Cost: ${prize.clam_cost} 🥟${prize.repeatable ? ' · 🔁 Repeatable' : ''}`}
+                        secondary={prize.repeatable
+                          ? t('admin:prizes.costLineRepeatable', { cost: prize.clam_cost })
+                          : t('admin:prizes.costLine', { cost: prize.clam_cost })}
                       />
                       <ListItemSecondaryAction>
                         <Tooltip title={prize.repeatable ? 'Add to store (stays on the shelf after each redemption)' : 'Add to store (one-time redeemable offer)'}>
@@ -3561,12 +3563,12 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
             </List>
 
             <AdminFormSection
-              title="Prize Store"
-              subtitle="One-time offers kids can request on the dashboard; approve requests there (PIN-gated when set)"
+              title={t('admin:prizes.store')}
+              subtitle={t('admin:prizes.storeHelp')}
             >
               {prizeOffers.length === 0 ? (
                 <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
-                  The store is empty. Use ➕ next to a prize above to stock it.
+                  {t('admin:prizes.storeEmpty')}
                 </Typography>
               ) : (
                 <List>
@@ -3576,7 +3578,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                         primary={`${offer.name} — ${offer.clam_cost} 🥟${offer.repeatable ? ' · 🔁' : ''}`}
                         secondary={
                           offer.status === 'requested'
-                            ? `Requested by ${offer.requested_by_name || 'unknown'} — approve or decline on the dashboard`
+                            ? t('admin:prizes.requestedBy', { name: offer.requested_by_name || t('common:state.none') })
                             : 'On the shelf'
                         }
                       />
@@ -3600,7 +3602,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       {activeTab === 5 && (
         <Card>
           <CardContent>
-            <Typography variant="h6" gutterBottom>Security Settings</Typography>
+            <Typography variant="h6" gutterBottom>{t('admin:security.heading')}</Typography>
 
             {saveMessage.show && (
               <Alert severity={saveMessage.type} sx={{ mb: 2 }}>
@@ -3609,13 +3611,13 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
             )}
 
             <Alert severity="info" sx={{ mb: 3 }}>
-              The admin PIN is required to access the admin panel. Keep your PIN secure and memorable.
+              {t('admin:security.help')}
             </Alert>
 
             <Box sx={{ p: 3, border: '2px solid var(--accent)', borderRadius: 2, backgroundColor: 'rgba(158, 127, 255, 0.05)' }}>
               <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Lock />
-                Admin PIN Protection
+                {t('admin:security.pinProtection')}
               </Typography>
 
               <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
@@ -3628,7 +3630,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <Paper elevation={0} sx={{ p: 2, backgroundColor: 'rgba(0, 0, 0, 0.1)' }}>
                     <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                      PIN Requirements:
+                      {t('admin:security.requirements')}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                       • 4-8 numeric digits
@@ -3645,7 +3647,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <Paper elevation={0} sx={{ p: 2, backgroundColor: 'rgba(0, 0, 0, 0.1)' }}>
                     <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                      Current Status:
+                      {t('admin:security.currentStatus')}
                     </Typography>
                     <Chip
                       label={pinExists ? 'PIN Configured' : 'No PIN Set'}
@@ -3674,7 +3676,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                     fontSize: '1rem'
                   }}
                 >
-                  {pinExists ? 'Update Admin PIN' : 'Set Admin PIN'}
+                  {pinExists ? t('admin:pin.update') : t('admin:pin.setPin')}
                 </Button>
                 {pinExists && (
                   <Button
@@ -3684,14 +3686,14 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                     fullWidth
                     sx={{ py: 1, fontWeight: 'bold' }}
                   >
-                    Remove PIN
+                    {t('admin:security.removePin')}
                   </Button>
                 )}
               </Box>
 
               {pinExists && (
                 <Alert severity="warning" sx={{ mt: 2 }}>
-                  Changing your PIN will require you to use the new PIN on your next admin panel access.
+                  {t('admin:security.changeNote')}
                 </Alert>
               )}
             </Box>
@@ -3703,7 +3705,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       {activeTab === 6 && (
         <Card>
           <CardContent>
-            <Typography variant="h6" gutterBottom>Connections</Typography>
+            <Typography variant="h6" gutterBottom>{t('admin:connections.heading')}</Typography>
 
             {saveMessage.show && (
               <Alert severity={saveMessage.type} sx={{ mb: 2 }}>
@@ -3713,7 +3715,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
             <Box sx={{ maxWidth: 700 }}>
               <Typography variant="subtitle1" sx={{ mt: 1, mb: 1.5, fontWeight: 600 }}>
-                API Keys
+                {t('admin:connections.apiKeys')}
               </Typography>
 
               <Box
@@ -3725,21 +3727,21 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
               >
                 <TextField
                   fullWidth
-                  label="OpenWeatherMap API Key"
+                  label={t('admin:connections.openWeatherKey')}
                   type="password"
                   value={settings.WEATHER_API_KEY || ''}
                   onChange={(e) => setSettings(prev => ({ ...prev, WEATHER_API_KEY: e.target.value }))}
                   sx={{ mb: 2 }}
-                  helperText="Get your free API key from openweathermap.org/api"
+                  helperText={t('admin:connections.openWeatherHelp')}
                 />
 
                 <TextField
                   fullWidth
-                  label="Proxy Whitelist (comma-separated domains)"
+                  label={t('admin:connections.proxyWhitelist')}
                   value={settings.PROXY_WHITELIST || ''}
                   onChange={(e) => setSettings(prev => ({ ...prev, PROXY_WHITELIST: e.target.value }))}
                   sx={{ mb: 2 }}
-                  helperText="Domains allowed for proxy requests (e.g., api.example.com, another-api.com)"
+                  helperText={t('admin:connections.proxyHelp')}
                 />
 
                 <Button
@@ -3749,7 +3751,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                   startIcon={<Save />}
                   sx={{ mt: 1, mb: 4 }}
                 >
-                  {isLoading ? 'Saving...' : 'Save API Keys'}
+                  {isLoading ? t('common:state.saving') : t('admin:connections.saveApiKeys')}
                 </Button>
               </Box>
 
@@ -3771,7 +3773,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         <Card>
           <CardContent>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6">About</Typography>
+              <Typography variant="h6">{t('admin:about.heading')}</Typography>
               <Button
                 variant="outlined"
                 startIcon={<Refresh />}
@@ -3783,7 +3785,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
             </Box>
 
             <Alert severity="info" sx={{ mb: 2 }}>
-              This tab shows build metadata for the running client and server plus any Git tags that point to each commit.
+              {t('admin:about.help')}
             </Alert>
 
             {aboutError && (
@@ -3795,7 +3797,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, md: 6 }}>
                 <VersionInfoCard
-                  label="Frontend"
+                  label={t('admin:about.frontend')}
                   version={FRONTEND_VERSION}
                   commitUrl={frontendCommitUrl}
                   commitHash={FRONTEND_GIT_COMMIT}
@@ -3808,7 +3810,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
               <Grid size={{ xs: 12, md: 6 }}>
                 <VersionInfoCard
-                  label="Backend"
+                  label={t('admin:about.backend')}
                   version={backendStats?.version}
                   commitUrl={backendCommitUrl}
                   commitHash={backendStats?.commit}
@@ -3837,7 +3839,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         open={deleteTabDialog.open}
         onClose={() => setDeleteTabDialog({ open: false, tab: null })}
         onConfirm={confirmDeleteTab}
-        title="Delete Tab"
+        title={t('admin:tabs.deleteTab')}
         itemName={deleteTabDialog.tab?.label}
         itemLabel="Tab"
         warningMessage="Widgets assigned to this tab will be moved by the server rules for deleted tabs."
@@ -3853,29 +3855,29 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Warning color="warning" />
-            <Typography variant="h6">Copy Device Settings</Typography>
+            <Typography variant="h6">{t('admin:devices.copyTitle')}</Typography>
           </Box>
         </DialogTitle>
         <DialogContent>
           <Alert severity="warning" sx={{ mb: 2 }}>
-            This action will COPY all tabs and widget settings from the selected device to this current client.
+            {t('admin:devices.copyExplain')}
           </Alert>
           <Typography sx={{ mb: 2 }}>
-            This will overwrite all current tabs and widget assignments.
+            {t('admin:devices.copyWarning')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Source device: <strong>{copyDeviceDialog.device?.name}</strong>
+            {t('admin:devices.sourceDevice')} <strong>{copyDeviceDialog.device?.name}</strong>
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Destination device: <strong>{currentDeviceName}</strong>
+            {t('admin:devices.destinationDevice')} <strong>{currentDeviceName}</strong>
           </Typography>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setCopyDeviceDialog({ open: false, device: null })} variant="outlined">
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button onClick={confirmCopyDeviceToCurrent} variant="contained" color="warning" startIcon={<ContentCopy />}>
-            Confirm Copy
+            {t('admin:devices.confirmCopy')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -3890,13 +3892,13 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Edit color="primary" />
-            <Typography variant="h6">Rename Current Device Name</Typography>
+            <Typography variant="h6">{t('admin:devices.renameTitle')}</Typography>
           </Box>
         </DialogTitle>
         <DialogContent>
           <TextField
             fullWidth
-            label="New Device Name"
+            label={t('admin:devices.newName')}
             value={renameDeviceDialog.newName}
             onChange={(e) => setRenameDeviceDialog(prev => ({ ...prev, newName: e.target.value, error: '' }))}
             error={Boolean(renameDeviceDialog.error)}
@@ -3907,10 +3909,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setRenameDeviceDialog({ open: false, currentName: '', newName: '', error: '' })} variant="outlined">
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button onClick={confirmRenameDevice} variant="contained" startIcon={<Save />}>
-            Save Name
+            {t('admin:devices.saveName')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -3919,7 +3921,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         open={deleteDeviceDialog.open}
         onClose={() => setDeleteDeviceDialog({ open: false, device: null })}
         onConfirm={confirmDeleteDevice}
-        title="Delete Device"
+        title={t('admin:devices.deleteDevice')}
         itemName={deleteDeviceDialog.device?.name}
         itemLabel="Device"
         warningMessage="This action cannot be undone."
@@ -3930,7 +3932,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         open={deleteUserDialog.open}
         onClose={() => setDeleteUserDialog({ open: false, user: null })}
         onConfirm={() => deleteUser(deleteUserDialog.user?.id)}
-        title="Delete User"
+        title={t('admin:users.deleteUser')}
         itemName={deleteUserDialog.user?.username}
         itemLabel="User"
         warningMessage="This action cannot be undone!"
@@ -3964,47 +3966,47 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         <DialogContent>
           {choreModal.userChores.length === 0 ? (
             <Typography variant="body1" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
-              No chores assigned to this user.
+              {t('admin:chores.noChoresForUser')}
             </Typography>
           ) : (
             <TableContainer component={Paper} sx={{ mt: 1 }}>
               <Table sx={stackableTableSx}>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Title</TableCell>
-                    <TableCell>Description</TableCell>
-                    <TableCell>Schedule (Crontab)</TableCell>
-                    <TableCell>Visible</TableCell>
-                    <TableCell>Clams</TableCell>
-                    <TableCell>Actions</TableCell>
+                    <TableCell>{t('common:labels.title')}</TableCell>
+                    <TableCell>{t('common:labels.description')}</TableCell>
+                    <TableCell>{t('admin:chores.scheduleCrontab')}</TableCell>
+                    <TableCell>{t('admin:chores.visible')}</TableCell>
+                    <TableCell>{t('admin:chores.clams')}</TableCell>
+                    <TableCell>{t('common:labels.actions')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {choreModal.userChores.map((chore) => (
                     <TableRow key={chore.id}>
-                      <TableCell data-label="Title">
+                      <TableCell data-label={t('common:labels.title')}>
                         <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                           {chore.title}
                         </Typography>
                       </TableCell>
-                      <TableCell data-label="Description">
+                      <TableCell data-label={t('common:labels.description')}>
                         <Typography variant="body2" color="text.secondary">
                           {chore.description || 'No description'}
                         </Typography>
                       </TableCell>
-                      <TableCell data-label="Schedule">
+                      <TableCell data-label={t('admin:chores.schedule')}>
                         <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
                           {chore.crontab || 'One-time'}
                         </Typography>
                       </TableCell>
-                      <TableCell data-label="Visible">
+                      <TableCell data-label={t('admin:chores.visible')}>
                         <Chip
                           label={chore.visible ? 'Visible' : 'Hidden'}
                           color={chore.visible ? 'success' : 'default'}
                           size="small"
                         />
                       </TableCell>
-                      <TableCell data-label="Clams">
+                      <TableCell data-label={t('admin:chores.clams')}>
                         {chore.clam_value > 0 ? (
                           <Chip
                             label={`${chore.clam_value} 🥟`}
@@ -4013,7 +4015,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                           />
                         ) : (
                           <Typography variant="body2" color="text.secondary">
-                            Regular
+                            {t('admin:chores.regular')}
                           </Typography>
                         )}
                       </TableCell>
@@ -4022,7 +4024,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                           onClick={() => deleteChore(chore.id)}
                           color="error"
                           size="small"
-                          title="Delete chore"
+                          title={t('admin:chores.deleteChore')}
                         >
                           <Delete />
                         </IconButton>
@@ -4036,7 +4038,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         </DialogContent>
         <DialogActions>
           <Button onClick={closeChoreModal} variant="contained">
-            Close
+            {t('common:actions.close')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -4068,11 +4070,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Choose an avatar</DialogTitle>
+        <DialogTitle>{t('admin:users.chooseAnAvatar')}</DialogTitle>
         <DialogContent>
           {defaultAvatars.length === 0 ? (
             <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-              No built-in avatars available.
+              {t('admin:users.noAvatars')}
             </Typography>
           ) : (
             <Box
@@ -4108,7 +4110,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setAvatarPicker({ open: false, userId: null })}>Cancel</Button>
+          <Button onClick={() => setAvatarPicker({ open: false, userId: null })}>{t('common:actions.cancel')}</Button>
         </DialogActions>
       </Dialog>
     </Box>
