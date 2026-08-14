@@ -45,12 +45,5 @@
     "helper": "Se aplica solo a esta pantalla. Otros dispositivos mantienen su propio idioma.",
     "householdDefault": "Idioma predeterminado del hogar",
     "householdDefaultHelper": "Las pantallas nuevas empiezan en este idioma hasta que elijan el suyo."
-  },
-  "weekStart": {
-    "label": "La semana empieza el",
-    "helper": "Controla la primera columna del calendario y el día en que empieza la semana.",
-    "sunday": "Domingo",
-    "monday": "Lunes",
-    "saturday": "Sábado"
   }
 }

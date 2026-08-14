@@ -1,11 +1,7 @@
 {
   "interface": {
     "languageSection": "Language & Region",
-    "languageSubtitle": "Language for this display, plus how weeks are laid out"
-  },
-  "weekStart": {
-    "saved": "Week start saved.",
-    "saveFailed": "Could not save the week start setting."
+    "languageSubtitle": "Language for this display"
   },
   "language": {
     "saved": "Language updated.",

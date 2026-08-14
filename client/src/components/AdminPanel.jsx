@@ -101,10 +101,6 @@ import {
   readLocalScreensaverSettings,
   readLocalAutoDarkModeSettings,
   readLocalVacationModeSettings,
-  readLocalWeekStart,
-  writeLocalWeekStart,
-  normalizeWeekStart,
-  WEEK_START_UPDATED_EVENT,
 } from '../utils/interfaceSettings.js';
 import { useTranslation } from 'react-i18next';
 import { changeLanguage, SUPPORTED_LANGUAGES } from '../i18n/index.js';
@@ -247,9 +243,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const [draggingTabNumber, setDraggingTabNumber] = useState(null);
   // User display order (issue #134): drag on desktop, arrows everywhere.
   const [draggingUserId, setDraggingUserId] = useState(null);
-  // Language & week start (issue #137), both per-display.
-  const [weekStart, setWeekStart] = useState(readLocalWeekStart);
-
   const handleLanguageChange = async (code) => {
     try {
       await changeLanguage(code);
@@ -261,15 +254,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
   };
 
-  const handleWeekStartChange = (value) => {
-    const normalized = normalizeWeekStart(value);
-    setWeekStart(normalized);
-    writeLocalWeekStart(normalized);
-    // The calendar reads this on mount, so tell any open widget to re-read it.
-    window.dispatchEvent(new Event(WEEK_START_UPDATED_EVENT));
-    setSaveMessage({ show: true, type: 'success', text: t('admin:weekStart.saved') });
-    setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
-  };
   const [devices, setDevices] = useState([]);
   const [copyDeviceDialog, setCopyDeviceDialog] = useState({ open: false, device: null });
   const [deleteDeviceDialog, setDeleteDeviceDialog] = useState({ open: false, device: null });
@@ -2672,9 +2656,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       {activeTab === 1 && (
         <Card>
           <CardContent>
-            {/* Language & region (issue #137). Language is per-display, like
-                the other interface settings; week start is explicit rather
-                than derived from the language. */}
+            {/* Language (issue #137), per display like the other interface
+                settings. Week start deliberately lives in the calendar
+                widget's own settings, which has had per-tab week/month start
+                controls since #127 — a second global control would fight it. */}
             <AdminFormSection
               title={t('admin:interface.languageSection')}
               subtitle={t('admin:interface.languageSubtitle')}
@@ -2696,23 +2681,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                     </Select>
                     <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
                       {t('common:language.helper')}
-                    </Typography>
-                  </FormControl>
-                </Grid>
-                <Grid size={{ xs: 12, sm: 6 }}>
-                  <FormControl fullWidth>
-                    <InputLabel>{t('common:weekStart.label')}</InputLabel>
-                    <Select
-                      value={weekStart}
-                      label={t('common:weekStart.label')}
-                      onChange={(e) => handleWeekStartChange(e.target.value)}
-                    >
-                      <MenuItem value={0}>{t('common:weekStart.sunday')}</MenuItem>
-                      <MenuItem value={1}>{t('common:weekStart.monday')}</MenuItem>
-                      <MenuItem value={6}>{t('common:weekStart.saturday')}</MenuItem>
-                    </Select>
-                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
-                      {t('common:weekStart.helper')}
                     </Typography>
                   </FormControl>
                 </Grid>

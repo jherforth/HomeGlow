@@ -45,12 +45,5 @@
     "helper": "Applies to this display only. Other devices keep their own language.",
     "householdDefault": "Household default",
     "householdDefaultHelper": "New displays start in this language until they choose their own."
-  },
-  "weekStart": {
-    "label": "Week starts on",
-    "helper": "Controls the first column of the calendar grid and which day a week begins on.",
-    "sunday": "Sunday",
-    "monday": "Monday",
-    "saturday": "Saturday"
   }
 }

@@ -21,7 +21,7 @@ export const FALLBACK_LANGUAGE = 'en';
 // and so plugins can later register their own without colliding. Widgets are
 // migrated one at a time; a namespace is added here once its locale files
 // exist, so the completeness check never chases a file that isn't written yet.
-export const NAMESPACES = ['common', 'chores', 'admin', 'weather', 'photos'];
+export const NAMESPACES = ['common', 'chores', 'admin', 'weather', 'photos', 'calendar'];
 
 export const SUPPORTED_LANGUAGES = [
   { code: 'en', label: 'English', endonym: 'English' },
@@ -97,7 +97,8 @@ export async function initI18n({ initialLanguage } = {}) {
 export async function changeLanguage(language) {
   const code = SUPPORTED_LANGUAGES.some((l) => l.code === language) ? language : FALLBACK_LANGUAGE;
   await loadLanguageResources(code);
-  await setDateLocale(code);
+  // Synchronous: date display uses Intl, so there is no locale bundle to fetch.
+  setDateLocale(code);
   await i18n.changeLanguage(code);
   if (typeof document !== 'undefined') {
     document.documentElement.lang = code;

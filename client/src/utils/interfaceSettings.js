@@ -11,16 +11,6 @@ export const INTERFACE_COLORS_STORAGE_KEY = 'interfaceColors';
 export const SCREENSAVER_SETTINGS_STORAGE_KEY = 'screensaverSettings';
 export const AUTO_DARK_MODE_SETTINGS_STORAGE_KEY = 'autoDarkModeSettings';
 export const VACATION_MODE_STORAGE_KEY = 'vacationModeSettings';
-export const WEEK_START_STORAGE_KEY = 'weekStartsOn';
-// Broadcast so an open calendar re-reads the setting without a page reload.
-export const WEEK_START_UPDATED_EVENT = 'homeglow:week-start-updated';
-
-// Which day a week begins on, as a JS day index (0 = Sunday). Deliberately an
-// explicit setting rather than being derived from the language (issue #137):
-// households disagree with their locale often enough — and it reflows the whole
-// calendar grid — that guessing it from `es` or `en-GB` would surprise people.
-export const DEFAULT_WEEK_START = 0;
-export const WEEK_START_OPTIONS = [0, 1, 6]; // Sunday, Monday, Saturday
 
 export const DEFAULT_INTERFACE_COLORS = {
   primary: '#f5f5f5',
@@ -139,23 +129,3 @@ export const readLocalVacationModeSettings = () => {
   }
 };
 
-export const normalizeWeekStart = (raw) => {
-  const value = Number(raw);
-  return WEEK_START_OPTIONS.includes(value) ? value : DEFAULT_WEEK_START;
-};
-
-export const readLocalWeekStart = () => {
-  try {
-    return normalizeWeekStart(localStorage.getItem(WEEK_START_STORAGE_KEY));
-  } catch {
-    return DEFAULT_WEEK_START;
-  }
-};
-
-export const writeLocalWeekStart = (value) => {
-  try {
-    localStorage.setItem(WEEK_START_STORAGE_KEY, String(normalizeWeekStart(value)));
-  } catch {
-    // Storage unavailable (private mode); the setting simply won't persist.
-  }
-};

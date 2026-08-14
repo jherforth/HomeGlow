@@ -4,6 +4,7 @@ import { Settings, ViewModule, ViewWeek, ChevronLeft, ChevronRight, Add, Delete,
 import moment from 'moment';
 import { SketchPicker } from 'react-color';
 import axios from 'axios';
+import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
 import { getEventPillPalette, getPreferredColorMode } from '../utils/colorContrast.js';
@@ -11,17 +12,23 @@ import { buildMergedDotColors, buildMergedDotBackground, describeMergedCalendars
 import useIsMobile from '../hooks/useIsMobile.js';
 import MonthDayCell from './MonthDayCell.jsx';
 import ColorPickerPopover from './ColorPickerPopover.jsx';
+import {
+  formatTime,
+  formatShortDate,
+  formatShortDateWithYear,
+  formatShortDateTime,
+  formatFullDate,
+  formatMonthYear,
+  formatWeekdayShort,
+  formatMonthShort,
+  formatDayOfMonth,
+  getWeekdayLabels,
+  getWeekdayOptions,
+} from '../utils/dateUtils.js';
 
-const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const WEEKDAY_OPTIONS = [
-  { label: 'Sunday', value: 'sunday' },
-  { label: 'Monday', value: 'monday' },
-  { label: 'Tuesday', value: 'tuesday' },
-  { label: 'Wednesday', value: 'wednesday' },
-  { label: 'Thursday', value: 'thursday' },
-  { label: 'Friday', value: 'friday' },
-  { label: 'Saturday', value: 'saturday' },
-];
+// Stored values for the week/month start settings. Display names come from
+// getWeekdayOptions() so they localize; these keys never change.
+const WEEKDAY_VALUES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const WEEKDAY_INDEX = {
   sunday: 0,
   monday: 1,
@@ -109,8 +116,8 @@ const packEventsIntoLanes = (events) => {
 };
 
 const TAB_CALENDAR_VIEW_MODES = new Set(['month', 'week']);
-const VALID_WEEK_VIEW_STARTS = new Set(['today', 'yesterday', ...WEEKDAY_OPTIONS.map((option) => option.value)]);
-const VALID_MONTH_VIEW_STARTS = new Set(['today', 'yesterday', 'first-day-of-month', ...WEEKDAY_OPTIONS.map((option) => option.value)]);
+const VALID_WEEK_VIEW_STARTS = new Set(['today', 'yesterday', ...WEEKDAY_VALUES]);
+const VALID_MONTH_VIEW_STARTS = new Set(['today', 'yesterday', 'first-day-of-month', ...WEEKDAY_VALUES]);
 
 const parseTabConfigJson = (configJson) => {
   if (!configJson) return {};
@@ -184,6 +191,7 @@ const CalendarWidget = ({
   activeTab = 1,
   activeTabConfigJson = null,
 }) => {
+  const { t } = useTranslation(['calendar', 'common']);
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   // On phones the week view reads best (issue #118), so it is the default
   // whenever the tab has no explicit view override. The month/week toggle
@@ -253,15 +261,15 @@ const CalendarWidget = ({
   };
 
   const syncIntervalOptions = [
-    { label: 'Disabled', value: 0 },
-    { label: '5 minutes', value: 5 },
-    { label: '15 minutes', value: 15 },
-    { label: '30 minutes', value: 30 },
-    { label: '1 hour', value: 60 },
-    { label: '2 hours', value: 120 },
-    { label: '6 hours', value: 360 },
-    { label: '12 hours', value: 720 },
-    { label: '24 hours', value: 1440 }
+    { label: t('calendar:refresh.disabled'), value: 0 },
+    { label: t('calendar:refresh.min5'), value: 5 },
+    { label: t('calendar:refresh.min15'), value: 15 },
+    { label: t('calendar:refresh.min30'), value: 30 },
+    { label: t('calendar:refresh.hour1'), value: 60 },
+    { label: t('calendar:refresh.hour2'), value: 120 },
+    { label: t('calendar:refresh.hour6'), value: 360 },
+    { label: t('calendar:refresh.hour12'), value: 720 },
+    { label: t('calendar:refresh.hour24'), value: 1440 }
   ];
 
   // Initial data fetch
@@ -526,7 +534,7 @@ const CalendarWidget = ({
     if (diffMins < 60) return `${diffMins}m ago`;
     const diffHours = Math.floor(diffMins / 60);
     if (diffHours < 24) return `${diffHours}h ago`;
-    return moment(date).format('MMM D, h:mm A');
+    return formatShortDateTime(date);
   };
 
   const fetchCalendarEvents = async () => {
@@ -680,7 +688,7 @@ const CalendarWidget = ({
   };
 
   const handleDeleteCalendar = async (calendarId) => {
-    if (window.confirm('Are you sure you want to delete this calendar?')) {
+    if (window.confirm(t('calendar:sources.confirmDelete'))) {
       try {
         await axios.delete(`${API_BASE_URL}/api/calendar-sources/${calendarId}`);
         await fetchCalendarSources();
@@ -703,7 +711,7 @@ const CalendarWidget = ({
         setTestingConnection(false);
       }
     } else {
-      setTestResult({ success: false, message: 'Please save the calendar before testing' });
+      setTestResult({ success: false, message: t('calendar:sources.saveBeforeTesting') });
     }
   };
 
@@ -783,7 +791,7 @@ const CalendarWidget = ({
   };
 
   const formatEventTime = (date) => {
-    return moment(date).format('MMM D, h:mm A');
+    return formatShortDateTime(date);
   };
 
   const getGoogleSources = () => calendarSources.filter((s) => s.type === 'Google' && s.enabled);
@@ -879,7 +887,7 @@ const CalendarWidget = ({
 
   const deleteEvent = async (event) => {
     if (!isGoogleEvent(event)) return;
-    if (!window.confirm('Delete this event from Google Calendar?')) return;
+    if (!window.confirm(t('calendar:event.confirmDelete'))) return;
     try {
       await axios.delete(
         `${API_BASE_URL}/api/calendar-sources/${event.source_id}/events/${encodeURIComponent(event.id)}`,
@@ -1030,9 +1038,9 @@ const CalendarWidget = ({
 
       return {
         date,
-        dayName: moment(date).format('ddd'),
-        dayNumber: moment(date).format('D'),
-        monthName: moment(date).format('MMM'),
+        dayName: formatWeekdayShort(date),
+        dayNumber: formatDayOfMonth(date),
+        monthName: formatMonthShort(date),
         isToday: moment(date).isSame(moment(new Date()), 'day'),
         multiDaySlottedRows,
         multiDaySlotCount,
@@ -1107,15 +1115,12 @@ const CalendarWidget = ({
   };
 
   const formatDateRangeLabel = (start, end) => {
+    // Both endpoints go through the date seam so the pattern follows the
+    // locale, not just the month names.
     if (start.year() !== end.year()) {
-      return `${start.format('MMM D, YYYY')} - ${end.format('MMM D, YYYY')}`;
+      return `${formatShortDateWithYear(start)} - ${formatShortDateWithYear(end)}`;
     }
-
-    if (start.month() === end.month()) {
-      return `${start.format('MMM D')}-${end.format('D, YYYY')}`;
-    }
-
-    return `${start.format('MMM D')} - ${end.format('MMM D, YYYY')}`;
+    return `${formatShortDate(start)} - ${formatShortDateWithYear(end)}`;
   };
 
   const getCurrentPeriodLabel = () => {
@@ -1132,15 +1137,15 @@ const CalendarWidget = ({
         return formatDateRangeLabel(start, start.clone().add(monthViewWeeksToShow * 7 - 1, 'days'));
       }
 
-      return moment(currentDate).format('MMMM YYYY');
+      return formatMonthYear(currentDate);
     } else {
       const startOfWeek = getWeekStartDate();
       const endOfWeek = startOfWeek.clone().add(6, 'days');
 
       if (startOfWeek.month() === endOfWeek.month()) {
-        return `${startOfWeek.format('MMM D')}-${endOfWeek.format('D, YYYY')}`;
+        return `${formatShortDate(startOfWeek)} - ${formatShortDateWithYear(endOfWeek)}`;
       } else {
-        return `${startOfWeek.format('MMM D')} - ${endOfWeek.format('MMM D, YYYY')}`;
+        return `${formatShortDate(startOfWeek)} - ${formatShortDateWithYear(endOfWeek)}`;
       }
     }
   };
@@ -1174,7 +1179,7 @@ const CalendarWidget = ({
         p: 3
       }}>
         <CircularProgress />
-        <Typography>Loading calendar events...</Typography>
+        <Typography>{t('calendar:widget.loading')}</Typography>
       </Box>
     );
   }
@@ -1198,7 +1203,7 @@ const CalendarWidget = ({
             onClick={handlePreviousPeriod}
             size="small"
             sx={{ color: 'var(--text-color)' }}
-            aria-label="Previous period"
+            aria-label={t('calendar:widget.previousPeriod')}
           >
             <ChevronLeft />
           </IconButton>
@@ -1209,7 +1214,7 @@ const CalendarWidget = ({
             onClick={handleNextPeriod}
             size="small"
             sx={{ color: 'var(--text-color)' }}
-            aria-label="Next period"
+            aria-label={t('calendar:widget.nextPeriod')}
           >
             <ChevronRight />
           </IconButton>
@@ -1225,10 +1230,10 @@ const CalendarWidget = ({
               '& .MuiToggleButton-root.Mui-selected': { color: 'var(--text-color)', backgroundColor: 'rgba(var(--accent-rgb), 0.15)' },
             }}
           >
-            <ToggleButton value="month" aria-label="month view">
+            <ToggleButton value="month" aria-label={t('calendar:widget.monthView')}>
               <ViewModule />
             </ToggleButton>
-            <ToggleButton value="week" aria-label="week view">
+            <ToggleButton value="week" aria-label={t('calendar:widget.weekView')}>
               <ViewWeek />
             </ToggleButton>
           </ToggleButtonGroup>
@@ -1263,15 +1268,18 @@ const CalendarWidget = ({
 
             const headerLabels = (() => {
               if (isRollingMonthView) {
-                return Array.from({ length: monthColumns }, (_, idx) => rollingStartDate.clone().add(idx, 'days').format('ddd'));
+                return Array.from({ length: monthColumns }, (_, idx) => formatWeekdayShort(rollingStartDate.clone().add(idx, 'days')));
               }
 
               if (isFirstDayOfMonthMode) {
-                return Array.from({ length: 7 }, (_, idx) => monthStart.clone().add(idx, 'days').format('ddd'));
+                return Array.from({ length: 7 }, (_, idx) => formatWeekdayShort(monthStart.clone().add(idx, 'days')));
               }
 
+              // Localized short weekday names, rotated to the tab's chosen
+              // start day. The calendar has had its own explicit week-start
+              // setting since #127, so it is never guessed from the locale.
               const firstDayIndex = WEEKDAY_INDEX[dayOfWeekSettings.monthViewStart] ?? 0;
-              return Array.from({ length: 7 }, (_, idx) => WEEKDAY_LABELS[(firstDayIndex + idx) % 7]);
+              return getWeekdayLabels(firstDayIndex);
             })();
 
             const rows = (() => {
@@ -1622,7 +1630,7 @@ const CalendarWidget = ({
                           <Box sx={{ flex: 1, minWidth: 0 }}>
                             {showWeekStartTimes && (
                               <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block', fontSize: `${displaySettings.textSize}px` }}>
-                                {moment(event.start).format('h:mm A')}
+                                {formatTime(event.start)}
                               </Typography>
                             )}
                             <Typography variant="caption" sx={{
@@ -1663,14 +1671,14 @@ const CalendarWidget = ({
         <DialogTitle>
           {selectedDate && (
             <Typography variant="h6">
-              📅 {moment(selectedDate).format('dddd, MMMM D, YYYY')}
+              📅 {formatFullDate(selectedDate)}
             </Typography>
           )}
         </DialogTitle>
         <DialogContent>
           {selectedDateEvents.length === 0 ? (
             <Typography variant="body1" color="text.secondary" sx={{ py: 2 }}>
-              No events scheduled for this day.
+              {t('calendar:widget.noEventsForDay')}
             </Typography>
           ) : (
             <List>
@@ -1724,12 +1732,12 @@ const CalendarWidget = ({
                     </Box>
                     {isGoogleEvent(event) && (
                       <Box sx={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 0.5 }}>
-                        <Tooltip title="Edit event">
+                        <Tooltip title={t('calendar:widget.editEvent')}>
                           <IconButton size="small" onClick={() => openEditEventDialog(event)}>
                             <Edit fontSize="small" />
                           </IconButton>
                         </Tooltip>
-                        <Tooltip title="Delete event">
+                        <Tooltip title={t('calendar:widget.deleteEvent')}>
                           <IconButton size="small" onClick={() => deleteEvent(event)}>
                             <Delete fontSize="small" />
                           </IconButton>
@@ -1745,7 +1753,7 @@ const CalendarWidget = ({
                       secondary={
                         <Box>
                           <Typography variant="body1" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5, fontStyle: event.all_day ? 'italic' : 'normal' }}>
-                            🕐 {event.all_day ? 'All Day' : `${moment(event.start).format('h:mm A')} - ${moment(event.end).format('h:mm A')}`}
+                            🕐 {event.all_day ? t('calendar:event.allDay') : `${formatTime(event.start)} - ${formatTime(event.end)}`}
                           </Typography>
                           {event.location && (
                             <Typography variant="body2" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -1773,7 +1781,7 @@ const CalendarWidget = ({
               startIcon={<Add />}
               variant="outlined"
             >
-              Add event
+              {t('calendar:widget.addEvent')}
             </Button>
           ) : <Box />}
           <Button onClick={() => setShowDayModal(false)} variant="contained">
@@ -1809,7 +1817,7 @@ const CalendarWidget = ({
                 <InputLabel>Calendar</InputLabel>
                 <Select
                   value={eventDialog.sourceId || ''}
-                  label="Calendar"
+                  label={t('calendar:event.calendar')}
                   onChange={(e) => setEventDialog({ ...eventDialog, sourceId: e.target.value })}
                 >
                   {getGoogleSources().map((s) => (
@@ -1855,13 +1863,13 @@ const CalendarWidget = ({
                   }}
                 />
               }
-              label="All day"
+              label={t('calendar:event.allDay')}
               sx={{ mb: 2 }}
             />
 
             <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 2 }}>
               <TextField
-                label="Start"
+                label={t('calendar:event.start')}
                 type={eventForm.all_day ? 'date' : 'datetime-local'}
                 value={eventForm.start}
                 onChange={(e) => setEventForm({ ...eventForm, start: e.target.value })}
@@ -1869,7 +1877,7 @@ const CalendarWidget = ({
                 required
               />
               <TextField
-                label="End"
+                label={t('calendar:event.end')}
                 type={eventForm.all_day ? 'date' : 'datetime-local'}
                 value={eventForm.end}
                 onChange={(e) => setEventForm({ ...eventForm, end: e.target.value })}
@@ -1880,7 +1888,7 @@ const CalendarWidget = ({
 
             <TextField
               fullWidth
-              label="Location"
+              label={t('calendar:event.location')}
               value={eventForm.location}
               onChange={(e) => setEventForm({ ...eventForm, location: e.target.value })}
               sx={{ mb: 2 }}
@@ -1897,7 +1905,7 @@ const CalendarWidget = ({
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button type="button" onClick={closeEventDialog}>Cancel</Button>
+          <Button type="button" onClick={closeEventDialog}>{t('common:actions.cancel')}</Button>
           <Button type="submit" variant="contained" disabled={eventSaving}>
             {eventSaving ? <CircularProgress size={18} /> : (eventDialog.mode === 'create' ? 'Create' : 'Save')}
           </Button>
@@ -1918,7 +1926,7 @@ const CalendarWidget = ({
         }}
       >
         <Box sx={{ p: 3, minWidth: 350, maxHeight: '80vh', overflowY: 'auto' }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>Calendar Sources</Typography>
+          <Typography variant="h6" sx={{ mb: 2 }}>{t('calendar:sources.heading')}</Typography>
 
           <Box sx={{ mb: 3 }}>
             <Button
@@ -1933,7 +1941,7 @@ const CalendarWidget = ({
 
             {calendarSources.length === 0 ? (
               <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
-                No calendars configured
+                {t('calendar:sources.none')}
               </Typography>
             ) : (
               <List sx={{ maxHeight: 300, overflowY: 'auto' }}>
@@ -2011,7 +2019,7 @@ const CalendarWidget = ({
                               </Select>
                             </FormControl>
                           </Box>
-                          <Tooltip title="Sync now">
+                          <Tooltip title={t('calendar:sources.syncNow')}>
                             <IconButton
                               size="small"
                               onClick={() => handleSyncSource(calendar.id)}
@@ -2065,7 +2073,7 @@ const CalendarWidget = ({
 
           <FormControlLabel
             control={<Switch checked={dedupEnabled} onChange={handleToggleDedup} />}
-            label="Merge duplicate events across calendars"
+            label={t('calendar:settings.dedupe')}
           />
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
             When the same event appears on more than one calendar (even with slightly
@@ -2074,32 +2082,33 @@ const CalendarWidget = ({
 
           <Divider sx={{ my: 2 }} />
 
-          <Typography variant="h6" sx={{ mb: 2 }}>Tab specific settings</Typography>
+          <Typography variant="h6" sx={{ mb: 2 }}>{t('calendar:settings.tabSpecific')}</Typography>
 
           <Box sx={{ mb: 2 }}>
             <FormControl fullWidth size="small" sx={{ mb: 1 }}>
-              <InputLabel>Week View Start</InputLabel>
+              <InputLabel>{t('calendar:settings.weekViewStart')}</InputLabel>
               <Select
-                label="Week View Start"
+                label={t('calendar:settings.weekViewStart')}
                 value={dayOfWeekSettings.weekViewStart}
                 onChange={(e) => setDayOfWeekSettings(prev => ({ ...prev, weekViewStart: e.target.value }))}
               >
-                <MenuItem value="today">Today</MenuItem>
-                <MenuItem value="yesterday">Yesterday</MenuItem>
-                {WEEKDAY_OPTIONS.map(opt => (
+                <MenuItem value="today">{t('calendar:settings.today')}</MenuItem>
+                <MenuItem value="yesterday">{t('calendar:settings.yesterday')}</MenuItem>
+                {/* Localized day names; the stored value stays the English key. */}
+                {getWeekdayOptions().map(opt => (
                   <MenuItem key={`week-${opt.value}`} value={opt.value}>{opt.label}</MenuItem>
                 ))}
               </Select>
             </FormControl>
 
             <FormControl fullWidth size="small">
-              <InputLabel>Month View Start</InputLabel>
+              <InputLabel>{t('calendar:settings.monthViewStart')}</InputLabel>
               <Select
-                label="Month View Start"
+                label={t('calendar:settings.monthViewStart')}
                 value={dayOfWeekSettings.monthViewStart}
                 onChange={(e) => setDayOfWeekSettings(prev => ({ ...prev, monthViewStart: e.target.value }))}
               >
-                {WEEKDAY_OPTIONS.map(opt => (
+                {getWeekdayOptions().map(opt => (
                   <MenuItem key={`month-${opt.value}`} value={opt.value}>{opt.label}</MenuItem>
                 ))}
                 <MenuItem value="first-day-of-month">1st day of month</MenuItem>
@@ -2117,7 +2126,7 @@ const CalendarWidget = ({
                       onChange={(e) => setDayOfWeekSettings(prev => ({ ...prev, monthViewCurrentWeekFirst: e.target.checked }))}
                     />
                   )}
-                  label="Start calendar with current week"
+                  label={t('calendar:settings.currentWeekFirst')}
                   sx={{ mt: 0.5 }}
                 />
 
@@ -2126,7 +2135,7 @@ const CalendarWidget = ({
                     fullWidth
                     size="small"
                     type="number"
-                    label="Weeks to show"
+                    label={t('calendar:settings.weeksToShow')}
                     value={monthViewWeeksToShow}
                     onChange={(e) => {
                       const nextValue = clampInteger(e.target.value, 1, 8, DEFAULT_MONTH_VIEW_WEEKS_TO_SHOW);
@@ -2140,7 +2149,7 @@ const CalendarWidget = ({
                         step: 1,
                       }
                     }}
-                    helperText="Range: 1-8"
+                    helperText={t('calendar:settings.weeksRange')}
                   />
                 )}
               </>
@@ -2152,7 +2161,7 @@ const CalendarWidget = ({
                   fullWidth
                   size="small"
                   type="number"
-                  label="Days to show"
+                  label={t('calendar:settings.daysToShow')}
                   value={monthViewDaysToShow}
                   onChange={(e) => {
                     const nextValue = clampInteger(e.target.value, 1, 32, DEFAULT_MONTH_VIEW_DAYS_TO_SHOW);
@@ -2166,14 +2175,14 @@ const CalendarWidget = ({
                       step: 1,
                     }
                   }}
-                  helperText="Range: 1-32"
+                  helperText={t('calendar:settings.daysRange')}
                 />
 
                 <TextField
                   fullWidth
                   size="small"
                   type="number"
-                  label="Days per row"
+                  label={t('calendar:settings.daysPerRow')}
                   value={monthViewDaysPerRow}
                   onChange={(e) => {
                     const nextValue = clampInteger(e.target.value, 1, 14, DEFAULT_MONTH_VIEW_DAYS_PER_ROW);
@@ -2187,12 +2196,12 @@ const CalendarWidget = ({
                       step: 1,
                     }
                   }}
-                  helperText="Range: 1-14"
+                  helperText={t('calendar:settings.daysPerRowRange')}
                 />
               </>
             )}
 
-            <Typography variant="subtitle1" sx={{ mt: 3, mb: 2 }}>Display Settings</Typography>
+            <Typography variant="subtitle1" sx={{ mt: 3, mb: 2 }}>{t('calendar:settings.display')}</Typography>
 
             <FormControlLabel
               control={(
@@ -2204,12 +2213,12 @@ const CalendarWidget = ({
                   }))}
                 />
               )}
-              label="Show start times"
+              label={t('calendar:settings.showStartTimes')}
               sx={{ mb: 2 }}
             />
 
             <Box sx={{ mb: 3 }}>
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>Event Text Size</Typography>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>{t('calendar:settings.eventTextSize')}</Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <IconButton
                   size="small"
@@ -2253,7 +2262,7 @@ const CalendarWidget = ({
             </Box>
 
             <Box sx={{ mb: 3 }}>
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>Event Bullet Size</Typography>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>{t('calendar:settings.eventBulletSize')}</Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <IconButton
                   size="small"
@@ -2310,10 +2319,10 @@ const CalendarWidget = ({
 
           <Divider sx={{ my: 2 }} />
 
-          <Typography variant="h6" sx={{ mb: 2 }}>Default Event Colors</Typography>
+          <Typography variant="h6" sx={{ mb: 2 }}>{t('calendar:settings.defaultColors')}</Typography>
 
           <Box sx={{ mb: 3 }}>
-            <Typography variant="subtitle2" sx={{ mb: 1 }}>Event Background Color</Typography>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>{t('calendar:settings.eventBackground')}</Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Box
                 sx={{
@@ -2340,7 +2349,7 @@ const CalendarWidget = ({
           </Box>
 
           <Box sx={{ mb: 2 }}>
-            <Typography variant="subtitle2" sx={{ mb: 1 }}>Event Text Color</Typography>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>{t('calendar:settings.eventText')}</Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Box
                 sx={{
@@ -2407,7 +2416,7 @@ const CalendarWidget = ({
 
             <TextField
               fullWidth
-              label="Calendar Name"
+              label={t('calendar:sources.name')}
               value={calendarForm.name}
               onChange={(e) => setCalendarForm({ ...calendarForm, name: e.target.value })}
               sx={{ mb: 2 }}
@@ -2418,11 +2427,11 @@ const CalendarWidget = ({
               <InputLabel>Calendar Type</InputLabel>
               <Select
                 value={calendarForm.type}
-                label="Calendar Type"
+                label={t('calendar:sources.type')}
                 onChange={(e) => setCalendarForm({ ...calendarForm, type: e.target.value })}
               >
-                <MenuItem value="ICS">ICS (Public Calendar Link)</MenuItem>
-                <MenuItem value="CalDAV">CalDAV (Private Server)</MenuItem>
+                <MenuItem value="ICS">{t('calendar:sources.typeIcs')}</MenuItem>
+                <MenuItem value="CalDAV">{t('calendar:sources.typeCalDav')}</MenuItem>
                 <MenuItem value="Google" disabled={!googleAccountConnected}>
                   Google Calendar {googleAccountConnected ? '' : '(connect in Admin > Connections)'}
                 </MenuItem>
@@ -2486,7 +2495,7 @@ const CalendarWidget = ({
                 </Alert>
                 <TextField
                   fullWidth
-                  label="Apple ID (email)"
+                  label={t('calendar:sources.appleId')}
                   value={appleDiscoveryCredentials.appleId}
                   onChange={(e) => setAppleDiscoveryCredentials({ ...appleDiscoveryCredentials, appleId: e.target.value })}
                   sx={{ mb: 2 }}
@@ -2496,7 +2505,7 @@ const CalendarWidget = ({
                 />
                 <TextField
                   fullWidth
-                  label="App-Specific Password"
+                  label={t('calendar:sources.appleAppSpecificPassword')}
                   type="password"
                   value={appleDiscoveryCredentials.appPassword}
                   onChange={(e) => setAppleDiscoveryCredentials({ ...appleDiscoveryCredentials, appPassword: e.target.value })}
@@ -2562,7 +2571,7 @@ const CalendarWidget = ({
             ) : (
               <TextField
                 fullWidth
-                label="Calendar URL"
+                label={t('calendar:sources.url')}
                 value={calendarForm.url}
                 onChange={(e) => setCalendarForm({ ...calendarForm, url: e.target.value })}
                 sx={{ mb: 2 }}
@@ -2575,7 +2584,7 @@ const CalendarWidget = ({
               <>
                 <TextField
                   fullWidth
-                  label="Username"
+                  label={t('calendar:sources.username')}
                   value={calendarForm.username}
                   onChange={(e) => setCalendarForm({ ...calendarForm, username: e.target.value })}
                   sx={{ mb: 2 }}
@@ -2584,7 +2593,7 @@ const CalendarWidget = ({
 
                 <TextField
                   fullWidth
-                  label="Password"
+                  label={t('calendar:sources.password')}
                   type="password"
                   value={calendarForm.password}
                   onChange={(e) => setCalendarForm({ ...calendarForm, password: e.target.value })}
