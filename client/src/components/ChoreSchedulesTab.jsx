@@ -47,24 +47,21 @@ import { API_BASE_URL } from '../utils/apiConfig.js';
 import { CronExpressionParser } from 'cron-parser';
 import { getServerTimezoneSync } from '../utils/timezone.js';
 import SoundPicker from './SoundPicker.jsx';
+import { useTranslation } from 'react-i18next';
+import { getWeekdayLabels } from '../utils/dateUtils.js';
 import useIsMobile from '../hooks/useIsMobile.js';
 import { stackableTableSx } from '../utils/responsiveTable.js';
 
-const DAY_OPTIONS = [
-  { label: 'Sun', value: 0 },
-  { label: 'Mon', value: 1 },
-  { label: 'Tue', value: 2 },
-  { label: 'Wed', value: 3 },
-  { label: 'Thu', value: 4 },
-  { label: 'Fri', value: 5 },
-  { label: 'Sat', value: 6 }
-];
+// Day labels come from the locale (index 0 = Sunday, matching crontab).
+const getDayOptions = () => getWeekdayLabels(0).map((label, value) => ({ label, value }));
 
+// Values are crontab expressions and never change; only the label is
+// translated, at render time.
 const CRONTAB_PRESETS = [
-  { label: 'Daily', value: '0 0 * * *' },
-  { label: 'Every Other Day', value: '0 0 */2 * *' },
-  { label: 'Weekdays (Mon–Fri)', value: '0 0 * * 1-5' },
-  { label: 'Weekends (Sat–Sun)', value: '0 0 * * 0,6' }
+  { key: 'daily', value: '0 0 * * *' },
+  { key: 'everyOtherDay', value: '0 0 */2 * *' },
+  { key: 'weekdays', value: '0 0 * * 1-5' },
+  { key: 'weekends', value: '0 0 * * 0,6' }
 ];
 
 function getNextOccurrence(crontab) {
@@ -216,6 +213,7 @@ const defaultScheduleForm = {
 const defaultChoreForm = { title: '', description: '', clam_value: 0 };
 
 export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
+  const { t } = useTranslation(['chores', 'common']);
   const isMobile = useIsMobile();
   const [schedules, setSchedules] = useState([]);
   const [chores, setChores] = useState([]);
@@ -468,7 +466,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
   const getUserName = (userId) => {
     if (userId === null || userId === undefined || userId === 0) return 'Unassigned';
     const user = users.find(u => u.id === userId);
-    return user ? user.username : `User #${userId}`;
+    return user ? user.username : t('chores:schedules.unknownUser', { id: userId });
   };
 
   const getScheduleCountForChore = (choreId) =>
@@ -516,19 +514,19 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
 
       {/* ── CHORE DEFINITIONS ────────────────────────────── */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-        <Typography variant="h6">Chore Definitions</Typography>
+        <Typography variant="h6">{t('chores:schedules.definitionsHeading')}</Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button startIcon={<Refresh />} onClick={fetchAll} variant="outlined" size="small">
             Refresh
           </Button>
           <Button startIcon={<Add />} onClick={openCreateChore} variant="contained" size="small">
-            New Chore
+            {t('chores:schedules.newChore')}
           </Button>
         </Box>
       </Box>
 
       <Alert severity="info" sx={{ mb: 2 }}>
-        Chore definitions hold the title, description, and clam value. Add schedules below to assign them to users with a recurrence pattern.
+        {t('chores:schedules.definitionsHelp')}
       </Alert>
 
       <TableContainer component={Paper} sx={{ mb: 4 }}>
@@ -546,7 +544,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
             {chores.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} align="center" sx={{ py: 3 }}>
-                  <Typography color="text.secondary">No chores defined yet.</Typography>
+                  <Typography color="text.secondary">{t('chores:schedules.noChores')}</Typography>
                 </TableCell>
               </TableRow>
             ) : (
@@ -557,7 +555,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                   </TableCell>
                   <TableCell data-label="Description">
                     <Typography variant="body2" color="text.secondary">
-                      {c.description || <em style={{ opacity: 0.5 }}>No description</em>}
+                      {c.description || <em style={{ opacity: 0.5 }}>{t('chores:schedules.noDescription')}</em>}
                     </Typography>
                   </TableCell>
                   <TableCell data-label="Clams">
@@ -574,12 +572,12 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                   </TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', gap: 0.5 }}>
-                      <Tooltip title="Edit chore">
+                      <Tooltip title={t('chores:schedules.editChore')}>
                         <IconButton size="small" color="primary" onClick={() => openEditChore(c)}>
                           <Edit fontSize="small" />
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title="Delete chore and all its schedules">
+                      <Tooltip title={t('chores:schedules.deleteChoreAndSchedules')}>
                         <IconButton size="small" color="error" onClick={() => setDeleteChoreDialog({ open: true, chore: c })}>
                           <Delete fontSize="small" />
                         </IconButton>
@@ -597,35 +595,35 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
         <Typography variant="h6">Schedules</Typography>
         <Button startIcon={<Add />} onClick={openCreateSchedule} variant="contained" size="small">
-          New Schedule
+          {t('chores:schedules.newSchedule')}
         </Button>
       </Box>
 
       <Alert severity="info" sx={{ mb: 2 }}>
-        Schedules link chores to users and specify when they recur. A chore can have multiple schedules for different users or frequencies.
+        {t('chores:schedules.schedulesHelp')}
       </Alert>
 
       <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
         <FormControl size="small" sx={{ minWidth: 160 }}>
-          <InputLabel>Filter by User</InputLabel>
-          <Select value={filterUser} label="Filter by User" onChange={(e) => setFilterUser(e.target.value)}>
-            <MenuItem value="">All Users</MenuItem>
-            <MenuItem value="0">Unassigned (Bonus)</MenuItem>
+          <InputLabel>{t('chores:schedules.filterByUser')}</InputLabel>
+          <Select value={filterUser} label={t('chores:schedules.filterByUser')} onChange={(e) => setFilterUser(e.target.value)}>
+            <MenuItem value="">{t('chores:schedules.allUsers')}</MenuItem>
+            <MenuItem value="0">{t('chores:schedules.unassignedBonus')}</MenuItem>
             {users.map(u => <MenuItem key={u.id} value={u.id}>{u.username}</MenuItem>)}
           </Select>
         </FormControl>
 
         <FormControl size="small" sx={{ minWidth: 180 }}>
-          <InputLabel>Filter by Chore</InputLabel>
-          <Select value={filterChore} label="Filter by Chore" onChange={(e) => setFilterChore(e.target.value)}>
-            <MenuItem value="">All Chores</MenuItem>
+          <InputLabel>{t('chores:schedules.filterByChore')}</InputLabel>
+          <Select value={filterChore} label={t('chores:schedules.filterByChore')} onChange={(e) => setFilterChore(e.target.value)}>
+            <MenuItem value="">{t('chores:schedules.allChores')}</MenuItem>
             {chores.map(c => <MenuItem key={c.id} value={c.id}>{c.title}</MenuItem>)}
           </Select>
         </FormControl>
 
         {(filterUser || filterChore) && (
           <Button size="small" onClick={() => { setFilterUser(''); setFilterChore(''); }}>
-            Clear Filters
+            {t('chores:schedules.clearFilters')}
           </Button>
         )}
 
@@ -651,7 +649,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
             {filteredSchedules.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                  <Typography color="text.secondary">No schedules found.</Typography>
+                  <Typography color="text.secondary">{t('chores:schedules.noSchedules')}</Typography>
                 </TableCell>
               </TableRow>
             ) : (
@@ -683,11 +681,11 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                   </TableCell>
                   <TableCell data-label="Duration">
                     {s.crontab && s.duration === 'until-completed' ? (
-                      <Chip label="Until Completed" size="small" color="warning" />
+                      <Chip label={t('chores:schedules.untilCompleted')} size="small" color="warning" />
                     ) : s.crontab && s.duration === 'once-completed' ? (
                       <Chip label={`Once Completed${s.interval ? ` (${formatScheduleInterval(s.interval)})` : ''}`} size="small" color="secondary" />
                     ) : s.crontab ? (
-                      <Chip label="Day Of" size="small" variant="outlined" />
+                      <Chip label={t('chores:schedules.dayOf')} size="small" variant="outlined" />
                     ) : (
                       <Typography variant="caption" color="text.secondary">—</Typography>
                     )}
@@ -767,7 +765,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
             />
             <TextField
               size="small"
-              label="Clam Value"
+              label={t('chores:schedules.clamValue')}
               type="number"
               value={choreForm.clam_value}
               onChange={(e) => setChoreForm(f => ({ ...f, clam_value: parseInt(e.target.value) || 0 }))}
@@ -794,7 +792,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Warning color="error" />
-            Delete Chore
+            {t('chores:schedules.deleteChore')}
           </Box>
         </DialogTitle>
         <DialogContent>
@@ -858,7 +856,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                 label="Assigned To"
                 onChange={(e) => updateScheduleForm({ user_id: e.target.value })}
               >
-                <MenuItem value="">Unassigned (Bonus chore)</MenuItem>
+                <MenuItem value="">{t('chores:schedules.unassignedBonusChore')}</MenuItem>
                 {users.map(u => <MenuItem key={u.id} value={u.id}>{u.username}</MenuItem>)}
               </Select>
             </FormControl>
@@ -872,7 +870,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                   onChange={(e) => updateScheduleForm({ isOneTime: e.target.checked })}
                 />
               }
-              label="One-time task (no recurrence)"
+              label={t('chores:schedules.oneTimeTask')}
             />
 
             {!scheduleForm.isOneTime && (
@@ -894,8 +892,8 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                     label="Duration"
                     onChange={(e) => updateScheduleForm({ duration: e.target.value })}
                   >
-                    <MenuItem value="day-of">Day Of</MenuItem>
-                    <MenuItem value="until-completed">Until Completed</MenuItem>
+                    <MenuItem value="day-of">{t('chores:schedules.dayOf')}</MenuItem>
+                    <MenuItem value="until-completed">{t('chores:schedules.untilCompleted')}</MenuItem>
                     <MenuItem value="once-completed">Once Completed</MenuItem>
                   </Select>
                   <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, ml: 1.5 }}>
@@ -913,7 +911,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                       <TextField
                         fullWidth
                         size="small"
-                        label="Sleep Count"
+                        label={t('chores:schedules.sleepCount')}
                         value={scheduleForm.sleepCount}
                         onChange={(e) => {
                           const digitsOnly = e.target.value.replace(/\D/g, '');
@@ -926,10 +924,10 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                     </Grid>
                     <Grid size={6}>
                       <FormControl fullWidth size="small">
-                        <InputLabel>Sleep Unit</InputLabel>
+                        <InputLabel>{t('chores:schedules.sleepUnit')}</InputLabel>
                         <Select
                           value={scheduleForm.sleepUnit}
-                          label="Sleep Unit"
+                          label={t('chores:schedules.sleepUnit')}
                           onChange={(e) => updateScheduleForm({ sleepUnit: e.target.value })}
                         >
                           <MenuItem value="d">Days</MenuItem>
@@ -944,16 +942,16 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
 
                 {scheduleForm.scheduleMode === 'preset' && (
                   <FormControl fullWidth size="small">
-                    <InputLabel>Schedule Preset</InputLabel>
+                    <InputLabel>{t('chores:schedules.schedulePreset')}</InputLabel>
                     <Select
                       value={scheduleForm.selectedPreset}
-                      label="Schedule Preset"
+                      label={t('chores:schedules.schedulePreset')}
                       onChange={(e) => updateScheduleForm({ selectedPreset: e.target.value })}
                     >
                       {CRONTAB_PRESETS.map(p => (
-                        <MenuItem key={p.label} value={p.value}>
+                        <MenuItem key={p.key} value={p.value}>
                           <Box>
-                            <Typography variant="body2">{p.label}</Typography>
+                            <Typography variant="body2">{t(`chores:presets.${p.key}`)}</Typography>
                             <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
                               {p.value}
                             </Typography>
@@ -967,10 +965,10 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                 {scheduleForm.scheduleMode === 'days' && (
                   <Box>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                      Select which days this chore should appear:
+                      {t('chores:schedules.selectDays')}
                     </Typography>
                     <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                      {DAY_OPTIONS.map(day => (
+                      {getDayOptions().map(day => (
                         <Chip
                           key={day.value}
                           label={day.label}
@@ -1004,7 +1002,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                   <TextField
                     fullWidth
                     size="small"
-                    label="Crontab Expression"
+                    label={t('chores:schedules.crontabExpression')}
                     value={scheduleForm.customCrontab}
                     onChange={(e) => updateScheduleForm({ customCrontab: e.target.value })}
                     placeholder="0 0 * * 1"
@@ -1028,7 +1026,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                 )}
                 {scheduleForm.isOneTime && (
                   <Typography variant="caption" color="text.secondary">
-                    This chore will appear once and hide itself after completion.
+                    {t('chores:schedules.appearsOnce')}
                   </Typography>
                 )}
               </Alert>
@@ -1038,7 +1036,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
 
             {scheduleForm.isOneTime ? (
               <TextField
-                label="Due date (optional)"
+                label={t('chores:schedules.dueDateOptional')}
                 type="date"
                 size="small"
                 value={scheduleForm.due_date}
@@ -1047,7 +1045,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                   inputLabel: { shrink: true },
                   htmlInput: { placeholder: '' }
                 }}
-                helperText="Calendar deadline. The chore turns yellow when due, red when overdue."
+                helperText={t('chores:schedules.dueDateHelp')}
                 sx={{
                   maxWidth: 260,
                   '& input[type="date"]:not(:focus):invalid::-webkit-datetime-edit': {
@@ -1057,7 +1055,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
               />
             ) : (
               <TextField
-                label="Days until chore is due"
+                label={t('chores:schedules.daysUntilDue')}
                 type="number"
                 size="small"
                 value={scheduleForm.due_days}
@@ -1065,7 +1063,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                   const nextValue = e.target.value.replace(/\D/g, '');
                   updateScheduleForm({ due_days: nextValue });
                 }}
-                helperText="Leave blank for no due date. This sets a relative due-date offset for recurring chores."
+                helperText={t('chores:schedules.daysUntilDueHelp')}
                 error={hasInvalidDueDays}
                 slotProps={{ htmlInput: { min: 0, step: 1, inputMode: 'numeric', pattern: '[0-9]*' } }}
                 sx={{ maxWidth: 280 }}
@@ -1073,7 +1071,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
             )}
 
             <TextField
-              label="Due time (optional)"
+              label={t('chores:schedules.dueTimeOptional')}
               type="time"
               size="small"
               value={scheduleForm.due_time}
@@ -1082,7 +1080,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                 inputLabel: { shrink: true },
                 htmlInput: { placeholder: '' }
               }}
-              helperText="Time of day this chore is due. Required to play a sound."
+              helperText={t('chores:schedules.dueTimeHelp')}
               sx={{
                 maxWidth: 220,
                 '& input[type="time"]:not(:focus):invalid::-webkit-datetime-edit': {
@@ -1099,7 +1097,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                   disabled={!scheduleForm.due_time}
                 />
               }
-              label="Play sound when due"
+              label={t('chores:schedules.playSoundWhenDue')}
             />
 
             {scheduleForm.sound_enabled && scheduleForm.due_time && (
@@ -1114,12 +1112,12 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                   allowDelete
                 />
                 <TextField
-                  label="Repeat reminder every (minutes)"
+                  label={t('chores:schedules.repeatReminder')}
                   type="number"
                   size="small"
                   value={scheduleForm.reminder_interval_minutes}
                   onChange={(e) => updateScheduleForm({ reminder_interval_minutes: e.target.value })}
-                  helperText="Leave blank to ring once. Reminders repeat until the chore is completed."
+                  helperText={t('chores:schedules.repeatReminderHelp')}
                   inputProps={{ min: 0 }}
                   sx={{ maxWidth: 280 }}
                 />
@@ -1136,10 +1134,10 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                   onChange={(e) => updateScheduleForm({ transferable: e.target.checked })}
                 />
               }
-              label="Transferable"
+              label={t('chores:schedules.transferable')}
             />
             <Typography variant="caption" color="text.secondary" sx={{ mt: -1.5, ml: 6 }}>
-              Allows reassignment from the dashboard.
+              {t('chores:schedules.transferableHelp')}
             </Typography>
 
             <FormControlLabel
@@ -1149,10 +1147,10 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                   onChange={(e) => updateScheduleForm({ can_snooze: e.target.checked })}
                 />
               }
-              label="Can snooze/defer"
+              label={t('chores:schedules.canSnooze')}
             />
             <Typography variant="caption" color="text.secondary" sx={{ mt: -1.5, ml: 6 }}>
-              Allows the scheduled time to be deferred by a set time.
+              {t('chores:schedules.canSnoozeHelp')}
             </Typography>
 
             <Divider />
@@ -1164,7 +1162,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                   onChange={(e) => updateScheduleForm({ visible: e.target.checked })}
                 />
               }
-              label="Visible (active)"
+              label={t('chores:schedules.visibleActive')}
             />
           </Box>
         </DialogContent>
@@ -1183,10 +1181,10 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
 
       {/* ── DELETE SCHEDULE DIALOG ────────────────────────── */}
       <Dialog open={deleteScheduleDialog.open} onClose={() => setDeleteScheduleDialog({ open: false, schedule: null })} maxWidth="xs" fullWidth fullScreen={isMobile}>
-        <DialogTitle>Delete Schedule</DialogTitle>
+        <DialogTitle>{t('chores:schedules.deleteSchedule')}</DialogTitle>
         <DialogContent>
           <Alert severity="warning" sx={{ mb: 2 }}>
-            This will permanently delete this schedule. Completion history is preserved.
+            {t('chores:schedules.deleteScheduleWarning')}
           </Alert>
           <Typography variant="body2">
             Delete schedule for <strong>{deleteScheduleDialog.schedule?.title}</strong> assigned to{' '}
