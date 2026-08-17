@@ -1,0 +1,50 @@
+{
+  "actions": {
+    "add": "Add",
+    "cancel": "Cancel",
+    "close": "Close",
+    "clear": "Clear",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "remove": "Remove",
+    "save": "Save",
+    "upload": "Upload",
+    "choose": "Choose",
+    "refresh": "Refresh",
+    "backspace": "Backspace",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "duplicate": "Duplicate"
+  },
+  "state": {
+    "loading": "Loading...",
+    "saving": "Saving...",
+    "none": "None",
+    "optional": "optional"
+  },
+  "labels": {
+    "title": "Title",
+    "description": "Description",
+    "name": "Name",
+    "order": "Order",
+    "actions": "Actions",
+    "enabled": "Enabled",
+    "language": "Language"
+  },
+  "errors": {
+    "generic": "Something went wrong. Please try again.",
+    "loadFailed": "Could not load this. Please try again.",
+    "saveFailed": "Could not save your changes. Please try again."
+  },
+  "pin": {
+    "confirmWithAdminPin": "Confirm with Admin PIN",
+    "statusCheckFailed": "Could not confirm admin PIN status. Please try again."
+  },
+  "language": {
+    "label": "Language",
+    "helper": "Applies to this display only. Other devices keep their own language.",
+    "householdDefault": "Household default",
+    "householdDefaultHelper": "New displays start in this language until they choose their own."
+  }
+}

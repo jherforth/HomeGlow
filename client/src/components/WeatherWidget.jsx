@@ -18,6 +18,7 @@ import {
 import { Settings } from '@mui/icons-material';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import axios from 'axios';
+import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
 
@@ -54,6 +55,7 @@ const WeatherWidget = ({
   isActive = true,
   demoMode = false,
 }) => {
+  const { t, i18n } = useTranslation(['weather', 'common']);
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [weatherData, setWeatherData] = useState(null);
   const [forecastData, setForecastData] = useState([]);
@@ -180,9 +182,12 @@ const WeatherWidget = ({
         return 'Invalid API key. Please check your OpenWeatherMap API key in the Admin Panel.';
       }
       if (requestError.response.status === 404) {
-        return 'Invalid location. Try a city and country code like "Sydney,AU" or a postal code like "14818,US".';
+        return t('weather:errors.invalidLocation');
       }
-      return `Weather service error: ${requestError.response.status} ${requestError.response.statusText}`;
+      return t('weather:widget.serviceError', {
+        status: requestError.response.status,
+        statusText: requestError.response.statusText,
+      });
     }
 
     if (requestError?.code === 'ECONNREFUSED' || requestError?.message?.includes('Network Error')) {
@@ -282,7 +287,11 @@ const WeatherWidget = ({
       : await resolveCoordinatesForLocation(targetLocationQuery);
     const { lat, lon } = resolvedCoordinates;
 
-    const currentWeatherUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${weatherApiKey}&units=${targetUnitParam}`;
+    // OpenWeatherMap localizes its own condition text ("clear sky",
+    // "few clouds") when given lang, so those strings translate for free
+    // rather than needing a lookup table on our side.
+    const owmLang = i18n.language?.split('-')[0] || 'en';
+    const currentWeatherUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${weatherApiKey}&units=${targetUnitParam}&lang=${owmLang}`;
     const currentResponse = await axios.get(currentWeatherUrl);
     const nextWeatherData = currentResponse.data;
     let nextAirQualityData = null;
@@ -301,7 +310,7 @@ const WeatherWidget = ({
       }
     }
 
-    const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${weatherApiKey}&units=${targetUnitParam}`;
+    const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${weatherApiKey}&units=${targetUnitParam}&lang=${owmLang}`;
     const forecastResponse = await axios.get(forecastUrl);
     const chartDataPoints = [];
 
@@ -667,7 +676,7 @@ const WeatherWidget = ({
     }
 
     if (!locationQuery) {
-      setError('Please enter a location.');
+      setError(t('weather:errors.enterLocation'));
       return;
     }
 
@@ -703,13 +712,14 @@ const WeatherWidget = ({
 
   const getAirQualityLevel = (aqi) => {
     const levels = {
-      1: { label: 'Good', color: '#00e400', emoji: '😊' },
-      2: { label: 'Fair', color: '#ffff00', emoji: '😐' },
-      3: { label: 'Moderate', color: '#ff7e00', emoji: '😷' },
-      4: { label: 'Poor', color: '#ff0000', emoji: '😨' },
-      5: { label: 'Very Poor', color: '#8f3f97', emoji: '🤢' }
+      1: { key: 'good', color: '#00e400', emoji: '😊' },
+      2: { key: 'fair', color: '#ffff00', emoji: '😐' },
+      3: { key: 'moderate', color: '#ff7e00', emoji: '😷' },
+      4: { key: 'poor', color: '#ff0000', emoji: '😨' },
+      5: { key: 'veryPoor', color: '#8f3f97', emoji: '🤢' }
     };
-    return levels[aqi] || { label: 'Unknown', color: '#gray', emoji: '❓' };
+    const level = levels[aqi] || { key: 'unknown', color: '#gray', emoji: '❓' };
+    return { ...level, label: t(`weather:airQuality.${level.key}`) };
   };
 
   const handleOpenSettingsModal = () => {
@@ -726,7 +736,7 @@ const WeatherWidget = ({
   const handleSaveSettingsModal = async () => {
     const normalizedLocationQuery = (draftLocationQuery || '').trim();
     if (!normalizedLocationQuery) {
-      setError('Please enter a location.');
+      setError(t('weather:errors.enterLocation'));
       return;
     }
 
@@ -945,7 +955,7 @@ const WeatherWidget = ({
                 }}
               >
                 <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
-                  Air Quality
+                  {t('weather:widget.airQuality')}
                 </Typography>
                 {(() => {
                   const aqi = airQualityData.list[0].main.aqi;
@@ -1096,52 +1106,52 @@ const WeatherWidget = ({
         }
       }}
     >
-      <DialogTitle>Weather Widget Settings</DialogTitle>
+      <DialogTitle>{t('weather:settings.title')}</DialogTitle>
       <DialogContent>
         <Typography variant="caption" sx={{ display: 'block', mb: 2, opacity: 0.8 }}>
-          These settings apply only to this tab's weather widget instance.
+          {t('weather:settings.scopeNote')}
         </Typography>
 
         <TextField
           fullWidth
-          label="Location"
+          label={t('weather:settings.location')}
           value={draftLocationQuery}
           onChange={(e) => setDraftLocationQuery(e.target.value)}
           sx={{ mb: 2 }}
-          helperText="Examples: Sydney,AU or 14818,US"
+          helperText={t('weather:settings.locationHelp')}
         />
 
         <FormControl fullWidth sx={{ mb: 2 }}>
-          <InputLabel id="weather-temp-unit-label">Temperature Unit</InputLabel>
+          <InputLabel id="weather-temp-unit-label">{t('weather:settings.temperatureUnit')}</InputLabel>
           <Select
             labelId="weather-temp-unit-label"
-            label="Temperature Unit"
+            label={t('weather:settings.temperatureUnit')}
             value={draftTempUnit}
             onChange={(e) => setDraftTempUnit(e.target.value)}
           >
-            <MenuItem value="F">Fahrenheit (°F)</MenuItem>
-            <MenuItem value="C">Celsius (°C)</MenuItem>
+            <MenuItem value="F">{t('weather:settings.fahrenheit')}</MenuItem>
+            <MenuItem value="C">{t('weather:settings.celsius')}</MenuItem>
           </Select>
         </FormControl>
 
         <FormControl fullWidth>
-          <InputLabel id="weather-layout-mode-label">Layout Mode</InputLabel>
+          <InputLabel id="weather-layout-mode-label">{t('weather:settings.layoutMode')}</InputLabel>
           <Select
             labelId="weather-layout-mode-label"
-            label="Layout Mode"
+            label={t('weather:settings.layoutMode')}
             value={draftLayoutMode}
             onChange={(e) => setDraftLayoutMode(e.target.value)}
           >
-            <MenuItem value="auto">Auto (based on widget size)</MenuItem>
-            <MenuItem value="compact">Compact</MenuItem>
-            <MenuItem value="medium">Medium</MenuItem>
-            <MenuItem value="full">Full</MenuItem>
+            <MenuItem value="auto">{t('weather:settings.layoutAuto')}</MenuItem>
+            <MenuItem value="compact">{t('weather:settings.layoutCompact')}</MenuItem>
+            <MenuItem value="medium">{t('weather:settings.layoutMedium')}</MenuItem>
+            <MenuItem value="full">{t('weather:settings.layoutFull')}</MenuItem>
           </Select>
         </FormControl>
       </DialogContent>
       <DialogActions>
-        <Button type="button" onClick={handleCloseSettingsModal}>Cancel</Button>
-        <Button type="submit" variant="contained">Save</Button>
+        <Button type="button" onClick={handleCloseSettingsModal}>{t('common:actions.cancel')}</Button>
+        <Button type="submit" variant="contained">{t('common:actions.save')}</Button>
       </DialogActions>
     </Dialog>
   );
@@ -1179,7 +1189,7 @@ const WeatherWidget = ({
           </Typography>
         </Box>
         <Button size="small" variant="outlined" onClick={handleOpenSettingsModal}>
-          Open Settings
+          {t('weather:widget.openSettings')}
         </Button>
       </Box>
     );
@@ -1194,7 +1204,7 @@ const WeatherWidget = ({
         p: 2
       }}>
         <Typography variant="h6">🌤️ Weather</Typography>
-        <Typography>No weather data available</Typography>
+        <Typography>{t('weather:widget.noData')}</Typography>
       </Box>
     );
   } else {
@@ -1227,7 +1237,7 @@ const WeatherWidget = ({
       <IconButton
         size="small"
         onClick={handleOpenSettingsModal}
-        aria-label="Open weather widget settings"
+        aria-label={t('weather:widget.openSettingsAria')}
         sx={{
           position: 'absolute',
           top: 8,

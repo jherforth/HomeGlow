@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Box, Typography } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 
 // Full-screen confetti celebration for a prize redemption (prize store).
 // Pure CSS — ~60 confetti pieces with randomized fall/spin animations — no
@@ -14,6 +15,7 @@ const PIECE_COUNT = 60;
 const AUTO_DISMISS_MS = 4500;
 
 const PrizeCelebration = ({ username, prizeName, onDismiss }) => {
+  const { t } = useTranslation(['chores']);
   const pieces = useMemo(
     () =>
       Array.from({ length: PIECE_COUNT }, (_, i) => ({
@@ -94,7 +96,7 @@ const PrizeCelebration = ({ username, prizeName, onDismiss }) => {
       >
         <Typography sx={{ fontSize: '3rem', lineHeight: 1, mb: 1 }}>🎉</Typography>
         <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>
-          {username} redeemed a prize!
+          {t('chores:celebration.redeemedAPrize', { name: username })}
         </Typography>
         <Typography variant="h6" sx={{ color: 'var(--accent)', fontWeight: 600 }}>
           {prizeName}

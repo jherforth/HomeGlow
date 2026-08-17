@@ -1,0 +1,57 @@
+{
+  "widget": {
+    "noPhotos": "No photos available. Add a photo source in settings.",
+    "photoAlt": "Photo"
+  },
+  "settings": {
+    "sources": "Photo Sources",
+    "addSource": "Add Source",
+    "noSources": "No photo sources configured",
+    "photosPerView": "Photos Per View",
+    "photoSize": "Photo Size",
+    "transitionEffect": "Transition Effect",
+    "slideshowSpeed": "Slideshow Speed"
+  },
+  "size": {
+    "auto": "Auto (fit widget)",
+    "extraLarge": "Extra Large (880px)",
+    "large": "Large (720px)",
+    "medium": "Medium (580px)",
+    "small": "Small (450px)",
+    "extraSmall": "Extra Small (300px)"
+  },
+  "transition": {
+    "fade": "Fade",
+    "slide": "Slide"
+  },
+  "speed": {
+    "fast": "Fast (3s)",
+    "normal": "Normal (5s)",
+    "slow": "Slow (10s)",
+    "verySlow": "Very Slow (30s)"
+  },
+  "source": {
+    "name": "Source Name",
+    "type": "Type",
+    "immich": "Immich",
+    "homeglow": "HomeGlow Photos",
+    "immichUrl": "Immich Server URL",
+    "immichUrlPlaceholder": "Your Immich server URL",
+    "apiKey": "API Key",
+    "apiKeyHelp": "Get from Immich Settings → API Keys",
+    "albumId": "Album ID (Optional)",
+    "albumIdHelp": "Leave empty to show all photos",
+    "saveFirst": "Save this source first, then open the upload page to add photos from your device.",
+    "uploadExplain": "Upload photos directly from your device. They will be stored on your HomeGlow server and displayed in this widget.",
+    "openUploadPage": "Open upload page",
+    "mobileHint": "The upload page is mobile-friendly—open it on your phone to upload photos straight from your camera roll.",
+    "testConnection": "Test Connection"
+  },
+  "confirm": {
+    "deleteSource": "Are you sure you want to delete this photo source?"
+  },
+  "errors": {
+    "saveBeforeTesting": "Please save the photo source before testing",
+    "saveFailed": "Failed to save photo source. Please try again."
+  }
+}

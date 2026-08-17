@@ -39,46 +39,55 @@ import {
   LocalDrink,
   Cloud,
 } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 import useIsMobile from '../hooks/useIsMobile.js';
 
+// `name` is the stored icon identifier; the visible label is looked up from
+// the admin namespace at render time so it translates without changing what
+// gets persisted on the tab.
 const availableIcons = [
-  { name: 'bell', icon: Notifications, label: 'Bell' },
-  { name: 'bookmark', icon: Bookmark, label: 'Bookmark' },
-  { name: 'building', icon: Business, label: 'Building' },
-  { name: 'bucket', icon: LocalDrink, label: 'Bucket' },
-  { name: 'calendar', icon: CalendarToday, label: 'Calendar' },
-  { name: 'camera', icon: CameraAlt, label: 'Camera' },
-  { name: 'chart', icon: BarChart, label: 'Chart' },
-  { name: 'chat', icon: ChatBubble, label: 'Chat' },
-  { name: 'clipboard', icon: Assignment, label: 'Clipboard' },
-  { name: 'clock', icon: Schedule, label: 'Clock' },
-  { name: 'clouds', icon: Cloud, label: 'Clouds' },
-  { name: 'compass', icon: Explore, label: 'Compass' },
-  { name: 'envelope', icon: Email, label: 'Envelope' },
-  { name: 'file', icon: InsertDriveFile, label: 'File' },
-  { name: 'flag', icon: Flag, label: 'Flag' },
-  { name: 'folder', icon: Folder, label: 'Folder' },
-  { name: 'gem', icon: Diamond, label: 'Gem' },
-  { name: 'hand', icon: PanTool, label: 'Hand' },
-  { name: 'heart', icon: Favorite, label: 'Heart' },
-  { name: 'image', icon: Image, label: 'Image' },
-  { name: 'lightbulb', icon: Lightbulb, label: 'Lightbulb' },
-  { name: 'map', icon: Map, label: 'Map' },
-  { name: 'money', icon: AttachMoney, label: 'Money' },
-  { name: 'shovel', icon: Construction, label: 'Shovel' },
-  { name: 'star', icon: Star, label: 'Star' },
-  { name: 'trashcan', icon: Delete, label: 'Trashcan' },
+  { name: 'bell', icon: Notifications },
+  { name: 'bookmark', icon: Bookmark },
+  { name: 'building', icon: Business },
+  { name: 'bucket', icon: LocalDrink },
+  { name: 'calendar', icon: CalendarToday },
+  { name: 'camera', icon: CameraAlt },
+  { name: 'chart', icon: BarChart },
+  { name: 'chat', icon: ChatBubble },
+  { name: 'clipboard', icon: Assignment },
+  { name: 'clock', icon: Schedule },
+  { name: 'clouds', icon: Cloud },
+  { name: 'compass', icon: Explore },
+  { name: 'envelope', icon: Email },
+  { name: 'file', icon: InsertDriveFile },
+  { name: 'flag', icon: Flag },
+  { name: 'folder', icon: Folder },
+  { name: 'gem', icon: Diamond },
+  { name: 'hand', icon: PanTool },
+  { name: 'heart', icon: Favorite },
+  { name: 'image', icon: Image },
+  { name: 'lightbulb', icon: Lightbulb },
+  { name: 'map', icon: Map },
+  { name: 'money', icon: AttachMoney },
+  { name: 'shovel', icon: Construction },
+  { name: 'star', icon: Star },
+  { name: 'trashcan', icon: Delete },
 ];
 
 const TabIconModal = ({
   open,
   onClose,
   onSave,
-  title = 'Create New Tab',
-  saveButtonText = 'Create Tab',
+  // Defaults are resolved from translations below rather than inline, so a
+  // caller that passes nothing still gets localized copy.
+  title = null,
+  saveButtonText = null,
   initialData = null,
 }) => {
+  const { t } = useTranslation(['admin', 'common']);
   const isMobile = useIsMobile();
+  const resolvedTitle = title ?? t('admin:tabs.createTitle');
+  const resolvedSaveText = saveButtonText ?? t('admin:tabs.createButton');
   const [label, setLabel] = useState('');
   const [selectedIcon, setSelectedIcon] = useState('star');
   const [error, setError] = useState('');
@@ -136,14 +145,14 @@ const TabIconModal = ({
     >
       <DialogTitle>
         <Typography variant="h6" component="div">
-          {title}
+          {resolvedTitle}
         </Typography>
       </DialogTitle>
       <DialogContent>
         <Box sx={{ pt: 2 }}>
           <TextField
             fullWidth
-            label="Tab Label"
+            label={t('admin:tabs.tabLabel')}
             value={label}
             onChange={(e) => {
               setLabel(e.target.value);
@@ -156,7 +165,7 @@ const TabIconModal = ({
           />
 
           <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
-            Select an Icon
+            {t('admin:tabs.selectIcon')}
           </Typography>
 
           <Grid container spacing={1}>
@@ -189,7 +198,7 @@ const TabIconModal = ({
                   >
                     <IconComponent sx={{ fontSize: 32, mb: 0.5 }} />
                     <Typography variant="caption" sx={{ textAlign: 'center', fontSize: '0.7rem' }}>
-                      {iconItem.label}
+                      {t(`admin:icons.${iconItem.name}`)}
                     </Typography>
                   </Paper>
                 </Grid>
@@ -200,10 +209,10 @@ const TabIconModal = ({
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button type="button" onClick={handleClose} variant="outlined">
-          Cancel
+          {t('common:actions.cancel')}
         </Button>
         <Button type="submit" variant="contained" disabled={!label.trim()}>
-          {saveButtonText}
+          {resolvedSaveText}
         </Button>
       </DialogActions>
     </Dialog>

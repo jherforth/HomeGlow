@@ -1,0 +1,35 @@
+{
+  "widget": {
+    "noData": "No weather data available",
+    "openSettings": "Open Settings",
+    "openSettingsAria": "Open weather widget settings",
+    "airQuality": "Air Quality",
+    "serviceError": "Weather service error: {{status}} {{statusText}}"
+  },
+  "airQuality": {
+    "good": "Good",
+    "fair": "Fair",
+    "moderate": "Moderate",
+    "poor": "Poor",
+    "veryPoor": "Very Poor",
+    "unknown": "Unknown"
+  },
+  "settings": {
+    "title": "Weather Widget Settings",
+    "scopeNote": "These settings apply only to this tab's weather widget instance.",
+    "location": "Location",
+    "locationHelp": "Examples: Sydney,AU or 14818,US",
+    "temperatureUnit": "Temperature Unit",
+    "fahrenheit": "Fahrenheit (°F)",
+    "celsius": "Celsius (°C)",
+    "layoutMode": "Layout Mode",
+    "layoutAuto": "Auto (based on widget size)",
+    "layoutCompact": "Compact",
+    "layoutMedium": "Medium",
+    "layoutFull": "Full"
+  },
+  "errors": {
+    "enterLocation": "Please enter a location.",
+    "invalidLocation": "Invalid location. Try a city and country code like \"Sydney,AU\" or a postal code like \"14818,US\"."
+  }
+}

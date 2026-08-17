@@ -1,0 +1,57 @@
+{
+  "widget": {
+    "noPhotos": "No hay fotos disponibles. Añade una fuente de fotos en los ajustes.",
+    "photoAlt": "Foto"
+  },
+  "settings": {
+    "sources": "Fuentes de fotos",
+    "addSource": "Añadir fuente",
+    "noSources": "No hay fuentes de fotos configuradas",
+    "photosPerView": "Fotos por vista",
+    "photoSize": "Tamaño de la foto",
+    "transitionEffect": "Efecto de transición",
+    "slideshowSpeed": "Velocidad del pase de diapositivas"
+  },
+  "size": {
+    "auto": "Automático (ajustar al widget)",
+    "extraLarge": "Muy grande (880 px)",
+    "large": "Grande (720 px)",
+    "medium": "Mediano (580 px)",
+    "small": "Pequeño (450 px)",
+    "extraSmall": "Muy pequeño (300 px)"
+  },
+  "transition": {
+    "fade": "Fundido",
+    "slide": "Deslizar"
+  },
+  "speed": {
+    "fast": "Rápida (3 s)",
+    "normal": "Normal (5 s)",
+    "slow": "Lenta (10 s)",
+    "verySlow": "Muy lenta (30 s)"
+  },
+  "source": {
+    "name": "Nombre de la fuente",
+    "type": "Tipo",
+    "immich": "Immich",
+    "homeglow": "Fotos de HomeGlow",
+    "immichUrl": "URL del servidor Immich",
+    "immichUrlPlaceholder": "La URL de tu servidor Immich",
+    "apiKey": "Clave de API",
+    "apiKeyHelp": "Consíguela en Ajustes de Immich → Claves de API",
+    "albumId": "ID del álbum (opcional)",
+    "albumIdHelp": "Déjalo vacío para mostrar todas las fotos",
+    "saveFirst": "Guarda esta fuente primero y luego abre la página de subida para añadir fotos desde tu dispositivo.",
+    "uploadExplain": "Sube fotos directamente desde tu dispositivo. Se guardarán en tu servidor HomeGlow y se mostrarán en este widget.",
+    "openUploadPage": "Abrir la página de subida",
+    "mobileHint": "La página de subida está adaptada al móvil: ábrela en tu teléfono para subir fotos directamente desde tu galería.",
+    "testConnection": "Probar conexión"
+  },
+  "confirm": {
+    "deleteSource": "¿Seguro que quieres eliminar esta fuente de fotos?"
+  },
+  "errors": {
+    "saveBeforeTesting": "Guarda la fuente de fotos antes de probarla",
+    "saveFailed": "No se pudo guardar la fuente de fotos. Inténtalo de nuevo."
+  }
+}

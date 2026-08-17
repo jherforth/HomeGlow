@@ -1,10 +1,12 @@
 import React, { useEffect, useRef } from 'react';
 import { Box } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceName } from '../utils/deviceName.js';
 import { subscribePluginEvents } from '../utils/pluginEventBridge.js';
 
 const PluginWidgetWrapper = ({ filename, name, theme, transparentBackground = false, refreshNonce = 0, events = [] }) => {
+  const { i18n } = useTranslation();
   // Manifest plugins need the display's device name so device-scoped settings
   // resolve via the plugin SDK (issue #105 Phase 2).
   const deviceName = getDeviceName();
@@ -44,7 +46,10 @@ const PluginWidgetWrapper = ({ filename, name, theme, transparentBackground = fa
       <iframe
         ref={iframeRef}
         key={refreshNonce}
-        src={`${API_BASE_URL}/widgets/${filename}?theme=${theme}&device=${encodeURIComponent(deviceName)}`}
+        // lang rides the same channel as theme (issue #137) so a plugin that
+        // ships translations can follow the display's language; plugins that
+        // ignore it are unaffected.
+        src={`${API_BASE_URL}/widgets/${filename}?theme=${theme}&device=${encodeURIComponent(deviceName)}&lang=${i18n.language || 'en'}`}
         title={name}
         style={{
           width: '100%',

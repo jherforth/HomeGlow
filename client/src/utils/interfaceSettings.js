@@ -128,3 +128,4 @@ export const readLocalVacationModeSettings = () => {
     return { ...DEFAULT_VACATION_MODE_SETTINGS };
   }
 };
+

@@ -1,0 +1,50 @@
+{
+  "actions": {
+    "add": "Añadir",
+    "cancel": "Cancelar",
+    "close": "Cerrar",
+    "clear": "Borrar",
+    "confirm": "Confirmar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "remove": "Quitar",
+    "save": "Guardar",
+    "upload": "Subir",
+    "choose": "Elegir",
+    "refresh": "Actualizar",
+    "backspace": "Retroceso",
+    "moveUp": "Subir",
+    "moveDown": "Bajar",
+    "duplicate": "Duplicar"
+  },
+  "state": {
+    "loading": "Cargando...",
+    "saving": "Guardando...",
+    "none": "Ninguno",
+    "optional": "opcional"
+  },
+  "labels": {
+    "title": "Título",
+    "description": "Descripción",
+    "name": "Nombre",
+    "order": "Orden",
+    "actions": "Acciones",
+    "enabled": "Activado",
+    "language": "Idioma"
+  },
+  "errors": {
+    "generic": "Algo salió mal. Inténtalo de nuevo.",
+    "loadFailed": "No se pudo cargar. Inténtalo de nuevo.",
+    "saveFailed": "No se pudieron guardar los cambios. Inténtalo de nuevo."
+  },
+  "pin": {
+    "confirmWithAdminPin": "Confirmar con el PIN de administrador",
+    "statusCheckFailed": "No se pudo comprobar el estado del PIN. Inténtalo de nuevo."
+  },
+  "language": {
+    "label": "Idioma",
+    "helper": "Se aplica solo a esta pantalla. Otros dispositivos mantienen su propio idioma.",
+    "householdDefault": "Idioma predeterminado del hogar",
+    "householdDefaultHelper": "Las pantallas nuevas empiezan en este idioma hasta que elijan el suyo."
+  }
+}
