@@ -9,7 +9,7 @@
 #
 #   bash -c "$(curl -fsSL https://raw.githubusercontent.com/jherforth/HomeGlow/main/proxmox/install-homeglow.sh)"
 #
-# License: MIT (same as HomeGlow). Not affiliated with the community-scripts
+# License: MIT. Not affiliated with the community-scripts
 # project; see proxmox/README.md for the path to the official listing.
 
 set -euo pipefail
