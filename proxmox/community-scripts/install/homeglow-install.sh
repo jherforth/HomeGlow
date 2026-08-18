@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Copyright (c) 2021-2025 community-scripts ORG
+# Copyright (c) 2026 community-scripts ORG
 # Author: jherforth
-# License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
+# License: APGLv3 | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/jherforth/HomeGlow
 
 source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
