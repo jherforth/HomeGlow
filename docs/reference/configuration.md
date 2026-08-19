@@ -34,7 +34,7 @@ restart, delete `server/data/.encryption-key`.
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `VITE_REACT_APP_API_URL` | same-origin (prod) / `http://localhost:5001` (dev) | API base URL. Empty in prod means "use the current origin" (Nginx proxies `/api`). |
-| `VITE_OPENWEATHER_API_KEY` | — | Optional default weather key baked in at build time. |
+| `VITE_OPENWEATHER_API_KEY` | — | **Unused since weather moved server-side (#57).** The key now lives only in the `settings` table and never reaches the bundle. |
 | `VITE_APP_VERSION`, `VITE_GIT_COMMIT`, `VITE_GITHUB_REPOSITORY` | build metadata | Version display. |
 
 ### `.env` for Docker Compose
@@ -53,7 +53,9 @@ Open with the gear (⚙️) icon. These persist server-side (global settings in 
 
 | Section | What it configures | Storage |
 | --- | --- | --- |
-| **APIs** | OpenWeatherMap API key, ICS calendar URL | `settings` (global) |
+| **Connections → Weather** | Provider choice (`WEATHER_PROVIDER`: `openweathermap` \| `homeassistant`), OpenWeatherMap key (`WEATHER_API_KEY`, write-only) | `settings` (global) |
+| **Connections → Home Assistant** | Base URL (`HOME_ASSISTANT_URL`), long-lived token (`HOME_ASSISTANT_TOKEN_ENC`, encrypted + write-only), weather entity (`HOME_ASSISTANT_WEATHER_ENTITY`) | `settings` (global) |
+| **APIs** | ICS calendar URL | `settings` (global) |
 | **Chores → sounds** | Master enable (`CHORE_SOUND_ENABLED`), default sound (`CHORE_SOUND_DEFAULT`), volume (`CHORE_SOUND_VOLUME`) | `settings` (global) |
 | **Widgets** | Enable/disable built-ins, per-widget auto-refresh interval, transparency | `devices.device_settings_json` (per device) |
 | **Users** | Family members, avatars, clam adjustments | `users`, `chore_history` |

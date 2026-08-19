@@ -1,10 +1,38 @@
 {
   "widget": {
+    "title": "Weather",
     "noData": "No weather data available",
     "openSettings": "Open Settings",
     "openSettingsAria": "Open weather widget settings",
     "airQuality": "Air Quality",
-    "serviceError": "Weather service error: {{status}} {{statusText}}"
+    "serviceError": "Weather service error: {{status}} {{statusText}}",
+    "loadingData": "Loading weather data...",
+    "loadingSettings": "Loading weather settings...",
+    "forecastHeading": "3-Day Forecast",
+    "feelsLike": "Feels like {{value}}",
+    "humidity": "Humidity: {{value}}%",
+    "wind": "Wind: {{value}}"
+  },
+  "units": {
+    "milesPerHour": "mph",
+    "metersPerSecond": "m/s"
+  },
+  "conditions": {
+    "clear-night": "clear night",
+    "cloudy": "cloudy",
+    "exceptional": "exceptional",
+    "fog": "fog",
+    "hail": "hail",
+    "lightning": "thunderstorm",
+    "lightning-rainy": "thunderstorm with rain",
+    "partlycloudy": "partly cloudy",
+    "pouring": "heavy rain",
+    "rainy": "rain",
+    "snowy": "snow",
+    "snowy-rainy": "sleet",
+    "sunny": "sunny",
+    "windy": "windy",
+    "windy-variant": "windy"
   },
   "airQuality": {
     "good": "Good",
@@ -30,6 +58,9 @@
   },
   "errors": {
     "enterLocation": "Please enter a location.",
-    "invalidLocation": "Invalid location. Try a city and country code like \"Sydney,AU\" or a postal code like \"14818,US\"."
+    "invalidLocation": "Invalid location. Try a city and country code like \"Sydney,AU\" or a postal code like \"14818,US\".",
+    "badCredentials": "The weather provider rejected the saved credentials. Check them in the Admin Panel's Connections tab.",
+    "providerUnreachable": "Could not reach the weather provider. Check that it is running and reachable from HomeGlow.",
+    "fetchFailed": "Failed to fetch weather data. Please try again later."
   }
 }

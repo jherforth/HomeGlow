@@ -1,10 +1,38 @@
 {
   "widget": {
+    "title": "El tiempo",
     "noData": "No hay datos meteorológicos disponibles",
     "openSettings": "Abrir ajustes",
     "openSettingsAria": "Abrir los ajustes del widget del tiempo",
     "airQuality": "Calidad del aire",
-    "serviceError": "Error del servicio meteorológico: {{status}} {{statusText}}"
+    "serviceError": "Error del servicio meteorológico: {{status}} {{statusText}}",
+    "loadingData": "Cargando datos meteorológicos...",
+    "loadingSettings": "Cargando ajustes del tiempo...",
+    "forecastHeading": "Pronóstico de 3 días",
+    "feelsLike": "Sensación térmica {{value}}",
+    "humidity": "Humedad: {{value}}%",
+    "wind": "Viento: {{value}}"
+  },
+  "units": {
+    "milesPerHour": "mph",
+    "metersPerSecond": "m/s"
+  },
+  "conditions": {
+    "clear-night": "noche despejada",
+    "cloudy": "nublado",
+    "exceptional": "excepcional",
+    "fog": "niebla",
+    "hail": "granizo",
+    "lightning": "tormenta",
+    "lightning-rainy": "tormenta con lluvia",
+    "partlycloudy": "parcialmente nublado",
+    "pouring": "lluvia intensa",
+    "rainy": "lluvia",
+    "snowy": "nieve",
+    "snowy-rainy": "aguanieve",
+    "sunny": "soleado",
+    "windy": "ventoso",
+    "windy-variant": "ventoso"
   },
   "airQuality": {
     "good": "Buena",
@@ -30,6 +58,9 @@
   },
   "errors": {
     "enterLocation": "Introduce una ubicación.",
-    "invalidLocation": "Ubicación no válida. Prueba con una ciudad y código de país como \"Sydney,AU\" o un código postal como \"14818,US\"."
+    "invalidLocation": "Ubicación no válida. Prueba con una ciudad y código de país como \"Sydney,AU\" o un código postal como \"14818,US\".",
+    "badCredentials": "El proveedor meteorológico rechazó las credenciales guardadas. Compruébalas en la pestaña Conexiones del panel de administración.",
+    "providerUnreachable": "No se pudo contactar con el proveedor meteorológico. Comprueba que esté funcionando y sea accesible desde HomeGlow.",
+    "fetchFailed": "No se pudieron obtener los datos meteorológicos. Inténtalo de nuevo más tarde."
   }
 }

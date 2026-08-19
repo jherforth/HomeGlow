@@ -9,7 +9,6 @@ import WeatherWidget from '../components/WeatherWidget';
 
 const Dashboard = () => {
   const [locked, setLocked] = useState(true);
-  const [weatherApiKey, setWeatherApiKey] = useState('');
   const [widgetSizes, setWidgetSizes] = useState({});
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -86,7 +85,6 @@ const Dashboard = () => {
       minHeight: 2,
       content: <WeatherWidget
         key={refreshKey}
-        weatherApiKey={weatherApiKey}
         widgetSize={widgetSizes['weather-widget'] || { width: 4, height: 4 }}
       />
     }
@@ -102,7 +100,6 @@ const Dashboard = () => {
         ...widget,
         content: <WeatherWidget
           key={refreshKey}
-          weatherApiKey={weatherApiKey}
           widgetSize={size}
         />
       };

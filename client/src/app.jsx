@@ -161,10 +161,10 @@ const App = () => {
   const [widgetSettings, setWidgetSettings] = useState({ ...DEFAULT_WIDGET_SETTINGS });
   const [pluginSettings, setPluginSettings] = useState({});
   const [showAdminPanel, setShowAdminPanel] = useState(false);
-  const [apiKeys, setApiKeys] = useState({
-    WEATHER_API_KEY: '',
-  });
-  const [apiKeysLoaded, setApiKeysLoaded] = useState(false);
+  // Household settings the dashboard reads directly (chore sound preferences).
+  // Credentials are no longer among them — GET /api/settings redacts secrets,
+  // and weather is fetched server-side.
+  const [householdSettings, setHouseholdSettings] = useState({});
   const [installedPlugins, setInstalledPlugins] = useState([]);
   const [activeTab, setActiveTab] = useState(1);
   const { tabs, fetchTabs } = useFetchTabs(API_DEVICE_URL);
@@ -316,14 +316,12 @@ const App = () => {
 
   // region #98 - expected to get removed in the future (invoke migration bridge during bootstrap)
   useEffect(() => {
-    const fetchApiKeys = async () => {
+    const fetchHouseholdSettings = async () => {
       try {
         const response = await axios.get(`${API_BASE_URL}/api/settings`);
-        setApiKeys(response.data);
+        setHouseholdSettings(response.data || {});
       } catch (error) {
-        console.error('Error fetching API keys:', error);
-      } finally {
-        setApiKeysLoaded(true);
+        console.error('Error fetching household settings:', error);
       }
     };
 
@@ -345,7 +343,7 @@ const App = () => {
         fetchWidgetAssignments(),
         fetchInstalledPlugins(),
       ]);
-      await fetchApiKeys();
+      await fetchHouseholdSettings();
     };
 
     void initialize();
@@ -448,23 +446,29 @@ const App = () => {
     }
   };
 
+  // Sunrise and sunset are computed from coordinates server-side, so auto dark
+  // mode no longer needs an OpenWeatherMap key — it works with Home Assistant
+  // or with no weather provider configured at all.
   const resolveAutoTheme = useCallback(async () => {
     const hasCoordinates = typeof autoDarkModeSettings.lat === 'number' && typeof autoDarkModeSettings.lon === 'number';
-    if (!autoDarkModeSettings.enabled || !apiKeys.WEATHER_API_KEY || !hasCoordinates) {
+    if (!autoDarkModeSettings.enabled || !hasCoordinates) {
       return null;
     }
 
     try {
-      const response = await axios.get('https://api.openweathermap.org/data/2.5/weather', {
+      const response = await axios.get(`${API_BASE_URL}/api/sun`, {
         params: {
           lat: autoDarkModeSettings.lat,
           lon: autoDarkModeSettings.lon,
-          appid: apiKeys.WEATHER_API_KEY,
         },
       });
 
-      const sunrise = response?.data?.sys?.sunrise;
-      const sunset = response?.data?.sys?.sunset;
+      const { sunrise, sunset, alwaysUp, alwaysDown } = response?.data || {};
+
+      // Above the polar circles the sun may not cross the horizon at all.
+      if (alwaysUp) return 'light';
+      if (alwaysDown) return 'dark';
+
       if (typeof sunrise !== 'number' || typeof sunset !== 'number') {
         return null;
       }
@@ -475,7 +479,7 @@ const App = () => {
       console.error('Error resolving auto theme:', error);
       return null;
     }
-  }, [autoDarkModeSettings, apiKeys.WEATHER_API_KEY]);
+  }, [autoDarkModeSettings]);
 
   const applyAutoThemeNow = useCallback(async () => {
     const resolvedTheme = await resolveAutoTheme();
@@ -565,18 +569,19 @@ const App = () => {
   }, [themeMode, resolveAutoTheme, applyTheme]);
 
   useEffect(() => {
-    if (!apiKeysLoaded || themeMode !== 'auto') {
+    if (themeMode !== 'auto') {
       return;
     }
 
+    // Auto mode needs only coordinates now — sunrise is computed, not fetched.
     const hasCoordinates = typeof autoDarkModeSettings.lat === 'number' && typeof autoDarkModeSettings.lon === 'number';
-    const autoModeAvailable = autoDarkModeSettings.enabled && Boolean(apiKeys.WEATHER_API_KEY) && hasCoordinates;
+    const autoModeAvailable = autoDarkModeSettings.enabled && hasCoordinates;
     if (!autoModeAvailable) {
       const fallbackMode = theme === 'dark' ? 'dark' : 'light';
       setThemeMode(fallbackMode);
       localStorage.setItem(THEME_MODE_STORAGE_KEY, fallbackMode);
     }
-  }, [apiKeysLoaded, themeMode, autoDarkModeSettings, apiKeys.WEATHER_API_KEY, theme]);
+  }, [themeMode, autoDarkModeSettings, theme]);
 
   useEffect(() => {
     document.documentElement.style.setProperty('--light-gradient-start', widgetSettings.lightGradientStart);
@@ -706,7 +711,7 @@ const App = () => {
 
   const toggleTheme = () => {
     const hasCoordinates = typeof autoDarkModeSettings.lat === 'number' && typeof autoDarkModeSettings.lon === 'number';
-    const includeAutoMode = autoDarkModeSettings.enabled && hasCoordinates && (Boolean(apiKeys.WEATHER_API_KEY) || !apiKeysLoaded);
+    const includeAutoMode = autoDarkModeSettings.enabled && hasCoordinates;
     const themeModes = includeAutoMode ? ['light', 'dark', 'auto'] : ['light', 'dark'];
 
     const currentIndex = themeModes.includes(themeMode) ? themeModes.indexOf(themeMode) : 0;
@@ -829,12 +834,10 @@ const App = () => {
         content: (
           <Suspense fallback={<WidgetLoadingFallback label="weather" />}>
             <WeatherWidget
-              weatherApiKey={apiKeys.WEATHER_API_KEY}
               refreshInterval={widgetSettings.weather.refreshInterval || 0}
               activeTab={activeTab}
               activeTabConfigJson={tabs.find((tab) => tab.number === activeTab)?.config_json || null}
               allTabConfigs={tabs}
-              demoMode={demoStatus.demo}
             />
           </Suspense>
         ),
@@ -901,7 +904,7 @@ const App = () => {
     });
 
     return result;
-  }, [widgetSettings, pluginSettings, activeTab, apiKeys, widgetAssignments, installedPlugins, theme, demoStatus.demo]);
+  }, [widgetSettings, pluginSettings, activeTab, widgetAssignments, installedPlugins, theme, demoStatus.demo]);
 
   // Mobile stack (issue #118): same widget content nodes, fixed order, photos
   // excluded, grid metadata ignored.
@@ -917,7 +920,6 @@ const App = () => {
 
   const shouldRunWeatherBackgroundPrefetch =
     widgetSettings.weather.enabled &&
-    !!apiKeys.WEATHER_API_KEY &&
     !isWidgetAssignedToTab('weather', activeTab);
 
   // Unlock audio on the first user interaction (kiosk autoplay policy).
@@ -929,8 +931,8 @@ const App = () => {
   // Gated by the global master switch AND this device not being muted AND the
   // chores feature being enabled.
   const choreSoundGlobalEnabled =
-    apiKeys.CHORE_SOUND_ENABLED === 'true' || apiKeys.CHORE_SOUND_ENABLED === true;
-  const parsedSoundVolume = Number(apiKeys.CHORE_SOUND_VOLUME);
+    householdSettings.CHORE_SOUND_ENABLED === 'true' || householdSettings.CHORE_SOUND_ENABLED === true;
+  const parsedSoundVolume = Number(householdSettings.CHORE_SOUND_VOLUME);
   useChoreSoundScheduler({
     enabled:
       widgetSettings.chores.enabled &&
@@ -938,7 +940,7 @@ const App = () => {
       choreSoundDeviceEnabled &&
       // Vacation mode (issue #121) mutes chore due-time sounds while active.
       !(vacationActiveToday && vacationModeSettings.muteSounds),
-    defaultSound: apiKeys.CHORE_SOUND_DEFAULT || null,
+    defaultSound: householdSettings.CHORE_SOUND_DEFAULT || null,
     volume: Number.isFinite(parsedSoundVolume) ? parsedSoundVolume / 100 : 1,
   });
 
@@ -1013,7 +1015,6 @@ const App = () => {
           <Box sx={{ display: 'none' }}>
             <Suspense fallback={null}>
               <WeatherWidget
-                weatherApiKey={apiKeys.WEATHER_API_KEY}
                 refreshInterval={widgetSettings.weather.refreshInterval || 0}
                 activeTab={activeTab}
                 activeTabConfigJson={tabs.find((tab) => tab.number === activeTab)?.config_json || null}

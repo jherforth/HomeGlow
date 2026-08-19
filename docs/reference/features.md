@@ -23,8 +23,8 @@ code, so you know where to look when working on a given domain.
 
 ## Theming (light / dark / auto)
 
-- Three modes: **light**, **dark**, and **auto** (follows local sunrise/sunset via
-  OpenWeatherMap for a configured location).
+- Three modes: **light**, **dark**, and **auto** (follows local sunrise/sunset,
+  computed from a configured location — no API key or weather provider needed).
 - Implemented with CSS variables in `index.css` and a `data-theme` attribute on
   `<html>`. Gradients and interface colors are configurable in the Admin Panel and
   pushed to CSS variables at runtime.
@@ -190,11 +190,36 @@ and the `photo-sources` / `photo-items` routes.
 
 - Current conditions + 3-day forecast with interactive temperature and
   precipitation graphs.
-- Uses OpenWeatherMap (needs an API key; location by zip/coords).
-- Also powers **auto dark mode** (sunrise/sunset).
+- **Two sources** (issue #57), chosen in Admin Panel → Connections:
+  **OpenWeatherMap** (free API key, location by city/zip/coords) or
+  **Home Assistant** (reads an existing `weather.*` entity, no API key needed).
+- Fetched **server-side**. Credentials stay on the server, and one upstream call
+  is cached for every display rather than each tab fetching its own.
 
-**Code:** `WeatherWidget.jsx`; OpenWeatherMap is called from the client, with the
-API key stored via `/api/settings`.
+### What Home Assistant can and cannot supply
+
+Home Assistant weather entities vary by integration, so the widget hides what is
+missing rather than rendering blanks:
+
+| Field | Home Assistant source | Notes |
+| --- | --- | --- |
+| temperature, humidity, wind | entity attributes | converted from HA's configured unit system |
+| feels like | `apparent_temperature` | **not standard** — the row hides when absent |
+| condition + icon | entity state | a fixed vocabulary shared with OpenWeatherMap |
+| 3-day + hourly forecast | `weather.get_forecasts` service | falls back to the legacy `forecast` attribute on pre-2024 instances |
+| **air quality** | — | **unavailable**; the AQI panel hides entirely |
+
+Condition text is translated by HomeGlow from that shared vocabulary, so
+forecasts read correctly in every supported language. OpenWeatherMap's own
+localized description is preferred where it exists.
+
+**Auto dark mode** no longer needs a weather provider at all: sunrise and sunset
+are computed from coordinates (`GET /api/sun`), so the theme switches on schedule
+with Home Assistant, with OpenWeatherMap, or with nothing configured.
+
+**Code:** `WeatherWidget.jsx`; `server/services/weather/` (`payload.js` defines
+the shared contract, one module per provider, `sun.js` for the solar
+calculation); `server/services/homeAssistant.js` for the connection.
 
 ## Screensaver (burn-in prevention)
 

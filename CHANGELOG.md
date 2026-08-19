@@ -11,6 +11,37 @@ vacation mode; metrics-ready chore history; and a bank of built-in avatars.
 
 ## New Features
 
+### Home Assistant as a Weather Source (#57)
+- **Home Assistant can now supply the weather**, so households already running it
+  no longer need an OpenWeatherMap API key. Pick the source in Admin Panel →
+  Connections, point HomeGlow at your instance, and choose a `weather.*` entity
+  (Test Connection populates a picker).
+- **Weather is now fetched server-side.** Credentials never reach a browser, and
+  one upstream call is cached for the whole house instead of every tab on every
+  display fetching its own — noticeably kinder to the OpenWeatherMap free tier.
+- **Secrets are redacted from the settings API.** `GET /api/settings` is
+  unauthenticated and previously handed out the OpenWeatherMap key (and Google's
+  stored client secret) to every browser and plugin iframe. Those are now
+  filtered server-side and edited write-only; saving a form with the field left
+  blank keeps the stored value rather than wiping it.
+- **Auto dark mode no longer needs a weather provider.** Sunrise and sunset are
+  computed from your coordinates, so the theme switches on schedule with Home
+  Assistant, with OpenWeatherMap, or with nothing configured at all. Polar day
+  and night are handled.
+- Where Home Assistant carries less than OpenWeatherMap the widget hides those
+  sections rather than showing blanks — air quality above all, which Home
+  Assistant has no equivalent for. The
+  [feature reference](docs/reference/features.md#weather) documents exactly what
+  each source provides.
+
+### Fixed along the way
+- **Forecast day names and chart times now follow the display language.** They
+  were hardcoded to US English, so a Spanish dashboard still read "Wed / Thu /
+  Fri". Several weather strings the translation pass had missed ("Feels like",
+  "3-Day Forecast", "Humidity", "Wind") are translated too.
+- **Wind speed is labelled correctly in metric.** It read "mph" regardless of the
+  selected unit, while the underlying value was in m/s.
+
 ### Plugin Platform (#105)
 - Custom widgets grow into **manifest-based plugins**: an embedded manifest
   declares an id, settings, and event subscriptions while plain HTML widgets

@@ -21,6 +21,7 @@ import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
+import { formatTime, formatWeekdayShort } from '../utils/dateUtils.js';
 
 const DEFAULT_LOCATION_QUERY = '14818';
 const VALID_LAYOUT_MODES = new Set(['auto', 'compact', 'medium', 'full']);
@@ -44,7 +45,6 @@ const isValidCoordinates = (candidate) => {
 };
 
 const WeatherWidget = ({
-  weatherApiKey,
   refreshInterval = 0,
   widgetSize = { width: 4, height: 4 },
   activeTab = 1,
@@ -53,7 +53,6 @@ const WeatherWidget = ({
   prefetchOnly = false,
   refreshNonce = 0,
   isActive = true,
-  demoMode = false,
 }) => {
   const { t, i18n } = useTranslation(['weather', 'common']);
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
@@ -61,6 +60,10 @@ const WeatherWidget = ({
   const [forecastData, setForecastData] = useState([]);
   const [airQualityData, setAirQualityData] = useState(null);
   const [chartData, setChartData] = useState([]);
+  // The place name the provider reported, shown under the temperature. Home
+  // Assistant reports its entity's friendly name here, OpenWeatherMap the
+  // geocoded city.
+  const [locationName, setLocationName] = useState('');
   const [locationQuery, setLocationQuery] = useState(DEFAULT_LOCATION_QUERY);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -160,218 +163,58 @@ const WeatherWidget = ({
     return readWeatherSettingsFromTabConfig(configJson);
   };
 
-  const buildNotFoundError = () => {
-    const notFoundError = new Error('Location not found');
-    notFoundError.response = {
-      status: 404,
-      statusText: 'Not Found',
-    };
-    return notFoundError;
-  };
-
   const applyWeatherPayloadToState = (payload) => {
-    setWeatherData(payload.weatherData || null);
-    setForecastData(Array.isArray(payload.forecastData) ? payload.forecastData : []);
-    setAirQualityData(payload.airQualityData || null);
-    setChartData(Array.isArray(payload.chartData) ? payload.chartData : []);
+    setWeatherData(payload.current || null);
+    setForecastData(Array.isArray(payload.forecast) ? payload.forecast : []);
+    setAirQualityData(payload.airQuality || null);
+    setChartData(Array.isArray(payload.hourly) ? payload.hourly : []);
+    setLocationName(payload.resolvedName || '');
   };
 
   const getWeatherErrorMessage = (requestError) => {
-    if (requestError?.response) {
-      if (requestError.response.status === 401) {
-        return 'Invalid API key. Please check your OpenWeatherMap API key in the Admin Panel.';
-      }
-      if (requestError.response.status === 404) {
-        return t('weather:errors.invalidLocation');
-      }
-      return t('weather:widget.serviceError', {
-        status: requestError.response.status,
-        statusText: requestError.response.statusText,
+    const status = requestError?.response?.status;
+    const serverMessage = requestError?.response?.data?.error;
+
+    if (status === 401) {
+      return t('weather:errors.badCredentials');
+    }
+    if (status === 404) {
+      return t('weather:errors.invalidLocation');
+    }
+    if (status === 503 || status === 504) {
+      return t('weather:errors.providerUnreachable');
+    }
+    if (status) {
+      // The server already phrases provider failures usefully (missing API key,
+      // unconfigured Home Assistant), so prefer its message over a generic one.
+      return serverMessage || t('weather:widget.serviceError', {
+        status,
+        statusText: requestError.response.statusText || '',
       });
     }
 
-    if (requestError?.code === 'ECONNREFUSED' || requestError?.message?.includes('Network Error')) {
-      return 'Unable to connect to weather service. Please check your internet connection.';
-    }
-
-    return 'Failed to fetch weather data. Please try again later.';
+    return t('weather:errors.fetchFailed');
   };
 
-  const shouldTryZipFallback = (candidateLocation) => {
-    const normalizedCandidate = String(candidateLocation || '').trim();
-    if (!normalizedCandidate) {
-      return false;
-    }
-
-    // Treat as postal/zip style when the query has no alphabetic characters.
-    return !/[a-z]/i.test(normalizedCandidate);
-  };
-
-  const getDirectGeocodeCandidates = (targetLocationQuery) => {
-    const baseQuery = String(targetLocationQuery || '').trim();
-    if (!baseQuery) {
-      return [];
-    }
-
-    const candidates = [baseQuery];
-    const alreadyUsQualified = /,\s*us\s*$/i.test(baseQuery) || /,\s*usa\s*$/i.test(baseQuery);
-    const hasExplicitCountrySegment = baseQuery.split(',').length >= 3;
-
-    if (!alreadyUsQualified && !hasExplicitCountrySegment) {
-      candidates.push(`${baseQuery},US`);
-    }
-
-    return candidates;
-  };
-
-  const resolveCoordinatesForLocation = async (targetLocationQuery) => {
-    const directCandidates = getDirectGeocodeCandidates(targetLocationQuery);
-    for (const directCandidate of directCandidates) {
-      const encodedLocation = encodeURIComponent(directCandidate);
-      const directGeocodeUrl = `https://api.openweathermap.org/geo/1.0/direct?q=${encodedLocation}&limit=1&appid=${weatherApiKey}`;
-
-      try {
-        const directResponse = await axios.get(directGeocodeUrl);
-        if (Array.isArray(directResponse.data) && directResponse.data.length > 0) {
-          const bestMatch = directResponse.data[0];
-          const resolvedCoordinates = {
-            lat: bestMatch.lat,
-            lon: bestMatch.lon,
-            name: bestMatch.name,
-            country: bestMatch.country,
-            state: bestMatch.state || null,
-            source: 'direct',
-          };
-          return resolvedCoordinates;
-        }
-      } catch (requestError) {
-        if (requestError?.response?.status !== 404) {
-          throw requestError;
-        }
-      }
-    }
-
-    if (shouldTryZipFallback(targetLocationQuery)) {
-      const normalizedZip = targetLocationQuery.includes(',') ? targetLocationQuery : `${targetLocationQuery},US`;
-      const encodedZip = encodeURIComponent(normalizedZip);
-      const zipGeocodeUrl = `https://api.openweathermap.org/geo/1.0/zip?zip=${encodedZip}&appid=${weatherApiKey}`;
-
-      try {
-        const zipResponse = await axios.get(zipGeocodeUrl);
-        if (zipResponse?.data && typeof zipResponse.data.lat === 'number' && typeof zipResponse.data.lon === 'number') {
-          const resolvedCoordinates = {
-            lat: zipResponse.data.lat,
-            lon: zipResponse.data.lon,
-            name: zipResponse.data.name || null,
-            country: zipResponse.data.country || null,
-            state: null,
-            source: 'zip',
-          };
-          return resolvedCoordinates;
-        }
-      } catch (requestError) {
-        if (requestError?.response?.status !== 404) {
-          throw requestError;
-        }
-      }
-    }
-
-    throw buildNotFoundError();
-  };
-
+  // One call to our own server, which owns the provider choice and the
+  // credentials. The widget no longer knows or cares whether the data came from
+  // OpenWeatherMap, Home Assistant, or the demo snapshot.
   const fetchWeatherPayload = async (targetLocationQuery, targetTempUnit, targetCoordinates = null) => {
-    const targetUnitParam = targetTempUnit === 'F' ? 'imperial' : 'metric';
-
-    const resolvedCoordinates = isValidCoordinates(targetCoordinates)
-      ? { ...targetCoordinates, source: 'saved' }
-      : await resolveCoordinatesForLocation(targetLocationQuery);
-    const { lat, lon } = resolvedCoordinates;
-
-    // OpenWeatherMap localizes its own condition text ("clear sky",
-    // "few clouds") when given lang, so those strings translate for free
-    // rather than needing a lookup table on our side.
-    const owmLang = i18n.language?.split('-')[0] || 'en';
-    const currentWeatherUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${weatherApiKey}&units=${targetUnitParam}&lang=${owmLang}`;
-    const currentResponse = await axios.get(currentWeatherUrl);
-    const nextWeatherData = currentResponse.data;
-    let nextAirQualityData = null;
-    let nextForecastData = [];
-    let nextChartData = [];
-
-    if (currentResponse.data.coord) {
-      const { lat, lon } = currentResponse.data.coord;
-      const airQualityUrl = `https://api.openweathermap.org/data/2.5/air_pollution?lat=${lat}&lon=${lon}&appid=${weatherApiKey}`;
-
-      try {
-        const airQualityResponse = await axios.get(airQualityUrl);
-        nextAirQualityData = airQualityResponse.data;
-      } catch {
-        nextAirQualityData = null;
-      }
-    }
-
-    const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${weatherApiKey}&units=${targetUnitParam}&lang=${owmLang}`;
-    const forecastResponse = await axios.get(forecastUrl);
-    const chartDataPoints = [];
-
-    if (forecastResponse.data && forecastResponse.data.list) {
-      const forecastByDay = {};
-
-      forecastResponse.data.list.slice(0, 24).forEach((item, index) => {
-        const date = new Date(item.dt * 1000);
-        const dayKey = date.toDateString();
-
-        if (!forecastByDay[dayKey]) {
-          forecastByDay[dayKey] = {
-            date,
-            temps: {
-              min: item.main.temp_min,
-              max: item.main.temp_max,
-              all: [],
-            },
-            weather: item.weather[0],
-            precipitation: item.rain ? item.rain['3h'] || 0 : 0,
-          };
-        } else {
-          forecastByDay[dayKey].temps.min = Math.min(forecastByDay[dayKey].temps.min, item.main.temp_min);
-          forecastByDay[dayKey].temps.max = Math.max(forecastByDay[dayKey].temps.max, item.main.temp_max);
-        }
-
-        forecastByDay[dayKey].temps.all.push(item.main.temp);
-
-        if (index < 8) {
-          chartDataPoints.push({
-            time: date.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true }),
-            temperature: Math.round(item.main.temp),
-            precipitation: item.rain ? item.rain['3h'] || 0 : 0,
-          });
-        }
-      });
-
-      nextForecastData = Object.values(forecastByDay).slice(0, 3).map(day => ({
-        date: day.date,
-        dayName: day.date.toLocaleDateString('en-US', { weekday: 'short' }),
-        tempHigh: Math.round(day.temps.max),
-        tempLow: Math.round(day.temps.min),
-        tempAvg: Math.round(day.temps.all.reduce((a, b) => a + b, 0) / day.temps.all.length),
-        weather: day.weather,
-        precipitation: day.precipitation,
-      }));
-
-      nextChartData = chartDataPoints;
-    }
-
-    return {
-      coordinates: {
-        lat,
-        lon,
-      },
-      resolvedName: resolvedCoordinates.name || '',
-      weatherData: nextWeatherData,
-      airQualityData: nextAirQualityData,
-      forecastData: nextForecastData,
-      chartData: nextChartData,
+    const params = {
+      units: targetTempUnit === 'F' ? 'imperial' : 'metric',
+      lang: i18n.language?.split('-')[0] || 'en',
     };
+
+    // Saved coordinates skip the geocoding round trip, exactly as before.
+    if (isValidCoordinates(targetCoordinates)) {
+      params.lat = targetCoordinates.lat;
+      params.lon = targetCoordinates.lon;
+    } else {
+      params.location = targetLocationQuery;
+    }
+
+    const response = await axios.get(`${API_BASE_URL}/api/weather`, { params });
+    return response.data;
   };
 
   const resolvePayloadFromCacheOrApi = async (
@@ -421,7 +264,7 @@ const WeatherWidget = ({
   };
 
   const refreshCurrentWeather = async () => {
-    if (!weatherApiKey || !locationQuery) {
+    if (!locationQuery) {
       return;
     }
 
@@ -547,39 +390,20 @@ const WeatherWidget = ({
     applyResolvedTabSettings(tabSettings);
   }, [activeTab, activeTabConfigJson, refreshNonce]);
 
-  // Demo mode: no OpenWeatherMap key exists, so instead of the normal fetch
-  // pipeline the server hands us a static snapshot (Chili, NY). Writing it into
-  // the payload cache means every later settings re-apply finds it there.
-  useEffect(() => {
-    if (!demoMode || !settingsLoaded) return undefined;
-
-    let cancelled = false;
-    (async () => {
-      try {
-        const units = tempUnit === 'C' ? 'metric' : 'imperial';
-        const response = await axios.get(`${API_BASE_URL}/api/demo/weather?units=${units}`);
-        if (cancelled || !response.data?.weatherData) return;
-        writeCachedPayloadFor(locationQuery, tempUnit, response.data);
-        applyWeatherPayloadToState(response.data);
-        setError(null);
-      } catch {
-        // Demo snapshot unavailable; leave the widget in its default state.
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [demoMode, settingsLoaded, locationQuery, tempUnit]);
+  // Demo mode needs no special case any more: the server picks the demo
+  // provider behind GET /api/weather, so the widget takes the same path it
+  // does with a real provider configured.
 
   useEffect(() => {
     if (!settingsLoaded || !shouldFetchNow) {
       return;
     }
 
-    if (locationQuery && weatherApiKey) {
+    if (locationQuery) {
       fetchWeatherData();
       setShouldFetchNow(false);
     }
-  }, [locationQuery, weatherApiKey, tempUnit, settingsLoaded, shouldFetchNow]);
+  }, [locationQuery, tempUnit, settingsLoaded, shouldFetchNow]);
 
   const collectTargets = () => {
     const targetsByKey = new Map();
@@ -654,7 +478,7 @@ const WeatherWidget = ({
   // based: fully paused while the screen is inactive, catches up once on
   // resume instead of stacking missed runs.
   useDataRefresh(
-    settingsLoaded && weatherApiKey
+    settingsLoaded
       ? (refreshInterval > 0 ? refreshInterval : WEATHER_CACHE_FALLBACK_REFRESH_MS)
       : 0,
     () => { void prefetchAllTargets(); },
@@ -670,11 +494,8 @@ const WeatherWidget = ({
   );
 
   const fetchWeatherData = async () => {
-    if (!weatherApiKey) {
-      setError('Weather API key not configured. Please add your OpenWeatherMap API key in the Admin Panel.');
-      return;
-    }
-
+    // Credentials are the server's business now — if none are configured it
+    // says so, and getWeatherErrorMessage surfaces that message verbatim.
     if (!locationQuery) {
       setError(t('weather:errors.enterLocation'));
       return;
@@ -755,9 +576,12 @@ const WeatherWidget = ({
 
     if (!resolvedCoordinates) {
       try {
-        const geocoded = await resolveCoordinatesForLocation(normalizedLocationQuery);
-        resolvedCoordinates = { lat: geocoded.lat, lon: geocoded.lon };
-        resolvedName = geocoded.name || '';
+        // Geocoding moved server-side along with the API key.
+        const { data } = await axios.get(`${API_BASE_URL}/api/weather/geocode`, {
+          params: { q: normalizedLocationQuery },
+        });
+        resolvedCoordinates = { lat: data.lat, lon: data.lon };
+        resolvedName = data.resolvedName || '';
       } catch (error) {
         setError(getWeatherErrorMessage(error));
         return;
@@ -790,20 +614,54 @@ const WeatherWidget = ({
     setSettingsModalOpen(false);
   };
 
-  const getWeatherIcon = (iconCode) => {
+  // Keyed on the shared condition vocabulary (server/services/weather/payload.js)
+  // rather than OpenWeatherMap icon codes, so every provider lights the same
+  // icon for the same weather.
+  const getWeatherIcon = (condition) => {
     const iconMap = {
-      '01d': '☀️', '01n': '🌙',
-      '02d': '⛅', '02n': '☁️',
-      '03d': '☁️', '03n': '☁️',
-      '04d': '☁️', '04n': '☁️',
-      '09d': '🌧️', '09n': '🌧️',
-      '10d': '🌦️', '10n': '🌧️',
-      '11d': '⛈️', '11n': '⛈️',
-      '13d': '❄️', '13n': '❄️',
-      '50d': '🌫️', '50n': '🌫️'
+      'clear-night': '🌙',
+      'cloudy': '☁️',
+      'exceptional': '🌤️',
+      'fog': '🌫️',
+      'hail': '🌨️',
+      'lightning': '🌩️',
+      'lightning-rainy': '⛈️',
+      'partlycloudy': '⛅',
+      'pouring': '🌧️',
+      'rainy': '🌦️',
+      'snowy': '❄️',
+      'snowy-rainy': '🌨️',
+      'sunny': '☀️',
+      'windy': '💨',
+      'windy-variant': '💨',
     };
-    return iconMap[iconCode] || '🌤️';
+    return iconMap[condition] || '🌤️';
   };
+
+  // OpenWeatherMap returns text already translated by the API; Home Assistant
+  // returns only a token, so we translate it ourselves. Preferring the
+  // provider's text keeps OpenWeatherMap's richer wording ("light intensity
+  // drizzle") where it exists.
+  const describeCondition = (entry) => {
+    if (entry?.description) return entry.description;
+    if (!entry?.condition) return '';
+    return t(`weather:conditions.${entry.condition}`);
+  };
+
+  // Wind arrives in mph for imperial and m/s for metric, matching the units
+  // parameter the server was given. The old code labelled everything "mph".
+  const windUnitLabel = t(tempUnit === 'C' ? 'weather:units.metersPerSecond' : 'weather:units.milesPerHour');
+
+  // Forecast dates arrive as YYYY-MM-DD and hourly points as unix seconds, both
+  // machine formats. Formatting happens here, in the active locale, so a
+  // Spanish display shows "mié" rather than "Wed".
+  const forecastDayLabel = (day) => formatWeekdayShort(new Date(`${day.date}T12:00:00`));
+
+  const chartSeries = chartData.map((point) => ({
+    time: formatTime(new Date(point.timestamp * 1000)),
+    temperature: point.temp === null ? null : Math.round(point.temp),
+    precipitation: point.precipitation ?? 0,
+  }));
 
   // Compact Layout - Current weather only
   const renderCompactLayout = () => {
@@ -817,16 +675,16 @@ const WeatherWidget = ({
         p: 1
       }}>
         <Typography variant="h2" sx={{ fontSize: '3rem', mb: 1 }}>
-          {getWeatherIcon(weatherData.weather[0].icon)}
+          {getWeatherIcon(weatherData.condition)}
         </Typography>
         <Typography variant="h3" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-          {Math.round(weatherData.main.temp)}{unitSymbol}
+          {Math.round(weatherData.temp)}{unitSymbol}
         </Typography>
         <Typography variant="h6" sx={{ mb: 1, textAlign: 'center' }}>
-          {weatherData.name}
+          {locationName}
         </Typography>
         <Typography variant="body1" sx={{ textAlign: 'center', textTransform: 'capitalize', mb: 0.5 }}>
-          {weatherData.weather[0].description}
+          {describeCondition(weatherData)}
         </Typography>
       </Box>
     );
@@ -845,32 +703,38 @@ const WeatherWidget = ({
         {/* Current Weather */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Typography variant="h1" sx={{ fontSize: '3rem' }}>
-            {getWeatherIcon(weatherData.weather[0].icon)}
+            {getWeatherIcon(weatherData.condition)}
           </Typography>
           <Box sx={{ flex: 1 }}>
             <Typography variant="h3" sx={{ fontWeight: 'bold' }}>
-              {Math.round(weatherData.main.temp)}{unitSymbol}
+              {Math.round(weatherData.temp)}{unitSymbol}
             </Typography>
             <Typography variant="h6" sx={{ mb: 1 }}>
-              {weatherData.name}
+              {locationName}
             </Typography>
             <Typography variant="body1" sx={{ textTransform: 'capitalize' }}>
-              {weatherData.weather[0].description}
+              {describeCondition(weatherData)}
             </Typography>
-            <Typography variant="body2" sx={{ opacity: 0.7 }}>
-              Feels like {Math.round(weatherData.main.feels_like)}{unitSymbol}
-            </Typography>
+            {/* Home Assistant weather entities often carry no apparent
+                temperature, so this line is conditional rather than assumed. */}
+            {weatherData.feelsLike !== null && (
+              <Typography variant="body2" sx={{ opacity: 0.7 }}>
+                {t('weather:widget.feelsLike', {
+                  value: `${Math.round(weatherData.feelsLike)}${unitSymbol}`,
+                })}
+              </Typography>
+            )}
           </Box>
         </Box>
 
         {/* 3-Day Forecast */}
         <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-            3-Day Forecast
+            {t('weather:widget.forecastHeading')}
           </Typography>
-          {forecastData.map((day, index) => (
+          {forecastData.map((day) => (
             <Box
-              key={index}
+              key={day.date}
               sx={{
                 display: 'flex',
                 alignItems: 'center',
@@ -882,17 +746,17 @@ const WeatherWidget = ({
               }}
             >
               <Typography variant="body2" sx={{ fontWeight: 'bold', minWidth: 40 }}>
-                {day.dayName}
+                {forecastDayLabel(day)}
               </Typography>
               <Typography variant="h6" sx={{ fontSize: '1.5rem' }}>
-                {getWeatherIcon(day.weather.icon)}
+                {getWeatherIcon(day.condition)}
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, minWidth: 80, justifyContent: 'flex-end' }}>
                 <Typography variant="body2" sx={{ color: '#ff6b6b', fontWeight: 'bold' }}>
-                  {day.tempHigh}°
+                  {day.high === null ? '—' : `${Math.round(day.high)}°`}
                 </Typography>
                 <Typography variant="body2" sx={{ color: '#00ddeb' }}>
-                  {day.tempLow}°
+                  {day.low === null ? '—' : `${Math.round(day.low)}°`}
                 </Typography>
               </Box>
             </Box>
@@ -916,28 +780,41 @@ const WeatherWidget = ({
           {/* Current Weather - Left Column */}
           <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <Typography variant="h4" sx={{ fontSize: '3rem', mb: 1 }}>
-              {getWeatherIcon(weatherData.weather[0].icon)}
+              {getWeatherIcon(weatherData.condition)}
             </Typography>
             <Typography variant="h3" sx={{ fontWeight: 'bold', mb: 1 }}>
-              {Math.round(weatherData.main.temp)}{unitSymbol}
+              {Math.round(weatherData.temp)}{unitSymbol}
             </Typography>
             <Typography variant="h6" sx={{ mb: 1, textAlign: 'center' }}>
-              {weatherData.name}
+              {locationName}
             </Typography>
             <Typography variant="body1" sx={{ mb: 2, textAlign: 'center', textTransform: 'capitalize' }}>
-              {weatherData.weather[0].description}
+              {describeCondition(weatherData)}
             </Typography>
 
+            {/* Each of these is optional: Home Assistant entities vary in what
+                they expose, so a missing reading hides its row rather than
+                rendering "NaN". */}
             <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="body2">
-                Feels like {Math.round(weatherData.main.feels_like)}{unitSymbol}
-              </Typography>
-              <Typography variant="body2">
-                Humidity: {weatherData.main.humidity}%
-              </Typography>
-              <Typography variant="body2">
-                Wind: {Math.round(weatherData.wind.speed)} mph
-              </Typography>
+              {weatherData.feelsLike !== null && (
+                <Typography variant="body2">
+                  {t('weather:widget.feelsLike', {
+                    value: `${Math.round(weatherData.feelsLike)}${unitSymbol}`,
+                  })}
+                </Typography>
+              )}
+              {weatherData.humidity !== null && (
+                <Typography variant="body2">
+                  {t('weather:widget.humidity', { value: weatherData.humidity })}
+                </Typography>
+              )}
+              {weatherData.windSpeed !== null && (
+                <Typography variant="body2">
+                  {t('weather:widget.wind', {
+                    value: `${Math.round(weatherData.windSpeed)} ${windUnitLabel}`,
+                  })}
+                </Typography>
+              )}
             </Box>
 
             {/* Air Quality Box */}
@@ -958,7 +835,7 @@ const WeatherWidget = ({
                   {t('weather:widget.airQuality')}
                 </Typography>
                 {(() => {
-                  const aqi = airQualityData.list[0].main.aqi;
+                  const aqi = airQualityData.aqi;
                   const aqiInfo = getAirQualityLevel(aqi);
                   return (
                     <>
@@ -982,15 +859,21 @@ const WeatherWidget = ({
                           </Typography>
                         </Box>
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, fontSize: '0.75rem' }}>
-                          <Typography variant="caption">
-                            PM2.5: {Math.round(airQualityData.list[0].components.pm2_5)}
-                          </Typography>
-                          <Typography variant="caption">
-                            PM10: {Math.round(airQualityData.list[0].components.pm10)}
-                          </Typography>
-                          <Typography variant="caption">
-                            O₃: {Math.round(airQualityData.list[0].components.o3)}
-                          </Typography>
+                          {airQualityData.pm2_5 !== null && (
+                            <Typography variant="caption">
+                              PM2.5: {Math.round(airQualityData.pm2_5)}
+                            </Typography>
+                          )}
+                          {airQualityData.pm10 !== null && (
+                            <Typography variant="caption">
+                              PM10: {Math.round(airQualityData.pm10)}
+                            </Typography>
+                          )}
+                          {airQualityData.o3 !== null && (
+                            <Typography variant="caption">
+                              O₃: {Math.round(airQualityData.o3)}
+                            </Typography>
+                          )}
                         </Box>
                       </Box>
                     </>
@@ -1003,12 +886,12 @@ const WeatherWidget = ({
           {/* 3-Day Forecast - Middle Column */}
           <Box sx={{ flex: 1 }}>
             <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>
-              3-Day Forecast
+              {t('weather:widget.forecastHeading')}
             </Typography>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {forecastData.map((day, index) => (
+              {forecastData.map((day) => (
                 <Box
-                  key={index}
+                  key={day.date}
                   sx={{
                     display: 'flex',
                     alignItems: 'center',
@@ -1021,18 +904,18 @@ const WeatherWidget = ({
                 >
                   <Box sx={{ textAlign: 'right' }}>
                     <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#ff6b6b' }}>
-                      {day.tempHigh}{unitSymbol}
+                      {day.high === null ? '—' : `${Math.round(day.high)}${unitSymbol}`}
                     </Typography>
                     <Typography variant="body2" sx={{ color: '#00ddeb' }}>
-                      {day.tempLow}{unitSymbol}
+                      {day.low === null ? '—' : `${Math.round(day.low)}${unitSymbol}`}
                     </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <Typography variant="h5">
-                      {getWeatherIcon(day.weather.icon)}
+                      {getWeatherIcon(day.condition)}
                     </Typography>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                      {day.weather.description}
+                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', textTransform: 'capitalize' }}>
+                      {forecastDayLabel(day)} · {describeCondition(day)}
                     </Typography>
                   </Box>
                 </Box>
@@ -1062,7 +945,7 @@ const WeatherWidget = ({
             <Box sx={{ flex: 1, width: '100%', minWidth: 0, minHeight: 220 }}>
               <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                 {chartType === 'temperature' ? (
-                  <LineChart data={chartData}>
+                  <LineChart data={chartSeries}>
                     <XAxis dataKey="time" axisLine={false} tickLine={false} />
                     <YAxis axisLine={false} tickLine={false} width={30} />
                     <Tooltip />
@@ -1075,7 +958,7 @@ const WeatherWidget = ({
                     />
                   </LineChart>
                 ) : (
-                  <BarChart data={chartData}>
+                  <BarChart data={chartSeries}>
                     <XAxis dataKey="time" axisLine={false} tickLine={false} />
                     <YAxis axisLine={false} tickLine={false} width={30} />
                     <Tooltip />
@@ -1168,8 +1051,8 @@ const WeatherWidget = ({
         alignItems: 'center',
         p: 2
       }}>
-        <Typography variant="h6">🌤️ Weather</Typography>
-        <Typography>{settingsLoaded ? 'Loading weather data...' : 'Loading weather settings...'}</Typography>
+        <Typography variant="h6">🌤️ {t('weather:widget.title')}</Typography>
+        <Typography>{settingsLoaded ? t('weather:widget.loadingData') : t('weather:widget.loadingSettings')}</Typography>
       </Box>
     );
   } else if (error) {
@@ -1203,7 +1086,7 @@ const WeatherWidget = ({
         alignItems: 'center',
         p: 2
       }}>
-        <Typography variant="h6">🌤️ Weather</Typography>
+        <Typography variant="h6">🌤️ {t('weather:widget.title')}</Typography>
         <Typography>{t('weather:widget.noData')}</Typography>
       </Box>
     );
@@ -1212,7 +1095,7 @@ const WeatherWidget = ({
       <>
         {layoutType !== 'compact' && (
           <Box sx={{ p: 2, pb: 0 }}>
-            <Typography variant="h6">🌤️ Weather</Typography>
+            <Typography variant="h6">🌤️ {t('weather:widget.title')}</Typography>
           </Box>
         )}
 

@@ -154,18 +154,22 @@ test('sample data is seeded (users, chores, prizes, calendar events)', async () 
     assert.ok(sourceNames.includes('Arizona Diamondbacks'));
 });
 
-test('demo weather snapshot is served in both unit systems', async () => {
-    const imperial = await api('/api/demo/weather');
+test('demo weather snapshot is served through the normal weather route', async () => {
+    // Demo mode selects the demo provider behind GET /api/weather rather than
+    // exposing a separate endpoint, so this exercises the same path a real
+    // install uses.
+    const imperial = await api('/api/weather');
     assert.equal(imperial.status, 200);
-    assert.equal(imperial.body.weatherData.name, 'Chili');
-    assert.equal(typeof imperial.body.weatherData.main.temp, 'number');
-    assert.ok(Array.isArray(imperial.body.forecastData) && imperial.body.forecastData.length === 3);
-    assert.ok(Array.isArray(imperial.body.chartData) && imperial.body.chartData.length === 8);
-    assert.ok(imperial.body.airQualityData.list[0].main.aqi >= 1);
+    assert.equal(imperial.body.provider, 'demo');
+    assert.equal(imperial.body.resolvedName, 'Chili');
+    assert.equal(typeof imperial.body.current.temp, 'number');
+    assert.equal(imperial.body.forecast.length, 3);
+    assert.equal(imperial.body.hourly.length, 8);
+    assert.ok(imperial.body.airQuality.aqi >= 1);
 
-    const metric = await api('/api/demo/weather?units=metric');
+    const metric = await api('/api/weather?units=metric');
     assert.equal(metric.status, 200);
-    assert.ok(metric.body.weatherData.main.temp < imperial.body.weatherData.main.temp,
+    assert.ok(metric.body.current.temp < imperial.body.current.temp,
         'metric temperature should be the Celsius conversion of the imperial snapshot');
 });
 

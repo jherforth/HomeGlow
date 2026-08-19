@@ -200,10 +200,38 @@ static route.
 ### Settings & API keys
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET/POST | `/api/settings` | Read / write global settings (weather key, ICS URL). |
+| GET/POST | `/api/settings` | Read / write global settings (ICS URL, chore sounds, …). |
 | POST | `/api/settings/search` | Look up specific settings. |
 | POST | `/api/test-api-key` | Validate an OpenWeatherMap key. |
 | GET | `/api/proxy` | Generic CORS proxy (used by widgets/integrations). |
+
+> **Secrets are redacted from both read routes.** `GET /api/settings` and
+> `POST /api/settings/search` are unauthenticated and return the whole settings
+> table, so `WEATHER_API_KEY`, `HOME_ASSISTANT_TOKEN_ENC`, and
+> `GOOGLE_CLIENT_SECRET_ENC` are filtered out server-side
+> (`REDACTED_SETTING_KEYS` in `index.js`). The Admin Panel edits them blind —
+> writing an **empty value** to a redacted key is treated as "leave unchanged"
+> so saving an untouched form cannot wipe a stored credential. Whether one is
+> stored is reported by the `/api/connections/*/status` routes.
+
+### Weather
+Weather is fetched **server-side** so provider credentials never reach a browser
+(issue #57). The active provider is the `WEATHER_PROVIDER` setting
+(`openweathermap` | `homeassistant`); demo mode always uses the bundled snapshot.
+Every provider returns the same payload — see
+`server/services/weather/payload.js`.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/weather` | Current conditions, 3-day forecast, hourly series, air quality. Params: `location` or `lat`+`lon`, `units` (`imperial`\|`metric`), `lang`, `refresh=1`. |
+| GET | `/api/weather/geocode` | Resolve a free-text location to `{lat, lon, resolvedName}`. With **no** `q`, returns Home Assistant's own configured location when that is the provider. |
+| GET | `/api/sun` | `{sunrise, sunset, alwaysUp, alwaysDown}` (unix seconds) computed from `lat`/`lon`. No provider or API key involved — auto dark mode works with nothing configured. |
+
+Responses are cached for 10 minutes per (provider, location, units, language),
+so one upstream call serves every display in the house rather than one per tab
+per device. Provider failures map to `401` (bad credentials), `404` (unknown
+location), `503`/`504` (unreachable), and `502` (provider returned a payload
+that failed contract validation).
 
 ### Calendar sources, events & sync
 | Method | Path | Purpose |
@@ -233,6 +261,20 @@ static route.
 | GET | `/api/connections/google/calendars` | List Google calendars. |
 | DELETE | `/api/connections/google/account` | Unlink Google account. |
 | POST | `/api/connections/apple/calendars` | List Apple/CalDAV calendars. |
+
+### Home Assistant connection
+Home Assistant's long-lived access token controls the whole house, so it is
+encrypted at rest, redacted from the settings routes, and only ever used
+server-side.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/connections/homeassistant/status` | `{has_url, has_token, url, weather_entity, encryption}` — never the token. |
+| PUT | `/api/connections/homeassistant` | Save URL / token / weather entity. An omitted or empty `token` keeps the stored one. Rejects non-http(s) URLs with 400. |
+| POST | `/api/connections/homeassistant/test` | `{ok, message, version}` — health check against `GET /api/`. |
+| GET | `/api/connections/homeassistant/weather-entities` | List `weather.*` entities for the Admin Panel picker. |
+| DELETE | `/api/connections/homeassistant` | Clear the stored connection. |
+| GET | `/api/connections/weather/status` | Active provider, whether it is usable, and why not if it isn't. |
 
 ### Photo sources & media
 | Method | Path | Purpose |

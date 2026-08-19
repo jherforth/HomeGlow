@@ -173,13 +173,24 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const [choresSubTab, setChoresSubTab] = useState(0);
   const [widgetsSubTab, setWidgetsSubTab] = useState(0);
   const [settings, setSettings] = useState({
+    // Write-only: the server redacts this from GET /api/settings, so the field
+    // starts blank and an empty save leaves the stored key untouched.
     WEATHER_API_KEY: '',
+    WEATHER_PROVIDER: 'openweathermap',
     PROXY_WHITELIST: '',
     daily_completion_clam_reward: '2',
     CHORE_SOUND_ENABLED: 'false',
     CHORE_SOUND_DEFAULT: '',
     CHORE_SOUND_VOLUME: '100'
   });
+  // Home Assistant connection (issue #57). Like the Google client secret, the
+  // token is never sent back to the browser — only whether one is stored.
+  const [weatherProviderStatus, setWeatherProviderStatus] = useState(null);
+  const [homeAssistantStatus, setHomeAssistantStatus] = useState(null);
+  const [homeAssistantDraft, setHomeAssistantDraft] = useState({ url: '', token: '', weather_entity: '' });
+  const [homeAssistantEntities, setHomeAssistantEntities] = useState([]);
+  const [homeAssistantTestResult, setHomeAssistantTestResult] = useState(null);
+  const [isTestingHomeAssistant, setIsTestingHomeAssistant] = useState(false);
   const [widgetSettings, setLocalWidgetSettings] = useState({
     ...DEFAULT_WIDGET_SETTINGS
   });
@@ -294,6 +305,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       setVacationModeSettings(readLocalVacationModeSettings());
       setAutoDarkModeSettings(readLocalAutoDarkModeSettings());
       fetchSettings();
+      fetchWeatherConnectionStatus();
       fetchDeviceSettings();
       fetchUsers();
       fetchChores();
@@ -637,13 +649,92 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     }
   };
 
+  const fetchWeatherConnectionStatus = async () => {
+    try {
+      const [provider, ha] = await Promise.all([
+        axios.get(`${API_BASE_URL}/api/connections/weather/status`),
+        axios.get(`${API_BASE_URL}/api/connections/homeassistant/status`),
+      ]);
+      setWeatherProviderStatus(provider.data);
+      setHomeAssistantStatus(ha.data);
+      setHomeAssistantDraft((prev) => ({
+        ...prev,
+        url: ha.data?.url || '',
+        weather_entity: ha.data?.weather_entity || '',
+      }));
+      // Bind to the stored setting, not the effective provider: in demo mode
+      // the effective one is "demo", which is not a selectable option.
+      setSettings((prev) => ({
+        ...prev,
+        WEATHER_PROVIDER: provider.data?.configured_provider || 'openweathermap',
+      }));
+    } catch (error) {
+      console.error('Error fetching weather connection status:', error);
+    }
+  };
+
+  const saveHomeAssistantConnection = async () => {
+    setIsLoading(true);
+    try {
+      const response = await axios.put(`${API_BASE_URL}/api/connections/homeassistant`, {
+        url: homeAssistantDraft.url,
+        // An empty token means "keep the stored one" — the field is blank on
+        // load because the server never sends the token back.
+        ...(homeAssistantDraft.token ? { token: homeAssistantDraft.token } : {}),
+        weather_entity: homeAssistantDraft.weather_entity,
+      });
+      setHomeAssistantStatus(response.data?.status || null);
+      setHomeAssistantDraft((prev) => ({ ...prev, token: '' }));
+      await fetchWeatherConnectionStatus();
+      setSaveMessage({ show: true, type: 'success', text: t('admin:messages.homeAssistantSaved') });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error saving Home Assistant connection:', error);
+      const text = error?.response?.data?.error || t('admin:messages.homeAssistantFailed');
+      setSaveMessage({ show: true, type: 'error', text });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 4000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const testHomeAssistantConnection = async () => {
+    setIsTestingHomeAssistant(true);
+    setHomeAssistantTestResult(null);
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/connections/homeassistant/test`);
+      setHomeAssistantTestResult(response.data);
+
+      // A working connection is the moment to offer the entity picker.
+      if (response.data?.ok) {
+        try {
+          const entities = await axios.get(`${API_BASE_URL}/api/connections/homeassistant/weather-entities`);
+          setHomeAssistantEntities(entities.data?.entities || []);
+        } catch {
+          setHomeAssistantEntities([]);
+        }
+      }
+    } catch (error) {
+      setHomeAssistantTestResult({
+        ok: false,
+        message: error?.response?.data?.error || t('admin:messages.homeAssistantFailed'),
+      });
+    } finally {
+      setIsTestingHomeAssistant(false);
+    }
+  };
+
   const saveAllApiSettings = async () => {
     setIsLoading(true);
     try {
       await Promise.all([
         axios.post(`${API_BASE_URL}/api/settings`, { key: 'WEATHER_API_KEY', value: settings.WEATHER_API_KEY || '' }),
+        axios.post(`${API_BASE_URL}/api/settings`, { key: 'WEATHER_PROVIDER', value: settings.WEATHER_PROVIDER || 'openweathermap' }),
         axios.post(`${API_BASE_URL}/api/settings`, { key: 'PROXY_WHITELIST', value: settings.PROXY_WHITELIST || '' })
       ]);
+      // Clear the write-only field and re-read what the server now holds.
+      setSettings((prev) => ({ ...prev, WEATHER_API_KEY: '' }));
+      await fetchWeatherConnectionStatus();
       setSaveMessage({ show: true, type: 'success', text: t('admin:messages.allSettingsSaved') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } catch (error) {
@@ -1240,59 +1331,21 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     }
   };
 
+  // Geocoding runs on the server, which holds the API key. Passing no query
+  // asks the server for the provider's own location, which is how a Home
+  // Assistant household gets coordinates without an OpenWeatherMap key at all.
   const resolveAutoDarkModeLocation = async (locationQuery) => {
-    const apiKey = settings.WEATHER_API_KEY?.trim();
-    if (!apiKey) {
-      throw new Error('Please save an OpenWeather API key in the Connections tab first.');
+    const normalized = (locationQuery || '').trim();
+    const response = await axios.get(`${API_BASE_URL}/api/weather/geocode`, {
+      params: normalized ? { q: normalized } : {},
+    });
+
+    const { lat, lon, resolvedName } = response.data || {};
+    if (typeof lat !== 'number' || typeof lon !== 'number') {
+      throw new Error('Location not found. Try a city, city/state, city/country, or ZIP code.');
     }
 
-    const normalized = locationQuery.trim();
-    const directCandidates = [normalized];
-    if (!normalized.includes(',') && /[a-zA-Z]/.test(normalized)) {
-      directCandidates.push(`${normalized},US`);
-    }
-
-    for (const candidate of directCandidates) {
-      const response = await axios.get('https://api.openweathermap.org/geo/1.0/direct', {
-        params: {
-          q: candidate,
-          limit: 1,
-          appid: apiKey,
-        },
-      });
-
-      const first = Array.isArray(response.data) ? response.data[0] : null;
-      if (first && typeof first.lat === 'number' && typeof first.lon === 'number') {
-        const nameParts = [first.name, first.state, first.country].filter(Boolean);
-        return {
-          lat: first.lat,
-          lon: first.lon,
-          resolvedName: nameParts.join(', '),
-        };
-      }
-    }
-
-    const zipPattern = /^[0-9]{3,10}(,[a-zA-Z]{2})?$/;
-    if (zipPattern.test(normalized)) {
-      const zipValue = normalized.includes(',') ? normalized : `${normalized},US`;
-      const response = await axios.get('https://api.openweathermap.org/geo/1.0/zip', {
-        params: {
-          zip: zipValue,
-          appid: apiKey,
-        },
-      });
-
-      if (typeof response?.data?.lat === 'number' && typeof response?.data?.lon === 'number') {
-        const nameParts = [response.data.name, response.data.country].filter(Boolean);
-        return {
-          lat: response.data.lat,
-          lon: response.data.lon,
-          resolvedName: nameParts.join(', '),
-        };
-      }
-    }
-
-    throw new Error('Location not found. Try a city, city/state, city/country, or ZIP code.');
+    return { lat, lon, resolvedName: resolvedName || normalized };
   };
 
   const saveAutoDarkModeSettings = async () => {
@@ -1308,16 +1361,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       setAutoDarkModeSettings(nextSettings);
       setSaveMessage({ show: true, type: 'success', text: t('admin:messages.autoDarkDisabled') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
-      return;
-    }
-
-    if (!settings.WEATHER_API_KEY?.trim()) {
-      setSaveMessage({
-        show: true,
-        type: 'error',
-        text: t('admin:messages.autoDarkNeedsKey'),
-      });
-      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3500);
       return;
     }
 
@@ -1364,9 +1407,9 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
   useEffect(() => {
     const hasCoordinates = typeof autoDarkModeSettings.lat === 'number' && typeof autoDarkModeSettings.lon === 'number';
-    const apiKey = settings.WEATHER_API_KEY?.trim();
 
-    if (!autoDarkModeSettings.resolvedName || !hasCoordinates || !apiKey) {
+    // No API key needed any more — the server computes these from coordinates.
+    if (!autoDarkModeSettings.resolvedName || !hasCoordinates) {
       setAutoDarkModeSunTimes({ sunrise: null, sunset: null, timezoneOffset: 0 });
       setAutoDarkModeSunTimesError('');
       setAutoDarkModeSunTimesLoading(false);
@@ -1379,34 +1422,31 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       setAutoDarkModeSunTimesError('');
 
       try {
-        const response = await axios.get('https://api.openweathermap.org/data/2.5/weather', {
+        const response = await axios.get(`${API_BASE_URL}/api/sun`, {
           params: {
             lat: autoDarkModeSettings.lat,
             lon: autoDarkModeSettings.lon,
-            appid: apiKey,
           },
         });
 
-        const sunrise = response?.data?.sys?.sunrise;
-        const sunset = response?.data?.sys?.sunset;
-        const timezoneOffset = response?.data?.timezone;
+        const { sunrise, sunset, alwaysUp, alwaysDown } = response?.data || {};
 
         if (typeof sunrise !== 'number' || typeof sunset !== 'number') {
-          throw new Error('Sunrise and sunset are unavailable for this location.');
+          throw new Error(alwaysUp || alwaysDown
+            ? 'The sun does not rise or set at this location today.'
+            : 'Sunrise and sunset are unavailable for this location.');
         }
 
         if (!isCancelled) {
-          setAutoDarkModeSunTimes({
-            sunrise,
-            sunset,
-            timezoneOffset: typeof timezoneOffset === 'number' ? timezoneOffset : 0,
-          });
+          // The times come back as unix seconds; the preview renders them in
+          // the browser's own zone, which is the display the user is looking at.
+          setAutoDarkModeSunTimes({ sunrise, sunset, timezoneOffset: 0 });
         }
       } catch (error) {
         if (!isCancelled) {
           console.error('Error fetching auto dark mode sunrise/sunset:', error);
           setAutoDarkModeSunTimes({ sunrise: null, sunset: null, timezoneOffset: 0 });
-          setAutoDarkModeSunTimesError('Unable to load today\'s sunrise and sunset.');
+          setAutoDarkModeSunTimesError(error.message || 'Unable to load today\'s sunrise and sunset.');
         }
       } finally {
         if (!isCancelled) {
@@ -1420,7 +1460,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     return () => {
       isCancelled = true;
     };
-  }, [autoDarkModeSettings.resolvedName, autoDarkModeSettings.lat, autoDarkModeSettings.lon, settings.WEATHER_API_KEY]);
+  }, [autoDarkModeSettings.resolvedName, autoDarkModeSettings.lat, autoDarkModeSettings.lon]);
 
   const formatAutoDarkModeLocationTime = (unixSeconds, timezoneOffsetSeconds = 0) => {
     if (typeof unixSeconds !== 'number') {
@@ -2994,12 +3034,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 {t('admin:autoDark.help')}
               </Alert>
 
-              {!settings.WEATHER_API_KEY?.trim() && (
-                <Alert severity="warning" sx={{ mb: 2 }}>
-                  {t('admin:autoDark.noApiKey')}
-                </Alert>
-              )}
-
               <FormControlLabel
                 control={
                   <Switch
@@ -3715,7 +3749,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
             <Box sx={{ maxWidth: 700 }}>
               <Typography variant="subtitle1" sx={{ mt: 1, mb: 1.5, fontWeight: 600 }}>
-                {t('admin:connections.apiKeys')}
+                {t('admin:connections.weatherHeading')}
               </Typography>
 
               <Box
@@ -3725,15 +3759,43 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                   saveAllApiSettings();
                 }}
               >
-                <TextField
-                  fullWidth
-                  label={t('admin:connections.openWeatherKey')}
-                  type="password"
-                  value={settings.WEATHER_API_KEY || ''}
-                  onChange={(e) => setSettings(prev => ({ ...prev, WEATHER_API_KEY: e.target.value }))}
-                  sx={{ mb: 2 }}
-                  helperText={t('admin:connections.openWeatherHelp')}
-                />
+                <FormControl fullWidth sx={{ mb: 2 }}>
+                  <InputLabel id="weather-provider-label">{t('admin:connections.weatherProvider')}</InputLabel>
+                  <Select
+                    labelId="weather-provider-label"
+                    label={t('admin:connections.weatherProvider')}
+                    value={settings.WEATHER_PROVIDER || 'openweathermap'}
+                    onChange={(e) => setSettings(prev => ({ ...prev, WEATHER_PROVIDER: e.target.value }))}
+                  >
+                    <MenuItem value="openweathermap">{t('admin:connections.providerOpenWeather')}</MenuItem>
+                    <MenuItem value="homeassistant">{t('admin:connections.providerHomeAssistant')}</MenuItem>
+                  </Select>
+                </FormControl>
+
+                {weatherProviderStatus && !weatherProviderStatus.configured && (
+                  <Alert severity="warning" sx={{ mb: 2 }}>
+                    {weatherProviderStatus.reason}
+                  </Alert>
+                )}
+
+                {/* The key field is write-only: the server redacts it, so this
+                    shows whether one is stored and accepts a replacement. */}
+                {settings.WEATHER_PROVIDER !== 'homeassistant' && (
+                  <TextField
+                    fullWidth
+                    label={t('admin:connections.openWeatherKey')}
+                    type="password"
+                    value={settings.WEATHER_API_KEY || ''}
+                    onChange={(e) => setSettings(prev => ({ ...prev, WEATHER_API_KEY: e.target.value }))}
+                    sx={{ mb: 2 }}
+                    placeholder={weatherProviderStatus?.has_api_key ? t('admin:connections.keyStored') : ''}
+                    helperText={
+                      weatherProviderStatus?.has_api_key
+                        ? t('admin:connections.openWeatherStoredHelp')
+                        : t('admin:connections.openWeatherHelp')
+                    }
+                  />
+                )}
 
                 <TextField
                   fullWidth
@@ -3753,6 +3815,114 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 >
                   {isLoading ? t('common:state.saving') : t('admin:connections.saveApiKeys')}
                 </Button>
+              </Box>
+
+              <Divider sx={{ my: 2 }} />
+
+              {/* Home Assistant (issue #57) */}
+              <Typography variant="subtitle1" sx={{ mt: 2, mb: 1.5, fontWeight: 600 }}>
+                {t('admin:connections.homeAssistantHeading')}
+              </Typography>
+
+              <Alert severity="info" sx={{ mb: 2 }}>
+                {t('admin:connections.homeAssistantHelp')}
+              </Alert>
+
+              {homeAssistantStatus && !homeAssistantStatus.encryption?.configured && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  {t('admin:connections.encryptionRequired')}
+                </Alert>
+              )}
+
+              <Box
+                component="form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  saveHomeAssistantConnection();
+                }}
+              >
+                <TextField
+                  fullWidth
+                  label={t('admin:connections.homeAssistantUrl')}
+                  value={homeAssistantDraft.url}
+                  onChange={(e) => setHomeAssistantDraft(prev => ({ ...prev, url: e.target.value }))}
+                  sx={{ mb: 2 }}
+                  placeholder="http://homeassistant.local:8123"
+                  helperText={t('admin:connections.homeAssistantUrlHelp')}
+                />
+
+                <TextField
+                  fullWidth
+                  label={t('admin:connections.homeAssistantToken')}
+                  type="password"
+                  value={homeAssistantDraft.token}
+                  onChange={(e) => setHomeAssistantDraft(prev => ({ ...prev, token: e.target.value }))}
+                  sx={{ mb: 2 }}
+                  placeholder={homeAssistantStatus?.has_token ? t('admin:connections.tokenStored') : ''}
+                  helperText={
+                    homeAssistantStatus?.has_token
+                      ? t('admin:connections.homeAssistantTokenStoredHelp')
+                      : t('admin:connections.homeAssistantTokenHelp')
+                  }
+                />
+
+                {/* Populated by Test Connection, so the entity id can be picked
+                    rather than remembered. */}
+                {homeAssistantEntities.length > 0 ? (
+                  <FormControl fullWidth sx={{ mb: 2 }}>
+                    <InputLabel id="ha-weather-entity-label">{t('admin:connections.homeAssistantEntity')}</InputLabel>
+                    <Select
+                      labelId="ha-weather-entity-label"
+                      label={t('admin:connections.homeAssistantEntity')}
+                      value={homeAssistantDraft.weather_entity || ''}
+                      onChange={(e) => setHomeAssistantDraft(prev => ({ ...prev, weather_entity: e.target.value }))}
+                    >
+                      {homeAssistantEntities.map((entity) => (
+                        <MenuItem key={entity.entity_id} value={entity.entity_id}>
+                          {entity.name} ({entity.entity_id})
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                ) : (
+                  <TextField
+                    fullWidth
+                    label={t('admin:connections.homeAssistantEntity')}
+                    value={homeAssistantDraft.weather_entity}
+                    onChange={(e) => setHomeAssistantDraft(prev => ({ ...prev, weather_entity: e.target.value }))}
+                    sx={{ mb: 2 }}
+                    placeholder="weather.home"
+                    helperText={t('admin:connections.homeAssistantEntityHelp')}
+                  />
+                )}
+
+                {homeAssistantTestResult && (
+                  <Alert severity={homeAssistantTestResult.ok ? 'success' : 'error'} sx={{ mb: 2 }}>
+                    {homeAssistantTestResult.message}
+                    {homeAssistantTestResult.version ? ` (${homeAssistantTestResult.version})` : ''}
+                  </Alert>
+                )}
+
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1, mb: 2 }}>
+                  <Button
+                    type="submit"
+                    variant="contained"
+                    disabled={isLoading}
+                    startIcon={<Save />}
+                  >
+                    {isLoading ? t('common:state.saving') : t('admin:connections.saveHomeAssistant')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outlined"
+                    disabled={isTestingHomeAssistant || !homeAssistantStatus?.has_token}
+                    onClick={testHomeAssistantConnection}
+                  >
+                    {isTestingHomeAssistant
+                      ? t('admin:connections.testing')
+                      : t('admin:connections.testConnection')}
+                  </Button>
+                </Box>
               </Box>
 
               <Divider sx={{ my: 2 }} />

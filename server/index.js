@@ -106,6 +106,9 @@ const googleCalendar = require('./services/googleCalendar');
 const appleCalDAV = require('./services/appleCalDAV');
 const googlePhotos = require('./services/googlePhotos');
 const googlePhotosPicker = require('./services/googlePhotosPicker');
+const homeAssistant = require('./services/homeAssistant');
+const weatherService = require('./services/weather');
+const { computeSunTimes } = require('./services/weather/sun');
 const { isEncryptionConfigured, getEncryptionStatus } = require('./utils/encryption');
 let calendarSyncService = null;
 
@@ -3541,14 +3544,91 @@ fastify.get('/api/demo', async () => {
   return { demo: DEMO_MODE, resetHours: DEMO_MODE ? DEMO_RESET_HOURS : null };
 });
 
-// Static weather snapshot for the demo weather widget (no OpenWeatherMap key
-// in demo mode). ?units=metric converts the imperial snapshot.
-fastify.get('/api/demo/weather', async (request, reply) => {
-  if (!DEMO_MODE) {
-    return reply.status(404).send({ error: 'Not available outside demo mode.' });
+// Weather (issue #57). The provider — OpenWeatherMap, Home Assistant, or the
+// demo snapshot — is chosen server-side, so credentials never reach a browser
+// and one upstream call serves every display in the house.
+fastify.get('/api/weather', async (request, reply) => {
+  try {
+    const { location, lat, lon, units, lang, refresh } = request.query || {};
+    const payload = await weatherService.getWeather(db, {
+      locationQuery: location,
+      lat: lat === undefined ? undefined : Number(lat),
+      lon: lon === undefined ? undefined : Number(lon),
+      units: units === 'metric' ? 'metric' : 'imperial',
+      lang: String(lang || 'en').split('-')[0],
+      demoMode: DEMO_MODE,
+      forceRefresh: refresh === '1' || refresh === 'true',
+    });
+    return payload;
+  } catch (error) {
+    // Provider errors already carry a status (401 bad credentials, 404 unknown
+    // location, 503 unreachable); anything else is ours.
+    const status = Number.isInteger(error.status) ? error.status : 500;
+    console.error('Error fetching weather:', error.message);
+    return reply.status(status).send({ error: error.message || 'Failed to fetch weather.' });
   }
-  const { buildDemoWeatherPayload } = require('./utils/demoWeather');
-  return buildDemoWeatherPayload(request.query.units === 'metric' ? 'metric' : 'imperial');
+});
+
+// Resolve a free-text location to coordinates. Used by the weather widget's
+// settings dialog and by auto dark mode, both of which used to call
+// OpenWeatherMap's geocoder from the browser with the raw API key.
+fastify.get('/api/weather/geocode', async (request, reply) => {
+  try {
+    const query = String(request.query?.q || '').trim();
+
+    // With no query, report the provider's own location where it has one. A
+    // Home Assistant household already told HA where it lives, so auto dark
+    // mode should not need a second answer — or an OpenWeatherMap key.
+    if (!query) {
+      if (weatherService.getConfiguredProvider(db) === weatherService.PROVIDERS.HOMEASSISTANT
+        && homeAssistant.isConfigured(db)) {
+        const config = await homeAssistant.homeAssistantFetch(db, 'GET', '/api/config');
+        if (Number.isFinite(config?.latitude) && Number.isFinite(config?.longitude)) {
+          return {
+            lat: config.latitude,
+            lon: config.longitude,
+            resolvedName: config.location_name || '',
+          };
+        }
+      }
+      return reply.status(400).send({ error: 'A location query is required.' });
+    }
+
+    const apiKey = db.prepare('SELECT value FROM settings WHERE key = ?').get('WEATHER_API_KEY')?.value;
+    if (!apiKey) {
+      return reply.status(400).send({
+        error: 'Geocoding needs an OpenWeatherMap API key. Save one in the Connections tab, or let Home Assistant supply the location.',
+      });
+    }
+
+    const openWeatherMap = require('./services/weather/openweathermap');
+    const resolved = await openWeatherMap.resolveCoordinates(query, apiKey);
+    return { lat: resolved.lat, lon: resolved.lon, resolvedName: resolved.name || '' };
+  } catch (error) {
+    const status = Number.isInteger(error.status) ? error.status : 500;
+    console.error('Error geocoding location:', error.message);
+    return reply.status(status).send({ error: error.message || 'Failed to resolve location.' });
+  }
+});
+
+// Sunrise/sunset for auto dark mode. Computed from coordinates rather than
+// fetched, so the theme switches on schedule with no weather provider
+// configured and no API key held.
+fastify.get('/api/sun', async (request, reply) => {
+  const lat = Number(request.query?.lat);
+  const lon = Number(request.query?.lon);
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    return reply.status(400).send({ error: 'lat and lon are required.' });
+  }
+
+  const times = computeSunTimes(lat, lon);
+  return {
+    sunrise: times.sunrise,
+    sunset: times.sunset,
+    alwaysUp: times.alwaysUp,
+    alwaysDown: times.alwaysDown,
+  };
 });
 
 function deserializeSettingValue(value) {
@@ -3569,9 +3649,25 @@ function deserializeSettingValue(value) {
   }
 }
 
+// Settings that must never be serialized to a client. GET /api/settings is
+// unauthenticated and returns the whole table, so anything secret has to be
+// filtered here rather than merely encrypted at rest — the ciphertext is still
+// not something to hand out. Connection state for these lives behind the
+// /api/connections/* status routes, which report booleans and previews instead.
+const REDACTED_SETTING_KEYS = new Set([
+  'GOOGLE_CLIENT_SECRET_ENC',
+  homeAssistant.TOKEN_KEY,
+  // The OpenWeatherMap key used to be handed to every browser so the widget
+  // could call the API itself. Now that weather is fetched server-side, nothing
+  // on the client needs it — the Admin Panel shows whether one is stored via
+  // GET /api/connections/weather/status and writes a replacement blind.
+  'WEATHER_API_KEY',
+]);
+
 // Convert an array of {key, value} settings rows into a single {key: value}
-// object, deserializing any JSON-encoded values.
+// object, deserializing any JSON-encoded values and dropping secrets.
 const rowsToSettingsObject = (rows) => rows.reduce((acc, row) => {
+  if (REDACTED_SETTING_KEYS.has(row.key)) return acc;
   acc[row.key] = deserializeSettingValue(row.value);
   return acc;
 }, {});
@@ -3625,6 +3721,15 @@ fastify.post('/api/settings', async (request, reply) => {
     return reply.status(400).send({ error: 'Key and value are required.' });
   }
   try {
+    // Redacted settings are never sent to the client, so the Admin Panel edits
+    // them blind and submits an empty string when the user did not retype one.
+    // Treat that as "leave it alone" rather than as "delete it" — otherwise
+    // saving any other field on the same form would silently wipe the secret.
+    if (REDACTED_SETTING_KEYS.has(key) && String(value).trim() === '') {
+      console.log(`Skipping blank write to redacted setting '${key}' (left unchanged).`);
+      return { success: true, message: `Setting '${key}' left unchanged.` };
+    }
+
     // Use INSERT OR REPLACE to either insert a new setting or update an existing one
     const stmt = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
     const result = stmt.run(key, value);
@@ -3634,11 +3739,10 @@ fastify.post('/api/settings', async (request, reply) => {
     const verification = db.prepare('SELECT key, value FROM settings WHERE key = ?').get(key);
     console.log('Verification query result:', verification);
 
-    // Special verification for weather API key
-    if (key === 'WEATHER_API_KEY') {
-      console.log('=== WEATHER API KEY VERIFICATION ===');
-      console.log('Saved value in DB:', verification ? verification.value : 'NOT FOUND');
-      console.log('Value matches input?', verification && verification.value === value);
+    // Changing the provider or its credentials invalidates anything cached
+    // under the old configuration.
+    if (key === 'WEATHER_API_KEY' || key === weatherService.PROVIDER_SETTING_KEY) {
+      weatherService.clearCache();
     }
 
     return { success: true, message: `Setting '${key}' saved successfully.` };
@@ -4808,6 +4912,93 @@ fastify.delete('/api/connections/google/account', async (request, reply) => {
   } catch (error) {
     console.error('Error disconnecting Google account:', error);
     reply.status(500).send({ error: error.message || 'Failed to disconnect Google account' });
+  }
+});
+
+// Home Assistant connection routes (issue #57).
+//
+// The status route reports whether a token is stored, never the token itself —
+// a Home Assistant long-lived token controls the whole house, so it is stored
+// encrypted, redacted from GET /api/settings, and written blind.
+fastify.get('/api/connections/homeassistant/status', async (request, reply) => {
+  try {
+    const status = homeAssistant.getHomeAssistantStatus(db);
+    return {
+      ...status,
+      encryption: { configured: status.encryption_configured, status: getEncryptionStatus() },
+    };
+  } catch (error) {
+    console.error('Error fetching Home Assistant status:', error);
+    reply.status(500).send({ error: 'Failed to fetch Home Assistant status' });
+  }
+});
+
+fastify.put('/api/connections/homeassistant', async (request, reply) => {
+  if (demoBlocked(reply)) return;
+  try {
+    const { url, token, weather_entity } = request.body || {};
+
+    // Only the token needs encryption, so only the token needs the key.
+    if (token !== undefined && token !== null && String(token).trim() !== '' && !isEncryptionConfigured()) {
+      return reply.status(400).send({ error: 'ENCRYPTION_KEY is not configured on the server.' });
+    }
+
+    homeAssistant.saveConfig(db, { url, token, weatherEntity: weather_entity });
+    // Provider config changed, so anything cached under the old settings is stale.
+    weatherService.clearCache();
+    return { success: true, status: homeAssistant.getHomeAssistantStatus(db) };
+  } catch (error) {
+    console.error('Error saving Home Assistant config:', error);
+    reply.status(400).send({ error: error.message || 'Failed to save Home Assistant config' });
+  }
+});
+
+fastify.post('/api/connections/homeassistant/test', async (request, reply) => {
+  if (demoBlocked(reply)) return;
+  try {
+    return await homeAssistant.testConnection(db);
+  } catch (error) {
+    console.error('Error testing Home Assistant connection:', error);
+    reply.status(500).send({ error: error.message || 'Failed to test Home Assistant connection' });
+  }
+});
+
+fastify.get('/api/connections/homeassistant/weather-entities', async (request, reply) => {
+  if (demoBlocked(reply)) return;
+  try {
+    if (!homeAssistant.isConfigured(db)) {
+      return reply.status(400).send({ error: 'Home Assistant is not configured.' });
+    }
+    return { entities: await homeAssistant.listWeatherEntities(db) };
+  } catch (error) {
+    const status = Number.isInteger(error.status) ? error.status : 500;
+    console.error('Error listing Home Assistant weather entities:', error.message);
+    reply.status(status).send({ error: error.message || 'Failed to list weather entities' });
+  }
+});
+
+fastify.delete('/api/connections/homeassistant', async (request, reply) => {
+  if (demoBlocked(reply)) return;
+  try {
+    homeAssistant.clearConfig(db);
+    weatherService.clearCache();
+    return { success: true };
+  } catch (error) {
+    console.error('Error clearing Home Assistant config:', error);
+    reply.status(500).send({ error: error.message || 'Failed to clear Home Assistant config' });
+  }
+});
+
+// Which weather provider is active and whether it is usable. Lets the Admin
+// Panel show "no API key saved" without the key ever being sent to it.
+fastify.get('/api/connections/weather/status', async (request, reply) => {
+  try {
+    const status = weatherService.getProviderStatus(db, { demoMode: DEMO_MODE });
+    const hasApiKey = !!db.prepare('SELECT value FROM settings WHERE key = ?').get('WEATHER_API_KEY')?.value;
+    return { ...status, has_api_key: hasApiKey };
+  } catch (error) {
+    console.error('Error fetching weather provider status:', error);
+    reply.status(500).send({ error: 'Failed to fetch weather provider status' });
   }
 });
 

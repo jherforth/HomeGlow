@@ -45,7 +45,7 @@ DEMO MODE enabled: in-memory database, PIN disabled, sample data resets every 6h
 | **Admin PIN** | Optional PIN gate on the Admin Panel | **Disabled** — panel opens freely; PIN set/verify/delete return `403` so no visitor can lock others out |
 | **Sample data** | Empty first-run welcome screen | A demo household is **seeded at boot and re-seeded every 6 hours**; new visitor devices auto-enable the chore, calendar, and weather widgets |
 | **Calendar sync** | Syncs whatever sources you configure | Runs **only for the curated demo feeds** seeded at boot; source add/edit/delete routes are blocked so visitor URLs are never fetched |
-| **Weather** | Live OpenWeatherMap data (your API key) | A **static snapshot of Chili, NY** served from `GET /api/demo/weather` — no API key involved |
+| **Weather** | Live data from your chosen provider | A **static snapshot of Chili, NY** — demo mode selects the demo provider behind the normal `GET /api/weather`, so no credentials are involved |
 | **Abuse-prone routes** | Available | Return `403` (see below) |
 | **Client banner** | — | A **"Demo Mode — sample data resets every N hours"** banner is shown |
 
@@ -107,9 +107,13 @@ and is designed to make an empty dashboard feel like a real family command cente
   - **Town of Chili — Calendar** and **Town of Chili — Community Events** — two
     overlapping town feeds, which double as a live demonstration of
     cross-calendar event deduplication.
-- **A weather snapshot for Chili, NY** — the demo has no OpenWeatherMap key, so
-  the weather widget renders a static real-conditions snapshot (current temp,
-  3-day outlook, hourly chart, air quality) served by `GET /api/demo/weather`.
+- **A weather snapshot for Chili, NY** — the demo has no weather credentials, so
+  the server selects the demo provider behind the normal `GET /api/weather` and
+  the widget renders a static real-conditions snapshot (current temp, 3-day
+  outlook, hourly chart, air quality). Forecast dates are generated relative to
+  today, so the demo never shows a stale week. Because it goes through the same
+  route as a real install, demo mode exercises the production code path rather
+  than a special case in the widget.
 
 Because the whole set is re-seeded on a timer (every 6 hours by default) and the
 database is in-memory, the demo always returns to this known-good state; each
