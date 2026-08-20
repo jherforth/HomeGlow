@@ -151,9 +151,7 @@
     "failed": "No se pudieron canjear las almejas."
   },
   "celebration": {
-    "redeemedAPrize": "¡{{name}} canjeó un premio!",
-    "allChoresDone": "¡{{name}} terminó todas las tareas!",
-    "bonusEarned": "+{{count}} 🥟 de bonificación diaria"
+    "redeemedAPrize": "¡{{name}} canjeó un premio!"
   },
   "schedules": {
     "definitionsHeading": "Definiciones de tareas",

@@ -28,11 +28,15 @@ vacation mode; metrics-ready chore history; and a bank of built-in avatars.
   and it appears beside the title in Admin Panel → Chores → Schedules.
 
 ### Chore Completion Celebration (#140)
-- Finishing your **last chore of the day** now sets off a confetti burst and a
-  chime on every display, not just the one it was tapped on.
-- It is a **new effect**, deliberately different from the prize-redemption
-  confetti: a radial firework burst of mixed shapes rather than a curtain of
-  falling pieces, so at a glance you can tell which kind of good news it is.
+- Finishing your **last chore of the day** now sets off confetti and a chime on
+  every display, not just the one it was tapped on.
+- The confetti **pops up from the bottom of the screen**, using the same popcorn
+  physics as the vacation screensaver. It's wordless and names nobody — the
+  panel turning green and the clam total already say who and what — and it draws
+  no backdrop, so the dashboard stays visible and usable while it plays.
+- It works even if the event stream doesn't reach a display. The screen that
+  completed the chore reacts to its own state rather than waiting for a server
+  push; the push is what lets *other* screens in the house join in.
 - Fires once per person per day, at the same moment the daily bonus is earned —
   whether the last chore was completed, handed over by a parent, or snoozed out
   of today. Undoing it and redoing it celebrates again, because the bonus is

@@ -1,240 +1,203 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Box, Typography } from '@mui/material';
-import { useTranslation } from 'react-i18next';
+import { Box } from '@mui/material';
 
-// Full-screen celebration for finishing every regular chore for the day
-// (issue #140).
+// Confetti for finishing every regular chore for the day (issue #140).
 //
-// Deliberately a different effect from PrizeCelebration's curtain of falling
-// rectangles, so the two read as distinct events at a glance: this one is a
-// radial burst — pieces fire outward from the middle of the screen, decelerate,
-// then fall away under gravity, the way a firework does. Mixed shapes (squares,
-// circles, and thin streamers) rather than one uniform chip.
+// Deliberately wordless. An earlier version put a card naming the person in the
+// middle of the screen, which meant a modal-feeling overlay that dimmed the
+// whole dashboard for five seconds and sat nowhere near the panel that had just
+// turned green. The green panel and the updated clam total already say who and
+// what; this only has to say "something good happened".
 //
-// Pure CSS, no canvas and no dependencies, matching the existing celebration.
-// Rendered through a portal to document.body because the chore widget sits
-// inside a react-grid-layout item whose CSS transform creates a stacking
-// context, which would otherwise trap the overlay beneath MUI dialogs and
-// break position: fixed.
+// The motion follows VacationScreensaver: pieces launch from behind the bottom
+// dock with a random upward velocity, gravity arcs them back down, and each one
+// is removed once it falls out of view. Positions are written straight to the
+// nodes inside a rAF loop, so 60fps motion causes no React re-renders.
+//
+// Nothing here is interactive and there is no backdrop — pointerEvents: none
+// throughout — so the dashboard stays usable while it plays.
+//
+// Rendered through a portal to document.body because the chore widget sits in a
+// react-grid-layout item whose transform would otherwise trap position: fixed.
 
-const BURST_COLORS = ['#f94144', '#f3722c', '#f9c74f', '#90be6d', '#43aa8b', '#4d908e', '#577590', '#b5179e'];
-const PIECE_COUNT = 90;
-const AUTO_DISMISS_MS = 5000;
+const CONFETTI_COLORS = ['#f94144', '#f3722c', '#f9c74f', '#90be6d', '#43aa8b', '#4d908e', '#577590', '#b5179e'];
 
-// Three shapes keep the burst from looking like one repeated sprite.
-const SHAPES = ['square', 'circle', 'streamer'];
+const PIECE_COUNT = 70;
+const GRAVITY_PX_S2 = 1400;
+// Pieces launch over a short window rather than all at once, so it reads as a
+// burst rather than a single wall of confetti.
+const LAUNCH_WINDOW_MS = 550;
+// Hard stop, in case a piece somehow never leaves the viewport.
+const MAX_LIFETIME_MS = 7000;
 
-const shapeStyles = (shape, size, color) => {
+const randomBetween = (min, max) => min + Math.random() * (max - min);
+
+const prefersReducedMotion = () =>
+  typeof window !== 'undefined'
+  && typeof window.matchMedia === 'function'
+  && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const shapeSx = (shape, size, color) => {
   if (shape === 'circle') {
     return { width: size, height: size, borderRadius: '50%', backgroundColor: color };
   }
   if (shape === 'streamer') {
-    return { width: Math.max(2, size * 0.25), height: size * 1.8, borderRadius: '2px', backgroundColor: color };
+    return { width: Math.max(2, size * 0.3), height: size * 2, borderRadius: '2px', backgroundColor: color };
   }
-  return { width: size, height: size, borderRadius: '2px', backgroundColor: color };
+  return { width: size, height: size * 0.6, borderRadius: '1px', backgroundColor: color };
 };
 
-// Roughly what the message card measures; used only to keep it on screen when
-// it is anchored near an edge. Exact width does not matter, since the card is
-// centred on this estimate and then clamped.
-const CARD_WIDTH_ESTIMATE = 340;
-const VIEWPORT_MARGIN = 12;
+const SHAPES = ['square', 'circle', 'streamer'];
 
-// Place the card over the column that just went green, rather than in the
-// middle of the screen where it reads as unrelated to what changed. The card is
-// wider than a 180-250px column, so it centres on the column and is clamped to
-// the viewport; near an edge it shifts in rather than hanging off.
-const anchoredCardSx = (anchorRect) => {
-  if (!anchorRect) return {};
+const ChoreCelebration = ({ onDismiss }) => {
+  const [pieces, setPieces] = useState([]);
+  const pieceStateRef = useRef(new Map());
+  const nodesRef = useRef(new Map());
+  const doneRef = useRef(false);
 
-  const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : CARD_WIDTH_ESTIMATE;
-  const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0;
-
-  const desiredLeft = anchorRect.left + anchorRect.width / 2 - CARD_WIDTH_ESTIMATE / 2;
-  const maxLeft = Math.max(VIEWPORT_MARGIN, viewportWidth - CARD_WIDTH_ESTIMATE - VIEWPORT_MARGIN);
-  const left = Math.min(Math.max(VIEWPORT_MARGIN, desiredLeft), maxLeft);
-
-  // Sit over the upper third of the column, near the avatar and the "All Done"
-  // chip, so the card and the thing it is celebrating are in the same glance.
-  const desiredTop = anchorRect.top + Math.min(anchorRect.height * 0.28, 140);
-  const top = Math.min(Math.max(VIEWPORT_MARGIN, desiredTop), Math.max(VIEWPORT_MARGIN, viewportHeight - 200));
-
-  return {
-    position: 'fixed',
-    top,
-    left,
-    width: CARD_WIDTH_ESTIMATE,
-    maxWidth: `calc(100vw - ${VIEWPORT_MARGIN * 2}px)`,
-  };
-};
-
-// Where the burst radiates from: the centre of the celebrating user's column
-// when we know it, the centre of the screen otherwise.
-const burstOriginSx = (anchorRect) => {
-  if (!anchorRect) {
-    return { position: 'absolute', left: '50%', top: '50%' };
-  }
-  return {
-    position: 'fixed',
-    left: anchorRect.left + anchorRect.width / 2,
-    top: anchorRect.top + Math.min(anchorRect.height / 2, 220),
-  };
-};
-
-const ChoreCelebration = ({ username, reward, anchorRect = null, onDismiss }) => {
-  const { t } = useTranslation(['chores']);
-  const originSx = burstOriginSx(anchorRect);
-
-  const pieces = useMemo(
-    () =>
-      Array.from({ length: PIECE_COUNT }, (_, i) => {
-        // Spread evenly around the circle with a little jitter, so the burst
-        // looks scattered rather than like spokes on a wheel.
-        const angle = (i / PIECE_COUNT) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
-        const velocity = 140 + Math.random() * 260;
-        return {
-          id: i,
-          // Where the piece flies to at the apex of the burst.
-          burstX: Math.cos(angle) * velocity,
-          burstY: Math.sin(angle) * velocity,
-          // Where it ends up after gravity takes over: same horizontal drift,
-          // well below the viewport.
-          fallY: Math.sin(angle) * velocity + 420 + Math.random() * 320,
-          driftX: Math.cos(angle) * velocity + (Math.random() - 0.5) * 90,
-          size: 6 + Math.random() * 9,
-          color: BURST_COLORS[i % BURST_COLORS.length],
-          shape: SHAPES[i % SHAPES.length],
-          spin: (Math.random() > 0.5 ? 1 : -1) * (360 + Math.random() * 540),
-          delay: Math.random() * 0.25,
-          duration: 1.9 + Math.random() * 1.3,
-        };
-      }),
-    []
-  );
-
+  // Launch + physics. One effect owns the whole lifecycle so there is no window
+  // where a piece exists in state but has no simulation entry.
   useEffect(() => {
-    const timer = setTimeout(onDismiss, AUTO_DISMISS_MS);
-    return () => clearTimeout(timer);
-  }, [onDismiss]);
+    // With reduced motion there is nothing to show — the whole component is
+    // motion — so bow out immediately rather than freezing debris on screen.
+    if (prefersReducedMotion()) {
+      onDismiss();
+      return undefined;
+    }
+
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    const spawned = [];
+    for (let i = 0; i < PIECE_COUNT; i++) {
+      const id = i;
+      // Launch from behind the bottom dock, spread across the middle of the
+      // screen the way the vacation emoji do.
+      const x = width / 2 + randomBetween(-width * 0.32, width * 0.32);
+      const vy = -Math.sqrt(2 * GRAVITY_PX_S2 * randomBetween(height * 0.45, height * 0.95));
+      const vx = randomBetween(-width * 0.22, width * 0.22);
+
+      pieceStateRef.current.set(id, {
+        x,
+        y: height + 30,
+        vx,
+        vy,
+        rotation: randomBetween(0, 360),
+        spin: randomBetween(-260, 260),
+        // Staggered launch: until its delay elapses the piece just waits
+        // off-screen below the fold.
+        delay: randomBetween(0, LAUNCH_WINDOW_MS),
+        elapsed: 0,
+      });
+
+      spawned.push({
+        id,
+        shape: SHAPES[i % SHAPES.length],
+        size: 7 + Math.random() * 9,
+        color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+      });
+    }
+    setPieces(spawned);
+
+    let rafId = null;
+    let lastTime = performance.now();
+    const startedAt = lastTime;
+
+    const finish = () => {
+      if (doneRef.current) return;
+      doneRef.current = true;
+      onDismiss();
+    };
+
+    const step = (now) => {
+      const dt = Math.min((now - lastTime) / 1000, 0.05);
+      lastTime = now;
+      const viewportHeight = window.innerHeight;
+      const finished = [];
+
+      pieceStateRef.current.forEach((p, id) => {
+        p.elapsed += dt * 1000;
+        if (p.elapsed < p.delay) return;
+
+        p.vy += GRAVITY_PX_S2 * dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.rotation += p.spin * dt;
+
+        // Gone once it has fallen back below the fold on the way down.
+        if (p.y > viewportHeight + 60 && p.vy > 0) {
+          finished.push(id);
+          return;
+        }
+
+        const node = nodesRef.current.get(id);
+        if (node) {
+          node.style.transform = `translate(${p.x}px, ${p.y}px) rotate(${p.rotation}deg)`;
+        }
+      });
+
+      for (const id of finished) {
+        pieceStateRef.current.delete(id);
+        nodesRef.current.delete(id);
+        const node = document.getElementById(`chore-confetti-${id}`);
+        if (node) node.style.display = 'none';
+      }
+
+      if (pieceStateRef.current.size === 0 || now - startedAt > MAX_LIFETIME_MS) {
+        finish();
+        return;
+      }
+
+      rafId = requestAnimationFrame(step);
+    };
+
+    rafId = requestAnimationFrame(step);
+
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      pieceStateRef.current.clear();
+      nodesRef.current.clear();
+    };
+    // Mount-only: the burst is fired once and runs to completion.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (pieces.length === 0) return null;
 
   return createPortal(
     <Box
-      onClick={onDismiss}
-      onTouchStart={onDismiss}
+      aria-hidden="true"
+      className="chore-confetti-layer"
       sx={{
         position: 'fixed',
         inset: 0,
         zIndex: 10000,
         overflow: 'hidden',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.35)',
-        cursor: 'pointer',
-        // Out fast, then arc down: the 45% keyframe is the apex, which is what
-        // gives the burst its firework shape rather than a straight scatter.
-        '@keyframes chore-burst': {
-          '0%': {
-            transform: 'translate(0, 0) rotate(0deg) scale(0.4)',
-            opacity: 1,
-          },
-          '45%': {
-            transform: 'translate(var(--burst-x), var(--burst-y)) rotate(calc(var(--spin) * 0.5)) scale(1)',
-            opacity: 1,
-          },
-          '100%': {
-            transform: 'translate(var(--drift-x), var(--fall-y)) rotate(var(--spin)) scale(0.9)',
-            opacity: 0,
-          },
-        },
-        '@keyframes chore-badge-pop': {
-          '0%': { transform: 'scale(0.5) rotate(-6deg)', opacity: 0 },
-          '55%': { transform: 'scale(1.08) rotate(2deg)', opacity: 1 },
-          '100%': { transform: 'scale(1) rotate(0deg)', opacity: 1 },
-        },
-        // A single expanding ring at the origin sells the "burst" moment.
-        '@keyframes chore-shockwave': {
-          '0%': { transform: 'scale(0.2)', opacity: 0.55 },
-          '100%': { transform: 'scale(2.4)', opacity: 0 },
-        },
-        // Respect a reduced-motion preference: keep the message, drop the
-        // flying debris rather than showing a static clump of coloured squares.
-        '@media (prefers-reduced-motion: reduce)': {
-          '& .chore-burst-piece': { display: 'none' },
-          '& .chore-shockwave': { display: 'none' },
-        },
+        // Purely decorative: never intercept a tap meant for the dashboard.
+        pointerEvents: 'none',
       }}
     >
-      {/* Zero-size origin the burst radiates from. Anchoring it to the column
-          means the confetti visibly comes out of the panel that just went
-          green, rather than from the middle of the screen while the card sits
-          somewhere else. */}
-      <Box className="chore-burst-origin" sx={{ ...originSx, width: 0, height: 0, pointerEvents: 'none' }}>
+      {pieces.map((piece) => (
         <Box
-          className="chore-shockwave"
+          key={piece.id}
+          id={`chore-confetti-${piece.id}`}
+          className="chore-confetti-piece"
+          ref={(node) => {
+            if (node) nodesRef.current.set(piece.id, node);
+          }}
           sx={{
             position: 'absolute',
-            width: 220,
-            height: 220,
-            marginLeft: '-110px',
-            marginTop: '-110px',
-            borderRadius: '50%',
-            border: '3px solid var(--accent)',
-            animation: 'chore-shockwave 0.9s ease-out both',
+            top: 0,
+            left: 0,
+            ...shapeSx(piece.shape, piece.size, piece.color),
             pointerEvents: 'none',
+            willChange: 'transform',
+            // First paint is off-screen; the rAF loop takes over immediately.
+            transform: 'translate(-100px, 200vh)',
           }}
         />
-
-        {pieces.map((piece) => (
-          <Box
-            key={piece.id}
-            className="chore-burst-piece"
-            sx={{
-              position: 'absolute',
-              left: 0,
-              top: 0,
-              ...shapeStyles(piece.shape, piece.size, piece.color),
-              '--burst-x': `${piece.burstX}px`,
-              '--burst-y': `${piece.burstY}px`,
-              '--drift-x': `${piece.driftX}px`,
-              '--fall-y': `${piece.fallY}px`,
-              '--spin': `${piece.spin}deg`,
-              animation: `chore-burst ${piece.duration}s cubic-bezier(0.15, 0.75, 0.35, 1) ${piece.delay}s both`,
-              pointerEvents: 'none',
-            }}
-          />
-        ))}
-      </Box>
-
-      <Box
-        sx={{
-          position: 'relative',
-          backgroundColor: 'var(--card-bg)',
-          color: 'var(--text-color)',
-          border: '1px solid var(--card-border)',
-          borderRadius: 3,
-          boxShadow: 'var(--shadow)',
-          px: 4,
-          py: 3,
-          textAlign: 'center',
-          maxWidth: '80vw',
-          animation: 'chore-badge-pop 0.55s ease-out both',
-          // Overrides the flex centring above when we know where the
-          // celebrating user's column is.
-          ...anchoredCardSx(anchorRect),
-        }}
-      >
-        <Typography sx={{ fontSize: '3.25rem', lineHeight: 1, mb: 1 }}>🏆</Typography>
-        <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>
-          {t('chores:celebration.allChoresDone', { name: username })}
-        </Typography>
-        {reward > 0 && (
-          <Typography variant="h6" sx={{ color: 'var(--accent)', fontWeight: 600 }}>
-            {t('chores:celebration.bonusEarned', { count: reward })}
-          </Typography>
-        )}
-      </Box>
+      ))}
     </Box>,
     document.body
   );

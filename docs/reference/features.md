@@ -58,19 +58,27 @@ The chore system uses a **three-table model** (see [Database](../architecture/da
   column that is only 180–250px wide. Chores without an icon keep the checkmark.
   The icon belongs to the chore, so every schedule of it shows the same picture.
 - **All-chores-done celebration** (issue #140): when a user finishes their last
-  regular chore, a **radial confetti burst + chime** fires on every display,
-  driven by the `chore.allCompleted` event. Visually distinct from the prize
-  celebration's falling confetti, so the two events are tellable apart at a
-  glance. The message card and the burst origin are **anchored over that user's
-  column** — the panel that just turned green — rather than the middle of the
-  screen, so the celebration reads as belonging to the person who earned it. A
-  display that isn't showing that column (the mobile stack, another tab) falls
-  back to centring. Fires once per user per day, alongside the daily bonus, from whichever
-  route emptied the list — completing, receiving a transfer, or snoozing the last
-  chore out of today. Toggle in **Admin Panel → Chores → Settings** (on by
-  default); the toggle is a display preference, so the event still reaches
-  plugins when it is off. Honours `prefers-reduced-motion` by keeping the message
-  and dropping the flying pieces.
+  regular chore, **confetti pops up from the bottom of the screen** and a chime
+  plays — the same popcorn physics as the vacation screensaver. Deliberately
+  wordless and names nobody: the panel turning green and the clam total already
+  say who and what. It draws no backdrop and never intercepts a tap, so the
+  dashboard stays usable while it plays. Distinct from the prize celebration,
+  which is a centred card with falling confetti.
+  - **Two triggers, deduplicated.** The display that completed the chore reacts
+    to its own local state, so it needs nothing from the network beyond the
+    completion request that just succeeded. The `chore.allCompleted` SSE event
+    is what lets *other* displays in the house join in. It originally relied on
+    the event alone, which made the whole feature hostage to the event stream
+    surviving a deployment's reverse proxy — everything else shown on completion
+    is computed locally, so a blocked stream made the celebration the one thing
+    that silently did nothing.
+  - Fires once per user per day, from whichever route emptied the list —
+    completing, receiving a transfer, or snoozing the last chore out of today.
+    Undoing the last chore revokes the daily bonus, so redoing it celebrates again.
+  - Toggle in **Admin Panel → Chores → Settings** (on by default); it is a
+    display preference, so the event still reaches plugins when it is off.
+  - Skipped entirely under `prefers-reduced-motion` — the effect is nothing but
+    motion, so there is no meaningful reduced version.
 - **The prize store** (spending mechanism): `prizes` is the definitions ledger
   in Prize Management; parents stock the store with offers (`prize_offers`).
   Kids browse the 🛍️ Prize Store on the dashboard and **request** an offer;

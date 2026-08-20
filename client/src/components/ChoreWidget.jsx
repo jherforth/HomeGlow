@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Typography,
   Button,
@@ -94,7 +94,12 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
   const [prizeOffers, setPrizeOffers] = useState([]);
   const [quickSpend, setQuickSpend] = useState({ open: false, user: null, amount: '', note: '' });
   const [celebration, setCelebration] = useState(null); // { username, prizeName }
-  const [choreCelebration, setChoreCelebration] = useState(null); // { username, reward }
+  const [choreCelebration, setChoreCelebration] = useState(null); // { id } — wordless confetti
+  // `${userId}:${date}` keys already celebrated, so the local and SSE triggers
+  // cannot both fire for the same day. Cleared for a user when their day stops
+  // being complete, so an undo/redo celebrates again.
+  const celebratedDaysRef = useRef(new Set());
+  const celebrationSeededRef = useRef(false);
   // Cost splitting: which offer is in split-select mode and which kids are in.
   const [splitDraft, setSplitDraft] = useState({ offerId: null, userIds: [] });
   const longPressTimerRef = useRef(null);
@@ -199,41 +204,74 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
     });
   }, [users, soundEnabled]);
 
-  // Finishing every regular chore for the day celebrates the same way, on every
-  // display (issue #140). The server emits chore.allCompleted once per user per
-  // day, from whichever route finished their list — completing the last chore,
-  // receiving a transfer, or snoozing it out of today.
+  // Finishing every regular chore for the day sets off confetti (issue #140).
+  //
+  // Two things can trigger it, deduplicated by celebratedDaysRef:
+  //
+  //   1. Local state — the effect below watches for a user's day flipping to
+  //      complete. This is what fires on the display that did the tapping, and
+  //      it needs nothing from the network beyond the completion request that
+  //      just succeeded.
+  //   2. The chore.allCompleted SSE event, which is what lets *other* displays
+  //      in the house join in.
+  //
+  // Originally only (2) existed, which made the whole feature dependent on the
+  // event stream surviving the deployment's reverse proxy. Everything else the
+  // widget shows on completion — the clam total, the panel turning green — is
+  // computed locally, so when the stream was blocked the celebration was the
+  // only thing that silently did nothing. Reacting locally to a local action is
+  // both more robust and more direct.
+  const celebrateDayComplete = useCallback((userId) => {
+    const key = `${userId}:${getTodayDateString()}`;
+    if (celebratedDaysRef.current.has(key)) return;
+    celebratedDaysRef.current.add(key);
+
+    setChoreCelebration({ id: key });
+    if (soundEnabled) {
+      try {
+        playSound(soundUrl('chime.wav'), 0.8);
+      } catch { /* sound is best-effort */ }
+    }
+  }, [soundEnabled]);
+
   useEffect(() => {
     if (!celebrationEnabled) return undefined;
 
     return subscribePluginEvents((message) => {
       if (message.event !== 'chore.allCompleted') return;
-
-      const user = users.find((u) => u.id === message.payload.userId);
-
-      // Measure the celebrating user's column so the card can sit over it.
-      // Null on any display that isn't showing that column right now — the
-      // mobile stack, a tab without the chore widget, a second display — and
-      // the card falls back to the centre of the screen there.
-      const column = document.querySelector(`[data-chore-user-id="${message.payload.userId}"]`);
-      const rect = column ? column.getBoundingClientRect() : null;
-
-      setChoreCelebration({
-        username: message.payload.username || user?.username || 'Someone',
-        reward: message.payload.reward || 0,
-        anchorRect: rect
-          ? { top: rect.top, left: rect.left, width: rect.width, height: rect.height }
-          : null,
-      });
-      if (soundEnabled) {
-        try {
-          playSound(soundUrl('chime.wav'), 0.8);
-        } catch { /* sound is best-effort */ }
-      }
+      celebrateDayComplete(message.payload.userId);
       // The daily bonus landed, so balances moved.
       void fetchUsers();
     });
-  }, [users, soundEnabled, celebrationEnabled]);
+  }, [celebrationEnabled, celebrateDayComplete]);
+
+  // Local trigger: watch for a day transitioning to complete.
+  //
+  // The first pass after data loads only seeds the ref, so a display opening on
+  // an already-finished day does not throw confetti at nobody. Clearing the key
+  // when a day stops being complete is what lets an undo/redo celebrate again,
+  // matching the daily bonus being revoked and re-earned.
+  useEffect(() => {
+    if (!celebrationEnabled || loading || users.length === 0) return;
+
+    const today = getTodayDateString();
+    const seeding = !celebrationSeededRef.current;
+
+    users.filter((user) => user.id !== 0).forEach((user) => {
+      const key = `${user.id}:${today}`;
+      if (!isUserDayComplete(user.id)) {
+        celebratedDaysRef.current.delete(key);
+        return;
+      }
+      if (seeding) {
+        celebratedDaysRef.current.add(key);
+        return;
+      }
+      celebrateDayComplete(user.id);
+    });
+
+    celebrationSeededRef.current = true;
+  }, [users, schedules, history, celebrationEnabled, loading, celebrateDayComplete]);
 
   const fetchData = async () => {
     try {
@@ -1078,9 +1116,6 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
               return (
                 <Box
                   key={user.id}
-                  // Lets the all-chores-done celebration position itself over
-                  // the column that just went green, instead of landing in the
-                  // middle of the screen next to an unrelated widget (#140).
                   data-chore-user-id={user.id}
                   sx={{
                     flex: '1 1 0',
@@ -1476,9 +1511,7 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
 
         {choreCelebration && (
           <ChoreCelebration
-            username={choreCelebration.username}
-            reward={choreCelebration.reward}
-            anchorRect={choreCelebration.anchorRect}
+            key={choreCelebration.id}
             onDismiss={() => setChoreCelebration(null)}
           />
         )}

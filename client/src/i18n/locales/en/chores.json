@@ -151,9 +151,7 @@
     "failed": "Could not redeem clams."
   },
   "celebration": {
-    "redeemedAPrize": "{{name}} redeemed a prize!",
-    "allChoresDone": "{{name}} finished every chore!",
-    "bonusEarned": "+{{count}} 🥟 daily bonus"
+    "redeemedAPrize": "{{name}} redeemed a prize!"
   },
   "schedules": {
     "definitionsHeading": "Chore Definitions",
