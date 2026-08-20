@@ -9,6 +9,26 @@ vacation mode; metrics-ready chore history; and a bank of built-in avatars.
 
 ---
 
+## Security
+
+### Calendar and photo credentials no longer use a published key
+- Apple app-specific passwords, CalDAV passwords, Immich API keys, and photo
+  source passwords and refresh tokens were encrypted with a key **hardcoded in
+  this repository** unless you set `ENCRYPTION_KEY`. Because the stock
+  `docker-compose.yml` never passed that variable to the backend, setting it had
+  no effect — so in practice every install was using the published key, and
+  anyone with a copy of `tasks.db` could read those credentials.
+- They now use the same auto-generated AES-256-GCM key as the Google and Home
+  Assistant credentials. **Existing values are re-encrypted automatically on
+  first start after upgrading. No action is required.**
+- **You still don't need to configure an encryption key.** One is generated on
+  first start and kept at `data/.encryption-key` inside the mounted volume, so
+  it survives restarts and upgrades. Worth including `homeglow/data` in your
+  backups — losing it means re-entering stored credentials.
+- `ENCRYPTION_KEY` now actually works if you do want to supply your own, and is
+  written to the key file the first time it's seen, so removing it later no
+  longer strands your data.
+
 ## New Features
 
 ### Chore Icons (#141)

@@ -54,6 +54,7 @@ run in ascending order. The registry lives in `schemaMigrations` in
 | 22 | `schema22-prizeRepeatSplit.js` | Adds `prizes.repeatable` (approval returns the offer to the shelf instead of consuming it) and `prize_offers.split_user_ids` (co-spenders sharing the cost evenly). |
 | 23 | `schema23-userSortOrder.js` | Adds `users.sort_order` (admin-chosen display order, issue #134), backfilled from `id` so existing households keep their current order. |
 | 24 | `schema24-choreIcon.js` | Adds `chores.icon` — an optional emoji shown on the dashboard card (issue #141). Stored as the literal character rather than a name, so the picker's bank can grow without a migration. NULL means no icon. |
+| 25 | `schema25-unifyCredentialEncryption.js` | Re-encrypts `calendar_sources.password` and `photo_sources.api_key`/`password`/`refresh_token` from the old AES-256-CBC scheme (which fell back to a key hardcoded in the repo) onto the auto-keyed AES-256-GCM store the rest of the app uses. Skips values already converted, so a replay is a no-op; a row that cannot be decrypted is logged by name and left rather than aborting the batch. |
 
 Each versioned migration runs inside a transaction, reads its context from
 `globalThis.__HOMEGLOW_SCHEMA_MIGRATION_CONTEXT`, and writes the new

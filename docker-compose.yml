@@ -19,6 +19,11 @@ services:
       - NODE_ENV=production
       - PORT=${BACKEND_PORT:-5000}
       - TZ=${TZ:-America/New_York}
+      # Optional. Leave unset and HomeGlow generates its own key on first start,
+      # storing it at data/.encryption-key inside the mounted volume. Set it
+      # only to supply your own key or share one between instances. Empty is
+      # treated as unset, so this line is a no-op unless you fill it in.
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
       # Public demo instance: in-memory DB, no PIN, sample data, uploads/proxy
       # disabled (plugins remain installable — they reset with the demo cycle).
       # Leave unset (false) for normal installs.

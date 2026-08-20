@@ -109,7 +109,14 @@ const googlePhotosPicker = require('./services/googlePhotosPicker');
 const homeAssistant = require('./services/homeAssistant');
 const weatherService = require('./services/weather');
 const { computeSunTimes } = require('./services/weather/sun');
-const { isEncryptionConfigured, getEncryptionStatus } = require('./utils/encryption');
+const {
+  isEncryptionConfigured,
+  getEncryptionStatus,
+  encrypt,
+  decrypt,
+  isLegacyCiphertext,
+  decryptLegacy,
+} = require('./utils/encryption');
 let calendarSyncService = null;
 
 const pluginEvents = require('./services/pluginEvents');
@@ -141,6 +148,7 @@ const schemaMigrations = [
   { schemaId: 22, migrationPath: './migrations/schema22-prizeRepeatSplit', },
   { schemaId: 23, migrationPath: './migrations/schema23-userSortOrder', },
   { schemaId: 24, migrationPath: './migrations/schema24-choreIcon', },
+  { schemaId: 25, migrationPath: './migrations/schema25-unifyCredentialEncryption', },
 ];
 
 const ALLOWED_SCHEDULE_DURATIONS = new Set(['day-of', 'until-completed', 'once-completed']);
@@ -422,31 +430,29 @@ function buildDateCrontab(dateObj) {
   return `0 0 ${dayOfMonth} ${month} *`;
 }
 
-// Encryption utilities for calendar credentials
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'homeglow-default-key-change-in-production-32bytes';
-const ENCRYPTION_ALGORITHM = 'aes-256-cbc';
-
+// Credential encryption for calendar and photo sources.
+//
+// These used to have their own AES-256-CBC scheme keyed on
+// `ENCRYPTION_KEY || <a string hardcoded in this repository>`, which meant that
+// on any install that did not set the variable — including every install using
+// the stock docker-compose, which never forwarded it — Apple app passwords,
+// Immich API keys and photo refresh tokens were encrypted with a published key.
+//
+// They now use the same auto-keyed AES-256-GCM store as the Google and Home
+// Assistant credentials (utils/encryption.js), which generates and persists its
+// own key and needs no configuration. Values written before that change are
+// still read through the legacy path; migration 25 re-encrypts them in place.
 function encryptPassword(password) {
   if (!password) return null;
-  const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32);
-  const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM, key, iv);
-  let encrypted = cipher.update(password, 'utf8', 'hex');
-  encrypted += cipher.final('hex');
-  return iv.toString('hex') + ':' + encrypted;
+  return encrypt(password);
 }
 
 function decryptPassword(encryptedPassword) {
   if (!encryptedPassword) return null;
   try {
-    const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32);
-    const parts = encryptedPassword.split(':');
-    const iv = Buffer.from(parts[0], 'hex');
-    const encrypted = parts[1];
-    const decipher = crypto.createDecipheriv(ENCRYPTION_ALGORITHM, key, iv);
-    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    return decrypted;
+    return isLegacyCiphertext(encryptedPassword)
+      ? decryptLegacy(encryptedPassword)
+      : decrypt(encryptedPassword);
   } catch (error) {
     console.error('Error decrypting password:', error);
     return null;

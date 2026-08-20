@@ -12,16 +12,43 @@ database). This page covers both.
 | `PORT` | `5000` | Port Fastify listens on. |
 | `TZ` | `America/New_York` | IANA timezone. Drives the nightly cron job and date math. Set this to your local zone. |
 | `DB_PATH` | `server/data/tasks.db` | Override the SQLite file location. |
-| `ENCRYPTION_KEY` | _(insecure fallback)_ | 32-byte key used to encrypt stored third-party credentials/tokens. **Set a stable value in production.** Generate with `openssl rand -base64 32`. Changing it invalidates previously stored secrets. |
+| `ENCRYPTION_KEY` | _auto-generated_ | **Optional.** Key used to encrypt stored third-party credentials. If unset, one is generated on first start — see below. Set it only to supply your own key or share one across instances; must decode to 32 bytes (`openssl rand -base64 32`). Changing it after credentials are stored invalidates them. |
 | `NODE_ENV` | — | `production` / `development`. |
 | `HOMEGLOW_DISABLE_BACKGROUND_JOBS` | `0` | Set to `1` to disable the nightly chore-pruning cron (useful in tests). |
 | `HOMEGLOW_DISABLE_CALENDAR_SYNC` | `0` | Set to `1` to disable the calendar sync service. |
 | `DEMO_MODE` | `false` | Set to `true` to run a **public demo instance**: in-memory DB (wiped on stop), admin PIN disabled, sample data seeded and reset every 6h (incl. live demo calendar feeds and a static weather snapshot), and abuse-prone routes (uploads, CORS proxy, OAuth, calendar source management) return 403 — calendar sync only ever fetches the seeded demo feeds. See the [Demo Mode](../guides/demo-mode.md) guide. |
 | `BACKEND_VERSION` / `BACKEND_GIT_COMMIT` / `BACKEND_GITHUB_REPOSITORY` | build metadata | Surfaced by `GET /api/stats`; set by CI. |
 
-If `ENCRYPTION_KEY` is missing or invalid, the server logs a warning at startup and
-disables third-party connections (Google, etc.). To regenerate a random key on
-restart, delete `server/data/.encryption-key`.
+### Encryption key — you do not need to set one
+
+Stored third-party credentials — the Google OAuth client secret and tokens, the
+Home Assistant access token, and calendar and photo source passwords, API keys
+and refresh tokens — are encrypted with AES-256-GCM.
+
+**No configuration is required.** On first start the server generates a random
+32-byte key and writes it to `server/data/.encryption-key` with mode `0600`.
+That path is inside the mounted `data` volume, so the key survives restarts and
+image upgrades. The one thing worth doing is **including `homeglow/data` in your
+backups** — losing that file means re-entering your stored credentials.
+
+Resolution order is `ENCRYPTION_KEY` → the key file → generate a new one. When
+`ENCRYPTION_KEY` is set and no key file exists yet, the supplied key is also
+written to the file, so removing the variable later keeps working rather than
+silently generating a different key.
+
+The server only disables third-party connections when it has no usable key at
+all, which in practice means the key file could not be written (a read-only
+volume or a permissions problem) or a supplied `ENCRYPTION_KEY` does not decode
+to 32 bytes. Both are logged at startup. To rotate to a fresh key, delete
+`server/data/.encryption-key` and restart — stored credentials will need
+re-entering.
+
+> **Before v1.7**, calendar and photo credentials used a separate scheme that
+> fell back to a key hardcoded in this repository whenever `ENCRYPTION_KEY` was
+> unset — which was every install using the stock `docker-compose.yml`, since it
+> never passed the variable through. They now share the key above, and existing
+> values are re-encrypted automatically on upgrade (migration 25). No action is
+> needed.
 
 ### Runtime — frontend (`homeglow-frontend`, Nginx)
 | Variable | Default | Purpose |
