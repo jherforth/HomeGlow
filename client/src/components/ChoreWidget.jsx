@@ -210,9 +210,20 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
       if (message.event !== 'chore.allCompleted') return;
 
       const user = users.find((u) => u.id === message.payload.userId);
+
+      // Measure the celebrating user's column so the card can sit over it.
+      // Null on any display that isn't showing that column right now — the
+      // mobile stack, a tab without the chore widget, a second display — and
+      // the card falls back to the centre of the screen there.
+      const column = document.querySelector(`[data-chore-user-id="${message.payload.userId}"]`);
+      const rect = column ? column.getBoundingClientRect() : null;
+
       setChoreCelebration({
         username: message.payload.username || user?.username || 'Someone',
         reward: message.payload.reward || 0,
+        anchorRect: rect
+          ? { top: rect.top, left: rect.left, width: rect.width, height: rect.height }
+          : null,
       });
       if (soundEnabled) {
         try {
@@ -1067,6 +1078,10 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
               return (
                 <Box
                   key={user.id}
+                  // Lets the all-chores-done celebration position itself over
+                  // the column that just went green, instead of landing in the
+                  // middle of the screen next to an unrelated widget (#140).
+                  data-chore-user-id={user.id}
                   sx={{
                     flex: '1 1 0',
                     minWidth: '180px',
@@ -1463,6 +1478,7 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
           <ChoreCelebration
             username={choreCelebration.username}
             reward={choreCelebration.reward}
+            anchorRect={choreCelebration.anchorRect}
             onDismiss={() => setChoreCelebration(null)}
           />
         )}

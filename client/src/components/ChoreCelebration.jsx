@@ -35,8 +35,56 @@ const shapeStyles = (shape, size, color) => {
   return { width: size, height: size, borderRadius: '2px', backgroundColor: color };
 };
 
-const ChoreCelebration = ({ username, reward, onDismiss }) => {
+// Roughly what the message card measures; used only to keep it on screen when
+// it is anchored near an edge. Exact width does not matter, since the card is
+// centred on this estimate and then clamped.
+const CARD_WIDTH_ESTIMATE = 340;
+const VIEWPORT_MARGIN = 12;
+
+// Place the card over the column that just went green, rather than in the
+// middle of the screen where it reads as unrelated to what changed. The card is
+// wider than a 180-250px column, so it centres on the column and is clamped to
+// the viewport; near an edge it shifts in rather than hanging off.
+const anchoredCardSx = (anchorRect) => {
+  if (!anchorRect) return {};
+
+  const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : CARD_WIDTH_ESTIMATE;
+  const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0;
+
+  const desiredLeft = anchorRect.left + anchorRect.width / 2 - CARD_WIDTH_ESTIMATE / 2;
+  const maxLeft = Math.max(VIEWPORT_MARGIN, viewportWidth - CARD_WIDTH_ESTIMATE - VIEWPORT_MARGIN);
+  const left = Math.min(Math.max(VIEWPORT_MARGIN, desiredLeft), maxLeft);
+
+  // Sit over the upper third of the column, near the avatar and the "All Done"
+  // chip, so the card and the thing it is celebrating are in the same glance.
+  const desiredTop = anchorRect.top + Math.min(anchorRect.height * 0.28, 140);
+  const top = Math.min(Math.max(VIEWPORT_MARGIN, desiredTop), Math.max(VIEWPORT_MARGIN, viewportHeight - 200));
+
+  return {
+    position: 'fixed',
+    top,
+    left,
+    width: CARD_WIDTH_ESTIMATE,
+    maxWidth: `calc(100vw - ${VIEWPORT_MARGIN * 2}px)`,
+  };
+};
+
+// Where the burst radiates from: the centre of the celebrating user's column
+// when we know it, the centre of the screen otherwise.
+const burstOriginSx = (anchorRect) => {
+  if (!anchorRect) {
+    return { position: 'absolute', left: '50%', top: '50%' };
+  }
+  return {
+    position: 'fixed',
+    left: anchorRect.left + anchorRect.width / 2,
+    top: anchorRect.top + Math.min(anchorRect.height / 2, 220),
+  };
+};
+
+const ChoreCelebration = ({ username, reward, anchorRect = null, onDismiss }) => {
   const { t } = useTranslation(['chores']);
+  const originSx = burstOriginSx(anchorRect);
 
   const pieces = useMemo(
     () =>
@@ -118,36 +166,46 @@ const ChoreCelebration = ({ username, reward, onDismiss }) => {
         },
       }}
     >
-      <Box
-        className="chore-shockwave"
-        sx={{
-          position: 'absolute',
-          width: 220,
-          height: 220,
-          borderRadius: '50%',
-          border: '3px solid var(--accent)',
-          animation: 'chore-shockwave 0.9s ease-out both',
-          pointerEvents: 'none',
-        }}
-      />
-
-      {pieces.map((piece) => (
+      {/* Zero-size origin the burst radiates from. Anchoring it to the column
+          means the confetti visibly comes out of the panel that just went
+          green, rather than from the middle of the screen while the card sits
+          somewhere else. */}
+      <Box className="chore-burst-origin" sx={{ ...originSx, width: 0, height: 0, pointerEvents: 'none' }}>
         <Box
-          key={piece.id}
-          className="chore-burst-piece"
+          className="chore-shockwave"
           sx={{
             position: 'absolute',
-            ...shapeStyles(piece.shape, piece.size, piece.color),
-            '--burst-x': `${piece.burstX}px`,
-            '--burst-y': `${piece.burstY}px`,
-            '--drift-x': `${piece.driftX}px`,
-            '--fall-y': `${piece.fallY}px`,
-            '--spin': `${piece.spin}deg`,
-            animation: `chore-burst ${piece.duration}s cubic-bezier(0.15, 0.75, 0.35, 1) ${piece.delay}s both`,
+            width: 220,
+            height: 220,
+            marginLeft: '-110px',
+            marginTop: '-110px',
+            borderRadius: '50%',
+            border: '3px solid var(--accent)',
+            animation: 'chore-shockwave 0.9s ease-out both',
             pointerEvents: 'none',
           }}
         />
-      ))}
+
+        {pieces.map((piece) => (
+          <Box
+            key={piece.id}
+            className="chore-burst-piece"
+            sx={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              ...shapeStyles(piece.shape, piece.size, piece.color),
+              '--burst-x': `${piece.burstX}px`,
+              '--burst-y': `${piece.burstY}px`,
+              '--drift-x': `${piece.driftX}px`,
+              '--fall-y': `${piece.fallY}px`,
+              '--spin': `${piece.spin}deg`,
+              animation: `chore-burst ${piece.duration}s cubic-bezier(0.15, 0.75, 0.35, 1) ${piece.delay}s both`,
+              pointerEvents: 'none',
+            }}
+          />
+        ))}
+      </Box>
 
       <Box
         sx={{
@@ -162,6 +220,9 @@ const ChoreCelebration = ({ username, reward, onDismiss }) => {
           textAlign: 'center',
           maxWidth: '80vw',
           animation: 'chore-badge-pop 0.55s ease-out both',
+          // Overrides the flex centring above when we know where the
+          // celebrating user's column is.
+          ...anchoredCardSx(anchorRect),
         }}
       >
         <Typography sx={{ fontSize: '3.25rem', lineHeight: 1, mb: 1 }}>🏆</Typography>

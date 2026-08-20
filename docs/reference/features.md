@@ -61,7 +61,11 @@ The chore system uses a **three-table model** (see [Database](../architecture/da
   regular chore, a **radial confetti burst + chime** fires on every display,
   driven by the `chore.allCompleted` event. Visually distinct from the prize
   celebration's falling confetti, so the two events are tellable apart at a
-  glance. Fires once per user per day, alongside the daily bonus, from whichever
+  glance. The message card and the burst origin are **anchored over that user's
+  column** — the panel that just turned green — rather than the middle of the
+  screen, so the celebration reads as belonging to the person who earned it. A
+  display that isn't showing that column (the mobile stack, another tab) falls
+  back to centring. Fires once per user per day, alongside the daily bonus, from whichever
   route emptied the list — completing, receiving a transfer, or snoozing the last
   chore out of today. Toggle in **Admin Panel → Chores → Settings** (on by
   default); the toggle is a display preference, so the event still reaches
