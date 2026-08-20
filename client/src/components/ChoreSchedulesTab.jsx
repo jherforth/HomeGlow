@@ -47,6 +47,7 @@ import { API_BASE_URL } from '../utils/apiConfig.js';
 import { CronExpressionParser } from 'cron-parser';
 import { getServerTimezoneSync } from '../utils/timezone.js';
 import SoundPicker from './SoundPicker.jsx';
+import ChoreIconPicker from './ChoreIconPicker.jsx';
 import { useTranslation } from 'react-i18next';
 import { getWeekdayLabels } from '../utils/dateUtils.js';
 import useIsMobile from '../hooks/useIsMobile.js';
@@ -210,7 +211,7 @@ const defaultScheduleForm = {
   can_snooze: true
 };
 
-const defaultChoreForm = { title: '', description: '', clam_value: 0 };
+const defaultChoreForm = { title: '', description: '', clam_value: 0, icon: '' };
 
 export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
   const { t } = useTranslation(['chores', 'common']);
@@ -427,7 +428,12 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
 
   const openEditChore = (chore) => {
     setEditingChore(chore);
-    setChoreForm({ title: chore.title, description: chore.description || '', clam_value: chore.clam_value || 0 });
+    setChoreForm({
+      title: chore.title,
+      description: chore.description || '',
+      clam_value: chore.clam_value || 0,
+      icon: chore.icon || '',
+    });
     setChoreDialogOpen(true);
   };
 
@@ -551,7 +557,13 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
               chores.map(c => (
                 <TableRow key={c.id}>
                   <TableCell data-label={t('common:labels.title')}>
-                    <Typography variant="body2" fontWeight="bold">{c.title}</Typography>
+                    <Typography variant="body2" fontWeight="bold">
+                      {/* Inline rather than its own column: this table stacks
+                          into rows on mobile, and an icon-only column would
+                          become a near-empty labelled row down there. */}
+                      {c.icon && <Box component="span" sx={{ mr: 0.75 }}>{c.icon}</Box>}
+                      {c.title}
+                    </Typography>
                   </TableCell>
                   <TableCell data-label={t('common:labels.description')}>
                     <Typography variant="body2" color="text.secondary">
@@ -773,6 +785,12 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
               onChange={(e) => setChoreForm(f => ({ ...f, clam_value: parseInt(e.target.value) || 0 }))}
               slotProps={{ htmlInput: { min: 0 } }}
               sx={{ width: { xs: '100%', sm: 140 } }}
+            />
+            {/* The icon belongs to the chore, not the schedule, so it is picked
+                here and every schedule of this chore inherits it (issue #141). */}
+            <ChoreIconPicker
+              value={choreForm.icon}
+              onChange={(icon) => setChoreForm(f => ({ ...f, icon }))}
             />
           </Box>
         </DialogContent>

@@ -51,6 +51,12 @@ The chore system uses a **three-table model** (see [Database](../architecture/da
   by summing `chore_history` (no denormalized total). Completing *all* of a user's
   daily chores awards a bonus. **Bonus chores** carry a custom clam value and reset
   to unassigned each night; only one uncompleted bonus chore per user at a time.
+- **Chore icons** (issue #141): a chore can carry an optional emoji, picked from
+  a grouped bank when creating or editing it. On the dashboard the icon **takes
+  the place of the checkmark** while the chore is pending, and reverts to the
+  usual undo arrow once done — so it costs no horizontal space in a per-user
+  column that is only 180–250px wide. Chores without an icon keep the checkmark.
+  The icon belongs to the chore, so every schedule of it shows the same picture.
 - **All-chores-done celebration** (issue #140): when a user finishes their last
   regular chore, a **radial confetti burst + chime** fires on every display,
   driven by the `chore.allCompleted` event. Visually distinct from the prize

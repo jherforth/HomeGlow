@@ -42,6 +42,7 @@ import { playSound, soundUrl } from '../utils/choreSound.js';
 import { formatTime } from '../utils/dateUtils.js';
 import PrizeCelebration from './PrizeCelebration.jsx';
 import ChoreCelebration from './ChoreCelebration.jsx';
+import ChoreIconPicker from './ChoreIconPicker.jsx';
 
 const USERS_UPDATED_EVENT = 'homeglow:users-updated';
 
@@ -70,6 +71,7 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
     description: '',
     assigned_days_of_week: ['monday'],
     clam_value: 0,
+    icon: '',
     is_one_time: false
   });
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -696,7 +698,8 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
       const choreResponse = await axios.post(`${API_BASE_URL}/api/chores`, {
         title: newChore.title,
         description: newChore.description,
-        clam_value: newChore.clam_value
+        clam_value: newChore.clam_value,
+        icon: newChore.icon
       });
 
       const choreId = choreResponse.data.id;
@@ -917,10 +920,20 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
           )}
         </Box>
         <Box sx={{ display: 'flex', gap: 0.5 }}>
+          {/* The chore's icon takes the place of the checkmark while the chore
+              is pending (issue #141). The per-user column is only 180-250px
+              wide, so a separate icon slot would cost 25-35% of the title area;
+              reusing this button costs nothing. The filled accent circle still
+              carries the "tap me" affordance, and completion still flips to an
+              outlined undo, so done-vs-todo reads the same as before. Chores
+              with no icon keep the checkmark. */}
           <IconButton
             color={schedule.completed ? "secondary" : "primary"}
             onClick={() => toggleChoreCompletion(schedule, schedule.completed)}
             size="small"
+            aria-label={schedule.completed
+              ? t('chores:widget.uncompleteAria', { title: schedule.title })
+              : t('chores:widget.completeAria', { title: schedule.title })}
             sx={{
               minWidth: 'auto',
               width: 32,
@@ -933,7 +946,28 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
               }
             }}
           >
-            {schedule.completed ? <Undo fontSize="small" /> : <Check fontSize="small" />}
+            {schedule.completed
+              ? <Undo fontSize="small" />
+              : (schedule.icon
+                ? (
+                  <Box
+                    component="span"
+                    aria-hidden="true"
+                    sx={{
+                      // Matches the optical weight of the 20px checkmark this
+                      // replaces; smaller leaves a conspicuous ring of accent
+                      // colour around the glyph.
+                      fontSize: '1.15rem',
+                      lineHeight: 1,
+                      // Emoji carry their own colour, so drop the white tint
+                      // the checkmark relies on.
+                      filter: 'none',
+                    }}
+                  >
+                    {schedule.icon}
+                  </Box>
+                )
+                : <Check fontSize="small" />)}
           </IconButton>
         </Box>
       </Box>
@@ -1464,6 +1498,12 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
               onChange={(e) => setNewChore({ ...newChore, description: e.target.value })}
               sx={{ mb: 2 }}
             />
+            <Box sx={{ mb: 2 }}>
+              <ChoreIconPicker
+                value={newChore.icon}
+                onChange={(icon) => setNewChore({ ...newChore, icon })}
+              />
+            </Box>
             <FormControl fullWidth sx={{ mb: 2 }}>
               <InputLabel>{t('chores:add.assignToUser')}</InputLabel>
               <Select

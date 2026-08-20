@@ -11,6 +11,22 @@ vacation mode; metrics-ready chore history; and a bank of built-in avatars.
 
 ## New Features
 
+### Chore Icons (#141)
+- A chore can now carry an **emoji**, picked from a grouped bank (bedroom,
+  bathroom, cleaning, kitchen, living areas, pets, outdoors, school) when you
+  create or edit it. Especially useful for kids who aren't reading yet.
+- **It costs no space on the dashboard.** The icon takes the place of the
+  checkmark while the chore is pending and flips back to the usual undo arrow
+  once it's done — so the per-user column, which is only 180–250px wide, doesn't
+  give up any room for the chore title. Chores without an icon look exactly as
+  they do today.
+- Emoji rather than an icon font: it covers the whole requested set (toothbrush,
+  broom, rake, litter box, snow shovel…), renders in colour, and adds nothing to
+  the bundle. Two have no Unicode equivalent and use the nearest sensible stand-in
+  — a cyclone for the vacuum and a chair for the table.
+- The icon belongs to the chore, so every schedule of it shows the same picture,
+  and it appears beside the title in Admin Panel → Chores → Schedules.
+
 ### Chore Completion Celebration (#140)
 - Finishing your **last chore of the day** now sets off a confetti burst and a
   chime on every display, not just the one it was tapped on.

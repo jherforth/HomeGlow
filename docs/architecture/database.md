@@ -53,6 +53,7 @@ run in ascending order. The registry lives in `schemaMigrations` in
 | 21 | `schema21-prizeOffers.js` | Adds `prize_offers` (the prize store: one-time redeemable instances of ledger prizes with the available → requested → redeemed request queue). |
 | 22 | `schema22-prizeRepeatSplit.js` | Adds `prizes.repeatable` (approval returns the offer to the shelf instead of consuming it) and `prize_offers.split_user_ids` (co-spenders sharing the cost evenly). |
 | 23 | `schema23-userSortOrder.js` | Adds `users.sort_order` (admin-chosen display order, issue #134), backfilled from `id` so existing households keep their current order. |
+| 24 | `schema24-choreIcon.js` | Adds `chores.icon` — an optional emoji shown on the dashboard card (issue #141). Stored as the literal character rather than a name, so the picker's bank can grow without a migration. NULL means no icon. |
 
 Each versioned migration runs inside a transaction, reads its context from
 `globalThis.__HOMEGLOW_SCHEMA_MIGRATION_CONTEXT`, and writes the new

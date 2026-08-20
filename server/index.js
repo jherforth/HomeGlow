@@ -140,6 +140,7 @@ const schemaMigrations = [
   { schemaId: 21, migrationPath: './migrations/schema21-prizeOffers', },
   { schemaId: 22, migrationPath: './migrations/schema22-prizeRepeatSplit', },
   { schemaId: 23, migrationPath: './migrations/schema23-userSortOrder', },
+  { schemaId: 24, migrationPath: './migrations/schema24-choreIcon', },
 ];
 
 const ALLOWED_SCHEDULE_DURATIONS = new Set(['day-of', 'until-completed', 'once-completed']);
@@ -2424,6 +2425,20 @@ fastify.delete('/api/devices/:deviceName', async (request, reply) => {
   }
 });
 
+// Chore icons (issue #141) are stored as the literal emoji rather than a name,
+// so the client can grow its bank without a migration and an unrecognized value
+// still renders. The only rules are "empty means none" and a length cap — a
+// single emoji can legitimately be several code points (skin tones, ZWJ
+// sequences), so the cap is generous rather than 1.
+const CHORE_ICON_MAX_LENGTH = 16;
+
+function normalizeChoreIcon(icon) {
+  if (icon === undefined || icon === null) return null;
+  const trimmed = String(icon).trim();
+  if (!trimmed) return null;
+  return trimmed.slice(0, CHORE_ICON_MAX_LENGTH);
+}
+
 // Chore routes (updated for new schema)
 fastify.get('/api/chores', async (request, reply) => {
   try {
@@ -2436,10 +2451,12 @@ fastify.get('/api/chores', async (request, reply) => {
 });
 
 fastify.post('/api/chores', async (request, reply) => {
-  const { title, description, clam_value } = request.body;
+  const { title, description, clam_value, icon } = request.body;
   try {
-    const stmt = db.prepare('INSERT INTO chores (title, description, clam_value) VALUES (?, ?, ?)');
-    const info = stmt.run(title, description, clam_value || 0);
+    const stmt = db.prepare('INSERT INTO chores (title, description, clam_value, icon) VALUES (?, ?, ?, ?)');
+    // Empty string and undefined both mean "no icon"; store NULL so the widget
+    // has a single falsy case to check (issue #141).
+    const info = stmt.run(title, description, clam_value || 0, normalizeChoreIcon(icon));
     return { id: info.lastInsertRowid, success: true };
   } catch (error) {
     console.error('Error adding chore:', error);
@@ -2449,10 +2466,10 @@ fastify.post('/api/chores', async (request, reply) => {
 
 fastify.patch('/api/chores/:id', async (request, reply) => {
   const { id } = request.params;
-  const { title, description, clam_value } = request.body;
+  const { title, description, clam_value, icon } = request.body;
   try {
-    const stmt = db.prepare('UPDATE chores SET title = ?, description = ?, clam_value = ? WHERE id = ?');
-    const info = stmt.run(title, description, clam_value, id);
+    const stmt = db.prepare('UPDATE chores SET title = ?, description = ?, clam_value = ?, icon = ? WHERE id = ?');
+    const info = stmt.run(title, description, clam_value, normalizeChoreIcon(icon), id);
     if (info.changes === 0) {
       return reply.status(404).send({ error: 'Chore not found' });
     }
@@ -2483,7 +2500,7 @@ fastify.delete('/api/chores/:id', async (request, reply) => {
 fastify.get('/api/chore-schedules', async (request, reply) => {
   try {
     const { user_id, visible, usage, chore_id } = request.query;
-    let query = 'SELECT cs.*, c.title, c.description, c.clam_value FROM chore_schedules cs JOIN chores c ON cs.chore_id = c.id';
+    let query = 'SELECT cs.*, c.title, c.description, c.clam_value, c.icon FROM chore_schedules cs JOIN chores c ON cs.chore_id = c.id';
     const conditions = [];
     const params = [];
 
