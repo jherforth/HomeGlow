@@ -3044,6 +3044,25 @@ function awardDailyRegularBonusIfDue(userId, date) {
 
   if (!bonusAlreadyAwarded) {
     db.prepare("INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind) VALUES (?, NULL, ?, ?, ?, 'daily_bonus')").run(userId, date, dailyReward, 'Regular chores');
+
+    // This is the one moment "everything on today's list is done" becomes true
+    // for a user, and every route that can finish someone's day funnels through
+    // here — completing a chore, receiving a transfer, or snoozing the last one
+    // out of today. Emitting from inside the not-already-awarded branch gives
+    // the celebration the same once-per-day semantics as the bonus itself
+    // (issue #140).
+    //
+    // The event is emitted regardless of whether any display is configured to
+    // celebrate: it is a factual domain signal that plugins may want, and the
+    // CHORE_CELEBRATION_ENABLED setting is a presentation preference applied
+    // client-side, exactly as CHORE_SOUND_ENABLED gates playback rather than data.
+    const user = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
+    pluginEvents.emit('chore.allCompleted', {
+      userId,
+      username: user ? user.username : null,
+      date,
+      reward: dailyReward,
+    });
   }
 }
 
@@ -3113,10 +3132,10 @@ fastify.post('/api/chores/complete', async (request, reply) => {
       }
     }
 
-    awardDailyRegularBonusIfDue(user_id, date);
-
-    const totalResult = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(user_id);
-
+    // Announce this completion before awarding the daily bonus, because the
+    // award emits chore.allCompleted. Emitting in the other order would tell a
+    // subscriber the day was finished while the chore that finished it had not
+    // been announced yet — a plugin counting completions would be one short.
     pluginEvents.emit('chore.completed', {
       userId: user_id,
       choreId: schedule.chore_id,
@@ -3124,6 +3143,11 @@ fastify.post('/api/chores/complete', async (request, reply) => {
       clamValue: schedule.clam_value,
       date,
     });
+
+    awardDailyRegularBonusIfDue(user_id, date);
+
+    // Read the total after the award so the response includes the bonus.
+    const totalResult = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(user_id);
 
     return { success: true, clam_total: totalResult.total };
   } catch (error) {

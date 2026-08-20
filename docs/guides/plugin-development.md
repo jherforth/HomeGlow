@@ -224,10 +224,24 @@ const off = HomeGlow.on('clam.withdrawn', (payload, meta) => {
 | `clam.withdrawn` | clams reduced from a user | `{ userId, amount, newTotal }` |
 | `chore.completed` | a chore is completed | `{ userId, choreId, scheduleId, clamValue, date }` |
 | `chore.uncompleted` | a completion is undone | `{ userId, choreId, scheduleId, clamValue, date }` |
+| `chore.allCompleted` | a user's last **regular** chore for the day is done | `{ userId, username, date, reward }` |
 | `prize.redeemed` | a prize-store request is approved | `{ userId, prizeId, offerId, prizeName, cost, newTotal }` |
 
 Declaring an event not in the catalog rejects the install — typos fail loudly.
 Only declared events are ever delivered to your iframe.
+
+**On `chore.allCompleted`:** it fires alongside the daily-completion bonus, so it
+inherits that behaviour exactly — once per user per day, from whichever route
+emptied their list (completing the last chore, receiving a transfer, or snoozing
+one out of today). Undoing the last chore revokes the bonus, so redoing it fires
+again. Bonus chores (`clam_value > 0`) are outside the regular set and never
+trigger it.
+
+It is always emitted regardless of the household's celebration setting — that
+toggle is a display preference applied client-side, so your plugin still sees the
+signal. And it is emitted **after** the `chore.completed` for the chore that
+finished the list, so a counter incremented on `chore.completed` is already
+correct by the time `chore.allCompleted` arrives.
 
 **Important:** events fire in your widget only while it is mounted. They are
 live UI signals, not a durable feed — anything that must not be missed belongs

@@ -306,6 +306,16 @@ need:
 | `clam.deposited` | `POST /api/users/:id/clams/add` succeeds | `{ userId, amount, newTotal }` |
 | `chore.completed` | `POST /api/chores/complete` succeeds | `{ userId, choreId, scheduleId, clamValue, date }` |
 | `chore.uncompleted` | `POST /api/chores/uncomplete` succeeds | `{ userId, choreId, scheduleId, clamValue, date }` — mirror event so reactions can compensate (see `factor` below) |
+| `chore.allCompleted` | the daily-completion bonus is newly awarded (issue #140) | `{ userId, username, date, reward }` |
+
+> **`chore.allCompleted` is emitted from inside `awardDailyRegularBonusIfDue`,
+> not from a route.** That function is the single point where "every regular
+> chore is done" becomes true, and it is already reached from completion,
+> transfer, and snooze, so one emission site covers every route that can finish
+> a user's day. Emitting from the not-already-awarded branch gives it the bonus's
+> own once-per-user-per-day semantics for free. The completion route emits
+> `chore.completed` **before** calling it, so a subscriber is never told the day
+> is finished by a chore it has not yet heard about.
 
 Events are named `domain.pastTenseVerb`. New events are additive. The catalog
 lives in [`server/services/pluginEvents.js`](../../server/services/pluginEvents.js)

@@ -250,6 +250,8 @@
     "rewards": "Rewards",
     "dailyReward": "Daily Completion Clam Reward",
     "dailyRewardHelp": "Clams awarded when a user completes all their daily chores",
+    "celebrationEnable": "Celebrate when someone finishes every chore",
+    "celebrationHelp": "Shows confetti on every display when a user completes their last chore of the day.",
     "soundsHeading": "Chore Due-Time Sounds",
     "soundsEnable": "Enable chore due-time sounds (household-wide master switch)",
     "defaultSoundHelp": "Default sound (used when a chore doesn't pick its own)",

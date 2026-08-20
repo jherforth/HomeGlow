@@ -11,6 +11,22 @@ vacation mode; metrics-ready chore history; and a bank of built-in avatars.
 
 ## New Features
 
+### Chore Completion Celebration (#140)
+- Finishing your **last chore of the day** now sets off a confetti burst and a
+  chime on every display, not just the one it was tapped on.
+- It is a **new effect**, deliberately different from the prize-redemption
+  confetti: a radial firework burst of mixed shapes rather than a curtain of
+  falling pieces, so at a glance you can tell which kind of good news it is.
+- Fires once per person per day, at the same moment the daily bonus is earned —
+  whether the last chore was completed, handed over by a parent, or snoozed out
+  of today. Undoing it and redoing it celebrates again, because the bonus is
+  genuinely re-earned.
+- **Toggle in Admin Panel → Chores → Settings**, on by default. Turning it off is
+  a display preference: plugins still receive the underlying event.
+- Respects `prefers-reduced-motion` — the message stays, the flying pieces don't.
+- Plugin authors get a new catalog event, `chore.allCompleted`
+  (`{ userId, username, date, reward }`).
+
 ### Home Assistant as a Weather Source (#57)
 - **Home Assistant can now supply the weather**, so households already running it
   no longer need an OpenWeatherMap API key. Pick the source in Admin Panel →

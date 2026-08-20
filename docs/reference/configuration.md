@@ -56,6 +56,7 @@ Open with the gear (⚙️) icon. These persist server-side (global settings in 
 | **Connections → Weather** | Provider choice (`WEATHER_PROVIDER`: `openweathermap` \| `homeassistant`), OpenWeatherMap key (`WEATHER_API_KEY`, write-only) | `settings` (global) |
 | **Connections → Home Assistant** | Base URL (`HOME_ASSISTANT_URL`), long-lived token (`HOME_ASSISTANT_TOKEN_ENC`, encrypted + write-only), weather entity (`HOME_ASSISTANT_WEATHER_ENTITY`) | `settings` (global) |
 | **APIs** | ICS calendar URL | `settings` (global) |
+| **Chores → rewards** | Daily completion bonus (`daily_completion_clam_reward`), all-chores-done celebration (`CHORE_CELEBRATION_ENABLED`, default on) | `settings` (global) |
 | **Chores → sounds** | Master enable (`CHORE_SOUND_ENABLED`), default sound (`CHORE_SOUND_DEFAULT`), volume (`CHORE_SOUND_VOLUME`) | `settings` (global) |
 | **Widgets** | Enable/disable built-ins, per-widget auto-refresh interval, transparency | `devices.device_settings_json` (per device) |
 | **Users** | Family members, avatars, clam adjustments | `users`, `chore_history` |

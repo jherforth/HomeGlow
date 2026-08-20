@@ -179,6 +179,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     WEATHER_PROVIDER: 'openweathermap',
     PROXY_WHITELIST: '',
     daily_completion_clam_reward: '2',
+    CHORE_CELEBRATION_ENABLED: 'true',
     CHORE_SOUND_ENABLED: 'false',
     CHORE_SOUND_DEFAULT: '',
     CHORE_SOUND_VOLUME: '100'
@@ -612,13 +613,23 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     }
   };
 
+  // The celebration fires at exactly the moment the daily reward is earned, so
+  // the two save together rather than needing their own button (issue #140).
   const saveDailyClamReward = async () => {
     setIsLoading(true);
     try {
-      await axios.post(`${API_BASE_URL}/api/settings`, {
-        key: 'daily_completion_clam_reward',
-        value: settings.daily_completion_clam_reward || '2',
-      });
+      await Promise.all([
+        axios.post(`${API_BASE_URL}/api/settings`, {
+          key: 'daily_completion_clam_reward',
+          value: settings.daily_completion_clam_reward || '2',
+        }),
+        axios.post(`${API_BASE_URL}/api/settings`, {
+          key: 'CHORE_CELEBRATION_ENABLED',
+          value: settings.CHORE_CELEBRATION_ENABLED === false || settings.CHORE_CELEBRATION_ENABLED === 'false'
+            ? 'false'
+            : 'true',
+        }),
+      ]);
       setSaveMessage({ show: true, type: 'success', text: t('admin:messages.clamRewardSaved') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } catch (error) {
@@ -3412,9 +3423,26 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                   startIcon={<Save />}
                   sx={{ alignSelf: { xs: 'stretch', sm: 'center' }, mt: { xs: 0, sm: 1 } }}
                 >
-                  {isLoading ? 'Saving...' : 'Save'}
+                  {isLoading ? t('common:state.saving') : t('common:actions.save')}
                 </Button>
               </Box>
+
+              <FormControlLabel
+                sx={{ mt: 1 }}
+                control={
+                  <Switch
+                    checked={settings.CHORE_CELEBRATION_ENABLED !== 'false' && settings.CHORE_CELEBRATION_ENABLED !== false}
+                    onChange={(e) => setSettings(prev => ({
+                      ...prev,
+                      CHORE_CELEBRATION_ENABLED: e.target.checked ? 'true' : 'false',
+                    }))}
+                  />
+                }
+                label={t('admin:chores.celebrationEnable')}
+              />
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                {t('admin:chores.celebrationHelp')}
+              </Typography>
             </Box>
 
             <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>

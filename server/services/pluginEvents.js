@@ -13,6 +13,7 @@ const PLUGIN_EVENT_CATALOG = Object.freeze([
     'clam.withdrawn',    // { userId, amount, newTotal }
     'chore.completed',   // { userId, choreId, scheduleId, clamValue, date }
     'chore.uncompleted', // { userId, choreId, scheduleId, clamValue, date } — mirror of chore.completed
+    'chore.allCompleted',// { userId, username, date, reward } — every regular chore done for the day (issue #140)
     'prize.redeemed',    // { userId, prizeId, offerId, prizeName, cost, newTotal }
 ]);
 

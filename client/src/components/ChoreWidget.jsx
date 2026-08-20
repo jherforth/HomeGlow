@@ -41,6 +41,7 @@ import { subscribePluginEvents } from '../utils/pluginEventBridge.js';
 import { playSound, soundUrl } from '../utils/choreSound.js';
 import { formatTime } from '../utils/dateUtils.js';
 import PrizeCelebration from './PrizeCelebration.jsx';
+import ChoreCelebration from './ChoreCelebration.jsx';
 
 const USERS_UPDATED_EVENT = 'homeglow:users-updated';
 
@@ -79,6 +80,8 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
   const [deviceSettingsLoaded, setDeviceSettingsLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [dailyClamReward, setDailyClamReward] = useState(2);
+  // Household toggle for the all-chores-done celebration (issue #140).
+  const [celebrationEnabled, setCelebrationEnabled] = useState(true);
   // Long-press / right-click chore menu and its follow-up dialogs (issue #122).
   const [choreMenu, setChoreMenu] = useState({ position: null, schedule: null });
   const [transferDialog, setTransferDialog] = useState({ open: false, schedule: null, targetUserId: null, mode: 'keep', bonus: 1 });
@@ -89,6 +92,7 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
   const [prizeOffers, setPrizeOffers] = useState([]);
   const [quickSpend, setQuickSpend] = useState({ open: false, user: null, amount: '', note: '' });
   const [celebration, setCelebration] = useState(null); // { username, prizeName }
+  const [choreCelebration, setChoreCelebration] = useState(null); // { username, reward }
   // Cost splitting: which offer is in split-select mode and which kids are in.
   const [splitDraft, setSplitDraft] = useState({ offerId: null, userIds: [] });
   const longPressTimerRef = useRef(null);
@@ -193,6 +197,31 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
     });
   }, [users, soundEnabled]);
 
+  // Finishing every regular chore for the day celebrates the same way, on every
+  // display (issue #140). The server emits chore.allCompleted once per user per
+  // day, from whichever route finished their list — completing the last chore,
+  // receiving a transfer, or snoozing it out of today.
+  useEffect(() => {
+    if (!celebrationEnabled) return undefined;
+
+    return subscribePluginEvents((message) => {
+      if (message.event !== 'chore.allCompleted') return;
+
+      const user = users.find((u) => u.id === message.payload.userId);
+      setChoreCelebration({
+        username: message.payload.username || user?.username || 'Someone',
+        reward: message.payload.reward || 0,
+      });
+      if (soundEnabled) {
+        try {
+          playSound(soundUrl('chime.wav'), 0.8);
+        } catch { /* sound is best-effort */ }
+      }
+      // The daily bonus landed, so balances moved.
+      void fetchUsers();
+    });
+  }, [users, soundEnabled, celebrationEnabled]);
+
   const fetchData = async () => {
     try {
       await Promise.all([
@@ -217,6 +246,10 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
       if (response.data.daily_completion_clam_reward) {
         setDailyClamReward(parseInt(response.data.daily_completion_clam_reward, 10));
       }
+      // Defaults on: the celebration is the point of the feature, and the
+      // setting only exists once a parent has turned it off (issue #140).
+      setCelebrationEnabled(response.data.CHORE_CELEBRATION_ENABLED !== 'false'
+        && response.data.CHORE_CELEBRATION_ENABLED !== false);
     } catch (error) {
       console.error('Error fetching settings:', error);
     }
@@ -1125,7 +1158,11 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
           fullWidth
         >
           <DialogTitle>
-            <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {/* component="div" because DialogTitle already renders an <h2>;
+                without it this nests an <h6> inside it, which React reports as
+                a hydration error. ClamValueModal and TabIconModal already do
+                this — this one was the odd one out. */}
+            <Typography variant="h6" component="div" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               {t('chores:prizeStore.title')}
             </Typography>
           </DialogTitle>
@@ -1385,6 +1422,14 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
             username={celebration.username}
             prizeName={celebration.prizeName}
             onDismiss={() => setCelebration(null)}
+          />
+        )}
+
+        {choreCelebration && (
+          <ChoreCelebration
+            username={choreCelebration.username}
+            reward={choreCelebration.reward}
+            onDismiss={() => setChoreCelebration(null)}
           />
         )}
 

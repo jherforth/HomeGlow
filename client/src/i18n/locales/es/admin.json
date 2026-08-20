@@ -250,6 +250,8 @@
     "rewards": "Recompensas",
     "dailyReward": "Recompensa diaria en almejas",
     "dailyRewardHelp": "Almejas que se dan cuando alguien completa todas sus tareas del día",
+    "celebrationEnable": "Celebrar cuando alguien termina todas las tareas",
+    "celebrationHelp": "Muestra confeti en todas las pantallas cuando alguien completa su última tarea del día.",
     "soundsHeading": "Sonidos de vencimiento de tareas",
     "soundsEnable": "Activar los sonidos de vencimiento (interruptor general del hogar)",
     "defaultSoundHelp": "Sonido predeterminado (se usa cuando una tarea no elige el suyo)",

@@ -51,6 +51,16 @@ The chore system uses a **three-table model** (see [Database](../architecture/da
   by summing `chore_history` (no denormalized total). Completing *all* of a user's
   daily chores awards a bonus. **Bonus chores** carry a custom clam value and reset
   to unassigned each night; only one uncompleted bonus chore per user at a time.
+- **All-chores-done celebration** (issue #140): when a user finishes their last
+  regular chore, a **radial confetti burst + chime** fires on every display,
+  driven by the `chore.allCompleted` event. Visually distinct from the prize
+  celebration's falling confetti, so the two events are tellable apart at a
+  glance. Fires once per user per day, alongside the daily bonus, from whichever
+  route emptied the list — completing, receiving a transfer, or snoozing the last
+  chore out of today. Toggle in **Admin Panel → Chores → Settings** (on by
+  default); the toggle is a display preference, so the event still reaches
+  plugins when it is off. Honours `prefers-reduced-motion` by keeping the message
+  and dropping the flying pieces.
 - **The prize store** (spending mechanism): `prizes` is the definitions ledger
   in Prize Management; parents stock the store with offers (`prize_offers`).
   Kids browse the 🛍️ Prize Store on the dashboard and **request** an offer;
