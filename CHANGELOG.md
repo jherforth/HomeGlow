@@ -11,6 +11,22 @@ vacation mode; metrics-ready chore history; and a bank of built-in avatars.
 
 ## Security
 
+### Certificate verification is no longer disabled process-wide (#139)
+- The CORS proxy used to set `NODE_TLS_REJECT_UNAUTHORIZED=0` the first time it
+  saw any `https://` URL. That turned off certificate verification for the
+  **entire backend process** — including the Google OAuth token exchange, iCloud
+  CalDAV, and every calendar and photo fetch — and never turned it back on.
+- Verification is now decided per request from the target's address. Public
+  hosts are **always** verified.
+- **Self-hosted setups got better, not worse.** A LAN service with a self-signed
+  certificate — Immich, Home Assistant, a NAS serving an ICS feed — previously
+  worked only *after* something tripped that global switch, so it failed on a
+  fresh boot and started working later. Private addresses (RFC1918, loopback,
+  `.local`, `.lan`, `.internal`) now accept a self-signed certificate reliably,
+  and it's logged when they do.
+- Installs running entirely over plain HTTP, on a LAN or on localhost, are
+  unaffected — no TLS is involved in those requests at all.
+
 ### Calendar and photo credentials no longer use a published key
 - Apple app-specific passwords, CalDAV passwords, Immich API keys, and photo
   source passwords and refresh tokens were encrypted with a key **hardcoded in

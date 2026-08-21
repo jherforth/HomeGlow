@@ -11,6 +11,7 @@
 // reason weather moved server-side at all; see docs/reference/configuration.md.
 
 const { encrypt, decrypt, isEncryptionConfigured } = require('../utils/encryption');
+const { fetchTlsOptions, isCertificateVerificationSkipped } = require('../utils/outboundTls');
 
 const URL_KEY = 'HOME_ASSISTANT_URL';
 const TOKEN_KEY = 'HOME_ASSISTANT_TOKEN_ENC';
@@ -126,6 +127,10 @@ async function homeAssistantFetch(db, method, apiPath, body) {
             Authorization: `Bearer ${token}`,
             Accept: 'application/json',
         },
+        // Home Assistant is almost always on the household's own network, often
+        // behind a self-signed certificate. Accept one for a private address,
+        // never for a public one (issue #139).
+        ...fetchTlsOptions(url),
     };
     if (body !== undefined) {
         init.headers['Content-Type'] = 'application/json';
@@ -201,6 +206,9 @@ async function testConnection(db) {
             ok: true,
             message: locationName ? `Connected to ${locationName}.` : 'Connected to Home Assistant.',
             version,
+            // Surfaced so the Admin Panel can say so rather than silently
+            // trusting whatever certificate the LAN handed us.
+            selfSignedAccepted: isCertificateVerificationSkipped(`${baseUrl}/api/`),
         };
     } catch (error) {
         return { ok: false, message: error.message || 'Connection failed.' };

@@ -50,6 +50,35 @@ re-entering.
 > values are re-encrypted automatically on upgrade (migration 25). No action is
 > needed.
 
+### Outbound TLS — self-signed certificates on your own network
+
+HomeGlow talks to two kinds of host and treats their certificates differently.
+There is nothing to configure.
+
+| Target | Certificate policy |
+| --- | --- |
+| `http://` anything | No TLS involved. Installs running entirely over plain HTTP, on a LAN or on localhost, are unaffected. |
+| `https://` **public** host (Google, iCloud, OpenWeatherMap, a hosted ICS feed) | **Always verified.** A bad certificate here is an attack, and it is the only thing protecting an OAuth refresh token in transit. |
+| `https://` **private** host | **Self-signed accepted**, and logged when it happens. |
+
+"Private" means loopback, RFC1918 (`10/8`, `172.16/12`, `192.168/16`),
+link-local, IPv6 unique-local/loopback, or a hostname ending in `.local`,
+`.lan`, `.internal`, `.home` or `.home.arpa`. That covers the normal
+self-hosted case — Immich, Home Assistant or a NAS on your own network, where no
+public CA will ever issue a certificate for `192.168.1.50`.
+
+The match is on the literal hostname, with no DNS lookup. One honest limitation
+follows: a name like `myserver.local` that actually resolves to a public address
+is still treated as local.
+
+> **Before v1.7**, the CORS proxy set `NODE_TLS_REJECT_UNAUTHORIZED=0` the first
+> time it saw any `https://` URL, which disabled certificate verification for
+> the whole backend process — Google token exchanges included — and never
+> restored it. It also meant self-signed LAN services only worked *after*
+> something happened to trip that switch, so they failed on a fresh boot. Both
+> are fixed: the decision is per request, and the LAN case is now deterministic
+> (issue #139).
+
 ### Runtime — frontend (`homeglow-frontend`, Nginx)
 | Variable | Default | Purpose |
 | --- | --- | --- |

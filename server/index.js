@@ -117,6 +117,31 @@ const {
   isLegacyCiphertext,
   decryptLegacy,
 } = require('./utils/encryption');
+const { httpsAgentFor, isCertificateVerificationSkipped } = require('./utils/outboundTls');
+
+// Certificate policy for every outbound axios request, decided per URL from the
+// target's address class (issue #139). Registered on the default axios instance,
+// which is shared by every module that requires axios — the calendar sync
+// service and the Apple CalDAV client included — so no call site has to remember
+// this, and a new one cannot forget it.
+//
+// Public hosts are always verified. Private ones (RFC1918, loopback, .local and
+// friends) accept a self-signed certificate, because that is the normal case for
+// a NAS or a photo server on the household's own network and there is no public
+// CA that would ever issue for 192.168.1.50.
+axios.interceptors.request.use((config) => {
+  try {
+    const resolved = config.baseURL && !/^https?:\/\//i.test(config.url || '')
+      ? new URL(config.url || '', config.baseURL)
+      : new URL(config.url);
+    const agent = httpsAgentFor(resolved);
+    if (agent) config.httpsAgent = agent;
+  } catch (_) {
+    // Not a URL we can classify; axios will fail on it anyway, and leaving the
+    // config untouched means Node's default (verify) applies.
+  }
+  return config;
+});
 let calendarSyncService = null;
 
 const pluginEvents = require('./services/pluginEvents');
@@ -4359,6 +4384,8 @@ fastify.get('/api/proxy', async (request, reply) => {
 
     console.log(`Proxying request to whitelisted domain: ${targetUrl}`);
 
+    const proxyHttpsAgent = httpsAgentFor(targetUrl);
+
     // Configure axios for both HTTP and HTTPS
     const axiosConfig = {
       timeout: 15000, // 15 second timeout
@@ -4370,17 +4397,16 @@ fastify.get('/api/proxy', async (request, reply) => {
       maxRedirects: 5,
       validateStatus: function (status) {
         return status < 500; // Resolve only if the status code is less than 500
-      }
+      },
+      // Certificate policy is decided per request from the target's address
+      // class (issue #139). This used to set NODE_TLS_REJECT_UNAUTHORIZED='0',
+      // which disabled verification for the whole process — every later Google
+      // token exchange included — and never restored it.
+      ...(proxyHttpsAgent ? { httpsAgent: proxyHttpsAgent } : {}),
     };
 
-    // For HTTP requests, ensure we don't have HTTPS-specific configurations
-    if (target.protocol === 'http:') {
-      console.log('Making HTTP request (not HTTPS)');
-      // No special HTTPS agent needed for HTTP
-    } else {
-      console.log('Making HTTPS request');
-      // For HTTPS, we might need to handle self-signed certificates
-      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; // Only for development
+    if (isCertificateVerificationSkipped(targetUrl)) {
+      console.log(`Proxy: ${targetHostname} is a private address; accepting a self-signed certificate.`);
     }
 
     console.log('Making axios request with config:', axiosConfig);
