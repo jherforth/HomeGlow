@@ -12,8 +12,9 @@ ships no shared credentials, so nothing about your calendar or photos passes
 through anyone else's project.
 
 > **This takes about ten minutes**, and most of it is in the Google Cloud Console
-> rather than HomeGlow. The two steps people miss are **enabling the APIs**
-> (§2 — there are *two* of them) and **the redirect URI scheme** (§3).
+> rather than HomeGlow. The two steps people miss are **enabling the right
+> Photos API** (§2 — two have nearly identical names) and **the redirect URI
+> scheme** (§3).
 
 ## 1. Create the OAuth client
 
@@ -40,12 +41,16 @@ Under **APIs & Services → Library**, enable:
 | API | Needed for |
 |---|---|
 | **Google Calendar API** | the Calendar widget |
-| **Google Photos Library API** | the Photos widget |
-| **Google Photos Picker API** | the Photos widget — **a separate API from the one above** |
+| **Google Photos Picker API** | the Photo widget |
 
-Photos needs **both** of the last two. Enabling only the Library API leaves photo
-picking failing with a 403 that names the Picker API. Google caches the
-disabled state briefly, so give it a minute or two before retrying.
+**Enable the Picker API, not the Library API.** The two have confusingly similar
+names and it is easy to enable the wrong one: picking photos goes through
+`photospicker.googleapis.com`, and downloads come straight from the URL the picker
+hands back. The older `photoslibrary.googleapis.com` is not used by this flow.
+
+If you enable the wrong one, picking fails with a 403 whose message names the API
+you are missing — read it rather than guessing. Google caches the disabled state
+briefly, so give it a minute or two before retrying.
 
 ## 3. Give HomeGlow the credentials
 
@@ -81,14 +86,15 @@ Once connected, the panel shows the account and what it granted.
 
 ## 5. Calendars
 
-**Admin Panel → Calendar sources → Add source → Google.** Pick which of the
-account's calendars to show; each keeps its own colour in the Calendar widget.
-Calendars shared with the account appear alongside its own.
+**Calendar widget → settings → Add source → Google.** Calendar sources are
+configured on the widget itself, not in the Admin Panel — the same place photo
+sources live. Pick which of the account's calendars to show; each keeps its own
+colour. Calendars shared with the account appear alongside its own.
 
 ## 6. Photos
 
 **Photo widget → settings → Add source → type `Google Photos`.** Save the source
-first, then use **Choose photos**. That opens Google's own picker in a new tab,
+first, then use **Pick photos in Google Photos**. That opens Google's own picker in a new tab,
 where you select the photos you want. HomeGlow polls until you are done, then
 downloads the selected photos and lists them, with a delete button per photo.
 
@@ -124,6 +130,6 @@ Two things do change under verification pressure, and both are worth knowing:
 |---|---|
 | `Error 400: redirect_uri_mismatch` | The Redirect URI in HomeGlow and the one registered in the Cloud Console differ. Compare them character for character, including the scheme — see §3. |
 | `Error 400: policy_enforced` | The Google account is enrolled in Advanced Protection, which refuses unverified apps. Use a different account. |
-| Photo picking fails, or the photo list stays empty | One of the two Photos APIs is not enabled — see §2. The Picker API is separate from the Library API. |
+| Photo picking fails with a 403 | The **Photos Picker API** is not enabled — see §2. Note it is a different API from the similarly named Photos Library API; the error message names the one you are missing. |
 | Connection drops every week | The OAuth consent screen is still in *Testing*. Set it to *In production*. |
 | Calendar events do not appear | Check the calendar is selected in **Calendar sources**, and that the Google Calendar API is enabled. |
