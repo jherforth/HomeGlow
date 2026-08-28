@@ -35,6 +35,7 @@
     "type": "Tipo",
     "immich": "Immich",
     "homeglow": "Fotos de HomeGlow",
+    "google": "Google Fotos",
     "immichUrl": "URL del servidor Immich",
     "immichUrlPlaceholder": "La URL de tu servidor Immich",
     "apiKey": "Clave de API",
@@ -45,7 +46,23 @@
     "uploadExplain": "Sube fotos directamente desde tu dispositivo. Se guardarán en tu servidor HomeGlow y se mostrarán en este widget.",
     "openUploadPage": "Abrir la página de subida",
     "mobileHint": "La página de subida está adaptada al móvil: ábrela en tu teléfono para subir fotos directamente desde tu galería.",
-    "testConnection": "Probar conexión"
+    "testConnection": "Probar conexión",
+    "googlePicker": {
+      "explain": "Elige fotos desde tu cuenta de Google. Se descargarán a tu servidor de HomeGlow para que sigan funcionando aunque caduque la sesión compartida.",
+      "pickPhotos": "Elegir fotos en Google Fotos",
+      "waiting": "Esperando a que elijas fotos en Google Fotos…",
+      "popupBlocked": "Tu navegador bloqueó la ventana de Google Fotos.",
+      "openManually": "Ábrela manualmente",
+      "cancel": "Cancelar",
+      "timedOut": "Se agotó el tiempo esperando tu selección en Google Fotos. Puedes intentarlo de nuevo.",
+      "startFailed": "No se pudo iniciar la sesión del selector de Google Fotos.",
+      "ingestFailed": "No se pudieron descargar las fotos que elegiste.",
+      "result": "Añadidas {{added}}, omitidas {{skipped}}, fallidas {{failed}} de {{total}}.",
+      "noAccount": "Primero conecta una cuenta de Google desde el Panel de administración → pestaña Conexiones y luego vuelve aquí.",
+      "missingScope": "Esta conexión de Google no incluye el permiso de Fotos. Vuelve a conectarla desde el Panel de administración → Conexiones con la opción de Fotos activada.",
+      "pickedTitle": "Fotos elegidas ({{count}})",
+      "pickedEmpty": "Aún no has elegido fotos. Usa el botón de arriba para elegir algunas."
+    }
   },
   "confirm": {
     "deleteSource": "¿Seguro que quieres eliminar esta fuente de fotos?"

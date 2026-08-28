@@ -35,6 +35,7 @@
     "type": "Type",
     "immich": "Immich",
     "homeglow": "HomeGlow Photos",
+    "google": "Google Photos",
     "immichUrl": "Immich Server URL",
     "immichUrlPlaceholder": "Your Immich server URL",
     "apiKey": "API Key",
@@ -45,7 +46,23 @@
     "uploadExplain": "Upload photos directly from your device. They will be stored on your HomeGlow server and displayed in this widget.",
     "openUploadPage": "Open upload page",
     "mobileHint": "The upload page is mobile-friendly—open it on your phone to upload photos straight from your camera roll.",
-    "testConnection": "Test Connection"
+    "testConnection": "Test Connection",
+    "googlePicker": {
+      "explain": "Pick photos from your Google account. They will be downloaded to your HomeGlow server so they keep working even if the shared session expires.",
+      "pickPhotos": "Pick photos in Google Photos",
+      "waiting": "Waiting for you to choose photos in Google Photos…",
+      "popupBlocked": "Your browser blocked the Google Photos window.",
+      "openManually": "Open it manually",
+      "cancel": "Cancel",
+      "timedOut": "Timed out waiting for a Google Photos selection. You can try again.",
+      "startFailed": "Could not start a Google Photos picker session.",
+      "ingestFailed": "Could not download the photos you picked.",
+      "result": "Added {{added}}, skipped {{skipped}}, failed {{failed}} of {{total}}.",
+      "noAccount": "Connect a Google account first from the Admin Panel → Connections tab, then come back here.",
+      "missingScope": "This Google connection does not include Photos permission. Reconnect from Admin Panel → Connections with the Photos option enabled.",
+      "pickedTitle": "Picked photos ({{count}})",
+      "pickedEmpty": "No photos picked yet. Use the pick button above to choose some."
+    }
   },
   "confirm": {
     "deleteSource": "Are you sure you want to delete this photo source?"

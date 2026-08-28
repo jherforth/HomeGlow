@@ -26,6 +26,18 @@ const PhotoWidget = ({ refreshNonce = 0, isActive = true }) => {
   const [testingConnection, setTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState(null);
   const [savingSource, setSavingSource] = useState(false);
+  const [googleStatus, setGoogleStatus] = useState(null);
+  const [googleStatusLoading, setGoogleStatusLoading] = useState(false);
+  const [pickerWaiting, setPickerWaiting] = useState(false);
+  const [pickerUri, setPickerUri] = useState(null);
+  const [popupBlocked, setPopupBlocked] = useState(false);
+  const [pickerError, setPickerError] = useState(null);
+  const [pickerResult, setPickerResult] = useState(null);
+  const [pickedItems, setPickedItems] = useState([]);
+  const [pickedLoading, setPickedLoading] = useState(false);
+  const pollIntervalRef = useRef(null);
+  const pollTimeoutRef = useRef(null);
+  const pickerActiveRef = useRef(false);
   const [isPlaying, setIsPlaying] = useState(true);
   const [slideshowInterval, setSlideshowInterval] = useState(5000);
   const [photosPerView, setPhotosPerView] = useState(1);
@@ -211,6 +223,164 @@ const PhotoWidget = ({ refreshNonce = 0, isActive = true }) => {
       setSavingSource(false);
     }
   };
+
+  // "5s" / "1799.969983s" → seconds as a number. Google returns picker
+  // pollingConfig values as duration strings, not numbers.
+  const parseDurationSeconds = (v) => {
+    if (typeof v === 'number' && Number.isFinite(v)) return v;
+    if (typeof v !== 'string') return null;
+    const m = v.match(/^([\d.]+)s?$/);
+    return m ? parseFloat(m[1]) : null;
+  };
+
+  const stopPicker = () => {
+    pickerActiveRef.current = false;
+    if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
+    if (pollTimeoutRef.current) { clearTimeout(pollTimeoutRef.current); pollTimeoutRef.current = null; }
+    setPickerWaiting(false);
+    setPickerUri(null);
+    setPopupBlocked(false);
+  };
+
+  const fetchGoogleStatus = async () => {
+    setGoogleStatusLoading(true);
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/connections/google/status`);
+      setGoogleStatus(response.data);
+    } catch (error) {
+      console.error('Error fetching Google connection status:', error);
+      setGoogleStatus(null);
+    } finally {
+      setGoogleStatusLoading(false);
+    }
+  };
+
+  const fetchPickedMedia = async (sourceId) => {
+    setPickedLoading(true);
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/photo-sources/${sourceId}/picked`);
+      setPickedItems(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Error listing picked media:', error);
+      setPickedItems([]);
+    } finally {
+      setPickedLoading(false);
+    }
+  };
+
+  const handleDeletePicked = async (mediaRowId) => {
+    if (!editingSource) return;
+    try {
+      await axios.delete(`${API_BASE_URL}/api/photo-sources/${editingSource.id}/picked/${mediaRowId}`);
+      await fetchPickedMedia(editingSource.id);
+      await fetchPhotos();
+    } catch (error) {
+      console.error('Error deleting picked media:', error);
+    }
+  };
+
+  const ingestPickedSession = async (sourceId) => {
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/photo-sources/${sourceId}/picker-session/ingest`);
+      setPickerResult(response.data);
+      await fetchPickedMedia(sourceId);
+      await fetchPhotos();
+    } catch (error) {
+      console.error('Error ingesting picked media:', error);
+      setPickerError(error.response?.data?.error || t('photos:source.googlePicker.ingestFailed'));
+    }
+  };
+
+  const handleStartPicker = async () => {
+    if (!editingSource) return;
+    setPickerError(null);
+    setPickerResult(null);
+    setPickerWaiting(true);
+    let session;
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/photo-sources/${editingSource.id}/picker-session`);
+      session = response.data;
+    } catch (error) {
+      console.error('Error creating picker session:', error);
+      setPickerWaiting(false);
+      setPickerError(error.response?.data?.error || t('photos:source.googlePicker.startFailed'));
+      return;
+    }
+
+    const uri = session.pickerUri;
+    setPickerUri(uri);
+
+    const opened = uri ? window.open(uri, '_blank') : null;
+    if (opened) {
+      // Sever the opener reference so the Google-hosted page can't script back.
+      try { opened.opener = null; } catch (_) { /* cross-origin */ }
+    } else {
+      setPopupBlocked(true);
+    }
+
+    const pollSecs = parseDurationSeconds(session.pollingConfig?.pollInterval) || 5;
+    const timeoutSecs = parseDurationSeconds(session.pollingConfig?.timeoutIn) || 1800;
+    const sourceId = editingSource.id;
+
+    pickerActiveRef.current = true;
+
+    pollIntervalRef.current = setInterval(async () => {
+      if (!pickerActiveRef.current) return;
+      try {
+        const poll = await axios.get(`${API_BASE_URL}/api/photo-sources/${sourceId}/picker-session`);
+        if (poll.data?.mediaItemsSet && pickerActiveRef.current) {
+          stopPicker();
+          await ingestPickedSession(sourceId);
+        }
+      } catch (error) {
+        console.error('Error polling picker session:', error);
+      }
+    }, Math.max(1, pollSecs) * 1000);
+
+    pollTimeoutRef.current = setTimeout(() => {
+      if (pickerActiveRef.current) {
+        stopPicker();
+        setPickerError(t('photos:source.googlePicker.timedOut'));
+      }
+    }, Math.max(1, timeoutSecs) * 1000);
+  };
+
+  const handleCancelPicker = async () => {
+    const sourceId = editingSource?.id;
+    stopPicker();
+    if (sourceId) {
+      try {
+        await axios.delete(`${API_BASE_URL}/api/photo-sources/${sourceId}/picker-session`);
+      } catch (error) {
+        console.error('Error cancelling picker session:', error);
+      }
+    }
+  };
+
+  // Load Google status + picked media when the dialog opens on a GooglePhotos source.
+  useEffect(() => {
+    if (showSourceDialog && sourceForm.type === 'GooglePhotos') {
+      fetchGoogleStatus();
+      if (editingSource) {
+        fetchPickedMedia(editingSource.id);
+      } else {
+        setPickedItems([]);
+      }
+    }
+  }, [showSourceDialog, sourceForm.type, editingSource?.id]);
+
+  // Any time the dialog closes, tear down picker state so no timer survives.
+  useEffect(() => {
+    if (!showSourceDialog) {
+      stopPicker();
+      setPickerError(null);
+      setPickerResult(null);
+    }
+  }, [showSourceDialog]);
+
+  useEffect(() => {
+    return () => stopPicker();
+  }, []);
 
   const handleSettingsClick = (event) => {
     setSettingsAnchor(event.currentTarget);
@@ -589,6 +759,7 @@ const PhotoWidget = ({ refreshNonce = 0, isActive = true }) => {
             >
               <MenuItem value="Immich">{t('photos:source.immich')}</MenuItem>
               <MenuItem value="HomeGlowPhotos">{t('photos:source.homeglow')}</MenuItem>
+              <MenuItem value="GooglePhotos">{t('photos:source.google')}</MenuItem>
             </Select>
           </FormControl>
 
@@ -621,6 +792,129 @@ const PhotoWidget = ({ refreshNonce = 0, isActive = true }) => {
                 helperText={t('photos:source.albumIdHelp')}
               />
             </>
+          )}
+
+          {sourceForm.type === 'GooglePhotos' && (
+            <Box sx={{ mt: 2 }}>
+              {!editingSource ? (
+                <Alert severity="info">
+                  {t('photos:source.saveFirst')}
+                </Alert>
+              ) : googleStatusLoading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                  <CircularProgress size={24} />
+                </Box>
+              ) : !googleStatus?.account ? (
+                <Alert severity="warning">
+                  {t('photos:source.googlePicker.noAccount')}
+                </Alert>
+              ) : !(googleStatus.account.scopes || '').includes('photoslibrary.readonly.appcreateddata') ? (
+                <Alert severity="warning">
+                  {t('photos:source.googlePicker.missingScope')}
+                </Alert>
+              ) : (
+                <>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    {t('photos:source.googlePicker.explain')}
+                  </Typography>
+                  {!pickerWaiting ? (
+                    <Button
+                      type="button"
+                      variant="contained"
+                      startIcon={<CloudUpload />}
+                      onClick={handleStartPicker}
+                    >
+                      {t('photos:source.googlePicker.pickPhotos')}
+                    </Button>
+                  ) : (
+                    <Box>
+                      <Alert severity="info" sx={{ mb: 1 }}>
+                        {popupBlocked && pickerUri ? (
+                          <>
+                            {t('photos:source.googlePicker.popupBlocked')}{' '}
+                            <a href={pickerUri} target="_blank" rel="noopener noreferrer">
+                              {t('photos:source.googlePicker.openManually')}
+                            </a>
+                          </>
+                        ) : (
+                          t('photos:source.googlePicker.waiting')
+                        )}
+                      </Alert>
+                      <Button type="button" onClick={handleCancelPicker}>
+                        {t('photos:source.googlePicker.cancel')}
+                      </Button>
+                    </Box>
+                  )}
+
+                  {pickerError && (
+                    <Alert severity="error" sx={{ mt: 2 }}>
+                      {pickerError}
+                    </Alert>
+                  )}
+                  {pickerResult && (
+                    <Alert
+                      severity={pickerResult.failed > 0 ? 'warning' : 'success'}
+                      sx={{ mt: 2 }}
+                    >
+                      {t('photos:source.googlePicker.result', pickerResult)}
+                    </Alert>
+                  )}
+
+                  <Box sx={{ mt: 3 }}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      {t('photos:source.googlePicker.pickedTitle', { count: pickedItems.length })}
+                    </Typography>
+                    {pickedLoading ? (
+                      <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                        <CircularProgress size={20} />
+                      </Box>
+                    ) : pickedItems.length === 0 ? (
+                      <Typography variant="body2" color="text.secondary">
+                        {t('photos:source.googlePicker.pickedEmpty')}
+                      </Typography>
+                    ) : (
+                      <Box
+                        sx={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))',
+                          gap: 1
+                        }}
+                      >
+                        {pickedItems.map((item) => (
+                          <Box key={item.id} sx={{ position: 'relative' }}>
+                            <img
+                              src={`${API_BASE_URL}/api/photo-sources/${editingSource.id}/picked/${item.id}`}
+                              alt={item.filename || ''}
+                              style={{
+                                width: '100%',
+                                height: 80,
+                                objectFit: 'cover',
+                                borderRadius: 4,
+                                display: 'block'
+                              }}
+                            />
+                            <IconButton
+                              size="small"
+                              onClick={() => handleDeletePicked(item.id)}
+                              sx={{
+                                position: 'absolute',
+                                top: 2,
+                                right: 2,
+                                backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                                color: 'white',
+                                '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.8)' }
+                              }}
+                            >
+                              <Delete fontSize="small" />
+                            </IconButton>
+                          </Box>
+                        ))}
+                      </Box>
+                    )}
+                  </Box>
+                </>
+              )}
+            </Box>
           )}
 
           {sourceForm.type === 'HomeGlowPhotos' && (
