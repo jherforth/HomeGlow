@@ -4,6 +4,11 @@ import { Settings, Add, Delete, Edit, Refresh, ChevronLeft, ChevronRight, PlayAr
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../utils/apiConfig.js';
+import {
+  parseDurationMs,
+  hasGooglePhotosPickerScope,
+  summarizePickerIngest,
+} from '../utils/googlePhotosPicker.js';
 
 const PhotoWidget = ({ refreshNonce = 0, isActive = true }) => {
   const { t } = useTranslation(['photos', 'common']);
@@ -224,15 +229,6 @@ const PhotoWidget = ({ refreshNonce = 0, isActive = true }) => {
     }
   };
 
-  // "5s" / "1799.969983s" → seconds as a number. Google returns picker
-  // pollingConfig values as duration strings, not numbers.
-  const parseDurationSeconds = (v) => {
-    if (typeof v === 'number' && Number.isFinite(v)) return v;
-    if (typeof v !== 'string') return null;
-    const m = v.match(/^([\d.]+)s?$/);
-    return m ? parseFloat(m[1]) : null;
-  };
-
   const stopPicker = () => {
     pickerActiveRef.current = false;
     if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
@@ -318,8 +314,8 @@ const PhotoWidget = ({ refreshNonce = 0, isActive = true }) => {
       setPopupBlocked(true);
     }
 
-    const pollSecs = parseDurationSeconds(session.pollingConfig?.pollInterval) || 5;
-    const timeoutSecs = parseDurationSeconds(session.pollingConfig?.timeoutIn) || 1800;
+    const pollMs = Math.max(1000, parseDurationMs(session.pollingConfig?.pollInterval, 5000));
+    const timeoutMs = Math.max(1000, parseDurationMs(session.pollingConfig?.timeoutIn, 1800000));
     const sourceId = editingSource.id;
 
     pickerActiveRef.current = true;
@@ -335,14 +331,14 @@ const PhotoWidget = ({ refreshNonce = 0, isActive = true }) => {
       } catch (error) {
         console.error('Error polling picker session:', error);
       }
-    }, Math.max(1, pollSecs) * 1000);
+    }, pollMs);
 
     pollTimeoutRef.current = setTimeout(() => {
       if (pickerActiveRef.current) {
         stopPicker();
         setPickerError(t('photos:source.googlePicker.timedOut'));
       }
-    }, Math.max(1, timeoutSecs) * 1000);
+    }, timeoutMs);
   };
 
   const handleCancelPicker = async () => {
@@ -808,7 +804,7 @@ const PhotoWidget = ({ refreshNonce = 0, isActive = true }) => {
                 <Alert severity="warning">
                   {t('photos:source.googlePicker.noAccount')}
                 </Alert>
-              ) : !(googleStatus.account.scopes || '').includes('photoslibrary.readonly.appcreateddata') ? (
+              ) : !hasGooglePhotosPickerScope(googleStatus.account.scopes) ? (
                 <Alert severity="warning">
                   {t('photos:source.googlePicker.missingScope')}
                 </Alert>
@@ -851,14 +847,14 @@ const PhotoWidget = ({ refreshNonce = 0, isActive = true }) => {
                       {pickerError}
                     </Alert>
                   )}
-                  {pickerResult && (
-                    <Alert
-                      severity={pickerResult.failed > 0 ? 'warning' : 'success'}
-                      sx={{ mt: 2 }}
-                    >
-                      {t('photos:source.googlePicker.result', pickerResult)}
-                    </Alert>
-                  )}
+                  {pickerResult && (() => {
+                    const summary = summarizePickerIngest(pickerResult);
+                    return (
+                      <Alert severity={summary.severity} sx={{ mt: 2 }}>
+                        {t('photos:source.googlePicker.result', summary)}
+                      </Alert>
+                    );
+                  })()}
 
                   <Box sx={{ mt: 3 }}>
                     <Typography variant="subtitle2" gutterBottom>
