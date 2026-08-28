@@ -17,6 +17,81 @@ const xmlParser = new XMLParser({
   trimValues: true,
 });
 
+// ---------------------------------------------------------------------------
+// Outbound CalDAV request bodies
+//
+// Every request body lives here so the wire format is in one place instead of
+// being scattered through the request functions. JavaScript has no `static final`,
+// so this is a frozen class with static fields — the closest equivalent: the
+// values cannot be reassigned, and strings are immutable already.
+//
+// CALENDAR_QUERY is the one exception to "static string": a calendar-query REPORT
+// must carry a concrete time-range, so it is a builder.
+// ---------------------------------------------------------------------------
+class ICLOUD_XML_MESSAGE {
+  // PROPFIND Depth:0 against the service root -> current-user-principal href.
+  static CURRENT_USER_PRINCIPAL = `<?xml version="1.0" encoding="utf-8"?>
+<d:propfind xmlns:d="DAV:">
+  <d:prop>
+    <d:current-user-principal />
+  </d:prop>
+</d:propfind>`;
+
+  // PROPFIND Depth:0 against the principal -> calendar-home-set href.
+  static CALENDAR_HOME_SET = `<?xml version="1.0" encoding="utf-8"?>
+<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:prop>
+    <c:calendar-home-set />
+  </d:prop>
+</d:propfind>`;
+
+  // PROPFIND Depth:1 against the calendar home -> one entry per collection.
+  // cs:source is required: it is the only way a subscription's upstream feed URL
+  // becomes discoverable. Without it, subscriptions look like empty calendars.
+  static CALENDAR_LIST = `<?xml version="1.0" encoding="utf-8"?>
+<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:cs="http://calendarserver.org/ns/" xmlns:ical="http://apple.com/ns/ical/">
+  <d:prop>
+    <d:displayname />
+    <d:resourcetype />
+    <ical:calendar-color />
+    <cs:getctag />
+    <cs:source />
+    <c:supported-calendar-component-set />
+  </d:prop>
+</d:propfind>`;
+
+  // PROPFIND Depth:0 against a single collection -> is it a subscription, and
+  // where does its feed live? Kept minimal so the probe stays cheap.
+  static COLLECTION_SOURCE = `<?xml version="1.0" encoding="utf-8"?>
+<d:propfind xmlns:d="DAV:" xmlns:cs="http://calendarserver.org/ns/">
+  <d:prop>
+    <d:resourcetype />
+    <cs:source />
+  </d:prop>
+</d:propfind>`;
+
+  // REPORT against a calendar collection -> etag + ICS payload per event that
+  // overlaps the window. Both bounds are UTC basic-format (YYYYMMDDTHHMMSSZ).
+  static CALENDAR_QUERY(startUtc, endUtc) {
+    return `<?xml version="1.0" encoding="utf-8"?>
+<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:prop>
+    <d:getetag />
+    <c:calendar-data />
+  </d:prop>
+  <c:filter>
+    <c:comp-filter name="VCALENDAR">
+      <c:comp-filter name="VEVENT">
+        <c:time-range start="${startUtc}" end="${endUtc}" />
+      </c:comp-filter>
+    </c:comp-filter>
+  </c:filter>
+</c:calendar-query>`;
+  }
+}
+
+Object.freeze(ICLOUD_XML_MESSAGE);
+
 function buildAuthHeader(appleId, appPassword) {
   return 'Basic ' + Buffer.from(`${appleId}:${appPassword}`).toString('base64');
 }
@@ -218,12 +293,7 @@ async function discoverPrincipalUrl(appleId, appPassword) {
       'Depth': '0',
       'Content-Type': 'application/xml; charset=utf-8',
     },
-    data: `<?xml version="1.0" encoding="utf-8"?>
-<d:propfind xmlns:d="DAV:">
-  <d:prop>
-    <d:current-user-principal />
-  </d:prop>
-</d:propfind>`,
+    data: ICLOUD_XML_MESSAGE.CURRENT_USER_PRINCIPAL,
     timeout: 15000,
     validateStatus: (s) => s < 500,
   });
@@ -248,12 +318,7 @@ async function discoverCalendarHome(principalUrl, appleId, appPassword) {
       'Depth': '0',
       'Content-Type': 'application/xml; charset=utf-8',
     },
-    data: `<?xml version="1.0" encoding="utf-8"?>
-<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
-  <d:prop>
-    <c:calendar-home-set />
-  </d:prop>
-</d:propfind>`,
+    data: ICLOUD_XML_MESSAGE.CALENDAR_HOME_SET,
     timeout: 15000,
     validateStatus: (s) => s < 500,
   });
@@ -285,17 +350,7 @@ async function listCalendars(calendarHomeUrl, appleId, appPassword) {
       'Depth': '1',
       'Content-Type': 'application/xml; charset=utf-8',
     },
-    data: `<?xml version="1.0" encoding="utf-8"?>
-<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:cs="http://calendarserver.org/ns/" xmlns:ical="http://apple.com/ns/ical/">
-  <d:prop>
-    <d:displayname />
-    <d:resourcetype />
-    <ical:calendar-color />
-    <cs:getctag />
-    <cs:source />
-    <c:supported-calendar-component-set />
-  </d:prop>
-</d:propfind>`,
+    data: ICLOUD_XML_MESSAGE.CALENDAR_LIST,
     timeout: 15000,
     validateStatus: (s) => s < 500,
   });
@@ -355,13 +410,7 @@ async function describeCollection(calendarUrl, appleId, appPassword) {
       'Depth': '0',
       'Content-Type': 'application/xml; charset=utf-8',
     },
-    data: `<?xml version="1.0" encoding="utf-8"?>
-<d:propfind xmlns:d="DAV:" xmlns:cs="http://calendarserver.org/ns/">
-  <d:prop>
-    <d:resourcetype />
-    <cs:source />
-  </d:prop>
-</d:propfind>`,
+    data: ICLOUD_XML_MESSAGE.COLLECTION_SOURCE,
     timeout: 15000,
     validateStatus: (s) => s < 500,
   });
@@ -431,20 +480,7 @@ async function fetchCalendarEvents(calendarUrl, appleId, appPassword) {
       'Depth': '1',
       'Content-Type': 'application/xml; charset=utf-8',
     },
-    data: `<?xml version="1.0" encoding="utf-8"?>
-<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
-  <d:prop>
-    <d:getetag />
-    <c:calendar-data />
-  </d:prop>
-  <c:filter>
-    <c:comp-filter name="VCALENDAR">
-      <c:comp-filter name="VEVENT">
-        <c:time-range start="${formatDate(timeMin)}" end="${formatDate(timeMax)}" />
-      </c:comp-filter>
-    </c:comp-filter>
-  </c:filter>
-</c:calendar-query>`,
+    data: ICLOUD_XML_MESSAGE.CALENDAR_QUERY(formatDate(timeMin), formatDate(timeMax)),
     timeout: 30000,
     validateStatus: (s) => s < 500,
   });
@@ -476,6 +512,7 @@ module.exports = {
   discoverAndListCalendars,
   fetchCalendarEvents,
   // Exported for unit testing (pure XML/ICS helpers, no network).
+  ICLOUD_XML_MESSAGE,
   parsePrincipalUrl,
   parseCalendarHomeUrl,
   parseCalendars,
