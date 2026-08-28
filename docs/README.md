@@ -34,6 +34,7 @@ stays relevant.
 - [Getting Started (Local Dev)](guides/getting-started.md)
 - [Deployment](guides/deployment.md) — Docker Compose, Portainer, Proxmox LXC, and updating.
 - [Demo Mode](guides/demo-mode.md) — run a public, self-resetting showcase instance with sample data.
+- [Google Integration](guides/google-integration.md) — connect Google Calendar and Google Photos: OAuth client, the two APIs to enable, and what verification does and does not mean.
 - [Configuration](reference/configuration.md) — environment variables and admin-panel settings.
 - [Custom Widget Development](guides/custom-widgets.md) — build and publish your own HTML widgets.
 - [Plugin Development](guides/plugin-development.md) — the full guide: manifest, storage, settings, events, reactions, and a complete worked example.
