@@ -30,11 +30,12 @@ In the [Google Cloud Console](https://console.cloud.google.com/):
    paste in §3.
 5. Keep the **Client ID** and **Client secret**.
 
-## 2. Enable the APIs — both of them
+## 2. Enable the APIs
 
-**This is the step that most often goes wrong**, because nothing fails until you
-try to use the feature, and then the error appears in a server log rather than on
-screen.
+**This is the step that most often goes wrong**, because nothing fails at setup
+time — the APIs are only touched once you actually use a widget. When it does
+fail, HomeGlow shows Google's own error, which names the missing API and links
+straight to the console page that enables it.
 
 Under **APIs & Services → Library**, enable:
 
@@ -94,8 +95,8 @@ colour. Calendars shared with the account appear alongside its own.
 ## 6. Photos
 
 **Photo widget → settings → Add source → type `Google Photos`.** Save the source
-first, then use **Pick photos in Google Photos**. That opens Google's own picker in a new tab,
-where you select the photos you want. HomeGlow polls until you are done, then
+first, then use **Pick photos in Google Photos**. That opens Google's own picker
+in a new tab, where you select the photos you want. HomeGlow polls until you are done, then
 downloads the selected photos and lists them, with a delete button per photo.
 
 > **Why a picker rather than browsing your albums?** Google removed the broad
