@@ -4,6 +4,8 @@ const {
     parsePrincipalUrl,
     parseCalendarHomeUrl,
     parseCalendars,
+    parseCollectionSource,
+    normalizeFeedUrl,
     extractIcsPayloads,
     icsToEvents,
 } = require('../services/appleCalDAV');
@@ -210,4 +212,95 @@ test('parseCalendars includes shared/subscribed calendars that advertise VEVENT'
     const names = calendars.map((c) => c.name).sort();
     // Work + subscribed Holidays (VEVENT) + Legacy (no comp set, calendar resourcetype)
     assert.deepEqual(names, ['Legacy', 'US Holidays', 'Work']);
+});
+
+test('normalizeFeedUrl rewrites webcal schemes and rejects non-http(s)', () => {
+    assert.equal(
+        normalizeFeedUrl('webcal://example.com/feed.ics'),
+        'https://example.com/feed.ics'
+    );
+    assert.equal(
+        normalizeFeedUrl('WEBCALS://example.com/feed.ics'),
+        'https://example.com/feed.ics'
+    );
+    // Already-usable schemes pass through untouched.
+    assert.equal(
+        normalizeFeedUrl('https://example.com/feed.ics?token=abc'),
+        'https://example.com/feed.ics?token=abc'
+    );
+    assert.equal(normalizeFeedUrl('  http://example.com/f.ics  '), 'http://example.com/f.ics');
+    // Anything else must be refused so <cs:source> cannot redirect us off-protocol.
+    assert.equal(normalizeFeedUrl('file:///etc/passwd'), null);
+    assert.equal(normalizeFeedUrl('ftp://example.com/feed.ics'), null);
+    assert.equal(normalizeFeedUrl(''), null);
+    assert.equal(normalizeFeedUrl(null), null);
+});
+
+test('parseCollectionSource reads the subscription feed URL from a Depth:0 PROPFIND', () => {
+    const body = `<?xml version="1.0" encoding="UTF-8"?>
+<multistatus xmlns="DAV:" xmlns:cs="http://calendarserver.org/ns/">
+  <response>
+    <href>/123456/calendars/subscribed-feed/</href>
+    <propstat><prop>
+      <resourcetype><collection/><cs:subscribed/></resourcetype>
+      <cs:source><href>webcal://example.com/team/schedule.ics</href></cs:source>
+    </prop><status>HTTP/1.1 200 OK</status></propstat>
+  </response>
+</multistatus>`;
+
+    const result = parseCollectionSource(body);
+    assert.equal(result.subscribed, true);
+    assert.equal(result.sourceUrl, 'https://example.com/team/schedule.ics');
+});
+
+test('parseCollectionSource reports a regular calendar as not subscribed', () => {
+    const body = `<?xml version="1.0" encoding="UTF-8"?>
+<multistatus xmlns="DAV:" xmlns:caldav="urn:ietf:params:xml:ns:caldav"
+             xmlns:cs="http://calendarserver.org/ns/">
+  <response>
+    <href>/123456/calendars/home/</href>
+    <propstat><prop>
+      <resourcetype><collection/><caldav:calendar/></resourcetype>
+    </prop><status>HTTP/1.1 200 OK</status></propstat>
+  </response>
+</multistatus>`;
+
+    const result = parseCollectionSource(body);
+    assert.equal(result.subscribed, false);
+    assert.equal(result.sourceUrl, null);
+});
+
+test('parseCalendars exposes subscribed flag and source feed URL', () => {
+    // Regression: subscriptions were listed in the picker but then queried with a
+    // calendar-query REPORT, which returns an empty multistatus (0 events).
+    const body = `<?xml version="1.0" encoding="UTF-8"?>
+<multistatus xmlns="DAV:" xmlns:caldav="urn:ietf:params:xml:ns:caldav"
+             xmlns:cs="http://calendarserver.org/ns/" xmlns:ical="http://apple.com/ns/ical/">
+  <response>
+    <href>/123456/calendars/home/</href>
+    <propstat><prop>
+      <displayname>Family</displayname>
+      <resourcetype><collection/><caldav:calendar/></resourcetype>
+      <caldav:supported-calendar-component-set><caldav:comp name="VEVENT"/></caldav:supported-calendar-component-set>
+    </prop><status>HTTP/1.1 200 OK</status></propstat>
+  </response>
+  <response>
+    <href>/123456/calendars/sports/</href>
+    <propstat><prop>
+      <displayname>Team Schedule</displayname>
+      <resourcetype><collection/><cs:subscribed/></resourcetype>
+      <cs:source><href>webcal://example.com/team/schedule.ics</href></cs:source>
+      <caldav:supported-calendar-component-set><caldav:comp name="VEVENT"/></caldav:supported-calendar-component-set>
+    </prop><status>HTTP/1.1 200 OK</status></propstat>
+  </response>
+</multistatus>`;
+
+    const calendars = parseCalendars(body);
+    const byName = Object.fromEntries(calendars.map((c) => [c.name, c]));
+
+    assert.equal(calendars.length, 2);
+    assert.equal(byName['Family'].subscribed, false);
+    assert.equal(byName['Family'].sourceUrl, null);
+    assert.equal(byName['Team Schedule'].subscribed, true);
+    assert.equal(byName['Team Schedule'].sourceUrl, 'https://example.com/team/schedule.ics');
 });

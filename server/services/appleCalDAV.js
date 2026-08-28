@@ -59,6 +59,31 @@ function absolutizeUrl(href) {
   return value.startsWith('http') ? value : `${CALDAV_BASE}${value}`;
 }
 
+// iCloud records a subscription's upstream feed as webcal:// (occasionally
+// webcals://). Those are ordinary http(s) URLs wearing a different scheme, which
+// axios will not fetch, so rewrite them. Anything that is still not http(s)
+// afterwards is rejected, so a hostile or malformed <cs:source> cannot talk us
+// into fetching file:// or similar.
+function normalizeFeedUrl(url) {
+  const value = (url || '').trim();
+  if (!value) return null;
+  const rewritten = value.replace(/^webcals?:\/\//i, 'https://');
+  return /^https?:\/\//i.test(rewritten) ? rewritten : null;
+}
+
+// Pull the <cs:source><d:href> feed URL out of a <response>, normalized.
+function extractSourceHref(response) {
+  const sourceProp = findProp(response, 'source');
+  if (!sourceProp) return null;
+  const href = asArray(sourceProp.href)[0];
+  return normalizeFeedUrl(nodeText(href) ?? nodeText(sourceProp));
+}
+
+// True when a parsed resourcetype carries <cs:subscribed/>.
+function isSubscribedResourceType(resourcetype) {
+  return !!resourcetype && typeof resourcetype === 'object' && 'subscribed' in resourcetype;
+}
+
 function parseMultistatusResponses(xmlBody) {
   const doc = xmlParser.parse(xmlBody);
   return asArray(doc && doc.multistatus && doc.multistatus.response);
@@ -132,10 +157,29 @@ function parseCalendars(xmlBody) {
     }
 
     const calUrl = absolutizeUrl(href);
-    calendars.push({ id: calUrl, name, color: color || '#3d7ab5', url: calUrl });
+    calendars.push({
+      id: calUrl,
+      name,
+      color: color || '#3d7ab5',
+      url: calUrl,
+      // Subscriptions hold no event resources of their own; sourceUrl is where
+      // their events actually live. See fetchCalendarEvents.
+      subscribed: isSubscribedResourceType(resourcetype),
+      sourceUrl: extractSourceHref(response),
+    });
   }
 
   return calendars;
+}
+
+// Read subscription details out of a Depth:0 PROPFIND body for one collection.
+function parseCollectionSource(xmlBody) {
+  for (const response of parseMultistatusResponses(xmlBody)) {
+    const subscribed = isSubscribedResourceType(findProp(response, 'resourcetype'));
+    const sourceUrl = extractSourceHref(response);
+    if (subscribed || sourceUrl) return { subscribed, sourceUrl };
+  }
+  return { subscribed: false, sourceUrl: null };
 }
 
 // Extract the raw ICS payload strings from a calendar REPORT response body.
@@ -248,6 +292,7 @@ async function listCalendars(calendarHomeUrl, appleId, appPassword) {
     <d:resourcetype />
     <ical:calendar-color />
     <cs:getctag />
+    <cs:source />
     <c:supported-calendar-component-set />
   </d:prop>
 </d:propfind>`,
@@ -299,8 +344,77 @@ function icsToEvents(icsContent) {
   return events;
 }
 
+// Ask iCloud whether a collection is a subscription, and if so where its events
+// really live. Depth:0 so it stays a cheap single-resource lookup.
+async function describeCollection(calendarUrl, appleId, appPassword) {
+  const response = await axios({
+    method: 'PROPFIND',
+    url: calendarUrl,
+    headers: {
+      'Authorization': buildAuthHeader(appleId, appPassword),
+      'Depth': '0',
+      'Content-Type': 'application/xml; charset=utf-8',
+    },
+    data: `<?xml version="1.0" encoding="utf-8"?>
+<d:propfind xmlns:d="DAV:" xmlns:cs="http://calendarserver.org/ns/">
+  <d:prop>
+    <d:resourcetype />
+    <cs:source />
+  </d:prop>
+</d:propfind>`,
+    timeout: 15000,
+    validateStatus: (s) => s < 500,
+  });
+
+  if (response.status !== 207 && response.status !== 200) {
+    return { subscribed: false, sourceUrl: null };
+  }
+
+  return parseCollectionSource(response.data);
+}
+
+// Fetch a subscribed calendar's events straight from its upstream ICS feed.
+// Deliberately unauthenticated: the feed is hosted by a third party (TeamSnap,
+// leagues, school districts), so the iCloud app password must never be sent there.
+async function fetchSubscriptionEvents(feedUrl) {
+  const response = await axios.get(feedUrl, {
+    timeout: 30000,
+    responseType: 'text',
+    // Keep the body a raw string; ICAL.parse needs the original text.
+    transformResponse: [(data) => data],
+    maxRedirects: 5,
+    validateStatus: (s) => s < 500,
+  });
+
+  if (response.status !== 200) {
+    throw new Error(`Failed to fetch subscribed calendar feed (HTTP ${response.status}).`);
+  }
+
+  return icsToEvents(response.data);
+}
+
 // Fetch events from a specific calendar URL using CalDAV REPORT
 async function fetchCalendarEvents(calendarUrl, appleId, appPassword) {
+  // An iCloud subscription (a webcal feed added to iCloud) is a pointer, not a
+  // container: its resourcetype is <cs:subscribed/> and the events live at the
+  // <cs:source> URL. A calendar-query REPORT against one succeeds but returns an
+  // empty multistatus, which surfaced as "synced 0 events" with no error. Detect
+  // that case and read the upstream feed instead.
+  let subscription = { subscribed: false, sourceUrl: null };
+  try {
+    subscription = await describeCollection(calendarUrl, appleId, appPassword);
+  } catch (err) {
+    // Never let the probe break a calendar that the REPORT path already handled.
+    console.warn('Subscription probe failed; falling back to CalDAV REPORT:', err.message);
+  }
+
+  if (subscription.subscribed) {
+    if (!subscription.sourceUrl) {
+      throw new Error('Subscribed iCloud calendar exposes no usable source feed URL.');
+    }
+    return fetchSubscriptionEvents(subscription.sourceUrl);
+  }
+
   const authHeader = buildAuthHeader(appleId, appPassword);
 
   const now = Date.now();
@@ -365,6 +479,8 @@ module.exports = {
   parsePrincipalUrl,
   parseCalendarHomeUrl,
   parseCalendars,
+  parseCollectionSource,
+  normalizeFeedUrl,
   extractIcsPayloads,
   icsToEvents,
 };
