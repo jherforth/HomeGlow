@@ -182,7 +182,8 @@
     "confirmCopy": "Confirm Copy",
     "renameTitle": "Rename Current Device Name",
     "newName": "New Device Name",
-    "saveName": "Save Name"
+    "saveName": "Save Name",
+    "nameRule": "Name must be 1–64 characters, contain at least one letter or digit, and may only include letters, digits, spaces, and _ - . ' ( )."
   },
   "colors": {
     "heading": "Accent Colors",

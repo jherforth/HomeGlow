@@ -182,7 +182,8 @@
     "confirmCopy": "Confirmar la copia",
     "renameTitle": "Cambiar el nombre del dispositivo actual",
     "newName": "Nuevo nombre del dispositivo",
-    "saveName": "Guardar el nombre"
+    "saveName": "Guardar el nombre",
+    "nameRule": "El nombre debe tener entre 1 y 64 caracteres, contener al menos una letra o dígito, y solo puede incluir letras, dígitos, espacios y _ - . ' ( )."
   },
   "colors": {
     "heading": "Colores de acento",
