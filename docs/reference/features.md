@@ -188,6 +188,13 @@ in `server/index.js`.
   calendar colors, so it keeps answering "which calendars is this on?"
 - **Per-event Google colors** (PR #133): an event individually recolored in
   Google keeps that color in HomeGlow instead of inheriting its calendar's.
+- **Return to today**: the period label is a button — tap it to jump back. Inert
+  when already there. Desktop also gets a 📅 button; on a phone the header has no
+  room for one.
+- **Idle auto-return** (`calendarWidgetSettings.idleReturnMinutes`, per device,
+  default 20 minutes, 0 disables): returns to today after that long without
+  interaction, so a wall display left on last month stops looking current. Resets
+  the date only, not the view.
   Sync resolves the event's `colorId` to a hex through Google's `/colors`
   palette (cached 24h) and stores it in the existing `raw_data` column, which
   `getCachedEvents` surfaces as `event_color`. Every view prefers

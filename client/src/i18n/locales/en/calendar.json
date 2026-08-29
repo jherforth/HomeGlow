@@ -9,7 +9,9 @@
     "weekView": "week view",
     "addEvent": "Add event",
     "editEvent": "Edit event",
-    "deleteEvent": "Delete event"
+    "deleteEvent": "Delete event",
+    "goToToday": "Go to today",
+    "todayIndicator": "Today"
   },
   "event": {
     "calendar": "Calendar",
@@ -70,7 +72,11 @@
     "defaultColors": "Default Event Colors",
     "eventBackground": "Event Background Color",
     "eventText": "Event Text Color",
-    "resetToDefault": "Reset to Default"
+    "resetToDefault": "Reset to Default",
+    "idleReturnHeading": "Auto-return to today",
+    "idleReturnHelp": "After this many minutes without any interaction, the calendar jumps back to today. The view (month or week) is left alone.",
+    "idleReturnMinutes": "Minutes idle",
+    "idleReturnDisabledHint": "Set to 0 (or leave empty) to turn auto-return off."
   },
   "refresh": {
     "disabled": "Disabled",

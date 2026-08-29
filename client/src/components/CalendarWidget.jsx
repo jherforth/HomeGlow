@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Card, Typography, Box, List, ListItem, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, Button, IconButton, Popover, ToggleButton, ToggleButtonGroup, TextField, Switch, Checkbox, FormControlLabel, Select, MenuItem, FormControl, InputLabel, Chip, Divider, CircularProgress, Alert, Tooltip } from '@mui/material';
-import { Settings, ViewModule, ViewWeek, ChevronLeft, ChevronRight, Add, Delete, Edit, Refresh, Remove, Sync, Schedule } from '@mui/icons-material';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Card, Typography, Box, List, ListItem, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, Button, ButtonBase, IconButton, Popover, ToggleButton, ToggleButtonGroup, TextField, Switch, Checkbox, FormControlLabel, Select, MenuItem, FormControl, InputLabel, Chip, Divider, CircularProgress, Alert, Tooltip } from '@mui/material';
+import { Settings, ViewModule, ViewWeek, ChevronLeft, ChevronRight, Add, Delete, Edit, Refresh, Remove, Sync, Schedule, Today } from '@mui/icons-material';
 import moment from 'moment';
 import { SketchPicker } from 'react-color';
 import axios from 'axios';
@@ -10,6 +10,14 @@ import { getDeviceApiBase } from '../utils/deviceName.js';
 import { getEventPillPalette, getPreferredColorMode } from '../utils/colorContrast.js';
 import { buildMergedDotColors, buildMergedDotBackground, describeMergedCalendars } from '../utils/calendarMergeColors.js';
 import useIsMobile from '../hooks/useIsMobile.js';
+import { usePageVisibility } from '../hooks/useScreenActivity.js';
+import {
+  DEFAULT_IDLE_RETURN_MINUTES,
+  MAX_IDLE_RETURN_MINUTES,
+  idleReturnTimeoutMs,
+  isSameLocalCalendarDay,
+  normalizeIdleReturnMinutes,
+} from '../utils/calendarIdleReturn.js';
 import MonthDayCell from './MonthDayCell.jsx';
 import ColorPickerPopover from './ColorPickerPopover.jsx';
 import {
@@ -19,6 +27,7 @@ import {
   formatShortDateTime,
   formatFullDate,
   formatMonthYear,
+  formatMonthShortYear,
   formatWeekdayShort,
   formatMonthShort,
   formatDayOfMonth,
@@ -208,6 +217,14 @@ const CalendarWidget = ({
   const [viewMode, setViewMode] = useState('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [eventColors, setEventColors] = useState({ ...DEFAULT_CALENDAR_EVENT_COLORS });
+  // Idle auto-return: 0 means DISABLED, not "return instantly".
+  // The raw input string lets the settings field accept an empty box and
+  // parse it as disabled without snapping back to a number on every keystroke.
+  const [idleReturnMinutes, setIdleReturnMinutes] = useState(DEFAULT_IDLE_RETURN_MINUTES);
+  const [idleReturnMinutesInput, setIdleReturnMinutesInput] = useState(String(DEFAULT_IDLE_RETURN_MINUTES));
+  const [activityTick, setActivityTick] = useState(0);
+  const pageVisible = usePageVisibility();
+  const markActivity = useCallback(() => setActivityTick((tick) => tick + 1), []);
   const [displaySettings, setDisplaySettings] = useState({ ...DEFAULT_CALENDAR_DISPLAY_SETTINGS });
   const [dayOfWeekSettings, setDayOfWeekSettings] = useState({ ...DEFAULT_CALENDAR_DAY_OF_WEEK_SETTINGS });
   const [calendarSettingsLoaded, setCalendarSettingsLoaded] = useState(false);
@@ -311,6 +328,12 @@ const CalendarWidget = ({
             ...settings.eventColors,
           });
         }
+
+        if (Object.prototype.hasOwnProperty.call(settings, 'idleReturnMinutes')) {
+          const normalized = normalizeIdleReturnMinutes(settings.idleReturnMinutes);
+          setIdleReturnMinutes(normalized);
+          setIdleReturnMinutesInput(normalized > 0 ? String(normalized) : '');
+        }
       } catch (error) {
         console.error('Error loading calendar widget settings:', error);
       } finally {
@@ -331,6 +354,7 @@ const CalendarWidget = ({
         await axios.patch(`${API_DEVICE_URL}/settings`, {
           calendarWidgetSettings: {
             eventColors,
+            idleReturnMinutes,
           },
         });
       } catch (error) {
@@ -344,6 +368,7 @@ const CalendarWidget = ({
     API_DEVICE_URL,
     calendarSettingsLoaded,
     eventColors,
+    idleReturnMinutes,
   ]);
 
   useEffect(() => {
@@ -433,6 +458,36 @@ const CalendarWidget = ({
 
     return () => clearTimeout(timeoutId);
   }, [API_DEVICE_URL, activeTab, activeTabConfigJson, dayOfWeekSettings, displaySettings]);
+
+  const isViewingToday = isSameLocalCalendarDay(currentDate, new Date());
+
+  const goToToday = () => {
+    if (isViewingToday) return;
+    setCurrentDate(new Date());
+    markActivity();
+  };
+
+  // Idle auto-return. Any user interaction bumps activityTick,
+  // which restarts the countdown; unmounting or a config change clears the
+  // pending timeout via the cleanup below (a leak on a wall display that runs
+  // for months would be a real bug, not a theoretical one). While the browser
+  // tab is hidden we bail out entirely — the same page-visibility signal the
+  // rest of the app already uses — so the calendar doesn't silently jump
+  // around behind another tab. Auto-return moves the date only; viewMode is
+  // preserved so a household that deliberately chose week view isn't flipped
+  // back to month as a second surprise on top of the date jump.
+  useEffect(() => {
+    const timeoutMs = idleReturnTimeoutMs(idleReturnMinutes);
+    if (!timeoutMs) return undefined;
+    if (!pageVisible) return undefined;
+    if (isViewingToday) return undefined;
+
+    const timeoutId = setTimeout(() => {
+      setCurrentDate(new Date());
+    }, timeoutMs);
+
+    return () => clearTimeout(timeoutId);
+  }, [activityTick, idleReturnMinutes, pageVisible, isViewingToday]);
 
   const fetchCalendarSources = async () => {
     try {
@@ -805,6 +860,7 @@ const CalendarWidget = ({
   const openCreateEventDialog = () => {
     const googleSources = getGoogleSources();
     if (googleSources.length === 0) return;
+    markActivity();
     const baseDay = selectedDate ? moment(selectedDate) : moment();
     const start = baseDay.clone().hour(9).minute(0).second(0);
     const end = start.clone().add(1, 'hour');
@@ -821,6 +877,7 @@ const CalendarWidget = ({
   };
 
   const openEditEventDialog = (event) => {
+    markActivity();
     const allDay = !!event.all_day;
     const startStr = allDay
       ? moment(event.start).format('YYYY-MM-DD')
@@ -900,6 +957,7 @@ const CalendarWidget = ({
   };
 
   const handleSelectSlot = ({ start }) => {
+    markActivity();
     const selectedDay = moment(start).startOf('day');
     const dayDate = selectedDay.toDate();
     const dayEvents = events
@@ -916,6 +974,7 @@ const CalendarWidget = ({
   };
 
   const handleSelectEvent = (event) => {
+    markActivity();
     const selectedDay = moment(event.start).startOf('day');
     const dayDate = selectedDay.toDate();
     const dayEvents = events
@@ -1051,6 +1110,7 @@ const CalendarWidget = ({
   };
 
   const handleSettingsClick = (event) => {
+    markActivity();
     setSettingsAnchor(event.currentTarget);
   };
 
@@ -1070,6 +1130,7 @@ const CalendarWidget = ({
     if (newViewMode === null || !TAB_CALENDAR_VIEW_MODES.has(newViewMode)) return;
 
     // Optimistic UI: switch instantly, then persist in the background.
+    markActivity();
     setViewMode(newViewMode);
     void persistViewModeForTab(activeTab, newViewMode);
   };
@@ -1079,6 +1140,7 @@ const CalendarWidget = ({
   };
 
   const handlePreviousPeriod = () => {
+    markActivity();
     if (viewMode === 'month') {
       const newDate = new Date(currentDate);
       if (isRollingMonthView) {
@@ -1097,6 +1159,7 @@ const CalendarWidget = ({
   };
 
   const handleNextPeriod = () => {
+    markActivity();
     if (viewMode === 'month') {
       const newDate = new Date(currentDate);
       if (isRollingMonthView) {
@@ -1137,7 +1200,7 @@ const CalendarWidget = ({
         return formatDateRangeLabel(start, start.clone().add(monthViewWeeksToShow * 7 - 1, 'days'));
       }
 
-      return formatMonthYear(currentDate);
+      return isMobile ? formatMonthShortYear(currentDate) : formatMonthYear(currentDate);
     } else {
       const startOfWeek = getWeekStartDate();
       const endOfWeek = startOfWeek.clone().add(6, 'days');
@@ -1207,9 +1270,37 @@ const CalendarWidget = ({
           >
             <ChevronLeft />
           </IconButton>
-          <Typography variant="h6" sx={{ minWidth: '200px', textAlign: 'center' }}>
-            📅 {getCurrentPeriodLabel()}
-          </Typography>
+          {/* The period label doubles as the go-to-today control: on a phone this is the only Today affordance, and on
+              desktop the icon button below keeps it discoverable. Disabled
+              when already on today so it neither reacts nor advertises. */}
+          <Tooltip
+            title={t('calendar:widget.goToToday')}
+            disableHoverListener={isViewingToday}
+            disableFocusListener={isViewingToday}
+            disableTouchListener={isViewingToday}
+          >
+            <ButtonBase
+              onClick={goToToday}
+              disabled={isViewingToday}
+              aria-label={isViewingToday ? undefined : t('calendar:widget.goToToday')}
+              sx={{
+                minWidth: { xs: 0, sm: '200px' },
+                borderRadius: 1,
+                px: 1,
+                py: 0.5,
+                color: 'var(--text-color)',
+                '&:hover:not(.Mui-disabled)': {
+                  backgroundColor: 'rgba(var(--accent-rgb), 0.08)',
+                },
+                '&.Mui-disabled': { color: 'var(--text-color)' },
+              }}
+            >
+              <Typography variant="h6" component="span" sx={{ textAlign: 'center' }}>
+                {isMobile ? '' : '📅 '}{getCurrentPeriodLabel()}
+                {isViewingToday && ` · ${t('calendar:widget.todayIndicator')}`}
+              </Typography>
+            </ButtonBase>
+          </Tooltip>
           <IconButton
             onClick={handleNextPeriod}
             size="small"
@@ -1218,6 +1309,27 @@ const CalendarWidget = ({
           >
             <ChevronRight />
           </IconButton>
+          <Tooltip title={t('calendar:widget.goToToday')}>
+            {/* Desktop-only redundant affordance: on phones the label above is
+                the control, but a tappable heading isn't self-evidently
+                tappable, so keep the icon visible from `sm` up. span wrapper:
+                MUI Tooltips need a non-disabled child to receive pointer
+                events, and this button is disabled on today. */}
+            <Box
+              component="span"
+              sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
+            >
+              <IconButton
+                onClick={goToToday}
+                disabled={isViewingToday}
+                size="small"
+                sx={{ color: 'var(--text-color)' }}
+                aria-label={t('calendar:widget.goToToday')}
+              >
+                <Today />
+              </IconButton>
+            </Box>
+          </Tooltip>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <ToggleButtonGroup
@@ -2316,6 +2428,35 @@ const CalendarWidget = ({
               Reset Display Settings
             </Button>
           </Box>
+
+          <Divider sx={{ my: 2 }} />
+
+          <Typography variant="h6" sx={{ mb: 1 }}>{t('calendar:settings.idleReturnHeading')}</Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+            {t('calendar:settings.idleReturnHelp')}
+          </Typography>
+          <TextField
+            fullWidth
+            size="small"
+            type="number"
+            label={t('calendar:settings.idleReturnMinutes')}
+            value={idleReturnMinutesInput}
+            onChange={(e) => {
+              const raw = e.target.value;
+              setIdleReturnMinutesInput(raw);
+              setIdleReturnMinutes(normalizeIdleReturnMinutes(raw));
+            }}
+            slotProps={{
+              htmlInput: {
+                min: 0,
+                max: MAX_IDLE_RETURN_MINUTES,
+                step: 1,
+                inputMode: 'numeric',
+              },
+            }}
+            helperText={t('calendar:settings.idleReturnDisabledHint')}
+            sx={{ mb: 2 }}
+          />
 
           <Divider sx={{ my: 2 }} />
 
