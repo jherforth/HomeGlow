@@ -462,8 +462,10 @@ const CalendarWidget = ({
   const isViewingToday = isSameLocalCalendarDay(currentDate, new Date());
 
   const goToToday = () => {
-    if (isViewingToday) return;
-    setCurrentDate(new Date());
+    const now = new Date();
+    if (!isSameLocalCalendarDay(currentDate, now)) {
+      setCurrentDate(now);
+    }
     markActivity();
   };
 
