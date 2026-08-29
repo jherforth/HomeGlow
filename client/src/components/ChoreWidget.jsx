@@ -27,9 +27,11 @@ import {
   ListItemButton,
   ListItemAvatar,
   Radio,
-  RadioGroup
+  RadioGroup,
+  Popover,
+  Switch
 } from '@mui/material';
-import { Edit, Save, Cancel, Add, Delete, Check, Undo, SwapHoriz, Snooze, Backspace } from '@mui/icons-material';
+import { Edit, Save, Cancel, Add, Delete, Check, Undo, SwapHoriz, Snooze, Backspace, Settings as SettingsIcon } from '@mui/icons-material';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import LoadingBackdrop from './LoadingBackdrop';
@@ -37,6 +39,7 @@ import PinModal from './PinModal';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
 import { shouldShowChoreToday, getTodayDateString, convertDaysToCrontab, getDueDateStatus, formatDueDate } from '../utils/choreHelpers.js';
+import { filterVisibleUsers, toggleHiddenUserId, pruneHiddenUserIds } from '../utils/choreUserVisibility.js';
 import { subscribePluginEvents } from '../utils/pluginEventBridge.js';
 import { playSound, soundUrl } from '../utils/choreSound.js';
 import { formatTime } from '../utils/dateUtils.js';
@@ -79,6 +82,11 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
   const [loading, setLoading] = useState(true);
   const [showBonusChores, setShowBonusChores] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  // Per-device: which real users this display hides. Bonus pseudo-user (id 0)
+  // is not a real user and is not offered in the selector — the "Bonus Chores"
+  // column already has its own toggle.
+  const [hiddenUserIds, setHiddenUserIds] = useState([]);
+  const [settingsAnchor, setSettingsAnchor] = useState(null);
   const [deviceSettingsLoaded, setDeviceSettingsLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [dailyClamReward, setDailyClamReward] = useState(2);
@@ -124,6 +132,12 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
         if (choreSettings && typeof choreSettings.soundEnabled === 'boolean') {
           setSoundEnabled(choreSettings.soundEnabled);
         }
+        if (choreSettings && Array.isArray(choreSettings.hiddenUserIds)) {
+          // Coerce here so a JSON-round-tripped string id still matches later.
+          setHiddenUserIds(choreSettings.hiddenUserIds
+            .map((id) => Number(id))
+            .filter((id) => Number.isFinite(id)));
+        }
       } catch (error) {
         console.error('Error loading chore widget settings:', error);
       } finally {
@@ -154,6 +168,7 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
           choreWidgetSettings: {
             showBonusChores,
             soundEnabled,
+            hiddenUserIds,
           },
         });
       } catch (error) {
@@ -162,7 +177,7 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
     }, 250);
 
     return () => clearTimeout(timeoutId);
-  }, [API_DEVICE_URL, deviceSettingsLoaded, showBonusChores, soundEnabled]);
+  }, [API_DEVICE_URL, deviceSettingsLoaded, showBonusChores, soundEnabled, hiddenUserIds]);
 
   useEffect(() => {
     const onUsersUpdated = () => {
@@ -1048,6 +1063,9 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
   }
 
   const availableBonusChores = getAvailableBonusChores();
+  // Users the widget will render as columns on this device. Ordering carries
+  // through from the server (admin sort_order); the filter only removes.
+  const visibleUsers = filterVisibleUsers(users, hiddenUserIds);
 
   return (
     <>
@@ -1087,6 +1105,15 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
             >
               🛍️
             </Button>
+            <IconButton
+              onClick={(event) => setSettingsAnchor(event.currentTarget)}
+              size="small"
+              aria-label={t('chores:visibility.openSettings')}
+              title={t('chores:visibility.openSettings')}
+              sx={{ color: 'var(--text-color)' }}
+            >
+              <SettingsIcon fontSize="small" />
+            </IconButton>
             <Button
               startIcon={<Add />}
               onClick={() => setShowAddDialog(true)}
@@ -1107,7 +1134,26 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
             alignItems: 'flex-start',
             width: '100%'
           }}>
-            {users.filter(user => user.id !== 0).map(user => {
+            {visibleUsers.length === 0 && !showBonusChores && (
+              // Wall display fallback — a blank widget looks like a crash. Tell
+              // the user where to bring someone back.
+              <Box sx={{
+                flex: '1 1 0',
+                minWidth: '180px',
+                border: '2px dashed var(--card-border)',
+                borderRadius: 2,
+                p: 3,
+                textAlign: 'center'
+              }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
+                  {t('chores:visibility.allHiddenTitle')}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {t('chores:visibility.allHiddenBody')}
+                </Typography>
+              </Box>
+            )}
+            {visibleUsers.map(user => {
               const userChores = getUserChoresForToday(user.id);
               const completedChores = userChores.filter(c => c.completed && c.clam_value === 0).length;
               const totalRegularChores = userChores.filter(c => c.clam_value === 0).length;
@@ -1749,6 +1795,50 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
             <Button variant="contained" onClick={confirmSnooze}>{t('chores:snooze.confirm')}</Button>
           </DialogActions>
         </Dialog>
+
+        {/* Per-device settings: which users this display shows */}
+        <Popover
+          open={Boolean(settingsAnchor)}
+          anchorEl={settingsAnchor}
+          onClose={() => setSettingsAnchor(null)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        >
+          <Box sx={{ p: 2, minWidth: 260, maxHeight: '80vh', overflowY: 'auto' }}>
+            <Typography variant="h6" sx={{ mb: 1 }}>
+              {t('chores:visibility.heading')}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+              {t('chores:visibility.helper')}
+            </Typography>
+            {users.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                {t('chores:visibility.noUsers')}
+              </Typography>
+            ) : (
+              <FormGroup>
+                {users.map((user) => {
+                  const hidden = hiddenUserIds.map(Number).includes(Number(user.id));
+                  return (
+                    <FormControlLabel
+                      key={user.id}
+                      control={
+                        <Switch
+                          size="small"
+                          checked={!hidden}
+                          onChange={() => setHiddenUserIds((prev) =>
+                            pruneHiddenUserIds(toggleHiddenUserId(prev, user.id), users)
+                          )}
+                        />
+                      }
+                      label={user.username}
+                    />
+                  );
+                })}
+              </FormGroup>
+            )}
+          </Box>
+        </Popover>
 
         {/* Admin PIN confirmation for transfer/snooze */}
         <PinModal
