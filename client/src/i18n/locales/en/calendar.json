@@ -10,8 +10,7 @@
     "addEvent": "Add event",
     "editEvent": "Edit event",
     "deleteEvent": "Delete event",
-    "goToToday": "Go to today",
-    "todayIndicator": "Today"
+    "goToToday": "Go to today"
   },
   "event": {
     "calendar": "Calendar",

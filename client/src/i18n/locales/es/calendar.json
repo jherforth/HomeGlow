@@ -10,8 +10,7 @@
     "addEvent": "Añadir evento",
     "editEvent": "Editar evento",
     "deleteEvent": "Eliminar evento",
-    "goToToday": "Ir a hoy",
-    "todayIndicator": "Hoy"
+    "goToToday": "Ir a hoy"
   },
   "event": {
     "calendar": "Calendario",

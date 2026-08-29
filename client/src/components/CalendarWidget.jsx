@@ -1271,33 +1271,24 @@ const CalendarWidget = ({
             <ChevronLeft />
           </IconButton>
           {/* The period label doubles as the go-to-today control: on a phone this is the only Today affordance, and on
-              desktop the icon button below keeps it discoverable. Disabled
-              when already on today so it neither reacts nor advertises. */}
-          <Tooltip
-            title={t('calendar:widget.goToToday')}
-            disableHoverListener={isViewingToday}
-            disableFocusListener={isViewingToday}
-            disableTouchListener={isViewingToday}
-          >
+              desktop the icon button below keeps it discoverable. */}
+          <Tooltip title={t('calendar:widget.goToToday')}>
             <ButtonBase
               onClick={goToToday}
-              disabled={isViewingToday}
-              aria-label={isViewingToday ? undefined : t('calendar:widget.goToToday')}
+              aria-label={t('calendar:widget.goToToday')}
               sx={{
                 minWidth: { xs: 0, sm: '200px' },
                 borderRadius: 1,
                 px: 1,
                 py: 0.5,
                 color: 'var(--text-color)',
-                '&:hover:not(.Mui-disabled)': {
+                '&:hover': {
                   backgroundColor: 'rgba(var(--accent-rgb), 0.08)',
                 },
-                '&.Mui-disabled': { color: 'var(--text-color)' },
               }}
             >
               <Typography variant="h6" component="span" sx={{ textAlign: 'center' }}>
                 {isMobile ? '' : '📅 '}{getCurrentPeriodLabel()}
-                {isViewingToday && ` · ${t('calendar:widget.todayIndicator')}`}
               </Typography>
             </ButtonBase>
           </Tooltip>
@@ -1312,23 +1303,15 @@ const CalendarWidget = ({
           <Tooltip title={t('calendar:widget.goToToday')}>
             {/* Desktop-only redundant affordance: on phones the label above is
                 the control, but a tappable heading isn't self-evidently
-                tappable, so keep the icon visible from `sm` up. span wrapper:
-                MUI Tooltips need a non-disabled child to receive pointer
-                events, and this button is disabled on today. */}
-            <Box
-              component="span"
-              sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
+                tappable, so keep the icon visible from `sm` up. */}
+            <IconButton
+              onClick={goToToday}
+              size="small"
+              sx={{ display: { xs: 'none', sm: 'inline-flex' }, color: 'var(--text-color)' }}
+              aria-label={t('calendar:widget.goToToday')}
             >
-              <IconButton
-                onClick={goToToday}
-                disabled={isViewingToday}
-                size="small"
-                sx={{ color: 'var(--text-color)' }}
-                aria-label={t('calendar:widget.goToToday')}
-              >
-                <Today />
-              </IconButton>
-            </Box>
+              <Today />
+            </IconButton>
           </Tooltip>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
