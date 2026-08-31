@@ -2284,7 +2284,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                             secondary={widget.description || t('admin:plugins.noDescription')}
                             slotProps={{ secondary: { sx: { fontStyle: widget.description ? 'normal' : 'italic' } } }}
                           />
-                          <ListItemSecondaryAction>
+                          {/* Normal flow, not ListItemSecondaryAction: that is absolutely
+                              positioned and reserves only an icon-sized gap, so a wrapped
+                              description runs underneath the button (#147 follow-up). */}
+                          <Box sx={{ flexShrink: 0, ml: 2, alignSelf: 'center' }}>
                             <Button
                               onClick={() => installGithubWidget(widget)}
                               startIcon={<CloudDownload />}
@@ -2293,7 +2296,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                             >
                               {t('admin:widgets.install')}
                             </Button>
-                          </ListItemSecondaryAction>
+                          </Box>
                         </ListItem>
                       ))}
                     </List>
