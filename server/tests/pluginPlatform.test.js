@@ -547,6 +547,76 @@ test('manifests may only declare catalog events', async () => {
     assert.equal(ok.status, 200);
 });
 
+// --- Manifest description (issue #147) ---
+
+test('a manifest description is stored and returned with the plugin', async () => {
+    const manifest = {
+        manifestVersion: 1,
+        id: 'described-plugin',
+        name: 'Described Plugin',
+        description: 'Shows this sentence in the plugin list instead of just a filename.',
+    };
+    const upload = await uploadWidget('described.html', widgetHtml(manifest));
+    assert.equal(upload.status, 200);
+
+    const list = await api('/api/widgets');
+    const entry = list.body.find((w) => w.pluginId === 'described-plugin');
+    assert.ok(entry, 'plugin missing from the list');
+    assert.equal(entry.manifest.description, manifest.description);
+});
+
+test('description is optional, so a manifest without one still installs', async () => {
+    // Requiring it would invalidate every plugin already installed.
+    const upload = await uploadWidget('undescribed.html', widgetHtml({
+        manifestVersion: 1,
+        id: 'undescribed-plugin',
+    }));
+    assert.equal(upload.status, 200);
+
+    const list = await api('/api/widgets');
+    const entry = list.body.find((w) => w.pluginId === 'undescribed-plugin');
+    assert.equal(entry.manifest.description, undefined);
+});
+
+test('description must be a string within the length cap', async () => {
+    const wrongType = await uploadWidget('desc-type.html', widgetHtml({
+        manifestVersion: 1,
+        id: 'desc-type-plugin',
+        description: { text: 'not a string' },
+    }));
+    assert.equal(wrongType.status, 400);
+    assert.match(wrongType.body.error, /description must be a string/);
+
+    const tooLong = await uploadWidget('desc-long.html', widgetHtml({
+        manifestVersion: 1,
+        id: 'desc-long-plugin',
+        description: 'x'.repeat(301),
+    }));
+    assert.equal(tooLong.status, 400);
+    assert.match(tooLong.body.error, /300 characters or fewer/);
+
+    // The cap is on the trimmed value, so padding does not push a valid one over.
+    const padded = await uploadWidget('desc-pad.html', widgetHtml({
+        manifestVersion: 1,
+        id: 'desc-pad-plugin',
+        description: '   ' + 'x'.repeat(300) + '   ',
+    }));
+    assert.equal(padded.status, 200);
+});
+
+test('an unknown manifest field is ignored rather than rejected', async () => {
+    // This is what lets a plugin carrying newer fields stay installable on an
+    // older HomeGlow: validation checks the fields it knows and leaves the rest
+    // alone. Pinning it so a future strict-schema change is a deliberate choice.
+    const upload = await uploadWidget('future.html', widgetHtml({
+        manifestVersion: 1,
+        id: 'future-plugin',
+        description: 'Carries a field this version has never heard of.',
+        somethingFromALaterVersion: { nested: true },
+    }));
+    assert.equal(upload.status, 200);
+});
+
 // --- Declarative reactions (Phase 4) ---
 
 const SIPHON_PLUGIN_ID = 'siphon-test-plugin';

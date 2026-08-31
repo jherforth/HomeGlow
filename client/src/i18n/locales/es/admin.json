@@ -164,7 +164,11 @@
     "transparentBackground": "Fondo transparente",
     "options": "Opciones del plugin",
     "perDevice": "Por dispositivo — se aplica al dispositivo desde el que editas",
-    "saveSettings": "Guardar ajustes de plugins"
+    "saveSettings": "Guardar ajustes de plugins",
+    "noDescription": "Sin descripción",
+    "showPreview": "Vista previa",
+    "hidePreview": "Ocultar vista previa",
+    "previewTitle": "Vista previa en vivo de {{name}}"
   },
   "devices": {
     "manageHelp": "Gestiona los dispositivos y copia pestañas y ajustes de widgets entre ellos. Al copiar se sobrescriben las pestañas y widgets del dispositivo actual.",

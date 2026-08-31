@@ -792,6 +792,7 @@ fastify.get('/index.css', async (request, reply) => {
 const PLUGIN_MANIFEST_REGEX = /<script[^>]*id=["']homeglow-manifest["'][^>]*>([\s\S]*?)<\/script>/i;
 const PLUGIN_ID_REGEX = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const PLUGIN_SETTING_KEY_REGEX = /^[a-zA-Z][a-zA-Z0-9]{0,63}$/;
+const PLUGIN_DESCRIPTION_MAX_LENGTH = 300;
 const PLUGIN_SETTING_TYPES = new Set(['number', 'string', 'boolean', 'select']);
 const PLUGIN_SETTING_SCOPES = new Set(['household', 'device']);
 
@@ -823,6 +824,16 @@ function extractPluginManifest(htmlContent) {
   }
   if (manifest.name !== undefined && typeof manifest.name !== 'string') {
     errors.push('name must be a string.');
+  }
+  // A short human sentence for the plugin list and the browse view (issue
+  // #147). Optional: requiring it would invalidate every plugin already
+  // installed. Capped because it renders as a card subtitle, not a README.
+  if (manifest.description !== undefined) {
+    if (typeof manifest.description !== 'string') {
+      errors.push('description must be a string.');
+    } else if (manifest.description.trim().length > PLUGIN_DESCRIPTION_MAX_LENGTH) {
+      errors.push(`description must be ${PLUGIN_DESCRIPTION_MAX_LENGTH} characters or fewer.`);
+    }
   }
   if (manifest.apiVersion !== undefined && manifest.apiVersion !== 'v1') {
     errors.push("apiVersion must be 'v1'.");
@@ -1650,6 +1661,89 @@ fastify.get('/api/widgets/debug', async (request, reply) => {
   }
 });
 
+// Browse-time plugin metadata (issue #147).
+//
+// The repository listing gives a name and a download URL but nothing about what
+// a plugin actually does, so the browse view used to synthesise a placeholder
+// ("Widget: Bills") that reads like a description and is not one. The real text
+// lives in each plugin's own manifest, so fetch the file and parse it.
+//
+// Two things make that cheap enough to do on every browse:
+//
+//   * The fetch goes to raw.githubusercontent, which is not the REST API and
+//     does not spend the unauthenticated 60-per-hour budget the listing itself
+//     costs. Plugins are ~20 KB.
+//   * The listing carries a git sha per file, so a parsed manifest can be
+//     cached against it and is only ever fetched once per version. An updated
+//     plugin gets a new sha and re-fetches on its own.
+const pluginMetadataCache = new Map();
+const PLUGIN_METADATA_CACHE_MAX = 200;
+
+function cachePluginMetadata(sha, value) {
+  if (pluginMetadataCache.size >= PLUGIN_METADATA_CACHE_MAX) {
+    // Map keeps insertion order, so the first key is the oldest.
+    const oldest = pluginMetadataCache.keys().next().value;
+    if (oldest !== undefined) pluginMetadataCache.delete(oldest);
+  }
+  pluginMetadataCache.set(sha, value);
+}
+
+// Returns { description, pluginId } for a remote plugin, or nulls when it has
+// no manifest (a legacy widget) or could not be read. Never throws: a plugin
+// that fails here should still be listed and installable, just without a
+// description.
+async function fetchRemotePluginMetadata(downloadUrl, sha) {
+  if (sha && pluginMetadataCache.has(sha)) {
+    return pluginMetadataCache.get(sha);
+  }
+
+  let result = { description: null, pluginId: null };
+  try {
+    const response = await axios.get(downloadUrl, {
+      headers: { 'User-Agent': 'HomeGlow-Server/1.0' },
+      timeout: 10000,
+      responseType: 'text',
+      transformResponse: [(data) => data],
+    });
+    const { manifest } = extractPluginManifest(String(response.data || ''));
+    if (manifest) {
+      const description = typeof manifest.description === 'string' ? manifest.description.trim() : '';
+      result = {
+        description: description || null,
+        pluginId: typeof manifest.id === 'string' ? manifest.id : null,
+      };
+    }
+  } catch (error) {
+    console.warn(`Could not read plugin metadata from ${downloadUrl}: ${error.message}`);
+  }
+
+  if (sha) cachePluginMetadata(sha, result);
+  return result;
+}
+
+// A preview image is a sibling file rather than something embedded in the
+// plugin: "chore-metrics.png" beside "chore-metrics.html".
+//
+// Deliberately not a manifest field. An older HomeGlow returns the whole
+// manifest in GET /api/widgets, which the dashboard fetches on every boot, so a
+// base64 image in there would be downloaded by every display on every page load
+// on any install that has not upgraded. A sibling file is invisible to those
+// versions and costs nothing extra here, because the repository listing already
+// returns every file in the directory.
+const PLUGIN_PREVIEW_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp'];
+
+function findPreviewUrl(entries, htmlFilename) {
+  const stem = htmlFilename.replace(/.html$/i, '').toLowerCase();
+  const match = entries.find((entry) => {
+    if (entry.type !== 'file') return false;
+    const lower = entry.name.toLowerCase();
+    const dot = lower.lastIndexOf('.');
+    if (dot < 0) return false;
+    return lower.slice(0, dot) === stem && PLUGIN_PREVIEW_EXTENSIONS.includes(lower.slice(dot));
+  });
+  return match ? match.download_url : null;
+}
+
 // Endpoint: List available widgets from GitHub repository
 fastify.get('/api/widgets/github', async (request, reply) => {
   try {
@@ -1679,8 +1773,13 @@ fastify.get('/api/widgets/github', async (request, reply) => {
         widgets.push({
           name: item.name.replace('.html', ''),
           filename: item.name,
-          description: `Widget: ${item.name.replace('.html', '')}`,
+          // Filled in below from each plugin's own manifest. Null rather than a
+          // synthesised string: a plugin with no manifest has no description,
+          // and saying so is more useful than inventing one.
+          description: null,
+          previewUrl: findPreviewUrl(response.data, item.name),
           download_url: item.download_url,
+          sha: item.sha,
           path: item.path,
           size: item.size,
           type: 'file'
@@ -1705,8 +1804,10 @@ fastify.get('/api/widgets/github', async (request, reply) => {
             widgets.push({
               name: `${item.name}/${htmlFile.name.replace('.html', '')}`,
               filename: htmlFile.name,
-              description: `Widget from ${item.name} folder`,
+              description: null,
+              previewUrl: findPreviewUrl(dirResponse.data, htmlFile.name),
               download_url: htmlFile.download_url,
+              sha: htmlFile.sha,
               path: htmlFile.path,
               size: htmlFile.size,
               type: 'file',
@@ -1718,6 +1819,15 @@ fastify.get('/api/widgets/github', async (request, reply) => {
         }
       }
     }
+
+    // Read each plugin's manifest for its real description. allSettled so one
+    // unreadable file cannot fail the whole listing — it just lists without a
+    // description. Cached by sha, so this is a one-time cost per plugin version.
+    await Promise.allSettled(widgets.map(async (widget) => {
+      const meta = await fetchRemotePluginMetadata(widget.download_url, widget.sha);
+      widget.description = meta.description;
+      if (meta.pluginId) widget.pluginId = meta.pluginId;
+    }));
 
     console.log(`Found ${widgets.length} widgets in GitHub repository`);
     return widgets;

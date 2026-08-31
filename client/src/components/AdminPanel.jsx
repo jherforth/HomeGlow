@@ -211,6 +211,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const [prizeOffers, setPrizeOffers] = useState([]);
   const [uploadedWidgets, setUploadedWidgets] = useState([]);
   const [githubWidgets, setGithubWidgets] = useState([]);
+  // Which installed plugin is currently showing a live preview, if any.
+  const [previewPlugin, setPreviewPlugin] = useState(null);
   const [loadingGithub, setLoadingGithub] = useState(false);
   const [colorPickerAnchor, setColorPickerAnchor] = useState({ key: null, el: null });
   const [deleteUserDialog, setDeleteUserDialog] = useState({ open: false, user: null });
@@ -2264,9 +2266,23 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                     <List sx={{ maxHeight: 400, overflowY: 'auto' }}>
                       {githubWidgets.map((widget) => (
                         <ListItem key={widget.path} sx={{ border: '1px solid var(--card-border)', borderRadius: 1, mb: 1 }}>
+                          {/* Sibling image in the plugins repo (chore-metrics.png next to
+                              chore-metrics.html). Deliberately not carried in the manifest:
+                              older HomeGlow versions return the whole manifest in
+                              GET /api/widgets, which every dashboard fetches on boot. */}
+                          {widget.previewUrl && (
+                            <Box
+                              component="img"
+                              src={widget.previewUrl}
+                              alt=""
+                              loading="lazy"
+                              sx={{ width: 96, height: 60, objectFit: 'cover', borderRadius: 1, mr: 2, flexShrink: 0 }}
+                            />
+                          )}
                           <ListItemText
                             primary={widget.name}
-                            secondary={widget.description}
+                            secondary={widget.description || t('admin:plugins.noDescription')}
+                            slotProps={{ secondary: { sx: { fontStyle: widget.description ? 'normal' : 'italic' } } }}
                           />
                           <ListItemSecondaryAction>
                             <Button
@@ -2306,18 +2322,55 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                       return (
                         <Box key={plugin.filename} sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                            <Box>
+                            <Box sx={{ pr: 1 }}>
                               <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
                                 {plugin.name}
                               </Typography>
                               <Typography variant="caption" color="text.secondary">
                                 {plugin.filename}
                               </Typography>
+                              {/* Straight from the plugin's own manifest (issue #147). A
+                                  legacy widget has none, and says so rather than showing
+                                  a made-up line. */}
+                              <Typography
+                                variant="body2"
+                                sx={{ mt: 0.5, color: plugin.manifest?.description ? 'var(--text-color)' : 'text.secondary',
+                                      fontStyle: plugin.manifest?.description ? 'normal' : 'italic' }}
+                              >
+                                {plugin.manifest?.description || t('admin:plugins.noDescription')}
+                              </Typography>
                             </Box>
-                            <IconButton onClick={() => deleteWidget(plugin.filename)} color="error" size="small">
-                              <Delete />
-                            </IconButton>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+                              {/* An installed plugin is already served at /widgets/<file>,
+                                  so it can preview itself. On demand rather than always:
+                                  these are real plugins that make real API calls, and a
+                                  list of live iframes would run all of them at once. */}
+                              <Button
+                                size="small"
+                                onClick={() => setPreviewPlugin((current) => current === plugin.filename ? null : plugin.filename)}
+                              >
+                                {previewPlugin === plugin.filename
+                                  ? t('admin:plugins.hidePreview')
+                                  : t('admin:plugins.showPreview')}
+                              </Button>
+                              <IconButton onClick={() => deleteWidget(plugin.filename)} color="error" size="small">
+                                <Delete />
+                              </IconButton>
+                            </Box>
                           </Box>
+
+                          {previewPlugin === plugin.filename && (
+                            <Box sx={{ mb: 2, border: '1px solid var(--card-border)', borderRadius: 1, overflow: 'hidden', height: 220 }}>
+                              <iframe
+                                title={t('admin:plugins.previewTitle', { name: plugin.name })}
+                                // Same channel PluginWidgetWrapper uses, read from the root
+                                // element because the Admin Panel has no theme prop.
+                                src={`${API_BASE_URL}/widgets/${encodeURIComponent(plugin.filename)}?theme=${document.documentElement.getAttribute('data-theme') || 'light'}&lang=${i18n.language || 'en'}`}
+                                sandbox="allow-scripts allow-same-origin"
+                                style={{ width: '100%', height: '100%', border: 0, display: 'block', backgroundColor: 'var(--card-bg)' }}
+                              />
+                            </Box>
+                          )}
 
                           <Grid container spacing={2} sx={{ alignItems: 'center' }}>
                             <Grid size={{ xs: 12, sm: 6 }}>

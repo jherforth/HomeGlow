@@ -164,7 +164,11 @@
     "transparentBackground": "Transparent Background",
     "options": "Plugin Options",
     "perDevice": "Per device — applies to the device you're editing from",
-    "saveSettings": "Save Plugin Settings"
+    "saveSettings": "Save Plugin Settings",
+    "noDescription": "No description provided",
+    "showPreview": "Preview",
+    "hidePreview": "Hide preview",
+    "previewTitle": "Live preview of {{name}}"
   },
   "devices": {
     "manageHelp": "Manage devices and copy tabs/widget settings between them. Copying will overwrite the current device tabs and widget assignments.",

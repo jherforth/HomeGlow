@@ -148,6 +148,26 @@ const settings = await HomeGlow.settings.get();   // { siphonAmount: 2, mode: "s
 await HomeGlow.settings.set({ siphonAmount: 3 }); // validated against the manifest schema
 ```
 
+### Descriptions and preview images
+
+Give the manifest a `description` and the Admin Panel shows it under the plugin
+name, in the installed list and when browsing the plugin repository. Without one
+a plugin is just a filename. Keep it to a sentence; 300 characters is the cap.
+
+A **preview image** is a sibling file rather than a manifest field: put
+`my-plugin.png` next to `my-plugin.html` in the plugins repository and the browse
+list picks it up automatically (`.png`, `.jpg`, `.jpeg` or `.webp`). Nothing to
+declare.
+
+It is a separate file on purpose. Older HomeGlow versions return the entire
+manifest from `GET /api/widgets`, which every dashboard fetches on boot, so an
+embedded base64 image would be downloaded by every display on every page load of
+any install that had not upgraded. A sibling file is invisible to them.
+
+An installed plugin needs no image at all — the Admin Panel previews it live in a
+sandboxed iframe, which is always current. The sibling image is for the browse
+list, where nothing is installed yet.
+
 ### Core events
 
 Declare the events your plugin cares about in the manifest — names are validated

@@ -98,6 +98,7 @@ Embed a manifest as a JSON script block anywhere in your HTML (conventionally in
   "manifestVersion": 1,
   "id": "my-plugin",
   "name": "My Plugin",
+  "description": "One sentence on what this does, shown in the plugin list.",
   "apiVersion": "v1",
   "storage": true,
   "settings": [ ... ],
@@ -123,6 +124,7 @@ serving your widget, and the SDK picks it up — you never pass your own id.
 | `manifestVersion` | ✅ | Must be `1`. |
 | `id` | ✅ | Unique lowercase slug (`a-z`, `0-9`, `-`, max 64). Your namespace for storage/settings/events. Stable across versions — changing it orphans your data. |
 | `name` | — | Display name shown in the Admin Panel (falls back to the filename). |
+| `description` | — | One sentence on what the plugin does, shown under its name in the Admin Panel and in the browse list. Max 300 characters — it is a card subtitle, not a README. Worth writing: without it the list shows only a filename. |
 | `apiVersion` | — | `"v1"` — the API contract you target. |
 | `storage` | — | `true` to use the storage API. Without it, storage calls are 403. |
 | `settings` | — | Declared settings the Admin Panel renders (see §4). |
