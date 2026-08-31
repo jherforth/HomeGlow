@@ -153,6 +153,14 @@
   "celebration": {
     "redeemedAPrize": "¡{{name}} canjeó un premio!"
   },
+  "visibility": {
+    "openSettings": "Ajustes del widget de tareas",
+    "heading": "Mostrar en esta pantalla",
+    "helper": "Elige quién aparece como columna en esta pantalla. Las demás pantallas seguirán viendo a todos.",
+    "noUsers": "Aún no hay personas para mostrar.",
+    "allHiddenTitle": "No se muestra a nadie en esta pantalla",
+    "allHiddenBody": "Abre los ajustes del widget de tareas (icono del engranaje) y vuelve a activar a alguien."
+  },
   "schedules": {
     "definitionsHeading": "Definiciones de tareas",
     "newChore": "Nueva tarea",

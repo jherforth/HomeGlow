@@ -114,6 +114,12 @@ optional follow-up **reminder interval** that repeats until the chore is complet
   1. **Global master** (`CHORE_SOUND_ENABLED`) in Admin → Chores + a default sound and volume.
   2. **Per-device mute** — the 🔔/🔕 button on the chore widget (stored in
      `choreWidgetSettings.soundEnabled` in device settings) silences one display.
+
+- **Per-device user visibility** (`choreWidgetSettings.hiddenUserIds`): the gear on
+  the chore widget hides users on that display only. Ordering stays global
+  (`users.sort_order`). Stores who is *hidden*, so a user added later shows up
+  everywhere by default. Hiding everyone shows an explanatory panel rather than an
+  empty widget.
   3. **Per-schedule** `sound_enabled` + `due_time`.
 - **The ringer** runs app-level (`useChoreSoundScheduler`), so it fires regardless of
   which tab is showing. It rings once at the due time if the chore is still incomplete

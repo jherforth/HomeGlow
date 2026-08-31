@@ -153,6 +153,14 @@
   "celebration": {
     "redeemedAPrize": "{{name}} redeemed a prize!"
   },
+  "visibility": {
+    "openSettings": "Chore widget settings",
+    "heading": "Show on this display",
+    "helper": "Choose which people appear as columns on this display. Others keep seeing everyone.",
+    "noUsers": "No people to show yet.",
+    "allHiddenTitle": "Nobody is showing on this display",
+    "allHiddenBody": "Open the chore widget settings (gear icon) and turn someone back on."
+  },
   "schedules": {
     "definitionsHeading": "Chore Definitions",
     "newChore": "New Chore",
