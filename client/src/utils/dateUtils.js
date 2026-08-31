@@ -83,6 +83,9 @@ export const formatFullDate = (value) =>
 /** "August 2026" — month and year, for calendar headers. */
 export const formatMonthYear = (value) => formatWith({ year: 'numeric', month: 'long' }, value);
 
+/** "Aug 2026" — short month and year, for narrow calendar headers. */
+export const formatMonthShortYear = (value) => formatWith({ year: 'numeric', month: 'short' }, value);
+
 /** "Thu" — abbreviated weekday. */
 export const formatWeekdayShort = (value) => formatWith({ weekday: 'short' }, value);
 

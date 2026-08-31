@@ -9,7 +9,8 @@
     "weekView": "vista de semana",
     "addEvent": "Añadir evento",
     "editEvent": "Editar evento",
-    "deleteEvent": "Eliminar evento"
+    "deleteEvent": "Eliminar evento",
+    "goToToday": "Ir a hoy"
   },
   "event": {
     "calendar": "Calendario",
@@ -70,7 +71,11 @@
     "defaultColors": "Colores predeterminados de los eventos",
     "eventBackground": "Color de fondo del evento",
     "eventText": "Color del texto del evento",
-    "resetToDefault": "Restablecer valores predeterminados"
+    "resetToDefault": "Restablecer valores predeterminados",
+    "idleReturnHeading": "Volver a hoy automáticamente",
+    "idleReturnHelp": "Tras estos minutos sin ninguna interacción, el calendario vuelve al día de hoy. La vista (mes o semana) se mantiene.",
+    "idleReturnMinutes": "Minutos sin actividad",
+    "idleReturnDisabledHint": "Pon 0 (o déjalo vacío) para desactivarlo."
   },
   "refresh": {
     "disabled": "Desactivado",
