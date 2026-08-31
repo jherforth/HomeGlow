@@ -4,12 +4,26 @@ on:
   push:
     branches:
       - '**'
+  # Without this, a pull request from a fork gets no CI at all: `push` only
+  # fires for branches in this repository, and a fork's branch never is one.
+  # Five external contributions were merged on a reviewer running the suites
+  # by hand before this was added.
+  #
+  # Deliberately `pull_request`, not `pull_request_target`: this checks out
+  # and runs the contributor's code, so it must keep the read-only token and
+  # no access to secrets. `pull_request_target` would hand an untrusted branch
+  # a privileged token.
+  pull_request:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-tests-${{ github.ref }}
+  # Key on the PR head where there is one, so a branch in this repository that
+  # also has a PR open collapses its push run and its pull_request run into a
+  # single group instead of testing the same commit twice. A fork PR has a
+  # distinct head label, so it is unaffected.
+  group: ci-tests-${{ github.event.pull_request.head.label || github.ref }}
   cancel-in-progress: true
 
 jobs:
