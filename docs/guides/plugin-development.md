@@ -249,6 +249,37 @@ correct by the time `chore.allCompleted` arrives.
 live UI signals, not a durable feed — anything that must not be missed belongs
 in a **reaction** (next section) and durable state in **storage**.
 
+### Telling the host you changed core data
+
+Events flow HomeGlow → your plugin. This is the one signal that flows back.
+
+If your plugin writes core data through the REST API — completing a chore,
+adding clams — the host widgets showing that same data do not know. A chore your
+plugin just completed keeps rendering as undone until the chore widget's own
+refresh timer fires, which is **off by default** and five minutes at its
+shortest.
+
+Post one message to the parent window after the write lands:
+
+```js
+window.parent.postMessage({ type: 'homeglow:data-changed', scope: 'chores' }, '*');
+```
+
+HomeGlow re-broadcasts it to any widget listening for that scope, and the chore
+widget refetches. Valid scopes are `chores`, `users`, `calendar` and `prizes`;
+an unknown scope is dropped rather than waking every refetch in the app.
+
+Three things worth knowing:
+
+- **It is safe to send unconditionally.** A HomeGlow that predates this channel
+  ignores the message, as does a plugin page opened outside an iframe.
+- **It only refreshes the display it was sent from.** postMessage is
+  same-page, so a second wall display still waits for its own timer. This is
+  deliberate: the alternative is the SSE event stream, which does not reach the
+  browser on every deployment.
+- **It is a hint, not a write.** The host only refetches. It grants no
+  permission you did not already have by calling the API.
+
 ## 6. Reactions — server-side logic without server-side code
 
 A reaction is a bounded storage increment HomeGlow itself executes whenever an

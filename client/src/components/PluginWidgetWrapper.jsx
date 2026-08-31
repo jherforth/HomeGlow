@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceName } from '../utils/deviceName.js';
 import { subscribePluginEvents } from '../utils/pluginEventBridge.js';
+import { acceptPluginDataMessage, emitPluginDataChanged } from '../utils/pluginDataBridge.js';
 
 const PluginWidgetWrapper = ({ filename, name, theme, transparentBackground = false, refreshNonce = 0, events = [] }) => {
   const { i18n } = useTranslation();
@@ -37,6 +38,24 @@ const PluginWidgetWrapper = ({ filename, name, theme, transparentBackground = fa
       );
     });
   }, [eventsKey, iframeOrigin]);
+
+  // The reverse direction: a plugin that wrote core data through the REST API
+  // tells the host, so widgets showing that data can refetch instead of
+  // waiting out their own refresh timer.
+  //
+  // Trust is anchored on the frame, not the payload: the message must come
+  // from THIS wrapper's iframe and from the origin its document was loaded
+  // from. Any other frame on the page — or an unknown scope — is ignored.
+  useEffect(() => {
+    const onMessage = (event) => {
+      const scope = acceptPluginDataMessage(event, iframeRef.current?.contentWindow, iframeOrigin);
+      if (!scope) return;
+      emitPluginDataChanged(scope, { filename });
+    };
+
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [iframeOrigin, filename]);
 
   return (
     <Box sx={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
