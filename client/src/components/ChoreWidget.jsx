@@ -41,6 +41,7 @@ import { getDeviceApiBase } from '../utils/deviceName.js';
 import { shouldShowChoreToday, getTodayDateString, convertDaysToCrontab, getDueDateStatus, formatDueDate } from '../utils/choreHelpers.js';
 import { filterVisibleUsers, toggleHiddenUserId, pruneHiddenUserIds } from '../utils/choreUserVisibility.js';
 import { subscribePluginEvents } from '../utils/pluginEventBridge.js';
+import { subscribePluginDataChanged } from '../utils/pluginDataBridge.js';
 import { playSound, soundUrl } from '../utils/choreSound.js';
 import { formatTime } from '../utils/dateUtils.js';
 import PrizeCelebration from './PrizeCelebration.jsx';
@@ -188,6 +189,16 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
     return () => {
       window.removeEventListener(USERS_UPDATED_EVENT, onUsersUpdated);
     };
+  }, []);
+
+  // A plugin on this display wrote chore data through the API (a routine
+  // checklist completing its chore, say). Refetch the same way the container's
+  // refresh timer does, rather than leaving a completed chore looking undone
+  // until that timer fires.
+  useEffect(() => {
+    return subscribePluginDataChanged('chores', () => {
+      fetchData();
+    });
   }, []);
 
   // Prize redemptions celebrate on every display showing the chore widget:
