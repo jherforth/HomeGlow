@@ -69,7 +69,7 @@ import {
 import ColorPickerPopover from './ColorPickerPopover';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
-import { getDeviceApiBase, getDeviceName, setDeviceName } from '../utils/deviceName.js';
+import { getDeviceApiBase, getDeviceName, setDeviceName, isValidDeviceName } from '../utils/deviceName.js';
 import PinModal from './PinModal';
 import ChoreSchedulesTab from './ChoreSchedulesTab';
 import ChoreHistoryTab from './ChoreHistoryTab';
@@ -1194,8 +1194,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
   const confirmRenameDevice = async () => {
     const nextName = (renameDeviceDialog.newName || '').trim();
-    if (!nextName) {
-      setRenameDeviceDialog(prev => ({ ...prev, error: 'Device Name is required.' }));
+    if (!isValidDeviceName(nextName)) {
+      setRenameDeviceDialog(prev => ({ ...prev, error: t('admin:devices.nameRule') }));
       return;
     }
 
@@ -4098,7 +4098,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
             fullWidth
             label={t('admin:devices.newName')}
             value={renameDeviceDialog.newName}
-            onChange={(e) => setRenameDeviceDialog(prev => ({ ...prev, newName: e.target.value, error: '' }))}
+            onChange={(e) => {
+              const val = e.target.value;
+              const validationError = isValidDeviceName(val) ? '' : t('admin:devices.nameRule');
+              setRenameDeviceDialog(prev => ({ ...prev, newName: val, error: validationError }));
+            }}
             error={Boolean(renameDeviceDialog.error)}
             helperText={renameDeviceDialog.error || 'This updates the current device name in both server and local storage.'}
             sx={{ mt: 1 }}
@@ -4109,7 +4113,12 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
           <Button onClick={() => setRenameDeviceDialog({ open: false, currentName: '', newName: '', error: '' })} variant="outlined">
             {t('common:actions.cancel')}
           </Button>
-          <Button onClick={confirmRenameDevice} variant="contained" startIcon={<Save />}>
+          <Button
+            onClick={confirmRenameDevice}
+            variant="contained"
+            startIcon={<Save />}
+            disabled={!isValidDeviceName((renameDeviceDialog.newName || '').trim())}
+          >
             {t('admin:devices.saveName')}
           </Button>
         </DialogActions>

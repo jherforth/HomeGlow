@@ -118,6 +118,11 @@ const {
   decryptLegacy,
 } = require('./utils/encryption');
 const { httpsAgentFor, isCertificateVerificationSkipped } = require('./utils/outboundTls');
+const {
+  DEVICE_NAME_RULE_MESSAGE,
+  isValidDeviceName,
+  normalizeDeviceName,
+} = require('./utils/deviceName');
 
 // Certificate policy for every outbound axios request, decided per URL from the
 // target's address class (issue #139). Registered on the default axios instance,
@@ -2270,6 +2275,7 @@ function ensureDeviceExists(deviceName) {
   db.prepare('INSERT OR IGNORE INTO devices (name, updateTime) VALUES (?, CURRENT_TIMESTAMP)').run(deviceName);
   ensureHomeTabExists(deviceName);
 }
+
 function touchDeviceUpdateTime(deviceName) {
   db.prepare('UPDATE devices SET updateTime = CURRENT_TIMESTAMP WHERE name = ?').run(deviceName);
 }
@@ -2361,10 +2367,16 @@ fastify.patch('/api/devices/:deviceName', async (request, reply) => {
     return reply.status(400).send({ error: 'name is required' });
   }
 
-  const trimmedNewName = newName.trim();
+  // NFC-normalise so two visually identical accented names collapse to the
+  // same string on write and on the duplicate check below.
+  const normalizedNewName = normalizeDeviceName(newName);
 
-  if (trimmedNewName === deviceName) {
-    return { success: true, name: trimmedNewName, message: 'Device name unchanged' };
+  if (!isValidDeviceName(normalizedNewName)) {
+    return reply.status(400).send({ error: DEVICE_NAME_RULE_MESSAGE });
+  }
+
+  if (normalizedNewName === deviceName) {
+    return { success: true, name: normalizedNewName, message: 'Device name unchanged' };
   }
 
   try {
@@ -2373,13 +2385,13 @@ fastify.patch('/api/devices/:deviceName', async (request, reply) => {
       return reply.status(404).send({ error: 'Device not found' });
     }
 
-    const alreadyUsed = db.prepare('SELECT name FROM devices WHERE name = ?').get(trimmedNewName);
+    const alreadyUsed = db.prepare('SELECT name FROM devices WHERE name = ?').get(normalizedNewName);
     if (alreadyUsed) {
       return reply.status(409).send({ error: 'A device with that name already exists' });
     }
 
-    db.prepare('UPDATE devices SET name = ?, updateTime = CURRENT_TIMESTAMP WHERE name = ?').run(trimmedNewName, deviceName);
-    return { success: true, name: trimmedNewName, message: 'Device name updated successfully' };
+    db.prepare('UPDATE devices SET name = ?, updateTime = CURRENT_TIMESTAMP WHERE name = ?').run(normalizedNewName, deviceName);
+    return { success: true, name: normalizedNewName, message: 'Device name updated successfully' };
   } catch (error) {
     console.error('Error updating device name:', error);
     reply.status(500).send({ error: 'Failed to update device name' });
