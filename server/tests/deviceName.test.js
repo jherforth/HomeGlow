@@ -83,3 +83,18 @@ test('normalizeDeviceName returns empty string for non-strings', () => {
     assert.equal(normalizeDeviceName(undefined), '');
     assert.equal(normalizeDeviceName(123), '');
 });
+
+test('accepts scripts whose vowel signs are combining marks', () => {
+    // Devanagari, Thai and friends carry matras/viramas in the Unicode Mark
+    // category, so an allow-list of \p{L}\p{N} alone silently excludes them.
+    assert.equal(isValidDeviceName('रसोई'), true, 'Hindi');
+    assert.equal(isValidDeviceName('ครัว'), true, 'Thai');
+    assert.equal(isValidDeviceName('ਰਸੋਈ'), true, 'Punjabi');
+});
+
+test('allowing marks does not let invisible or bidi controls through', () => {
+    // Format characters are \p{Cf}, not \p{M}, so they stay rejected.
+    assert.equal(isValidDeviceName('Kitchen \u200D Display'), false, 'zero-width joiner');
+    assert.equal(isValidDeviceName('Kitchen \u202E Display'), false, 'RTL override');
+    assert.equal(isValidDeviceName('\u0301\u0301'), false, 'marks alone are not a name');
+});

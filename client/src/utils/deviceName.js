@@ -17,7 +17,7 @@
 
 const DEVICE_NAME_STORAGE_KEY = 'homeglow_device_name';
 
-const DEVICE_NAME_ALLOWED = /^[\p{L}\p{N} _\-.'()]+$/u;
+const DEVICE_NAME_ALLOWED = /^[\p{L}\p{M}\p{N} _\-.'()]+$/u;
 const DEVICE_NAME_HAS_ALNUM = /[\p{L}\p{N}]/u;
 const DEVICE_NAME_MAX_LENGTH = 64;
 

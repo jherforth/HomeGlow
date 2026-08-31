@@ -14,7 +14,7 @@
 // server 400 is a backstop, not the user's first experience of the
 // constraint.
 
-const DEVICE_NAME_ALLOWED = /^[\p{L}\p{N} _\-.'()]+$/u;
+const DEVICE_NAME_ALLOWED = /^[\p{L}\p{M}\p{N} _\-.'()]+$/u;
 const DEVICE_NAME_HAS_ALNUM = /[\p{L}\p{N}]/u;
 const DEVICE_NAME_MAX_LENGTH = 64;
 const DEVICE_NAME_RULE_MESSAGE =

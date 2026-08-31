@@ -165,3 +165,17 @@ describe('normalizeDeviceName', () => {
         expect(normalizeDeviceName(12345)).toBe('');
     });
 });
+
+describe('isValidDeviceName — combining-mark scripts', () => {
+    it('accepts scripts whose vowel signs are combining marks', () => {
+        expect(isValidDeviceName('रसोई')).toBe(true);
+        expect(isValidDeviceName('ครัว')).toBe(true);
+        expect(isValidDeviceName('ਰਸੋਈ')).toBe(true);
+    });
+
+    it('still rejects invisible and bidi control characters', () => {
+        expect(isValidDeviceName('Kitchen \u200D Display')).toBe(false);
+        expect(isValidDeviceName('Kitchen \u202E Display')).toBe(false);
+        expect(isValidDeviceName('\u0301\u0301')).toBe(false);
+    });
+});
