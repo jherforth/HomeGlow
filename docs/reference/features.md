@@ -188,9 +188,11 @@ in `server/index.js`.
   calendar colors, so it keeps answering "which calendars is this on?"
 - **Per-event Google colors** (PR #133): an event individually recolored in
   Google keeps that color in HomeGlow instead of inheriting its calendar's.
-- **Return to today**: the period label is a button — tap it to jump back. Inert
-  when already there. Desktop also gets a 📅 button; on a phone the header has no
-  room for one.
+- **Return to today**: the period label is a button — tap it to jump back.
+  Desktop also gets a 📅 button; on a phone the header has no room for one. The
+  control stays live even when already on today: whether "today" is still today
+  is only knowable at click time, so a label asserting it would go stale on a
+  display left running past midnight.
 - **Idle auto-return** (`calendarWidgetSettings.idleReturnMinutes`, per device,
   default 20 minutes, 0 disables): returns to today after that long without
   interaction, so a wall display left on last month stops looking current. Resets
