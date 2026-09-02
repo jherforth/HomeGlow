@@ -2368,7 +2368,12 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                                 title={t('admin:plugins.previewTitle', { name: plugin.name })}
                                 // Same channel PluginWidgetWrapper uses, read from the root
                                 // element because the Admin Panel has no theme prop.
-                                src={`${API_BASE_URL}/widgets/${encodeURIComponent(plugin.filename)}?theme=${document.documentElement.getAttribute('data-theme') || 'light'}&lang=${i18n.language || 'en'}`}
+                                //
+                                // device is carried too, and is not cosmetic: the plugin
+                                // platform refuses to WRITE a device-scoped setting without
+                                // it, so a plugin whose own UI saves one would fail here
+                                // while working fine on the dashboard.
+                                src={`${API_BASE_URL}/widgets/${encodeURIComponent(plugin.filename)}?theme=${document.documentElement.getAttribute('data-theme') || 'light'}&device=${encodeURIComponent(currentDeviceName)}&lang=${i18n.language || 'en'}`}
                                 sandbox="allow-scripts allow-same-origin"
                                 style={{ width: '100%', height: '100%', border: 0, display: 'block', backgroundColor: 'var(--card-bg)' }}
                               />
