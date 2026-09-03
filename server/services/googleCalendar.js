@@ -60,6 +60,49 @@ async function listEventColors(db, accountId) {
     }
 }
 
+// Event labels supersede the legacy /colors palette: a label's backgroundColor
+// is the color Google's own UI shows. They live on the calendar resource, so a
+// per-(account, calendar) cache is the tightest key; a shared TTL with the
+// legacy palette keeps both refreshes on the same cadence.
+const eventLabelCache = new Map();
+
+function eventLabelCacheKey(accountId, calendarId) {
+    return `${accountId}:${calendarId}`;
+}
+
+// Maps a calendar's eventLabelId (UUID) to its backgroundColor hex. Returns an
+// empty map on failure so callers fall through to the legacy colorId path
+// rather than dropping color entirely.
+async function listEventLabels(db, accountId, calendarId) {
+    const cacheKey = eventLabelCacheKey(accountId, calendarId);
+    const cached = eventLabelCache.get(cacheKey);
+    if (cached && Date.now() - cached.fetchedAt < EVENT_COLOR_CACHE_TTL_MS) {
+        return cached.labels;
+    }
+
+    try {
+        const labels = {};
+        const data = await googleFetch(db, accountId, 'GET', `/calendars/${encodeURIComponent(calendarId)}`);
+        const list = data && data.labelProperties && data.labelProperties.eventLabels;
+        if (Array.isArray(list)) {
+            for (const label of list) {
+                if (label && label.id && label.backgroundColor) {
+                    labels[label.id] = label.backgroundColor;
+                }
+            }
+        }
+        // Same reasoning as listEventColors: only cache successful fetches.
+        // A transient failure returning an empty map, if cached, would strip
+        // label colors for the whole TTL and freeze that state into raw_data
+        // for every event synced in that window.
+        eventLabelCache.set(cacheKey, { labels, fetchedAt: Date.now() });
+        return labels;
+    } catch (error) {
+        console.error('Error fetching Google event labels:', error.message);
+        return {};
+    }
+}
+
 function parseEventDate(dt) {
     if (!dt) return null;
     if (dt.date) {
@@ -139,6 +182,7 @@ async function deleteEvent(db, accountId, calendarId, eventId) {
 module.exports = {
     listCalendars,
     listEventColors,
+    listEventLabels,
     listEvents,
     createEvent,
     updateEvent,

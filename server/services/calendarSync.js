@@ -231,7 +231,10 @@ class CalendarSyncService {
     const timeMin = new Date(now - 13 * 30 * 24 * 60 * 60 * 1000);
     const timeMax = new Date(now + 13 * 30 * 24 * 60 * 60 * 1000);
     const items = await googleCalendar.listEvents(this.db, account.id, calendarId, { timeMin, timeMax });
-    const eventColors = await googleCalendar.listEventColors(this.db, account.id);
+    const [eventColors, eventLabels] = await Promise.all([
+      googleCalendar.listEventColors(this.db, account.id),
+      googleCalendar.listEventLabels(this.db, account.id, calendarId),
+    ]);
 
     const out = [];
     for (const item of items) {
@@ -244,10 +247,16 @@ class CalendarSyncService {
       if (start.allDay) {
         endDate = new Date(endDate.getTime() - 24 * 60 * 60 * 1000);
       }
-      // colorId is only set when the event was individually recolored in
-      // Google; events on the calendar's default color omit it entirely, and
-      // those fall through to the source color at read time.
+      // Custom-label events carry only eventLabelId; default-palette events
+      // carry both. Prefer the label because its backgroundColor matches what
+      // Google's own UI shows — the legacy /colors palette still returns
+      // pre-2016 hexes (e.g. colorId 8 -> #e1e1e1 near-white, while the label
+      // is #616161 dark grey). An unresolvable label falls through so a stale
+      // label cache never strips color from an event that also has a colorId.
       const colorId = item.colorId || null;
+      const eventLabelId = item.eventLabelId || null;
+      const labelColor = eventLabelId ? (eventLabels[eventLabelId] || null) : null;
+      const paletteColor = colorId ? (eventColors[colorId] || null) : null;
       out.push({
         uid: item.id,
         title: item.summary || 'Untitled Event',
@@ -261,7 +270,8 @@ class CalendarSyncService {
           htmlLink: item.htmlLink,
           etag: item.etag,
           colorId,
-          eventColor: colorId ? (eventColors[colorId] || null) : null,
+          eventLabelId,
+          eventColor: labelColor || paletteColor || null,
         },
       });
     }
