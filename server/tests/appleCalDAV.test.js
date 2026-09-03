@@ -1,6 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
+const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 const { XMLValidator } = require('fast-xml-parser');
 const {
     ICLOUD_XML_MESSAGE,
@@ -11,10 +13,315 @@ const {
     normalizeFeedUrl,
     extractIcsPayloads,
     icsToEvents,
+    isAllDaySpan,
     fetchCalendarEvents,
 } = require('../services/appleCalDAV');
 
+// ---------------------------------------------------------------------------
+// All-day anchoring and recurrence expansion
+// ---------------------------------------------------------------------------
+
+const WINDOW = {
+    from: new Date('2026-08-01T00:00:00.000Z'),
+    to: new Date('2026-11-01T00:00:00.000Z'),
+};
+
+function wrapVEvents(...bodies) {
+    return [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//HomeGlow Regression Test//EN',
+        ...bodies,
+        'END:VCALENDAR',
+    ].join('\r\n');
+}
+
+const CHICAGO_VTIMEZONE = [
+    'BEGIN:VTIMEZONE',
+    'TZID:America/Chicago',
+    'BEGIN:DAYLIGHT',
+    'TZOFFSETFROM:-0600',
+    'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU',
+    'DTSTART:20070311T020000',
+    'TZNAME:CDT',
+    'TZOFFSETTO:-0500',
+    'END:DAYLIGHT',
+    'BEGIN:STANDARD',
+    'TZOFFSETFROM:-0500',
+    'RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU',
+    'DTSTART:20071104T020000',
+    'TZNAME:CST',
+    'TZOFFSETTO:-0600',
+    'END:STANDARD',
+    'END:VTIMEZONE',
+].join('\r\n');
+
+// A team feed writes its day markers as a timed midnight-to-midnight span rather
+// than VALUE=DATE. Resolving that against the server's zone put "NO PRACTICE on
+// Sep 5" at 11:00 PM on Sep 4 for any display west of the backend.
+test('icsToEvents treats a midnight-to-midnight span as an all-day event on that date', () => {
+    const events = icsToEvents(wrapVEvents(
+        'BEGIN:VEVENT',
+        'UID:day-marker',
+        'SUMMARY:NO PRACTICE',
+        'DTSTART:20260905T000000',
+        'DTEND:20260906T000000',
+        'END:VEVENT',
+    ), WINDOW);
+
+    assert.equal(events.length, 1);
+    assert.equal(events[0].all_day, true);
+    assert.equal(events[0].start.toISOString(), '2026-09-05T00:00:00.000Z');
+    assert.equal(events[0].end.toISOString(), '2026-09-05T00:00:00.000Z');
+});
+
+test('icsToEvents anchors a date-only event to UTC midnight of its date', () => {
+    const events = icsToEvents(wrapVEvents(
+        'BEGIN:VEVENT',
+        'UID:date-only',
+        'SUMMARY:No School',
+        'DTSTART;VALUE=DATE:20260905',
+        'DTEND;VALUE=DATE:20260906',
+        'END:VEVENT',
+    ), WINDOW);
+
+    assert.equal(events.length, 1);
+    assert.equal(events[0].all_day, true);
+    assert.equal(events[0].start.toISOString(), '2026-09-05T00:00:00.000Z');
+    assert.equal(events[0].end.toISOString(), '2026-09-05T00:00:00.000Z');
+});
+
+test('icsToEvents stores the last covered day for a multi-day all-day event', () => {
+    const events = icsToEvents(wrapVEvents(
+        'BEGIN:VEVENT',
+        'UID:trip',
+        'SUMMARY:Trip',
+        'DTSTART;VALUE=DATE:20260914',
+        'DTEND;VALUE=DATE:20260918',
+        'END:VEVENT',
+    ), WINDOW);
+
+    assert.equal(events.length, 1);
+    assert.equal(events[0].start.toISOString(), '2026-09-14T00:00:00.000Z');
+    // DTEND is exclusive; the cache stores the last day the event covers.
+    assert.equal(events[0].end.toISOString(), '2026-09-17T00:00:00.000Z');
+});
+
+test('icsToEvents keeps a zoned timed event as an exact instant', () => {
+    const events = icsToEvents(wrapVEvents(
+        CHICAGO_VTIMEZONE,
+        'BEGIN:VEVENT',
+        'UID:practice',
+        'SUMMARY:Practice',
+        'DTSTART;TZID=America/Chicago:20260904T160000',
+        'DTEND;TZID=America/Chicago:20260904T173000',
+        'END:VEVENT',
+    ), WINDOW);
+
+    assert.equal(events.length, 1);
+    assert.equal(events[0].all_day, false);
+    assert.equal(events[0].start.toISOString(), '2026-09-04T21:00:00.000Z');
+    assert.equal(events[0].end.toISOString(), '2026-09-04T22:30:00.000Z');
+});
+
+test('isAllDaySpan only claims whole-day spans', () => {
+    const time = (opts) => ({ hour: 0, minute: 0, second: 0, isDate: false, compare: () => 1, ...opts });
+
+    assert.equal(isAllDaySpan(time({ isDate: true }), null), true, 'date-only needs no end');
+    assert.equal(isAllDaySpan(time(), time()), true, 'midnight to a later midnight');
+    assert.equal(isAllDaySpan(time({ hour: 16 }), time()), false, 'timed start');
+    assert.equal(isAllDaySpan(time(), time({ minute: 30 })), false, 'timed end');
+    assert.equal(isAllDaySpan(time(), time({ compare: () => 0 })), false, 'zero-length midnight event');
+    assert.equal(isAllDaySpan(null, time()), false, 'no start');
+});
+
+// A recurring series arrives as one master VEVENT. Reading DTSTART off it showed
+// a weekly practice once, on the week the series began.
+test('icsToEvents expands a recurring series across the window', () => {
+    const events = icsToEvents(wrapVEvents(
+        'BEGIN:VEVENT',
+        'UID:weekly-practice',
+        'SUMMARY:Practice',
+        'DTSTART:20260901T210000Z',
+        'DTEND:20260901T223000Z',
+        'RRULE:FREQ=WEEKLY;COUNT=4',
+        'END:VEVENT',
+    ), WINDOW);
+
+    assert.deepEqual(events.map((e) => e.start.toISOString()), [
+        '2026-09-01T21:00:00.000Z',
+        '2026-09-08T21:00:00.000Z',
+        '2026-09-15T21:00:00.000Z',
+        '2026-09-22T21:00:00.000Z',
+    ]);
+    // Each occurrence needs its own uid: the cache is keyed on (source, uid).
+    assert.equal(new Set(events.map((e) => e.uid)).size, 4);
+});
+
+test('icsToEvents drops occurrences excluded by EXDATE', () => {
+    const events = icsToEvents(wrapVEvents(
+        'BEGIN:VEVENT',
+        'UID:weekly-practice',
+        'SUMMARY:Practice',
+        'DTSTART:20260901T210000Z',
+        'DTEND:20260901T223000Z',
+        'RRULE:FREQ=WEEKLY;COUNT=4',
+        'EXDATE:20260915T210000Z',
+        'END:VEVENT',
+    ), WINDOW);
+
+    assert.deepEqual(events.map((e) => e.start.toISOString()), [
+        '2026-09-01T21:00:00.000Z',
+        '2026-09-08T21:00:00.000Z',
+        '2026-09-22T21:00:00.000Z',
+    ]);
+});
+
+test('icsToEvents applies a RECURRENCE-ID override to its occurrence only', () => {
+    const events = icsToEvents(wrapVEvents(
+        'BEGIN:VEVENT',
+        'UID:weekly-practice',
+        'SUMMARY:Practice',
+        'DTSTART:20260901T210000Z',
+        'DTEND:20260901T223000Z',
+        'RRULE:FREQ=WEEKLY;COUNT=3',
+        'END:VEVENT',
+        'BEGIN:VEVENT',
+        'UID:weekly-practice',
+        'RECURRENCE-ID:20260908T210000Z',
+        'SUMMARY:Practice (moved)',
+        'DTSTART:20260908T233000Z',
+        'DTEND:20260909T010000Z',
+        'END:VEVENT',
+    ), WINDOW);
+
+    assert.equal(events.length, 3);
+    const moved = events.find((e) => e.title === 'Practice (moved)');
+    assert.ok(moved, 'the override must replace its occurrence');
+    assert.equal(moved.start.toISOString(), '2026-09-08T23:30:00.000Z');
+    // The master's own 9:00 PM slot for that date must be gone, not duplicated.
+    assert.equal(events.filter((e) => e.start.toISOString() === '2026-09-08T21:00:00.000Z').length, 0);
+});
+
+test('icsToEvents keeps an orphan RECURRENCE-ID override whose master is absent', () => {
+    const events = icsToEvents(wrapVEvents(
+        'BEGIN:VEVENT',
+        'UID:elsewhere',
+        'RECURRENCE-ID:20260908T210000Z',
+        'SUMMARY:Practice (moved)',
+        'DTSTART:20260908T233000Z',
+        'DTEND:20260909T010000Z',
+        'END:VEVENT',
+    ), WINDOW);
+
+    assert.equal(events.length, 1);
+    assert.equal(events[0].title, 'Practice (moved)');
+});
+
+test('icsToEvents bounds an open-ended series to the requested window', () => {
+    const events = icsToEvents(wrapVEvents(
+        'BEGIN:VEVENT',
+        'UID:forever',
+        'SUMMARY:Daily standup',
+        'DTSTART:20200106T150000Z',
+        'DTEND:20200106T151500Z',
+        'RRULE:FREQ=DAILY',
+        'END:VEVENT',
+    ), { from: new Date('2026-09-01T00:00:00.000Z'), to: new Date('2026-09-05T00:00:00.000Z') });
+
+    assert.deepEqual(events.map((e) => e.start.toISOString().slice(0, 10)), [
+        '2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04',
+    ]);
+});
+
+test('icsToEvents survives a malformed VEVENT alongside a good one', () => {
+    const events = icsToEvents(wrapVEvents(
+        'BEGIN:VEVENT',
+        'UID:broken',
+        'SUMMARY:No dates at all',
+        'END:VEVENT',
+        'BEGIN:VEVENT',
+        'UID:fine',
+        'SUMMARY:Good event',
+        'DTSTART:20260904T210000Z',
+        'DTEND:20260904T220000Z',
+        'END:VEVENT',
+    ), WINDOW);
+
+    assert.deepEqual(events.map((e) => e.title), ['Good event']);
+});
+
+// The bug this guards was invisible in-process: the backend container ran on
+// America/New_York while the display was on America/Chicago, so the cached row
+// carried the backend's zone. Run the same payload under two very different
+// zones in real subprocesses and require identical output.
+test('icsToEvents output does not depend on the server timezone', () => {
+    const payload = wrapVEvents(
+        CHICAGO_VTIMEZONE,
+        'BEGIN:VEVENT',
+        'UID:day-marker',
+        'SUMMARY:NO PRACTICE',
+        'DTSTART:20260905T000000',
+        'DTEND:20260906T000000',
+        'END:VEVENT',
+        'BEGIN:VEVENT',
+        'UID:date-only',
+        'SUMMARY:No School',
+        'DTSTART;VALUE=DATE:20260921',
+        'DTEND;VALUE=DATE:20260922',
+        'END:VEVENT',
+        'BEGIN:VEVENT',
+        'UID:practice',
+        'SUMMARY:Practice',
+        'DTSTART;TZID=America/Chicago:20260904T160000',
+        'DTEND;TZID=America/Chicago:20260904T173000',
+        'RRULE:FREQ=WEEKLY;COUNT=3',
+        'END:VEVENT',
+    );
+
+    const script = `
+        const { icsToEvents } = require(${JSON.stringify(path.resolve(__dirname, '../services/appleCalDAV'))});
+        const events = icsToEvents(process.env.HOMEGLOW_TEST_ICS, {
+            from: new Date('2026-08-01T00:00:00.000Z'),
+            to: new Date('2026-11-01T00:00:00.000Z'),
+        });
+        process.stdout.write(JSON.stringify(events.map((e) => [
+            e.title, e.all_day, e.start.toISOString(), e.end.toISOString(),
+        ])));
+    `;
+
+    const runUnder = (tz) => {
+        const result = spawnSync(process.execPath, ['-e', script], {
+            env: { ...process.env, TZ: tz, HOMEGLOW_TEST_ICS: payload },
+            encoding: 'utf8',
+        });
+        assert.equal(result.status, 0, `child failed under TZ=${tz}: ${result.stderr}`);
+        return result.stdout;
+    };
+
+    const eastern = runUnder('America/New_York');
+    assert.equal(runUnder('Asia/Tokyo'), eastern, 'a positive-offset server must agree');
+    assert.equal(runUnder('UTC'), eastern, 'a UTC server must agree');
+
+    const parsed = JSON.parse(eastern);
+    assert.deepEqual(parsed[0], ['NO PRACTICE', true, '2026-09-05T00:00:00.000Z', '2026-09-05T00:00:00.000Z']);
+    assert.deepEqual(parsed[1], ['No School', true, '2026-09-21T00:00:00.000Z', '2026-09-21T00:00:00.000Z']);
+    assert.equal(parsed.filter((e) => e[0] === 'Practice').length, 3);
+    assert.equal(parsed.find((e) => e[0] === 'Practice')[2], '2026-09-04T21:00:00.000Z');
+});
+
 // Anonymized fixtures: no real names, emails, or principal/DSID values.
+//
+// Fixture dates are relative to today on purpose: icsToEvents only keeps events
+// inside a +/-13-month window (an unfiltered subscription feed can otherwise
+// carry a decade of history), so a hardcoded date would silently age out of the
+// window and start failing these tests.
+const FIXTURE_DAY = (() => {
+    const d = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`;
+})();
+
 const ANON_VCALENDAR = [
     'BEGIN:VCALENDAR',
     'CALSCALE:GREGORIAN',
@@ -24,8 +331,8 @@ const ANON_VCALENDAR = [
     'ATTENDEE;CN=Jane Doe;CUTYPE=INDIVIDUAL;EMAIL=jane@example.com',
     ' ;PARTSTAT=ACCEPTED;ROLE=CHAIR:/principal/',
     'CREATED:20251215T153939Z',
-    'DTEND;TZID=America/Chicago:20260309T104500',
-    'DTSTART;TZID=America/Chicago:20260309T094500',
+    `DTEND;TZID=America/Chicago:${FIXTURE_DAY}T104500`,
+    `DTSTART;TZID=America/Chicago:${FIXTURE_DAY}T094500`,
     'SUMMARY:Sample Event',
     'UID:00000000-0000-0000-0000-000000000000',
     'DTSTAMP:20260108T022826Z',
@@ -325,8 +632,8 @@ function buildVCalendar(summary, uid) {
         'PRODID:-//Example Inc.//Example//EN',
         'VERSION:2.0',
         'BEGIN:VEVENT',
-        'DTSTART;TZID=America/Chicago:20260309T094500',
-        'DTEND;TZID=America/Chicago:20260309T104500',
+        `DTSTART;TZID=America/Chicago:${FIXTURE_DAY}T094500`,
+        `DTEND;TZID=America/Chicago:${FIXTURE_DAY}T104500`,
         `SUMMARY:${summary}`,
         `UID:${uid}`,
         'DTSTAMP:20260108T022826Z',

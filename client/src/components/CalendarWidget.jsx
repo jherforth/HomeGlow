@@ -9,6 +9,7 @@ import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
 import { getEventPillPalette, getPreferredColorMode } from '../utils/colorContrast.js';
 import { buildMergedDotColors, buildMergedDotBackground, describeMergedCalendars } from '../utils/calendarMergeColors.js';
+import { parseCalendarDate } from '../utils/calendarDates.js';
 import useIsMobile from '../hooks/useIsMobile.js';
 import { usePageVisibility } from '../hooks/useScreenActivity.js';
 import {
@@ -612,8 +613,8 @@ const CalendarWidget = ({
         const formattedEvents = response.data.map(event => ({
           id: event.id || Math.random().toString(),
           title: event.title || event.summary || 'Untitled Event',
-          start: new Date(event.start),
-          end: new Date(event.end),
+          start: parseCalendarDate(event.start, event.all_day),
+          end: parseCalendarDate(event.end, event.all_day),
           description: event.description || '',
           location: event.location || '',
           all_day: event.all_day || false,

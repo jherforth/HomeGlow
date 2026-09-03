@@ -37,6 +37,64 @@ test('normalizeAllDayEnd subtracts one day for all-day events', () => {
     assert.equal(result.toISOString().slice(0, 10), '2026-05-01');
 });
 
+// node-ical resolves date-only values against server-local midnight. Storing
+// that instant as-is bakes the backend's timezone into the row, which is how an
+// all-day event ends up rendered at 11:00 PM the day before on a display in a
+// different zone.
+test('normalizeAllDayRange re-anchors local-midnight dates to UTC midnight', () => {
+    const service = new CalendarSyncService({}, () => null);
+
+    // Local midnight on Sep 5, whatever zone this process runs in.
+    const localStart = new Date(2026, 8, 5);
+    const localExclusiveEnd = new Date(2026, 8, 6);
+
+    const single = service.normalizeAllDayRange(localStart, localExclusiveEnd);
+    assert.equal(single.start.toISOString(), '2026-09-05T00:00:00.000Z');
+    // DTEND is exclusive; a one-day event ends on the day it starts.
+    assert.equal(single.end.toISOString(), '2026-09-05T00:00:00.000Z');
+
+    const span = service.normalizeAllDayRange(localStart, new Date(2026, 8, 8));
+    assert.equal(span.start.toISOString(), '2026-09-05T00:00:00.000Z');
+    assert.equal(span.end.toISOString(), '2026-09-07T00:00:00.000Z');
+
+    // A missing DTEND means a single day, not a zero-length event.
+    const noEnd = service.normalizeAllDayRange(localStart, null);
+    assert.equal(noEnd.start.toISOString(), '2026-09-05T00:00:00.000Z');
+    assert.equal(noEnd.end.toISOString(), '2026-09-05T00:00:00.000Z');
+});
+
+test('fetchICSEvents anchors all-day events to UTC midnight of their date', async () => {
+    const fixture = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//HomeGlow Regression Test//EN',
+        'BEGIN:VEVENT',
+        'UID:all-day@example.com',
+        'DTSTAMP:20260901T120000Z',
+        'DTSTART;VALUE=DATE:20260905',
+        'DTEND;VALUE=DATE:20260906',
+        'SUMMARY:No School',
+        'END:VEVENT',
+        'END:VCALENDAR',
+    ].join('\r\n');
+
+    const parsed = nodeIcal.sync.parseICS(fixture);
+    const service = new CalendarSyncService({}, () => null);
+    const originalFromUrl = nodeIcal.async.fromURL;
+    nodeIcal.async.fromURL = async () => parsed;
+
+    try {
+        const events = await service.fetchICSEvents({ id: 'fixture', url: 'http://example.invalid/test.ics' });
+
+        assert.equal(events.length, 1);
+        assert.equal(events[0].all_day, true);
+        assert.equal(events[0].start.toISOString(), '2026-09-05T00:00:00.000Z');
+        assert.equal(events[0].end.toISOString(), '2026-09-05T00:00:00.000Z');
+    } finally {
+        nodeIcal.async.fromURL = originalFromUrl;
+    }
+});
+
 test('fetchICSEvents normalizes SUMMARY/DESCRIPTION/LOCATION to strings', async () => {
     const fixture = buildFixtureIcs();
     const parsed = nodeIcal.sync.parseICS(fixture);

@@ -5,6 +5,7 @@ const googleConnection = require('./googleConnection');
 const googleCalendar = require('./googleCalendar');
 const appleCalDAV = require('./appleCalDAV');
 const { dedupeCalendarEvents } = require('../utils/calendarDedup');
+const { DAY_MS, utcMidnightFromLocalDate, inclusiveAllDayEnd } = require('../utils/calendarDates');
 
 class CalendarSyncService {
   constructor(db, decryptPassword) {
@@ -23,6 +24,18 @@ class CalendarSyncService {
     const d = new Date(end);
     d.setDate(d.getDate() - 1);
     return d;
+  }
+
+  // node-ical resolves date-only values against the server's local midnight,
+  // which bakes this machine's timezone into the cached row. Re-anchor the pair
+  // to UTC midnight of the calendar date so a display in another zone still
+  // renders the event on the day the feed named. See utils/calendarDates.
+  normalizeAllDayRange(start, end) {
+    const utcStart = utcMidnightFromLocalDate(start);
+    const exclusiveEnd = end === undefined || end === null
+      ? new Date(utcStart.getTime() + DAY_MS)
+      : utcMidnightFromLocalDate(end);
+    return { start: utcStart, end: inclusiveAllDayEnd(utcStart, exclusiveEnd) };
   }
 
   normalizeIcsTextValue(value) {
@@ -148,11 +161,14 @@ class CalendarSyncService {
       if (!instances) {
         const isAllDay = event.start?.dateOnly ?? false;
         const rawEnd = event.end;
+        const times = isAllDay
+          ? this.normalizeAllDayRange(event.start, rawEnd)
+          : { start: new Date(event.start), end: new Date(rawEnd) };
         out.push({
           uid: event.uid || `${source.id}-${Date.now()}-${Math.random()}`,
           title: this.normalizeIcsTextValue(event.summary) || 'Untitled Event',
-          start: new Date(event.start),
-          end: isAllDay ? this.normalizeAllDayEnd(rawEnd) : new Date(rawEnd),
+          start: times.start,
+          end: times.end,
           description: this.normalizeIcsTextValue(event.description),
           location: this.normalizeIcsTextValue(event.location),
           all_day: isAllDay,
@@ -163,12 +179,16 @@ class CalendarSyncService {
 
       for (const instance of instances) {
         const isAllDay = instance.start?.dateOnly ?? instance.event?.start?.dateOnly ?? false;
+        const rawStart = instance.start ?? instance.event?.start;
         const rawEnd = instance.end ?? instance.event?.end;
+        const times = isAllDay
+          ? this.normalizeAllDayRange(rawStart, rawEnd)
+          : { start: new Date(rawStart), end: new Date(rawEnd) };
         out.push({
-          uid: `${instance.uid ?? instance.event?.uid ?? source.id}-${new Date(instance.start ?? instance.event?.start).getTime()}`,
+          uid: `${instance.uid ?? instance.event?.uid ?? source.id}-${new Date(rawStart).getTime()}`,
           title: this.normalizeIcsTextValue(instance.summary ?? instance.event?.summary) || 'Untitled Event',
-          start: new Date(instance.start ?? instance.event?.start),
-          end: isAllDay ? this.normalizeAllDayEnd(rawEnd) : new Date(rawEnd),
+          start: times.start,
+          end: times.end,
           description: this.normalizeIcsTextValue(instance.description ?? instance.event?.description),
           location: this.normalizeIcsTextValue(instance.location ?? instance.event?.location),
           all_day: isAllDay,
