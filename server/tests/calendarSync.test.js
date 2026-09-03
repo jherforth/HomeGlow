@@ -1,7 +1,40 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const http = require('node:http');
 const nodeIcal = require('node-ical');
 const CalendarSyncService = require('../services/calendarSync');
+
+// Fixture dates are relative to today: icsToEvents keeps only events inside a
+// +/-13-month window, so a hardcoded date would silently age out of it.
+const FIXTURE_DATE = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+const pad = (n) => String(n).padStart(2, '0');
+const fixtureYmd = (offsetDays = 0) => {
+    const d = new Date(FIXTURE_DATE.getTime() + offsetDays * 24 * 60 * 60 * 1000);
+    return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`;
+};
+const fixtureUtcMidnight = (offsetDays = 0) =>
+    `${fixtureYmd(offsetDays).replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3')}T00:00:00.000Z`;
+
+// Serves whatever a test puts in `state`, recording each request so the test can
+// assert what was actually sent on the wire.
+async function startFakeIcsHost() {
+    const state = { status: 200, contentType: 'text/calendar', body: '', requests: [] };
+
+    const server = http.createServer((req, res) => {
+        state.requests.push({ method: req.method, url: req.url, authorization: req.headers.authorization ?? null });
+        res.writeHead(state.status, { 'Content-Type': state.contentType });
+        res.end(state.body);
+    });
+
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+
+    return {
+        state,
+        url: `http://127.0.0.1:${server.address().port}/calendar.ics`,
+        close: () => new Promise((resolve) => server.close(resolve)),
+    };
+}
+
 
 function buildFixtureIcs() {
     return [
@@ -127,8 +160,133 @@ test('fetchICSEvents normalizes SUMMARY/DESCRIPTION/LOCATION to strings', async 
     }
 });
 
-test('getCachedEvents maps cached rows with source metadata', () => {
-    const sources = [
+// ---------------------------------------------------------------------------
+// Generic CalDAV sources (an ICS document behind HTTP basic auth)
+// ---------------------------------------------------------------------------
+
+test('fetchCalDAVEvents sends basic auth built from the decrypted password', async () => {
+    const host = await startFakeIcsHost();
+    host.state.body = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//HomeGlow Regression Test//EN',
+        'BEGIN:VEVENT',
+        'UID:caldav-timed@example.com',
+        `DTSTART:${fixtureYmd()}T150000Z`,
+        `DTEND:${fixtureYmd()}T160000Z`,
+        'SUMMARY:Timed event',
+        'END:VEVENT',
+        'END:VCALENDAR',
+    ].join('\r\n');
+
+    const service = new CalendarSyncService({}, () => 'plaintext-secret');
+
+    try {
+        const events = await service.fetchCalDAVEvents({
+            id: 7,
+            url: host.url,
+            username: 'user@example.com',
+            password: 'encrypted-blob',
+        });
+
+        assert.equal(events.length, 1);
+        assert.equal(events[0].title, 'Timed event');
+
+        assert.equal(host.state.requests.length, 1);
+        const expected = 'Basic ' + Buffer.from('user@example.com:plaintext-secret').toString('base64');
+        assert.equal(host.state.requests[0].authorization, expected);
+    } finally {
+        await host.close();
+    }
+});
+
+// This path hand-rolled its own ICS parse, so it carried both of the bugs the
+// shared reader fixes: a series showed up once at the date it began, and an
+// all-day event was anchored to the server's local midnight.
+test('fetchCalDAVEvents expands recurring events and anchors all-day dates', async () => {
+    const host = await startFakeIcsHost();
+    host.state.body = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//HomeGlow Regression Test//EN',
+        'BEGIN:VEVENT',
+        'UID:caldav-weekly@example.com',
+        `DTSTART:${fixtureYmd()}T150000Z`,
+        `DTEND:${fixtureYmd()}T160000Z`,
+        'SUMMARY:Weekly standup',
+        'RRULE:FREQ=WEEKLY;COUNT=3',
+        'END:VEVENT',
+        'BEGIN:VEVENT',
+        'UID:caldav-allday@example.com',
+        `DTSTART;VALUE=DATE:${fixtureYmd(1)}`,
+        `DTEND;VALUE=DATE:${fixtureYmd(2)}`,
+        'SUMMARY:Day off',
+        'END:VEVENT',
+        'END:VCALENDAR',
+    ].join('\r\n');
+
+    const service = new CalendarSyncService({}, () => 'secret');
+
+    try {
+        const events = await service.fetchCalDAVEvents({
+            id: 7, url: host.url, username: 'user', password: 'blob',
+        });
+
+        const standups = events.filter((e) => e.title === 'Weekly standup');
+        assert.equal(standups.length, 3, 'the series must be expanded, not cached once');
+        const days = standups.map((e) => e.start.getTime());
+        assert.equal(days[1] - days[0], 7 * 24 * 60 * 60 * 1000);
+        assert.equal(days[2] - days[1], 7 * 24 * 60 * 60 * 1000);
+        assert.equal(new Set(standups.map((e) => e.uid)).size, 3, 'each occurrence needs its own uid');
+
+        const dayOff = events.find((e) => e.title === 'Day off');
+        assert.ok(dayOff);
+        assert.equal(dayOff.all_day, true);
+        assert.equal(dayOff.start.toISOString(), fixtureUtcMidnight(1));
+        assert.equal(dayOff.end.toISOString(), fixtureUtcMidnight(1));
+    } finally {
+        await host.close();
+    }
+});
+
+test('fetchCalDAVEvents rejects a 200 that is not an iCalendar document', async () => {
+    const host = await startFakeIcsHost();
+    // What a collection URL needing a REPORT, or an auth redirect to a login
+    // page, actually returns. ical.js would fail on it with a parse error that
+    // says nothing useful.
+    host.state.contentType = 'text/html';
+    host.state.body = '<!doctype html><html><body>Please sign in</body></html>';
+
+    const service = new CalendarSyncService({}, () => 'secret');
+
+    try {
+        await assert.rejects(
+            () => service.fetchCalDAVEvents({ id: 7, url: host.url, username: 'user', password: 'blob' }),
+            /did not return an iCalendar document/
+        );
+    } finally {
+        await host.close();
+    }
+});
+
+test('fetchCalDAVEvents reports a failing HTTP status instead of parsing the body', async () => {
+    const host = await startFakeIcsHost();
+    host.state.status = 401;
+    host.state.body = 'Unauthorized';
+
+    const service = new CalendarSyncService({}, () => 'wrong-password');
+
+    try {
+        await assert.rejects(
+            () => service.fetchCalDAVEvents({ id: 7, url: host.url, username: 'user', password: 'blob' }),
+            /HTTP 401/
+        );
+    } finally {
+        await host.close();
+    }
+});
+
+test('getCachedEvents maps cached rows with source metadata', () => {    const sources = [
         { id: 1, name: 'Family', color: '#123456' },
     ];
 

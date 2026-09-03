@@ -1,11 +1,11 @@
 const axios = require('axios');
-const ICAL = require('ical.js');
 const node_ical = require('node-ical');
 const googleConnection = require('./googleConnection');
 const googleCalendar = require('./googleCalendar');
 const appleCalDAV = require('./appleCalDAV');
 const { dedupeCalendarEvents } = require('../utils/calendarDedup');
 const { DAY_MS, utcMidnightFromLocalDate, inclusiveAllDayEnd } = require('../utils/calendarDates');
+const { icsToEvents } = require('../utils/icsEvents');
 
 class CalendarSyncService {
   constructor(db, decryptPassword) {
@@ -200,37 +200,42 @@ class CalendarSyncService {
     return out;
   }
 
+  // A "CalDAV" source is an ICS document behind HTTP basic auth: the calendar
+  // export URL of a Nextcloud/Baikal/Radicale install, or any private ICS feed.
+  // (iCloud is its own source type — it needs PROPFIND discovery, see
+  // fetchAppleCalDAVEvents.)
+  //
+  // Parsing is delegated to the shared ICS reader. This used to hand-roll it,
+  // which meant a recurring event was cached once at the date the series began,
+  // and an all-day event was anchored to the server's local midnight — landing
+  // it on the previous day on any display in another timezone.
   async fetchCalDAVEvents(source) {
     const decryptedPassword = this.decryptPassword(source.password);
     const authHeader = 'Basic ' + Buffer.from(`${source.username}:${decryptedPassword}`).toString('base64');
 
     const response = await axios.get(source.url, {
       headers: { 'Authorization': authHeader },
-      timeout: 15000
+      timeout: 15000,
+      responseType: 'text',
+      // Keep the body a raw string; the ICS reader needs the original text.
+      transformResponse: [(data) => data],
+      maxRedirects: 5,
+      validateStatus: (s) => s < 500,
     });
 
-    const icsData = response.data;
-    const jcalData = ICAL.parse(icsData);
-    const comp = new ICAL.Component(jcalData);
-    const vevents = comp.getAllSubcomponents('vevent');
+    if (response.status !== 200) {
+      throw new Error(`CalDAV request failed (HTTP ${response.status}). Check the URL and credentials.`);
+    }
 
-    return vevents.map(vevent => {
-      const event = new ICAL.Event(vevent);
-      const dtstart = vevent.getFirstPropertyValue('dtstart');
-      const isAllDay = dtstart?.isDate ?? false;
-      const rawEnd = event.endDate.toJSDate();
+    const icsData = typeof response.data === 'string' ? response.data : '';
 
-      return {
-        uid: event.uid || `${source.id}-${Date.now()}-${Math.random()}`,
-        title: event.summary || 'Untitled Event',
-        start: event.startDate.toJSDate(),
-        end: isAllDay ? this.normalizeAllDayEnd(rawEnd) : rawEnd,
-        description: event.description,
-        location: event.location,
-        all_day: isAllDay,
-        raw: {}
-      };
-    });
+    // A collection URL that needs a REPORT, or an auth redirect, answers 200 with
+    // XML or a login page. Say so, rather than surfacing an ical.js parse error.
+    if (!icsData.includes('BEGIN:VCALENDAR')) {
+      throw new Error('CalDAV URL did not return an iCalendar document. Use the calendar\'s ICS export URL.');
+    }
+
+    return icsToEvents(icsData);
   }
 
   async fetchAppleCalDAVEvents(source) {
