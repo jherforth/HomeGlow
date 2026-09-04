@@ -204,8 +204,10 @@
     "cycleTabs": "Cycle Through Tabs",
     "cycleTabsHelp": "Automatically switch between {{count}} tabs",
     "cycleTabsDisabled": "Create tabs in the Tab Bar to enable this feature",
-    "immichSlideshow": "Immich Photo Slideshow",
-    "immichDisabled": "Configure an Immich photo source in the Photos widget to enable this feature",
+    "photoSlideshow": "Photo Slideshow",
+    "photoSlideshowHelp": "Display photos from your configured sources",
+    "photoNoSource": "Configure a photo source in the Photos widget to enable this feature",
+    "photoNoItems": "Add photos to your configured source to enable this feature",
     "photoInterval": "Photo Slideshow Interval",
     "tabInterval": "Tab Cycle Interval",
     "save": "Save Screensaver Settings"

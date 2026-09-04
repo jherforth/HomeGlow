@@ -204,8 +204,10 @@
     "cycleTabs": "Pasar por las pestañas",
     "cycleTabsHelp": "Cambiar automáticamente entre {{count}} pestañas",
     "cycleTabsDisabled": "Crea pestañas en la barra para poder usar esta función",
-    "immichSlideshow": "Pase de fotos de Immich",
-    "immichDisabled": "Configura una fuente de fotos de Immich en el widget de fotos para poder usar esta función",
+    "photoSlideshow": "Pase de fotos",
+    "photoSlideshowHelp": "Mostrar fotos de tus fuentes configuradas",
+    "photoNoSource": "Configura una fuente de fotos en el widget de fotos para poder usar esta función",
+    "photoNoItems": "Añade fotos a tu fuente configurada para poder usar esta función",
     "photoInterval": "Intervalo del pase de fotos",
     "tabInterval": "Intervalo entre pestañas",
     "save": "Guardar los ajustes del salvapantallas"
