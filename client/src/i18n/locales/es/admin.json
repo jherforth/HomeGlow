@@ -208,6 +208,8 @@
     "immichDisabled": "Configura una fuente de fotos de Immich en el widget de fotos para poder usar esta función",
     "photoInterval": "Intervalo del pase de fotos",
     "tabInterval": "Intervalo entre pestañas",
+    "keepScreenAwake": "Mantener la pantalla encendida",
+    "keepScreenAwakeHelp": "Si está activo, el salvapantallas impide que la pantalla se apague. Desactívalo en un quiosco de pared para que la gestión de energía del dispositivo pueda atenuar y apagar la pantalla mientras el salvapantallas esté en marcha.",
     "save": "Guardar los ajustes del salvapantallas"
   },
   "vacation": {

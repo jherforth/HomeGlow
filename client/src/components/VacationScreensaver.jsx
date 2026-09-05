@@ -17,7 +17,7 @@ const GRAVITY_PX_S2 = 1200;
 
 const randomBetween = (min, max) => min + Math.random() * (max - min);
 
-const VacationScreensaver = ({ onExit }) => {
+const VacationScreensaver = ({ onExit, keepScreenAwake }) => {
   const pageVisible = usePageVisibility();
   // Particle ids drive React rendering; positions are advanced with direct
   // style writes in the rAF loop so 60fps motion causes zero re-renders.
@@ -49,6 +49,7 @@ const VacationScreensaver = ({ onExit }) => {
 
     let wakeLock = null;
     const requestWakeLock = async () => {
+      if (!keepScreenAwake) return;
       try {
         wakeLock = await navigator.wakeLock.request('screen');
       } catch (err) {
@@ -71,7 +72,7 @@ const VacationScreensaver = ({ onExit }) => {
       }
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
+  }, [keepScreenAwake]);
 
   // Spawner: pop a random emoji from behind the dock at a random interval.
   useEffect(() => {

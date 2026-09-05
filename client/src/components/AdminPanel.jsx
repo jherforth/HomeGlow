@@ -3009,6 +3009,20 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 />
               )}
 
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={screensaverSettings.keepScreenAwake}
+                    onChange={(e) => setScreensaverSettings(prev => ({ ...prev, keepScreenAwake: e.target.checked }))}
+                  />
+                }
+                label={t('admin:screensaver.keepScreenAwake')}
+                sx={{ mb: 1 }}
+              />
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                {t('admin:screensaver.keepScreenAwakeHelp')}
+              </Typography>
+
               <Button
                 variant="contained"
                 onClick={saveScreensaverSettings}

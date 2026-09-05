@@ -23,6 +23,7 @@ export const DEFAULT_SCREENSAVER_SETTINGS = {
   mode: 'tabs',
   timeout: 5,
   slideshowInterval: 10,
+  keepScreenAwake: true,
 };
 
 export const DEFAULT_AUTO_DARK_MODE_SETTINGS = {

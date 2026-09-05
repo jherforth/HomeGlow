@@ -1138,7 +1138,7 @@ const App = () => {
           {vacationActiveToday ? (
             // Vacation mode (issue #121) replaces the standard screensaver
             // with the popcorn vacation-emoji one.
-            <VacationScreensaver onExit={handleExitScreensaver} />
+            <VacationScreensaver onExit={handleExitScreensaver} keepScreenAwake={screensaverSettings.keepScreenAwake} />
           ) : (
             <ScreenSaver
               mode={screensaverSettings.mode}
@@ -1146,6 +1146,7 @@ const App = () => {
               tabs={tabs}
               onExit={handleExitScreensaver}
               onTabChange={handleScreensaverTabChange}
+              keepScreenAwake={screensaverSettings.keepScreenAwake}
             />
           )}
         </Suspense>
