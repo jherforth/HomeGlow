@@ -9,6 +9,7 @@ import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
 import { getEventPillPalette, getPreferredColorMode } from '../utils/colorContrast.js';
 import { buildMergedDotColors, buildMergedDotBackground, describeMergedCalendars } from '../utils/calendarMergeColors.js';
+import { eventDates } from '../utils/calendarAllDay.js';
 import useIsMobile from '../hooks/useIsMobile.js';
 import { usePageVisibility } from '../hooks/useScreenActivity.js';
 import {
@@ -612,8 +613,10 @@ const CalendarWidget = ({
         const formattedEvents = response.data.map(event => ({
           id: event.id || Math.random().toString(),
           title: event.title || event.summary || 'Untitled Event',
-          start: new Date(event.start),
-          end: new Date(event.end),
+          // All-day dates carry no timezone at source but are stored and served
+          // as UTC midnight, so reading them as instants shows them a day early
+          // west of UTC. eventDates recovers the published date (issue #65).
+          ...eventDates(event),
           description: event.description || '',
           location: event.location || '',
           all_day: event.all_day || false,
