@@ -36,6 +36,26 @@ export function shouldShowChoreToday(schedule) {
   }
 }
 
+/**
+ * True when `userId` still has a bonus chore outstanding for today, which is
+ * what blocks claiming another one.
+ *
+ * A bonus chore is one with clam_value > 0 (a regular chore is clam_value 0 —
+ * the same test the server uses). Only chores actually DUE today count: a
+ * Monday-only bonus chore is not outstanding on a Sunday, so it must not block
+ * a claim. Due-ness comes from shouldShowChoreToday, the same predicate the
+ * widget renders with, so the gate and the list can never disagree.
+ */
+export function hasOutstandingBonusChore(schedules, history, userId, today) {
+  return schedules
+    .filter((schedule) => schedule.user_id === userId
+      && (schedule.clam_value || 0) > 0
+      && shouldShowChoreToday(schedule))
+    .some((schedule) => !history.some((entry) => entry.chore_schedule_id === schedule.id
+      && entry.user_id === userId
+      && entry.date === today));
+}
+
 export function getTodayDateString() {
   const tz = getServerTimezoneSync();
   const today = new Date();

@@ -4,7 +4,7 @@ vi.mock('./timezone.js', () => ({
     getServerTimezoneSync: () => 'UTC',
 }));
 
-import { shouldShowChoreToday, convertDaysToCrontab, getDueDateStatus, formatDueDate } from './choreHelpers.js';
+import { shouldShowChoreToday, convertDaysToCrontab, getDueDateStatus, formatDueDate, hasOutstandingBonusChore } from './choreHelpers.js';
 
 describe('choreHelpers utilities', () => {
     let consoleErrorSpy;
@@ -107,5 +107,70 @@ describe('choreHelpers utilities', () => {
             expect(formatDueDate('not-a-date')).toBe('not-a-date');
             expect(formatDueDate(null)).toBe('');
         });
+    });
+});
+
+describe('hasOutstandingBonusChore', () => {
+    let consoleErrorSpy;
+
+    beforeAll(() => {
+        consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+        vi.useFakeTimers();
+        // 2026-09-06 is a Sunday (cron day-of-week 0).
+        vi.setSystemTime(new Date('2026-09-06T12:00:00.000Z'));
+    });
+
+    afterAll(() => {
+        vi.useRealTimers();
+        consoleErrorSpy.mockRestore();
+    });
+
+    const TODAY = '2026-09-06';
+    const bonus = (id, crontab) => ({ id, user_id: 4, visible: 1, clam_value: 1, crontab });
+    const done = (id) => ({ chore_schedule_id: id, user_id: 4, date: TODAY });
+
+    it('does not block on a bonus chore that is not due today', () => {
+        // Thursday-only chore, uncompleted, on a Sunday: nothing is outstanding.
+        // Avoid the day immediately after TODAY here: shouldShowChoreToday
+        // compares a cron occurrence resolved in the SERVER zone against local
+        // midnight, so with the mocked server zone (UTC) ahead of the runner's,
+        // tomorrow-00:00 lands on today's local date. That skew is issue #21,
+        // not this helper.
+        const schedules = [bonus(24, '0 0 * * 4')];
+        expect(hasOutstandingBonusChore(schedules, [], 4, TODAY)).toBe(false);
+    });
+
+    it('blocks on a bonus chore that is due today and uncompleted', () => {
+        const schedules = [bonus(13, '0 0 * * 0,1,3,4')];
+        expect(hasOutstandingBonusChore(schedules, [], 4, TODAY)).toBe(true);
+    });
+
+    it('does not block once every bonus chore due today is complete', () => {
+        // The reported case: due-today chores done, other weekdays' chores not.
+        const schedules = [
+            bonus(13, '0 0 * * 0,1,3,4'),
+            bonus(36, '0 0 * * *'),
+            bonus(24, '0 0 * * 4'),
+            bonus(20, '0 0 * * 5'),
+        ];
+        expect(hasOutstandingBonusChore(schedules, [done(13), done(36)], 4, TODAY)).toBe(false);
+    });
+
+    it('ignores regular chores, which award no clams', () => {
+        const regular = { id: 2, user_id: 4, visible: 1, clam_value: 0, crontab: '0 0 * * *' };
+        expect(hasOutstandingBonusChore([regular], [], 4, TODAY)).toBe(false);
+    });
+
+    it('ignores another user\'s outstanding bonus chore', () => {
+        const other = { id: 9, user_id: 3, visible: 1, clam_value: 1, crontab: '0 0 * * *' };
+        expect(hasOutstandingBonusChore([other], [], 4, TODAY)).toBe(false);
+    });
+
+    it('ignores hidden schedules', () => {
+        expect(hasOutstandingBonusChore([{ ...bonus(8, '0 0 * * *'), visible: 0 }], [], 4, TODAY)).toBe(false);
+    });
+
+    it('treats a one-off schedule with no crontab as due today', () => {
+        expect(hasOutstandingBonusChore([bonus(41, null)], [], 4, TODAY)).toBe(true);
     });
 });
