@@ -38,7 +38,7 @@ import LoadingBackdrop from './LoadingBackdrop';
 import PinModal from './PinModal';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
-import { shouldShowChoreToday, getTodayDateString, convertDaysToCrontab, getDueDateStatus, formatDueDate } from '../utils/choreHelpers.js';
+import { shouldShowChoreToday, getTodayDateString, convertDaysToCrontab, getDueDateStatus, formatDueDate, hasOutstandingBonusChore } from '../utils/choreHelpers.js';
 import { filterVisibleUsers, toggleHiddenUserId, pruneHiddenUserIds } from '../utils/choreUserVisibility.js';
 import { subscribePluginEvents } from '../utils/pluginEventBridge.js';
 import { subscribePluginDataChanged } from '../utils/pluginDataBridge.js';
@@ -530,22 +530,7 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
 
       const today = getTodayDateString();
 
-      const userBonusSchedules = schedules.filter(s =>
-        s.user_id === userId &&
-        s.visible === 1 &&
-        s.clam_value > 0
-      );
-
-      const hasUncompletedBonusChoreToday = userBonusSchedules.some(schedule => {
-        const completedToday = history.some(h =>
-          h.chore_schedule_id === schedule.id &&
-          h.user_id === userId &&
-          h.date === today
-        );
-        return !completedToday;
-      });
-
-      if (hasUncompletedBonusChoreToday) {
+      if (hasOutstandingBonusChore(schedules, history, userId, today)) {
         alert(t('chores:bonus.alreadyHasBonus'));
         return;
       }
