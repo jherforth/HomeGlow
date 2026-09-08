@@ -70,6 +70,7 @@ import ColorPickerPopover from './ColorPickerPopover';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase, getDeviceName, setDeviceName, isValidDeviceName } from '../utils/deviceName.js';
+import { fetchPinRemembered, setPinRemembered, forgetPinOnAllDevices, shouldPromptForPin } from '../utils/adminPinDevice.js';
 import PinModal from './PinModal';
 import ChoreSchedulesTab from './ChoreSchedulesTab';
 import ChoreHistoryTab from './ChoreHistoryTab';
@@ -379,9 +380,15 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const checkPinStatus = async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/admin-pin/exists`);
-      setPinExists(response.data.exists);
+      const exists = response.data.exists === true;
+      setPinExists(exists);
 
-      if (response.data.exists) {
+      // A device told to remember the PIN behaves exactly as if none were set,
+      // here as well as in the chore widget. Honouring it in one gate and not
+      // the other would read as broken.
+      const remembered = exists ? await fetchPinRemembered(API_BASE_URL) : false;
+
+      if (shouldPromptForPin({ pinExists: exists, remembered })) {
         setPinModal({ open: true, mode: 'verify', title: t('admin:pin.enter') });
       } else {
         setIsAuthenticated(true);
@@ -1880,7 +1887,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     return chores.filter(chore => chore.user_id === userId).length;
   };
 
-  const handlePinVerify = async (pin) => {
+  const handlePinVerify = async (pin, remember) => {
     try {
       if (pinModal.mode === 'set') {
         await axios.post(`${API_BASE_URL}/api/admin-pin/set`, { pin });
@@ -1892,6 +1899,15 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       } else {
         const response = await axios.post(`${API_BASE_URL}/api/admin-pin/verify`, { pin });
         if (response.data.valid) {
+          if (remember) {
+            // Best effort: the PIN was correct, so entry must not be blocked by
+            // a failure to record the preference.
+            try {
+              await setPinRemembered(API_BASE_URL, true);
+            } catch (error) {
+              console.error('Error remembering PIN on this device:', error);
+            }
+          }
           setIsAuthenticated(true);
           setPinModal({ open: false, mode: 'verify', title: '' });
         } else {
@@ -1911,6 +1927,30 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       return;
     }
     setPinModal({ open: false, mode: 'verify', title: '' });
+  };
+
+  const handleForgetPinDevices = async () => {
+    if (!window.confirm('Require the admin PIN again on every device, including this one?')) return;
+    try {
+      const { total, failed } = await forgetPinOnAllDevices(API_BASE_URL);
+      if (failed > 0) {
+        setSaveMessage({
+          show: true,
+          type: 'error',
+          text: `Could not update ${failed} of ${total} devices. Try again.`,
+        });
+      } else {
+        setSaveMessage({
+          show: true,
+          type: 'success',
+          text: `The PIN is required again on all ${total} devices.`,
+        });
+      }
+    } catch (error) {
+      console.error('Error clearing remembered PIN devices:', error);
+      setSaveMessage({ show: true, type: 'error', text: 'Could not update devices. Try again.' });
+    }
+    setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 4000);
   };
 
   const handleUpdatePin = () => {
@@ -2026,6 +2066,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
           onVerify={handlePinVerify}
           mode={pinModal.mode}
           title={pinModal.title}
+          allowRemember
         />
       </Box>
     );
@@ -3852,6 +3893,16 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 {pinExists && (
                   <Button
                     variant="outlined"
+                    onClick={handleForgetPinDevices}
+                    fullWidth
+                    sx={{ py: 1, fontWeight: 'bold' }}
+                  >
+                    Require PIN on all devices again
+                  </Button>
+                )}
+                {pinExists && (
+                  <Button
+                    variant="outlined"
                     onClick={handleClearPin}
                     color="error"
                     fullWidth
@@ -4369,6 +4420,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         onVerify={handlePinVerify}
         mode={pinModal.mode}
         title={pinModal.title}
+        allowRemember
       />
 
       <ClamValueModal

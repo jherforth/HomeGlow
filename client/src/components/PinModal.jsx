@@ -6,6 +6,8 @@ import {
   Box,
   Typography,
   Button,
+  Checkbox,
+  FormControlLabel,
   IconButton,
   Paper,
   Alert
@@ -13,11 +15,15 @@ import {
 import { Lock, Backspace } from '@mui/icons-material';
 import useIsMobile from '../hooks/useIsMobile.js';
 
-const PinModal = ({ open, onClose, onVerify, mode = 'verify', title }) => {
+// allowRemember offers "remember on this device" alongside verification. The
+// choice is handed to onVerify rather than acted on here — this component knows
+// about PINs, not about where a device stores its settings.
+const PinModal = ({ open, onClose, onVerify, mode = 'verify', title, allowRemember = false }) => {
   const isMobile = useIsMobile();
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [step, setStep] = useState('enter');
+  const [remember, setRemember] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -26,6 +32,7 @@ const PinModal = ({ open, onClose, onVerify, mode = 'verify', title }) => {
       setPin('');
       setConfirmPin('');
       setStep('enter');
+      setRemember(false);
       setError('');
     }
   }, [open]);
@@ -136,7 +143,7 @@ const PinModal = ({ open, onClose, onVerify, mode = 'verify', title }) => {
 
     setIsLoading(true);
     try {
-      await onVerify(pinToVerify);
+      await onVerify(pinToVerify, allowRemember && remember);
     } catch (err) {
       setError(err.message || 'Invalid PIN. Please try again.');
       setPin('');
@@ -233,6 +240,31 @@ const PinModal = ({ open, onClose, onVerify, mode = 'verify', title }) => {
           </Typography>
 
           {renderPinDots(currentPin)}
+
+          {allowRemember && mode === 'verify' && (
+            <Box sx={{ mb: 2 }}>
+              <FormControlLabel
+                control={(
+                  <Checkbox
+                    checked={remember}
+                    onChange={(e) => setRemember(e.target.checked)}
+                    disabled={isLoading}
+                    sx={{ color: 'var(--accent)', '&.Mui-checked': { color: 'var(--accent)' } }}
+                  />
+                )}
+                label={<Typography variant="body2">Remember PIN on this device</Typography>}
+              />
+              {remember && (
+                <Typography
+                  variant="caption"
+                  sx={{ display: 'block', color: 'var(--text-muted)', pl: 4, mt: -0.5 }}
+                >
+                  This device will stop asking. You can always require the PIN
+                  again from Admin &rarr; Security.
+                </Typography>
+              )}
+            </Box>
+          )}
 
           <Paper
             elevation={0}
