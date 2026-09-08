@@ -158,6 +158,11 @@ const buildTagUrl = (repository, tagName) => {
 };
 
 
+// GooglePhotos and HomeGlowPhotos item counts come from a local DB read and are trustworthy.
+// Immich item counts are NOT — the server catches per-source Immich errors and returns [] with
+// 200, so a network outage is indistinguishable from an empty library at the client.
+const DB_BACKED_PHOTO_TYPES = ['GooglePhotos', 'HomeGlowPhotos'];
+
 const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const { t, i18n } = useTranslation(['admin', 'common']);
   const isMobile = useIsMobile();
@@ -235,7 +240,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   // stored values (a stored default would pin the household against future
   // manifest default changes).
   const [pluginDeclaredDirty, setPluginDeclaredDirty] = useState({});
-  const [photoSources, setPhotoSources] = useState([]);
+  const [photoSources, setPhotoSources] = useState(null); // null = not yet loaded
+  const [photoItemCount, setPhotoItemCount] = useState(null); // null = unknown
   const [screensaverSettings, setScreensaverSettings] = useState(readLocalScreensaverSettings);
   const [vacationModeSettings, setVacationModeSettings] = useState(readLocalVacationModeSettings);
   const [autoDarkModeSettings, setAutoDarkModeSettings] = useState(readLocalAutoDarkModeSettings);
@@ -317,7 +323,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
       fetchUploadedWidgets();
       fetchTabs();
       fetchWidgetAssignments();
-      fetchPhotoSources();
+      fetchPhotoData();
       fetchDevices();
     }
   }, [isAuthenticated]);
@@ -344,13 +350,29 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     }
   };
 
-  const fetchPhotoSources = async () => {
+  const fetchPhotoData = async () => {
+    let sources;
     try {
       const response = await axios.get(`${API_BASE_URL}/api/photo-sources`);
-      setPhotoSources(Array.isArray(response.data) ? response.data : []);
+      sources = Array.isArray(response.data) ? response.data : [];
     } catch (error) {
       console.error('Error fetching photo sources:', error);
-      setPhotoSources([]);
+      return; // leave photoSources null — gate won't assert anything while unknown
+    }
+    setPhotoSources(sources);
+
+    // Immich is gated on source existence, not item count — see DB_BACKED_PHOTO_TYPES comment.
+    // Skip the extra request entirely for households that have an Immich source configured.
+    if (sources.some(s => s.type === 'Immich' && s.enabled === 1)) {
+      return;
+    }
+
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/photo-items`);
+      setPhotoItemCount(Array.isArray(response.data) ? response.data.length : 0);
+    } catch (error) {
+      console.error('Error fetching photo items:', error);
+      // null = unknown; gate falls back to source-only check rather than disabling
     }
   };
 
@@ -1488,7 +1510,19 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     });
   };
 
-  const hasImmichConfigured = photoSources.some(source => source.type === 'Immich' && source.enabled === 1);
+  const sourcesLoaded = photoSources !== null;
+  const hasImmichSource = sourcesLoaded && photoSources.some(s => s.type === 'Immich' && s.enabled === 1);
+  const hasNonImmichPhotoSource = sourcesLoaded && photoSources.some(s => DB_BACKED_PHOTO_TYPES.includes(s.type) && s.enabled === 1);
+  // For non-Immich types the item count is a trustworthy DB read.
+  // When null (HomeGlow server unreachable), fall back to source-only check.
+  const nonImmichCanSupplyItems = hasNonImmichPhotoSource && (photoItemCount === null || photoItemCount > 0);
+  const canUsePhotoSlideshow = sourcesLoaded && (hasImmichSource || nonImmichCanSupplyItems);
+  // null while sources are still loading — avoids asserting "no source" before data arrives.
+  const photoDisabledReason = !sourcesLoaded
+    ? null
+    : !(hasImmichSource || hasNonImmichPhotoSource)
+      ? t('admin:screensaver.photoNoSource')
+      : t('admin:screensaver.photoNoItems');
   const hasTabsCreated = tabs.length > 0;
 
   const handleWidgetToggle = (widget, field) => {
@@ -2919,12 +2953,12 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 </Tooltip>
 
                 <Tooltip
-                  title={!hasImmichConfigured ? "Configure Immich in the Photos widget settings to use this mode" : ""}
+                  title={!canUsePhotoSlideshow ? (photoDisabledReason || '') : ""}
                   placement="right"
                 >
                   <FormControlLabel
                     value="photos"
-                    control={<Radio disabled={!hasImmichConfigured} />}
+                    control={<Radio disabled={!canUsePhotoSlideshow} />}
                     label={
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <PhotoLibrary fontSize="small" />
@@ -2933,28 +2967,28 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                             variant="body2"
                             sx={{
                               fontWeight: 'bold',
-                              color: !hasImmichConfigured ? 'text.disabled' : 'inherit'
+                              color: !canUsePhotoSlideshow ? 'text.disabled' : 'inherit'
                             }}
                           >
-                            {t('admin:screensaver.immichSlideshow')}
+                            {t('admin:screensaver.photoSlideshow')}
                           </Typography>
                           <Typography
                             variant="caption"
-                            color={!hasImmichConfigured ? 'text.disabled' : 'text.secondary'}
+                            color={!canUsePhotoSlideshow ? 'text.disabled' : 'text.secondary'}
                           >
-                            {hasImmichConfigured
-                              ? 'Display photos from your Immich library'
-                              : 'Immich not configured'}
+                            {canUsePhotoSlideshow
+                              ? t('admin:screensaver.photoSlideshowHelp')
+                              : (photoDisabledReason || '')}
                           </Typography>
                         </Box>
-                        {!hasImmichConfigured && (
-                          <Tooltip title={t('admin:screensaver.immichDisabled')}>
+                        {!canUsePhotoSlideshow && photoDisabledReason && (
+                          <Tooltip title={photoDisabledReason}>
                             <Info fontSize="small" color="disabled" />
                           </Tooltip>
                         )}
                       </Box>
                     }
-                    sx={{ opacity: !hasImmichConfigured ? 0.6 : 1 }}
+                    sx={{ opacity: !canUsePhotoSlideshow ? 0.6 : 1 }}
                   />
                 </Tooltip>
               </RadioGroup>
