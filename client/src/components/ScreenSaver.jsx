@@ -5,7 +5,7 @@ import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { usePageVisibility } from '../hooks/useScreenActivity.js';
 
-const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange }) => {
+const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange, keepScreenAwake }) => {
   const pageVisible = usePageVisibility();
   const [photos, setPhotos] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -61,35 +61,36 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange }) => 
   }, [mode, photos.length, tabs, slideshowInterval, loading, onTabChange, pageVisible]);
 
   useEffect(() => {
-    if ('wakeLock' in navigator) {
-      let wakeLock = null;
+    if (!('wakeLock' in navigator)) return undefined;
 
-      const requestWakeLock = async () => {
-        try {
-          wakeLock = await navigator.wakeLock.request('screen');
-        } catch (err) {
-          console.log('Wake Lock error:', err);
-        }
-      };
+    let wakeLock = null;
 
-      requestWakeLock();
+    const requestWakeLock = async () => {
+      if (!keepScreenAwake) return;
+      try {
+        wakeLock = await navigator.wakeLock.request('screen');
+      } catch (err) {
+        console.log('Wake Lock error:', err);
+      }
+    };
 
-      const handleVisibilityChange = () => {
-        if (document.visibilityState === 'visible') {
-          requestWakeLock();
-        }
-      };
+    requestWakeLock();
 
-      document.addEventListener('visibilitychange', handleVisibilityChange);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        requestWakeLock();
+      }
+    };
 
-      return () => {
-        if (wakeLock) {
-          wakeLock.release();
-        }
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-      };
-    }
-  }, []);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      if (wakeLock) {
+        wakeLock.release();
+      }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [keepScreenAwake]);
 
   const handleExit = useCallback(() => {
     if (exitTimeoutRef.current) return;

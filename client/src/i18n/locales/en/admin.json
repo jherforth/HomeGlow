@@ -210,6 +210,8 @@
     "photoNoItems": "Add photos to your configured source to enable this feature",
     "photoInterval": "Photo Slideshow Interval",
     "tabInterval": "Tab Cycle Interval",
+    "keepScreenAwake": "Keep screen awake",
+    "keepScreenAwakeHelp": "When on, the screensaver prevents the screen from sleeping. Turn off on a wall kiosk so the device's own power management can dim and sleep the display while the screensaver runs.",
     "save": "Save Screensaver Settings"
   },
   "vacation": {
