@@ -1,11 +1,12 @@
-# HomeGlow v 1.7 Changelog
+# HomeGlow v 1.8 Changelog
 
 ## 🎉 Recent Updates
 
-The biggest release yet: a full plugin platform with its own API, storage, and
-event stream; a real spending mechanism for the clam economy (prize store,
-request queue, splitting, celebrations); a complete mobile experience;
-vacation mode; metrics-ready chore history; and a bank of built-in avatars.
+A hardening-and-reach release. The process-wide TLS switch is gone and stored
+credentials no longer use a key published in this repository; the interface
+speaks Spanish; weather can come from Home Assistant instead of a paid API key;
+chores gain icons and a completion celebration; and plugins gain descriptions,
+in-place previews, and a way to tell the dashboard they changed something.
 
 ---
 
@@ -44,6 +45,17 @@ vacation mode; metrics-ready chore history; and a bank of built-in avatars.
 - `ENCRYPTION_KEY` now actually works if you do want to supply your own, and is
   written to the key file the first time it's seen, so removing it later no
   longer strands your data.
+
+### `@fastify/static` upgraded to close two CVEs (#136)
+- The backend's static-file plugin moves 9.1.3 → 10.1.3, fixing
+  **CVE-2026-15074** — a route-guard bypass via non-leading `../` and `%2E%2E`
+  path segments — and CVE-2026-7120. There is no 9.x backport; the whole 9.x
+  line is affected, so the major bump was the only route to a patched version.
+- v10 hands `setHeaders` a Fastify reply rather than the raw Node response, so
+  both `/Uploads/` registrations moved to `reply.header`. Without that the first
+  static request throws and takes the backend down — the defect that sent an
+  earlier attempt at this upgrade back.
+- Contributed by **@anupamme**.
 
 ## New Features
 
@@ -106,13 +118,144 @@ vacation mode; metrics-ready chore history; and a bank of built-in avatars.
   [feature reference](docs/reference/features.md#weather) documents exactly what
   each source provides.
 
-### Fixed along the way
+### Weather fixes along the way
 - **Forecast day names and chart times now follow the display language.** They
   were hardcoded to US English, so a Spanish dashboard still read "Wed / Thu /
   Fri". Several weather strings the translation pass had missed ("Feels like",
   "3-Day Forecast", "Humidity", "Wind") are translated too.
 - **Wind speed is labelled correctly in metric.** It read "mph" regardless of the
   selected unit, while the underlying value was in m/s.
+
+### Spanish, and the groundwork for any language (#137, #138)
+- The whole interface is translated — dashboard widgets, the screensaver, and
+  every tab of the Admin Panel. **Spanish ships with 1.8**, and the display
+  language is chosen per device.
+- Dates and times now go through `Intl` rather than moment locales, so weekday
+  and month names follow the chosen language everywhere they appear.
+- A `check:i18n` script runs in CI and enforces key parity between locales, so a
+  missing translation fails the build instead of showing a raw key on the wall.
+- `react-big-calendar` was imported but never rendered — the calendar widget
+  draws its own views — so it is gone. **The calendar chunk fell 237 KB to
+  110 KB, a 54% reduction.**
+
+### Plugins describe themselves, and can be previewed (#147)
+- A plugin manifest can carry a **description**, shown on its card in the Admin
+  Panel and in the GitHub browse list, so you can tell what a plugin does before
+  installing it.
+- Installed plugins can be **previewed in place**, rendered live in the panel on
+  demand rather than always — these are real plugins making real API calls, and
+  a list of live iframes would run all of them at once.
+- Preview images live in a sibling file in the plugin repository rather than in
+  the manifest, deliberately: `/api/widgets` returns manifests in full and every
+  dashboard fetches it at boot, where an embedded image took that payload from
+  284 bytes to 55 KB.
+
+### Users appear in the order you choose (#134)
+- Users had no order of their own and rendered in insertion order. Migration 23
+  adds `users.sort_order`, backfilled from `id`, so existing households keep
+  exactly the order they see today.
+- Because no client component sorts users, that single `ORDER BY` carries the
+  chosen order everywhere at once: dashboard chore columns, chore-assignment
+  dropdowns, and the transfer and prize-split pickers.
+- Tab reordering now works on touch screens too. It relied on HTML5 drag events,
+  which never fire on a phone or a wall tablet — the devices most likely to be
+  in hand.
+
+### Calendar: a Today control, and an idle return (#144)
+- A **Today** control returns the calendar to the current period, and the view
+  goes back there on its own after a spell of inactivity — so a wall display
+  someone paged forward isn't still showing next month in the morning.
+- Contributed by **@mrramam**.
+
+### Chores: show or hide people per display (#145)
+- Each display chooses which family members its chore widget shows, stored per
+  device. A kitchen screen can show everyone while a child's tab shows only
+  them, from one install.
+- Contributed by **@mrramam**.
+
+---
+
+## For plugin authors
+
+### Plugins can tell the host they changed core data (#148)
+- A plugin that writes core data through the API — a checklist completing a
+  chore, say — can now say so, and widgets showing that data refetch
+  immediately instead of waiting out their own refresh timer, which is off by
+  default and five minutes at its shortest.
+- One `postMessage` to the parent window. The host accepts it only from that
+  plugin's own iframe and rebroadcasts it to whichever widgets listen; the
+  scopes a plugin may claim are a closed set, so a typo is inert rather than
+  waking every refetch in the app. It is a hint, not a write — the host only
+  refetches, granting nothing the plugin couldn't already do by calling the API.
+- Deliberately **not** routed through the plugin event stream. That stream is
+  SSE and does not reach the browser on every deployment; two frames on one page
+  need no network at all. The tradeoff is that it refreshes the display it came
+  from, not every display in the house.
+- The Admin Panel's plugin preview now carries the device name (#149), so a
+  plugin that saves a device-scoped setting works in the preview exactly as it
+  does on the dashboard. It previously failed there with a 400 while working
+  fine on a real tab.
+
+---
+
+## Fixes & Community Contributions
+
+- **Google per-event colours survive a sync (#133).** Google returns `colorId`
+  on individually recoloured events, but only three fields per item were kept,
+  so every event rendered in its calendar's colour. Sync now resolves `colorId`
+  to a hex through the `/colors` endpoint (cached 24h) and every view prefers it,
+  falling back to the calendar colour. No schema migration. — **@Leesam**
+- **Subscribed iCloud calendars now return their events (#146).** A subscribed
+  iCloud calendar is a pointer, not an event container: a calendar-query REPORT
+  against one succeeds but returns nothing, so sync reported success with zero
+  events while Calendar.app showed them fine. Those calendars are now read from
+  their source feed. — **@cosmosified**
+- **Google Photos gains the Photos Picker flow (#142).** A picker session opens
+  Google's hosted picker, polls until you finish, and lists what was picked with
+  per-item delete — plus clear guidance when no Google account is connected or
+  the connection lacks the needed scope. — **@mrramam**
+- **Device names are validated on rename (#143)**, so a name the API rejects can
+  no longer strand a display's profile. — **@mrramam**
+- CI now runs on pull requests, so contributions from forks are tested before
+  they are merged.
+
+---
+
+## Summary
+
+A release about trust and reach: TLS verification is scoped per request instead
+of switched off globally, stored credentials move off a published key and
+re-encrypt themselves on first start, and a static-file CVE is closed. Around
+that, the interface learns Spanish, weather can come from Home Assistant,
+chores get icons and a celebration worth finishing the day for, and the plugin
+platform grows descriptions, previews, and a way back to the dashboard.
+
+---
+
+## 📝 Notes
+
+**Upgrading is nothing more than pulling the new images.** Credentials stored
+before this release are re-encrypted automatically on first start, and no
+encryption key needs configuring — one is generated on first run and kept at
+`data/.encryption-key` inside the mounted volume. Include `homeglow/data` in
+your backups: losing that file means re-entering stored third-party credentials.
+
+For questions or issues, please visit our [GitHub Issues](https://github.com/jherforth/HomeGlow/issues) page.
+
+---
+
+# HomeGlow v 1.7 Changelog
+
+## 🎉 Recent Updates
+
+The biggest release yet: a full plugin platform with its own API, storage, and
+event stream; a real spending mechanism for the clam economy (prize store,
+request queue, splitting, celebrations); a complete mobile experience;
+vacation mode; metrics-ready chore history; and a bank of built-in avatars.
+
+---
+
+## New Features
 
 ### Plugin Platform (#105)
 - Custom widgets grow into **manifest-based plugins**: an embedded manifest
