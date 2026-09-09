@@ -18,7 +18,6 @@ wget https://raw.githubusercontent.com/jherforth/HomeGlow/main/docker-compose.ym
 cat > .env <<'EOF'
 FRONTEND_PORT=3000
 TZ=America/New_York
-ENCRYPTION_KEY=REPLACE_WITH_openssl_rand_base64_32
 EOF
 
 # 3. Start
@@ -33,8 +32,12 @@ docker compose up -d
 - `homeglow-frontend` — publishes `FRONTEND_PORT`; knows the backend via
   `BACKEND_SERVICE`/`BACKEND_PORT` on the shared `homeglow-network`.
 
-> Add `ENCRYPTION_KEY` to the backend service's environment (and your `.env`) if you
-> use Google/CalDAV connections — see [Configuration](../reference/configuration.md).
+> **No encryption key needs configuring.** HomeGlow generates one on first start
+> and keeps it at `data/.encryption-key` inside the mounted volume, so it survives
+> restarts and image upgrades. Set `ENCRYPTION_KEY` in your `.env` only to supply
+> your own key or share one between instances — the compose file already passes it
+> through, and an empty value is treated as unset. See
+> [Configuration](../reference/configuration.md).
 
 ### Updating
 ```bash
