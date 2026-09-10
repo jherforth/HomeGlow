@@ -111,19 +111,26 @@
     "pictureUploadFailed": "Failed to upload profile picture. Please try again.",
     "pinSet": "Admin PIN set successfully!",
     "pinRemoved": "Admin PIN removed. Admin panel is now unprotected.",
-    "pinRemoveFailed": "Failed to remove PIN. Please try again."
+    "pinRemoveFailed": "Failed to remove PIN. Please try again.",
+    "pinDevicesForgotten": "The PIN is required again on all {{total}} devices.",
+    "pinDevicesPartlyForgotten": "Could not update {{failed}} of {{total}} devices. Try again.",
+    "pinDevicesForgetFailed": "Could not update devices. Try again.",
+    "pinChangedDevicesForgotten": "PIN updated. Every device will be asked for it again.",
+    "pinChangedDevicesNotForgotten": "PIN updated, but some devices may still skip it. Use “Require PIN on all devices again”."
   },
   "confirm": {
     "deletePrize": "Are you sure you want to delete this prize?",
     "deleteWidget": "Are you sure you want to delete this widget?",
     "purgePluginData": "Also delete this plugin's stored data and settings?\n\nChoose Cancel to keep them (e.g. if you plan to reinstall the same plugin later).",
     "deleteSchedule": "Are you sure you want to remove this chore schedule?",
-    "removePin": "Are you sure you want to remove the admin PIN? Anyone will be able to access the admin panel without a PIN."
+    "removePin": "Are you sure you want to remove the admin PIN? Anyone will be able to access the admin panel without a PIN.",
+    "forgetPinDevices": "Require the admin PIN again on every device, including this one?"
   },
   "pin": {
     "enter": "Enter Admin PIN",
     "update": "Update Admin PIN",
-    "setPin": "Set Admin PIN"
+    "setPin": "Set Admin PIN",
+    "forgetDevices": "Require PIN on all devices again"
   },
   "refresh": {
     "disabled": "Disabled",

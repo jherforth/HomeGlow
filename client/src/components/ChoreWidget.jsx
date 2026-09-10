@@ -38,6 +38,7 @@ import LoadingBackdrop from './LoadingBackdrop';
 import PinModal from './PinModal';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
+import { fetchPinRemembered, setPinRemembered, shouldPromptForPin } from '../utils/adminPinDevice.js';
 import { shouldShowChoreToday, getTodayDateString, convertDaysToCrontab, getDueDateStatus, formatDueDate, hasOutstandingBonusChore } from '../utils/choreHelpers.js';
 import { filterVisibleUsers, toggleHiddenUserId, pruneHiddenUserIds } from '../utils/choreUserVisibility.js';
 import { subscribePluginEvents } from '../utils/pluginEventBridge.js';
@@ -656,11 +657,15 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
   };
 
   // Runs `action` immediately when no admin PIN is configured (incl. demo
-  // mode); otherwise opens the PIN modal and runs it after verification.
+  // mode), or when this device has been told to remember the PIN — a remembered
+  // device behaves exactly as if no PIN were set. Otherwise opens the PIN modal
+  // and runs the action after verification.
   const requirePin = async (action) => {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/admin-pin/exists`);
-      if (response.data?.exists) {
+      const pinExists = response.data?.exists === true;
+      const remembered = pinExists ? await fetchPinRemembered(API_BASE_URL) : false;
+      if (shouldPromptForPin({ pinExists, remembered })) {
         setPinGate({ open: true, onSuccess: action });
       } else {
         action();
@@ -671,10 +676,19 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
     }
   };
 
-  const handlePinVerify = async (pin) => {
+  const handlePinVerify = async (pin, remember) => {
     const response = await axios.post(`${API_BASE_URL}/api/admin-pin/verify`, { pin });
     if (!response.data?.valid) {
       throw new Error('Incorrect PIN. Please try again.');
+    }
+    if (remember) {
+      // Best effort: the PIN was correct, so the action must proceed even if
+      // recording the preference fails.
+      try {
+        await setPinRemembered(API_BASE_URL, true);
+      } catch (error) {
+        console.error('Error remembering PIN on this device:', error);
+      }
     }
     const action = pinGate.onSuccess;
     setPinGate({ open: false, onSuccess: null });
@@ -1842,6 +1856,7 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
           onClose={() => setPinGate({ open: false, onSuccess: null })}
           onVerify={handlePinVerify}
           title={t('common:pin.confirmWithAdminPin')}
+          allowRemember
         />
       </Box>
 
