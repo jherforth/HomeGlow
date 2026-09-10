@@ -111,19 +111,26 @@
     "pictureUploadFailed": "No se pudo subir la foto de perfil. Inténtalo de nuevo.",
     "pinSet": "¡PIN de administrador configurado!",
     "pinRemoved": "PIN de administrador eliminado. El panel ya no está protegido.",
-    "pinRemoveFailed": "No se pudo eliminar el PIN. Inténtalo de nuevo."
+    "pinRemoveFailed": "No se pudo eliminar el PIN. Inténtalo de nuevo.",
+    "pinDevicesForgotten": "El PIN vuelve a ser obligatorio en los {{total}} dispositivos.",
+    "pinDevicesPartlyForgotten": "No se pudieron actualizar {{failed}} de {{total}} dispositivos. Inténtalo de nuevo.",
+    "pinDevicesForgetFailed": "No se pudieron actualizar los dispositivos. Inténtalo de nuevo.",
+    "pinChangedDevicesForgotten": "PIN actualizado. Se volverá a pedir en todos los dispositivos.",
+    "pinChangedDevicesNotForgotten": "PIN actualizado, pero puede que algunos dispositivos sigan omitiéndolo. Usa «Volver a exigir el PIN en todos los dispositivos»."
   },
   "confirm": {
     "deletePrize": "¿Seguro que quieres eliminar este premio?",
     "deleteWidget": "¿Seguro que quieres eliminar este widget?",
     "purgePluginData": "¿Eliminar también los datos y ajustes guardados de este plugin?\n\nElige Cancelar para conservarlos (por ejemplo, si piensas reinstalarlo más adelante).",
     "deleteSchedule": "¿Seguro que quieres quitar esta programación de tarea?",
-    "removePin": "¿Seguro que quieres eliminar el PIN de administrador? Cualquiera podrá acceder al panel sin PIN."
+    "removePin": "¿Seguro que quieres eliminar el PIN de administrador? Cualquiera podrá acceder al panel sin PIN.",
+    "forgetPinDevices": "¿Volver a exigir el PIN de administrador en todos los dispositivos, incluido este?"
   },
   "pin": {
     "enter": "Introduce el PIN de administrador",
     "update": "Cambiar el PIN de administrador",
-    "setPin": "Configurar el PIN de administrador"
+    "setPin": "Configurar el PIN de administrador",
+    "forgetDevices": "Volver a exigir el PIN en todos los dispositivos"
   },
   "refresh": {
     "disabled": "Desactivado",
