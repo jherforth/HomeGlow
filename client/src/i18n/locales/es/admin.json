@@ -157,9 +157,7 @@
     "saveSettings": "Guardar ajustes de widgets",
     "uploadCustom": "Subir un widget personalizado",
     "uploadHtml": "Subir un widget HTML",
-    "uploaded": "Widgets subidos",
-    "fileName": "Archivo: {{filename}}",
-    "githubRepo": "Repositorio de widgets en GitHub",
+    "githubRepo": "Repositorio de complementos de GitHub",
     "refreshAvailable": "ACTUALIZAR LOS PLUGINS DISPONIBLES",
     "clickThe": "Pulsa el botón",
     "buttonAboveToLoad": "de arriba para cargar la lista de plugins disponibles.",
@@ -175,7 +173,11 @@
     "noDescription": "Sin descripción",
     "showPreview": "Vista previa",
     "hidePreview": "Ocultar vista previa",
-    "previewTitle": "Vista previa en vivo de {{name}}"
+    "previewTitle": "Vista previa en vivo de {{name}}",
+    "noneInstalled": "Todavía no hay complementos instalados. Instala uno desde el repositorio de arriba o sube el tuyo.",
+    "enlargePreview": "Ver una vista previa más grande de {{name}}",
+    "closePreview": "Cerrar la vista previa",
+    "previewAlt": "Vista previa de {{name}}"
   },
   "devices": {
     "manageHelp": "Gestiona los dispositivos y copia pestañas y ajustes de widgets entre ellos. Al copiar se sobrescriben las pestañas y widgets del dispositivo actual.",
