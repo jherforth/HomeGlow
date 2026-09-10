@@ -64,7 +64,8 @@ import {
   Info,
   OpenInNew,
   ArrowUpward,
-  ArrowDownward
+  ArrowDownward,
+  Close
 } from '@mui/icons-material';
 import ColorPickerPopover from './ColorPickerPopover';
 import axios from 'axios';
@@ -216,6 +217,9 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
   const [newPrize, setNewPrize] = useState({ name: '', clam_cost: 0, repeatable: false });
   const [prizeOffers, setPrizeOffers] = useState([]);
   const [uploadedWidgets, setUploadedWidgets] = useState([]);
+  // The browse thumbnails are cropped to 96x60, so a plugin's screenshot is
+  // largely unreadable in the list. Holds { url, name } while one is enlarged.
+  const [enlargedPreview, setEnlargedPreview] = useState(null);
   const [githubWidgets, setGithubWidgets] = useState([]);
   // Which installed plugin is currently showing a live preview, if any.
   const [previewPlugin, setPreviewPlugin] = useState(null);
@@ -2290,44 +2294,13 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
 
             {widgetsSubTab === 1 && (
               <>
-                <Grid container spacing={3}>
-                  <Grid size={{ xs: 12, md: 6 }}>
-                    <Typography variant="subtitle1" gutterBottom>{t('admin:widgets.uploadCustom')}</Typography>
-                    <Button
-                      variant="contained"
-                      component="label"
-                      startIcon={<Upload />}
-                      fullWidth
-                      sx={{ mb: 2 }}
-                    >
-                      {t('admin:widgets.uploadHtml')}
-                      <input
-                        type="file"
-                        hidden
-                        accept=".html"
-                        onChange={handleWidgetUpload}
-                      />
-                    </Button>
-
-                    <Typography variant="subtitle1" gutterBottom>{t('admin:widgets.uploaded')}</Typography>
-                    <List>
-                      {uploadedWidgets.map((widget) => (
-                        <ListItem key={widget.filename} sx={{ border: '1px solid var(--card-border)', borderRadius: 1, mb: 1 }}>
-                          <ListItemText
-                            primary={widget.name}
-                            secondary={t('admin:widgets.fileName', { filename: widget.filename })}
-                          />
-                          <ListItemSecondaryAction>
-                            <IconButton onClick={() => deleteWidget(widget.filename)} color="error">
-                              <Delete />
-                            </IconButton>
-                          </ListItemSecondaryAction>
-                        </ListItem>
-                      ))}
-                    </List>
-                  </Grid>
-
-                  <Grid size={{ xs: 12, md: 6 }}>
+                {/* The uploaded-widget list that used to sit beside this was a
+                    second view of the same array the Plugin Settings section
+                    below already renders — and that one carries the delete
+                    button, the description and the preview. Removing it lets
+                    the repository span the width it needs (issue #162). */}
+                <Box>
+                  <Box>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                       <Typography variant="subtitle1">{t('admin:widgets.githubRepo')}</Typography>
                       <Button
@@ -2360,7 +2333,14 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                       </Alert>
                     )}
 
-                    <List sx={{ maxHeight: 400, overflowY: 'auto' }}>
+                    {/* Rows run about 86px, so the old 400px cut off mid-row and
+                        showed under five of the 23 plugins. Still capped rather
+                        than unbounded: letting the full list run would push the
+                        upload button and the settings below it off the page.
+                        Relative to the viewport rather than a fixed height, so a
+                        tall wall display shows more while a laptop does not end
+                        up scrolling the list inside a scrolling dialog. */}
+                    <List sx={{ maxHeight: { xs: 360, md: '50vh' }, overflowY: 'auto' }}>
                       {githubWidgets.map((widget) => (
                         <ListItem key={widget.path} sx={{ border: '1px solid var(--card-border)', borderRadius: 1, mb: 1 }}>
                           {/* Sibling image in the plugins repo (chore-metrics.png next to
@@ -2368,13 +2348,33 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                               older HomeGlow versions return the whole manifest in
                               GET /api/widgets, which every dashboard fetches on boot. */}
                           {widget.previewUrl && (
+                            // A button rather than a bare image, so the enlarged
+                            // view is reachable from a keyboard as well as a tap.
                             <Box
-                              component="img"
-                              src={widget.previewUrl}
-                              alt=""
-                              loading="lazy"
-                              sx={{ width: 96, height: 60, objectFit: 'cover', borderRadius: 1, mr: 2, flexShrink: 0 }}
-                            />
+                              component="button"
+                              type="button"
+                              onClick={() => setEnlargedPreview({ url: widget.previewUrl, name: widget.name })}
+                              aria-label={t('admin:plugins.enlargePreview', { name: widget.name })}
+                              sx={{
+                                p: 0,
+                                mr: 2,
+                                border: 'none',
+                                background: 'none',
+                                cursor: 'zoom-in',
+                                flexShrink: 0,
+                                lineHeight: 0,
+                                borderRadius: 1,
+                                '&:focus-visible': { outline: '2px solid var(--accent)', outlineOffset: 2 }
+                              }}
+                            >
+                              <Box
+                                component="img"
+                                src={widget.previewUrl}
+                                alt=""
+                                loading="lazy"
+                                sx={{ width: 96, height: 60, objectFit: 'cover', borderRadius: 1, display: 'block' }}
+                              />
+                            </Box>
                           )}
                           <ListItemText
                             primary={widget.name}
@@ -2397,8 +2397,35 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                         </ListItem>
                       ))}
                     </List>
-                  </Grid>
-                </Grid>
+                  </Box>
+                </Box>
+
+                <Divider sx={{ my: 3 }} />
+
+                <Typography variant="subtitle1" gutterBottom>{t('admin:widgets.uploadCustom')}</Typography>
+                <Button
+                  variant="contained"
+                  component="label"
+                  startIcon={<Upload />}
+                  sx={{ mb: 1 }}
+                >
+                  {t('admin:widgets.uploadHtml')}
+                  <input
+                    type="file"
+                    hidden
+                    accept=".html"
+                    onChange={handleWidgetUpload}
+                  />
+                </Button>
+
+                {/* Without this the page would end at the upload button on a
+                    fresh install, with nothing saying why the settings section
+                    below is missing. */}
+                {uploadedWidgets.length === 0 && (
+                  <Alert severity="info" sx={{ mt: 2 }}>
+                    {t('admin:plugins.noneInstalled')}
+                  </Alert>
+                )}
 
                 {uploadedWidgets.length > 0 && (
                   <Box
@@ -4444,6 +4471,40 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
         title={pinModal.title}
         allowRemember
       />
+
+      {/* Enlarged plugin preview (issue #162). The list thumbnails are cropped
+          to 96x60, so this is the only place the screenshot is actually
+          legible. Dialog gives Escape-to-close alongside the X. */}
+      <Dialog
+        open={!!enlargedPreview}
+        onClose={() => setEnlargedPreview(null)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, pr: 1 }}>
+          <Box component="span" sx={{ flex: 1, minWidth: 0 }}>{enlargedPreview?.name}</Box>
+          <IconButton
+            onClick={() => setEnlargedPreview(null)}
+            aria-label={t('admin:plugins.closePreview')}
+            size="small"
+          >
+            <Close />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ pt: 0 }}>
+          {enlargedPreview && (
+            <Box
+              component="img"
+              src={enlargedPreview.url}
+              alt={t('admin:plugins.previewAlt', { name: enlargedPreview.name })}
+              // maxWidth rather than width: these screenshots are around 620px
+              // wide, and stretching one to fill a md dialog only makes it
+              // blurrier — the opposite of why the enlarged view exists.
+              sx={{ maxWidth: '100%', height: 'auto', display: 'block', mx: 'auto', borderRadius: 1 }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
       <ClamValueModal
         open={!!clamModalUser}

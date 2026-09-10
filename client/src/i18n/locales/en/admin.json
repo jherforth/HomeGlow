@@ -157,9 +157,7 @@
     "saveSettings": "Save Widget Settings",
     "uploadCustom": "Upload Custom Widget",
     "uploadHtml": "Upload HTML Widget",
-    "uploaded": "Uploaded Widgets",
-    "fileName": "File: {{filename}}",
-    "githubRepo": "GitHub Widget Repository",
+    "githubRepo": "GitHub Plugin Repository",
     "refreshAvailable": "REFRESH AVAILABLE PLUGINS",
     "clickThe": "Click the",
     "buttonAboveToLoad": "button above to load the list of plugins available for installation.",
@@ -175,7 +173,11 @@
     "noDescription": "No description provided",
     "showPreview": "Preview",
     "hidePreview": "Hide preview",
-    "previewTitle": "Live preview of {{name}}"
+    "previewTitle": "Live preview of {{name}}",
+    "noneInstalled": "No plugins installed yet. Install one from the repository above, or upload your own.",
+    "enlargePreview": "See a larger preview of {{name}}",
+    "closePreview": "Close preview",
+    "previewAlt": "Preview of {{name}}"
   },
   "devices": {
     "manageHelp": "Manage devices and copy tabs/widget settings between them. Copying will overwrite the current device tabs and widget assignments.",
