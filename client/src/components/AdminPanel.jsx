@@ -2333,7 +2333,14 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                       </Alert>
                     )}
 
-                    <List sx={{ maxHeight: 400, overflowY: 'auto' }}>
+                    {/* Rows run about 86px, so the old 400px cut off mid-row and
+                        showed under five of the 23 plugins. Still capped rather
+                        than unbounded: letting the full list run would push the
+                        upload button and the settings below it off the page.
+                        Relative to the viewport rather than a fixed height, so a
+                        tall wall display shows more while a laptop does not end
+                        up scrolling the list inside a scrolling dialog. */}
+                    <List sx={{ maxHeight: { xs: 360, md: '50vh' }, overflowY: 'auto' }}>
                       {githubWidgets.map((widget) => (
                         <ListItem key={widget.path} sx={{ border: '1px solid var(--card-border)', borderRadius: 1, mb: 1 }}>
                           {/* Sibling image in the plugins repo (chore-metrics.png next to
