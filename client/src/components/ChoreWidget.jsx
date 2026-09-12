@@ -41,6 +41,7 @@ import { getDeviceApiBase } from '../utils/deviceName.js';
 import { fetchPinRemembered, setPinRemembered, shouldPromptForPin } from '../utils/adminPinDevice.js';
 import { shouldShowChoreToday, getTodayDateString, convertDaysToCrontab, getDueDateStatus, formatDueDate, hasOutstandingBonusChore } from '../utils/choreHelpers.js';
 import { filterVisibleUsers, toggleHiddenUserId, pruneHiddenUserIds } from '../utils/choreUserVisibility.js';
+import { isControlHidden } from '../utils/displayControls.js';
 import { subscribePluginEvents } from '../utils/pluginEventBridge.js';
 import { subscribePluginDataChanged } from '../utils/pluginDataBridge.js';
 import { playSound, soundUrl } from '../utils/choreSound.js';
@@ -62,7 +63,7 @@ const formatDueTime = (dueTime) => {
   return formatTime(date);
 };
 
-const ChoreWidget = ({ refreshNonce = 0 }) => {
+const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
   const { t } = useTranslation(['chores', 'common']);
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [users, setUsers] = useState([]);
@@ -118,6 +119,40 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
   const choreMenuOpenedAtRef = useRef(0);
 
   const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+  // Control Limits (resolved once in app.jsx and handed down). Hidden means NOT
+  // RENDERED — never a disabled button and never a PIN prompt offered in place of
+  // the action, because the point is that this display does not carry the control
+  // at all.
+  const hideAddChore = isControlHidden(hiddenControls, 'core:addChore');
+  const hideTransferChore = isControlHidden(hiddenControls, 'core:transferChore');
+  const hideSnoozeChore = isControlHidden(hiddenControls, 'core:snoozeChore');
+  const hidePrizeApproval = isControlHidden(hiddenControls, 'core:prizeApproval');
+  const hideQuickSpend = isControlHidden(hiddenControls, 'core:quickSpend');
+
+  // A control hidden while its dialog is already open would otherwise stay
+  // completable — hiding the entry point is not enough once someone is past it.
+  // Each updater returns the previous state unchanged when there is nothing to
+  // close, so React bails out instead of re-rendering this effect's inputs.
+  useEffect(() => {
+    if (hideAddChore) {
+      setShowAddDialog((prev) => (prev ? false : prev));
+    }
+    if (hideTransferChore) {
+      setTransferDialog((prev) => (prev.open ? { ...prev, open: false } : prev));
+    }
+    if (hideSnoozeChore) {
+      setSnoozeDialog((prev) => (prev.open ? { ...prev, open: false } : prev));
+    }
+    if (hideQuickSpend) {
+      setQuickSpend((prev) => (prev.open ? { open: false, user: null, amount: '', note: '' } : prev));
+    }
+    // The menu holds only these two items, so it is empty exactly when both are
+    // hidden — and an open empty menu is a dead backdrop the user has to dismiss.
+    if (hideTransferChore && hideSnoozeChore) {
+      setChoreMenu((prev) => (prev.position ? { position: null, schedule: null } : prev));
+    }
+  }, [hideAddChore, hideTransferChore, hideSnoozeChore, hideQuickSpend]);
 
   useEffect(() => {
     fetchData();
@@ -579,8 +614,13 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
 
   const openChoreMenu = (clientX, clientY, schedule) => {
     if (choreMenu.schedule) return; // already open (Android contextmenu + timer double-fire guard)
-    const canTransfer = schedule.transferable !== 0 && users.filter(u => u.id !== 0 && u.id !== schedule.user_id).length > 0;
-    const canSnooze = schedule.can_snooze !== 0;
+    // Control Limits fold in here rather than only at the MenuItem: hiding both
+    // items but still opening the menu leaves an empty popover over the chore,
+    // which reads as a bug and has to be dismissed before anything else works.
+    const canTransfer = !hideTransferChore
+      && schedule.transferable !== 0
+      && users.filter(u => u.id !== 0 && u.id !== schedule.user_id).length > 0;
+    const canSnooze = !hideSnoozeChore && schedule.can_snooze !== 0;
     if (!canTransfer && !canSnooze) return;
     choreMenuOpenedAtRef.current = Date.now();
     setChoreMenu({ position: { top: clientY, left: clientX }, schedule });
@@ -717,6 +757,11 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
       }
     }
     setTransferDialog(prev => ({ ...prev, open: false }));
+    // Control Limits, decided not overlooked: if core:transferChore is hidden
+    // while this PIN modal is up, the transfer still completes on verification.
+    // The parent initiated it while the control was visible, and Control Limits
+    // is visibility rather than a security boundary, so interrupting an action
+    // already in flight buys nothing. Do not "fix" this with a ref.
     requirePin(() => reassignChore(schedule.id, targetUserId, extras));
   };
 
@@ -749,6 +794,8 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
       return;
     }
     setSnoozeDialog(prev => ({ ...prev, open: false }));
+    // Same decision as confirmTransfer: hiding core:snoozeChore while this PIN
+    // modal is up does not cancel the snooze the parent already confirmed.
     requirePin(async () => {
       try {
         setIsLoading(true);
@@ -850,11 +897,14 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
       }
     }
 
+    // The avatar itself is never hidden — it carries the clam balance, which is
+    // how a child reads their own total. Quick-spend being hidden costs it only
+    // the handler and the affordances that advertise one.
     return (
       <Box
-        sx={{ position: 'relative', display: 'inline-block', cursor: 'pointer' }}
-        title={t('chores:widget.redeemClamsFor', { name: user.username })}
-        onClick={() => setQuickSpend({ open: true, user, amount: '', note: '' })}
+        sx={{ position: 'relative', display: 'inline-block', cursor: hideQuickSpend ? 'default' : 'pointer' }}
+        title={hideQuickSpend ? undefined : t('chores:widget.redeemClamsFor', { name: user.username })}
+        onClick={hideQuickSpend ? undefined : () => setQuickSpend({ open: true, user, amount: '', note: '' })}
       >
         {imageUrl ? (
           <>
@@ -1124,14 +1174,16 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
             >
               <SettingsIcon fontSize="small" />
             </IconButton>
-            <Button
-              startIcon={<Add />}
-              onClick={() => setShowAddDialog(true)}
-              variant="contained"
-              size="small"
-            >
-              {t('chores:widget.addChore')}
-            </Button>
+            {!hideAddChore && (
+              <Button
+                startIcon={<Add />}
+                onClick={() => setShowAddDialog(true)}
+                variant="contained"
+                size="small"
+              >
+                {t('chores:widget.addChore')}
+              </Button>
+            )}
           </Box>
         </Box>
 
@@ -1345,13 +1397,23 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
                       })()}
                     </Typography>
                     <Box sx={{ display: 'flex', gap: 1 }}>
-                      <Button size="small" variant="contained" startIcon={<Check />} onClick={() => approvePrizeOffer(offer.id)}>
-                        {t('chores:prizeStore.approve')}
-                      </Button>
-                      <Button size="small" variant="outlined" color="error" onClick={() => declinePrizeOffer(offer.id)}>
-                        {t('chores:prizeStore.decline')}
-                      </Button>
-                      <Button size="small" onClick={() => cancelPrizeRequest(offer.id)} sx={{ ml: 'auto', opacity: 0.7 }}>
+                      {/* Parent verdict only. The child's own "cancel request"
+                          below stays: it is how they take back a request on a
+                          display that cannot approve it. */}
+                      {!hidePrizeApproval && (
+                        <>
+                          <Button size="small" variant="contained" startIcon={<Check />} onClick={() => approvePrizeOffer(offer.id)}>
+                            {t('chores:prizeStore.approve')}
+                          </Button>
+                          <Button size="small" variant="outlined" color="error" onClick={() => declinePrizeOffer(offer.id)}>
+                            {t('chores:prizeStore.decline')}
+                          </Button>
+                        </>
+                      )}
+                      {/* Pushed right only while it shares the row with the
+                          verdict buttons; alone it sits where any lone button
+                          would. */}
+                      <Button size="small" onClick={() => cancelPrizeRequest(offer.id)} sx={{ ml: hidePrizeApproval ? 0 : 'auto', opacity: 0.7 }}>
                         {t('chores:prizeStore.cancelRequest')}
                       </Button>
                     </Box>
@@ -1693,13 +1755,13 @@ const ChoreWidget = ({ refreshNonce = 0 }) => {
           anchorReference="anchorPosition"
           anchorPosition={choreMenu.position || undefined}
         >
-          {choreMenu.schedule?.transferable !== 0 && users.filter(u => u.id !== 0 && u.id !== choreMenu.schedule?.user_id).length > 0 && (
+          {!hideTransferChore && choreMenu.schedule?.transferable !== 0 && users.filter(u => u.id !== 0 && u.id !== choreMenu.schedule?.user_id).length > 0 && (
             <MenuItem onClick={openTransferDialog}>
               <ListItemIcon><SwapHoriz fontSize="small" /></ListItemIcon>
               <ListItemText primary={t('chores:transfer.menuItem')} />
             </MenuItem>
           )}
-          {choreMenu.schedule?.can_snooze !== 0 && (
+          {!hideSnoozeChore && choreMenu.schedule?.can_snooze !== 0 && (
             <MenuItem onClick={openSnoozeDialog}>
               <ListItemIcon><Snooze fontSize="small" /></ListItemIcon>
               <ListItemText primary={t('chores:snooze.menuItem')} />
