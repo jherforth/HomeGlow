@@ -165,7 +165,7 @@ const buildTagUrl = (repository, tagName) => {
 // 200, so a network outage is indistinguishable from an empty library at the client.
 const DB_BACKED_PHOTO_TYPES = ['GooglePhotos', 'HomeGlowPhotos'];
 
-const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
+const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequestClose }) => {
   const { t, i18n } = useTranslation(['admin', 'common']);
   const isMobile = useIsMobile();
   const [currentDeviceName, setCurrentDeviceName] = useState(() => getDeviceName());
@@ -1945,11 +1945,13 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     }
   };
 
+  // Cancel, Escape and a backdrop click all arrive here. While the gate is up
+  // the panel renders nothing but this modal, and the modal's backdrop covers
+  // the containing dialog's close button — so declining to act on a dismissal
+  // leaves no way out but a page reload. Leave Admin instead.
   const handlePinModalClose = () => {
-    if (pinModal.mode === 'set' && !pinExists) {
-      return;
-    }
     if (!isAuthenticated) {
+      onRequestClose?.();
       return;
     }
     setPinModal({ open: false, mode: 'verify', title: '' });
