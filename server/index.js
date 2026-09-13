@@ -118,6 +118,7 @@ const {
   decryptLegacy,
 } = require('./utils/encryption');
 const { httpsAgentFor, isCertificateVerificationSkipped } = require('./utils/outboundTls');
+const { sqliteUtcToIso, sqliteUtcToMs } = require('./utils/sqliteTime');
 const {
   DEVICE_NAME_RULE_MESSAGE,
   isValidDeviceName,
@@ -2241,9 +2242,7 @@ function parseTabConfigJson(configJson) {
 
 function getDeviceUpdateTimeMs(deviceName) {
   const row = db.prepare('SELECT updateTime FROM devices WHERE name = ?').get(deviceName);
-  if (!row?.updateTime) return null;
-  const timestamp = Date.parse(row.updateTime);
-  return Number.isFinite(timestamp) ? timestamp : null;
+  return sqliteUtcToMs(row?.updateTime);
 }
 
 function sendJsonWithConditionalCache(request, reply, payload, lastModifiedMs = null) {
@@ -2403,6 +2402,7 @@ fastify.get('/api/devices', async (request, reply) => {
 
       return {
         ...device,
+        updateTime: sqliteUtcToIso(device.updateTime),
         widgets: widgetCount,
       };
     });
@@ -4912,8 +4912,8 @@ fastify.get('/api/connections/google/status', async (request, reply) => {
         name: account.name,
         picture: account.picture,
         scopes: account.scopes,
-        connected_at: account.created_at,
-        updated_at: account.updated_at,
+        connected_at: sqliteUtcToIso(account.created_at),
+        updated_at: sqliteUtcToIso(account.updated_at),
       } : null,
     };
   } catch (error) {

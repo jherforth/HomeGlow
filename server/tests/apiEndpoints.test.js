@@ -760,3 +760,26 @@ test('chore schedule rejects an impossible due_date', async () => {
     assert.equal(createRes.status, 400);
     assert.match(createRes.body.error, /due_date/);
 });
+
+test('GET /api/devices reports updateTime as an explicit UTC instant', async () => {
+    const deviceName = `instant-device-${Date.now()}`;
+    const settingsRes = await api(`/api/devices/${encodeURIComponent(deviceName)}/settings`, {
+        method: 'PATCH',
+        body: JSON.stringify({ theme: 'dark' }),
+    });
+    assert.equal(settingsRes.status, 200);
+
+    const { status, body } = await api('/api/devices');
+    assert.equal(status, 200);
+
+    const device = body.find((entry) => entry.name === deviceName);
+    assert.ok(device, 'expected the device to appear in /api/devices');
+
+    // The stored column is "YYYY-MM-DD HH:MM:SS" with no zone marker, which
+    // every consumer reads as local time. The response must carry the marker.
+    assert.match(device.updateTime, /Z$/);
+    assert.ok(
+        Math.abs(Date.parse(device.updateTime) - Date.now()) < 120000,
+        `updateTime ${device.updateTime} is not close to now`
+    );
+});
