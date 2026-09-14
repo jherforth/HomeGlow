@@ -3874,11 +3874,30 @@ const rowsToSettingsObject = (rows) => rows.reduce((acc, row) => {
   return acc;
 }, {});
 
+// Settings lookup shared by both read routes. `keys` entries may carry `*`
+// wildcards; an empty list means the whole table. Secrets are dropped by
+// rowsToSettingsObject, so neither route can return them.
+function selectSettings(keys) {
+  let query = 'SELECT key, value FROM settings';
+  if (keys.length) {
+    query += ' WHERE ' + keys.map(() => 'key LIKE ?').join(' OR ');
+  }
+  return db.prepare(query).all(...keys.map((key) => key.replaceAll('*', '%')));
+}
+
+// A comma-separated `keys` query param, e.g. ?keys=default_language,PHOTO_WIDGET_*
+// Absent or empty means "no filter" and the whole table comes back, which is
+// what this route has always done.
+function parseSettingsKeysParam(raw) {
+  if (typeof raw !== 'string' || raw.trim() === '') return [];
+  return raw.split(',').map((key) => key.trim()).filter((key) => key !== '');
+}
+
 // NEW: API Endpoints for Settings (including API keys)
 fastify.get('/api/settings', async (request, reply) => {
   try {
     console.log('=== FETCHING SETTINGS ===');
-    const rows = db.prepare('SELECT key, value FROM settings').all();
+    const rows = selectSettings(parseSettingsKeysParam(request.query?.keys));
     console.log('Raw settings from database:', rows);
     const settings = rowsToSettingsObject(rows);
     console.log('Processed settings object:', settings);
@@ -3895,14 +3914,10 @@ fastify.post('/api/settings/search', async (request, reply) => {
     // coerce the request body to array of strings to search the settings database by key:
     const keys = Array.isArray(request.body) ? request.body : [request.body];
 
-    // use parameters to filter settings by key if provided, otherwise return all settings
-    // accept simple wildcards for partial match via * (e.g. WEATHER_* to match all weather related settings)
-    let query = 'SELECT key, value FROM settings';
-    if (keys.length) {
-      const conditions = keys.map(() => 'key LIKE ?').join(' OR ');
-      query += ' WHERE ' + conditions;
-    }
-    const rows = db.prepare(query).all(...keys.map(key => key.replaceAll('*', '%')));
+    // Kept as-is: this is a documented plugin endpoint (plugin-development.md),
+    // so third-party plugins call it and it stays supported. GET /api/settings
+    // with ?keys= is the preferred read for new callers.
+    const rows = selectSettings(keys);
     console.log('Raw settings from database:', rows);
     const settings = rowsToSettingsObject(rows);
     console.log('Processed settings object:', settings);

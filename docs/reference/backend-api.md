@@ -200,8 +200,8 @@ static route.
 ### Settings & API keys
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET/POST | `/api/settings` | Read / write global settings (ICS URL, chore sounds, …). |
-| POST | `/api/settings/search` | Look up specific settings. |
+| GET/POST | `/api/settings` | Read / write global settings (ICS URL, chore sounds, …). `GET ?keys=KEY,PREFIX_*` narrows the read; omit `keys` for the whole table. |
+| POST | `/api/settings/search` | Look up specific settings. Equivalent to `GET /api/settings?keys=…`; kept because plugins are documented against it. |
 | POST | `/api/test-api-key` | Validate an OpenWeatherMap key. |
 | GET | `/api/proxy` | Generic CORS proxy (used by widgets/integrations). |
 

@@ -409,7 +409,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
 
   const fetchSettings = async () => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/settings/search`, ['*']);
+      // No filter: this panel edits the whole table.
+      const response = await axios.get(`${API_BASE_URL}/api/settings`);
       setSettings(response.data);
     } catch (error) {
       console.error('Error fetching settings:', error);

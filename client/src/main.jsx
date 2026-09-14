@@ -13,7 +13,9 @@ const resolveInitialLanguage = async () => {
   const stored = getStoredLanguage();
   if (stored) return stored;
   try {
-    const { data } = await axios.post(`${API_BASE_URL}/api/settings/search`, ['default_language']);
+    const { data } = await axios.get(`${API_BASE_URL}/api/settings`, {
+      params: { keys: 'default_language' },
+    });
     const value = data && data.default_language;
     return typeof value === 'string' && value ? value : undefined;
   } catch {

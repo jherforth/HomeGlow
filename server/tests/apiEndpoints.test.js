@@ -422,6 +422,55 @@ test('settings endpoints persist and query values', async () => {
     });
     assert.equal(searchRes.status, 200);
     assert.deepEqual(searchRes.body.TEST_SETTING_JSON, { featureEnabled: true, retries: 2 });
+
+    // The same lookup over GET, so a read does not have to be a POST. The POST
+    // stays supported: it is documented for plugin authors.
+    const getFiltered = await api('/api/settings?keys=TEST_SETTING_*');
+    assert.equal(getFiltered.status, 200);
+    assert.deepEqual(getFiltered.body.TEST_SETTING_JSON, { featureEnabled: true, retries: 2 });
+});
+
+test('GET /api/settings filters by keys, and an absent filter still returns everything', async () => {
+    const save = async (key, value) => {
+        const res = await api('/api/settings', {
+            method: 'POST',
+            body: JSON.stringify({ key, value }),
+        });
+        assert.equal(res.status, 200);
+    };
+    await save('KEYFILTER_ALPHA', 'a');
+    await save('KEYFILTER_BETA', 'b');
+    await save('OTHER_GAMMA', 'g');
+
+    const exact = await api('/api/settings?keys=KEYFILTER_ALPHA');
+    assert.equal(exact.status, 200);
+    assert.equal(exact.body.KEYFILTER_ALPHA, 'a');
+    assert.equal(exact.body.KEYFILTER_BETA, undefined, 'an exact key must not match its siblings');
+    assert.equal(exact.body.OTHER_GAMMA, undefined);
+
+    const wildcard = await api('/api/settings?keys=KEYFILTER_*');
+    assert.equal(wildcard.body.KEYFILTER_ALPHA, 'a');
+    assert.equal(wildcard.body.KEYFILTER_BETA, 'b');
+    assert.equal(wildcard.body.OTHER_GAMMA, undefined, 'the wildcard must not spill past its prefix');
+
+    const several = await api('/api/settings?keys=KEYFILTER_ALPHA,OTHER_GAMMA');
+    assert.equal(several.body.KEYFILTER_ALPHA, 'a');
+    assert.equal(several.body.OTHER_GAMMA, 'g');
+    assert.equal(several.body.KEYFILTER_BETA, undefined);
+
+    // Unfiltered behaviour is unchanged — this route has always returned the lot.
+    const all = await api('/api/settings');
+    assert.equal(all.body.KEYFILTER_ALPHA, 'a');
+    assert.equal(all.body.OTHER_GAMMA, 'g');
+
+    const empty = await api('/api/settings?keys=');
+    assert.equal(empty.body.KEYFILTER_ALPHA, 'a', 'an empty filter means no filter, not no results');
+
+    // Secrets stay redacted on the filtered path too.
+    await save('WEATHER_API_KEY', 'sk-should-never-be-returned');
+    const secret = await api('/api/settings?keys=WEATHER_API_KEY');
+    assert.equal(secret.status, 200);
+    assert.equal(secret.body.WEATHER_API_KEY, undefined, 'redaction must apply to the filtered read');
 });
 
 test('prize endpoints validate and support CRUD lifecycle', async () => {
