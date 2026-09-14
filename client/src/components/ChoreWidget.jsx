@@ -49,6 +49,15 @@ import { formatTime } from '../utils/dateUtils.js';
 import PrizeCelebration from './PrizeCelebration.jsx';
 import ChoreCelebration from './ChoreCelebration.jsx';
 import ChoreIconPicker from './ChoreIconPicker.jsx';
+import { shouldPersistSettings } from '../utils/widgetSettingsPersist';
+
+// Shared by the initial state and by the snapshot taken when a load returns no
+// stored settings, so "never saved" and "saved the defaults" compare equal.
+const DEFAULT_SHOW_BONUS_CHORES = true;
+const DEFAULT_SOUND_ENABLED = true;
+// Frozen: it is shared by every instance's initial state and by the
+// no-stored-settings snapshot, so an in-place mutation would corrupt both.
+const DEFAULT_HIDDEN_USER_IDS = Object.freeze([]);
 
 const USERS_UPDATED_EVENT = 'homeglow:users-updated';
 
@@ -83,14 +92,17 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showPrizesModal, setShowPrizesModal] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [showBonusChores, setShowBonusChores] = useState(true);
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [showBonusChores, setShowBonusChores] = useState(DEFAULT_SHOW_BONUS_CHORES);
+  const [soundEnabled, setSoundEnabled] = useState(DEFAULT_SOUND_ENABLED);
   // Per-device: which real users this display hides. Bonus pseudo-user (id 0)
   // is not a real user and is not offered in the selector — the "Bonus Chores"
   // column already has its own toggle.
-  const [hiddenUserIds, setHiddenUserIds] = useState([]);
+  const [hiddenUserIds, setHiddenUserIds] = useState(DEFAULT_HIDDEN_USER_IDS);
   const [settingsAnchor, setSettingsAnchor] = useState(null);
   const [deviceSettingsLoaded, setDeviceSettingsLoaded] = useState(false);
+  // The settings as last known to agree with the server; null until a load
+  // succeeds. Guards the persist effect below — see widgetSettingsPersist.
+  const loadedSettingsRef = useRef(null);
   const [isLoading, setIsLoading] = useState(false);
   const [dailyClamReward, setDailyClamReward] = useState(2);
   // Household toggle for the all-chores-done celebration (issue #140).
@@ -160,24 +172,32 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
 
   useEffect(() => {
     const loadDeviceWidgetSettings = async () => {
+      let adopted = null;
       try {
         const response = await axios.get(`${API_DEVICE_URL}/settings`);
         const choreSettings = response.data?.choreWidgetSettings;
-        if (choreSettings && typeof choreSettings.showBonusChores === 'boolean') {
-          setShowBonusChores(choreSettings.showBonusChores);
-        }
-        if (choreSettings && typeof choreSettings.soundEnabled === 'boolean') {
-          setSoundEnabled(choreSettings.soundEnabled);
-        }
-        if (choreSettings && Array.isArray(choreSettings.hiddenUserIds)) {
+        adopted = {
+          showBonusChores: choreSettings && typeof choreSettings.showBonusChores === 'boolean'
+            ? choreSettings.showBonusChores
+            : DEFAULT_SHOW_BONUS_CHORES,
+          soundEnabled: choreSettings && typeof choreSettings.soundEnabled === 'boolean'
+            ? choreSettings.soundEnabled
+            : DEFAULT_SOUND_ENABLED,
           // Coerce here so a JSON-round-tripped string id still matches later.
-          setHiddenUserIds(choreSettings.hiddenUserIds
-            .map((id) => Number(id))
-            .filter((id) => Number.isFinite(id)));
-        }
+          hiddenUserIds: choreSettings && Array.isArray(choreSettings.hiddenUserIds)
+            ? choreSettings.hiddenUserIds.map((id) => Number(id)).filter((id) => Number.isFinite(id))
+            : DEFAULT_HIDDEN_USER_IDS,
+        };
+        setShowBonusChores(adopted.showBonusChores);
+        setSoundEnabled(adopted.soundEnabled);
+        setHiddenUserIds(adopted.hiddenUserIds);
       } catch (error) {
         console.error('Error loading chore widget settings:', error);
       } finally {
+        // Null on failure: the component is still holding its own defaults, and
+        // persisting those would replace whatever the server has.
+        loadedSettingsRef.current = adopted;
+        // Set regardless, so a failed load renders the widget instead of hanging.
         setDeviceSettingsLoaded(true);
       }
     };
@@ -199,15 +219,20 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
       return;
     }
 
+    const current = { showBonusChores, soundEnabled, hiddenUserIds };
+    // The load itself is not an edit. Without this the effect writes back what
+    // it just read on every mount — and on every tab change that remounts the
+    // widget, which on a rotating display is a write a minute.
+    if (!shouldPersistSettings(loadedSettingsRef.current, current)) {
+      return undefined;
+    }
+
     const timeoutId = setTimeout(async () => {
       try {
         await axios.patch(`${API_DEVICE_URL}/settings`, {
-          choreWidgetSettings: {
-            showBonusChores,
-            soundEnabled,
-            hiddenUserIds,
-          },
+          choreWidgetSettings: current,
         });
+        loadedSettingsRef.current = current;
       } catch (error) {
         console.error('Error saving chore widget settings:', error);
       }
