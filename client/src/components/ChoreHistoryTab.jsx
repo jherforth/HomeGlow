@@ -19,6 +19,7 @@ import { Delete, Refresh } from '@mui/icons-material';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { stackableTableSx } from '../utils/responsiveTable.js';
+import { formatLoggedAt } from '../utils/choreHelpers.js';
 
 export default function ChoreHistoryTab() {
   const [history, setHistory] = useState([]);
@@ -74,7 +75,8 @@ export default function ChoreHistoryTab() {
       </Box>
 
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Showing clam-earning history entries from the last 7 days.
+        Showing clam-earning history entries from the last 7 days. <strong>Date</strong> is
+        the day the entry counts for; <strong>Logged</strong> is when it was actually recorded.
       </Typography>
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -96,6 +98,7 @@ export default function ChoreHistoryTab() {
                 <TableCell sx={{ fontWeight: 600 }}>User</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Title</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Date</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Logged</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Clams</TableCell>
                 <TableCell align="right" sx={{ fontWeight: 600 }}>Actions</TableCell>
               </TableRow>
@@ -115,6 +118,11 @@ export default function ChoreHistoryTab() {
                   </TableCell>
                   <TableCell data-label="Date">
                     <Typography variant="body2">{formatDate(entry.date)}</Typography>
+                  </TableCell>
+                  <TableCell data-label="Logged">
+                    <Typography variant="body2" color="text.secondary">
+                      {formatLoggedAt(entry.created_at, entry.date) || '—'}
+                    </Typography>
                   </TableCell>
                   <TableCell data-label="Clams">
                     <Chip

@@ -115,3 +115,34 @@ export function formatDueDate(dueDate) {
   if (Number.isNaN(date.getTime())) return dueDate;
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
+
+/**
+ * When a history row was actually recorded, for display beside the row's own
+ * date. The two usually agree, and repeating the date in every row would be
+ * noise — so the date is shown only when it differs, which is exactly the case
+ * a reader would otherwise misread: a chore dated yesterday but checked off
+ * after midnight.
+ *
+ * Rendered in the server's timezone, not the viewer's, so the time cannot
+ * contradict the date column beside it when a phone is travelling.
+ *
+ * Returns '' for a missing or unparseable value; callers render a placeholder
+ * rather than a wrong time.
+ */
+export function formatLoggedAt(createdAt, rowDate, locale = undefined) {
+  if (!createdAt) return '';
+  const logged = new Date(createdAt);
+  if (Number.isNaN(logged.getTime())) return '';
+
+  const timeZone = getServerTimezoneSync();
+  const time = logged.toLocaleTimeString(locale, { timeZone, hour: 'numeric', minute: '2-digit' });
+
+  const loggedDate = new Intl.DateTimeFormat('en-CA', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(logged);
+
+  if (!rowDate || loggedDate === rowDate) return time;
+
+  const dayLabel = logged.toLocaleDateString(locale, { timeZone, month: 'short', day: 'numeric' });
+  return `${dayLabel}, ${time}`;
+}

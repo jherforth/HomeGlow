@@ -783,3 +783,32 @@ test('GET /api/devices reports updateTime as an explicit UTC instant', async () 
         `updateTime ${device.updateTime} is not close to now`
     );
 });
+
+test('chore history reports created_at as an explicit UTC instant', async () => {
+    const userRes = await api('/api/users', {
+        method: 'POST',
+        body: JSON.stringify({ username: `logged-user-${Date.now()}`, color: '#123456' }),
+    });
+    assert.equal(userRes.status, 200);
+    const userId = userRes.body.id;
+
+    const createRes = await api('/api/chore-history', {
+        method: 'POST',
+        body: JSON.stringify({ user_id: userId, date: '2026-09-12', clam_value: 3, kind: 'adjustment' }),
+    });
+    assert.equal(createRes.status, 200);
+
+    const { status, body } = await api(`/api/chore-history?user_id=${userId}`);
+    assert.equal(status, 200);
+
+    const row = body.find((entry) => entry.id === createRes.body.id);
+    assert.ok(row, 'expected the new history row to come back');
+
+    // Stored as "YYYY-MM-DD HH:MM:SS" with no zone, which every consumer reads
+    // as local time. The response must carry the marker.
+    assert.match(row.created_at, /Z$/);
+    assert.ok(
+        Math.abs(Date.parse(row.created_at) - Date.now()) < 120000,
+        `created_at ${row.created_at} is not close to now`
+    );
+});

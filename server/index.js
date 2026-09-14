@@ -2988,6 +2988,14 @@ fastify.delete('/api/chore-schedules/:id', async (request, reply) => {
 });
 
 // Chore History routes
+// chore_history.created_at is written by CURRENT_TIMESTAMP, so it is UTC with no
+// zone marker and every consumer would read it as local time. Rows leave the API
+// carrying an instant instead.
+function withIsoCreatedAt(row) {
+  if (!row || row.created_at === undefined) return row;
+  return { ...row, created_at: sqliteUtcToIso(row.created_at) };
+}
+
 fastify.get('/api/chore-history', async (request, reply) => {
   try {
     const { user_id, date, date_from, date_to } = request.query;
@@ -3019,7 +3027,7 @@ fastify.get('/api/chore-history', async (request, reply) => {
     query += ' ORDER BY date DESC, created_at DESC';
 
     const rows = db.prepare(query).all(...params);
-    return rows;
+    return rows.map(withIsoCreatedAt);
   } catch (error) {
     console.error('Error fetching chore history:', error);
     reply.status(500).send({ error: 'Failed to fetch chore history' });
@@ -3030,7 +3038,7 @@ fastify.get('/api/chore-history/user/:userId', async (request, reply) => {
   const { userId } = request.params;
   try {
     const rows = db.prepare('SELECT * FROM chore_history WHERE user_id = ? ORDER BY date DESC, created_at DESC').all(userId);
-    return rows;
+    return rows.map(withIsoCreatedAt);
   } catch (error) {
     console.error('Error fetching user history:', error);
     reply.status(500).send({ error: 'Failed to fetch user history' });
@@ -3084,7 +3092,7 @@ fastify.get('/api/chore-history/recent', async (request, reply) => {
       WHERE ch.date >= ? AND ch.clam_value != 0
       ORDER BY ch.date DESC, ch.created_at DESC
     `).all(sinceStr);
-    return rows;
+    return rows.map(withIsoCreatedAt);
   } catch (error) {
     console.error('Error fetching recent chore history:', error);
     reply.status(500).send({ error: 'Failed to fetch recent chore history' });
