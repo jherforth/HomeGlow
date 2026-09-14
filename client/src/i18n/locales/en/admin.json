@@ -313,6 +313,60 @@
     "removePin": "Remove PIN",
     "changeNote": "Changing your PIN will require you to use the new PIN on your next admin panel access."
   },
+  "controls": {
+    "heading": "Controls on Displays",
+    "help": "Choose which parent controls each display offers. Hiding a control only stops that display from drawing it — it is not a password, and anything hidden is still available here.",
+    "defaultHeading": "Default for new displays",
+    "defaultHelp": "Displays with no setting of their own follow this, including displays added later.",
+    "displaysHeading": "Each display",
+    "noDisplays": "No displays have checked in yet.",
+    "loading": "Reading displays...",
+    "loadFailed": "Could not read the displays. Use Refresh to try again.",
+    "presetLabel": "Controls offered",
+    "switchHint": "On means the control is shown.",
+    "futureDefaultOn": "Controls added later will default to on.",
+    "futureDefaultOff": "Controls added later will default to off.",
+    "coreGroup": "Built-in controls",
+    "inheritingHelp": "These switches follow the household default. Choose Full control or Wall display to give this display a setting of its own.",
+    "unreadableHelp": "We could not read this display's settings, so what it offers is unknown. Nothing has been changed for it.",
+    "unlockedNotice": "This display remembers the admin PIN, so it is exempt and offers every control. The settings below are saved but not in effect here. Use \"{{action}}\" above to apply them again.",
+    "saveFailed": "Could not save that change, so the displays were read again.",
+    "saving": "Saving changes",
+    "currentUnknownHelp": "We could not read the settings for the display you are using, so we cannot tell whether a change here would take controls away from it.",
+    "presets": {
+      "householdDefault": "Household default",
+      "fullControl": "Full control",
+      "wallDisplay": "Wall display",
+      "custom": "Custom",
+      "unknown": "Unknown"
+    },
+    "status": {
+      "inheriting": "Using household default",
+      "unreadable": "Could not read this display"
+    },
+    "items": {
+      "addChore": "Add a chore",
+      "transferChore": "Transfer a chore to someone else",
+      "snoozeChore": "Snooze a chore",
+      "prizeApproval": "Approve or decline prize requests",
+      "quickSpend": "Spend clams from a profile"
+    },
+    "confirm": {
+      "title": "Restrict this display too?",
+      "body": "\"{{device}}\" is the display you are using, and it follows the household default, so this change would take controls away from it.",
+      "keepFull": "Keep full control here",
+      "applyHere": "Apply here too",
+      "failed": "Could not save that change, so the household default was left as it was. Try again, or cancel to keep it."
+    },
+    "clearExceptions": {
+      "title": "Replace the individual control settings?",
+      "display_one": "\"{{device}}\" has controls set individually. \"{{preset}}\" replaces all of them, and 1 switch below changes.",
+      "display_other": "\"{{device}}\" has controls set individually. \"{{preset}}\" replaces all of them, and {{count}} switches below change.",
+      "household_one": "The default has controls set individually. \"{{preset}}\" replaces all of them, for every display that follows the default, and 1 switch below changes.",
+      "household_other": "The default has controls set individually. \"{{preset}}\" replaces all of them, for every display that follows the default, and {{count}} switches below change.",
+      "confirm": "Replace"
+    }
+  },
   "connections": {
     "heading": "Connections",
     "apiKeys": "API Keys",

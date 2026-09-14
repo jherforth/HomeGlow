@@ -25,6 +25,7 @@ import {
 } from './utils/interfaceSettings.js';
 import { normalizeWidgetSettings, BASE_WIDGET_SETTINGS } from './utils/widgetSettings.js';
 import { buildMobileWidgetList } from './utils/mobileWidgets.js';
+import { CORE_CONTROLS, resolveHiddenControls } from './utils/displayControls.js';
 import './index.css';
 
 const loadAdminPanel = () => import('./components/AdminPanel.jsx');
@@ -97,6 +98,35 @@ const DEFAULT_WIDGET_SETTINGS = {
   darkButtonGradientEnd: '#620808',
 };
 
+const CORE_CONTROL_IDS = CORE_CONTROLS.map((control) => control.id);
+
+// Backoff for the admin-PIN existence check. Four attempts over ~6s: long enough
+// to ride out a server still coming up behind a kiosk that boots with it, short
+// enough that nothing waits on it.
+const ADMIN_PIN_EXISTS_RETRY_DELAYS_MS = [500, 1500, 4000];
+
+// How long to wait before starting that ladder over, while the answer is still
+// unknown. Minutes, not seconds: the ladder already covers the fast case, so
+// anything still unresolved is an outage measured in minutes, and polling it
+// quickly would only add load to a server that is evidently already struggling.
+// The poll exists because the cost of an unresolved answer does not expire (see
+// the recovery effect), and it stops the moment one lands.
+const ADMIN_PIN_EXISTS_RECOVERY_INTERVAL_MS = 5 * 60 * 1000;
+
+/**
+ * Control Limits ids are namespaced in storage (`plugin:<pluginId>:<control>`)
+ * so two plugins cannot collide. A plugin only ever knows its own unprefixed
+ * ids, so the namespace is stripped here: it is core's storage concern and must
+ * not leak into every plugin author's widget.
+ */
+const unprefixedHiddenControlsFor = (hiddenControls, pluginId) => {
+  if (!pluginId || !Array.isArray(hiddenControls)) return [];
+  const prefix = `plugin:${pluginId}:`;
+  return hiddenControls
+    .filter((id) => id.startsWith(prefix))
+    .map((id) => id.slice(prefix.length));
+};
+
 const readLocalTheme = () => {
   const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
   return savedTheme === 'dark' ? 'dark' : 'light';
@@ -165,6 +195,21 @@ const App = () => {
   // Credentials are no longer among them — GET /api/settings redacts secrets,
   // and weather is fetched server-side.
   const [householdSettings, setHouseholdSettings] = useState({});
+  // The raw device settings blob, kept alongside the hydrated view above:
+  // Control Limits reads keys this component does not otherwise model
+  // (`controlLimits`, `adminPinRemembered`), and resolveHiddenControls wants the
+  // blob as stored, not a projection of it.
+  const [rawDeviceSettings, setRawDeviceSettings] = useState(null);
+  // null = the PIN check has not landed. Passed into displayControls as
+  // `undefined`, never `false`: `false` states that no PIN exists, which makes a
+  // remembered display stop being exempt. See isDisplayUnlocked.
+  const [adminPinExists, setAdminPinExists] = useState(null);
+  // Serializes runs of the PIN check. It is started from bootstrap, from every
+  // device-settings-updated event and from the recovery poll, so a run sitting
+  // in its backoff and a freshly started one can be in flight together; without
+  // a token the older one can land last and publish the staler answer. Matches
+  // how ControlsOnDisplay's loadLimits guards the same pattern.
+  const adminPinExistsTokenRef = useRef(0);
   const [installedPlugins, setInstalledPlugins] = useState([]);
   const [activeTab, setActiveTab] = useState(1);
   const { tabs, fetchTabs } = useFetchTabs(API_DEVICE_URL);
@@ -190,6 +235,8 @@ const App = () => {
   }, []);
 
   const hydrateFromDeviceSettings = useCallback((settings) => {
+    setRawDeviceSettings(settings || {});
+
     const widgetSettingsFromServer = normalizeWidgetSettings(settings?.widgetSettings, DEFAULT_WIDGET_SETTINGS);
     const pluginSettingsFromServer = settings?.pluginSettings && typeof settings.pluginSettings === 'object'
       ? settings.pluginSettings
@@ -216,6 +263,61 @@ const App = () => {
       console.error('Error fetching device settings:', error);
     }
   }, [API_DEVICE_URL, hydrateFromDeviceSettings]);
+
+  const fetchHouseholdSettings = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/settings`);
+      setHouseholdSettings(response.data || {});
+    } catch (error) {
+      console.error('Error fetching household settings:', error);
+    }
+  }, []);
+
+  // Whether a household admin PIN is configured. Only a clean read may report
+  // `false` — claiming "no PIN exists" on the strength of a request that did not
+  // answer would make every remembered display drop its exemption and strip a
+  // parent's controls. Control Limits is visibility, not access control, so an
+  // unreadable check resolves the generous way.
+  //
+  // Retried because the generous way is not free: while this stays unresolved,
+  // every display that remembers the PIN is exempt, which is the household-wide
+  // disable that displayControls' `pinExists !== false` guard exists to prevent.
+  // displayControls time-boxes that cost by obliging the caller to resolve the
+  // value; a single failed request would leave it unresolved forever, so one
+  // flaky response must not be the end of it. The ladder is bounded and loud
+  // when it runs out, but it is not the last word: the recovery effect below
+  // starts it again for as long as the answer stays unknown.
+  const fetchAdminPinExists = useCallback(async () => {
+    adminPinExistsTokenRef.current += 1;
+    const token = adminPinExistsTokenRef.current;
+    // A superseded run abandons both its write and its remaining backoff: a
+    // newer run owns the answer, and an older one waking up mid-ladder would
+    // otherwise overwrite it with a staler read.
+    const superseded = () => token !== adminPinExistsTokenRef.current;
+
+    for (let attempt = 0; attempt <= ADMIN_PIN_EXISTS_RETRY_DELAYS_MS.length; attempt += 1) {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/api/admin-pin/exists`);
+        if (superseded()) return;
+        setAdminPinExists(response.data?.exists === true);
+        return;
+      } catch (error) {
+        if (superseded()) return;
+        const retryDelay = ADMIN_PIN_EXISTS_RETRY_DELAYS_MS[attempt];
+        if (retryDelay === undefined) {
+          console.error(
+            'Admin PIN existence check failed after '
+              + `${ADMIN_PIN_EXISTS_RETRY_DELAYS_MS.length + 1} attempts; Control Limits stay `
+              + `disabled on displays that remember the PIN, retrying every ${
+                ADMIN_PIN_EXISTS_RECOVERY_INTERVAL_MS / 60000} minutes:`,
+            error,
+          );
+          return;
+        }
+        await new Promise((resolve) => { setTimeout(resolve, retryDelay); });
+      }
+    }
+  }, []);
 
   // region #98 - expected to get removed in the future (one-time local-to-server settings migration)
   const migrateLocalDeviceSettingsToServer = useCallback(async () => {
@@ -316,15 +418,6 @@ const App = () => {
 
   // region #98 - expected to get removed in the future (invoke migration bridge during bootstrap)
   useEffect(() => {
-    const fetchHouseholdSettings = async () => {
-      try {
-        const response = await axios.get(`${API_BASE_URL}/api/settings`);
-        setHouseholdSettings(response.data || {});
-      } catch (error) {
-        console.error('Error fetching household settings:', error);
-      }
-    };
-
     const fetchDemoStatus = async () => {
       try {
         const response = await axios.get(`${API_BASE_URL}/api/demo`);
@@ -335,6 +428,11 @@ const App = () => {
     };
 
     const initialize = async () => {
+      // Started, not awaited: it retries on its own schedule and nothing else
+      // here depends on the answer, so a slow or failing PIN endpoint must not
+      // delay the settings, tabs and plugins this dashboard renders from.
+      void fetchAdminPinExists();
+
       await migrateLocalDeviceSettingsToServer();
       await fetchDemoStatus();
       await fetchDeviceSettings();
@@ -347,7 +445,12 @@ const App = () => {
     };
 
     void initialize();
-  }, [fetchDeviceSettings, migrateLocalDeviceSettingsToServer]);
+  }, [
+    fetchDeviceSettings,
+    migrateLocalDeviceSettingsToServer,
+    fetchHouseholdSettings,
+    fetchAdminPinExists,
+  ]);
   // endRegion #98
 
   // Demo mode: each visitor's browser is a fresh "device", which normally
@@ -507,6 +610,14 @@ const App = () => {
   useEffect(() => {
     const handleDeviceSettingsUpdated = () => {
       void fetchDeviceSettings();
+      // Control Limits resolve from three inputs, and Admin can change any of
+      // them: this display's own limits (device settings), the household default
+      // (household settings) and whether a PIN exists at all — removing the PIN
+      // re-applies limits to every remembered display. Refetching all three here
+      // is what makes a change in Admin take effect on this screen without a
+      // reload.
+      void fetchHouseholdSettings();
+      void fetchAdminPinExists();
     };
 
     const handleInterfaceSettingsUpdated = () => {
@@ -527,7 +638,38 @@ const App = () => {
       window.removeEventListener(DEVICE_SETTINGS_UPDATED_EVENT, handleDeviceSettingsUpdated);
       window.removeEventListener(INTERFACE_SETTINGS_UPDATED_EVENT, handleInterfaceSettingsUpdated);
     };
-  }, [fetchDeviceSettings]);
+  }, [fetchDeviceSettings, fetchHouseholdSettings, fetchAdminPinExists]);
+
+  // Recovery for a PIN check that never landed.
+  //
+  // While adminPinExists is unresolved, every display that remembers the PIN is
+  // exempt from Control Limits — the household-wide disable isDisplayUnlocked's
+  // `pinExists !== false` guard exists to prevent, which is why its contract
+  // puts the obligation to resolve the value on this caller. The ladder above
+  // covers a server coming up a moment behind its kiosk; it does not cover an
+  // API unreachable for the length of a migration after an LXC reboot. Past
+  // that, the only other trigger is a device-settings-updated event from this
+  // window's own Admin Panel, which nobody opens on a wall display — so the
+  // exemption lasted until a human reloaded the page, i.e. indefinitely.
+  //
+  // A slow poll rather than re-attempting from the focus/visibilitychange
+  // handlers the auto-theme effect uses: a kiosk is never backgrounded and
+  // never blurred, so those are precisely the events the failing case does not
+  // produce, and they are gated on `themeMode === 'auto'` besides. Keyed on
+  // adminPinExists, so the first answer tears the interval down — unresolved is
+  // the only state in which this polls at all, and nothing here ever asserts
+  // `false` from a request that did not answer.
+  useEffect(() => {
+    if (adminPinExists !== null) {
+      return undefined;
+    }
+
+    const intervalId = setInterval(() => {
+      void fetchAdminPinExists();
+    }, ADMIN_PIN_EXISTS_RECOVERY_INTERVAL_MS);
+
+    return () => clearInterval(intervalId);
+  }, [adminPinExists, fetchAdminPinExists]);
 
   useEffect(() => {
     if (themeMode !== 'auto') {
@@ -799,6 +941,39 @@ const App = () => {
     return { x: match.layout_x, y: match.layout_y, w: match.layout_w, h: match.layout_h };
   };
 
+  // Every control id this dashboard can name: the core catalog plus whatever the
+  // installed plugins declare. Only a source of candidates — a stored id for a
+  // plugin that is not installed here still applies, which is the module's job,
+  // not this list's.
+  const knownControlIds = useMemo(() => {
+    const ids = [...CORE_CONTROL_IDS];
+
+    installedPlugins.forEach((plugin) => {
+      const pluginId = plugin?.manifest?.id;
+      const declared = plugin?.manifest?.hideableControls;
+      if (!pluginId || !Array.isArray(declared)) return;
+
+      declared.forEach((control) => {
+        if (control && typeof control.id === 'string') {
+          ids.push(`plugin:${pluginId}:${control.id}`);
+        }
+      });
+    });
+
+    return ids;
+  }, [installedPlugins]);
+
+  // Resolved once here and passed down, so every widget on this display agrees
+  // about what it may render. Until the PIN check lands, adminPinExists is null
+  // and must reach the module as `undefined` — `false` would assert that no PIN
+  // is configured.
+  const hiddenControls = useMemo(() => resolveHiddenControls({
+    deviceSettings: rawDeviceSettings,
+    householdSettings,
+    pinExists: adminPinExists === null ? undefined : adminPinExists,
+    knownControlIds,
+  }), [rawDeviceSettings, householdSettings, adminPinExists, knownControlIds]);
+
   const widgets = useMemo(() => {
     const result = [];
 
@@ -855,7 +1030,7 @@ const App = () => {
         savedLayout: dbLayout,
         content: (
           <Suspense fallback={<WidgetLoadingFallback label="chores" />}>
-            <ChoreWidget />
+            <ChoreWidget hiddenControls={hiddenControls} />
           </Suspense>
         ),
       });
@@ -899,12 +1074,13 @@ const App = () => {
           theme={theme}
           transparentBackground={pSettings.transparent || false}
           events={plugin.manifest?.events || []}
+          hiddenControls={unprefixedHiddenControlsFor(hiddenControls, plugin.manifest?.id)}
         />,
       });
     });
 
     return result;
-  }, [widgetSettings, pluginSettings, activeTab, widgetAssignments, installedPlugins, theme, demoStatus.demo]);
+  }, [widgetSettings, pluginSettings, activeTab, widgetAssignments, installedPlugins, theme, demoStatus.demo, hiddenControls]);
 
   // Mobile stack (issue #118): same widget content nodes, fixed order, photos
   // excluded, grid metadata ignored.
@@ -1084,6 +1260,7 @@ const App = () => {
           <Suspense fallback={<Typography sx={{ py: 2 }}>Loading settings...</Typography>}>
             <AdminPanel
               setWidgetSettings={setWidgetSettings}
+              onRequestClose={toggleAdminPanel}
               onPluginsChanged={fetchInstalledPlugins}
               onTabsChanged={async () => {
                 await fetchTabs();

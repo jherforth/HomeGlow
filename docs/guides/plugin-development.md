@@ -130,6 +130,10 @@ serving your widget, and the SDK picks it up — you never pass your own id.
 | `settings` | — | Declared settings the Admin Panel renders (see §4). |
 | `events` | — | Core events to receive while mounted (see §5). |
 | `reactions` | — | Server-side increments run on events (see §6). Requires `storage: true`. |
+| `hideableControls` | — | Controls a display may be configured to hide (see §4). |
+
+Keys not listed here are **ignored**, not rejected — so a misspelled field fails
+silently rather than loudly.
 
 **Validation is strict and loud**: an invalid manifest rejects the upload with
 the exact errors (400), and a duplicate `id` is a 409. A widget *without* a
@@ -200,6 +204,72 @@ await HomeGlow.settings.set({ mode: 'give' });  // validated server-side
 
 Values are validated against your declared schema on every write (wrong type,
 out-of-range, unknown key → 400; all-or-nothing).
+
+### Control limits — let a display hide your management controls
+
+A wall display in the kitchen shouldn't offer your Edit and Delete buttons. Declare
+which controls can be hidden and the Admin Panel makes them per-display switches.
+**You do the hiding** — HomeGlow can't reach into your iframe. Household-facing
+behavior is in the [Control Limits guide](control-limits.md).
+
+```json
+"hideableControls": [
+  { "id": "editPoll", "label": "Create and edit polls" }
+]
+```
+
+```js
+// At parse time, not in DOMContentLoaded — later than that and the control
+// paints before you remove it, flashing on every iframe reload.
+const hidden = (new URLSearchParams(location.search).get('hide') || '')
+  .split(',').filter(Boolean);
+
+if (!hidden.includes('editPoll')) renderEditButton();
+```
+
+Literal markup is fine too — remove the nodes instead of skipping a call.
+
+#### Rules
+
+- **Ids are unprefixed, camelCase, and permanent.** `hide` names only your own
+  controls. `edit_poll` and `EditPoll` are rejected outright, and upload doesn't
+  validate it, so a typo fails silently. Ids are stored verbatim in every display's
+  settings, so renaming one orphans their configuration — same rule as `manifest.id`.
+- **Check nothing else references a node you removed.** Enable/disable, focus or
+  label code doing `getElementById` on a hidden control will throw, and an exception
+  mid-render can blank the widget. This is the one way adopting this breaks a plugin.
+- **Fail open.** No `hide` param means hide nothing, so an older dashboard and a
+  direct load both still work.
+- **Declaring a control means a wall display hides it.** Don't declare what should
+  always be visible; undeclared controls can never be hidden. A control reachable
+  only *through* another needs no id of its own — hide the gate, and block entering
+  that mode, not just its button.
+- **Drop the container when nothing visible is left in it**, or you ship empty
+  padding and headings floating over nothing.
+- **`label` is optional** (falls back to the id) and **is not translated**, even
+  though `lang` lets you localize the rest of your widget.
+- **Not security.** The API has no per-device auth. Don't gate anything that matters
+  on this.
+
+#### Two things that will cost you time
+
+**Retrofitting changes behavior on upgrade.** `hideAll` covers controls that didn't
+exist when it was set, so the moment your update installs, every display already set
+to Wall display loses your newly declared controls with nobody touching a setting.
+Usually desirable — worth a line in your release notes.
+
+**If hiding seems to do nothing, check whether that display remembers the admin
+PIN.** Such displays are exempt and get an empty hide list whatever is configured, so
+your code is probably fine. Clear it with Admin → Security → "Require PIN on all
+devices again".
+
+#### Testing
+
+Append the param yourself — `/widgets/YourPlugin.html?hide=editPoll` — the cheapest
+honest test of your hiding logic. Note a direct load isn't sandboxed, so `confirm()`,
+`prompt()` and `alert()` work there and won't work embedded. Then try it in the
+dashboard, and **test the all-hidden case**: it's where empty containers show up and
+the state you're least likely to try.
 
 ## 5. Events — react live to what happens in HomeGlow
 

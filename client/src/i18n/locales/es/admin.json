@@ -313,6 +313,60 @@
     "removePin": "Eliminar el PIN",
     "changeNote": "Si cambias el PIN, tendrás que usar el nuevo la próxima vez que accedas al panel."
   },
+  "controls": {
+    "heading": "Controles en las pantallas",
+    "help": "Elige qué controles de madres y padres ofrece cada pantalla. Ocultar un control solo evita que esa pantalla lo dibuje: no es una contraseña, y todo lo oculto sigue disponible aquí.",
+    "defaultHeading": "Predeterminado para pantallas nuevas",
+    "defaultHelp": "Las pantallas que no tienen su propia configuración siguen esta, incluidas las que se añadan más adelante.",
+    "displaysHeading": "Cada pantalla",
+    "noDisplays": "Todavía no se ha conectado ninguna pantalla.",
+    "loading": "Leyendo las pantallas...",
+    "loadFailed": "No se pudieron leer las pantallas. Usa Actualizar para volver a intentarlo.",
+    "presetLabel": "Controles ofrecidos",
+    "switchHint": "Activado significa que el control se muestra.",
+    "futureDefaultOn": "Los controles que se añadan más adelante estarán activados por defecto.",
+    "futureDefaultOff": "Los controles que se añadan más adelante estarán desactivados por defecto.",
+    "coreGroup": "Controles integrados",
+    "inheritingHelp": "Estos interruptores siguen el valor predeterminado del hogar. Elige Control total o Pantalla de pared para dar a esta pantalla su propia configuración.",
+    "unreadableHelp": "No se pudo leer la configuración de esta pantalla, así que no sabemos qué ofrece. No se ha cambiado nada en ella.",
+    "unlockedNotice": "Esta pantalla recuerda el PIN de administrador, por lo que está exenta y ofrece todos los controles. La configuración de abajo está guardada, pero no se aplica aquí. Usa «{{action}}» arriba para volver a aplicarla.",
+    "saveFailed": "No se pudo guardar ese cambio, así que se volvieron a leer las pantallas.",
+    "saving": "Guardando cambios",
+    "currentUnknownHelp": "No se pudo leer la configuración de la pantalla que estás usando, así que no sabemos si un cambio aquí le quitaría controles.",
+    "presets": {
+      "householdDefault": "Predeterminado del hogar",
+      "fullControl": "Control total",
+      "wallDisplay": "Pantalla de pared",
+      "custom": "Personalizado",
+      "unknown": "Desconocido"
+    },
+    "status": {
+      "inheriting": "Usa el predeterminado del hogar",
+      "unreadable": "No se pudo leer esta pantalla"
+    },
+    "items": {
+      "addChore": "Añadir una tarea",
+      "transferChore": "Transferir una tarea a otra persona",
+      "snoozeChore": "Posponer una tarea",
+      "prizeApproval": "Aprobar o rechazar solicitudes de premios",
+      "quickSpend": "Gastar almejas desde un perfil"
+    },
+    "confirm": {
+      "title": "¿Restringir también esta pantalla?",
+      "body": "«{{device}}» es la pantalla que estás usando y sigue el predeterminado del hogar, así que este cambio le quitaría controles.",
+      "keepFull": "Mantener el control total aquí",
+      "applyHere": "Aplicar también aquí",
+      "failed": "No se pudo guardar ese cambio, así que el predeterminado del hogar se quedó como estaba. Vuelve a intentarlo o cancela para dejarlo así."
+    },
+    "clearExceptions": {
+      "title": "¿Reemplazar los controles ajustados uno a uno?",
+      "display_one": "«{{device}}» tiene controles ajustados uno a uno. «{{preset}}» los reemplaza todos, y 1 interruptor de abajo cambia.",
+      "display_other": "«{{device}}» tiene controles ajustados uno a uno. «{{preset}}» los reemplaza todos, y {{count}} interruptores de abajo cambian.",
+      "household_one": "El predeterminado tiene controles ajustados uno a uno. «{{preset}}» los reemplaza todos, para todas las pantallas que siguen el predeterminado, y 1 interruptor de abajo cambia.",
+      "household_other": "El predeterminado tiene controles ajustados uno a uno. «{{preset}}» los reemplaza todos, para todas las pantallas que siguen el predeterminado, y {{count}} interruptores de abajo cambian.",
+      "confirm": "Reemplazar"
+    }
+  },
   "connections": {
     "heading": "Conexiones",
     "apiKeys": "Claves de API",
