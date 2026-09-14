@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -85,6 +85,7 @@ import ScreensaverIntervalSlider from './ScreensaverIntervalSlider';
 import GoogleAccountConnection from './GoogleAccountConnection';
 import ClamValueModal from './ClamValueModal';
 import SoundPicker from './SoundPicker';
+import ControlsOnDisplay from './ControlsOnDisplay';
 import useFetchTabs from '../hooks/useFetchTabs.js';
 import useIsMobile from '../hooks/useIsMobile.js';
 import { syncWidgetAssignments } from '../utils/assignmentSync.js';
@@ -104,6 +105,7 @@ import {
   readLocalAutoDarkModeSettings,
   readLocalVacationModeSettings,
 } from '../utils/interfaceSettings.js';
+import { CONTROL_LIMITS_DEFAULT_KEY } from '../utils/displayControls.js';
 import { useTranslation } from 'react-i18next';
 import { changeLanguage, SUPPORTED_LANGUAGES } from '../i18n/index.js';
 
@@ -436,6 +438,22 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
     await axios.patch(`${API_DEVICE_URL}/settings`, partialSettings);
     window.dispatchEvent(new Event(DEVICE_SETTINGS_UPDATED_EVENT));
   };
+
+  // Fold the saved household default into the settings we already hold rather
+  // than re-reading, and tell the live dashboard so the change lands on this
+  // screen without a reload.
+  const handleHouseholdControlLimitsSaved = useCallback((value) => {
+    setSettings((prev) => ({ ...prev, [CONTROL_LIMITS_DEFAULT_KEY]: value }));
+    window.dispatchEvent(new Event(DEVICE_SETTINGS_UPDATED_EVENT));
+  }, []);
+
+  // The form holds its own copy of every display's settings, so there is
+  // nothing to fold in here; this exists only to tell the live dashboard that
+  // the screen it is drawing just changed.
+  const handleDisplayControlLimitsSaved = useCallback((deviceName) => {
+    if (deviceName !== currentDeviceName) return;
+    window.dispatchEvent(new Event(DEVICE_SETTINGS_UPDATED_EVENT));
+  }, [currentDeviceName]);
 
   const fetchUsers = async () => {
     try {
@@ -3968,6 +3986,17 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged }) => {
                 </Alert>
               )}
             </Box>
+
+            <ControlsOnDisplay
+              apiBaseUrl={API_BASE_URL}
+              devices={devices}
+              currentDeviceName={currentDeviceName}
+              pinExists={pinExists}
+              householdSettings={settings}
+              plugins={uploadedWidgets}
+              onHouseholdDefaultSaved={handleHouseholdControlLimitsSaved}
+              onDisplayLimitsSaved={handleDisplayControlLimitsSaved}
+            />
           </CardContent>
         </Card>
       )}

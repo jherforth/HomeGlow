@@ -6,7 +6,18 @@ import { getDeviceName } from '../utils/deviceName.js';
 import { subscribePluginEvents } from '../utils/pluginEventBridge.js';
 import { acceptPluginDataMessage, emitPluginDataChanged } from '../utils/pluginDataBridge.js';
 
-const PluginWidgetWrapper = ({ filename, name, theme, transparentBackground = false, refreshNonce = 0, events = [] }) => {
+const PluginWidgetWrapper = ({
+  filename,
+  name,
+  theme,
+  transparentBackground = false,
+  refreshNonce = 0,
+  events = [],
+  // Control Limits: this plugin's own hidden control ids, already unprefixed by
+  // the dashboard. HomeGlow cannot reach into the iframe, so the plugin is told
+  // and does its own hiding — see docs/guides/plugin-development.md.
+  hiddenControls = [],
+}) => {
   const { i18n } = useTranslation();
   // Manifest plugins need the display's device name so device-scoped settings
   // resolve via the plugin SDK (issue #105 Phase 2).
@@ -57,6 +68,15 @@ const PluginWidgetWrapper = ({ filename, name, theme, transparentBackground = fa
     return () => window.removeEventListener('message', onMessage);
   }, [iframeOrigin, filename]);
 
+  // Omitted entirely when nothing is hidden: a plugin (and an older dashboard)
+  // must read "no hide param" as "hide nothing". Flattened to a string so an
+  // unchanged hidden set produces a byte-identical src — changing src navigates
+  // the frame, which is what makes a newly hidden control take effect, and is
+  // waste when a settings refetch merely handed us an equal array.
+  const hideParam = (Array.isArray(hiddenControls) ? hiddenControls : [])
+    .map((id) => encodeURIComponent(id))
+    .join(',');
+
   return (
     <Box sx={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
       {/* Keying the iframe on refreshNonce reloads the plugin on refresh
@@ -68,7 +88,7 @@ const PluginWidgetWrapper = ({ filename, name, theme, transparentBackground = fa
         // lang rides the same channel as theme (issue #137) so a plugin that
         // ships translations can follow the display's language; plugins that
         // ignore it are unaffected.
-        src={`${API_BASE_URL}/widgets/${filename}?theme=${theme}&device=${encodeURIComponent(deviceName)}&lang=${i18n.language || 'en'}`}
+        src={`${API_BASE_URL}/widgets/${filename}?theme=${theme}&device=${encodeURIComponent(deviceName)}&lang=${i18n.language || 'en'}${hideParam ? `&hide=${hideParam}` : ''}`}
         title={name}
         style={{
           width: '100%',
