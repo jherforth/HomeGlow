@@ -1260,6 +1260,7 @@ const App = () => {
           <Suspense fallback={<Typography sx={{ py: 2 }}>Loading settings...</Typography>}>
             <AdminPanel
               setWidgetSettings={setWidgetSettings}
+              onRequestClose={toggleAdminPanel}
               onPluginsChanged={fetchInstalledPlugins}
               onTabsChanged={async () => {
                 await fetchTabs();
