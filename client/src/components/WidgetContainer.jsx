@@ -1,4 +1,4 @@
-import React, { Suspense, useState, useEffect, useRef, useCallback } from 'react';
+import React, { Suspense, useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Box, IconButton } from '@mui/material';
 import GridLayout, { getCompactor } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
@@ -12,6 +12,8 @@ import {
   scaleLayoutItem,
 } from '../utils/gridLayout.js';
 import CountdownCircle from './CountdownCircle';
+import { shouldAcceptLayoutChange } from '../utils/layoutSync';
+import { buildLayout } from '../utils/gridPlacement';
 
 // No auto-compaction; block overlaps (same as compactType={null} + preventCollision).
 const GRID_COMPACTOR = getCompactor(null, false, true);
@@ -64,6 +66,10 @@ const WidgetContainer = ({
   const prevLockedRef = useRef(locked);
   const hasInitializedLockEffectRef = useRef(false);
   const saveTimerRef = useRef(null);
+  // Which tab the current `layout` state was built for. Null until the first
+  // rebuild lands. Guards against saving a layout mid tab change — see
+  // shouldAcceptLayoutChange.
+  const layoutTabRef = useRef(null);
   const resizeTapGuardRef = useRef(new Map());
 
   const saveLayoutsToApi = useCallback((layoutItems, tabNumber, cols) => {
@@ -137,85 +143,18 @@ const WidgetContainer = ({
     if (widgetsChanged) {
       prevWidgetIdsRef.current = currentCacheKey;
 
-      const cols = gridCols;
-      const placed = [];
-
-      const collides = (x, y, w, h) => {
-        return placed.some(p =>
-          x < p.x + p.w && x + w > p.x && y < p.y + p.h && y + h > p.y
-        );
-      };
-
-      const findFreePosition = (w, h) => {
-        for (let row = 0; row < 200; row++) {
-          for (let col = 0; col <= cols - w; col++) {
-            if (!collides(col, row, w, h)) return { x: col, y: row };
-          }
-        }
-        return { x: 0, y: 0 };
-      };
-
-      const initialLayout = widgets.map((widget) => {
-        const minW = widget.minWidth || 3;
-        const minH = widget.minHeight || 2;
-        let item;
-
-        if (widget.savedLayout) {
-          const scaled = layoutItemFromNormalized(
-            {
-              x: widget.savedLayout.x ?? widget.defaultPosition.x,
-              y: widget.savedLayout.y ?? widget.defaultPosition.y,
-              w: widget.savedLayout.w || widget.defaultSize.width,
-              h: widget.savedLayout.h || widget.defaultSize.height,
-              minW,
-              minH,
-            },
-            cols
-          );
-          item = {
-            i: widget.id,
-            ...scaled,
-            static: lockedRef.current,
-          };
-        } else {
-          const scaledDefault = layoutItemFromNormalized(
-            {
-              x: widget.defaultPosition.x,
-              y: widget.defaultPosition.y,
-              w: widget.defaultSize.width,
-              h: widget.defaultSize.height,
-              minW,
-              minH,
-            },
-            cols
-          );
-          const pos = findFreePosition(scaledDefault.w, scaledDefault.h);
-          item = {
-            i: widget.id,
-            x: pos.x,
-            y: pos.y,
-            w: scaledDefault.w,
-            h: scaledDefault.h,
-            minW: scaledDefault.minW,
-            minH: scaledDefault.minH,
-            static: lockedRef.current,
-          };
-        }
-
-        placed.push({ x: item.x, y: item.y, w: item.w, h: item.h });
-        return item;
-      });
+      const initialLayout = buildLayout(widgets, gridCols, lockedRef.current);
       setLayout(initialLayout);
+      layoutTabRef.current = activeTab;
     } else if (colsChanged) {
       setLayout((currentLayout) => {
         const nextLayout = currentLayout.map((item) => ({
           ...scaleLayoutItem(item, prevCols, gridCols),
           static: lockedRef.current,
         }));
-        const calendarBefore = currentLayout.find((item) => item.i === 'calendar-widget');
-        const calendarAfter = nextLayout.find((item) => item.i === 'calendar-widget');
         return nextLayout;
       });
+      layoutTabRef.current = activeTab;
     }
 
     prevGridColsRef.current = gridCols;
@@ -233,7 +172,14 @@ const WidgetContainer = ({
         static: locked
       }));
 
-      const shouldPersistLockedLayouts = hasInitializedLockEffectRef.current && !wasLocked && locked;
+      // Same invariant as handleLayoutChange: only persist when the layout state
+      // and the active tab agree. Locking mid tab change would otherwise write
+      // the previous tab's arrangement under the new tab's number by this path
+      // instead.
+      const shouldPersistLockedLayouts = hasInitializedLockEffectRef.current
+        && !wasLocked
+        && locked
+        && layoutTabRef.current === activeTab;
       if (shouldPersistLockedLayouts) {
         saveLayoutsToApi(updatedLayout, activeTab, gridCols);
       }
@@ -260,7 +206,16 @@ const WidgetContainer = ({
   }, [locked]);
 
   const handleLayoutChange = (newLayout) => {
-    if (locked) return;
+    // Not just `locked`: the grid also emits during a tab change, before the
+    // rebuild for the new tab has landed. Saving then writes the previous tab's
+    // arrangement under the new tab's number.
+    if (!shouldAcceptLayoutChange({
+      locked,
+      layoutTab: layoutTabRef.current,
+      activeTab,
+    })) {
+      return;
+    }
 
     const currentLayoutById = new Map(layout.map(item => [item.i, item]));
     const safeLayout = newLayout.map((item) => {
@@ -491,6 +446,35 @@ const WidgetContainer = ({
     }));
   }, []);
 
+  // The layout handed to the grid must describe exactly the children being
+  // rendered — one entry each, no more.
+  //
+  // `layout` state is rebuilt by an effect, so during a tab change it still
+  // describes the previous tab while the children are already the new tab's.
+  // Passing it raw gives the grid entries whose `i` matches no child, and
+  // children with no entry; it then synthesizes placements and, with
+  // preventCollision, shuffles non-static items around until they fit. That is
+  // the visible scramble, and it only appears unlocked because static items are
+  // pinned and excluded from collision movement.
+  //
+  // Deriving it per render closes the window: the grid never sees one tab's
+  // items alongside another tab's children.
+  // The layout handed to the grid must describe exactly the children being
+  // rendered. `layout` state is rebuilt by an effect, so during a tab change it
+  // still describes the previous tab — passing it raw gives the grid entries
+  // matching no child and children with no entry, and it shuffles non-static
+  // items around hunting for a fit. That is the visible scramble, and it only
+  // appears unlocked because static items are pinned.
+  //
+  // Built from `widgets`, whose savedLayout is already scoped to the active tab,
+  // so it is correct even mid-transition. Once the rebuild has landed for this
+  // tab, live state wins so a drag in progress is not thrown away.
+  const gridLayout = useMemo(() => {
+    const built = buildLayout(widgets, gridCols, locked);
+    if (layoutTabRef.current !== activeTab) return built;
+    return built.map((item) => layout.find((l) => l.i === item.i) || item);
+  }, [widgets, layout, gridCols, locked, activeTab]);
+
   const resizeButtonBaseStyle = {
     fontSize: '1.5rem',
     userSelect: 'none',
@@ -532,7 +516,7 @@ const WidgetContainer = ({
         <GridLayout
           className="layout"
           width={containerWidth}
-          layout={layout}
+          layout={gridLayout}
           gridConfig={{
             cols: gridCols,
             rowHeight: 100,
