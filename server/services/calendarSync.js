@@ -6,17 +6,29 @@ const googleCalendar = require('./googleCalendar');
 const appleCalDAV = require('./appleCalDAV');
 const { dedupeCalendarEvents } = require('../utils/calendarDedup');
 
+// Falls back to console when no logger is supplied, so the service stays usable
+// standalone (tests construct it directly). `debug` maps to nothing in the
+// fallback: without a level there is no way to honour one, and per-cycle chatter
+// is exactly what must not be printed unconditionally.
+const CONSOLE_LOGGER = {
+  debug: () => { },
+  info: (...args) => console.log(...args),
+  warn: (...args) => console.warn(...args),
+  error: (...args) => console.error(...args),
+};
+
 class CalendarSyncService {
-  constructor(db, decryptPassword) {
+  constructor(db, decryptPassword, logger = CONSOLE_LOGGER) {
     this.db = db;
     this.decryptPassword = decryptPassword;
+    this.log = logger;
     this.syncIntervals = new Map();
     this.isSyncing = new Map();
   }
 
   initialize() {
     this.startAllSyncJobs();
-    console.log('Calendar sync service initialized');
+    this.log.info('Calendar sync service initialized');
   }
 
   normalizeAllDayEnd(end) {
@@ -44,7 +56,7 @@ class CalendarSyncService {
 
   async syncSource(sourceId) {
     if (this.isSyncing.get(sourceId)) {
-      console.log(`Sync already in progress for source ${sourceId}, skipping`);
+      this.log.debug(`Sync already in progress for source ${sourceId}, skipping`);
       return { skipped: true };
     }
 
@@ -53,7 +65,7 @@ class CalendarSyncService {
     try {
       const source = this.db.prepare('SELECT * FROM calendar_sources WHERE id = ? AND enabled = 1').get(sourceId);
       if (!source) {
-        console.log(`Source ${sourceId} not found or disabled`);
+        this.log.warn(`Source ${sourceId} not found or disabled`);
         return { success: false, error: 'Source not found or disabled' };
       }
 
@@ -65,7 +77,7 @@ class CalendarSyncService {
         return { skipped: true };
       }
 
-      console.log(`Starting sync for calendar source: ${source.name} (${source.type})`);
+      this.log.debug(`Starting sync for calendar source: ${source.name} (${source.type})`);
       const startTime = Date.now();
 
       let events = [];
@@ -113,11 +125,11 @@ class CalendarSyncService {
         VALUES (?, datetime('now'), 'success', ?, ?)
       `).run(sourceId, `Synced ${events.length} events in ${duration}ms`, events.length);
 
-      console.log(`Synced ${events.length} events for ${source.name} in ${duration}ms`);
+      this.log.info(`Synced ${events.length} events for ${source.name} in ${duration}ms`);
 
       return { success: true, eventCount: events.length, duration };
     } catch (error) {
-      console.error(`Error syncing calendar source ${sourceId}:`, error.message);
+      this.log.error(`Error syncing calendar source ${sourceId}: ${error.message}`);
 
       this.db.prepare(`
         INSERT OR REPLACE INTO calendar_sync_status (source_id, last_sync_at, last_sync_status, last_sync_message)
@@ -408,7 +420,7 @@ class CalendarSyncService {
     }
 
     if (interval <= 0) {
-      console.log(`Sync disabled for source ${sourceId}`);
+      this.log.info(`Sync disabled for source ${sourceId}`);
       return;
     }
 
@@ -416,12 +428,12 @@ class CalendarSyncService {
 
     const intervalId = setInterval(() => {
       this.syncSource(sourceId).catch(err => {
-        console.error(`Scheduled sync failed for source ${sourceId}:`, err.message);
+        this.log.error(`Scheduled sync failed for source ${sourceId}: ${err.message}`);
       });
     }, intervalMs);
 
     this.syncIntervals.set(sourceId, intervalId);
-    console.log(`Started sync job for source ${sourceId} every ${interval} minutes`);
+    this.log.info(`Started sync job for source ${sourceId} every ${interval} minutes`);
   }
 
   restartSyncJob(sourceId) {
@@ -441,7 +453,7 @@ class CalendarSyncService {
 
     setTimeout(() => {
       this.syncAllSources().catch(err => {
-        console.error('Initial sync failed:', err.message);
+        this.log.error(`Initial sync failed: ${err.message}`);
       });
     }, 5000);
   }
@@ -449,7 +461,7 @@ class CalendarSyncService {
   stopAllSyncJobs() {
     for (const [sourceId, intervalId] of this.syncIntervals) {
       clearInterval(intervalId);
-      console.log(`Stopped sync job for source ${sourceId}`);
+      this.log.info(`Stopped sync job for source ${sourceId}`);
     }
     this.syncIntervals.clear();
   }
