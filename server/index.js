@@ -20,7 +20,41 @@ const demoBlocked = (reply) => {
 };
 process.env.TZ = APP_TIMEZONE;
 
-const fastify = require('fastify')({ logger: true });
+const { resolveLogLevel, isSqlTraceEnabled } = require('./utils/logLevel');
+const { resolveLogFormat, transportFor } = require('./utils/logFormat');
+const { installConsoleShim } = require('./utils/consoleShim');
+
+// Both resolved before the logger exists, so a rejected value can be reported
+// through the logger once it is up rather than vanishing.
+const LOG_LEVEL_RESULT = resolveLogLevel(process.env.LOG_LEVEL);
+const LOG_LEVEL = LOG_LEVEL_RESULT.level;
+const LOG_FORMAT_RESULT = resolveLogFormat(process.env.LOG_FORMAT);
+const LOG_FORMAT = LOG_FORMAT_RESULT.format;
+
+const fastify = require('fastify')({
+  logger: { level: LOG_LEVEL, transport: transportFor(LOG_FORMAT) },
+});
+
+// From here on, every console.* call in this process -- this file, the
+// services, and dependencies -- goes through fastify.log at the level matching
+// the method that was called, and therefore obeys LOG_LEVEL. See the note in
+// utils/consoleShim.js for what that means when reading console.error below.
+installConsoleShim(fastify.log);
+
+// Deliberately at warn: it survives the default level. An operator who
+// mistyped one of these is precisely the person who will not see an info line.
+if (LOG_LEVEL_RESULT.source === 'invalid') {
+  fastify.log.warn(
+    `LOG_LEVEL="${LOG_LEVEL_RESULT.rejected}" is not a log level; using "${LOG_LEVEL}". ` +
+    'Valid: trace, debug, info, warn, error, fatal, silent.'
+  );
+}
+if (LOG_FORMAT_RESULT.source === 'invalid') {
+  fastify.log.warn(
+    `LOG_FORMAT="${LOG_FORMAT_RESULT.rejected}" is not a log format; using "${LOG_FORMAT}". ` +
+    'Valid: pretty, json.'
+  );
+}
 const Database = require('better-sqlite3');
 const ical = require('ical-generator');
 const node_ical = require('node-ical');
@@ -504,11 +538,13 @@ fastify.register(multipart, {
   },
 });
 
-// Add a preHandler hook to log all incoming requests
-fastify.addHook('preHandler', (request, reply, done) => {
-  console.log(`Incoming request: ${request.method} ${request.url}`);
-  done();
-});
+// Request logging is Fastify's own, not a hook of ours. Its logger already
+// emits an "incoming request" and a "request completed" line per request, with
+// the request id, status and duration attached -- and, unlike a console.log in
+// a preHandler, it obeys LOG_LEVEL. The hook that used to live here printed a
+// second, poorer copy that no level could switch off, which on a wall display
+// polling continuously is a steady leak into the journal for no added
+// information. Set LOG_LEVEL=info to see requests.
 
 // Serve static files for uploads.
 //
@@ -1832,7 +1868,14 @@ async function ConnectOrCreateDb() {
       await fs.chmod(path.dirname(dbPath), 0o777);
     }
 
-    const newDb = new Database(dbPath, { verbose: console.log });
+    // Statement tracing is attached only when the level would emit it. Passing
+    // `verbose` at all makes better-sqlite3 expand every statement's bound
+    // parameters into a string, so leaving it on and filtering downstream would
+    // still pay the cost -- and still put calendar titles, locations and the
+    // whole raw upstream payload into the log on the way past.
+    const newDb = isSqlTraceEnabled(LOG_LEVEL)
+      ? new Database(dbPath, { verbose: (sql) => fastify.log.debug({ sql }, 'sqlite statement') })
+      : new Database(dbPath);
     newDb.pragma('foreign_keys = ON');
     // WAL lets readers proceed while a writer is active (better-sqlite3 is still
     // single-threaded, but this avoids POSIX lock stalls across connections).
@@ -6242,7 +6285,7 @@ const start = async () => {
     // fetched (SSRF guard). The seeded "Family Calendar" placeholder
     // (.invalid host) is skipped by the service itself.
     if (DEMO_MODE) {
-      calendarSyncService = new CalendarSyncService(db, decryptPassword);
+      calendarSyncService = new CalendarSyncService(db, decryptPassword, fastify.log);
       if (process.env.HOMEGLOW_DISABLE_CALENDAR_SYNC !== '1') {
         calendarSyncService.initialize();
         console.log('Calendar sync enabled in demo mode (seeded demo feeds only; source management is demo-blocked)');
@@ -6250,7 +6293,7 @@ const start = async () => {
         console.log('Calendar sync jobs disabled in demo mode by HOMEGLOW_DISABLE_CALENDAR_SYNC=1 (cached events only)');
       }
     } else if (process.env.HOMEGLOW_DISABLE_CALENDAR_SYNC !== '1') {
-      calendarSyncService = new CalendarSyncService(db, decryptPassword);
+      calendarSyncService = new CalendarSyncService(db, decryptPassword, fastify.log);
       calendarSyncService.initialize();
       console.log('Calendar sync service started');
     } else {
