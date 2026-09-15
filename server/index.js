@@ -21,20 +21,38 @@ const demoBlocked = (reply) => {
 process.env.TZ = APP_TIMEZONE;
 
 const { resolveLogLevel, isSqlTraceEnabled } = require('./utils/logLevel');
+const { resolveLogFormat, transportFor } = require('./utils/logFormat');
+const { installConsoleShim } = require('./utils/consoleShim');
 
-// Resolved before the logger exists, so a rejected value is reported through
-// console once the logger is up rather than vanishing.
+// Both resolved before the logger exists, so a rejected value can be reported
+// through the logger once it is up rather than vanishing.
 const LOG_LEVEL_RESULT = resolveLogLevel(process.env.LOG_LEVEL);
 const LOG_LEVEL = LOG_LEVEL_RESULT.level;
+const LOG_FORMAT_RESULT = resolveLogFormat(process.env.LOG_FORMAT);
+const LOG_FORMAT = LOG_FORMAT_RESULT.format;
 
-const fastify = require('fastify')({ logger: { level: LOG_LEVEL } });
+const fastify = require('fastify')({
+  logger: { level: LOG_LEVEL, transport: transportFor(LOG_FORMAT) },
+});
 
+// From here on, every console.* call in this process -- this file, the
+// services, and dependencies -- goes through fastify.log at the level matching
+// the method that was called, and therefore obeys LOG_LEVEL. See the note in
+// utils/consoleShim.js for what that means when reading console.error below.
+installConsoleShim(fastify.log);
+
+// Deliberately at warn: it survives the default level. An operator who
+// mistyped one of these is precisely the person who will not see an info line.
 if (LOG_LEVEL_RESULT.source === 'invalid') {
-  // Deliberately at warn: it survives the default level. An operator who
-  // mistyped LOG_LEVEL is precisely the person who will not see an info line.
   fastify.log.warn(
     `LOG_LEVEL="${LOG_LEVEL_RESULT.rejected}" is not a log level; using "${LOG_LEVEL}". ` +
     'Valid: trace, debug, info, warn, error, fatal, silent.'
+  );
+}
+if (LOG_FORMAT_RESULT.source === 'invalid') {
+  fastify.log.warn(
+    `LOG_FORMAT="${LOG_FORMAT_RESULT.rejected}" is not a log format; using "${LOG_FORMAT}". ` +
+    'Valid: pretty, json.'
   );
 }
 const Database = require('better-sqlite3');
