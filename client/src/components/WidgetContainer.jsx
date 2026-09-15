@@ -12,6 +12,7 @@ import {
   scaleLayoutItem,
 } from '../utils/gridLayout.js';
 import CountdownCircle from './CountdownCircle';
+import { canCommitResize } from '../utils/resizeGuard';
 
 // No auto-compaction; block overlaps (same as compactType={null} + preventCollision).
 const GRID_COMPACTOR = getCompactor(null, false, true);
@@ -371,6 +372,15 @@ const WidgetContainer = ({
 
       const before = currentLayout.find((item) => item.i === widgetId);
       const after = newLayout.find((item) => item.i === widgetId);
+
+      // The grid refuses a DRAG that would land on another widget
+      // (compactType null + preventCollision). The resize buttons bypass that
+      // path entirely, so a widget could be grown over its neighbour and the
+      // overlap persisted. Apply the same rule here: abandon the resize and
+      // keep the layout untouched, so nothing is saved either.
+      if (!canCommitResize(currentLayout, before, after)) {
+        return currentLayout;
+      }
 
       if (onLayoutChangeCallback) {
         onLayoutChangeCallback(newLayout);
