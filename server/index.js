@@ -677,109 +677,16 @@ fastify.get('/index.css', async (request, reply) => {
   } catch (error) {
     console.error('Error serving index.css:', error);
 
-    // Fallback: serve minimal CSS for widgets
-    const fallbackCSS = `
-      :root {
-        --background: #f4f4f9;
-        --card-bg: rgba(255, 255, 255, 0.8);
-        --card-border: rgba(255, 255, 255, 0.2);
-        --text-color: #1a1a2e;
-        --text-color-rgb: 26, 26, 46;
-        --accent: #6e44ff;
-        --accent-rgb: 110, 68, 255;
-        --shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-        --backdrop-blur: blur(10px);
-        --dynamic-text-size: 16px;
-        --dynamic-card-width: 300px;
-        --dynamic-card-padding: 20px;
-        --error-color: #ff4444;
-        --light-gradient-start: #00ddeb;
-        --light-gradient-end: #ff6b6b;
-        --dark-gradient-start: #2e2767;
-        --dark-gradient-end: #620808;
-        --light-button-gradient-start: #00ddeb;
-        --light-button-gradient-end: #ff6b6b;
-        --dark-button-gradient-start: #2e2767;
-        --dark-button-gradient-end: #620808;
-        --gradient: linear-gradient(45deg, var(--light-gradient-start), var(--light-gradient-end));
-      }
-
-      [data-theme="dark"] {
-        --background: #0a0a1a;
-        --card-bg: rgba(30, 30, 50, 0.7);
-        --card-border: rgba(100, 100, 150, 0.3);
-        --text-color: #a6a6d1;
-        --text-color-rgb: 166, 166, 209;
-        --accent: #00ddeb;
-        --accent-rgb: 0, 221, 235;
-        --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-        --gradient: linear-gradient(45deg, var(--dark-gradient-start), var(--dark-gradient-end));
-      }
-
-      html, body {
-        margin: 0;
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        background: var(--background);
-        color: var(--text-color);
-        transition: background 0.3s ease, color 0.3s ease;
-        touch-action: manipulation;
-        width: 100%;
-        height: 100%;
-        overflow-x: hidden;
-        overflow-y: auto;
-        font-size: var(--dynamic-text-size);
-      }
-
-      .card {
-        background: var(--card-bg);
-        border: 1px solid var(--card-border);
-        border-radius: 12px;
-        padding: var(--dynamic-card-padding);
-        backdrop-filter: var(--backdrop-blur);
-        box-shadow: var(--shadow);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-        width: 100%;
-        max-width: var(--dynamic-card-width);
-        touch-action: manipulation;
-      }
-
-      .card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
-      }
-
-      h1, h2, h3, h4, h5, h6 {
-        font-weight: 700;
-        letter-spacing: 0.5px;
-        color: var(--text-color);
-      }
-
-      button {
-        background: linear-gradient(45deg, var(--light-button-gradient-start), var(--light-button-gradient-end));
-        color: var(--text-color);
-        border: none;
-        border-radius: 8px;
-        padding: 10px 20px;
-        cursor: pointer;
-        font-size: 1rem;
-        font-weight: 600;
-        transition: background 0.3s ease;
-        touch-action: manipulation;
-      }
-
-      [data-theme="dark"] button {
-        background: linear-gradient(45deg, var(--dark-button-gradient-start), var(--dark-button-gradient-end));
-      }
-
-      button:hover {
-        filter: brightness(1.1);
-      }
-    `;
-
-    console.log('Serving fallback CSS');
-    reply.header('Content-Type', 'text/css');
-    reply.header('Access-Control-Allow-Origin', '*');
-    return fallbackCSS;
+    // No substitute stylesheet. This used to answer with a hardcoded palette
+    // that defined *different* variable names than src/index.css and inverted
+    // the theme model — light :root with a dark override, where the real sheet
+    // is dark :root with a light override. Because the containers could never
+    // find the real file, that substitute was what every plugin actually
+    // received, and plugin authors wrote against its vocabulary. A stylesheet
+    // that silently supplies different values under different names is worse
+    // than none: plugins already carry their own `var(--x, default)` fallbacks,
+    // and those only work if this path stays quiet.
+    return reply.status(404).send({ error: 'index.css not found' });
   }
 });
 
@@ -3874,11 +3781,30 @@ const rowsToSettingsObject = (rows) => rows.reduce((acc, row) => {
   return acc;
 }, {});
 
+// Settings lookup shared by both read routes. `keys` entries may carry `*`
+// wildcards; an empty list means the whole table. Secrets are dropped by
+// rowsToSettingsObject, so neither route can return them.
+function selectSettings(keys) {
+  let query = 'SELECT key, value FROM settings';
+  if (keys.length) {
+    query += ' WHERE ' + keys.map(() => 'key LIKE ?').join(' OR ');
+  }
+  return db.prepare(query).all(...keys.map((key) => key.replaceAll('*', '%')));
+}
+
+// A comma-separated `keys` query param, e.g. ?keys=default_language,PHOTO_WIDGET_*
+// Absent or empty means "no filter" and the whole table comes back, which is
+// what this route has always done.
+function parseSettingsKeysParam(raw) {
+  if (typeof raw !== 'string' || raw.trim() === '') return [];
+  return raw.split(',').map((key) => key.trim()).filter((key) => key !== '');
+}
+
 // NEW: API Endpoints for Settings (including API keys)
 fastify.get('/api/settings', async (request, reply) => {
   try {
     console.log('=== FETCHING SETTINGS ===');
-    const rows = db.prepare('SELECT key, value FROM settings').all();
+    const rows = selectSettings(parseSettingsKeysParam(request.query?.keys));
     console.log('Raw settings from database:', rows);
     const settings = rowsToSettingsObject(rows);
     console.log('Processed settings object:', settings);
@@ -3895,14 +3821,10 @@ fastify.post('/api/settings/search', async (request, reply) => {
     // coerce the request body to array of strings to search the settings database by key:
     const keys = Array.isArray(request.body) ? request.body : [request.body];
 
-    // use parameters to filter settings by key if provided, otherwise return all settings
-    // accept simple wildcards for partial match via * (e.g. WEATHER_* to match all weather related settings)
-    let query = 'SELECT key, value FROM settings';
-    if (keys.length) {
-      const conditions = keys.map(() => 'key LIKE ?').join(' OR ');
-      query += ' WHERE ' + conditions;
-    }
-    const rows = db.prepare(query).all(...keys.map(key => key.replaceAll('*', '%')));
+    // Kept as-is: this is a documented plugin endpoint (plugin-development.md),
+    // so third-party plugins call it and it stays supported. GET /api/settings
+    // with ?keys= is the preferred read for new callers.
+    const rows = selectSettings(keys);
     console.log('Raw settings from database:', rows);
     const settings = rowsToSettingsObject(rows);
     console.log('Processed settings object:', settings);
