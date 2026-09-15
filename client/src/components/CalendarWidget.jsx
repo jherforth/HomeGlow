@@ -20,6 +20,7 @@ import {
 } from '../utils/calendarIdleReturn.js';
 import MonthDayCell from './MonthDayCell.jsx';
 import ColorPickerPopover from './ColorPickerPopover.jsx';
+import { shouldPersistSettings } from '../utils/widgetSettingsPersist';
 import {
   formatTime,
   formatShortDate,
@@ -228,6 +229,11 @@ const CalendarWidget = ({
   const [displaySettings, setDisplaySettings] = useState({ ...DEFAULT_CALENDAR_DISPLAY_SETTINGS });
   const [dayOfWeekSettings, setDayOfWeekSettings] = useState({ ...DEFAULT_CALENDAR_DAY_OF_WEEK_SETTINGS });
   const [calendarSettingsLoaded, setCalendarSettingsLoaded] = useState(false);
+  // Settings as last known to agree with the server; null until a load succeeds.
+  // See widgetSettingsPersist for why both persist effects below consult these.
+  const loadedCalendarSettingsRef = useRef(null);
+  // Per tab, because the tab-specific persist effect runs again on every tab change.
+  const loadedTabSettingsRef = useRef(new Map());
   const [showColorPicker, setShowColorPicker] = useState({ background: false, text: false });
   const [calendarColorPickerAnchor, setCalendarColorPickerAnchor] = useState(null);
   const [calendarSources, setCalendarSources] = useState([]);
@@ -314,29 +320,29 @@ const CalendarWidget = ({
 
   useEffect(() => {
     const loadCalendarWidgetSettings = async () => {
+      let adopted = null;
       try {
         const response = await axios.get(`${API_DEVICE_URL}/settings`);
         const settings = response.data?.calendarWidgetSettings;
-        if (!settings || typeof settings !== 'object') {
-          setCalendarSettingsLoaded(true);
-          return;
-        }
+        const hasStored = settings && typeof settings === 'object';
 
-        if (settings.eventColors && typeof settings.eventColors === 'object') {
-          setEventColors({
-            ...DEFAULT_CALENDAR_EVENT_COLORS,
-            ...settings.eventColors,
-          });
-        }
+        const nextColors = hasStored && settings.eventColors && typeof settings.eventColors === 'object'
+          ? { ...DEFAULT_CALENDAR_EVENT_COLORS, ...settings.eventColors }
+          : { ...DEFAULT_CALENDAR_EVENT_COLORS };
+        const nextIdle = hasStored && Object.prototype.hasOwnProperty.call(settings, 'idleReturnMinutes')
+          ? normalizeIdleReturnMinutes(settings.idleReturnMinutes)
+          : DEFAULT_IDLE_RETURN_MINUTES;
 
-        if (Object.prototype.hasOwnProperty.call(settings, 'idleReturnMinutes')) {
-          const normalized = normalizeIdleReturnMinutes(settings.idleReturnMinutes);
-          setIdleReturnMinutes(normalized);
-          setIdleReturnMinutesInput(normalized > 0 ? String(normalized) : '');
-        }
+        setEventColors(nextColors);
+        setIdleReturnMinutes(nextIdle);
+        setIdleReturnMinutesInput(nextIdle > 0 ? String(nextIdle) : '');
+        adopted = { eventColors: nextColors, idleReturnMinutes: nextIdle };
       } catch (error) {
         console.error('Error loading calendar widget settings:', error);
       } finally {
+        // Null on failure — the component still holds its defaults, and writing
+        // those back would replace the stored settings.
+        loadedCalendarSettingsRef.current = adopted;
         setCalendarSettingsLoaded(true);
       }
     };
@@ -349,14 +355,17 @@ const CalendarWidget = ({
       return;
     }
 
+    const current = { eventColors, idleReturnMinutes };
+    if (!shouldPersistSettings(loadedCalendarSettingsRef.current, current)) {
+      return undefined;
+    }
+
     const persistCalendarWidgetSettings = async () => {
       try {
         await axios.patch(`${API_DEVICE_URL}/settings`, {
-          calendarWidgetSettings: {
-            eventColors,
-            idleReturnMinutes,
-          },
+          calendarWidgetSettings: current,
         });
+        loadedCalendarSettingsRef.current = current;
       } catch (error) {
         console.error('Error saving calendar widget settings:', error);
       }
@@ -374,9 +383,13 @@ const CalendarWidget = ({
   useEffect(() => {
     const inMemoryViewMode = readCalendarViewModeFromTabConfig(activeTabConfigJson);
     const inMemoryTabSettings = readCalendarTabSpecificSettingsFromTabConfig(activeTabConfigJson);
+    const nextDayOfWeek = inMemoryTabSettings?.dayOfWeekSettings || { ...DEFAULT_CALENDAR_DAY_OF_WEEK_SETTINGS };
+    const nextDisplay = inMemoryTabSettings?.displaySettings || { ...DEFAULT_CALENDAR_DISPLAY_SETTINGS };
     setViewMode(inMemoryViewMode || defaultViewMode);
-    setDayOfWeekSettings(inMemoryTabSettings?.dayOfWeekSettings || { ...DEFAULT_CALENDAR_DAY_OF_WEEK_SETTINGS });
-    setDisplaySettings(inMemoryTabSettings?.displaySettings || { ...DEFAULT_CALENDAR_DISPLAY_SETTINGS });
+    setDayOfWeekSettings(nextDayOfWeek);
+    setDisplaySettings(nextDisplay);
+    // The tab config came from the server, so these agree with it.
+    loadedTabSettingsRef.current.set(activeTab, { dayOfWeekSettings: nextDayOfWeek, displaySettings: nextDisplay });
   }, [activeTab, activeTabConfigJson, defaultViewMode]);
 
   useEffect(() => {
@@ -391,9 +404,15 @@ const CalendarWidget = ({
         const dbTabSettings = readCalendarTabSpecificSettingsFromTabConfig(activeTabRow?.config_json || null);
 
         if (!cancelled) {
+          const nextDayOfWeek = dbTabSettings?.dayOfWeekSettings || { ...DEFAULT_CALENDAR_DAY_OF_WEEK_SETTINGS };
+          const nextDisplay = dbTabSettings?.displaySettings || { ...DEFAULT_CALENDAR_DISPLAY_SETTINGS };
           setViewMode(dbViewMode || defaultViewMode);
-          setDayOfWeekSettings(dbTabSettings?.dayOfWeekSettings || { ...DEFAULT_CALENDAR_DAY_OF_WEEK_SETTINGS });
-          setDisplaySettings(dbTabSettings?.displaySettings || { ...DEFAULT_CALENDAR_DISPLAY_SETTINGS });
+          setDayOfWeekSettings(nextDayOfWeek);
+          setDisplaySettings(nextDisplay);
+          loadedTabSettingsRef.current.set(activeTab, {
+            dayOfWeekSettings: nextDayOfWeek,
+            displaySettings: nextDisplay,
+          });
         }
       } catch {
         // Best effort only. Keep current UI mode when DB refresh fails.
@@ -441,9 +460,11 @@ const CalendarWidget = ({
             : DEFAULT_CALENDAR_DISPLAY_SETTINGS.showStartTimes,
         },
       });
+      return true;
     } catch (error) {
       // Non-blocking preference persistence.
       console.debug('Calendar tab-specific settings persistence failed:', error);
+      return false;
     }
   };
 
@@ -452,8 +473,23 @@ const CalendarWidget = ({
       return undefined;
     }
 
+    // Snapshot is per tab: this effect lists activeTab as a dependency, so it
+    // runs on every tab change — including one that only rotated into view and
+    // changed nothing. Comparing against the wrong tab's values would write on
+    // each rotation even with a dirty check in place.
+    const current = { dayOfWeekSettings, displaySettings };
+    if (!shouldPersistSettings(loadedTabSettingsRef.current.get(activeTab), current)) {
+      return undefined;
+    }
+
+    const tabNumber = activeTab;
     const timeoutId = setTimeout(() => {
-      void persistTabSpecificSettingsForTab(activeTab, dayOfWeekSettings, displaySettings);
+      void persistTabSpecificSettingsForTab(tabNumber, dayOfWeekSettings, displaySettings)
+        .then((saved) => {
+          // Only on a confirmed write. Marking the snapshot clean after a failed
+          // PATCH would suppress the retry and leave the tab out of sync.
+          if (saved) loadedTabSettingsRef.current.set(tabNumber, current);
+        });
     }, 300);
 
     return () => clearTimeout(timeoutId);
