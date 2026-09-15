@@ -989,6 +989,7 @@ const App = () => {
         content: (
           <Suspense fallback={<WidgetLoadingFallback label="calendar" />}>
             <CalendarWidget
+              hiddenControls={hiddenControls}
               activeTab={activeTab}
               activeTabConfigJson={tabs.find((tab) => tab.number === activeTab)?.config_json || null}
             />
@@ -1009,6 +1010,7 @@ const App = () => {
         content: (
           <Suspense fallback={<WidgetLoadingFallback label="weather" />}>
             <WeatherWidget
+              hiddenControls={hiddenControls}
               refreshInterval={widgetSettings.weather.refreshInterval || 0}
               activeTab={activeTab}
               activeTabConfigJson={tabs.find((tab) => tab.number === activeTab)?.config_json || null}
@@ -1047,7 +1049,7 @@ const App = () => {
         savedLayout: dbLayout,
         content: (
           <Suspense fallback={<WidgetLoadingFallback label="photos" />}>
-            <PhotoWidget />
+            <PhotoWidget hiddenControls={hiddenControls} />
           </Suspense>
         ),
       });
@@ -1191,6 +1193,7 @@ const App = () => {
           <Box sx={{ display: 'none' }}>
             <Suspense fallback={null}>
               <WeatherWidget
+                hiddenControls={hiddenControls}
                 refreshInterval={widgetSettings.weather.refreshInterval || 0}
                 activeTab={activeTab}
                 activeTabConfigJson={tabs.find((tab) => tab.number === activeTab)?.config_json || null}

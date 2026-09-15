@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
 import { formatTime, formatWeekdayShort } from '../utils/dateUtils.js';
+import { isControlHidden } from '../utils/displayControls.js';
 
 const DEFAULT_LOCATION_QUERY = '14818';
 const VALID_LAYOUT_MODES = new Set(['auto', 'compact', 'medium', 'full']);
@@ -53,6 +54,7 @@ const WeatherWidget = ({
   prefetchOnly = false,
   refreshNonce = 0,
   isActive = true,
+  hiddenControls = [],
 }) => {
   const { t, i18n } = useTranslation(['weather', 'common']);
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
@@ -73,6 +75,16 @@ const WeatherWidget = ({
   const [layoutMode, setLayoutMode] = useState('auto');
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+
+  // Control Limits (issue #166): the gear and the error-state button both open
+  // the same settings modal, so one gate covers them, and it closes the modal
+  // if it is already open.
+  const hideWeatherSettings = isControlHidden(hiddenControls, 'core:weatherSettings');
+  useEffect(() => {
+    if (hideWeatherSettings) {
+      setSettingsModalOpen((prev) => (prev ? false : prev));
+    }
+  }, [hideWeatherSettings]);
   const [shouldFetchNow, setShouldFetchNow] = useState(false);
   const [draftLocationQuery, setDraftLocationQuery] = useState(DEFAULT_LOCATION_QUERY);
   const [draftTempUnit, setDraftTempUnit] = useState('F');
@@ -1071,9 +1083,11 @@ const WeatherWidget = ({
             {error}
           </Typography>
         </Box>
-        <Button size="small" variant="outlined" onClick={handleOpenSettingsModal}>
-          {t('weather:widget.openSettings')}
-        </Button>
+        {!hideWeatherSettings && (
+          <Button size="small" variant="outlined" onClick={handleOpenSettingsModal}>
+            {t('weather:widget.openSettings')}
+          </Button>
+        )}
       </Box>
     );
   } else if (!weatherData) {
@@ -1117,20 +1131,22 @@ const WeatherWidget = ({
       overflow: 'hidden',
       position: 'relative'
     }}>
-      <IconButton
-        size="small"
-        onClick={handleOpenSettingsModal}
-        aria-label={t('weather:widget.openSettingsAria')}
-        sx={{
-          position: 'absolute',
-          top: 8,
-          right: 8,
-          zIndex: 10,
-          color: 'var(--text-color)',
-        }}
-      >
-        <Settings />
-      </IconButton>
+      {!hideWeatherSettings && (
+        <IconButton
+          size="small"
+          onClick={handleOpenSettingsModal}
+          aria-label={t('weather:widget.openSettingsAria')}
+          sx={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            zIndex: 10,
+            color: 'var(--text-color)',
+          }}
+        >
+          <Settings />
+        </IconButton>
+      )}
 
       {content}
       {settingsModal}

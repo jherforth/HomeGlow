@@ -349,7 +349,11 @@
       "transferChore": "Transfer a chore to someone else",
       "snoozeChore": "Snooze a chore",
       "prizeApproval": "Approve or decline prize requests",
-      "quickSpend": "Spend clams from a profile"
+      "quickSpend": "Spend clams from a profile",
+      "calendarSettings": "Calendar settings (calendars, sync, and display options)",
+      "editEvents": "Add, edit, or delete calendar events",
+      "photoSettings": "Photo settings (sources and slideshow)",
+      "weatherSettings": "Weather settings (location and units)"
     },
     "confirm": {
       "title": "Restrict this display too?",

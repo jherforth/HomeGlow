@@ -22,7 +22,10 @@ Install a plugin next month and its management controls are hidden there too,
 without you revisiting the screen.
 
 You can limit Add Chore, transferring a chore, snoozing a due date, approving
-prize requests, and redeeming clams from a child's profile picture — plus
+prize requests, and redeeming clams from a child's profile picture; the
+calendar's settings gear (calendars, sync, display options) and its event
+editor (add, edit, delete); the photo widget's settings gear (sources and
+slideshow); and the weather widget's settings (location and units) — plus
 whatever each installed plugin offers.
 
 ## Plugin controls
