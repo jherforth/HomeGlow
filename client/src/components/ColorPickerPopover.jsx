@@ -130,7 +130,7 @@ const ColorPickerInner = ({ hex, hsv, hsl, onChange }) => {
                 fontFamily: 'monospace',
                 outline: 'none',
                 background: 'var(--card-bg, #fff)',
-                color: 'var(--text-primary, #000)',
+                color: 'var(--text)',
               },
               label: { display: 'none' },
             }}

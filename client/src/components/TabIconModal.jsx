@@ -190,7 +190,7 @@ const TabIconModal = ({
                       border: isSelected ? '2px solid var(--accent)' : '2px solid transparent',
                       transition: 'all 0.2s ease',
                       '&:hover': {
-                        backgroundColor: isSelected ? 'var(--accent)' : 'rgba(158, 127, 255, 0.1)',
+                        backgroundColor: isSelected ? 'var(--accent)' : 'rgba(var(--accent-rgb), 0.1)',
                         transform: 'scale(1.05)',
                       },
                     }}

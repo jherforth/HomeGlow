@@ -134,7 +134,7 @@ const DraggableWidget = ({
             borderRadius: 2,
             transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
             boxShadow: isSelected
-              ? '0 8px 32px rgba(158, 127, 255, 0.3)'
+              ? '0 8px 32px rgba(var(--accent-rgb), 0.3)'
               : '0 2px 8px rgba(0, 0, 0, 0.1)',
             backgroundColor: 'var(--card-bg)',
             overflow: 'hidden',
@@ -142,9 +142,9 @@ const DraggableWidget = ({
             '&:hover': {
               border: isSelected
                 ? '3px solid var(--accent)'
-                : '3px solid rgba(158, 127, 255, 0.3)',
+                : '3px solid rgba(var(--accent-rgb), 0.3)',
               boxShadow: isSelected
-                ? '0 8px 32px rgba(158, 127, 255, 0.3)'
+                ? '0 8px 32px rgba(var(--accent-rgb), 0.3)'
                 : '0 4px 16px rgba(0, 0, 0, 0.15)',
             }
           }}
@@ -159,8 +159,8 @@ const DraggableWidget = ({
                 right: 0,
                 bottom: 0,
                 backgroundImage: `
-                  linear-gradient(to right, rgba(158, 127, 255, 0.1) 1px, transparent 1px),
-                  linear-gradient(to bottom, rgba(158, 127, 255, 0.1) 1px, transparent 1px)
+                  linear-gradient(to right, rgba(var(--accent-rgb), 0.1) 1px, transparent 1px),
+                  linear-gradient(to bottom, rgba(var(--accent-rgb), 0.1) 1px, transparent 1px)
                 `,
                 backgroundSize: `${containerWidth / gridCols}px ${rowHeight}px`,
                 pointerEvents: 'none',

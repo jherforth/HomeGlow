@@ -44,6 +44,40 @@ export const DEFAULT_VACATION_MODE_SETTINGS = {
   muteSounds: true,
 };
 
+/**
+ * "r, g, b" for a 3- or 6-digit hex color, or null for anything else. The
+ * stylesheet's alpha tints are written as rgba(var(--accent-rgb), x), which
+ * needs the bare triplet; a hex value cannot be dropped into rgba().
+ */
+export const hexToRgbTriplet = (hex) => {
+  if (typeof hex !== 'string') return null;
+  const match = hex.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (!match) return null;
+  const digits = match[1].length === 3
+    ? match[1].split('').map((d) => d + d).join('')
+    : match[1];
+  const value = parseInt(digits, 16);
+  return `${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}`;
+};
+
+/**
+ * Write the interface colors onto a root element as the CSS variables the app
+ * and its widgets read. --accent-rgb travels with --accent so the alpha tints
+ * follow the picked accent instead of staying on index.css's default; an
+ * accent the triplet cannot be derived from leaves the stylesheet default.
+ */
+export const applyInterfaceColors = (root, colors) => {
+  root.style.setProperty('--primary', colors.primary);
+  root.style.setProperty('--secondary', colors.secondary);
+  root.style.setProperty('--accent', colors.accent);
+  const accentRgb = hexToRgbTriplet(colors.accent);
+  if (accentRgb) {
+    root.style.setProperty('--accent-rgb', accentRgb);
+  } else {
+    root.style.removeProperty('--accent-rgb');
+  }
+};
+
 export const normalizeInterfaceColors = (raw) => ({
   ...DEFAULT_INTERFACE_COLORS,
   ...(raw && typeof raw === 'object' ? raw : {}),

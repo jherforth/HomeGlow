@@ -115,7 +115,7 @@ const ClamValueModal = ({ open, onClose, onSave, user, isSaving = false }) => {
             sx={{
               display: 'block',
               textAlign: 'center',
-              color: 'var(--text-muted)',
+              color: 'var(--text-secondary)',
               mb: 1,
               fontSize: '0.85rem',
             }}
@@ -130,7 +130,7 @@ const ClamValueModal = ({ open, onClose, onSave, user, isSaving = false }) => {
               fontSize: '2.5rem',
               lineHeight: 1.2,
               mb: 2,
-              color: 'var(--text-color)',
+              color: 'var(--text)',
             }}
           >
             {value === '' ? '0' : value} 🥟
@@ -169,7 +169,7 @@ const ClamValueModal = ({ open, onClose, onSave, user, isSaving = false }) => {
                   color: 'var(--accent)',
                   '&:hover': {
                     borderColor: 'var(--accent)',
-                    backgroundColor: 'rgba(158, 127, 255, 0.1)',
+                    backgroundColor: 'rgba(var(--accent-rgb), 0.1)',
                   },
                 }}
               >
@@ -194,7 +194,7 @@ const ClamValueModal = ({ open, onClose, onSave, user, isSaving = false }) => {
                   border: '2px solid var(--accent)',
                   color: 'var(--accent)',
                   '&:hover': {
-                    backgroundColor: 'rgba(158, 127, 255, 0.1)',
+                    backgroundColor: 'rgba(var(--accent-rgb), 0.1)',
                   },
                 }}
               >
@@ -213,10 +213,10 @@ const ClamValueModal = ({ open, onClose, onSave, user, isSaving = false }) => {
           disabled={isSaving}
           sx={{
             borderColor: 'var(--card-border)',
-            color: 'var(--text-color)',
+            color: 'var(--text)',
             '&:hover': {
               borderColor: 'var(--accent)',
-              backgroundColor: 'rgba(158, 127, 255, 0.05)',
+              backgroundColor: 'rgba(var(--accent-rgb), 0.05)',
             },
           }}
         >

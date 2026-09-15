@@ -82,3 +82,50 @@ describe('isVacationModeActiveToday', () => {
         expect(isVacationModeActiveToday({ enabled: true, startDate: '2026-08-01', endDate: '' }, TODAY)).toBe(false);
     });
 });
+
+import { hexToRgbTriplet, applyInterfaceColors } from './interfaceSettings.js';
+
+describe('hexToRgbTriplet', () => {
+    it('expands 6- and 3-digit hex into the bare triplet rgba() needs', () => {
+        expect(hexToRgbTriplet('#f472b6')).toBe('244, 114, 182');
+        expect(hexToRgbTriplet('#9E7FFF')).toBe('158, 127, 255');
+        expect(hexToRgbTriplet('#fff')).toBe('255, 255, 255');
+        expect(hexToRgbTriplet(' #000 ')).toBe('0, 0, 0');
+    });
+
+    it('returns null for anything that is not a hex color', () => {
+        for (const bad of ['f472b6', '#f472b', '#gggggg', 'rgb(1, 2, 3)', '', null, undefined, 42]) {
+            expect(hexToRgbTriplet(bad)).toBeNull();
+        }
+    });
+});
+
+describe('applyInterfaceColors', () => {
+    const fakeRoot = () => {
+        const vars = new Map();
+        return {
+            vars,
+            style: {
+                setProperty: (name, value) => vars.set(name, value),
+                removeProperty: (name) => vars.delete(name),
+            },
+        };
+    };
+
+    it('sets --accent-rgb alongside --accent so alpha tints follow the pick', () => {
+        const root = fakeRoot();
+        applyInterfaceColors(root, { primary: '#f5f5f5', secondary: '#38bdf8', accent: '#f472b6' });
+        expect(root.vars.get('--primary')).toBe('#f5f5f5');
+        expect(root.vars.get('--secondary')).toBe('#38bdf8');
+        expect(root.vars.get('--accent')).toBe('#f472b6');
+        expect(root.vars.get('--accent-rgb')).toBe('244, 114, 182');
+    });
+
+    it('drops a stale --accent-rgb when the accent is not a hex color', () => {
+        const root = fakeRoot();
+        applyInterfaceColors(root, { primary: '#f5f5f5', secondary: '#38bdf8', accent: '#f472b6' });
+        applyInterfaceColors(root, { primary: '#f5f5f5', secondary: '#38bdf8', accent: 'hotpink' });
+        expect(root.vars.get('--accent')).toBe('hotpink');
+        expect(root.vars.has('--accent-rgb')).toBe(false);
+    });
+});

@@ -1303,7 +1303,7 @@ const CalendarWidget = ({
           <IconButton
             onClick={handlePreviousPeriod}
             size="small"
-            sx={{ color: 'var(--text-color)' }}
+            sx={{ color: 'var(--text)' }}
             aria-label={t('calendar:widget.previousPeriod')}
           >
             <ChevronLeft />
@@ -1319,7 +1319,7 @@ const CalendarWidget = ({
                 borderRadius: 1,
                 px: 1,
                 py: 0.5,
-                color: 'var(--text-color)',
+                color: 'var(--text)',
                 '&:hover': {
                   backgroundColor: 'rgba(var(--accent-rgb), 0.08)',
                 },
@@ -1333,7 +1333,7 @@ const CalendarWidget = ({
           <IconButton
             onClick={handleNextPeriod}
             size="small"
-            sx={{ color: 'var(--text-color)' }}
+            sx={{ color: 'var(--text)' }}
             aria-label={t('calendar:widget.nextPeriod')}
           >
             <ChevronRight />
@@ -1345,7 +1345,7 @@ const CalendarWidget = ({
             <IconButton
               onClick={goToToday}
               size="small"
-              sx={{ display: { xs: 'none', sm: 'inline-flex' }, color: 'var(--text-color)' }}
+              sx={{ display: { xs: 'none', sm: 'inline-flex' }, color: 'var(--text)' }}
               aria-label={t('calendar:widget.goToToday')}
             >
               <Today />
@@ -1359,8 +1359,8 @@ const CalendarWidget = ({
             onChange={handleViewModeChange}
             size="small"
             sx={{
-              '& .MuiToggleButton-root': { color: 'var(--text-color)', borderColor: 'var(--card-border)' },
-              '& .MuiToggleButton-root.Mui-selected': { color: 'var(--text-color)', backgroundColor: 'rgba(var(--accent-rgb), 0.15)' },
+              '& .MuiToggleButton-root': { color: 'var(--text)', borderColor: 'var(--card-border)' },
+              '& .MuiToggleButton-root.Mui-selected': { color: 'var(--text)', backgroundColor: 'rgba(var(--accent-rgb), 0.15)' },
             }}
           >
             <ToggleButton value="month" aria-label={t('calendar:widget.monthView')}>
@@ -1373,7 +1373,7 @@ const CalendarWidget = ({
           <IconButton
             onClick={handleSettingsClick}
             size="small"
-            sx={{ color: 'var(--text-color)' }}
+            sx={{ color: 'var(--text)' }}
           >
             <Settings />
           </IconButton>
@@ -1671,7 +1671,7 @@ const CalendarWidget = ({
                     <Typography variant="h6" sx={{ fontWeight: 'bold', color: day.isToday ? 'var(--accent)' : 'inherit' }}>
                       {day.dayNumber}
                     </Typography>
-                    <Typography variant="caption" sx={{ color: 'var(--text-color)', opacity: 0.6 }}>
+                    <Typography variant="caption" sx={{ color: 'var(--text)', opacity: 0.6 }}>
                       {day.monthName}
                     </Typography>
                   </Box>

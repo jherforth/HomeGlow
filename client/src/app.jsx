@@ -18,6 +18,7 @@ import useIsMobile from './hooks/useIsMobile.js';
 import useScreenActivity from './hooks/useScreenActivity.js';
 import {
   readLocalInterfaceColors,
+  applyInterfaceColors,
   readLocalScreensaverSettings,
   readLocalAutoDarkModeSettings,
   readLocalVacationModeSettings,
@@ -592,9 +593,7 @@ const App = () => {
   }, [resolveAutoTheme, applyTheme]);
 
   useEffect(() => {
-    document.documentElement.style.setProperty('--primary', interfaceColors.primary);
-    document.documentElement.style.setProperty('--secondary', interfaceColors.secondary);
-    document.documentElement.style.setProperty('--accent', interfaceColors.accent);
+    applyInterfaceColors(document.documentElement, interfaceColors);
   }, [interfaceColors]);
 
   useEffect(() => {
@@ -1158,7 +1157,7 @@ const App = () => {
               borderRadius: '16px',
               backgroundColor: 'var(--card-bg)',
               border: '1px solid var(--card-border)',
-              color: 'var(--text-color)',
+              color: 'var(--text)',
               fontSize: '0.8rem',
               fontWeight: 600,
               boxShadow: 'var(--shadow)',
