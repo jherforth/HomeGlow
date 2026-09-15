@@ -34,6 +34,12 @@ export const CORE_CONTROLS = [
   { id: 'core:snoozeChore', labelKey: 'admin:controls.items.snoozeChore' },
   { id: 'core:prizeApproval', labelKey: 'admin:controls.items.prizeApproval' },
   { id: 'core:quickSpend', labelKey: 'admin:controls.items.quickSpend' },
+  // Gates, not buttons: each hides the entry point to a management surface
+  // (a gear, or the event editor) rather than the controls inside it.
+  { id: 'core:calendarSettings', labelKey: 'admin:controls.items.calendarSettings' },
+  { id: 'core:editEvents', labelKey: 'admin:controls.items.editEvents' },
+  { id: 'core:photoSettings', labelKey: 'admin:controls.items.photoSettings' },
+  { id: 'core:weatherSettings', labelKey: 'admin:controls.items.weatherSettings' },
 ];
 
 const CORE_CONTROL_IDS = CORE_CONTROLS.map((control) => control.id);
