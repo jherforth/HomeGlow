@@ -110,7 +110,7 @@ const PluginWidgetWrapper = ({
         // lang rides the same channel as theme (issue #137) so a plugin that
         // ships translations can follow the display's language; plugins that
         // ignore it are unaffected.
-        src={`${API_BASE_URL}/widgets/${filename}?theme=${theme}&device=${encodeURIComponent(deviceName)}&lang=${i18n.language || 'en'}${hideParam ? `&hide=${hideParam}` : ''}`}
+        src={`${API_BASE_URL}/widgets/${filename}?theme=${theme}&device=${encodeURIComponent(deviceName)}&lang=${i18n.language || 'en'}${hideParam ? `&hide=${hideParam}` : ''}${transparentBackground ? '&transparent=true' : ''}`}
         title={name}
         style={{
           width: '100%',

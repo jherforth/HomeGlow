@@ -152,6 +152,7 @@
   "widgets": {
     "help": "Activa widgets para mostrarlos en el panel. Haz clic para seleccionar uno y arrastra para moverlo o cambiar su tamaño desde las esquinas.",
     "showOnTabs": "Mostrar en las pestañas",
+    "transparentBackground": "Fondo transparente",
     "selectTabs": "Selecciona pestañas...",
     "weatherWidget": "Widget del tiempo",
     "saveSettings": "Guardar ajustes de widgets",

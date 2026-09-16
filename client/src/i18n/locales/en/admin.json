@@ -152,6 +152,7 @@
   "widgets": {
     "help": "Enable widgets to show them on the dashboard. Click to select a widget, then drag to move or resize from corners.",
     "showOnTabs": "Show on Tabs",
+    "transparentBackground": "Transparent Background",
     "selectTabs": "Select tabs...",
     "weatherWidget": "Weather Widget",
     "saveSettings": "Save Widget Settings",
