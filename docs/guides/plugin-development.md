@@ -87,6 +87,26 @@ developing. For external services without CORS headers, use the proxy:
 Widgets are stored in HomeGlow's database, so they (and everything below)
 survive app upgrades.
 
+### Theme colors arrive by message
+
+`/index.css` gives you the variable names and their defaults, but the household's
+picked interface colors are applied by the dashboard at runtime, and your widget
+is a separate document. So the dashboard also posts them into your iframe, on
+every load and on every change:
+
+```js
+{ type: 'homeglow:theme', theme: 'dark', colors: { primary, secondary, accent, accentRgb } }
+```
+
+If you load the SDK, there is nothing to do: it writes `--primary`, `--secondary`,
+`--accent` and `--accent-rgb` onto your root and sets `data-theme`, so CSS that
+reads `var(--accent, #757575)` follows the pick. Keep the fallback; it is what a
+direct load of the file gets. For canvas drawing or anything that needs the
+value in JavaScript, `HomeGlow.theme` holds the last message and
+`HomeGlow.onTheme(handler)` calls you now and on every change. The `?theme=`
+param is still on the URL, so a widget without the SDK starts in the right theme
+and only misses the colors.
+
 ## 2. Becoming a platform plugin: the manifest
 
 Embed a manifest as a JSON script block anywhere in your HTML (conventionally in

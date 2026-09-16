@@ -41,9 +41,48 @@
   // plugin manifest are forwarded, so HomeGlow.on() never sees undeclared
   // events.
   var eventHandlers = {};
+
+  // Theme (issue #179). The dashboard applies the picked interface colors to
+  // its own root at runtime; this document only gets the static stylesheet.
+  // The wrapper posts the current theme and colors on every load of the frame
+  // and on every change, and they are written here under the same variable
+  // names, so var(--accent) in plugin CSS follows the pick. Values are
+  // validated before they touch the stylesheet: a color is a hex literal, the
+  // triplet is three decimal bytes, the theme is one of the two names.
+  var HEX_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+  var RGB_TRIPLET = /^\d{1,3}, \d{1,3}, \d{1,3}$/;
+  var THEME_VARIABLES = [['primary', '--primary'], ['secondary', '--secondary'], ['accent', '--accent']];
+  var currentTheme = null;
+  var themeHandlers = [];
+  function applyTheme(data) {
+    var root = document.documentElement;
+    var theme = data.theme === 'light' ? 'light' : (data.theme === 'dark' ? 'dark' : null);
+    if (theme) root.setAttribute('data-theme', theme);
+    var colors = data.colors && typeof data.colors === 'object' ? data.colors : {};
+    THEME_VARIABLES.forEach(function (pair) {
+      var value = colors[pair[0]];
+      if (typeof value === 'string' && HEX_COLOR.test(value)) root.style.setProperty(pair[1], value);
+    });
+    if (typeof colors.accentRgb === 'string' && RGB_TRIPLET.test(colors.accentRgb)) {
+      root.style.setProperty('--accent-rgb', colors.accentRgb);
+    }
+    currentTheme = { theme: theme, colors: colors };
+    themeHandlers.slice().forEach(function (handler) {
+      try {
+        handler(currentTheme);
+      } catch (error) {
+        console.error('HomeGlow SDK: theme handler failed', error);
+      }
+    });
+  }
+
   window.addEventListener('message', function (messageEvent) {
     if (messageEvent.source !== window.parent) return;
     var data = messageEvent.data;
+    if (data && data.type === 'homeglow:theme') {
+      applyTheme(data);
+      return;
+    }
     if (!data || data.type !== 'homeglow:event' || typeof data.event !== 'string') return;
     var handlers = eventHandlers[data.event];
     if (!handlers) return;
@@ -96,6 +135,29 @@
       (eventHandlers[event] = eventHandlers[event] || []).push(handler);
       var self = this;
       return function () { self.off(event, handler); };
+    },
+
+    /**
+     * The last theme the dashboard sent: { theme: 'dark'|'light', colors: {
+     * primary, secondary, accent, accentRgb } }, or null before the first
+     * message. CSS that reads var(--accent) needs none of this; it is for
+     * canvas drawing and the like.
+     */
+    get theme() {
+      return currentTheme;
+    },
+
+    /**
+     * Subscribe to theme changes. Called at once with the current theme if one
+     * has arrived. Returns an unsubscribe function.
+     */
+    onTheme: function (handler) {
+      themeHandlers.push(handler);
+      if (currentTheme) handler(currentTheme);
+      return function () {
+        var index = themeHandlers.indexOf(handler);
+        if (index !== -1) themeHandlers.splice(index, 1);
+      };
     },
 
     /** Remove a handler added with on(). */

@@ -1073,6 +1073,7 @@ const App = () => {
           filename={plugin.filename}
           name={plugin.name}
           theme={theme}
+          colors={interfaceColors}
           transparentBackground={pSettings.transparent || false}
           events={plugin.manifest?.events || []}
           hiddenControls={unprefixedHiddenControlsFor(hiddenControls, plugin.manifest?.id)}
@@ -1081,7 +1082,7 @@ const App = () => {
     });
 
     return result;
-  }, [widgetSettings, pluginSettings, activeTab, widgetAssignments, installedPlugins, theme, demoStatus.demo, hiddenControls]);
+  }, [widgetSettings, pluginSettings, activeTab, widgetAssignments, installedPlugins, theme, interfaceColors, demoStatus.demo, hiddenControls]);
 
   // Mobile stack (issue #118): same widget content nodes, fixed order, photos
   // excluded, grid metadata ignored.
