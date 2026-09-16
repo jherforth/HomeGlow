@@ -349,7 +349,11 @@
       "transferChore": "Transferir una tarea a otra persona",
       "snoozeChore": "Posponer una tarea",
       "prizeApproval": "Aprobar o rechazar solicitudes de premios",
-      "quickSpend": "Gastar almejas desde un perfil"
+      "quickSpend": "Gastar almejas desde un perfil",
+      "calendarSettings": "Ajustes del calendario (calendarios, sincronización y opciones de visualización)",
+      "editEvents": "Añadir, editar o eliminar eventos del calendario",
+      "photoSettings": "Ajustes de fotos (fuentes y presentación)",
+      "weatherSettings": "Ajustes del tiempo (ubicación y unidades)"
     },
     "confirm": {
       "title": "¿Restringir también esta pantalla?",

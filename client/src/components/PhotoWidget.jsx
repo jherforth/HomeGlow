@@ -4,13 +4,14 @@ import { Settings, Add, Delete, Edit, Refresh, ChevronLeft, ChevronRight, PlayAr
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../utils/apiConfig.js';
+import { isControlHidden } from '../utils/displayControls.js';
 import {
   parseDurationMs,
   hasGooglePhotosPickerScope,
   summarizePickerIngest,
 } from '../utils/googlePhotosPicker.js';
 
-const PhotoWidget = ({ refreshNonce = 0, isActive = true }) => {
+const PhotoWidget = ({ refreshNonce = 0, isActive = true, hiddenControls = [] }) => {
   const { t } = useTranslation(['photos', 'common']);
   const [photos, setPhotos] = useState([]);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
@@ -19,6 +20,16 @@ const PhotoWidget = ({ refreshNonce = 0, isActive = true }) => {
   const [settingsAnchor, setSettingsAnchor] = useState(null);
   const [photoSources, setPhotoSources] = useState([]);
   const [showSourceDialog, setShowSourceDialog] = useState(false);
+
+  // Control Limits (issue #166): the gear is the gate to sources, the picker
+  // and slideshow settings. An open popover or source dialog closes with it.
+  const hidePhotoSettings = isControlHidden(hiddenControls, 'core:photoSettings');
+  useEffect(() => {
+    if (hidePhotoSettings) {
+      setSettingsAnchor((prev) => (prev ? null : prev));
+      setShowSourceDialog((prev) => (prev ? false : prev));
+    }
+  }, [hidePhotoSettings]);
   const [editingSource, setEditingSource] = useState(null);
   const [sourceForm, setSourceForm] = useState({
     name: '',
@@ -430,9 +441,11 @@ const PhotoWidget = ({ refreshNonce = 0, isActive = true }) => {
           <IconButton onClick={fetchPhotos} size="small" disabled={loading} sx={{ color: 'var(--text-color)' }}>
             <Refresh />
           </IconButton>
-          <IconButton onClick={handleSettingsClick} size="small" sx={{ color: 'var(--text-color)' }}>
-            <Settings />
-          </IconButton>
+          {!hidePhotoSettings && (
+            <IconButton onClick={handleSettingsClick} size="small" sx={{ color: 'var(--text-color)' }}>
+              <Settings />
+            </IconButton>
+          )}
         </Box>
       </Box>
 

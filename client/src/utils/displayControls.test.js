@@ -35,6 +35,10 @@ describe('constants', () => {
       'core:snoozeChore',
       'core:prizeApproval',
       'core:quickSpend',
+      'core:calendarSettings',
+      'core:editEvents',
+      'core:photoSettings',
+      'core:weatherSettings',
     ]);
     for (const control of CORE_CONTROLS) {
       expect(control.labelKey).toMatch(/^admin:controls\.items\.[a-z][a-zA-Z0-9]*$/);
@@ -399,13 +403,12 @@ describe('presetNameFor', () => {
   // Behavior 7.
   it('reads mode and except, never a length against the catalog', () => {
     // A length comparison shipped once and reported "Wall display" for any
-    // configuration that happened to name five controls, because
-    // CORE_CONTROLS has five entries.
-    const fivePluginIds = [
-      'plugin:a:one', 'plugin:b:two', 'plugin:c:three', 'plugin:d:four', 'plugin:e:five',
-    ];
-    expect(CORE_CONTROLS).toHaveLength(fivePluginIds.length);
-    expect(presetNameFor({ mode: 'showAll', except: fivePluginIds })).toBe('custom');
+    // configuration that happened to name as many controls as CORE_CONTROLS
+    // has entries. The decoy list tracks the catalog's size so the guard
+    // keeps guarding as the catalog grows.
+    const asManyPluginIds = CORE_CONTROLS.map((_, index) => `plugin:decoy:id${index}`);
+    expect(asManyPluginIds).toHaveLength(CORE_CONTROLS.length);
+    expect(presetNameFor({ mode: 'showAll', except: asManyPluginIds })).toBe('custom');
     expect(presetNameFor({ mode: 'showAll', except: CORE_IDS })).toBe('custom');
     expect(presetNameFor({ mode: 'hideAll', except: CORE_IDS })).toBe('custom');
   });
