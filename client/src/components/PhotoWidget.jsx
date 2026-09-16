@@ -424,13 +424,13 @@ const PhotoWidget = ({ refreshNonce = 0, isActive = true }) => {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h6">📷 Photos</Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
-          <IconButton onClick={handleTogglePlayback} size="small" sx={{ color: 'var(--text-color)' }}>
+          <IconButton onClick={handleTogglePlayback} size="small" sx={{ color: 'var(--text)' }}>
             {isPlaying ? <Pause /> : <PlayArrow />}
           </IconButton>
-          <IconButton onClick={fetchPhotos} size="small" disabled={loading} sx={{ color: 'var(--text-color)' }}>
+          <IconButton onClick={fetchPhotos} size="small" disabled={loading} sx={{ color: 'var(--text)' }}>
             <Refresh />
           </IconButton>
-          <IconButton onClick={handleSettingsClick} size="small" sx={{ color: 'var(--text-color)' }}>
+          <IconButton onClick={handleSettingsClick} size="small" sx={{ color: 'var(--text)' }}>
             <Settings />
           </IconButton>
         </Box>
@@ -446,7 +446,7 @@ const PhotoWidget = ({ refreshNonce = 0, isActive = true }) => {
 
       {!loading && !error && photos.length === 0 && (
         <Box sx={{ textAlign: 'center', py: 4 }}>
-          <Typography sx={{ color: 'var(--text-color)', opacity: 0.6 }}>{t('photos:widget.noPhotos')}</Typography>
+          <Typography sx={{ color: 'var(--text)', opacity: 0.6 }}>{t('photos:widget.noPhotos')}</Typography>
         </Box>
       )}
 

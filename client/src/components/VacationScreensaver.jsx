@@ -173,7 +173,7 @@ const VacationScreensaver = ({ onExit, keepScreenAwake }) => {
           transform: 'translate(-50%, -50%)',
           fontSize: '1.4rem',
           fontWeight: 600,
-          color: 'var(--text-color)',
+          color: 'var(--text)',
           opacity: 0.35,
           pointerEvents: 'none',
           userSelect: 'none',

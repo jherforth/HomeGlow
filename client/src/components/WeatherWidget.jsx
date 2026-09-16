@@ -1126,7 +1126,7 @@ const WeatherWidget = ({
           top: 8,
           right: 8,
           zIndex: 10,
-          color: 'var(--text-color)',
+          color: 'var(--text)',
         }}
       >
         <Settings />

@@ -83,7 +83,7 @@ const PrizeCelebration = ({ username, prizeName, onDismiss }) => {
       <Box
         sx={{
           backgroundColor: 'var(--card-bg)',
-          color: 'var(--text-color)',
+          color: 'var(--text)',
           border: '1px solid var(--card-border)',
           borderRadius: 3,
           boxShadow: 'var(--shadow)',
