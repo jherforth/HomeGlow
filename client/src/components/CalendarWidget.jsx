@@ -21,6 +21,7 @@ import {
 import MonthDayCell from './MonthDayCell.jsx';
 import ColorPickerPopover from './ColorPickerPopover.jsx';
 import { shouldPersistSettings } from '../utils/widgetSettingsPersist';
+import { isControlHidden } from '../utils/displayControls.js';
 import {
   formatTime,
   formatShortDate,
@@ -200,6 +201,7 @@ const CalendarWidget = ({
   refreshNonce = 0,
   activeTab = 1,
   activeTabConfigJson = null,
+  hiddenControls = [],
 }) => {
   const { t } = useTranslation(['calendar', 'common']);
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
@@ -261,6 +263,22 @@ const CalendarWidget = ({
   const [appleDiscoveryCredentials, setAppleDiscoveryCredentials] = useState({ appleId: '', appPassword: '' });
   const [googleAccountConnected, setGoogleAccountConnected] = useState(false);
   const [eventDialog, setEventDialog] = useState({ open: false, mode: 'create', event: null, sourceId: '' });
+
+  // Control Limits (issue #166): two gates, not one switch per button. The
+  // settings gear fronts calendars, sync and display options; the event editor
+  // fronts add, edit and delete. Hiding the entry point is not enough once
+  // someone is past it, so an open popover or dialog closes too.
+  const hideCalendarSettings = isControlHidden(hiddenControls, 'core:calendarSettings');
+  const hideEditEvents = isControlHidden(hiddenControls, 'core:editEvents');
+  useEffect(() => {
+    if (hideCalendarSettings) {
+      setSettingsAnchor((prev) => (prev ? null : prev));
+      setShowCalendarDialog((prev) => (prev ? false : prev));
+    }
+    if (hideEditEvents) {
+      setEventDialog((prev) => (prev.open ? { open: false, mode: 'create', event: null, sourceId: '' } : prev));
+    }
+  }, [hideCalendarSettings, hideEditEvents]);
   const [eventForm, setEventForm] = useState({ title: '', description: '', location: '', all_day: false, start: '', end: '' });
   const [eventSaving, setEventSaving] = useState(false);
   const [eventError, setEventError] = useState('');
@@ -1370,13 +1388,15 @@ const CalendarWidget = ({
               <ViewWeek />
             </ToggleButton>
           </ToggleButtonGroup>
-          <IconButton
-            onClick={handleSettingsClick}
-            size="small"
-            sx={{ color: 'var(--text)' }}
-          >
-            <Settings />
-          </IconButton>
+          {!hideCalendarSettings && (
+            <IconButton
+              onClick={handleSettingsClick}
+              size="small"
+              sx={{ color: 'var(--text)' }}
+            >
+              <Settings />
+            </IconButton>
+          )}
         </Box>
       </Box>
 
@@ -1863,7 +1883,7 @@ const CalendarWidget = ({
                         }}
                       />
                     </Box>
-                    {isGoogleEvent(event) && (
+                    {isGoogleEvent(event) && !hideEditEvents && (
                       <Box sx={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 0.5 }}>
                         <Tooltip title={t('calendar:widget.editEvent')}>
                           <IconButton size="small" onClick={() => openEditEventDialog(event)}>
@@ -1908,7 +1928,7 @@ const CalendarWidget = ({
           )}
         </DialogContent>
         <DialogActions sx={{ justifyContent: 'space-between' }}>
-          {getGoogleSources().length > 0 ? (
+          {getGoogleSources().length > 0 && !hideEditEvents ? (
             <Button
               onClick={openCreateEventDialog}
               startIcon={<Add />}
