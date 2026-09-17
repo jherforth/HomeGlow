@@ -25,6 +25,7 @@
     "ical-generator": "^10.2.0",
     "ical.js": "^2.2.1",
     "node-cron": "^4.6.0",
-    "node-ical": "^0.26.0"
+    "node-ical": "^0.26.0",
+    "pino-pretty": "13.1.3"
   }
 }
