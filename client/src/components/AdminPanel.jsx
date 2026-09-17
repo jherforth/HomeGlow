@@ -104,6 +104,7 @@ import {
   readLocalScreensaverSettings,
   readLocalAutoDarkModeSettings,
   readLocalVacationModeSettings,
+  applyInterfaceColors,
 } from '../utils/interfaceSettings.js';
 import { CONTROL_LIMITS_DEFAULT_KEY } from '../utils/displayControls.js';
 import { useTranslation } from 'react-i18next';
@@ -1335,9 +1336,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     const root = document.documentElement;
     const isLight = root.getAttribute('data-theme') === 'light';
 
-    root.style.setProperty('--primary', interfaceColors.primary);
-    root.style.setProperty('--secondary', interfaceColors.secondary);
-    root.style.setProperty('--accent', interfaceColors.accent);
+    applyInterfaceColors(root, interfaceColors);
 
     if (isLight) {
       root.style.setProperty('--background', interfaceColors.primary);
@@ -2246,7 +2245,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                   );
                 })}
 
-                <Box sx={{ mb: 3, p: 2, border: '2px solid var(--accent)', borderRadius: 1, backgroundColor: 'rgba(158, 127, 255, 0.05)' }}>
+                <Box sx={{ mb: 3, p: 2, border: '2px solid var(--accent)', borderRadius: 1, backgroundColor: 'rgba(var(--accent-rgb), 0.05)' }}>
                   <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>
                     {t('admin:widgets.weatherWidget')}
                   </Typography>
@@ -2482,7 +2481,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                                   a made-up line. */}
                               <Typography
                                 variant="body2"
-                                sx={{ mt: 0.5, color: plugin.manifest?.description ? 'var(--text-color)' : 'text.secondary',
+                                sx={{ mt: 0.5, color: plugin.manifest?.description ? 'var(--text)' : 'text.secondary',
                                       fontStyle: plugin.manifest?.description ? 'normal' : 'italic' }}
                               >
                                 {plugin.manifest?.description || t('admin:plugins.noDescription')}
@@ -3896,7 +3895,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
               {t('admin:security.help')}
             </Alert>
 
-            <Box sx={{ p: 3, border: '2px solid var(--accent)', borderRadius: 2, backgroundColor: 'rgba(158, 127, 255, 0.05)' }}>
+            <Box sx={{ p: 3, border: '2px solid var(--accent)', borderRadius: 2, backgroundColor: 'rgba(var(--accent-rgb), 0.05)' }}>
               <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Lock />
                 {t('admin:security.pinProtection')}

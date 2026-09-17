@@ -1195,7 +1195,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
               size="small"
               aria-label={t('chores:visibility.openSettings')}
               title={t('chores:visibility.openSettings')}
-              sx={{ color: 'var(--text-color)' }}
+              sx={{ color: 'var(--text)' }}
             >
               <SettingsIcon fontSize="small" />
             </IconButton>
@@ -1280,7 +1280,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
 
                   <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, width: '100%' }}>
                     {userChores.length === 0 ? (
-                      <Typography variant="body2" sx={{ textAlign: 'center', py: 1, color: 'var(--text-color)', opacity: 0.6 }}>
+                      <Typography variant="body2" sx={{ textAlign: 'center', py: 1, color: 'var(--text)', opacity: 0.6 }}>
                         {t('chores:widget.noChoresToday')}
                       </Typography>
                     ) : (
@@ -1562,7 +1562,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                     textAlign: 'center',
                     fontWeight: 'bold',
                     my: 1,
-                    color: overspent ? 'error.main' : (parsed > 0 ? 'var(--accent)' : 'var(--text-muted)'),
+                    color: overspent ? 'error.main' : (parsed > 0 ? 'var(--accent)' : 'var(--text-secondary)'),
                     transition: 'color 0.2s ease',
                   }}
                 >

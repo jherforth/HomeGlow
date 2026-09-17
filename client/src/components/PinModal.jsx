@@ -231,7 +231,7 @@ const PinModal = ({ open, onClose, onVerify, mode = 'verify', title, allowRememb
             sx={{
               display: 'block',
               textAlign: 'center',
-              color: 'var(--text-muted)',
+              color: 'var(--text-secondary)',
               mb: 2,
               fontSize: '0.85rem'
             }}
@@ -257,7 +257,7 @@ const PinModal = ({ open, onClose, onVerify, mode = 'verify', title, allowRememb
               {remember && (
                 <Typography
                   variant="caption"
-                  sx={{ display: 'block', color: 'var(--text-muted)', pl: 4, mt: -0.5 }}
+                  sx={{ display: 'block', color: 'var(--text-secondary)', pl: 4, mt: -0.5 }}
                 >
                   This device will stop asking. You can always require the PIN
                   again from Admin &rarr; Security.
@@ -309,7 +309,7 @@ const PinModal = ({ open, onClose, onVerify, mode = 'verify', title, allowRememb
                   color: 'var(--accent)',
                   '&:hover': {
                     borderColor: 'var(--accent)',
-                    backgroundColor: 'rgba(158, 127, 255, 0.1)'
+                    backgroundColor: 'rgba(var(--accent-rgb), 0.1)'
                   }
                 }}
               >
@@ -344,7 +344,7 @@ const PinModal = ({ open, onClose, onVerify, mode = 'verify', title, allowRememb
                   border: '2px solid var(--accent)',
                   color: 'var(--accent)',
                   '&:hover': {
-                    backgroundColor: 'rgba(158, 127, 255, 0.1)'
+                    backgroundColor: 'rgba(var(--accent-rgb), 0.1)'
                   }
                 }}
               >
@@ -361,10 +361,10 @@ const PinModal = ({ open, onClose, onVerify, mode = 'verify', title, allowRememb
                 sx={{
                   py: 1.5,
                   borderColor: 'var(--card-border)',
-                  color: 'var(--text-color)',
+                  color: 'var(--text)',
                   '&:hover': {
                     borderColor: 'var(--accent)',
-                    backgroundColor: 'rgba(158, 127, 255, 0.05)'
+                    backgroundColor: 'rgba(var(--accent-rgb), 0.05)'
                   }
                 }}
               >

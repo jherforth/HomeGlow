@@ -73,7 +73,7 @@ const ChoreIconPicker = ({ value, onChange }) => {
             sx={{
               ...cellSx(!value),
               fontSize: '0.7rem',
-              color: 'var(--text-color)',
+              color: 'var(--text)',
               opacity: 0.8,
             }}
             {...cellProps(!value, t('chores:icons.none'), () => onChange(''))}

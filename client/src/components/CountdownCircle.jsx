@@ -124,7 +124,7 @@ const CountdownCircle = ({ refreshInterval, onRefresh, isActive = true }) => {
           strokeLinecap="round"
           style={{
             transition: 'stroke-dashoffset 0.1s linear',
-            filter: 'drop-shadow(0 0 4px rgba(158, 127, 255, 0.5))',
+            filter: 'drop-shadow(0 0 4px rgba(var(--accent-rgb), 0.5))',
           }}
         />
       </svg>

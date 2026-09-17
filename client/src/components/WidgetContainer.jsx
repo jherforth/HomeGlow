@@ -617,7 +617,7 @@ const WidgetContainer = ({
                   borderRadius: 2,
                   transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
                   boxShadow: isSelected
-                    ? '0 8px 32px rgba(244, 114, 182, 0.3)'
+                    ? '0 8px 32px rgba(var(--accent-rgb), 0.3)'
                     : '0 2px 8px rgba(0, 0, 0, 0.1)',
                   backgroundColor: 'var(--card-bg)',
                   overflow: 'hidden',
@@ -629,11 +629,11 @@ const WidgetContainer = ({
                         ? '3px solid transparent'
                         : (isSelected
                           ? '3px solid var(--accent)'
-                          : '3px solid rgba(244, 114, 182, 0.3)'),
+                          : '3px solid rgba(var(--accent-rgb), 0.3)'),
                       boxShadow: locked
                         ? '0 2px 8px rgba(0, 0, 0, 0.1)'
                         : (isSelected
-                          ? '0 8px 32px rgba(244, 114, 182, 0.3)'
+                          ? '0 8px 32px rgba(var(--accent-rgb), 0.3)'
                           : '0 4px 16px rgba(0, 0, 0, 0.15)'),
                     }
                   }
