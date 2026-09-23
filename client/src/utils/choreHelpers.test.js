@@ -4,7 +4,7 @@ vi.mock('./timezone.js', () => ({
     getServerTimezoneSync: () => 'UTC',
 }));
 
-import { shouldShowChoreToday, convertDaysToCrontab, getDueDateStatus, formatDueDate, hasOutstandingBonusChore } from './choreHelpers.js';
+import { shouldShowChoreToday, convertDaysToCrontab, getDueDateStatus, formatDueDate, hasOutstandingBonusChore, compareByKey } from './choreHelpers.js';
 
 describe('choreHelpers utilities', () => {
     let consoleErrorSpy;
@@ -172,5 +172,116 @@ describe('hasOutstandingBonusChore', () => {
 
     it('treats a one-off schedule with no crontab as due today', () => {
         expect(hasOutstandingBonusChore([bonus(41, null)], [], 4, TODAY)).toBe(true);
+    });
+});
+
+describe('compareByKey', () => {
+    // The title column's key, which is what both tables sort by default.
+    const byTitle = r => String(r?.title ?? '');
+    const sorted = (rows, keyOf = byTitle, direction = 'asc') =>
+        [...rows].sort((a, b) => compareByKey(a, b, keyOf, direction)).map(r => r.title);
+
+    it('orders rows alphabetically regardless of the order they arrive in', () => {
+        expect(sorted([
+            { id: 3, title: 'Walk the dog' },
+            { id: 1, title: 'Dishes' },
+            { id: 2, title: 'Make bed' },
+        ])).toEqual(['Dishes', 'Make bed', 'Walk the dog']);
+    });
+
+    it('folds case so one chore does not sort into a second alphabet', () => {
+        expect(sorted([
+            { id: 1, title: 'banana' },
+            { id: 2, title: 'Apple' },
+            { id: 3, title: 'Cherry' },
+        ])).toEqual(['Apple', 'banana', 'Cherry']);
+    });
+
+    it('folds accents', () => {
+        expect(sorted([
+            { id: 1, title: 'Zebra' },
+            { id: 2, title: 'Émile' },
+            { id: 3, title: 'Edward' },
+        ])).toEqual(['Edward', 'Émile', 'Zebra']);
+    });
+
+    it('breaks ties on id so equal titles keep a deterministic order', () => {
+        const rows = [
+            { id: 9, title: 'Dishes' },
+            { id: 2, title: 'dishes' },
+            { id: 5, title: 'DISHES' },
+        ];
+        const ids = (rs, direction) =>
+            [...rs].sort((a, b) => compareByKey(a, b, byTitle, direction)).map(r => r.id);
+        expect(ids(rows, 'asc')).toEqual([2, 5, 9]);
+        // Same set, different arrival order, same result.
+        expect(ids([...rows].reverse(), 'asc')).toEqual([2, 5, 9]);
+        // The tie-break is not reversed, so flipping the column does not
+        // reshuffle rows whose keys are equal.
+        expect(ids(rows, 'desc')).toEqual([2, 5, 9]);
+    });
+
+    it('does not throw on a missing or null title', () => {
+        expect(sorted([
+            { id: 2, title: null },
+            { id: 1, title: 'Dishes' },
+            { id: 3 },
+        ])).toEqual([null, undefined, 'Dishes']);
+    });
+
+    it('sorts numeric-leading titles as text, not as numbers', () => {
+        expect(sorted([
+            { id: 1, title: '10 minutes of reading' },
+            { id: 2, title: '2 loads of laundry' },
+        ])).toEqual(['10 minutes of reading', '2 loads of laundry']);
+    });
+
+    it('reverses on desc', () => {
+        expect(sorted([
+            { id: 1, title: 'Dishes' },
+            { id: 2, title: 'Make bed' },
+            { id: 3, title: 'Walk the dog' },
+        ], byTitle, 'desc')).toEqual(['Walk the dog', 'Make bed', 'Dishes']);
+    });
+
+    it('compares numeric keys by value, not as text', () => {
+        // '10' sorts before '9' as a string; the clams column must not.
+        const byClams = r => Number(r?.clam_value ?? 0);
+        expect(sorted([
+            { id: 1, title: 'ten', clam_value: 10 },
+            { id: 2, title: 'nine', clam_value: 9 },
+            { id: 3, title: 'zero', clam_value: 0 },
+        ], byClams)).toEqual(['zero', 'nine', 'ten']);
+    });
+
+    it('treats a zero count as a real value rather than a missing one', () => {
+        // Ascending by the schedules column is how you find chores nobody is
+        // scheduled for, so 0 has to lead rather than be swept to the end.
+        const byCount = r => Number(r?.count ?? 0);
+        expect(sorted([
+            { id: 1, title: 'two', count: 2 },
+            { id: 2, title: 'none', count: 0 },
+        ], byCount)).toEqual(['none', 'two']);
+    });
+
+    it('sorts rows with no value last in both directions', () => {
+        // Next Occurrence: a one-time task and an unparseable crontab have no
+        // occurrence at all, and must not lead when you ask for the soonest.
+        const byNext = r => r?.next ?? null;
+        const rows = [
+            { id: 1, title: 'later', next: 200 },
+            { id: 2, title: 'one-time', next: null },
+            { id: 3, title: 'soonest', next: 100 },
+        ];
+        expect(sorted(rows, byNext, 'asc')).toEqual(['soonest', 'later', 'one-time']);
+        expect(sorted(rows, byNext, 'desc')).toEqual(['later', 'soonest', 'one-time']);
+    });
+
+    it('orders rows that are all missing a value by id', () => {
+        const byNext = r => r?.next ?? null;
+        expect(sorted([
+            { id: 7, title: 'seven' },
+            { id: 3, title: 'three' },
+        ], byNext)).toEqual(['three', 'seven']);
     });
 });

@@ -146,3 +146,52 @@ export function formatLoggedAt(createdAt, rowDate, locale = undefined) {
   const dayLabel = logged.toLocaleDateString(locale, { timeZone, month: 'short', day: 'numeric' });
   return `${dayLabel}, ${time}`;
 }
+
+/**
+ * Compare two rows by a column's sort key, for the chore admin tables.
+ *
+ * `GET /api/chores` and `GET /api/chore-schedules` declare no `ORDER BY`, so
+ * rows arrive in whatever order SQLite's plan yields, which is insertion order
+ * in practice. That is fine for a handful of chores and unreadable once a
+ * household has thirty, so both tables sort client side and let a header click
+ * re-sort.
+ *
+ * `keyOf` maps a row to the value the column sorts on, which is deliberately
+ * not what the cell draws: Next Occurrence renders a formatted date, and
+ * comparing those as text would order "Apr" before "Jan".
+ *
+ * Numbers compare numerically. Everything else goes through `localeCompare`
+ * with case and accents folded (`sensitivity: 'base'`), so "Dishes" and
+ * "dishes" sort together instead of splitting into two alphabets.
+ *
+ * A `null` key means the row has no value for this column at all, which is
+ * different from having a low one. Those rows sort last in *both* directions:
+ * flipping the arrow to find the soonest occurrence should not march the
+ * schedules that have no occurrence to the top. Next Occurrence is the only
+ * column that produces one, since a missing title folds to `''` and an
+ * unassigned schedule still reads "Unassigned".
+ *
+ * `id` breaks every tie and is never reversed, which keeps the order
+ * deterministic rather than leaning on the sort being stable over an input
+ * order that is itself unspecified, and means toggling the direction on a
+ * column full of equal values does not reshuffle those rows.
+ */
+export function compareByKey(a, b, keyOf, direction = 'asc', locale = undefined) {
+  const ka = keyOf(a);
+  const kb = keyOf(b);
+
+  const aMissing = ka === null || ka === undefined;
+  const bMissing = kb === null || kb === undefined;
+  if (aMissing || bMissing) {
+    if (!(aMissing && bMissing)) return aMissing ? 1 : -1;
+    return Number(a?.id ?? 0) - Number(b?.id ?? 0);
+  }
+
+  const byKey = typeof ka === 'number' && typeof kb === 'number'
+    ? ka - kb
+    : String(ka).localeCompare(String(kb), locale, { sensitivity: 'base' });
+
+  const signed = direction === 'desc' ? -byKey : byKey;
+  if (signed !== 0) return signed;
+  return Number(a?.id ?? 0) - Number(b?.id ?? 0);
+}
