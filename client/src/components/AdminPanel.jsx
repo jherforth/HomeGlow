@@ -2198,6 +2198,16 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                           }
                           label={t('common:labels.enabled')}
                         />
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={Boolean(config.transparent)}
+                              onChange={() => handleWidgetToggle(widget, 'transparent')}
+                            />
+                          }
+                          label={t('admin:widgets.transparentBackground')}
+                          sx={{ ml: 2 }}
+                        />
                       </Grid>
 
                       <Grid size={{ xs: 12, sm: 6 }}>
@@ -2260,6 +2270,16 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                           />
                         }
                         label={t('common:labels.enabled')}
+                      />
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={Boolean(widgetSettings.weather?.transparent)}
+                            onChange={() => handleWidgetToggle('weather', 'transparent')}
+                          />
+                        }
+                        label={t('admin:widgets.transparentBackground')}
+                        sx={{ ml: 2 }}
                       />
                     </Grid>
 

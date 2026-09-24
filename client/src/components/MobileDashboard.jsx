@@ -35,8 +35,8 @@ const MobileDashboard = ({ widgets }) => {
             borderRadius: 2,
             overflow: 'hidden',
             border: '1px solid var(--card-border)',
-            backgroundColor: 'var(--card-bg)',
-            boxShadow: 'var(--shadow)',
+            backgroundColor: widget.transparent ? 'transparent' : 'var(--card-bg)',
+            boxShadow: widget.transparent ? 'none' : 'var(--shadow)',
             ...(needsFixedMobileHeight(widget) ? { height: '60vh', minHeight: 360 } : {}),
           }}
         >

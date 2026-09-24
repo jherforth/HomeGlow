@@ -99,12 +99,6 @@ body {
   transform: translateY(-2px);
 }
 
-.card.transparent-card {
-  background: transparent;
-  backdrop-filter: none;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
 /* React Grid Layout Styles */
 .react-grid-layout {
   position: relative;

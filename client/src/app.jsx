@@ -980,6 +980,7 @@ const App = () => {
       const dbLayout = getWidgetLayoutForTab('calendar', activeTab);
       result.push({
         id: 'calendar-widget',
+        transparent: Boolean(widgetSettings.calendar.transparent),
         defaultPosition: { x: 0, y: 0 },
         defaultSize: { width: 8, height: 5 },
         minWidth: 2,
@@ -1001,6 +1002,7 @@ const App = () => {
       const dbLayout = getWidgetLayoutForTab('weather', activeTab);
       result.push({
         id: 'weather-widget',
+        transparent: Boolean(widgetSettings.weather.transparent),
         defaultPosition: { x: 8, y: 0 },
         defaultSize: { width: 4, height: 3 },
         minWidth: 2,
@@ -1024,6 +1026,7 @@ const App = () => {
       const dbLayout = getWidgetLayoutForTab('chores', activeTab);
       result.push({
         id: 'chores-widget',
+        transparent: Boolean(widgetSettings.chores.transparent),
         defaultPosition: { x: 0, y: 5 },
         defaultSize: { width: 6, height: 4 },
         minWidth: 2,
@@ -1041,6 +1044,7 @@ const App = () => {
       const dbLayout = getWidgetLayoutForTab('photos', activeTab);
       result.push({
         id: 'photos-widget',
+        transparent: Boolean(widgetSettings.photos.transparent),
         defaultPosition: { x: 6, y: 5 },
         defaultSize: { width: 6, height: 4 },
         minWidth: 2,
@@ -1064,6 +1068,7 @@ const App = () => {
       const dbLayout = getWidgetLayoutForTab(pluginWidgetName, activeTab);
       result.push({
         id: `plugin-${plugin.filename}`,
+        transparent: Boolean(pSettings.transparent),
         defaultPosition: { x: 0, y: 0 },
         defaultSize: { width: 6, height: 4 },
         minWidth: 2,
@@ -1073,6 +1078,7 @@ const App = () => {
           filename={plugin.filename}
           name={plugin.name}
           theme={theme}
+          colors={interfaceColors}
           transparentBackground={pSettings.transparent || false}
           events={plugin.manifest?.events || []}
           hiddenControls={unprefixedHiddenControlsFor(hiddenControls, plugin.manifest?.id)}
@@ -1081,7 +1087,7 @@ const App = () => {
     });
 
     return result;
-  }, [widgetSettings, pluginSettings, activeTab, widgetAssignments, installedPlugins, theme, demoStatus.demo, hiddenControls]);
+  }, [widgetSettings, pluginSettings, activeTab, widgetAssignments, installedPlugins, theme, interfaceColors, demoStatus.demo, hiddenControls]);
 
   // Mobile stack (issue #118): same widget content nodes, fixed order, photos
   // excluded, grid metadata ignored.

@@ -1,15 +1,19 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Box } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceName } from '../utils/deviceName.js';
 import { subscribePluginEvents } from '../utils/pluginEventBridge.js';
 import { acceptPluginDataMessage, emitPluginDataChanged } from '../utils/pluginDataBridge.js';
+import { buildPluginThemeMessage } from '../utils/pluginThemeBridge.js';
 
 const PluginWidgetWrapper = ({
   filename,
   name,
   theme,
+  // The dashboard's interface colors, so the plugin can follow the picked
+  // accent instead of the stylesheet's default. Null means "send theme only".
+  colors = null,
   transparentBackground = false,
   refreshNonce = 0,
   events = [],
@@ -68,6 +72,23 @@ const PluginWidgetWrapper = ({
     return () => window.removeEventListener('message', onMessage);
   }, [iframeOrigin, filename]);
 
+  // Theme and colors travel by postMessage (issue #179). The iframe's document
+  // only ever receives the static stylesheet, so the picked accent would never
+  // reach it otherwise. Posted on every load of the frame (the src changes on
+  // refresh and on a hidden-controls change) and again whenever the theme or
+  // the colors change while it is up. Same target origin rule as the events.
+  const themeMessage = useMemo(() => buildPluginThemeMessage(theme, colors), [theme, colors]);
+  const themeMessageRef = useRef(themeMessage);
+  themeMessageRef.current = themeMessage;
+  const postTheme = useCallback(() => {
+    const target = iframeRef.current?.contentWindow;
+    if (!target) return;
+    target.postMessage(themeMessageRef.current, iframeOrigin);
+  }, [iframeOrigin]);
+  useEffect(() => {
+    postTheme();
+  }, [postTheme, themeMessage]);
+
   // Omitted entirely when nothing is hidden: a plugin (and an older dashboard)
   // must read "no hide param" as "hide nothing". Flattened to a string so an
   // unchanged hidden set produces a byte-identical src — changing src navigates
@@ -85,10 +106,11 @@ const PluginWidgetWrapper = ({
       <iframe
         ref={iframeRef}
         key={refreshNonce}
+        onLoad={postTheme}
         // lang rides the same channel as theme (issue #137) so a plugin that
         // ships translations can follow the display's language; plugins that
         // ignore it are unaffected.
-        src={`${API_BASE_URL}/widgets/${filename}?theme=${theme}&device=${encodeURIComponent(deviceName)}&lang=${i18n.language || 'en'}${hideParam ? `&hide=${hideParam}` : ''}`}
+        src={`${API_BASE_URL}/widgets/${filename}?theme=${theme}&device=${encodeURIComponent(deviceName)}&lang=${i18n.language || 'en'}${hideParam ? `&hide=${hideParam}` : ''}${transparentBackground ? '&transparent=true' : ''}`}
         title={name}
         style={{
           width: '100%',
