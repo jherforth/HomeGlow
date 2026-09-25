@@ -17,6 +17,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TableSortLabel,
   Paper,
   IconButton,
   Dialog,
@@ -52,6 +53,7 @@ import { useTranslation } from 'react-i18next';
 import { getWeekdayLabels } from '../utils/dateUtils.js';
 import useIsMobile from '../hooks/useIsMobile.js';
 import { stackableTableSx } from '../utils/responsiveTable.js';
+import { compareByKey } from '../utils/choreHelpers.js';
 
 // Day labels come from the locale (index 0 = Sunday, matching crontab).
 const getDayOptions = () => getWeekdayLabels(0).map((label, value) => ({ label, value }));
@@ -65,16 +67,26 @@ const CRONTAB_PRESETS = [
   { key: 'weekends', value: '0 0 * * 0,6' }
 ];
 
-function getNextOccurrence(crontab) {
-  if (!crontab) return 'One-time';
+// The date the label is built from, exposed on its own so the Next Occurrence
+// column can sort on the instant rather than on the formatted string. Null
+// means there is no next occurrence: a one-time task, or an expression that
+// does not parse.
+function nextOccurrenceAt(crontab) {
+  if (!crontab) return null;
   try {
     const tz = getServerTimezoneSync();
-    const interval = CronExpressionParser.parse(crontab, { tz });
-    const next = interval.next().toDate();
-    return next.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });
+    return CronExpressionParser.parse(crontab, { tz }).next().toDate();
   } catch {
-    return 'Invalid expression';
+    return null;
   }
+}
+
+function getNextOccurrence(crontab) {
+  if (!crontab) return 'One-time';
+  const next = nextOccurrenceAt(crontab);
+  if (!next) return 'Invalid expression';
+  const tz = getServerTimezoneSync();
+  return next.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });
 }
 
 function validateCrontab(crontab) {
@@ -213,6 +225,31 @@ const defaultScheduleForm = {
 
 const defaultChoreForm = { title: '', description: '', clam_value: 0, icon: '' };
 
+// A header cell that re-sorts its table. `sortDirection` on the cell is what
+// puts `aria-sort` on the <th>, so the state is announced without a second
+// visually-hidden copy of it.
+function SortableHeader({ column, sort, onSort, children }) {
+  const active = sort.column === column;
+  return (
+    <TableCell sortDirection={active ? sort.direction : false}>
+      <TableSortLabel
+        active={active}
+        direction={active ? sort.direction : 'asc'}
+        onClick={() => onSort(column)}
+      >
+        {children}
+      </TableSortLabel>
+    </TableCell>
+  );
+}
+
+// Clicking the active column flips it; clicking a new one starts ascending,
+// which is the reading order for names and "soonest first" for dates.
+function nextSort(sort, column) {
+  if (sort.column !== column) return { column, direction: 'asc' };
+  return { column, direction: sort.direction === 'asc' ? 'desc' : 'asc' };
+}
+
 export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
   const { t } = useTranslation(['chores', 'common']);
   const isMobile = useIsMobile();
@@ -236,6 +273,11 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
 
   const [filterUser, setFilterUser] = useState('');
   const [filterChore, setFilterChore] = useState('');
+
+  const [choreSort, setChoreSort] = useState({ column: 'title', direction: 'asc' });
+  const [scheduleSort, setScheduleSort] = useState({ column: 'chore', direction: 'asc' });
+  const sortChores = column => setChoreSort(prev => nextSort(prev, column));
+  const sortSchedules = column => setScheduleSort(prev => nextSort(prev, column));
 
   const showMessage = (type, text) => {
     setSaveMessage({ show: true, type, text });
@@ -478,11 +520,52 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
   const getScheduleCountForChore = (choreId) =>
     schedules.filter(s => s.chore_id === choreId).length;
 
-  const filteredSchedules = schedules.filter(s => {
+  // What each sortable column orders by, which is not what the cell draws:
+  // clams and the schedule count are numbers behind chips, and Next Occurrence
+  // is a date behind a localized label.
+  //
+  // A column is here only if ordering by it answers a question someone asks.
+  // Description is free text and usually blank; Duration is four modes with no
+  // natural order rather than a length; Visible is a live Switch, so sorting by
+  // it would slide the row out from under the click that toggled it.
+  const choreSortKeys = {
+    title: c => String(c?.title ?? ''),
+    clams: c => Number(c?.clam_value ?? 0),
+    schedules: c => getScheduleCountForChore(c?.id),
+  };
+
+  const scheduleSortKeys = {
+    chore: s => String(s?.title ?? ''),
+    assignedTo: s => getUserName(s?.user_id),
+    nextOccurrence: s => nextOccurrenceAt(s?.crontab)?.getTime() ?? null,
+    clams: s => Number(s?.clam_value ?? 0),
+  };
+
+  // Both admin tables list alphabetically by default. The APIs return insertion
+  // order, which is unscannable once a household has more than a few chores.
+  //
+  // Each row's key is computed once rather than inside the comparator, which
+  // would re-parse a crontab on every one of the O(n log n) comparisons.
+  const sortRows = (rows, keys, sort) => {
+    // The first key is the column the table opens on, and the fallback for a
+    // state that somehow names a column this table does not have.
+    const keyOf = keys[sort.column] ?? Object.values(keys)[0];
+    const keyed = new Map(rows.map(r => [r.id, keyOf(r)]));
+    return [...rows].sort((a, b) => compareByKey(a, b, r => keyed.get(r.id), sort.direction));
+  };
+
+  const sortedChores = sortRows(chores, choreSortKeys, choreSort);
+
+  // The pickers stay alphabetical whatever the table above is sorted by: a
+  // dropdown you hunt through by name should not reorder because someone
+  // sorted the definitions table by clam value.
+  const choresByTitle = sortRows(chores, choreSortKeys, { column: 'title', direction: 'asc' });
+
+  const filteredSchedules = sortRows(schedules.filter(s => {
     if (filterUser && String(s.user_id) !== String(filterUser)) return false;
     if (filterChore && String(s.chore_id) !== String(filterChore)) return false;
     return true;
-  });
+  }), scheduleSortKeys, scheduleSort);
 
   const currentCrontab = computeCrontab(scheduleForm);
   const nextOccurrence = getNextOccurrence(currentCrontab);
@@ -539,10 +622,16 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
         <Table size="small" sx={stackableTableSx}>
           <TableHead>
             <TableRow>
-              <TableCell>{t('common:labels.title')}</TableCell>
+              <SortableHeader column="title" sort={choreSort} onSort={sortChores}>
+                {t('common:labels.title')}
+              </SortableHeader>
               <TableCell>{t('common:labels.description')}</TableCell>
-              <TableCell>{t('chores:schedules.clams')}</TableCell>
-              <TableCell>{t('chores:schedules.schedulesColumn')}</TableCell>
+              <SortableHeader column="clams" sort={choreSort} onSort={sortChores}>
+                {t('chores:schedules.clams')}
+              </SortableHeader>
+              <SortableHeader column="schedules" sort={choreSort} onSort={sortChores}>
+                {t('chores:schedules.schedulesColumn')}
+              </SortableHeader>
               <TableCell>{t('common:labels.actions')}</TableCell>
             </TableRow>
           </TableHead>
@@ -554,7 +643,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                 </TableCell>
               </TableRow>
             ) : (
-              chores.map(c => (
+              sortedChores.map(c => (
                 <TableRow key={c.id}>
                   <TableCell data-label={t('common:labels.title')}>
                     <Typography variant="body2" fontWeight="bold">
@@ -629,7 +718,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
           <InputLabel>{t('chores:schedules.filterByChore')}</InputLabel>
           <Select value={filterChore} label={t('chores:schedules.filterByChore')} onChange={(e) => setFilterChore(e.target.value)}>
             <MenuItem value="">{t('chores:schedules.allChores')}</MenuItem>
-            {chores.map(c => <MenuItem key={c.id} value={c.id}>{c.title}</MenuItem>)}
+            {choresByTitle.map(c => <MenuItem key={c.id} value={c.id}>{c.title}</MenuItem>)}
           </Select>
         </FormControl>
 
@@ -648,11 +737,19 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
         <Table size="small" sx={stackableTableSx}>
           <TableHead>
             <TableRow>
-              <TableCell>{t('chores:schedules.chore')}</TableCell>
-              <TableCell>{t('chores:schedules.assignedTo')}</TableCell>
-              <TableCell>{t('chores:schedules.nextOccurrence')}</TableCell>
+              <SortableHeader column="chore" sort={scheduleSort} onSort={sortSchedules}>
+                {t('chores:schedules.chore')}
+              </SortableHeader>
+              <SortableHeader column="assignedTo" sort={scheduleSort} onSort={sortSchedules}>
+                {t('chores:schedules.assignedTo')}
+              </SortableHeader>
+              <SortableHeader column="nextOccurrence" sort={scheduleSort} onSort={sortSchedules}>
+                {t('chores:schedules.nextOccurrence')}
+              </SortableHeader>
               <TableCell>{t('chores:schedules.duration')}</TableCell>
-              <TableCell>{t('chores:schedules.clams')}</TableCell>
+              <SortableHeader column="clams" sort={scheduleSort} onSort={sortSchedules}>
+                {t('chores:schedules.clams')}
+              </SortableHeader>
               <TableCell>{t('chores:schedules.visible')}</TableCell>
               <TableCell>{t('common:labels.actions')}</TableCell>
             </TableRow>
@@ -859,7 +956,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                 label={t('chores:schedules.chore')}
                 onChange={(e) => updateScheduleForm({ chore_id: e.target.value })}
               >
-                {chores.map(c => (
+                {choresByTitle.map(c => (
                   <MenuItem key={c.id} value={c.id}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
                       <span>{c.title}</span>
