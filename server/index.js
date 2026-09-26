@@ -2602,14 +2602,21 @@ fastify.delete('/api/chores/:id', async (request, reply) => {
 
 // Chore Schedules routes
 fastify.get('/api/chore-schedules', async (request, reply) => {
-    // Helper to evaluate calendar match for today
+    // Helper to evaluate calendar match for today.
+    // All-day events are stored as UTC midnight, so converting them with
+    // 'localtime' shifts them to the previous day in timezones behind UTC.
+    // An all-day event is the same date everywhere, so compare its UTC date
+    // directly; only timed events get the localtime conversion.
     const todayStr = getTodayLocalDateString();
     const todayEvents = db.prepare(`
       SELECT title, start_time, all_day
       FROM calendar_events_cache
       WHERE source_id IN (SELECT id FROM calendar_sources WHERE enabled = 1)
-        AND date(start_time, 'localtime') = ?
-    `).all(todayStr);
+        AND (
+          (all_day = 1 AND date(start_time) = ?)
+          OR (all_day = 0 AND date(start_time, 'localtime') = ?)
+        )
+    `).all(todayStr, todayStr);
 
     const checkCalendarMatch = (matchStr) => {
       if (!matchStr) return null;
