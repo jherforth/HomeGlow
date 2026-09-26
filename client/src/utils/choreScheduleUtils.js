@@ -27,14 +27,31 @@ export function getNextOccurrence(crontab, schedule) {
   if (schedule?.duration === 'once-completed') {
     return schedule.interval ? `Once completed (+${formatScheduleInterval(schedule.interval)})` : 'Once completed';
   }
+  if (schedule?.calendar_match) {
+    return schedule.calendar_matched_today ? 'Today' : 'No matching event';
+  }
   if (!crontab) return 'One-time';
+  const next = nextOccurrenceAt(crontab, schedule);
+  if (!next) return 'Invalid expression';
+  const tz = getServerTimezoneSync();
+  return next.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });
+}
+
+// The date the Next Occurrence label is built from, exposed on its own so
+// the column can sort on the instant rather than on the formatted string.
+// Null means there is no next occurrence: a one-time task, an expression
+// that does not parse, or a calendar schedule with no matching event today.
+export function nextOccurrenceAt(crontab, schedule) {
+  if (schedule?.duration === 'once-completed') return null;
+  if (schedule?.calendar_match) {
+    return schedule.calendar_matched_today ? new Date() : null;
+  }
+  if (!crontab) return null;
   try {
     const tz = getServerTimezoneSync();
-    const interval = CronExpressionParser.parse(crontab, { tz });
-    const next = interval.next().toDate();
-    return next.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });
+    return CronExpressionParser.parse(crontab, { tz }).next().toDate();
   } catch {
-    return 'Invalid expression';
+    return null;
   }
 }
 
