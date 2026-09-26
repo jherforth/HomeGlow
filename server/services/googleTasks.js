@@ -23,6 +23,12 @@ function deriveTasksRedirectUri(db, request) {
   return `${proto}://${host}/api/connections/google-tasks/callback`;
 }
 
+function pruneOAuthStates(db) {
+  db.prepare(
+    "DELETE FROM google_tasks_oauth_states WHERE datetime(created_at) < datetime('now', '-15 minutes')"
+  ).run();
+}
+
 function buildUserAuthUrl(db, { redirectUri, userId }) {
   const status = googleConnection.getOAuthStatus(db);
   const row = db.prepare("SELECT value FROM settings WHERE key = 'GOOGLE_CLIENT_ID'").get();
@@ -31,12 +37,14 @@ function buildUserAuthUrl(db, { redirectUri, userId }) {
     throw new Error('Google Client ID is not configured in Admin > Connections.');
   }
 
-  const stateData = {
-    userId,
-    nonce: crypto.randomBytes(16).toString('hex'),
-    redirectUri,
-  };
-  const state = Buffer.from(JSON.stringify(stateData)).toString('base64url');
+  // Opaque single-use state persisted server-side so the callback can
+  // verify the flow was initiated here (CSRF protection). The userId and
+  // redirectUri never travel through the browser in the state parameter.
+  pruneOAuthStates(db);
+  const state = crypto.randomBytes(24).toString('base64url');
+  db.prepare(
+    'INSERT INTO google_tasks_oauth_states (state, user_id, redirect_uri) VALUES (?, ?, ?)'
+  ).run(state, userId, redirectUri);
 
   const params = new URLSearchParams({
     client_id: clientId,
@@ -51,18 +59,24 @@ function buildUserAuthUrl(db, { redirectUri, userId }) {
   return `${AUTH_ENDPOINT}?${params.toString()}`;
 }
 
+function consumeOAuthState(db, state) {
+  pruneOAuthStates(db);
+  const row = db
+    .prepare('SELECT state, user_id, redirect_uri FROM google_tasks_oauth_states WHERE state = ?')
+    .get(state);
+  if (row) {
+    db.prepare('DELETE FROM google_tasks_oauth_states WHERE state = ?').run(state);
+  }
+  return row;
+}
+
 async function handleOAuthCallback(db, { code, state }) {
-  let stateData;
-  try {
-    stateData = JSON.parse(Buffer.from(state, 'base64url').toString('utf8'));
-  } catch {
-    throw new Error('Invalid OAuth state parameter.');
+  const stateRow = consumeOAuthState(db, state);
+  if (!stateRow) {
+    throw new Error('Invalid or expired OAuth state parameter.');
   }
 
-  const { userId, redirectUri } = stateData;
-  if (!userId || !redirectUri) {
-    throw new Error('Malformed OAuth state data.');
-  }
+  const { user_id: userId, redirect_uri: redirectUri } = stateRow;
 
   const clientRow = db.prepare("SELECT value FROM settings WHERE key = 'GOOGLE_CLIENT_ID'").get();
   const secretRow = db.prepare("SELECT value FROM settings WHERE key = 'GOOGLE_CLIENT_SECRET_ENC'").get();
