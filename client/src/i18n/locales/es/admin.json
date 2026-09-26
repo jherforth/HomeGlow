@@ -279,7 +279,23 @@
     "chores": "Tareas",
     "deleteUser": "Eliminar persona",
     "chooseAnAvatar": "Elige un avatar",
-    "noAvatars": "No hay avatares incluidos disponibles."
+    "noAvatars": "No hay avatares incluidos disponibles.",
+    "googleTasks": {
+      "title": "Google Tasks",
+      "connected": "Conectado",
+      "connect": "Conectar",
+      "disconnect": "Desconectar",
+      "sync": "Sincronizar",
+      "syncing": "Sincronizando...",
+      "connectedSuccess": "¡Google Tasks conectado correctamente!",
+      "connectionFailed": "Error al conectar Google Tasks.",
+      "authStartFailed": "No se pudo iniciar la autenticación de Google Tasks.",
+      "disconnectConfirm": "¿Seguro que quieres desconectar Google Tasks para este usuario?",
+      "disconnected": "Google Tasks desconectado.",
+      "disconnectFailed": "No se pudo desconectar Google Tasks.",
+      "syncFailed": "No se pudo sincronizar Google Tasks.",
+      "syncSuccess": "Tareas sincronizadas: {{imported}} tarea(s) nueva(s) importada(s), {{updated}} tarea(s) actualizada(s)."
+    }
   },
   "chores": {
     "history": "Historial",
