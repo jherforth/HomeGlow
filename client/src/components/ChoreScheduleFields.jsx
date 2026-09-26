@@ -207,7 +207,7 @@ export default function ChoreScheduleFields({ form, onChange, crontabError }) {
                 label={t('chores:schedules.calendarMatch', { defaultValue: 'Event Title Contains...' })}
                 value={form.calendar_match}
                 onChange={(e) => onChange({ calendar_match: e.target.value })}
-                placeholder="e.g. Columbia - Practice, Gymnastics"
+                placeholder="e.g. Practice, Gymnastics"
                 helperText={t('chores:schedules.calendarMatchHelp', { defaultValue: 'Triggers on days matching this event. The chore is due at the event start time and remains visible for the entire day.' })}
                 required
               />
