@@ -5126,7 +5126,7 @@ button{margin-top:20px;background:#2563eb;color:#fff;border:0;padding:10px 18px;
 button:hover{background:#1d4ed8}</style></head>
 <body><div class="card"><h1>${safeTitle}</h1><p>${safeMessage}</p>
 <button onclick="window.close()">Close window</button>
-<script>try{window.opener&&window.opener.postMessage({type:'homeglow:google-tasks-oauth',ok:${ok ? 'true' : 'false'}},'*');}catch(e){}</script>
+<script>try{window.opener&&window.opener.postMessage({type:'homeglow:google-tasks-oauth',ok:${ok ? 'true' : 'false'}},window.location.origin);}catch(e){}</script>
 </div></body></html>`;
   };
 

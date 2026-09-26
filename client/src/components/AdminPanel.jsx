@@ -362,6 +362,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
 
   useEffect(() => {
     const handleGoogleTasksMessage = (event) => {
+      if (event.origin !== window.location.origin) return;
       if (event.data?.type === 'homeglow:google-tasks-oauth') {
         fetchUsersGoogleTasksStatuses();
         fetchChores();
