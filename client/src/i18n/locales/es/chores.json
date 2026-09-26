@@ -232,7 +232,13 @@
     "onceCompletedWithInterval": "Una vez completada ({{interval}})",
     "oneTimeTaskShort": "Tarea única",
     "deleteChoreWarning": "Esto eliminará de forma permanente la tarea y las {{count}} programaciones vinculadas a ella. El historial de finalización se conserva.",
-    "deleteChorePrompt": "Eliminar"
+    "deleteChorePrompt": "Eliminar",
+    "assignToUsers": "Asignar a usuarios",
+    "calendarOn": "En: \"{{keyword}}\"",
+    "calendarMatchToday": "Coincide con un evento del calendario hoy",
+    "calendarNoMatchToday": "Ningún evento del calendario coincide con esta palabra clave hoy — revisa la ortografía con el título del evento",
+    "crontabFormatHelp": "Formato: minuto hora día-del-mes mes día-de-la-semana",
+    "calendarMatchPlaceholder": "p. ej. Práctica, Gimnasia"
   },
   "presets": {
     "daily": "A diario",

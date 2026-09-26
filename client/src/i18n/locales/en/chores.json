@@ -249,7 +249,13 @@
     "onceCompletedWithInterval": "Once Completed ({{interval}})",
     "oneTimeTaskShort": "One-time task",
     "deleteChoreWarning": "This will permanently delete the chore and all {{count}} schedule(s) linked to it. Completion history is preserved.",
-    "deleteChorePrompt": "Delete"
+    "deleteChorePrompt": "Delete",
+    "assignToUsers": "Assign to Users",
+    "calendarOn": "On: \"{{keyword}}\"",
+    "calendarMatchToday": "Matches a calendar event today",
+    "calendarNoMatchToday": "No calendar event matches this keyword today — check the spelling against the event title",
+    "crontabFormatHelp": "Format: minute hour day-of-month month day-of-week",
+    "calendarMatchPlaceholder": "e.g. Practice, Gymnastics"
   },
   "presets": {
     "daily": "Daily",

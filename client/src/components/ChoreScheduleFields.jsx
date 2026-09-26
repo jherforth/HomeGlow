@@ -194,7 +194,7 @@ export default function ChoreScheduleFields({ form, onChange, crontabError }) {
               onChange={(e) => onChange({ customCrontab: e.target.value })}
               placeholder="0 0 * * 1"
               error={!!crontabError}
-              helperText={crontabError || 'Format: minute hour day-of-month month day-of-week'}
+              helperText={crontabError || t('chores:schedules.crontabFormatHelp')}
               InputProps={{ sx: { fontFamily: 'monospace' } }}
             />
           )}
@@ -207,7 +207,7 @@ export default function ChoreScheduleFields({ form, onChange, crontabError }) {
                 label={t('chores:schedules.calendarMatch', { defaultValue: 'Event Title Contains...' })}
                 value={form.calendar_match}
                 onChange={(e) => onChange({ calendar_match: e.target.value })}
-                placeholder="e.g. Practice, Gymnastics"
+                placeholder={t('chores:schedules.calendarMatchPlaceholder')}
                 helperText={t('chores:schedules.calendarMatchHelp', { defaultValue: 'Triggers on days matching this event. The chore is due at the event start time and remains visible for the entire day.' })}
                 required
               />

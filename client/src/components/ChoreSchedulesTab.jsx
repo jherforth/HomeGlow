@@ -720,13 +720,13 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                     <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
                       {s.calendar_match ? (
                       <Chip
-                        label={`📅 On: "${s.calendar_match}" ${s.calendar_matched_today ? '✓' : '✗'}`}
+                        label={`📅 ${t('chores:schedules.calendarOn', { keyword: s.calendar_match })} ${s.calendar_matched_today ? '✓' : '✗'}`}
                         size="small"
                         color={s.calendar_matched_today ? "success" : "default"}
                         variant="outlined"
                         title={s.calendar_matched_today
-                          ? 'Matches a calendar event today'
-                          : 'No calendar event matches this keyword today — check the spelling against the event title'}
+                          ? t('chores:schedules.calendarMatchToday')
+                          : t('chores:schedules.calendarNoMatchToday')}
                       />
                     ) : getNextOccurrence(s.crontab, s)}
                     </Typography>
@@ -913,7 +913,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
             {!editingSchedule ? (
               <Box>
                 <FormControl fullWidth size="small">
-                  <InputLabel id="multi-user-label">Assign to Users</InputLabel>
+                  <InputLabel id="multi-user-label">{t('chores:schedules.assignToUsers')}</InputLabel>
                   <Select
                     labelId="multi-user-label"
                     multiple
@@ -922,7 +922,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                       const val = typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value;
                       setScheduleForm({ ...scheduleForm, user_ids: val });
                     }}
-                    label="Assign to Users"
+                    label={t('chores:schedules.assignToUsers')}
                     renderValue={(selected) => (
                       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                         {selected.map((uid) => {
