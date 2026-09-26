@@ -13,6 +13,8 @@
     "pickerLabel": "Icono",
     "none": "Sin icono",
     "noneShort": "Ninguno",
+    "custom": "Personalizado",
+    "customPlaceholder": "Emoji",
     "bed": "Cama",
     "clothes": "Ropa",
     "laundry": "Colada",
