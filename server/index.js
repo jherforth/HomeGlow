@@ -140,6 +140,7 @@ const googleCalendar = require('./services/googleCalendar');
 const appleCalDAV = require('./services/appleCalDAV');
 const googlePhotos = require('./services/googlePhotos');
 const googlePhotosPicker = require('./services/googlePhotosPicker');
+const googleTasks = require('./services/googleTasks');
 const homeAssistant = require('./services/homeAssistant');
 const weatherService = require('./services/weather');
 const { computeSunTimes } = require('./services/weather/sun');
@@ -214,6 +215,7 @@ const schemaMigrations = [
   { schemaId: 23, migrationPath: './migrations/schema23-userSortOrder', },
   { schemaId: 24, migrationPath: './migrations/schema24-choreIcon', },
   { schemaId: 25, migrationPath: './migrations/schema25-unifyCredentialEncryption', },
+  { schemaId: 26, migrationPath: './migrations/schema26-userGoogleTasks', },
 ];
 
 const ALLOWED_SCHEDULE_DURATIONS = new Set(['day-of', 'until-completed', 'once-completed']);
@@ -3237,6 +3239,13 @@ fastify.post('/api/chores/complete', async (request, reply) => {
     db.prepare("DELETE FROM chore_history WHERE chore_schedule_id = ? AND user_id = ? AND date = ? AND kind = 'missed'").run(chore_schedule_id, user_id, date);
     db.prepare("INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind) VALUES (?, ?, ?, ?, ?, 'completion')").run(user_id, chore_schedule_id, date, schedule.clam_value, schedule.title);
 
+    // Outbound sync to Google Tasks if linked
+    if (schedule.google_task_id) {
+      googleTasks.completeGoogleTask(db, user_id, schedule.google_task_id).catch((err) => {
+        console.warn(`[GoogleTasks] Failed to sync completion to Google Tasks:`, err.message);
+      });
+    }
+
     // Pay out a pending transfer bonus (attached by the parent when moving
     // this chore to a kid whose day was already complete) and clear it so it
     // pays only once.
@@ -5083,6 +5092,96 @@ fastify.delete('/api/connections/google/account', async (request, reply) => {
   }
 });
 
+// Per-User Google Tasks OAuth and Sync routes
+fastify.get('/api/users/:id/google-tasks/auth-url', async (request, reply) => {
+  if (demoBlocked(reply)) return;
+  const { id } = request.params;
+  try {
+    const user = db.prepare('SELECT id FROM users WHERE id = ?').get(id);
+    if (!user) {
+      return reply.status(404).send({ error: 'User not found' });
+    }
+    const redirectUri = googleTasks.deriveTasksRedirectUri(db, request);
+    const url = googleTasks.buildUserAuthUrl(db, { redirectUri, userId: user.id });
+    return { url, redirect_uri: redirectUri };
+  } catch (error) {
+    console.error('Error generating Google Tasks auth URL:', error);
+    reply.status(400).send({ error: error.message || 'Failed to generate Google Tasks auth URL' });
+  }
+});
+
+fastify.get('/api/connections/google-tasks/callback', async (request, reply) => {
+  if (demoBlocked(reply)) return;
+  const { code, state, error: oauthError } = request.query || {};
+  const renderTasksPage = (title, message, ok) => {
+    const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const safeTitle = escapeHtml(title);
+    const safeMessage = escapeHtml(message);
+    reply.header('Content-Type', 'text/html; charset=utf-8');
+    return `<!doctype html><html><head><meta charset="utf-8"><title>${safeTitle}</title>
+<style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0f172a;color:#f8fafc;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:24px}
+.card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:32px;max-width:480px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.3)}
+h1{margin:0 0 12px;font-size:22px;color:${ok ? '#4ade80' : '#f87171'}}p{margin:0;color:#cbd5e1;line-height:1.5}
+button{margin-top:20px;background:#2563eb;color:#fff;border:0;padding:10px 18px;border-radius:8px;font-size:14px;cursor:pointer}
+button:hover{background:#1d4ed8}</style></head>
+<body><div class="card"><h1>${safeTitle}</h1><p>${safeMessage}</p>
+<button onclick="window.close()">Close window</button>
+<script>try{window.opener&&window.opener.postMessage({type:'homeglow:google-tasks-oauth',ok:${ok ? 'true' : 'false'}},'*');}catch(e){}</script>
+</div></body></html>`;
+  };
+
+  try {
+    if (oauthError) {
+      return renderTasksPage('Authorization failed', `Google reported: ${oauthError}`, false);
+    }
+    if (!code || !state) {
+      return renderTasksPage('Authorization failed', 'Missing code or state parameter.', false);
+    }
+    const result = await googleTasks.handleOAuthCallback(db, { code, state });
+    // Trigger immediate sync upon connecting
+    googleTasks.syncUserGoogleTasks(db, result.userId).catch(() => {});
+    return renderTasksPage('Connected Google Tasks', `Signed in as ${result.email || 'your Google account'}. You can close this window.`, true);
+  } catch (error) {
+    console.error('Google Tasks OAuth callback error:', error);
+    return renderTasksPage('Authorization failed', error.message || 'An unexpected error occurred.', false);
+  }
+});
+
+fastify.get('/api/users/:id/google-tasks/status', async (request, reply) => {
+  const { id } = request.params;
+  try {
+    const status = googleTasks.getUserTasksStatus(db, id);
+    return status;
+  } catch (error) {
+    console.error('Error getting Google Tasks status:', error);
+    reply.status(500).send({ error: 'Failed to get Google Tasks status' });
+  }
+});
+
+fastify.delete('/api/users/:id/google-tasks', async (request, reply) => {
+  if (demoBlocked(reply)) return;
+  const { id } = request.params;
+  try {
+    await googleTasks.disconnectUserTasks(db, id);
+    return { success: true };
+  } catch (error) {
+    console.error('Error disconnecting Google Tasks:', error);
+    reply.status(500).send({ error: 'Failed to disconnect Google Tasks' });
+  }
+});
+
+fastify.post('/api/users/:id/google-tasks/sync', async (request, reply) => {
+  if (demoBlocked(reply)) return;
+  const { id } = request.params;
+  try {
+    const result = await googleTasks.syncUserGoogleTasks(db, id);
+    return { success: true, ...result };
+  } catch (error) {
+    console.error('Error syncing Google Tasks:', error);
+    reply.status(500).send({ error: error.message || 'Failed to sync Google Tasks' });
+  }
+});
+
 // Home Assistant connection routes (issue #57).
 //
 // The status route reports whether a token is stored, never the token itself —
@@ -6263,6 +6362,14 @@ const start = async () => {
 
     if (process.env.HOMEGLOW_DISABLE_BACKGROUND_JOBS !== '1') {
       startNightlyCronJob(); // Start the nightly chore pruning job
+      // Periodic 15-minute background sync for connected Google Tasks
+      setInterval(async () => {
+        try {
+          await googleTasks.syncAllGoogleTasks(db);
+        } catch (taskErr) {
+          console.error('[GoogleTasks:Periodic] Error during sync:', taskErr.message);
+        }
+      }, 15 * 60 * 1000);
     } else {
       console.log('Nightly background processing disabled by HOMEGLOW_DISABLE_BACKGROUND_JOBS=1');
     }
