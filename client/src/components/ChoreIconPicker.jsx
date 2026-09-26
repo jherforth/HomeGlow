@@ -1,7 +1,12 @@
-import React from 'react';
-import { Box, Typography, Tooltip } from '@mui/material';
+import React, { useRef } from 'react';
+import { Box, Typography, Tooltip, InputBase } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { CHORE_ICON_GROUPS, findChoreIcon } from '../utils/choreIcons.js';
+import {
+  CHORE_ICON_GROUPS,
+  findChoreIcon,
+  CHORE_ICON_MAX_LENGTH,
+  extractCustomEmoji,
+} from '../utils/choreIcons.js';
 
 // Emoji picker for a chore's icon (issue #141).
 //
@@ -12,6 +17,7 @@ import { CHORE_ICON_GROUPS, findChoreIcon } from '../utils/choreIcons.js';
 // icon, and a chore without one keeps its checkmark on the dashboard.
 const ChoreIconPicker = ({ value, onChange }) => {
   const { t } = useTranslation(['chores', 'common']);
+  const customInputRef = useRef(null);
 
   const cellSx = (selected) => ({
     width: 44,
@@ -51,6 +57,19 @@ const ChoreIconPicker = ({ value, onChange }) => {
   });
 
   const selectedEntry = value ? findChoreIcon(value) : null;
+  const isCustom = Boolean(value && !selectedEntry);
+
+  const handleCustomInputChange = (event) => {
+    const raw = event.target.value;
+    if (!raw) {
+      onChange('');
+      return;
+    }
+    const emoji = extractCustomEmoji(raw);
+    if (emoji) {
+      onChange(emoji);
+    }
+  };
 
   return (
     <Box role="radiogroup" aria-label={t('chores:icons.pickerLabel')}>
@@ -58,16 +77,9 @@ const ChoreIconPicker = ({ value, onChange }) => {
         <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
           {t('chores:icons.pickerLabel')}
         </Typography>
-        {/* An emoji outside the bank (kept from an older version, or typed by
-            hand) still shows here rather than looking unselected. */}
-        {value && !selectedEntry && (
-          <Typography variant="caption" color="text.secondary">
-            {value}
-          </Typography>
-        )}
       </Box>
 
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mb: 1.5 }}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mb: 1.5, alignItems: 'center' }}>
         <Tooltip title={t('chores:icons.none')}>
           <Box
             sx={{
@@ -79,6 +91,60 @@ const ChoreIconPicker = ({ value, onChange }) => {
             {...cellProps(!value, t('chores:icons.none'), () => onChange(''))}
           >
             {t('chores:icons.noneShort')}
+          </Box>
+        </Tooltip>
+
+        <Tooltip title={t('chores:icons.custom')}>
+          <Box
+            sx={{
+              ...cellSx(isCustom),
+              width: 72,
+              cursor: 'text',
+              overflow: 'hidden',
+              px: 0.5,
+              '&:hover': {
+                backgroundColor: isCustom
+                  ? 'rgba(var(--accent-rgb), 0.24)'
+                  : 'rgba(var(--accent-rgb), 0.08)',
+                transform: 'none',
+              },
+              '&:focus-within': {
+                border: '2px solid var(--accent)',
+              },
+            }}
+            role="radio"
+            aria-checked={isCustom}
+            aria-label={t('chores:icons.custom')}
+            tabIndex={-1}
+            onClick={() => customInputRef.current?.focus()}
+          >
+            <InputBase
+              inputRef={customInputRef}
+              value={isCustom ? value : ''}
+              onChange={handleCustomInputChange}
+              placeholder={t('chores:icons.customPlaceholder')}
+              inputProps={{
+                'aria-label': t('chores:icons.custom'),
+                maxLength: CHORE_ICON_MAX_LENGTH,
+              }}
+              sx={{
+                width: '100%',
+                height: '100%',
+                color: 'var(--text)',
+                '& input': {
+                  textAlign: 'center',
+                  fontSize: isCustom ? '1.5rem' : '0.75rem',
+                  lineHeight: 1,
+                  padding: 0,
+                  cursor: 'text',
+                  outline: 'none',
+                },
+                '& input::placeholder': {
+                  opacity: 0.7,
+                  color: 'inherit',
+                },
+              }}
+            />
           </Box>
         </Tooltip>
       </Box>

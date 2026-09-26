@@ -39,7 +39,7 @@ import PinModal from './PinModal';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
 import { fetchPinRemembered, setPinRemembered, shouldPromptForPin } from '../utils/adminPinDevice.js';
-import { shouldShowChoreToday, getTodayDateString, convertDaysToCrontab, getDueDateStatus, formatDueDate, hasOutstandingBonusChore } from '../utils/choreHelpers.js';
+import { shouldShowChoreToday, getTodayDateString, getDueDateStatus, formatDueDate, hasOutstandingBonusChore } from '../utils/choreHelpers.js';
 import { filterVisibleUsers, toggleHiddenUserId, pruneHiddenUserIds } from '../utils/choreUserVisibility.js';
 import { isControlHidden } from '../utils/displayControls.js';
 import { subscribePluginEvents } from '../utils/pluginEventBridge.js';
@@ -49,7 +49,15 @@ import { formatTime } from '../utils/dateUtils.js';
 import PrizeCelebration from './PrizeCelebration.jsx';
 import ChoreCelebration from './ChoreCelebration.jsx';
 import ChoreIconPicker from './ChoreIconPicker.jsx';
+import ChoreScheduleFields from './ChoreScheduleFields.jsx';
 import { shouldPersistSettings } from '../utils/widgetSettingsPersist';
+import {
+  DEFAULT_SCHEDULE_FIELDS,
+  computeCrontab,
+  validateCrontab,
+  updateScheduleFormHelper,
+  isScheduleFormInvalid
+} from '../utils/choreScheduleUtils.js';
 
 // Shared by the initial state and by the snapshot taken when a load returns no
 // stored settings, so "never saved" and "saved the defaults" compare equal.
@@ -58,6 +66,16 @@ const DEFAULT_SOUND_ENABLED = true;
 // Frozen: it is shared by every instance's initial state and by the
 // no-stored-settings snapshot, so an in-place mutation would corrupt both.
 const DEFAULT_HIDDEN_USER_IDS = Object.freeze([]);
+
+const DEFAULT_NEW_CHORE = {
+  user_id: '',
+  user_ids: [],
+  title: '',
+  description: '',
+  clam_value: 0,
+  icon: '',
+  ...DEFAULT_SCHEDULE_FIELDS
+};
 
 const USERS_UPDATED_EVENT = 'homeglow:users-updated';
 
@@ -80,15 +98,8 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
   const [schedules, setSchedules] = useState([]);
   const [history, setHistory] = useState([]);
   const [prizes, setPrizes] = useState([]);
-  const [newChore, setNewChore] = useState({
-    user_id: '',
-    title: '',
-    description: '',
-    assigned_days_of_week: ['monday'],
-    clam_value: 0,
-    icon: '',
-    is_one_time: false
-  });
+  const [newChore, setNewChore] = useState(DEFAULT_NEW_CHORE);
+  const [newChoreCrontabError, setNewChoreCrontabError] = useState(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showPrizesModal, setShowPrizesModal] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -130,7 +141,6 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
   const longPressStartRef = useRef(null);
   const choreMenuOpenedAtRef = useRef(0);
 
-  const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
   // Control Limits (resolved once in app.jsx and handed down). Hidden means NOT
   // RENDERED — never a disabled button and never a PIN prompt offered in place of
@@ -837,7 +847,24 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
     });
   };
 
+  const updateNewChore = (updates) => {
+    setNewChore((prev) => {
+      const { next, crontabError } = updateScheduleFormHelper(prev, updates);
+      setNewChoreCrontabError(crontabError);
+      return next;
+    });
+  };
+
   const saveChore = async () => {
+    const cron = computeCrontab(newChore);
+    const isCalendarMode = !newChore.isOneTime && newChore.scheduleMode === 'calendar';
+    const isAfterCompletionMode = !newChore.isOneTime && newChore.scheduleMode === 'after-completion';
+    const err = (newChore.isOneTime || isCalendarMode || isAfterCompletionMode) ? null : validateCrontab(cron);
+    if (err) {
+      setNewChoreCrontabError(err);
+      return;
+    }
+
     try {
       setIsLoading(true);
 
@@ -849,23 +876,28 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
       });
 
       const choreId = choreResponse.data.id;
-      const crontab = newChore.is_one_time ? null : convertDaysToCrontab(newChore.assigned_days_of_week);
+      const isIntervalSchedule = !newChore.isOneTime && (isAfterCompletionMode || newChore.duration === 'once-completed');
+      const normalizedInterval = isIntervalSchedule
+        ? `${newChore.sleepCount}${newChore.sleepUnit}`
+        : null;
+      const durationValue = !newChore.isOneTime
+        ? (isAfterCompletionMode ? 'once-completed' : newChore.duration)
+        : 'day-of';
+
+      const isMultiCreate = Array.isArray(newChore.user_ids) && newChore.user_ids.length > 0;
 
       await axios.post(`${API_BASE_URL}/api/chore-schedules`, {
         chore_id: choreId,
-        user_id: newChore.user_id || null,
-        crontab: crontab,
-        visible: 1
+        ...(isMultiCreate ? { user_ids: newChore.user_ids } : { user_id: newChore.user_id || null }),
+        crontab: isCalendarMode ? null : (cron || null),
+        duration: durationValue,
+        interval: normalizedInterval,
+        visible: 1,
+        calendar_match: isCalendarMode ? (newChore.calendar_match?.trim() || null) : null
       });
 
-      setNewChore({
-        user_id: '',
-        title: '',
-        description: '',
-        assigned_days_of_week: ['monday'],
-        clam_value: 0,
-        is_one_time: false
-      });
+      setNewChore(DEFAULT_NEW_CHORE);
+      setNewChoreCrontabError(null);
       setShowAddDialog(false);
       await fetchData();
     } catch (error) {
@@ -1063,8 +1095,8 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
             )}
           </Typography>
           {schedule.description && (
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-              {schedule.description}
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }} sx={{ whiteSpace: "pre-line", wordBreak: "break-word" }}>
+              <Box component="span" sx={{ whiteSpace: "pre-line", display: "block" }}>{schedule.description}</Box>
             </Typography>
           )}
         </Box>
@@ -1123,14 +1155,6 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
     );
   };
 
-  const handleDayToggle = (day) => {
-    setNewChore(prev => ({
-      ...prev,
-      assigned_days_of_week: prev.assigned_days_of_week.includes(day)
-        ? prev.assigned_days_of_week.filter(d => d !== day)
-        : [...prev.assigned_days_of_week, day]
-    }));
-  };
 
   if (loading) {
     return (
@@ -1202,7 +1226,11 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
             {!hideAddChore && (
               <Button
                 startIcon={<Add />}
-                onClick={() => setShowAddDialog(true)}
+                onClick={() => {
+                  setNewChore(DEFAULT_NEW_CHORE);
+                  setNewChoreCrontabError(null);
+                  setShowAddDialog(true);
+                }}
                 variant="contained"
                 size="small"
               >
@@ -1339,8 +1367,8 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                           />
                         </Typography>
                         {schedule.description && (
-                          <Typography variant="caption" color="text.secondary">
-                            {schedule.description}
+                          <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "pre-line", wordBreak: "break-word" }}>
+                            <Box component="span" sx={{ whiteSpace: "pre-line", display: "block" }}>{schedule.description}</Box>
                           </Typography>
                         )}
                         <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
@@ -1696,69 +1724,67 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                 onChange={(icon) => setNewChore({ ...newChore, icon })}
               />
             </Box>
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel>{t('chores:add.assignToUser')}</InputLabel>
-              <Select
-                value={newChore.user_id}
-                onChange={(e) => setNewChore({ ...newChore, user_id: e.target.value })}
-              >
-                <MenuItem value={0}>{t('chores:add.bonusChoreUnassigned')}</MenuItem>
-                {users.map(user => (
-                  <MenuItem key={user.id} value={user.id}>
-                    {user.username}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-
-            <Box sx={{ mb: 2 }}>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={newChore.is_one_time}
-                    onChange={(e) => setNewChore({
-                      ...newChore,
-                      is_one_time: e.target.checked,
-                      assigned_days_of_week: e.target.checked ? [] : ['monday']
-                    })}
-                    color="primary"
-                  />
-                }
-                label={t('chores:add.oneTime')}
-              />
+            <Box sx={{ mt: 1, mb: 2 }}>
+              <FormControl fullWidth size="small">
+                <InputLabel id="quick-add-users-label">{t('chores:add.assignTo')}</InputLabel>
+                <Select
+                  labelId="quick-add-users-label"
+                  multiple
+                  value={newChore.user_ids || []}
+                  onChange={(e) => {
+                    const val = typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value;
+                    setNewChore({ ...newChore, user_ids: val });
+                  }}
+                  label={t('chores:add.assignTo')}
+                  renderValue={(selected) => (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {selected.map((uid) => {
+                        const u = users.find(user => user.id === uid);
+                        return <Chip key={uid} size="small" label={u ? u.username : uid} />;
+                      })}
+                    </Box>
+                  )}
+                >
+                  {users.map((u) => (
+                    <MenuItem key={u.id} value={u.id}>
+                      <Checkbox checked={(newChore.user_ids || []).indexOf(u.id) > -1} />
+                      <ListItemText primary={u.username} />
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 0.5 }}>
+                <Button
+                  size="small"
+                  sx={{ fontSize: '0.75rem', py: 0.5 }}
+                  onClick={() => setNewChore({ ...newChore, user_ids: users.map(u => u.id) })}
+                >
+                  {t('chores:add.allUsers')}
+                </Button>
+                <Button
+                  size="small"
+                  sx={{ fontSize: '0.75rem', py: 0.5 }}
+                  onClick={() => setNewChore({ ...newChore, user_ids: [] })}
+                >
+                  {t('chores:add.clearUsers')}
+                </Button>
+              </Box>
             </Box>
 
-            {!newChore.is_one_time && (
-              <Box sx={{ mb: 2 }}>
-                <FormLabel component="legend" sx={{ mb: 1, display: 'block' }}>
-                  {t('chores:add.selectDays')}
-                </FormLabel>
-                <FormGroup row>
-                  {daysOfWeek.map(day => (
-                    <FormControlLabel
-                      key={day}
-                      control={
-                        <Checkbox
-                          checked={newChore.assigned_days_of_week.includes(day)}
-                          onChange={() => handleDayToggle(day)}
-                          color="primary"
-                        />
-                      }
-                      // Label is translated; `day` stays the English key that
-                      // crontab conversion and the API depend on.
-                      label={t(`chores:days.${day}`)}
-                    />
-                  ))}
-                </FormGroup>
-              </Box>
-            )}
+            <Box sx={{ mb: 2 }}>
+              <ChoreScheduleFields
+                form={newChore}
+                onChange={updateNewChore}
+                crontabError={newChoreCrontabError}
+              />
+            </Box>
 
             <TextField
               fullWidth
               type="number"
               label={t('chores:add.clamValue')}
               value={newChore.clam_value}
-              onChange={(e) => setNewChore({ ...newChore, clam_value: parseInt(e.target.value) || 0 })}
+              onChange={(e) => setNewChore({ ...newChore, clam_value: parseInt(e.target.value, 10) || 0 })}
             />
           </DialogContent>
           <DialogActions>
@@ -1766,7 +1792,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
             <Button
               type="submit"
               variant="contained"
-              disabled={!newChore.is_one_time && newChore.assigned_days_of_week.length === 0}
+              disabled={!newChore.title?.trim() || isScheduleFormInvalid(newChore, newChoreCrontabError)}
             >
               {t('chores:widget.addChore')}
             </Button>
@@ -1905,7 +1931,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
             <Typography variant="h6" sx={{ mb: 1 }}>
               {t('chores:visibility.heading')}
             </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }} sx={{ whiteSpace: "pre-line", wordBreak: "break-word" }}>
               {t('chores:visibility.helper')}
             </Typography>
             {users.length === 0 ? (

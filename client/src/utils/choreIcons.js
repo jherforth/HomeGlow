@@ -124,3 +124,36 @@ export const choreIconLabelKey = (emoji) => {
   const entry = findChoreIcon(emoji);
   return entry ? `chores:icons.${entry.key}` : null;
 };
+
+export const CHORE_ICON_MAX_LENGTH = 16;
+
+const EMOJI_REGEX = /^(?:\p{Extended_Pictographic}|\p{Regional_Indicator}{2})/u;
+
+/**
+ * Validate and extract a single emoji from user input.
+ * Strips alphanumeric characters and rejects non-emoji input.
+ * Supports multi-codepoint / ZWJ sequences up to CHORE_ICON_MAX_LENGTH characters.
+ */
+export function extractCustomEmoji(input) {
+  if (!input || typeof input !== 'string') return '';
+  const trimmed = input.trim();
+  if (!trimmed) return '';
+
+  let segments = [];
+  if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+    const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+    segments = Array.from(segmenter.segment(trimmed), (s) => s.segment);
+  } else {
+    const emojiClusterRegex = /(?:\p{Regional_Indicator}{2}|\p{Extended_Pictographic}(?:\uFE0F|\uFE0E|[\u{1F3FB}-\u{1F3FF}]|\u200D|\p{Extended_Pictographic})*)/gu;
+    segments = trimmed.match(emojiClusterRegex) || [];
+  }
+
+  const valid = segments.filter((seg) => {
+    if (!seg || seg.length > CHORE_ICON_MAX_LENGTH) return false;
+    if (/[a-zA-Z0-9]/.test(seg)) return false;
+    return EMOJI_REGEX.test(seg);
+  });
+
+  if (valid.length === 0) return '';
+  return valid[valid.length - 1];
+}
