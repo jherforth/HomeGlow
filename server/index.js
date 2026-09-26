@@ -2331,8 +2331,50 @@ function buildDefaultHomeTab(deviceName) {
 }
 
 function ensureDeviceExists(deviceName) {
-  db.prepare('INSERT OR IGNORE INTO devices (name, updateTime) VALUES (?, CURRENT_TIMESTAMP)').run(deviceName);
-  ensureHomeTabExists(deviceName);
+  const existing = db.prepare('SELECT name FROM devices WHERE name = ?').get(deviceName);
+  if (existing) {
+    ensureHomeTabExists(deviceName);
+    return;
+  }
+
+  // Device is brand-new. Insert it.
+  db.prepare('INSERT INTO devices (name, updateTime) VALUES (?, CURRENT_TIMESTAMP)').run(deviceName);
+
+  // Check if an existing configured device exists to seed tabs and settings from
+  const templateDevice = db.prepare(`
+    SELECT name, device_settings_json
+    FROM devices
+    WHERE name != ? AND EXISTS (SELECT 1 FROM tabs WHERE device_name = devices.name)
+    ORDER BY updateTime DESC
+    LIMIT 1
+  `).get(deviceName);
+
+  if (templateDevice) {
+    try {
+      db.transaction(() => {
+        db.prepare(`
+          INSERT INTO tabs (device_name, label, icon, show_label, number, created_at, config_json)
+          SELECT ?, label, icon, show_label, number, created_at, COALESCE(config_json, '{}')
+          FROM tabs
+          WHERE device_name = ?
+          ORDER BY number ASC
+        `).run(deviceName, templateDevice.name);
+
+        if (templateDevice.device_settings_json) {
+          db.prepare('UPDATE devices SET device_settings_json = ? WHERE name = ?').run(
+            templateDevice.device_settings_json,
+            deviceName
+          );
+        }
+      })();
+      console.log(`Auto-seeded new device ${deviceName} from existing device ${templateDevice.name}`);
+    } catch (err) {
+      console.error(`Failed to auto-seed new device ${deviceName}:`, err);
+      ensureHomeTabExists(deviceName);
+    }
+  } else {
+    ensureHomeTabExists(deviceName);
+  }
 }
 
 function touchDeviceUpdateTime(deviceName) {
@@ -3927,13 +3969,9 @@ fastify.get('/api/devices/:deviceName/tabs', async (request, reply) => {
   }
 
   try {
+    ensureDeviceExists(deviceName);
     const tabs = db.prepare('SELECT * FROM tabs WHERE device_name = ? ORDER BY number ASC').all(deviceName);
     const lastModifiedMs = getDeviceUpdateTimeMs(deviceName);
-    // region #98 - expected to get removed in the future (legacy empty-tabs API fallback)
-    if (tabs.length === 0) {
-      return sendJsonWithConditionalCache(request, reply, [buildDefaultHomeTab(deviceName)], null);
-    }
-    // endRegion #98
     return sendJsonWithConditionalCache(request, reply, tabs, lastModifiedMs);
   } catch (error) {
     console.error('Error fetching tabs:', error);
@@ -4296,11 +4334,7 @@ fastify.patch('/api/devices/:deviceName/widget-assignments/layout', async (reque
     }
 
     const layoutMap = parseTabConfigJson(tab.config_json);
-    const existing = layoutMap[widget_name];
-
-    if (!existing) {
-      return reply.status(404).send({ error: 'Assignment not found' });
-    }
+    const existing = layoutMap[widget_name] || {};
 
     const normalizedLayout = normalizeLayoutFields({
       layout_x: layout_x ?? existing.layout_x,
@@ -4367,11 +4401,7 @@ fastify.patch('/api/devices/:deviceName/widget-assignments/layout/bulk', async (
         continue;
       }
 
-      if (!(widgetName in tabEntry.layoutMap)) {
-        continue;
-      }
-
-      const existingLayout = tabEntry.layoutMap[widgetName];
+      const existingLayout = tabEntry.layoutMap[widgetName] || {};
       tabEntry.layoutMap[widgetName] = {
         ...existingLayout,
         ...normalizeLayoutFields({
