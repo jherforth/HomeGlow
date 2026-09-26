@@ -631,7 +631,15 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                   <TableCell data-label={t('chores:schedules.nextOccurrence')}>
                     <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
                       {s.calendar_match ? (
-                      <Chip label={`📅 On: "${s.calendar_match}"`} size="small" color={s.calendar_matched_today ? "success" : "default"} variant="outlined" />
+                      <Chip
+                        label={`📅 On: "${s.calendar_match}" ${s.calendar_matched_today ? '✓' : '✗'}`}
+                        size="small"
+                        color={s.calendar_matched_today ? "success" : "default"}
+                        variant="outlined"
+                        title={s.calendar_matched_today
+                          ? 'Matches a calendar event today'
+                          : 'No calendar event matches this keyword today — check the spelling against the event title'}
+                      />
                     ) : getNextOccurrence(s.crontab, s)}
                     </Typography>
                   </TableCell>
