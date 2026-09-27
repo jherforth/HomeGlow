@@ -3523,7 +3523,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                     </Button>
                   </Grid>
                   <Grid size={12}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                       {newUser.profile_picture ? (
                         <img
                           src={`${API_BASE_URL}/Uploads/users/${newUser.profile_picture}`}
@@ -3536,7 +3536,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                       <Button size="small" variant="outlined" onClick={() => setAvatarPicker({ open: true, userId: null })}>
                         {t('admin:users.chooseAvatar')}
                       </Button>
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" color="text.secondary" sx={{ flexBasis: { xs: '100%', sm: 'auto' } }}>
                         {t('admin:users.avatarHelp')}
                       </Typography>
                     </Box>
