@@ -2131,7 +2131,21 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
         variant="scrollable"
         scrollButtons="auto"
         allowScrollButtonsMobile
-        sx={{ mb: 3 }}
+        sx={{
+          mb: 3,
+          // Compact tabs on mobile so more fit on screen; keep 44px+ touch targets.
+          '@media (max-width:599.95px)': {
+            '& .MuiTab-root': {
+              minWidth: 0,
+              px: 1.5,
+              fontSize: '0.75rem',
+              minHeight: 48,
+            },
+            '& .MuiTabs-scrollButtons': {
+              width: 32,
+            },
+          },
+        }}
       >
         {adminTabs.map((tab, index) => (
           <Tab key={tab} label={tab} />
@@ -2150,6 +2164,19 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                 variant="scrollable"
                 scrollButtons="auto"
                 allowScrollButtonsMobile
+                sx={{
+                  '@media (max-width:599.95px)': {
+                    '& .MuiTab-root': {
+                      minWidth: 0,
+                      px: 1.25,
+                      fontSize: '0.75rem',
+                      minHeight: 44,
+                    },
+                    '& .MuiTabs-scrollButtons': {
+                      width: 28,
+                    },
+                  },
+                }}
               >
                 <Tab label={t('admin:subTabs.widgets')} />
                 <Tab label={t('admin:subTabs.plugins')} />
@@ -3727,6 +3754,19 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                 variant="scrollable"
                 scrollButtons="auto"
                 allowScrollButtonsMobile
+                sx={{
+                  '@media (max-width:599.95px)': {
+                    '& .MuiTab-root': {
+                      minWidth: 0,
+                      px: 1.25,
+                      fontSize: '0.75rem',
+                      minHeight: 44,
+                    },
+                    '& .MuiTabs-scrollButtons': {
+                      width: 28,
+                    },
+                  },
+                }}
               >
                 <Tab label={t('admin:users.chores')} />
                 <Tab label={t('admin:chores.history')} />
