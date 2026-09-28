@@ -1,6 +1,7 @@
 // CSS "stacked card" pattern for MUI <Table>: below the mobile cutoff the
-// header row is hidden and each body row renders as a bordered card whose
-// cells show their column name via the cell's data-label attribute.
+// header row is hidden and each body row renders as a compact bordered card.
+// Each labeled cell stacks its column name as a small caption ABOVE the value
+// (full-width, wrapping) — no side-by-side squeezing, no horizontal scroll.
 // Cells without a data-label (e.g. avatars, action buttons) render full-width
 // with their content wrapping naturally instead of being space-between'd.
 export const stackableTableSx = {
@@ -8,34 +9,46 @@ export const stackableTableSx = {
     '& thead': { display: 'none' },
     '& tr': {
       display: 'block',
-      mb: 1.5,
+      mb: 1,
       border: '1px solid var(--card-border)',
       borderRadius: 2,
-      p: 1,
+      px: 1.25,
+      py: 0.5,
     },
     '& td': {
       display: 'flex',
-      alignItems: 'center',
-      gap: 1.5,
       border: 0,
-      py: 0.75,
-      // Cells with a column label: label pinned left, value pushed right.
+      px: 0,
+      py: 0.5,
+      minWidth: 0,
+      // Cells with a column label: caption above, value below at full width.
       '&[data-label]': {
-        justifyContent: 'space-between',
+        flexDirection: 'column',
+        alignItems: 'flex-start',
+        gap: 0.25,
         '&::before': {
           content: 'attr(data-label)',
-          fontWeight: 600,
+          fontSize: '0.68rem',
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
           color: 'var(--text-secondary)',
-          marginRight: '12px',
-          flexShrink: 0,
         },
       },
       // Cells without a label (avatars, action buttons): wrap naturally,
       // left-aligned, so grouped controls don't get stretched apart.
       '&:not([data-label])': {
+        flexDirection: 'row',
         justifyContent: 'flex-start',
+        alignItems: 'center',
         flexWrap: 'wrap',
-        rowGap: 1,
+        gap: 1,
+        rowGap: 0.75,
+      },
+      // Values wrap and use the full card width — never truncate or scroll.
+      '& > *': {
+        minWidth: 0,
+        maxWidth: '100%',
       },
     },
   },
