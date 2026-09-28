@@ -91,7 +91,7 @@ import useFetchTabs from '../hooks/useFetchTabs.js';
 import useIsMobile from '../hooks/useIsMobile.js';
 import { syncWidgetAssignments } from '../utils/assignmentSync.js';
 import { normalizeWidgetSettings as normalizeSharedWidgetSettings } from '../utils/widgetSettings.js';
-import { stackableTableSx } from '../utils/responsiveTable.js';
+import { stackableTableSx, stackableTableContainerSx } from '../utils/responsiveTable.js';
 import {
   INTERFACE_COLORS_STORAGE_KEY,
   SCREENSAVER_SETTINGS_STORAGE_KEY,
@@ -2750,7 +2750,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                   </Button>
                 </Box>
 
-                <TableContainer component={Paper}>
+                <TableContainer component={Paper} sx={stackableTableContainerSx}>
                   <Table sx={stackableTableSx}>
                     <TableHead>
                       <TableRow>
@@ -2885,7 +2885,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                   </Box>
                 </Box>
 
-                <TableContainer component={Paper}>
+                <TableContainer component={Paper} sx={stackableTableContainerSx}>
                   <Table sx={stackableTableSx}>
                     <TableHead>
                       <TableRow>
@@ -3545,7 +3545,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
               </Box>
             </AdminFormSection>
 
-            <TableContainer component={Paper}>
+            <TableContainer component={Paper} sx={stackableTableContainerSx}>
               <Table sx={stackableTableSx}>
                 <TableHead>
                   <TableRow>
@@ -4576,7 +4576,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
               {t('admin:chores.noChoresForUser')}
             </Typography>
           ) : (
-            <TableContainer component={Paper} sx={{ mt: 1 }}>
+            <TableContainer component={Paper} sx={{ mt: 1, ...stackableTableContainerSx }}>
               <Table sx={stackableTableSx}>
                 <TableHead>
                   <TableRow>
