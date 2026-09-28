@@ -494,10 +494,17 @@ const WidgetContainer = ({
   // so it is correct even mid-transition. Once the rebuild has landed for this
   // tab, live state wins so a drag in progress is not thrown away.
   const gridLayout = useMemo(() => {
-    const built = buildLayout(widgets, gridCols, locked);
-    if (layoutTabRef.current !== activeTab) return built;
-    return built.map((item) => layout.find((l) => l.i === item.i) || item);
-  }, [widgets, layout, gridCols, locked, activeTab]);
+    // Build with locked=true so positions come from savedLayout/defaults;
+    // the `static` flag is overridden below from the live `locked` value.
+    // `locked` is intentionally NOT a dependency — toggling edit mode must
+    // not rebuild positions, only flip interactivity.
+    const built = buildLayout(widgets, gridCols, true);
+    const merged = layoutTabRef.current !== activeTab
+      ? built
+      : built.map((item) => layout.find((l) => l.i === item.i) || item);
+    // Apply the live locked state to every item without moving them.
+    return merged.map((item) => ({ ...item, static: locked }));
+  }, [widgets, layout, gridCols, activeTab]);
 
   const resizeButtonBaseStyle = {
     fontSize: '1.5rem',
