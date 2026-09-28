@@ -187,7 +187,17 @@ const WidgetContainer = ({
 
     setIsLockTransitioning(true);
 
-    const updatedLayout = layoutRef.current.map(item => ({
+    // Sync layout with widgets prop: preserve existing positions, add any
+    // missing widgets (from savedLayout or defaults), then flip static flag.
+    // This ensures entering edit mode shows exactly what's displayed in view mode.
+    const currentIds = new Set(layoutRef.current.map(item => item.i));
+    const missingWidgets = widgets.filter(w => !currentIds.has(w.id));
+    let syncedLayout = [...layoutRef.current];
+    if (missingWidgets.length > 0) {
+      const built = buildLayout(missingWidgets, gridCols, locked);
+      syncedLayout = [...syncedLayout, ...built];
+    }
+    const updatedLayout = syncedLayout.map(item => ({
       ...item,
       static: locked
     }));
