@@ -5,11 +5,16 @@ import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { usePageVisibility } from '../hooks/useScreenActivity.js';
 import ScreensaverOverlay from './ScreensaverOverlay.jsx';
+import PhotoCollage from './PhotoCollage.jsx';
+import { MIN_COLLAGE_PHOTOS } from '../utils/photoCollage.js';
 
-const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange, keepScreenAwake, overlay }) => {
+const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange, keepScreenAwake, overlay, photoLayout = 'fit' }) => {
   const pageVisible = usePageVisibility();
   const [photos, setPhotos] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  // Counts slideshow ticks without wrapping; the collage swaps a tile on each.
+  const [step, setStep] = useState(0);
+  const [collageUnavailable, setCollageUnavailable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [currentTabIndex, setCurrentTabIndex] = useState(0);
   const exitTimeoutRef = useRef(null);
@@ -47,6 +52,7 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange, keepS
     const interval = setInterval(() => {
       if (mode === 'photos' && photos.length > 0) {
         setCurrentIndex(prev => (prev + 1) % photos.length);
+        setStep(prev => prev + 1);
       } else if (mode === 'tabs' && tabs.length > 0) {
         setCurrentTabIndex(prev => {
           const nextIndex = (prev + 1) % tabs.length;
@@ -203,6 +209,11 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange, keepS
 
   const currentPhoto = photos[currentIndex];
 
+  // Too few photos for a collage falls back to the ambient single photo, which
+  // still fills the bars.
+  const collage = photoLayout === 'collage' && !collageUnavailable && photos.length >= MIN_COLLAGE_PHOTOS;
+  const ambient = photoLayout === 'ambient' || (photoLayout === 'collage' && !collage);
+
   return (
     <Box
       sx={{
@@ -216,6 +227,7 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange, keepS
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
+        overflow: 'hidden',
         cursor: 'none',
         '&:hover .screensaver-controls': {
           opacity: 1,
@@ -223,22 +235,58 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange, keepS
       }}
       onClick={handleExit}
     >
-      <Box
-        component="img"
-        src={`${API_BASE_URL}${currentPhoto?.url}`}
-        alt="Slideshow"
-        sx={{
-          maxWidth: '100%',
-          maxHeight: '100%',
-          objectFit: 'contain',
-          animation: 'sssFadeIn 1s ease-in-out',
-          '@keyframes sssFadeIn': {
-            '0%': { opacity: 0 },
-            '100%': { opacity: 1 },
-          },
-        }}
-        key={currentIndex}
-      />
+      {collage ? (
+        <PhotoCollage
+          photos={photos}
+          step={step}
+          onUnavailable={() => setCollageUnavailable(true)}
+        />
+      ) : (
+        <>
+          {/* Ambient: the same photo, blurred and dimmed, fills the bars the
+              contained photo leaves. The thumbnail is plenty for something
+              this blurred, and saves a second full download. */}
+          {ambient && (
+            <Box
+              component="img"
+              key={`ambient-${currentIndex}`}
+              src={`${API_BASE_URL}${currentPhoto?.thumbnail || currentPhoto?.url}`}
+              alt=""
+              aria-hidden
+              sx={{
+                position: 'absolute',
+                inset: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                filter: 'blur(40px) brightness(0.5) saturate(1.15)',
+                // Blur fades toward transparent at the edges; overscan hides it.
+                transform: 'scale(1.2)',
+                animation: 'sssFadeIn 1s ease-in-out',
+              }}
+            />
+          )}
+          <Box
+            component="img"
+            src={`${API_BASE_URL}${currentPhoto?.url}`}
+            alt="Slideshow"
+            sx={{
+              position: 'relative',
+              zIndex: 1,
+              maxWidth: '100%',
+              maxHeight: '100%',
+              objectFit: 'contain',
+              ...(ambient ? { boxShadow: '0 0 60px 10px rgba(0, 0, 0, 0.45)' } : {}),
+              animation: 'sssFadeIn 1s ease-in-out',
+              '@keyframes sssFadeIn': {
+                '0%': { opacity: 0 },
+                '100%': { opacity: 1 },
+              },
+            }}
+            key={currentIndex}
+          />
+        </>
+      )}
 
       {/* Calendar and weather in the corner (issue #190). Pointer events pass
           straight through, so a tap anywhere still exits. */}
@@ -248,7 +296,7 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange, keepS
           calendarDays={overlay.calendarDays}
           showWeather={!!overlay.weather}
           tabs={tabs}
-          driftStep={currentIndex}
+          driftStep={collage ? step : currentIndex}
         />
       )}
 
@@ -287,63 +335,68 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange, keepS
           <Close />
         </IconButton>
 
-        <IconButton
-          onClick={(e) => {
-            e.stopPropagation();
-            setCurrentIndex(prev => (prev - 1 + photos.length) % photos.length);
-          }}
-          sx={{
-            position: 'absolute',
-            left: 20,
-            top: '50%',
-            transform: 'translateY(-50%)',
-            color: 'white',
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            pointerEvents: 'auto',
-            '&:hover': {
-              backgroundColor: 'rgba(0, 0, 0, 0.7)',
-            },
-          }}
-        >
-          <ChevronLeft sx={{ fontSize: 40 }} />
-        </IconButton>
+        {/* Stepping one photo back or forward means nothing on a wall of them. */}
+        {!collage && (
+          <>
+            <IconButton
+              onClick={(e) => {
+                e.stopPropagation();
+                setCurrentIndex(prev => (prev - 1 + photos.length) % photos.length);
+              }}
+              sx={{
+                position: 'absolute',
+                left: 20,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: 'white',
+                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                pointerEvents: 'auto',
+                '&:hover': {
+                  backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                },
+              }}
+            >
+              <ChevronLeft sx={{ fontSize: 40 }} />
+            </IconButton>
 
-        <IconButton
-          onClick={(e) => {
-            e.stopPropagation();
-            setCurrentIndex(prev => (prev + 1) % photos.length);
-          }}
-          sx={{
-            position: 'absolute',
-            right: 20,
-            top: '50%',
-            transform: 'translateY(-50%)',
-            color: 'white',
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            pointerEvents: 'auto',
-            '&:hover': {
-              backgroundColor: 'rgba(0, 0, 0, 0.7)',
-            },
-          }}
-        >
-          <ChevronRight sx={{ fontSize: 40 }} />
-        </IconButton>
+            <IconButton
+              onClick={(e) => {
+                e.stopPropagation();
+                setCurrentIndex(prev => (prev + 1) % photos.length);
+              }}
+              sx={{
+                position: 'absolute',
+                right: 20,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: 'white',
+                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                pointerEvents: 'auto',
+                '&:hover': {
+                  backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                },
+              }}
+            >
+              <ChevronRight sx={{ fontSize: 40 }} />
+            </IconButton>
 
-        <Typography
-          sx={{
-            position: 'absolute',
-            bottom: 20,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            color: 'white',
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            px: 2,
-            py: 1,
-            borderRadius: 1,
-          }}
-        >
-          {currentIndex + 1} / {photos.length}
-        </Typography>
+            <Typography
+              sx={{
+                position: 'absolute',
+                bottom: 20,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                color: 'white',
+                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                px: 2,
+                py: 1,
+                borderRadius: 1,
+              }}
+            >
+              {currentIndex + 1} / {photos.length}
+            </Typography>
+          </>
+        )}
       </Box>
     </Box>
   );

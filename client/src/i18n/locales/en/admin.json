@@ -231,7 +231,16 @@
     "overlayDaysPlus_one": "Today and the next day",
     "overlayDaysPlus_other": "Today and the next {{count}} days",
     "overlayWeather": "Current weather",
-    "overlayWeatherHelp": "Uses the location and units from your weather widget."
+    "overlayWeatherHelp": "Uses the location and units from your weather widget.",
+    "layoutHeading": "Photo layout",
+    "layout": {
+      "fit": "Fit",
+      "fitHelp": "One photo at a time, shown whole on black.",
+      "ambient": "Ambient",
+      "ambientHelp": "One photo at a time, with a soft blurred copy of it filling the space around it.",
+      "collage": "Collage",
+      "collageHelp": "Several photos tiled to fill the screen, matched to spaces of their own shape. One photo changes each interval, and the arrangement changes every few rounds. Needs at least 3 photos."
+    }
   },
   "vacation": {
     "heading": "Vacation Mode",

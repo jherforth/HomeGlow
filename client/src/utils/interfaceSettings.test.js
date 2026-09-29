@@ -164,3 +164,18 @@ describe('normalizeScreensaverSettings — photo overlay (issue #190)', () => {
         expect(settings.keepScreenAwake).toBe(false);
     });
 });
+
+describe('normalizeScreensaverSettings — photo layout', () => {
+    it('defaults to fit, the original single-photo look', () => {
+        expect(DEFAULT_SCREENSAVER_SETTINGS.photoLayout).toBe('fit');
+        expect(normalizeScreensaverSettings({ mode: 'photos' }).photoLayout).toBe('fit');
+    });
+
+    it('keeps a known layout and discards anything else', () => {
+        expect(normalizeScreensaverSettings({ photoLayout: 'ambient' }).photoLayout).toBe('ambient');
+        expect(normalizeScreensaverSettings({ photoLayout: 'collage' }).photoLayout).toBe('collage');
+        for (const value of ['mosaic', '', null, 3, 'COLLAGE']) {
+            expect(normalizeScreensaverSettings({ photoLayout: value }).photoLayout).toBe('fit');
+        }
+    });
+});
