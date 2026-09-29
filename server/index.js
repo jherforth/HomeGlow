@@ -5602,22 +5602,80 @@ fastify.post('/api/photo-sources/:id/test', async (request, reply) => {
     }
 
     if (source.type === 'Immich') {
+      // Checked before the request rather than left to the catch-all below: a
+      // missing URL threw `Cannot read properties of null (reading 'replace')`
+      // and surfaced as a generic connection failure, which sends people
+      // checking their network for a field they never filled in.
+      if (!source.url) {
+        return reply.status(400).send({
+          success: false,
+          error: 'No Immich address saved for this source. Enter the server address, save, then test.',
+        });
+      }
+
       const decryptedApiKey = decryptPassword(source.api_key);
+      if (!decryptedApiKey) {
+        // decryptPassword returns null both when nothing is stored and when a
+        // stored value cannot be read. Telling those apart matters: the second
+        // is not fixed by re-checking the key in Immich.
+        return reply.status(400).send({
+          success: false,
+          error: source.api_key
+            ? 'The saved API key could not be read. Paste the key again and save.'
+            : 'No API key saved for this source. Paste an Immich API key and save, then test.',
+        });
+      }
+
       const baseUrl = source.url.replace(/\/+$/, '');
       const apiBase = baseUrl.includes('/api') ? baseUrl : `${baseUrl}/api`;
+      const immichHeaders = {
+        'x-api-key': decryptedApiKey,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      };
       console.log(`Testing Immich connection to: ${apiBase}/search/random`);
       const response = await axios.post(`${apiBase}/search/random`,
         { size: 1 },
-        {
-          headers: {
-            'x-api-key': decryptedApiKey,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          timeout: 10000
-        }
+        { headers: immichHeaders, timeout: 10000 }
       );
-      return { success: true, assetCount: response.data.length || 0, message: `Immich connection successful (${response.data.length || 0} assets found)` };
+      const assetCount = response.data.length || 0;
+
+      // The widget does not call /search/random when an album is set — it
+      // queries that album. Testing only the random endpoint reported success
+      // for a source whose album id was wrong, and the photos still never
+      // appeared. Exercise the same call the widget will make.
+      if (source.album_id) {
+        let albumTotal;
+        try {
+          const albumResponse = await axios.post(`${apiBase}/search/metadata`,
+            { albumIds: [source.album_id], page: 1, size: 1 },
+            { headers: immichHeaders, timeout: 10000 }
+          );
+          const bucket = albumResponse.data?.assets || {};
+          albumTotal = typeof bucket.total === 'number' ? bucket.total : (bucket.items || []).length;
+        } catch (albumError) {
+          return reply.status(400).send({
+            success: false,
+            error: 'Connected to Immich, but looking up that album failed. Check the album id.',
+            details: albumError.response?.data?.message || albumError.message,
+          });
+        }
+
+        if (!albumTotal) {
+          return reply.status(400).send({
+            success: false,
+            error: 'Connected to Immich, but that album id matched no photos. Check the album id, or clear it to use the whole library.',
+          });
+        }
+
+        return {
+          success: true,
+          assetCount: albumTotal,
+          message: `Immich connection successful (album has ${albumTotal} photo${albumTotal === 1 ? '' : 's'})`,
+        };
+      }
+
+      return { success: true, assetCount, message: `Immich connection successful (${assetCount} assets found)` };
     } else if (source.type === 'GooglePhotos') {
       const account = googleConnection.getConnectedAccount(db);
       if (!account) {
