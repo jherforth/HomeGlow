@@ -222,7 +222,16 @@
     "tabInterval": "Intervalo entre pestañas",
     "keepScreenAwake": "Mantener la pantalla encendida",
     "keepScreenAwakeHelp": "Si está activo, el salvapantallas impide que la pantalla se apague. Desactívalo en un quiosco de pared para que la gestión de energía del dispositivo pueda atenuar y apagar la pantalla mientras el salvapantallas esté en marcha.",
-    "save": "Guardar los ajustes del salvapantallas"
+    "save": "Guardar los ajustes del salvapantallas",
+    "overlayHeading": "Mostrar sobre las fotos",
+    "overlayHelp": "Muestra un poco de tu día sobre la presentación, en una esquina, con texto blanco sencillo.",
+    "overlayCalendar": "Agenda del calendario",
+    "overlayDays": "Días a mostrar",
+    "overlayDaysToday": "Solo hoy",
+    "overlayDaysPlus_one": "Hoy y el día siguiente",
+    "overlayDaysPlus_other": "Hoy y los {{count}} días siguientes",
+    "overlayWeather": "Clima actual",
+    "overlayWeatherHelp": "Usa la ubicación y las unidades de tu widget del clima."
   },
   "vacation": {
     "heading": "Modo vacaciones",

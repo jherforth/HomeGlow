@@ -46,5 +46,13 @@
     "helper": "Applies to this display only. Other devices keep their own language.",
     "householdDefault": "Household default",
     "householdDefaultHelper": "New displays start in this language until they choose their own."
+  },
+  "screensaverOverlay": {
+    "today": "Today",
+    "tomorrow": "Tomorrow",
+    "continued": "cont.",
+    "more_one": "+{{count}} more",
+    "more_other": "+{{count}} more",
+    "freeDay": "Nothing scheduled"
   }
 }

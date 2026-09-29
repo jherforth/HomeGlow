@@ -46,5 +46,13 @@
     "helper": "Se aplica solo a esta pantalla. Otros dispositivos mantienen su propio idioma.",
     "householdDefault": "Idioma predeterminado del hogar",
     "householdDefaultHelper": "Las pantallas nuevas empiezan en este idioma hasta que elijan el suyo."
+  },
+  "screensaverOverlay": {
+    "today": "Hoy",
+    "tomorrow": "Mañana",
+    "continued": "cont.",
+    "more_one": "+{{count}} más",
+    "more_other": "+{{count}} más",
+    "freeDay": "Nada programado"
   }
 }

@@ -24,6 +24,11 @@ export const DEFAULT_SCREENSAVER_SETTINGS = {
   timeout: 5,
   slideshowInterval: 10,
   keepScreenAwake: true,
+  // Corner overlay on the photo slideshow (issue #190). Off by default so an
+  // existing display looks exactly as it did.
+  overlayCalendar: false,
+  overlayCalendarDays: 1,
+  overlayWeather: false,
 };
 
 export const DEFAULT_AUTO_DARK_MODE_SETTINGS = {
@@ -83,10 +88,22 @@ export const normalizeInterfaceColors = (raw) => ({
   ...(raw && typeof raw === 'object' ? raw : {}),
 });
 
-export const normalizeScreensaverSettings = (raw) => ({
-  ...DEFAULT_SCREENSAVER_SETTINGS,
-  ...(raw && typeof raw === 'object' ? raw : {}),
-});
+export const normalizeScreensaverSettings = (raw) => {
+  const merged = {
+    ...DEFAULT_SCREENSAVER_SETTINGS,
+    ...(raw && typeof raw === 'object' ? raw : {}),
+  };
+  // The overlay fields are read straight into render decisions, so a stray
+  // "true" or an out-of-range day count from an older or hand-edited blob is
+  // coerced here rather than trusted downstream.
+  const days = Math.round(Number(merged.overlayCalendarDays));
+  return {
+    ...merged,
+    overlayCalendar: merged.overlayCalendar === true,
+    overlayWeather: merged.overlayWeather === true,
+    overlayCalendarDays: Number.isFinite(days) ? Math.min(7, Math.max(1, days)) : 1,
+  };
+};
 
 export const normalizeAutoDarkModeSettings = (raw) => {
   if (!raw || typeof raw !== 'object') {

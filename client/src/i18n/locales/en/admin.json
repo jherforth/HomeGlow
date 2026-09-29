@@ -222,7 +222,16 @@
     "tabInterval": "Tab Cycle Interval",
     "keepScreenAwake": "Keep screen awake",
     "keepScreenAwakeHelp": "When on, the screensaver prevents the screen from sleeping. Turn off on a wall kiosk so the device's own power management can dim and sleep the display while the screensaver runs.",
-    "save": "Save Screensaver Settings"
+    "save": "Save Screensaver Settings",
+    "overlayHeading": "Show on photos",
+    "overlayHelp": "Draw a little of your day over the slideshow, in the corner, in plain white text.",
+    "overlayCalendar": "Calendar agenda",
+    "overlayDays": "Days to show",
+    "overlayDaysToday": "Today only",
+    "overlayDaysPlus_one": "Today and the next day",
+    "overlayDaysPlus_other": "Today and the next {{count}} days",
+    "overlayWeather": "Current weather",
+    "overlayWeatherHelp": "Uses the location and units from your weather widget."
   },
   "vacation": {
     "heading": "Vacation Mode",

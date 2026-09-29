@@ -3157,6 +3157,63 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                 />
               )}
 
+              {/* Corner overlay (issue #190). Photo mode only: in tab mode the
+                  dashboard itself is on screen, so there is nothing to overlay. */}
+              {screensaverSettings.mode === 'photos' && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 0.5, fontWeight: 'bold' }}>
+                    {t('admin:screensaver.overlayHeading')}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                    {t('admin:screensaver.overlayHelp')}
+                  </Typography>
+
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={screensaverSettings.overlayCalendar === true}
+                        onChange={(e) => setScreensaverSettings(prev => ({ ...prev, overlayCalendar: e.target.checked }))}
+                      />
+                    }
+                    label={t('admin:screensaver.overlayCalendar')}
+                  />
+                  {screensaverSettings.overlayCalendar === true && (
+                    <FormControl size="small" sx={{ display: 'flex', ml: 6, mt: 1, mb: 1.5, maxWidth: 320 }}>
+                      <InputLabel id="screensaver-overlay-days-label">{t('admin:screensaver.overlayDays')}</InputLabel>
+                      <Select
+                        labelId="screensaver-overlay-days-label"
+                        value={screensaverSettings.overlayCalendarDays || 1}
+                        label={t('admin:screensaver.overlayDays')}
+                        onChange={(e) => setScreensaverSettings(prev => ({ ...prev, overlayCalendarDays: Number(e.target.value) }))}
+                      >
+                        {[1, 2, 3, 4, 5, 6, 7].map((days) => (
+                          <MenuItem key={days} value={days}>
+                            {days === 1
+                              ? t('admin:screensaver.overlayDaysToday')
+                              : t('admin:screensaver.overlayDaysPlus', { count: days - 1 })}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  )}
+
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={screensaverSettings.overlayWeather === true}
+                        onChange={(e) => setScreensaverSettings(prev => ({ ...prev, overlayWeather: e.target.checked }))}
+                      />
+                    }
+                    label={t('admin:screensaver.overlayWeather')}
+                  />
+                  {screensaverSettings.overlayWeather === true && (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 6 }}>
+                      {t('admin:screensaver.overlayWeatherHelp')}
+                    </Typography>
+                  )}
+                </Box>
+              )}
+
               {screensaverSettings.mode === 'tabs' && (
                 <ScreensaverIntervalSlider
                   label={t('admin:screensaver.tabInterval')}
