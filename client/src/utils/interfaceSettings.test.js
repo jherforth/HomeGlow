@@ -14,6 +14,8 @@ import {
     normalizeVacationModeSettings,
     readLocalVacationModeSettings,
     isVacationModeActiveToday,
+    normalizeScreensaverSettings,
+    DEFAULT_SCREENSAVER_SETTINGS,
 } from './interfaceSettings.js';
 
 describe('normalizeVacationModeSettings', () => {
@@ -127,5 +129,38 @@ describe('applyInterfaceColors', () => {
         applyInterfaceColors(root, { primary: '#f5f5f5', secondary: '#38bdf8', accent: 'hotpink' });
         expect(root.vars.get('--accent')).toBe('hotpink');
         expect(root.vars.has('--accent-rgb')).toBe(false);
+    });
+});
+
+describe('normalizeScreensaverSettings — photo overlay (issue #190)', () => {
+    it('defaults the overlay off, so an existing display looks exactly as it did', () => {
+        const settings = normalizeScreensaverSettings({ enabled: true, mode: 'photos' });
+        expect(settings.overlayCalendar).toBe(false);
+        expect(settings.overlayWeather).toBe(false);
+        expect(settings.overlayCalendarDays).toBe(1);
+        expect(DEFAULT_SCREENSAVER_SETTINGS.overlayCalendar).toBe(false);
+    });
+
+    it('accepts only a literal true for the toggles', () => {
+        for (const value of ['true', 1, 'yes', {}]) {
+            const settings = normalizeScreensaverSettings({ overlayCalendar: value, overlayWeather: value });
+            expect(settings.overlayCalendar).toBe(false);
+            expect(settings.overlayWeather).toBe(false);
+        }
+        expect(normalizeScreensaverSettings({ overlayWeather: true }).overlayWeather).toBe(true);
+    });
+
+    it('clamps the day window to today through a full week', () => {
+        expect(normalizeScreensaverSettings({ overlayCalendarDays: 0 }).overlayCalendarDays).toBe(1);
+        expect(normalizeScreensaverSettings({ overlayCalendarDays: 12 }).overlayCalendarDays).toBe(7);
+        expect(normalizeScreensaverSettings({ overlayCalendarDays: '4' }).overlayCalendarDays).toBe(4);
+        expect(normalizeScreensaverSettings({ overlayCalendarDays: 'abc' }).overlayCalendarDays).toBe(1);
+    });
+
+    it('leaves the existing fields untouched', () => {
+        const settings = normalizeScreensaverSettings({ timeout: 12, slideshowInterval: 30, keepScreenAwake: false });
+        expect(settings.timeout).toBe(12);
+        expect(settings.slideshowInterval).toBe(30);
+        expect(settings.keepScreenAwake).toBe(false);
     });
 });

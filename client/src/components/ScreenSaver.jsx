@@ -4,8 +4,9 @@ import { Close, ChevronLeft, ChevronRight } from '@mui/icons-material';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { usePageVisibility } from '../hooks/useScreenActivity.js';
+import ScreensaverOverlay from './ScreensaverOverlay.jsx';
 
-const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange, keepScreenAwake }) => {
+const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange, keepScreenAwake, overlay }) => {
   const pageVisible = usePageVisibility();
   const [photos, setPhotos] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -239,6 +240,18 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange, keepS
         key={currentIndex}
       />
 
+      {/* Calendar and weather in the corner (issue #190). Pointer events pass
+          straight through, so a tap anywhere still exits. */}
+      {(overlay?.calendar || overlay?.weather) && (
+        <ScreensaverOverlay
+          showCalendar={!!overlay.calendar}
+          calendarDays={overlay.calendarDays}
+          showWeather={!!overlay.weather}
+          tabs={tabs}
+          driftStep={currentIndex}
+        />
+      )}
+
       <Box
         className="screensaver-controls"
         sx={{
@@ -250,6 +263,8 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange, keepS
           opacity: 0,
           transition: 'opacity 0.3s ease',
           pointerEvents: 'none',
+          // Above the overlay, so the hover controls are never drawn under it.
+          zIndex: 3,
         }}
       >
         <IconButton

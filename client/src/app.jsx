@@ -1332,6 +1332,11 @@ const App = () => {
               onExit={handleExitScreensaver}
               onTabChange={handleScreensaverTabChange}
               keepScreenAwake={screensaverSettings.keepScreenAwake}
+              overlay={{
+                calendar: screensaverSettings.overlayCalendar,
+                calendarDays: screensaverSettings.overlayCalendarDays,
+                weather: screensaverSettings.overlayWeather,
+              }}
             />
           )}
         </Suspense>
