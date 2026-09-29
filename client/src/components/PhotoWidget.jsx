@@ -214,7 +214,15 @@ const PhotoWidget = ({ refreshNonce = 0, isActive = true, hiddenControls = [] })
         const response = await axios.post(`${API_BASE_URL}/api/photo-sources/${editingSource.id}/test`);
         setTestResult({ success: true, message: response.data.message });
       } catch (error) {
-        setTestResult({ success: false, message: error.response?.data?.error || 'Connection failed' });
+        // The server sends the actionable half in `details` — the Immich status,
+        // the DNS failure, the refused port. Showing only `error` left people
+        // with 'Failed to connect to photo source' and nothing to act on.
+        const data = error.response?.data;
+        const detail = data?.details ? ` (${data.details})` : '';
+        setTestResult({
+          success: false,
+          message: (data?.error || 'Connection failed') + detail,
+        });
       } finally {
         setTestingConnection(false);
       }

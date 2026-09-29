@@ -861,3 +861,39 @@ test('chore history reports created_at as an explicit UTC instant', async () => 
         `created_at ${row.created_at} is not close to now`
     );
 });
+
+// Testing an Immich source used to reach the network before noticing that the
+// fields it needs were never saved. A missing URL threw inside the try and
+// surfaced as the catch-all "Failed to connect to photo source", which reads
+// like a network problem and sends people checking their firewall.
+test('testing an Immich source without a URL says so instead of reporting a connection failure', async () => {
+    const created = await api('/api/photo-sources', {
+        method: 'POST',
+        body: JSON.stringify({ name: `no-url-${Date.now()}`, type: 'Immich', api_key: 'some-key' }),
+    });
+    assert.equal(created.status, 200);
+
+    const { status, body } = await api(`/api/photo-sources/${created.body.id}/test`, { method: 'POST' });
+    assert.equal(status, 400);
+    assert.equal(body.success, false);
+    assert.match(body.error, /address/i);
+    // The old failure mode: a TypeError from `null.replace` dressed up as a
+    // connection problem.
+    assert.doesNotMatch(body.error, /Failed to connect/i);
+});
+
+test('testing an Immich source without an API key says so', async () => {
+    const created = await api('/api/photo-sources', {
+        method: 'POST',
+        body: JSON.stringify({ name: `no-key-${Date.now()}`, type: 'Immich', url: 'http://127.0.0.1:59999' }),
+    });
+    assert.equal(created.status, 200);
+
+    const { status, body } = await api(`/api/photo-sources/${created.body.id}/test`, { method: 'POST' });
+    assert.equal(status, 400);
+    assert.equal(body.success, false);
+    assert.match(body.error, /API key/i);
+    // Reported without dialling the server, so an unreachable host cannot mask
+    // the real problem.
+    assert.doesNotMatch(body.error, /refused|timed out/i);
+});
