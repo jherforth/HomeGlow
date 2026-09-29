@@ -231,7 +231,16 @@
     "overlayDaysPlus_one": "Hoy y el día siguiente",
     "overlayDaysPlus_other": "Hoy y los {{count}} días siguientes",
     "overlayWeather": "Clima actual",
-    "overlayWeatherHelp": "Usa la ubicación y las unidades de tu widget del clima."
+    "overlayWeatherHelp": "Usa la ubicación y las unidades de tu widget del clima.",
+    "layoutHeading": "Diseño de las fotos",
+    "layout": {
+      "fit": "Ajustar",
+      "fitHelp": "Una foto a la vez, completa sobre fondo negro.",
+      "ambient": "Ambiente",
+      "ambientHelp": "Una foto a la vez, con una copia suave y difuminada que llena el espacio a su alrededor.",
+      "collage": "Collage",
+      "collageHelp": "Varias fotos en mosaico que llenan la pantalla, cada una en un espacio de su misma forma. Cambia una foto en cada intervalo y la disposición cambia cada pocas rondas. Necesita al menos 3 fotos."
+    }
   },
   "vacation": {
     "heading": "Modo vacaciones",

@@ -3157,6 +3157,40 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                 />
               )}
 
+              {/* How each photo uses the screen. Fit is the original look;
+                  the other two fill the bars a photo of a different shape
+                  leaves. */}
+              {screensaverSettings.mode === 'photos' && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                    {t('admin:screensaver.layoutHeading')}
+                  </Typography>
+                  <RadioGroup
+                    value={screensaverSettings.photoLayout || 'fit'}
+                    onChange={(e) => setScreensaverSettings(prev => ({ ...prev, photoLayout: e.target.value }))}
+                  >
+                    {['fit', 'ambient', 'collage'].map((layout) => (
+                      <FormControlLabel
+                        key={layout}
+                        value={layout}
+                        control={<Radio />}
+                        sx={{ alignItems: 'flex-start', mb: 1, '& .MuiRadio-root': { pt: 0.25 } }}
+                        label={
+                          <Box>
+                            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                              {t(`admin:screensaver.layout.${layout}`)}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {t(`admin:screensaver.layout.${layout}Help`)}
+                            </Typography>
+                          </Box>
+                        }
+                      />
+                    ))}
+                  </RadioGroup>
+                </Box>
+              )}
+
               {/* Corner overlay (issue #190). Photo mode only: in tab mode the
                   dashboard itself is on screen, so there is nothing to overlay. */}
               {screensaverSettings.mode === 'photos' && (

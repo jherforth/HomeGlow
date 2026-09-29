@@ -29,7 +29,13 @@ export const DEFAULT_SCREENSAVER_SETTINGS = {
   overlayCalendar: false,
   overlayCalendarDays: 1,
   overlayWeather: false,
+  // How the photo slideshow uses the screen: 'fit' shows each photo whole on
+  // black (the original look), 'ambient' fills the bars with a blurred copy of
+  // the photo, 'collage' tiles several photos across the screen.
+  photoLayout: 'fit',
 };
+
+export const PHOTO_LAYOUTS = ['fit', 'ambient', 'collage'];
 
 export const DEFAULT_AUTO_DARK_MODE_SETTINGS = {
   enabled: false,
@@ -102,6 +108,7 @@ export const normalizeScreensaverSettings = (raw) => {
     overlayCalendar: merged.overlayCalendar === true,
     overlayWeather: merged.overlayWeather === true,
     overlayCalendarDays: Number.isFinite(days) ? Math.min(7, Math.max(1, days)) : 1,
+    photoLayout: PHOTO_LAYOUTS.includes(merged.photoLayout) ? merged.photoLayout : 'fit',
   };
 };
 
