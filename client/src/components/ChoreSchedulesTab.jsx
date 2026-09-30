@@ -50,7 +50,8 @@ import ChoreIconPicker from './ChoreIconPicker.jsx';
 import ChoreScheduleFields from './ChoreScheduleFields.jsx';
 import { useTranslation } from 'react-i18next';
 import useIsMobile from '../hooks/useIsMobile.js';
-import { stackableTableSx, stackableTableContainerSx } from '../utils/responsiveTable.js';
+import { stackableTableSx } from '../utils/responsiveTable.js';
+import AdaptiveTableContainer from './AdaptiveTableContainer';
 import {
   CRONTAB_PRESETS,
   DEFAULT_SCHEDULE_FIELDS,
@@ -551,7 +552,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
         {t('chores:schedules.definitionsHelp')}
       </Alert>
 
-      <TableContainer component={Paper} sx={{ mb: 4, ...stackableTableContainerSx }}>
+      <AdaptiveTableContainer component={Paper} sx={{ mb: 4 }}>
         <Table size="small" sx={stackableTableSx}>
           <TableHead>
             <TableRow>
@@ -623,7 +624,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
             )}
           </TableBody>
         </Table>
-      </TableContainer>
+      </AdaptiveTableContainer>
 
       {/* ── SCHEDULES ────────────────────────────────────── */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
@@ -666,7 +667,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
         </Typography>
       </Box>
 
-      <TableContainer component={Paper} sx={stackableTableContainerSx}>
+      <AdaptiveTableContainer component={Paper}>
         <Table size="small" sx={stackableTableSx}>
           <TableHead>
             <TableRow>
@@ -778,7 +779,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
             )}
           </TableBody>
         </Table>
-      </TableContainer>
+      </AdaptiveTableContainer>
 
       {/* ── CHORE DIALOG ─────────────────────────────────── */}
       <Dialog

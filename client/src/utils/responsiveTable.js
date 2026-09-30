@@ -1,8 +1,9 @@
 // Compact horizontal-scroll table for mobile: below the mobile cutoff the
 // table keeps its desktop column layout inside a horizontally scrollable
-// container. The first column (Title/Chore) takes the full viewport width;
-// scroll right to reach the remaining columns (schedules, actions, etc).
-// Rows stay compact so 10-15 fit on screen.
+// container. The first column (Title/Chore) is sticky and sized to fit its
+// content via the --first-col-w CSS variable (set by AdaptiveTableContainer),
+// capped at the viewport width; scroll right to reach the remaining columns
+// (schedules, actions, etc). Rows stay compact so 10-15 fit on screen.
 export const stackableTableSx = {
   '@media (max-width:599.95px)': {
     display: 'block',
@@ -25,14 +26,17 @@ export const stackableTableSx = {
       fontSize: '0.8rem',
       verticalAlign: 'top',
     },
-    // First column takes full viewport width; sticky so it stays visible.
+    // First column is sticky and shrink-to-fit: --first-col-w is measured
+    // from the column content by AdaptiveTableContainer (capped at viewport
+    // width); falls back to full viewport width before measurement.
     '& .MuiTableBody-root .MuiTableCell-root:first-of-type': {
       position: 'sticky',
       left: 0,
       backgroundColor: 'var(--card-bg)',
       zIndex: 1,
-      minWidth: 'calc(100vw - 48px)',
-      maxWidth: 'calc(100vw - 48px)',
+      width: 'var(--first-col-w, calc(100vw - 48px))',
+      minWidth: 'var(--first-col-w, calc(100vw - 48px))',
+      maxWidth: 'var(--first-col-w, calc(100vw - 48px))',
       whiteSpace: 'normal',
       wordBreak: 'break-word',
     },
@@ -41,8 +45,9 @@ export const stackableTableSx = {
       left: 0,
       backgroundColor: 'var(--card-bg)',
       zIndex: 2,
-      minWidth: 'calc(100vw - 48px)',
-      maxWidth: 'calc(100vw - 48px)',
+      width: 'var(--first-col-w, calc(100vw - 48px))',
+      minWidth: 'var(--first-col-w, calc(100vw - 48px))',
+      maxWidth: 'var(--first-col-w, calc(100vw - 48px))',
     },
   },
 };
