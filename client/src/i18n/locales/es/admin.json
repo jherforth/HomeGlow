@@ -424,5 +424,23 @@
     "help": "Esta pestaña muestra los metadatos de compilación del cliente y del servidor, además de las etiquetas de Git que apuntan a cada commit.",
     "frontend": "Cliente",
     "backend": "Servidor"
+  },
+  "timezone": {
+    "heading": "Zona horaria",
+    "subtitle": "Para todo el hogar, no solo esta pantalla",
+    "label": "Zona horaria",
+    "current": "El servidor usa {{zone}}",
+    "sourceSetting": "configurada aquí",
+    "sourceEnv": "de TZ en tu .env / docker compose",
+    "sourceDefault": "la predeterminada, porque TZ no está definida",
+    "save": "Guardar",
+    "saved": "Zona horaria cambiada a {{zone}}. Las demás pantallas recibirán el cambio en un máximo de 15 minutos.",
+    "saveFailed": "No se pudo guardar la zona horaria: {{error}}",
+    "loadFailed": "No se pudo cargar la zona horaria del servidor.",
+    "detectedDiffers": "Este dispositivo usa {{zone}}.",
+    "useDetected": "Usarla",
+    "resetToEnv": "Volver a TZ de .env ({{zone}})",
+    "resetToDefault": "Volver a la predeterminada ({{zone}})",
+    "help": "Determina cuándo empieza cada día para las tareas, los recordatorios de hora límite y el reinicio de medianoche. Una zona configurada aquí tiene prioridad sobre TZ en .env, así que se mantiene sin recrear el contenedor. Las horas del calendario en cada pantalla siguen la zona horaria de ese dispositivo."
   }
 }

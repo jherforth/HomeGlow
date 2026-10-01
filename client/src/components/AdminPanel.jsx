@@ -78,6 +78,7 @@ import ChoreHistoryTab from './ChoreHistoryTab';
 import TabIconModal from './TabIconModal';
 import DeleteConfirmationDialog from './DeleteConfirmationDialog';
 import AdminFormSection from './AdminFormSection';
+import TimezoneSettings from './TimezoneSettings';
 import VersionInfoCard from './VersionInfoCard';
 import LoadingBackdrop from './LoadingBackdrop';
 import RefreshIntervalSelect from './RefreshIntervalSelect';
@@ -2961,6 +2962,14 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                   </FormControl>
                 </Grid>
               </Grid>
+            </AdminFormSection>
+
+            {/* Household-wide, unlike the rest of this tab (issue #193). */}
+            <AdminFormSection
+              title={t('admin:timezone.heading')}
+              subtitle={t('admin:timezone.subtitle')}
+            >
+              <TimezoneSettings />
             </AdminFormSection>
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
