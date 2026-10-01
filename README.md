@@ -80,6 +80,8 @@ docker compose up -d
 ```
 Configure API keys and widgets in the Admin Panel (⚙️ icon).
 
+**Time zone:** `TZ` sets the starting time zone. To change it later without editing `.env` or recreating the container, use Admin Panel → Interface → Time Zone. A zone set there takes priority over `TZ`, and resetting it goes back to `TZ`.
+
 **Updating:** `docker compose pull && docker compose up -d`
 
 ### Build from Source for Development

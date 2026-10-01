@@ -1,7 +1,14 @@
 // File: server/index.js
 require('dotenv').config();
 
-const APP_TIMEZONE = process.env.TZ || 'America/New_York';
+const appTimezone = require('./utils/appTimezone');
+
+// TZ as the environment gave it, kept for the Admin Panel to show and to fall
+// back to. The zone actually in force can change at runtime (issue #193):
+// startup applies one saved from the UI, and PUT /api/timezone switches it.
+const ENV_TIMEZONE = process.env.TZ;
+let APP_TIMEZONE_STATE = appTimezone.resolveAppTimezone({ env: ENV_TIMEZONE });
+let APP_TIMEZONE = APP_TIMEZONE_STATE.timezone;
 
 // Demo mode: a single opt-in flag for running a public, throwaway demo
 // instance. It uses an in-memory database (wiped on container stop), disables
@@ -2163,14 +2170,39 @@ async function dailyBackgroundProcessing() {
   }
 }
 
+let nightlyCronTask = null;
+
 function startNightlyCronJob() {
-  cron.schedule('0 0 * * *', async () => {
+  // Rescheduled when the time zone changes, so drop any earlier schedule
+  // rather than end up running at two different midnights.
+  if (nightlyCronTask) nightlyCronTask.stop();
+  nightlyCronTask = cron.schedule('0 0 * * *', async () => {
     console.log('Running daily background processing at midnight');
     await dailyBackgroundProcessing();
   }, {
     timezone: APP_TIMEZONE
   });
-  console.log('Daily background processing cron job scheduled for midnight');
+  console.log(`Daily background processing cron job scheduled for midnight (${APP_TIMEZONE})`);
+}
+
+// Put the server on the zone a saved setting and TZ resolve to. Node rereads
+// process.env.TZ on assignment, so Date's local time follows immediately; the
+// midnight job is rescheduled explicitly because node-cron captured the old
+// zone when it was created.
+function applyAppTimezone(saved) {
+  const previous = APP_TIMEZONE;
+  APP_TIMEZONE_STATE = appTimezone.resolveAppTimezone({ saved, env: ENV_TIMEZONE });
+  APP_TIMEZONE = APP_TIMEZONE_STATE.timezone;
+  process.env.TZ = APP_TIMEZONE;
+  if (APP_TIMEZONE !== previous) {
+    console.log(`Time zone set to ${APP_TIMEZONE} (from ${APP_TIMEZONE_STATE.source}; was ${previous})`);
+    if (nightlyCronTask) startNightlyCronJob();
+  }
+}
+
+function readSavedTimezone() {
+  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(appTimezone.SETTING_KEY);
+  return row ? row.value : null;
 }
 
 function parseJsonObject(value, fallback = {}) {
@@ -3688,7 +3720,42 @@ fastify.get('/api/calendar/ics', async (request, reply) => {
 });
 
 fastify.get('/api/timezone', async (request, reply) => {
-  return reply.send({ timezone: APP_TIMEZONE });
+  return reply.send({
+    timezone: APP_TIMEZONE,
+    // 'setting' (chosen in the Admin Panel), 'env' (TZ) or 'default'.
+    source: APP_TIMEZONE_STATE.source,
+    // What clearing the setting would go back to.
+    envTimezone: APP_TIMEZONE_STATE.envTimezone,
+  });
+});
+
+// Set the household time zone (issue #193), or clear it with null to go back
+// to TZ from the environment. Validated here because Node would accept any
+// string and quietly run on UTC.
+fastify.put('/api/timezone', async (request, reply) => {
+  if (demoBlocked(reply)) return;
+  const requested = request.body?.timezone;
+  try {
+    if (requested === null || requested === '') {
+      db.prepare('DELETE FROM settings WHERE key = ?').run(appTimezone.SETTING_KEY);
+      applyAppTimezone(null);
+    } else {
+      const canonical = appTimezone.canonicalTimeZone(requested);
+      if (!canonical) {
+        return reply.status(400).send({ error: `Unknown time zone: ${String(requested).slice(0, 64)}` });
+      }
+      db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(appTimezone.SETTING_KEY, canonical);
+      applyAppTimezone(canonical);
+    }
+    return {
+      timezone: APP_TIMEZONE,
+      source: APP_TIMEZONE_STATE.source,
+      envTimezone: APP_TIMEZONE_STATE.envTimezone,
+    };
+  } catch (error) {
+    console.error('Error saving time zone:', error);
+    return reply.status(500).send({ error: 'Failed to save time zone' });
+  }
 });
 
 // Demo-mode status for the client (banner, first-run seeding, PIN skip).
@@ -3886,6 +3953,11 @@ fastify.post('/api/settings', async (request, reply) => {
   if (!key || value === undefined) {
     console.log('ERROR: Missing key or value');
     return reply.status(400).send({ error: 'Key and value are required.' });
+  }
+  // Saving the zone has to validate it and switch the running server over;
+  // a raw write here would do neither.
+  if (key === appTimezone.SETTING_KEY) {
+    return reply.status(400).send({ error: 'Use PUT /api/timezone to change the time zone.' });
   }
   try {
     // Redacted settings are never sent to the client, so the Admin Panel edits
@@ -6298,6 +6370,10 @@ const start = async () => {
     }
     const currentSchemaId = getCurrentSchemaVersion();
     await applySchemaMigrations(currentSchemaId);
+
+    // Before anything that reads the date: a zone saved from the Admin Panel
+    // overrides TZ from the environment.
+    applyAppTimezone(readSavedTimezone());
 
     if (DEMO_MODE) {
       const { resetDemoData } = require('./utils/demoSeed');

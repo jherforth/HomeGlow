@@ -125,6 +125,30 @@ test('GET /api/timezone returns configured timezone', async () => {
 
     assert.equal(status, 200);
     assert.equal(body.timezone, 'UTC');
+    assert.equal(body.source, 'env');
+    assert.equal(body.envTimezone, 'UTC');
+});
+
+test('PUT /api/timezone switches zones, rejects unknown ones, and null goes back to TZ', async () => {
+    const put = (timezone) => api('/api/timezone', { method: 'PUT', body: JSON.stringify({ timezone }) });
+    try {
+        const set = await put('America/Chicago');
+        assert.equal(set.status, 200);
+        assert.deepEqual(set.body, { timezone: 'America/Chicago', source: 'setting', envTimezone: 'UTC' });
+        assert.equal((await api('/api/timezone')).body.timezone, 'America/Chicago');
+
+        // Node would take this and quietly run on UTC; the route must not.
+        const bad = await put('America/Chicag');
+        assert.equal(bad.status, 400);
+        assert.equal((await api('/api/timezone')).body.timezone, 'America/Chicago');
+
+        // The generic settings route cannot bypass the validation.
+        const raw = await api('/api/settings', { method: 'POST', body: JSON.stringify({ key: 'APP_TIMEZONE', value: 'Nope/Nope' }) });
+        assert.equal(raw.status, 400);
+    } finally {
+        const cleared = await put(null);
+        assert.deepEqual(cleared.body, { timezone: 'UTC', source: 'env', envTimezone: 'UTC' });
+    }
 });
 
 test('GET /api/stats returns backend build metadata', async () => {

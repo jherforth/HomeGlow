@@ -2,7 +2,7 @@ import React, { lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
 import axios from 'axios';
 import './index.css';
-import { initTimezone } from './utils/timezone.js';
+import { initTimezone, watchServerTimezone } from './utils/timezone.js';
 import { initI18n, getStoredLanguage } from './i18n/index.js';
 import { API_BASE_URL } from './utils/apiConfig.js';
 
@@ -42,6 +42,8 @@ Promise.all([
     console.error('i18n failed to initialize; falling back to raw keys:', error);
   }),
 ]).finally(() => {
+  // Follow a time zone changed from another display's Admin Panel.
+  watchServerTimezone();
   ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
       <Suspense fallback={<div style={{ minHeight: '100vh' }} />}>
