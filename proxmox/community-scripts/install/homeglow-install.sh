@@ -31,7 +31,7 @@ TZ=${tz:-America/New_York}
 FRONTEND_PORT=3000
 ENCRYPTION_KEY=$(openssl rand -base64 32)
 EOF
-cd /opt/homeglow
+cd /opt/homeglow || exit
 $STD docker compose pull
 $STD docker compose up -d
 msg_ok "Deployed HomeGlow"

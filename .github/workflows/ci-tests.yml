@@ -61,3 +61,18 @@ jobs:
         if: matrix.name == 'frontend'
         run: npm run check:i18n
         working-directory: ${{ matrix.path }}
+
+  # The Proxmox installer runs as root on people's hypervisors, and nobody's
+  # Proxmox host is part of CI. ShellCheck catches the bash mistakes; the test
+  # drives the real script through its dialogs against a stubbed host.
+  proxmox-installer:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: ShellCheck
+        run: shellcheck -x proxmox/install-homeglow.sh proxmox/tests/install-homeglow.test.sh
+
+      - name: Installer tests
+        run: bash proxmox/tests/install-homeglow.test.sh

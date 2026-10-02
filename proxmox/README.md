@@ -26,8 +26,24 @@ Run this **on a Proxmox VE host** (as root):
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/jherforth/HomeGlow/main/proxmox/install-homeglow.sh)"
 ```
 
-It prompts (with sensible defaults) for CT ID, hostname, disk/CPU/RAM, bridge, storage,
-timezone, and web port, then:
+It walks you through the settings in dialogs, the same blue `whiptail` screens the
+community-scripts installers use:
+
+- **Recommended** takes the next free container ID, 6 GB disk, 2 cores, 2048 MB RAM,
+  DHCP on `vmbr0`, and this host's time zone. It only asks which storage pool to use
+  when the host has more than one (on a ZFS install, for example, there is no
+  `local-lvm`).
+- **Advanced** steps through each setting, with **Back** on every screen: container ID
+  (checked against containers *and* VMs), hostname, disk, cores, RAM, storage pool and
+  template storage (picked from this host's active pools, with free space shown),
+  network bridge (picked from the host's bridges), DHCP or a static address with
+  gateway, an optional VLAN tag, time zone, and web port. Bad input is caught on the
+  screen where you typed it.
+- Nothing is created until you confirm the summary. If the install fails after the
+  container exists, it offers to remove the half-installed container.
+
+Without a terminal or `whiptail`, it asks the same questions as plain text prompts
+(force this with `HOMEGLOW_UI=plain`). Then it:
 
 1. Downloads a Debian 12 LXC template if needed.
 2. Creates an **unprivileged** LXC with `nesting=1,keyctl=1` (required to run Docker inside
@@ -35,6 +51,15 @@ timezone, and web port, then:
 3. Installs Docker, fetches `docker-compose.yml`, generates a stable `ENCRYPTION_KEY` into
    `/opt/homeglow/.env`, and runs `docker compose up -d`.
 4. Prints the access URL (`http://<container-ip>:<port>`).
+
+### Testing changes to the script
+
+There's no Proxmox host in CI, so `proxmox/tests/install-homeglow.test.sh` runs the real
+script against a stubbed one: fake `pct`/`pvesm`/`pvesh`/`pveam`/`ip` that log what
+they're asked, and a scripted `whiptail` that answers each dialog. CI runs it alongside
+ShellCheck on every push. Run it locally with `bash proxmox/tests/install-homeglow.test.sh`.
+The stubs can't show how the dialogs look on a real terminal, so check a change to the
+dialogs by hand on a Proxmox host.
 
 ### Updating
 
