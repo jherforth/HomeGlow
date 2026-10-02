@@ -173,12 +173,15 @@ scenario() {
 }
 
 # run_installer [ui] [stdin]
+# The terminal is xterm-256color unless a scenario sets TEST_TERM: CI runners
+# set TERM=dumb, which (rightly) turns the installer's color off.
 run_installer() {
   local ui="${1:-whiptail}" input="${2:-}"
   # The subshell is the point: these reach the installer and nothing else.
   # shellcheck disable=SC2030
   (
     export MOCK_DIR HOMEGLOW_UI="$ui" ZONEINFO_DIR="$ZONEINFO" PATH="$STUBS:$PATH"
+    export TERM="${TEST_TERM:-xterm-256color}"
     printf '%b' "$input" | timeout 30 bash "$INSTALLER"
   ) >"$MOCK_DIR/out.txt" 2>&1
   RC=$?
@@ -276,6 +279,14 @@ check "exits cleanly" rc_is 0
 check "still shows the banner" has out.txt '/_/ /_/\____/_/ /_/ /_/\___/\____/_/\____/|__/|__/'
 check "without a single escape code" no_escape
 check "leaves a C locale alone" lacks pct.log "WANT_LANG"
+
+scenario dumb-terminal host_lvm \
+  "0" \
+  "0 default" \
+  "0"
+TEST_TERM=dumb run_installer
+check "exits cleanly" rc_is 0
+check "prints no escape codes to a dumb terminal" no_escape
 
 # ------------------------------------------------------------------------------
 scenario zfs-pick-storage host_zfs \
