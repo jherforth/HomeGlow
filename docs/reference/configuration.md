@@ -10,7 +10,7 @@ database). This page covers both.
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `PORT` | `5000` | Port Fastify listens on. |
-| `TZ` | `America/New_York` | IANA timezone. Drives the nightly cron job and date math. Set this to your local zone. |
+| `TZ` | host's zone | IANA timezone. Drives the nightly cron job and date math. Optional: unset, the server follows the host (in Docker, via the `/etc/localtime:/host/localtime:ro` mount), and `America/New_York` only if the host's zone can't be read. A zone chosen in Admin Panel → Interface → Time Zone overrides it. |
 | `DB_PATH` | `server/data/tasks.db` | Override the SQLite file location. |
 | `ENCRYPTION_KEY` | _auto-generated_ | **Optional.** Key used to encrypt stored third-party credentials. If unset, one is generated on first start — see below. Set it only to supply your own key or share one across instances; must decode to 32 bytes (`openssl rand -base64 32`). Changing it after credentials are stored invalidates them. |
 | `NODE_ENV` | — | `production` / `development`. |
@@ -99,7 +99,7 @@ is still treated as local.
 See [`env.example`](../../env.example). Typical production `.env`:
 ```env
 FRONTEND_PORT=3000
-TZ=America/New_York
+# TZ=America/New_York   # optional; unset follows the host
 ENCRYPTION_KEY=<openssl rand -base64 32>
 ```
 Development additionally uses `DEV_FRONTEND_PORT` (3001) and `DEV_BACKEND_PORT` (5001).

@@ -3,7 +3,7 @@
 #
 # Set these environment variables in the .env file:
 # # Set the appropriate timezone for your location (https://en.wikipedia.org/wiki/List_of_tz_database_time_zones), e.g: America/New_York
-# TZ=America/New_York
+# TZ=America/New_York   (optional: unset, HomeGlow follows the host's time zone)
 # FRONTEND_PORT=3000
 
 services:
@@ -15,10 +15,15 @@ services:
     volumes:
       - ./homeglow/data:/app/data
       - ./homeglow/uploads:/app/uploads
+      # The host's time zone, read-only. Not mounted at /etc/localtime: that is
+      # a symlink in the image and Docker would overwrite the file it points to.
+      - /etc/localtime:/host/localtime:ro
     environment:
       - NODE_ENV=production
       - PORT=${BACKEND_PORT:-5000}
-      - TZ=${TZ:-America/New_York}
+      # Optional. Unset, the server follows the host's zone via the
+      # localtime mount below; either can be overridden in the Admin Panel.
+      - TZ=${TZ:-}
       # Optional. Leave unset and HomeGlow generates its own key on first start,
       # storing it at data/.encryption-key inside the mounted volume. Set it
       # only to supply your own key or share one between instances. Empty is

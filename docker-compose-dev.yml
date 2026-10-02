@@ -4,7 +4,7 @@
 # Quick Start:
 # Set these environment variables in .env file:
 # DEV_FRONTEND_PORT=3001
-# TZ=America/New_York
+# TZ=America/New_York   (optional: unset, HomeGlow follows the host's time zone)
 #
 # Deploy via Portainer or run: docker-compose -f docker-compose-dev.yml up -d
 #
@@ -25,10 +25,15 @@ services:
     volumes:
       - ./homeglowdev/data:/app/data
       - ./homeglowdev/uploads:/app/uploads
+      # The host's time zone, read-only. Not mounted at /etc/localtime: that is
+      # a symlink in the image and Docker would overwrite the file it points to.
+      - /etc/localtime:/host/localtime:ro
     environment:
       - NODE_ENV=development
       - PORT=${DEV_BACKEND_PORT:-5001}
-      - TZ=${TZ:-America/New_York}
+      # Optional. Unset, the server follows the host's zone via the
+      # localtime mount below; either can be overridden in the Admin Panel.
+      - TZ=${TZ:-}
     networks:
       - homeglow-test-network
     dns:

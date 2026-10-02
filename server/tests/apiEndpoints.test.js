@@ -134,7 +134,13 @@ test('PUT /api/timezone switches zones, rejects unknown ones, and null goes back
     try {
         const set = await put('America/Chicago');
         assert.equal(set.status, 200);
-        assert.deepEqual(set.body, { timezone: 'America/Chicago', source: 'setting', envTimezone: 'UTC' });
+        assert.deepEqual(set.body, {
+            timezone: 'America/Chicago',
+            source: 'setting',
+            envTimezone: 'UTC',
+            fallbackTimezone: 'UTC',
+            fallbackSource: 'env',
+        });
         assert.equal((await api('/api/timezone')).body.timezone, 'America/Chicago');
 
         // Node would take this and quietly run on UTC; the route must not.
@@ -147,7 +153,13 @@ test('PUT /api/timezone switches zones, rejects unknown ones, and null goes back
         assert.equal(raw.status, 400);
     } finally {
         const cleared = await put(null);
-        assert.deepEqual(cleared.body, { timezone: 'UTC', source: 'env', envTimezone: 'UTC' });
+        assert.deepEqual(cleared.body, {
+            timezone: 'UTC',
+            source: 'env',
+            envTimezone: 'UTC',
+            fallbackTimezone: 'UTC',
+            fallbackSource: 'env',
+        });
     }
 });
 

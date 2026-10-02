@@ -17,7 +17,8 @@ wget https://raw.githubusercontent.com/jherforth/HomeGlow/main/docker-compose.ym
 # 2. Create a .env next to it
 cat > .env <<'EOF'
 FRONTEND_PORT=3000
-TZ=America/New_York
+# Optional: unset, HomeGlow follows the host's time zone
+# TZ=America/New_York
 EOF
 
 # 3. Start
@@ -28,7 +29,9 @@ docker compose up -d
 
 [`docker-compose.yml`](../../docker-compose.yml) defines:
 - `homeglow-backend` — bind-mounts `./homeglow/data` (DB) and `./homeglow/uploads`
-  (photos/avatars/widgets); env `PORT`, `TZ`, `NODE_ENV=production`.
+  (photos/avatars/widgets), plus the host's `/etc/localtime` read-only at
+  `/host/localtime` so the server can follow the host's time zone; env `PORT`,
+  `TZ` (optional), `NODE_ENV=production`.
 - `homeglow-frontend` — publishes `FRONTEND_PORT`; knows the backend via
   `BACKEND_SERVICE`/`BACKEND_PORT` on the shared `homeglow-network`.
 
