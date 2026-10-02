@@ -1,13 +1,17 @@
 // File: server/index.js
-require('dotenv').config();
-
 const appTimezone = require('./utils/appTimezone');
+
+// The host's own zone, read before anything (dotenv included) can set TZ:
+// once TZ is set, Node reports that instead and never goes back.
+const HOST_TIMEZONE = appTimezone.detectHostTimezone();
+
+require('dotenv').config();
 
 // TZ as the environment gave it, kept for the Admin Panel to show and to fall
 // back to. The zone actually in force can change at runtime (issue #193):
 // startup applies one saved from the UI, and PUT /api/timezone switches it.
 const ENV_TIMEZONE = process.env.TZ;
-let APP_TIMEZONE_STATE = appTimezone.resolveAppTimezone({ env: ENV_TIMEZONE });
+let APP_TIMEZONE_STATE = appTimezone.resolveAppTimezone({ env: ENV_TIMEZONE, host: HOST_TIMEZONE });
 let APP_TIMEZONE = APP_TIMEZONE_STATE.timezone;
 
 // Demo mode: a single opt-in flag for running a public, throwaway demo
@@ -76,6 +80,7 @@ const crypto = require('crypto');
 const axios = require('axios');
 const ICAL = require('ical.js');
 const { CronExpressionParser } = require('cron-parser');
+const { cronFiresOnDate } = require('./utils/cronDay');
 const cron = require('node-cron');
 // For widget upload and registry
 const widgetRegistryPath = path.join(__dirname, 'widgets_registry.json');
@@ -221,6 +226,7 @@ const schemaMigrations = [
   { schemaId: 23, migrationPath: './migrations/schema23-userSortOrder', },
   { schemaId: 24, migrationPath: './migrations/schema24-choreIcon', },
   { schemaId: 25, migrationPath: './migrations/schema25-unifyCredentialEncryption', },
+  { schemaId: 26, migrationPath: './migrations/schema26-keepLegacyTimezone', },
 ];
 
 const ALLOWED_SCHEDULE_DURATIONS = new Set(['day-of', 'until-completed', 'once-completed']);
@@ -1916,11 +1922,17 @@ function getCurrentSchemaVersion() {
   return row ? parseInt(row.value, 10) || 0 : 0;
 }
 
+let isFreshInstall = false;
+
 function runSchemaMigrationModule(migration) {
   globalThis.__HOMEGLOW_SCHEMA_MIGRATION_CONTEXT = {
     db,
     schemaIdKey: SYSTEM_SCHEMA_ID_KEY,
     targetSchemaId: migration.schemaId,
+    // Set when this boot created the database, so a migration can tell a
+    // brand-new install from an upgrade.
+    freshInstall: isFreshInstall,
+    envTimezone: ENV_TIMEZONE,
   };
 
   try {
@@ -2103,26 +2115,18 @@ async function dailyBackgroundProcessing() {
     `).all();
     console.log(`Found ${stickyParentSchedules.length} sticky schedules to check`);
 
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-    const justBeforeToday = new Date(startOfToday.getTime() - 1);
-    let options = {
-      currentDate: justBeforeToday,
-      utc: false,
-    }
     let stickySchedulesCreated = 0;
     const triggeredSchedules = [];
     for (const schedule of stickyParentSchedules) {
-      let next = null;
+      let firesToday;
       try {
-        const cronInterval = CronExpressionParser.parse(schedule.crontab, options);
-        next = cronInterval.next().toISOString().split('T')[0];
+        firesToday = cronFiresOnDate(schedule.crontab, today);
       } catch (parseError) {
         console.warn(`Skipping sticky schedule ${schedule.id} due to invalid crontab: ${schedule.crontab}`);
         continue;
       }
 
-      if (today === next) {
+      if (firesToday) {
         const dueDateOffset = calculateDateOffsetDays(schedule.created_at, schedule.due_date);
         const childDueDate = dueDateOffset === null
           ? (schedule.due_date || null)
@@ -2191,7 +2195,7 @@ function startNightlyCronJob() {
 // zone when it was created.
 function applyAppTimezone(saved) {
   const previous = APP_TIMEZONE;
-  APP_TIMEZONE_STATE = appTimezone.resolveAppTimezone({ saved, env: ENV_TIMEZONE });
+  APP_TIMEZONE_STATE = appTimezone.resolveAppTimezone({ saved, env: ENV_TIMEZONE, host: HOST_TIMEZONE });
   APP_TIMEZONE = APP_TIMEZONE_STATE.timezone;
   process.env.TZ = APP_TIMEZONE;
   if (APP_TIMEZONE !== previous) {
@@ -3151,14 +3155,8 @@ function getTodaysRegularChoresForUser(userId, dateStr, referenceNow = new Date(
     // required for nor counted toward the daily completion bonus.
     .filter(s => !s.snoozed_until || new Date(s.snoozed_until) <= referenceNow);
 
-  // Anchor the cron replay to the target date, not the wall clock, so the
-  // helper works for past dates too. For today this is byte-identical to the
-  // old new Date()-based anchor.
-  const startOfDay = parseDateOnlyToLocalDate(dateStr) || new Date();
-  startOfDay.setHours(0, 0, 0, 0);
-  const justBeforeDay = new Date(startOfDay.getTime() - 1);
-  const options = { currentDate: justBeforeDay, utc: false };
-
+  // The cron replay is anchored to the target date, not the wall clock, so
+  // this works for past dates too.
   const todaysChores = [];
   for (const schedule of regularChores) {
     // schedules without crontab are one-time and always part of today's chores
@@ -3168,9 +3166,7 @@ function getTodaysRegularChoresForUser(userId, dateStr, referenceNow = new Date(
     }
 
     // ensure only chores that are due today are part of today's chores
-    const interval = CronExpressionParser.parse(schedule.crontab, options);
-    const next = interval.next().toISOString().split('T')[0];
-    if (dateStr === next) {
+    if (cronFiresOnDate(schedule.crontab, dateStr)) {
       todaysChores.push(schedule);
     }
   }
@@ -3719,14 +3715,19 @@ fastify.get('/api/calendar/ics', async (request, reply) => {
   }
 });
 
+// `source` is 'setting' (chosen in the Admin Panel), 'env' (TZ), 'host' (the
+// machine's own zone) or 'default'. `fallbackTimezone`/`fallbackSource` are
+// what clearing the setting would go back to.
+const timezonePayload = () => ({
+  timezone: APP_TIMEZONE,
+  source: APP_TIMEZONE_STATE.source,
+  envTimezone: APP_TIMEZONE_STATE.envTimezone,
+  fallbackTimezone: APP_TIMEZONE_STATE.fallbackTimezone,
+  fallbackSource: APP_TIMEZONE_STATE.fallbackSource,
+});
+
 fastify.get('/api/timezone', async (request, reply) => {
-  return reply.send({
-    timezone: APP_TIMEZONE,
-    // 'setting' (chosen in the Admin Panel), 'env' (TZ) or 'default'.
-    source: APP_TIMEZONE_STATE.source,
-    // What clearing the setting would go back to.
-    envTimezone: APP_TIMEZONE_STATE.envTimezone,
-  });
+  return reply.send(timezonePayload());
 });
 
 // Set the household time zone (issue #193), or clear it with null to go back
@@ -3747,11 +3748,7 @@ fastify.put('/api/timezone', async (request, reply) => {
       db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(appTimezone.SETTING_KEY, canonical);
       applyAppTimezone(canonical);
     }
-    return {
-      timezone: APP_TIMEZONE,
-      source: APP_TIMEZONE_STATE.source,
-      envTimezone: APP_TIMEZONE_STATE.envTimezone,
-    };
+    return timezonePayload();
   } catch (error) {
     console.error('Error saving time zone:', error);
     return reply.status(500).send({ error: 'Failed to save time zone' });
@@ -6364,7 +6361,8 @@ fastify.get('/api/system/backgroundTasks', async (request, reply) => {
 const start = async () => {
   try {
     db = await ConnectOrCreateDb();
-    if (!doesTableExist('settings')) {
+    isFreshInstall = !doesTableExist('settings');
+    if (isFreshInstall) {
       console.log('settings table not found; running initial bootstrap migrations');
       await runLegacyMigrations();
     }

@@ -430,9 +430,9 @@
     "subtitle": "For the whole household, not just this display",
     "label": "Time zone",
     "current": "The server is using {{zone}}",
-    "sourceSetting": "set here",
+    "sourceSetting": "chosen here",
     "sourceEnv": "from TZ in your .env / docker compose",
-    "sourceDefault": "the default, because TZ is not set",
+    "sourceDefault": "the default, because neither TZ nor the server's own zone could be read",
     "save": "Save",
     "saved": "Time zone set to {{zone}}. Other displays pick up the change within 15 minutes.",
     "saveFailed": "Could not save the time zone: {{error}}",
@@ -441,6 +441,8 @@
     "useDetected": "Use it",
     "resetToEnv": "Go back to TZ from .env ({{zone}})",
     "resetToDefault": "Go back to the default ({{zone}})",
-    "help": "Decides when each day starts for chores, due-time reminders and the midnight reset. A zone set here overrides TZ in .env, so it sticks without recreating the container. Calendar times on each display follow that device's own time zone."
+    "help": "Decides when each day starts for chores, due-time reminders and the midnight reset. A zone chosen here overrides TZ in .env and the server's own zone, and sticks without recreating the container. Calendar times on each display follow that device's own time zone.",
+    "sourceHost": "this server's own time zone",
+    "resetToHost": "Go back to the server's own time zone ({{zone}})"
   }
 }

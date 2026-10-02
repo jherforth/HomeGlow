@@ -17,16 +17,16 @@ RUN npm ci --omit=dev --no-audit --no-fund
 FROM node:24-slim
 WORKDIR /app
 
-# tzdata: chore scheduling depends on the TZ env var. Node's bundled ICU covers
-# JS Date/Intl on its own, but the OS zoneinfo db is ~3MB of insurance for
-# anything else that reads /usr/share/zoneinfo.
+# tzdata: the server names the host's time zone by matching the mounted
+# /host/localtime against /usr/share/zoneinfo (see utils/appTimezone.js).
+# Node's bundled ICU covers JS Date/Intl on its own.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends tzdata && \
     rm -rf /var/lib/apt/lists/*
 
-# Accept PORT and TZ as build arguments with defaults
+# Accept PORT as a build argument with a default. TZ deliberately has none:
+# unset, the server follows the host's zone (issue #193).
 ARG PORT=5000
-ARG TZ=America/New_York
 ARG BACKEND_VERSION=dev
 ARG BACKEND_GIT_COMMIT=
 ARG BACKEND_GITHUB_REPOSITORY=jherforth/HomeGlow
@@ -34,7 +34,6 @@ ARG BACKEND_GITHUB_REPOSITORY=jherforth/HomeGlow
 # Set as environment variables for runtime
 ENV NODE_ENV=production
 ENV PORT=$PORT
-ENV TZ=$TZ
 ENV APP_VERSION=$BACKEND_VERSION
 ENV BACKEND_VERSION=$BACKEND_VERSION
 ENV BACKEND_GIT_COMMIT=$BACKEND_GIT_COMMIT

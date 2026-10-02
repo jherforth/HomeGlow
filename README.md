@@ -70,8 +70,9 @@ wget https://raw.githubusercontent.com/jherforth/HomeGlow/main/docker-compose.ym
 
 # 2. Create config in .env (change the values as appropriate)
 FRONTEND_PORT=3000
-# Set the appropriate timezone for your location (https://en.wikipedia.org/wiki/List_of_tz_database_time_zones), e.g: America/New_York
-TZ=America/New_York
+# Optional: HomeGlow follows the host's time zone. Set TZ only to use a different one
+# (https://en.wikipedia.org/wiki/List_of_tz_database_time_zones), e.g.:
+# TZ=America/New_York
 
 # 3. Start HomeGlow
 docker compose up -d
@@ -80,7 +81,7 @@ docker compose up -d
 ```
 Configure API keys and widgets in the Admin Panel (⚙️ icon).
 
-**Time zone:** `TZ` sets the starting time zone. To change it later without editing `.env` or recreating the container, use Admin Panel → Interface → Time Zone. A zone set there takes priority over `TZ`, and resetting it goes back to `TZ`.
+**Time zone:** HomeGlow uses the host machine's time zone unless `TZ` is set. To change it without editing `.env` or recreating the container, use Admin Panel → Interface → Time Zone. A zone set there takes priority over both, and resetting it goes back to `TZ`, or to the host's zone if `TZ` isn't set. Installs from before this change that never set `TZ` were running on New York time; they keep it, saved as their chosen zone.
 
 **Updating:** `docker compose pull && docker compose up -d`
 

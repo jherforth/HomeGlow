@@ -74,12 +74,18 @@ const TimezoneSettings = () => {
     return <CircularProgress size={24} />;
   }
 
-  const sourceText = info.source === 'setting'
-    ? t('admin:timezone.sourceSetting')
-    : info.source === 'env'
-      ? t('admin:timezone.sourceEnv')
-      : t('admin:timezone.sourceDefault');
-  const fallbackZone = nameOf(info.envTimezone || 'America/New_York');
+  const SOURCE_KEYS = {
+    setting: 'sourceSetting',
+    env: 'sourceEnv',
+    host: 'sourceHost',
+    default: 'sourceDefault',
+  };
+  const sourceText = t(`admin:timezone.${SOURCE_KEYS[info.source] || 'sourceDefault'}`);
+  // What clearing the saved zone goes back to. Older servers only report
+  // envTimezone, so fall back on that.
+  const fallbackSource = info.fallbackSource || (info.envTimezone ? 'env' : 'default');
+  const fallbackZone = nameOf(info.fallbackTimezone || info.envTimezone || 'America/New_York');
+  const RESET_KEYS = { env: 'resetToEnv', host: 'resetToHost', default: 'resetToDefault' };
 
   return (
     <Box>
@@ -124,9 +130,7 @@ const TimezoneSettings = () => {
 
       {info.source === 'setting' && (
         <Button size="small" disabled={saving} onClick={() => save(null)} sx={{ mb: 1.5, px: 0 }}>
-          {info.envTimezone
-            ? t('admin:timezone.resetToEnv', { zone: fallbackZone })
-            : t('admin:timezone.resetToDefault', { zone: fallbackZone })}
+          {t(`admin:timezone.${RESET_KEYS[fallbackSource] || 'resetToDefault'}`, { zone: fallbackZone })}
         </Button>
       )}
 
