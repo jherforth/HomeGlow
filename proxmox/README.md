@@ -43,14 +43,17 @@ community-scripts installers use:
   container exists, it offers to remove the half-installed container.
 
 Without a terminal or `whiptail`, it asks the same questions as plain text prompts
-(force this with `HOMEGLOW_UI=plain`). Then it:
+(force this with `HOMEGLOW_UI=plain`). The install itself runs under a HomeGlow banner in
+the logo's colors; set `NO_COLOR=1` for plain text. Then it:
 
 1. Downloads a Debian 12 LXC template if needed.
 2. Creates an **unprivileged** LXC with `nesting=1,keyctl=1` (required to run Docker inside
    an unprivileged container).
-3. Installs Docker, fetches `docker-compose.yml`, generates a stable `ENCRYPTION_KEY` into
+3. Generates your shell's locale inside the container, so `apt` (now and in later
+   `pct enter` sessions) doesn't warn about a missing `en_US.UTF-8`.
+4. Installs Docker, fetches `docker-compose.yml`, generates a stable `ENCRYPTION_KEY` into
    `/opt/homeglow/.env`, and runs `docker compose up -d`.
-4. Prints the access URL (`http://<container-ip>:<port>`).
+5. Prints the access URL (`http://<container-ip>:<port>`).
 
 ### Testing changes to the script
 

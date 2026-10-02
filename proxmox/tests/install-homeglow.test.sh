@@ -81,6 +81,8 @@ printf "%q " "$@" >>"$MOCK_DIR/pct.log"; echo >>"$MOCK_DIR/pct.log"
 case "$1" in
   exec)
     shift 3
+    # Skip an `env VAR=value ...` prefix to find the real command.
+    if [[ "$1" == env ]]; then shift; while [[ "$1" == *=* ]]; do shift; done; fi
     case "$1" in
       getent) exit "${MOCK_NET_RC:-0}" ;;
       hostname) echo "192.168.1.77" ;;
@@ -171,12 +173,15 @@ scenario() {
 }
 
 # run_installer [ui] [stdin]
+# The terminal is xterm-256color unless a scenario sets TEST_TERM: CI runners
+# set TERM=dumb, which (rightly) turns the installer's color off.
 run_installer() {
   local ui="${1:-whiptail}" input="${2:-}"
   # The subshell is the point: these reach the installer and nothing else.
   # shellcheck disable=SC2030
   (
     export MOCK_DIR HOMEGLOW_UI="$ui" ZONEINFO_DIR="$ZONEINFO" PATH="$STUBS:$PATH"
+    export TERM="${TEST_TERM:-xterm-256color}"
     printf '%b' "$input" | timeout 30 bash "$INSTALLER"
   ) >"$MOCK_DIR/out.txt" 2>&1
   RC=$?
@@ -197,6 +202,14 @@ check() { # check <description> <command...>
 has()      { grep -qF -- "$2" "$MOCK_DIR/$1"; }
 lacks()    { ! grep -qF -- "$2" "$MOCK_DIR/$1"; }
 rc_is()    { [[ "$RC" == "$1" ]]; }
+# Every command run inside the container through bash -c forces the C.UTF-8
+# locale, so the host's LANG cannot make apt and perl warn.
+execs_use_c_locale() {
+  grep -F -- 'bash -c' "$MOCK_DIR/pct.log" | grep -vqF 'LC_ALL=C.UTF-8' && return 1
+  grep -qF -- 'bash -c' "$MOCK_DIR/pct.log"
+}
+has_escape() { grep -q $'\033' "$MOCK_DIR/out.txt"; }
+no_escape() { ! has_escape; }
 # The dialog shown right after the one whose title is $1.
 next_title() { awk -F'|' -v t="$1" 'found { print $2; exit } $2 == t { found = 1 }' "$MOCK_DIR/ui.log"; }
 title_after() { [[ "$(next_title "$1")" == "$2" ]]; }
@@ -240,8 +253,14 @@ scenario recommended host_lvm \
   "0" \
   "0 default" \
   "0"
-run_installer
+LANG=en_US.UTF-8 run_installer
 check "exits cleanly" rc_is 0
+check "shows the banner" has out.txt '/_/ /_/\____/_/ /_/ /_/\___/'
+check "draws it in the logo's colors" has out.txt $'\033[38;2;69;114;153m'
+check "lists the settings being used" has out.txt "Using recommended settings"
+check "runs container commands in C.UTF-8" execs_use_c_locale
+check "installs the locales package" has pct.log "openssl\ locales"
+check "generates the host's locale in the container" has pct.log "WANT_LANG=en_US.UTF-8"
 check "asks nothing about storage when there is one pool" lacks ui.log "Container disk storage"
 check "uses the only pool" has pct.log "local-lvm:6"
 check "uses the next free ID" has pct.log "create 105 local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst"
@@ -249,6 +268,25 @@ check "DHCP on vmbr0" has pct.log "name=eth0\\,bridge=vmbr0\\,ip=dhcp"
 check "takes the host's time zone from systemd" has pct.log "--timezone Europe/Berlin"
 check "writes the zone into HomeGlow's .env" has pct.log "TZ=Europe/Berlin"
 check "prints the address" has out.txt "http://192.168.1.77:3000"
+
+# ------------------------------------------------------------------------------
+scenario no-color host_lvm \
+  "0" \
+  "0 default" \
+  "0"
+NO_COLOR=1 LANG=C.UTF-8 run_installer
+check "exits cleanly" rc_is 0
+check "still shows the banner" has out.txt '/_/ /_/\____/_/ /_/ /_/\___/\____/_/\____/|__/|__/'
+check "without a single escape code" no_escape
+check "leaves a C locale alone" lacks pct.log "WANT_LANG"
+
+scenario dumb-terminal host_lvm \
+  "0" \
+  "0 default" \
+  "0"
+TEST_TERM=dumb run_installer
+check "exits cleanly" rc_is 0
+check "prints no escape codes to a dumb terminal" no_escape
 
 # ------------------------------------------------------------------------------
 scenario zfs-pick-storage host_zfs \

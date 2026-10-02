@@ -23,12 +23,103 @@ REPO_RAW="https://raw.githubusercontent.com/jherforth/HomeGlow/main"
 APP="HomeGlow"
 BACKTITLE="${APP} · Proxmox VE installer"
 
-# --- tiny output helpers (styled after community-scripts, self-contained) ----
-YW="\033[33m"; GN="\033[1;92m"; RD="\033[01;31m"; CL="\033[m"
-msg_info() { echo -e " ${YW}•${CL} $1"; }
+# --- output, in the logo's colors -------------------------------------------
+# Blue, navy, coral and amber from client/public/HomeGlowLogo.svg, as 24-bit
+# color. NO_COLOR (https://no-color.org) or a dumb terminal turns color off.
+ESC=$'\033'
+declare -A LOGO_RGB=([B]="69;114;153" [N]="37;44;63" [C]="217;92;108" [A]="240;189;108")
+if [[ -z "${NO_COLOR:-}" && "${TERM:-}" != dumb ]]; then
+  COLOR=1
+  BL="${ESC}[38;2;${LOGO_RGB[B]}m"; CO="${ESC}[38;2;${LOGO_RGB[C]}m"; AM="${ESC}[38;2;${LOGO_RGB[A]}m"
+  GN="${ESC}[1;92m"; BD="${ESC}[1m"; UL="${ESC}[4m"; CL="${ESC}[0m"
+else
+  COLOR=0; BL=""; CO=""; AM=""; GN=""; BD=""; UL=""; CL=""
+fi
+msg_info() { echo -e " ${AM}•${CL} $1"; }
 msg_ok()   { echo -e " ${GN}✓${CL} $1"; }
-msg_warn() { echo -e " ${YW}!${CL} $1"; }
-msg_err()  { echo -e " ${RD}✗${CL} $1" >&2; }
+msg_warn() { echo -e " ${AM}!${CL} $1"; }
+msg_err()  { echo -e " ${CO}✗${CL} $1" >&2; }
+
+# The banner: the logo as a pixel map beside "HomeGlow" in figlet's slant font
+# (the font the community-scripts headers use). "Home" is blue; "Glow" is
+# coral over amber, like the right half of the logo. The navy only appears in
+# the logo tile, where it sits beside the other colors as it does in the logo:
+# as text it would vanish on a black terminal.
+# The art ends lines in backslashes; inside single quotes those are literal.
+# shellcheck disable=SC1003
+BANNER_HOME=(
+  '    __  __'
+  '   / / / /___  ____ ___  ___'
+  '  / /_/ / __ \/ __ `__ \/ _ \'
+  ' / __  / /_/ / / / / / /  __/'
+  '/_/ /_/\____/_/ /_/ /_/\___/'
+)
+BANNER_GLOW_TOP=(
+  '                     ________             '
+  '  / ____/ /___ _      _'
+  '/ / __/ '
+  ''
+  ''
+)
+BANNER_GLOW_BOTTOM=(
+  ''
+  '_'
+  '/ __ \ | /| / /'
+  ' /_/ / / /_/ / |/ |/ / '
+  '\____/_/\____/|__/|__/  '
+)
+LOGO_PIXELS=(
+  '.BBBBBCCCCCC.'
+  'BBBBBBCCCCCCC'
+  'BBBBBBCCCCCCC'
+  'BBBBBBCCCCCCA'
+  'BBBBBBCCAAAAA'
+  'BBBBBNAAAAAAA'
+  'BNNNNNAAAAAAA'
+  'NNNNNNAAAAAAA'
+  'NNNNNNAAAAAAA'
+  '.NNNNNAAAAAA.'
+)
+
+# One text row of the logo tile. Each character cell shows two pixels: an
+# upper half block in the top pixel's color over the bottom pixel's color.
+logo_row() {
+  local top="${LOGO_PIXELS[$(( $1 * 2 ))]}" bottom="${LOGO_PIXELS[$(( $1 * 2 + 1 ))]}"
+  local out="" t b c
+  for (( c = 0; c < ${#top}; c++ )); do
+    t="${top:c:1}"; b="${bottom:c:1}"
+    if [[ $t == . && $b == . ]]; then
+      out+=" "
+    elif [[ $t == . ]]; then
+      out+="${ESC}[38;2;${LOGO_RGB[$b]}m▄${CL}"
+    elif [[ $b == . ]]; then
+      out+="${ESC}[38;2;${LOGO_RGB[$t]}m▀${CL}"
+    else
+      out+="${ESC}[38;2;${LOGO_RGB[$t]}m${ESC}[48;2;${LOGO_RGB[$b]}m▀${CL}"
+    fi
+  done
+  printf '%s' "$out"
+}
+
+# printf '%s' throughout: the art is full of backslashes that echo -e would eat.
+show_banner() {
+  local i
+  echo
+  for i in "${!BANNER_HOME[@]}"; do
+    if (( COLOR )); then
+      printf '  %s   %s%s%s%s%s%s%s\n' "$(logo_row "$i")" \
+        "$BL" "${BANNER_HOME[$i]}" "$CO" "${BANNER_GLOW_TOP[$i]}" "$AM" "${BANNER_GLOW_BOTTOM[$i]}" "$CL"
+    else
+      printf '  %s%s%s\n' "${BANNER_HOME[$i]}" "${BANNER_GLOW_TOP[$i]}" "${BANNER_GLOW_BOTTOM[$i]}"
+    fi
+  done
+  echo
+  if (( COLOR )); then
+    printf '  %s\n\n' "${BL}Proxmox VE installer${CL}  ${AM}·${CL}  Debian 12 LXC with Docker"
+  else
+    printf '  %s\n\n' "Proxmox VE installer  ·  Debian 12 LXC with Docker"
+  fi
+}
 
 # ============================================================================
 # Validation — pure checks, no side effects (sourced by the tests).
@@ -123,7 +214,7 @@ ui_input() {
       --inputbox "\n$2" 12 70 "$3" 3>&1 1>&2 2>&3
   else
     local reply
-    echo -e "\n ${GN}$1${CL} — $2" >&2
+    echo -e "\n ${BD}${BL}$1${CL} — $2" >&2
     read -rp "   [$3]: " reply || input_closed || return 1
     echo "${reply:-$3}"
   fi
@@ -141,7 +232,7 @@ ui_menu() {
   else
     local -a tags=() descs=()
     while (( $# )); do tags+=("$1"); descs+=("$2"); shift 2; done
-    echo -e "\n ${GN}${title}${CL} — ${text}" >&2
+    echo -e "\n ${BD}${BL}${title}${CL} — ${text}" >&2
     local i reply
     for i in "${!tags[@]}"; do
       printf '   %d) %-14s %s\n' "$(( i + 1 ))" "${tags[$i]}" "${descs[$i]}" >&2
@@ -172,7 +263,7 @@ ui_yesno() {
       --yes-button "${3:-Yes}" --no-button "${4:-No}" --yesno "\n$2" "$(text_height "$2")" 74
   else
     local reply
-    echo -e "\n ${GN}$1${CL}" >&2
+    echo -e "\n ${BD}${BL}$1${CL}" >&2
     echo -e "$2" | sed 's/^/   /' >&2
     read -rp "   ${3:-Yes}? [Y/n]: " reply || input_closed || return 1
     [[ ! "$reply" =~ ^[Nn] ]]
@@ -183,7 +274,7 @@ ui_msg() {
   if [[ $UI == whiptail ]]; then
     whiptail --backtitle "$(backtitle)" --title "$1" --msgbox "\n$2" "$(text_height "$2")" 74
   else
-    echo -e "   ${YW}$1:${CL} $2" >&2
+    echo -e "   ${AM}$1:${CL} $2" >&2
   fi
 }
 
@@ -201,7 +292,7 @@ trap 'exit 0' USR1
 
 exit_cancelled() {
   clear_screen
-  echo -e "\n ${YW}Installation cancelled. Nothing was changed.${CL}\n" >&2
+  echo -e "\n ${AM}Installation cancelled. Nothing was changed.${CL}\n" >&2
   if (( BASH_SUBSHELL > 0 )); then kill -USR1 "$MAIN_PID"; fi
   exit 0
 }
@@ -444,6 +535,24 @@ summary_text() {
 EOF
 }
 
+# The chosen settings under the banner, in the style of the community-scripts
+# installers: what is being used, labels in blue, values in amber.
+show_settings() {
+  local net="DHCP"
+  [[ "$NET_MODE" == static ]] && net="${IPV4_CIDR} via ${GATEWAY}"
+  [[ -n "$VLAN" ]] && net="${net}, VLAN ${VLAN}"
+  setting() { printf '  %s%-18s%s%s%s\n' "$BL" "$1" "$BD$AM" "$2" "$CL"; }
+  printf '  %sUsing %s settings%s\n' "$BD$BL" "${SETTINGS_MODE:-recommended}" "$CL"
+  setting "Container ID" "$CTID"
+  setting "Hostname" "$CT_HOSTNAME"
+  setting "Disk" "${DISK_GB} GB on ${STORAGE}"
+  setting "CPU / RAM" "${CORES} cores, ${RAM_MB} MB"
+  setting "Network" "${BRIDGE}, ${net}"
+  setting "Time zone" "$TZ_NAME"
+  setting "Web port" "$FRONTEND_PORT"
+  echo
+}
+
 choose_settings() {
   set_defaults
   ui_yesno "${APP}" "This creates a new LXC container on this Proxmox host and installs ${APP} in it: Debian 12, Docker, and the ${APP} containers.\n\nNothing is changed until you confirm the settings at the end." "Continue" "Exit" \
@@ -456,14 +565,17 @@ choose_settings() {
       advanced "Advanced: choose ID, storage, network, time zone, ...")" || exit_cancelled
     if [[ "$mode" == advanced ]]; then
       advanced_settings || continue
+      SETTINGS_MODE=custom
     else
       set_defaults
+      SETTINGS_MODE=recommended
     fi
     default_storage || continue
     # "Change settings" walks the wizard with every current choice filled in;
     # Back off its first step returns to the Recommended/Advanced choice.
     while ! ui_yesno "Ready to install" "$(summary_text)" "Install" "Change settings"; do
       advanced_settings || continue 2
+      SETTINGS_MODE=custom
     done
     return 0
   done
@@ -472,6 +584,22 @@ choose_settings() {
 # ============================================================================
 # Install
 # ============================================================================
+
+# Runs inside the container with WANT_LANG set (already checked to be a plain
+# locale name). Fails, and changes nothing that matters, if the locale is not
+# one Debian can generate.
+# shellcheck disable=SC2016
+LOCALE_SCRIPT='
+set -e
+# locale.gen spells the codeset UTF-8; a host may say utf8. glibc treats them alike.
+gen_name="$(printf "%s" "$WANT_LANG" | sed "s/\.[Uu][Tt][Ff]-\{0,1\}8/.UTF-8/")"
+sed -i "s/^# *\(${gen_name}\) /\1 /" /etc/locale.gen
+locale-gen >/dev/null
+# locale -a lists en_US.UTF-8 as en_US.utf8; compare both lower-cased.
+want="$(printf "%s" "$WANT_LANG" | sed "s/\.[Uu][Tt][Ff]-\{0,1\}8/.utf8/" | tr "[:upper:]" "[:lower:]")"
+locale -a | tr "[:upper:]" "[:lower:]" | grep -qxF "$want"
+update-locale LANG="$WANT_LANG"
+'
 install_homeglow() {
   # --- ensure a Debian 12 template is available ------------------------------
   msg_info "Ensuring the Debian 12 LXC template is available"
@@ -522,12 +650,27 @@ install_homeglow() {
   msg_ok "Container started"
 
   # --- provision inside the container ----------------------------------------
-  run() { pct exec "$CTID" -- bash -c "$1"; }
+  # pct exec carries this shell's LANG into the container, where that locale
+  # does not exist yet, so apt and perl warn on every run. C.UTF-8 is built
+  # into glibc and always there.
+  run() { pct exec "$CTID" -- env LANG=C.UTF-8 LC_ALL=C.UTF-8 bash -c "$1"; }
 
   msg_info "Installing base dependencies"
-  run "export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get install -y -qq ca-certificates curl openssl >/dev/null" \
+  run "export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get install -y -qq ca-certificates curl openssl locales >/dev/null" \
     || die "Dependency install failed."
   msg_ok "Base dependencies installed"
+
+  # Generate this shell's locale inside the container too, so a later
+  # `pct enter` (which brings LANG along the same way) is quiet as well.
+  local host_lang="${LANG:-}"
+  if [[ "$host_lang" =~ ^[A-Za-z0-9_.@-]+$ && "$host_lang" != C && "$host_lang" != C.* && "$host_lang" != POSIX ]]; then
+    msg_info "Setting up the ${host_lang} locale"
+    if pct exec "$CTID" -- env LANG=C.UTF-8 LC_ALL=C.UTF-8 WANT_LANG="$host_lang" bash -c "$LOCALE_SCRIPT" >/dev/null 2>&1; then
+      msg_ok "Locale ${host_lang} ready"
+    else
+      msg_warn "Could not generate ${host_lang} in the container; it will use C.UTF-8"
+    fi
+  fi
 
   msg_info "Installing Docker (this can take a few minutes)"
   run "curl -fsSL https://get.docker.com | sh >/dev/null 2>&1" || die "Docker install failed."
@@ -557,9 +700,9 @@ EOF"
   fi
   echo
   msg_ok "${APP} is installed in LXC ${CTID}."
-  echo -e "   Open:  ${GN}http://${ip:-<container-ip>}:${FRONTEND_PORT}${CL}"
-  echo -e "   Shell: ${YW}pct enter ${CTID}${CL}"
-  echo -e "   Update later:  ${YW}pct exec ${CTID} -- sh -c 'cd /opt/homeglow && docker compose pull && docker compose up -d'${CL}"
+  echo -e "   ${BL}Open:${CL}          ${BD}${AM}${UL}http://${ip:-<container-ip>}:${FRONTEND_PORT}${CL}"
+  echo -e "   ${BL}Shell:${CL}         pct enter ${CTID}"
+  echo -e "   ${BL}Update later:${CL}  pct exec ${CTID} -- sh -c 'cd /opt/homeglow && docker compose pull && docker compose up -d'"
   echo
 }
 
@@ -572,11 +715,13 @@ main() {
   (( $(storage_count rootdir) > 0 )) || { msg_err "No active storage on this host accepts container disks (content type 'rootdir')."; exit 1; }
   (( $(storage_count vztmpl) > 0 )) || { msg_err "No active storage on this host accepts container templates (content type 'vztmpl')."; exit 1; }
 
+  # Whiptail takes the whole screen, so the banner waits for the install; plain
+  # prompts scroll beneath it.
+  if [[ $UI == plain ]]; then show_banner; fi
   choose_settings
   clear_screen
-  echo -e "\n${GN}=== Installing ${APP} ===${CL}\n"
-  summary_text | sed -n '1,8p'
-  echo
+  show_banner
+  show_settings
   install_homeglow
 }
 
