@@ -229,6 +229,7 @@ const schemaMigrations = [
   { schemaId: 25, migrationPath: './migrations/schema25-unifyCredentialEncryption', },
   { schemaId: 26, migrationPath: './migrations/schema26-keepLegacyTimezone', },
   { schemaId: 27, migrationPath: './migrations/schema27-userGoogleTasks', },
+  { schemaId: 28, migrationPath: './migrations/schema28-choreCalendarMatch', },
 ];
 
 const ALLOWED_SCHEDULE_DURATIONS = new Set(['day-of', 'until-completed', 'once-completed']);
@@ -2639,6 +2640,38 @@ fastify.delete('/api/chores/:id', async (request, reply) => {
 
 // Chore Schedules routes
 fastify.get('/api/chore-schedules', async (request, reply) => {
+    // Helper to evaluate calendar match for today.
+    // All-day events are stored as UTC midnight, so converting them with
+    // 'localtime' shifts them to the previous day in timezones behind UTC.
+    // An all-day event is the same date everywhere, so compare its UTC date
+    // directly; only timed events get the localtime conversion.
+    const todayStr = getTodayLocalDateString();
+    const todayEvents = db.prepare(`
+      SELECT title, start_time, all_day
+      FROM calendar_events_cache
+      WHERE source_id IN (SELECT id FROM calendar_sources WHERE enabled = 1)
+        AND (
+          (all_day = 1 AND date(start_time) = ?)
+          OR (all_day = 0 AND date(start_time, 'localtime') = ?)
+        )
+    `).all(todayStr, todayStr);
+
+    const checkCalendarMatch = (matchStr) => {
+      if (!matchStr) return null;
+      const target = matchStr.toLowerCase().trim();
+      for (const ev of todayEvents) {
+        if (ev.title && ev.title.toLowerCase().includes(target)) {
+          let dueTime = null;
+          if (!ev.all_day && ev.start_time) {
+            const d = new Date(ev.start_time);
+            dueTime = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+          }
+          return { matched: true, eventTitle: ev.title, dueTime };
+        }
+      }
+      return { matched: false };
+    };
+
   try {
     const { user_id, visible, usage, chore_id } = request.query;
     let query = 'SELECT cs.*, c.title, c.description, c.clam_value, c.icon FROM chore_schedules cs JOIN chores c ON cs.chore_id = c.id';
@@ -2658,6 +2691,8 @@ fastify.get('/api/chore-schedules', async (request, reply) => {
       params.push(1);
       conditions.push('(cs.duration IS NULL OR cs.duration NOT IN (?, ?))');
       params.push('until-completed', 'once-completed');
+      conditions.push('(cs.due_date IS NULL OR cs.due_date <= ?)');
+      params.push(todayStr);
     }
     if (chore_id !== undefined) {
       conditions.push('cs.chore_id = ?');
@@ -2669,6 +2704,23 @@ fastify.get('/api/chore-schedules', async (request, reply) => {
     }
 
     const rows = db.prepare(query).all(...params);
+
+    for (const s of rows) {
+      if (s.calendar_match) {
+        const match = checkCalendarMatch(s.calendar_match);
+        if (match && match.matched) {
+          s.calendar_matched_today = 1;
+          if (match.dueTime && !s.due_time) {
+            s.due_time = match.dueTime;
+          }
+        } else {
+          s.calendar_matched_today = 0;
+        }
+      } else {
+        s.calendar_matched_today = 0;
+      }
+    }
+
     return rows;
   } catch (error) {
     console.error('Error fetching chore schedules:', error);
@@ -2690,8 +2742,81 @@ fastify.get('/api/chore-schedules/:id', async (request, reply) => {
   }
 });
 
+
+function createInitialChildSchedule(parentSchedule) {
+  const stmt = db.prepare(`
+    INSERT INTO chore_schedules (
+      chore_id, user_id, crontab, duration, visible, parent_schedule_id,
+      due_date, due_time, sound_enabled, sound, reminder_interval_minutes,
+      transferable, can_snooze
+    )
+    VALUES (?, ?, NULL, 'day-of', 1, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  return stmt.run(
+    parentSchedule.chore_id,
+    parentSchedule.user_id,
+    parentSchedule.id,
+    parentSchedule.due_date || null,
+    parentSchedule.due_time || null,
+    parentSchedule.sound_enabled ? 1 : 0,
+    parentSchedule.sound || null,
+    parentSchedule.reminder_interval_minutes || null,
+    parentSchedule.transferable !== undefined ? (parentSchedule.transferable ? 1 : 0) : 1,
+    parentSchedule.can_snooze !== undefined ? (parentSchedule.can_snooze ? 1 : 0) : 1
+  );
+}
+
 fastify.post('/api/chore-schedules', async (request, reply) => {
-  const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until } = request.body;
+    const body = request.body || {};
+    // Multi-user batch support
+    if (Array.isArray(body.user_ids) && body.user_ids.length > 0) {
+      const { chore_id, crontab, duration, interval, visible, due_date, due_time, sound_enabled, sound, reminder_interval_minutes, transferable, can_snooze, calendar_match } = body;
+      const insertStmt = db.prepare(`
+        INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, interval, visible, due_date, due_time, sound_enabled, sound, reminder_interval_minutes, transferable, can_snooze, calendar_match)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      const ids = [];
+      const runTx = db.transaction((uIds) => {
+        for (const uId of uIds) {
+          const res = insertStmt.run(
+            chore_id,
+            uId === '' || uId === null ? null : uId,
+            crontab || null,
+            duration || 'day-of',
+            interval || null,
+            visible !== undefined ? visible : 1,
+            due_date || null,
+            due_time || null,
+            sound_enabled ? 1 : 0,
+            sound || null,
+            reminder_interval_minutes || null,
+            transferable !== undefined ? (transferable ? 1 : 0) : 1,
+            can_snooze !== undefined ? (can_snooze ? 1 : 0) : 1,
+            calendar_match ? String(calendar_match).trim() : null
+          );
+          const parentId = res.lastInsertRowid;
+          ids.push(parentId);
+          if (duration === 'once-completed') {
+            createInitialChildSchedule({
+              id: parentId,
+              chore_id,
+              user_id: uId === '' || uId === null ? null : uId,
+              due_date: due_date || null,
+              due_time: due_time || null,
+              sound_enabled,
+              sound,
+              reminder_interval_minutes,
+              transferable,
+              can_snooze
+            });
+          }
+        }
+      });
+      runTx(body.user_ids);
+      return { success: true, ids, count: ids.length };
+    }
+
+  const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until, calendar_match } = request.body;
   try {
     if (!chore_id) {
       return reply.status(400).send({ error: 'chore_id is required' });
@@ -2713,9 +2838,6 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
 
     const normalizedInterval = normalizeScheduleInterval(interval);
     if (normalizedDuration === 'once-completed') {
-      if (!crontab) {
-        return reply.status(400).send({ error: 'once-completed schedules require a crontab expression' });
-      }
       if (!isValidScheduleInterval(normalizedInterval)) {
         return reply.status(400).send({ error: 'once-completed schedules require a valid interval like 30d, 3w, 2m, or 1y' });
       }
@@ -2744,7 +2866,7 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
       normalizedParentScheduleId = parsedParentScheduleId;
     }
 
-    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until, calendar_match) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     const info = stmt.run(
       chore_id,
       user_id || null,
@@ -2760,7 +2882,8 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
       dueDateResult.value,
       transferable !== undefined ? (transferable ? 1 : 0) : 1,
       can_snooze !== undefined ? (can_snooze ? 1 : 0) : 1,
-      snoozedUntilResult.value
+      snoozedUntilResult.value,
+      calendar_match ? String(calendar_match).trim() : null
     );
     return { id: info.lastInsertRowid, success: true };
   } catch (error) {
@@ -2770,7 +2893,7 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
 });
 
 fastify.post('/api/chore-schedules/bulk', async (request, reply) => {
-  const { chore_id, user_ids, crontab, visible, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze } = request.body;
+  const { chore_id, user_ids, crontab, visible, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, calendar_match } = request.body;
   try {
     if (!chore_id || !user_ids || !Array.isArray(user_ids)) {
       return reply.status(400).send({ error: 'chore_id and user_ids array are required' });
@@ -2788,11 +2911,11 @@ fastify.post('/api/chore-schedules/bulk', async (request, reply) => {
       }
     }
 
-    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, visible, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, visible, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, calendar_match) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     const ids = [];
 
     for (const user_id of user_ids) {
-      const info = stmt.run(chore_id, user_id, crontab || null, visible !== undefined ? visible : 1, dueTimeResult.value, sound || null, sound_enabled ? 1 : 0, reminderResult.value, dueDateResult.value, transferable !== undefined ? (transferable ? 1 : 0) : 1, can_snooze !== undefined ? (can_snooze ? 1 : 0) : 1);
+      const info = stmt.run(chore_id, user_id, crontab || null, visible !== undefined ? visible : 1, dueTimeResult.value, sound || null, sound_enabled ? 1 : 0, reminderResult.value, dueDateResult.value, transferable !== undefined ? (transferable ? 1 : 0) : 1, can_snooze !== undefined ? (can_snooze ? 1 : 0) : 1, calendar_match ? String(calendar_match).trim() : null);
       ids.push(info.lastInsertRowid);
     }
 
@@ -2805,7 +2928,7 @@ fastify.post('/api/chore-schedules/bulk', async (request, reply) => {
 
 fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
   const { id } = request.params;
-  const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until, revoke_daily_bonus, transfer_bonus_clams } = request.body;
+  const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until, revoke_daily_bonus, transfer_bonus_clams, calendar_match } = request.body;
   try {
     const dueTimeResult = normalizeDueTime(due_time);
     if (due_time !== undefined && !dueTimeResult.valid) {
@@ -2852,9 +2975,6 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
     const nextCrontab = crontab !== undefined ? (crontab || null) : existingSchedule.crontab;
     const nextInterval = normalizeScheduleInterval(interval !== undefined ? interval : existingSchedule.interval);
     if (nextDuration === 'once-completed') {
-      if (!nextCrontab) {
-        return reply.status(400).send({ error: 'once-completed schedules require a crontab expression' });
-      }
       if (!isValidScheduleInterval(nextInterval)) {
         return reply.status(400).send({ error: 'once-completed schedules require a valid interval like 30d, 3w, 2m, or 1y' });
       }
@@ -2902,6 +3022,7 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
     if (can_snooze !== undefined) { updates.push('can_snooze = ?'); params.push(can_snooze ? 1 : 0); }
     if (snoozed_until !== undefined) { updates.push('snoozed_until = ?'); params.push(snoozedUntilResult.value); }
     if (transfer_bonus_clams !== undefined) { updates.push('transfer_bonus_clams = ?'); params.push(normalizedTransferBonus); }
+    if (calendar_match !== undefined) { updates.push('calendar_match = ?'); params.push(calendar_match ? String(calendar_match).trim() || null : null); }
 
     if (updates.length === 0) {
       return reply.status(400).send({ error: 'No fields to update' });
@@ -3163,6 +3284,9 @@ function getTodaysRegularChoresForUser(userId, dateStr, referenceNow = new Date(
   for (const schedule of regularChores) {
     // schedules without crontab are one-time and always part of today's chores
     if (!schedule.crontab) {
+      if (schedule.due_date && schedule.due_date > dateStr) {
+        continue;
+      }
       todaysChores.push(schedule);
       continue;
     }
