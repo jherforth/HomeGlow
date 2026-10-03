@@ -272,6 +272,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   const [draggingTabNumber, setDraggingTabNumber] = useState(null);
   // User display order (issue #134): drag on desktop, arrows everywhere.
   const [draggingUserId, setDraggingUserId] = useState(null);
+  const [googleTasksStatuses, setGoogleTasksStatuses] = useState({});
+  const [syncingGoogleTasksUser, setSyncingGoogleTasksUser] = useState(null);
   const handleLanguageChange = async (code) => {
     try {
       await changeLanguage(code);
@@ -334,8 +336,91 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
       fetchWidgetAssignments();
       fetchPhotoData();
       fetchDevices();
+      fetchUsersGoogleTasksStatuses();
     }
   }, [isAuthenticated]);
+
+  const fetchUsersGoogleTasksStatuses = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/users`);
+      const userList = Array.isArray(res.data) ? res.data : [];
+      const statusMap = {};
+      await Promise.all(
+        userList
+          .filter((u) => u.id !== 0)
+          .map(async (u) => {
+            try {
+              const statusRes = await axios.get(`${API_BASE_URL}/api/users/${u.id}/google-tasks/status`);
+              statusMap[u.id] = statusRes.data;
+            } catch (_) {
+              statusMap[u.id] = { connected: false };
+            }
+          })
+      );
+      setGoogleTasksStatuses(statusMap);
+    } catch (_) {}
+  };
+
+  useEffect(() => {
+    const handleGoogleTasksMessage = (event) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === 'homeglow:google-tasks-oauth') {
+        fetchUsersGoogleTasksStatuses();
+        fetchChores();
+        setSaveMessage({
+          show: true,
+          type: event.data.ok ? 'success' : 'error',
+          text: event.data.ok ? t('admin:users.googleTasks.connectedSuccess') : t('admin:users.googleTasks.connectionFailed'),
+        });
+        setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 4000);
+      }
+    };
+    window.addEventListener('message', handleGoogleTasksMessage);
+    return () => window.removeEventListener('message', handleGoogleTasksMessage);
+  }, []);
+
+  const handleConnectGoogleTasks = async (userId) => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/users/${userId}/google-tasks/auth-url`);
+      if (res.data?.url) {
+        window.open(res.data.url, 'google-tasks-oauth', 'width=550,height=650');
+      }
+    } catch (err) {
+      alert(err.response?.data?.error || t('admin:users.googleTasks.authStartFailed'));
+    }
+  };
+
+  const handleDisconnectGoogleTasks = async (userId) => {
+    if (!window.confirm(t('admin:users.googleTasks.disconnectConfirm'))) return;
+    try {
+      await axios.delete(`${API_BASE_URL}/api/users/${userId}/google-tasks`);
+      await fetchUsersGoogleTasksStatuses();
+      setSaveMessage({ show: true, type: 'success', text: t('admin:users.googleTasks.disconnected') });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (err) {
+      alert(err.response?.data?.error || t('admin:users.googleTasks.disconnectFailed'));
+    }
+  };
+
+  const handleSyncGoogleTasks = async (userId) => {
+    setSyncingGoogleTasksUser(userId);
+    try {
+      const res = await axios.post(`${API_BASE_URL}/api/users/${userId}/google-tasks/sync`);
+      await fetchChores();
+      const imported = res.data.imported || 0;
+      const updated = res.data.updated || 0;
+      setSaveMessage({
+        show: true,
+        type: 'success',
+        text: t('admin:users.googleTasks.syncSuccess', { imported, updated }),
+      });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    } catch (err) {
+      alert(err.response?.data?.error || t('admin:users.googleTasks.syncFailed'));
+    } finally {
+      setSyncingGoogleTasksUser(null);
+    }
+  };
 
   useEffect(() => {
     if (!isAuthenticated || activeTab !== 7) {
@@ -3528,6 +3613,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                     <TableCell>{t('admin:users.email')}</TableCell>
                     <TableCell>{t('admin:users.clamTotal')}</TableCell>
                     <TableCell>{t('admin:users.chores')}</TableCell>
+                    <TableCell>{t('admin:users.googleTasks.title')}</TableCell>
                     <TableCell>{t('common:labels.actions')}</TableCell>
                   </TableRow>
                 </TableHead>
@@ -3667,6 +3753,45 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                         >
                           {getUserChoreCount(user.id)} chores
                         </Button>
+                      </TableCell>
+                      <TableCell data-label={t('admin:users.googleTasks.title')}>
+                        {!isBonus && (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                            {googleTasksStatuses[user.id]?.connected ? (
+                              <>
+                                <Chip
+                                  size="small"
+                                  color="success"
+                                  label={googleTasksStatuses[user.id]?.email || t('admin:users.googleTasks.connected')}
+                                />
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  disabled={syncingGoogleTasksUser === user.id}
+                                  onClick={() => handleSyncGoogleTasks(user.id)}
+                                >
+                                  {syncingGoogleTasksUser === user.id ? t('admin:users.googleTasks.syncing') : t('admin:users.googleTasks.sync')}
+                                </Button>
+                                <Button
+                                  size="small"
+                                  variant="text"
+                                  color="error"
+                                  onClick={() => handleDisconnectGoogleTasks(user.id)}
+                                >
+                                  {t('admin:users.googleTasks.disconnect')}
+                                </Button>
+                              </>
+                            ) : (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => handleConnectGoogleTasks(user.id)}
+                              >
+                                {t('admin:users.googleTasks.connect')}
+                              </Button>
+                            )}
+                          </Box>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', gap: 1 }}>
