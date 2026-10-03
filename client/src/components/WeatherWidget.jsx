@@ -45,6 +45,11 @@ const isValidCoordinates = (candidate) => {
     && Number.isFinite(candidate.lon);
 };
 
+// The widget's layouts and its "3-Day Forecast" heading are built for three
+// days. Providers may send more (OpenWeatherMap's free endpoint gives five),
+// which plugins such as Weather Glance show; this widget keeps to three.
+const CORE_FORECAST_DAYS = 3;
+
 const WeatherWidget = ({
   refreshInterval = 0,
   widgetSize = { width: 4, height: 4 },
@@ -744,7 +749,7 @@ const WeatherWidget = ({
           <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
             {t('weather:widget.forecastHeading')}
           </Typography>
-          {forecastData.map((day) => (
+          {forecastData.slice(0, CORE_FORECAST_DAYS).map((day) => (
             <Box
               key={day.date}
               sx={{
@@ -901,7 +906,7 @@ const WeatherWidget = ({
               {t('weather:widget.forecastHeading')}
             </Typography>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {forecastData.map((day) => (
+              {forecastData.slice(0, CORE_FORECAST_DAYS).map((day) => (
                 <Box
                   key={day.date}
                   sx={{
