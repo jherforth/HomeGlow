@@ -227,7 +227,7 @@ const schemaMigrations = [
   { schemaId: 24, migrationPath: './migrations/schema24-choreIcon', },
   { schemaId: 25, migrationPath: './migrations/schema25-unifyCredentialEncryption', },
   { schemaId: 26, migrationPath: './migrations/schema26-keepLegacyTimezone', },
-  { schemaId: 27, migrationPath: './migrations/schema27-choreCalendarMatch', },
+  { schemaId: 28, migrationPath: './migrations/schema28-choreCalendarMatch', },
 ];
 
 const ALLOWED_SCHEDULE_DURATIONS = new Set(['day-of', 'until-completed', 'once-completed']);
