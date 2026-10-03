@@ -19,6 +19,7 @@ import { Delete, Refresh } from '@mui/icons-material';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { stackableTableSx } from '../utils/responsiveTable.js';
+import AdaptiveTableContainer from './AdaptiveTableContainer';
 import { formatLoggedAt } from '../utils/choreHelpers.js';
 
 export default function ChoreHistoryTab() {
@@ -91,7 +92,7 @@ export default function ChoreHistoryTab() {
           <Typography color="text.secondary">No clam-earning history in the last 7 days.</Typography>
         </Box>
       ) : (
-        <TableContainer component={Paper} variant="outlined">
+        <AdaptiveTableContainer component={Paper} variant="outlined">
           <Table size="small" sx={stackableTableSx}>
             <TableHead>
               <TableRow>
@@ -147,7 +148,7 @@ export default function ChoreHistoryTab() {
               ))}
             </TableBody>
           </Table>
-        </TableContainer>
+        </AdaptiveTableContainer>
       )}
     </Box>
   );

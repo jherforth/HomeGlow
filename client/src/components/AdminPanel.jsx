@@ -92,6 +92,7 @@ import useIsMobile from '../hooks/useIsMobile.js';
 import { syncWidgetAssignments } from '../utils/assignmentSync.js';
 import { normalizeWidgetSettings as normalizeSharedWidgetSettings } from '../utils/widgetSettings.js';
 import { stackableTableSx } from '../utils/responsiveTable.js';
+import AdaptiveTableContainer from './AdaptiveTableContainer';
 import {
   INTERFACE_COLORS_STORAGE_KEY,
   SCREENSAVER_SETTINGS_STORAGE_KEY,
@@ -2131,7 +2132,21 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
         variant="scrollable"
         scrollButtons="auto"
         allowScrollButtonsMobile
-        sx={{ mb: 3 }}
+        sx={{
+          mb: 3,
+          // Compact tabs on mobile so more fit on screen; keep 44px+ touch targets.
+          '@media (max-width:599.95px)': {
+            '& .MuiTab-root': {
+              minWidth: 0,
+              px: 1.5,
+              fontSize: '0.75rem',
+              minHeight: 48,
+            },
+            '& .MuiTabs-scrollButtons': {
+              width: 32,
+            },
+          },
+        }}
       >
         {adminTabs.map((tab, index) => (
           <Tab key={tab} label={tab} />
@@ -2150,6 +2165,19 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                 variant="scrollable"
                 scrollButtons="auto"
                 allowScrollButtonsMobile
+                sx={{
+                  '@media (max-width:599.95px)': {
+                    '& .MuiTab-root': {
+                      minWidth: 0,
+                      px: 1.25,
+                      fontSize: '0.75rem',
+                      minHeight: 44,
+                    },
+                    '& .MuiTabs-scrollButtons': {
+                      width: 28,
+                    },
+                  },
+                }}
               >
                 <Tab label={t('admin:subTabs.widgets')} />
                 <Tab label={t('admin:subTabs.plugins')} />
@@ -2723,7 +2751,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                   </Button>
                 </Box>
 
-                <TableContainer component={Paper}>
+                <AdaptiveTableContainer component={Paper}>
                   <Table sx={stackableTableSx}>
                     <TableHead>
                       <TableRow>
@@ -2836,7 +2864,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                       })}
                     </TableBody>
                   </Table>
-                </TableContainer>
+                </AdaptiveTableContainer>
               </>
             )}
 
@@ -2858,7 +2886,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                   </Box>
                 </Box>
 
-                <TableContainer component={Paper}>
+                <AdaptiveTableContainer component={Paper}>
                   <Table sx={stackableTableSx}>
                     <TableHead>
                       <TableRow>
@@ -2922,7 +2950,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                       })}
                     </TableBody>
                   </Table>
-                </TableContainer>
+                </AdaptiveTableContainer>
               </>
             )}
           </CardContent>
@@ -3496,7 +3524,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                     </Button>
                   </Grid>
                   <Grid size={12}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                       {newUser.profile_picture ? (
                         <img
                           src={`${API_BASE_URL}/Uploads/users/${newUser.profile_picture}`}
@@ -3509,7 +3537,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                       <Button size="small" variant="outlined" onClick={() => setAvatarPicker({ open: true, userId: null })}>
                         {t('admin:users.chooseAvatar')}
                       </Button>
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" color="text.secondary" sx={{ flexBasis: { xs: '100%', sm: 'auto' } }}>
                         {t('admin:users.avatarHelp')}
                       </Typography>
                     </Box>
@@ -3518,7 +3546,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
               </Box>
             </AdminFormSection>
 
-            <TableContainer component={Paper}>
+            <AdaptiveTableContainer component={Paper}>
               <Table sx={stackableTableSx}>
                 <TableHead>
                   <TableRow>
@@ -3704,7 +3732,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                   })}
                 </TableBody>
               </Table>
-            </TableContainer>
+            </AdaptiveTableContainer>
           </CardContent>
         </Card>
       )}
@@ -3727,6 +3755,19 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                 variant="scrollable"
                 scrollButtons="auto"
                 allowScrollButtonsMobile
+                sx={{
+                  '@media (max-width:599.95px)': {
+                    '& .MuiTab-root': {
+                      minWidth: 0,
+                      px: 1.25,
+                      fontSize: '0.75rem',
+                      minHeight: 44,
+                    },
+                    '& .MuiTabs-scrollButtons': {
+                      width: 28,
+                    },
+                  },
+                }}
               >
                 <Tab label={t('admin:users.chores')} />
                 <Tab label={t('admin:chores.history')} />
@@ -4536,7 +4577,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
               {t('admin:chores.noChoresForUser')}
             </Typography>
           ) : (
-            <TableContainer component={Paper} sx={{ mt: 1 }}>
+            <AdaptiveTableContainer component={Paper} sx={{ mt: 1 }}>
               <Table sx={stackableTableSx}>
                 <TableHead>
                   <TableRow>
@@ -4600,7 +4641,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                   ))}
                 </TableBody>
               </Table>
-            </TableContainer>
+            </AdaptiveTableContainer>
           )}
         </DialogContent>
         <DialogActions>
