@@ -1,30 +1,65 @@
-// CSS "stacked card" pattern for MUI <Table>: below the mobile cutoff the
-// header row is hidden and each body row renders as a bordered card whose
-// cells show their column name via the cell's data-label attribute.
-// Cells without a data-label (e.g. avatars, action buttons) render unprefixed.
+// Compact horizontal-scroll table for mobile: below the mobile cutoff the
+// table keeps its desktop column layout inside a horizontally scrollable
+// container. The first column (Title/Chore) is sticky and sized to fit its
+// content via the --first-col-w CSS variable (set by AdaptiveTableContainer),
+// capped at the viewport width; scroll right to reach the remaining columns
+// (schedules, actions, etc). Rows stay compact so 10-15 fit on screen.
 export const stackableTableSx = {
   '@media (max-width:599.95px)': {
-    '& thead': { display: 'none' },
-    '& tr': {
-      display: 'block',
-      mb: 1.5,
-      border: '1px solid var(--card-border)',
-      borderRadius: 2,
-      p: 1,
+    display: 'block',
+    overflowX: 'auto',
+    WebkitOverflowScrolling: 'touch',
+    // The table itself needs a min-width to force horizontal scrolling.
+    '& .MuiTable-root': {
+      minWidth: 640,
+      width: 'max-content',
     },
-    '& td': {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      gap: 2,
-      border: 0,
+    '& .MuiTableHead-root .MuiTableCell-root': {
+      px: 1,
       py: 0.75,
-      '&::before': {
-        content: 'attr(data-label)',
-        fontWeight: 600,
-        color: 'var(--text-secondary)',
-        marginRight: '12px',
-      },
+      fontSize: '0.7rem',
+      whiteSpace: 'nowrap',
+    },
+    '& .MuiTableBody-root .MuiTableCell-root': {
+      px: 1,
+      py: 0.5,
+      fontSize: '0.8rem',
+      verticalAlign: 'top',
+    },
+    // First column is sticky and shrink-to-fit: --first-col-w is measured
+    // from the column content by AdaptiveTableContainer (capped at viewport
+    // width); falls back to full viewport width before measurement.
+    '& .MuiTableBody-root .MuiTableCell-root:first-of-type': {
+      position: 'sticky',
+      left: 0,
+      backgroundColor: 'var(--card-bg)',
+      zIndex: 1,
+      width: 'var(--first-col-w, calc(100vw - 48px))',
+      minWidth: 'var(--first-col-w, calc(100vw - 48px))',
+      maxWidth: 'var(--first-col-w, calc(100vw - 48px))',
+      whiteSpace: 'normal',
+      wordBreak: 'break-word',
+    },
+    '& .MuiTableHead-root .MuiTableCell-root:first-of-type': {
+      position: 'sticky',
+      left: 0,
+      backgroundColor: 'var(--card-bg)',
+      zIndex: 2,
+      width: 'var(--first-col-w, calc(100vw - 48px))',
+      minWidth: 'var(--first-col-w, calc(100vw - 48px))',
+      maxWidth: 'var(--first-col-w, calc(100vw - 48px))',
+    },
+  },
+};
+
+// Apply to the TableContainer for proper scroll behavior on mobile.
+export const stackableTableContainerSx = {
+  '@media (max-width:599.95px)': {
+    overflowX: 'auto',
+    WebkitOverflowScrolling: 'touch',
+    '& .MuiTable-root': {
+      width: 'max-content',
+      minWidth: '100%',
     },
   },
 };
