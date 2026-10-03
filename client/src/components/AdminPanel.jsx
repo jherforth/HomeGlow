@@ -85,7 +85,7 @@ import RefreshIntervalSelect from './RefreshIntervalSelect';
 import ScreensaverIntervalSlider from './ScreensaverIntervalSlider';
 import GoogleAccountConnection from './GoogleAccountConnection';
 import ClamValueModal from './ClamValueModal';
-import { parseAdminHash, setAdminHash, buildAdminHash } from '../utils/adminNavigation.js';
+import { parseAdminHash, setAdminHash, isAdminHash, CHORES_TAB_INDEX } from '../utils/adminNavigation.js';
 import SoundPicker from './SoundPicker';
 import ControlsOnDisplay from './ControlsOnDisplay';
 import useFetchTabs from '../hooks/useFetchTabs.js';
@@ -189,17 +189,17 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   const handleTabChange = useCallback((newTab) => {
     setActiveTab(newTab);
     // Reset subtab when switching tabs; keep chores subtab if staying on chores
-    const subtab = newTab === 3 ? choresSubTab : 0;
-    if (newTab !== 3) setChoresSubTab(0);
+    const subtab = newTab === CHORES_TAB_INDEX ? choresSubTab : 0;
+    if (newTab !== CHORES_TAB_INDEX) setChoresSubTab(0);
     setAdminHash(newTab, subtab);
   }, [choresSubTab]);
 
   const handleChoresSubTabChange = useCallback((newSubtab) => {
     setChoresSubTab(newSubtab);
-    setAdminHash(3, newSubtab);
+    setAdminHash(CHORES_TAB_INDEX, newSubtab);
   }, []);
 
-  // If the hash changes externally (back/forward button), sync the tabs.
+  // If the hash is edited while the panel is open, follow it.
   useEffect(() => {
     const onHashChange = () => {
       const parsed = parseAdminHash();
@@ -214,7 +214,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
 
   // Set initial hash if admin was opened without one (e.g. via button).
   useEffect(() => {
-    if (!window.location.hash.startsWith('#/admin')) {
+    if (!isAdminHash()) {
       setAdminHash(activeTab, choresSubTab);
     }
     // Only on mount.
@@ -2111,6 +2111,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     return option ? option.label : t('admin:refresh.disabled');
   };
 
+  // Same order as ADMIN_TABS in utils/adminNavigation.js, which names these
+  // tabs in the URL hash by position.
   const adminTabs = [
     'Widgets',
     'Interface',
