@@ -7,18 +7,26 @@ const VIEWPORT_MARGIN_PX = 48; // matches the calc(100vw - 48px) fallback
 
 // Measure the natural (unwrapped) width of the first column's cells.
 function measureFirstColumn(table) {
-  const cells = table.querySelectorAll(
-    'thead tr > th:first-child, thead tr > td:first-child, tbody tr > td:first-child, tbody tr > th:first-child'
+  const cells = Array.from(
+    table.querySelectorAll(
+      'thead tr > th:first-child, thead tr > td:first-child, tbody tr > td:first-child, tbody tr > th:first-child'
+    )
   );
   if (!cells.length) return 0;
-  let max = 0;
+  // Neutralize ALL first-column cells before measuring any of them: in auto
+  // table layout the column width is set by every cell in the column, so
+  // measuring one at a time would leave the column pinned wide by the rest.
   cells.forEach((cell) => {
-    // Temporarily lift the width constraints so scrollWidth reflects content.
     cell.style.minWidth = '0';
     cell.style.maxWidth = 'none';
     cell.style.width = 'auto';
     cell.style.whiteSpace = 'nowrap';
+  });
+  let max = 0;
+  cells.forEach((cell) => {
     max = Math.max(max, cell.scrollWidth);
+  });
+  cells.forEach((cell) => {
     cell.style.minWidth = '';
     cell.style.maxWidth = '';
     cell.style.width = '';
