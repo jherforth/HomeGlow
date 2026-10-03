@@ -85,6 +85,7 @@ import RefreshIntervalSelect from './RefreshIntervalSelect';
 import ScreensaverIntervalSlider from './ScreensaverIntervalSlider';
 import GoogleAccountConnection from './GoogleAccountConnection';
 import ClamValueModal from './ClamValueModal';
+import { parseAdminHash, setAdminHash, buildAdminHash } from '../utils/adminNavigation.js';
 import SoundPicker from './SoundPicker';
 import ControlsOnDisplay from './ControlsOnDisplay';
 import useFetchTabs from '../hooks/useFetchTabs.js';
@@ -181,9 +182,45 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     chores: { w: 6, h: 4 },
     photos: { w: 6, h: 4 },
   };
-  const [activeTab, setActiveTab] = useState(0);
-  const [choresSubTab, setChoresSubTab] = useState(0);
+  const [activeTab, setActiveTab] = useState(() => parseAdminHash()?.tab ?? 0);
+  const [choresSubTab, setChoresSubTab] = useState(() => parseAdminHash()?.subtab ?? 0);
   const [widgetsSubTab, setWidgetsSubTab] = useState(0);
+
+  // Sync tab changes to the URL hash for deep linking and refresh restore.
+  const handleTabChange = useCallback((newTab) => {
+    setActiveTab(newTab);
+    // Reset subtab when switching tabs; keep chores subtab if staying on chores
+    const subtab = newTab === 3 ? choresSubTab : 0;
+    if (newTab !== 3) setChoresSubTab(0);
+    setAdminHash(newTab, subtab);
+  }, [choresSubTab]);
+
+  const handleChoresSubTabChange = useCallback((newSubtab) => {
+    setChoresSubTab(newSubtab);
+    setAdminHash(3, newSubtab);
+  }, []);
+
+  // If the hash changes externally (back/forward button), sync the tabs.
+  useEffect(() => {
+    const onHashChange = () => {
+      const parsed = parseAdminHash();
+      if (parsed) {
+        setActiveTab(parsed.tab);
+        setChoresSubTab(parsed.subtab);
+      }
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
+  // Set initial hash if admin was opened without one (e.g. via button).
+  useEffect(() => {
+    if (!window.location.hash.startsWith('#/admin')) {
+      setAdminHash(activeTab, choresSubTab);
+    }
+    // Only on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [settings, setSettings] = useState({
     // Write-only: the server redacts this from GET /api/settings, so the field
     // starts blank and an empty save leaves the stored key untouched.
@@ -2213,7 +2250,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
 
       <Tabs
         value={activeTab}
-        onChange={(e, newValue) => setActiveTab(newValue)}
+        onChange={(e, newValue) => handleTabChange(newValue)}
         variant="scrollable"
         scrollButtons="auto"
         allowScrollButtonsMobile
@@ -3875,7 +3912,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
             <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
               <Tabs
                 value={choresSubTab}
-                onChange={(_, v) => setChoresSubTab(v)}
+                onChange={(_, v) => handleChoresSubTabChange(v)}
                 size="small"
                 variant="scrollable"
                 scrollButtons="auto"

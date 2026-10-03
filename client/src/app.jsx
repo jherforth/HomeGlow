@@ -27,6 +27,7 @@ import {
 import { normalizeWidgetSettings, BASE_WIDGET_SETTINGS } from './utils/widgetSettings.js';
 import { buildMobileWidgetList } from './utils/mobileWidgets.js';
 import { CORE_CONTROLS, resolveHiddenControls } from './utils/displayControls.js';
+import { parseAdminHash, clearAdminHash } from './utils/adminNavigation.js';
 import './index.css';
 
 const loadAdminPanel = () => import('./components/AdminPanel.jsx');
@@ -880,9 +881,21 @@ const App = () => {
   const toggleAdminPanel = () => {
     if (showAdminPanel) {
       void fetchDeviceSettings();
+      clearAdminHash();
     }
     setShowAdminPanel(!showAdminPanel);
   };
+
+  // Open admin panel if URL hash indicates it (deep link / refresh restore).
+  // The AdminPanel component syncs the specific tab/subtab from the hash.
+  useEffect(() => {
+    const parsed = parseAdminHash();
+    if (parsed && !showAdminPanel) {
+      setShowAdminPanel(true);
+    }
+    // Only run on mount — subsequent hash changes are handled by AdminPanel.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handlePageRefresh = () => {
     window.location.reload();
