@@ -12,6 +12,11 @@ export function shouldShowChoreToday(schedule) {
     return false;
   }
 
+  // Calendar Event Driven Chores
+  if (schedule.calendar_match) {
+    return !!schedule.calendar_matched_today;
+  }
+
   if (!schedule.crontab) {
     return true;
   }
