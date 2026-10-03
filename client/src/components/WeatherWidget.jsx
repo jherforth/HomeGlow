@@ -591,14 +591,14 @@ const WeatherWidget = ({
             <Button
               size="small"
               variant={chartType === 'temperature' ? 'contained' : 'outlined'}
-              onClick={() => setChartType('temperature')}
+              onClick={(e) => { e.stopPropagation(); setChartType('temperature'); }}
             >
               🌡️
             </Button>
             <Button
               size="small"
               variant={chartType === 'precipitation' ? 'contained' : 'outlined'}
-              onClick={() => setChartType('precipitation')}
+              onClick={(e) => { e.stopPropagation(); setChartType('precipitation'); }}
             >
               🌧️
             </Button>

@@ -192,7 +192,7 @@ function summarizeForecast(list, timezoneOffsetSeconds) {
         }
     }
 
-    return { forecast: Array.from(byDay.values()).slice(0, 3), hourly };
+    return { forecast: Array.from(byDay.values()).slice(0, 5), hourly };
 }
 
 /**
@@ -245,7 +245,7 @@ async function fetchWeather({ apiKey, locationQuery, coordinates, units, lang })
     let hourly = [];
     if (forecastResult.status === 'fulfilled' && Array.isArray(forecastResult.value?.list)) {
         const summarized = summarizeForecast(
-            forecastResult.value.list.slice(0, 24),
+            forecastResult.value.list.slice(0, 40),
             forecastResult.value.city?.timezone
         );
         forecast = summarized.forecast;
