@@ -591,14 +591,14 @@ const WeatherWidget = ({
             <Button
               size="small"
               variant={chartType === 'temperature' ? 'contained' : 'outlined'}
-              onClick={() => setChartType('temperature')}
+              onClick={(e) => { e.stopPropagation(); setChartType('temperature'); }}
             >
               🌡️
             </Button>
             <Button
               size="small"
               variant={chartType === 'precipitation' ? 'contained' : 'outlined'}
-              onClick={() => setChartType('precipitation')}
+              onClick={(e) => { e.stopPropagation(); setChartType('precipitation'); }}
             >
               🌧️
             </Button>
@@ -701,7 +701,7 @@ const WeatherWidget = ({
         <Box sx={{ p: 1.5, borderBottom: '1px solid var(--border, rgba(0,0,0,0.08))', bgcolor: 'rgba(0,0,0,0.02)' }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
             <Typography variant="caption" sx={{ fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'text.secondary' }}>
-              5-Day Forecast
+              3-Day Forecast
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.72rem' }}>
               Tap a day to filter
