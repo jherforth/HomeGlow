@@ -227,6 +227,7 @@ const schemaMigrations = [
   { schemaId: 24, migrationPath: './migrations/schema24-choreIcon', },
   { schemaId: 25, migrationPath: './migrations/schema25-unifyCredentialEncryption', },
   { schemaId: 26, migrationPath: './migrations/schema26-keepLegacyTimezone', },
+  { schemaId: 27, migrationPath: './migrations/schema27-choreCalendarMatch', },
 ];
 
 const ALLOWED_SCHEDULE_DURATIONS = new Set(['day-of', 'until-completed', 'once-completed']);
@@ -2017,6 +2018,7 @@ async function dailyBackgroundProcessing() {
       JOIN chores c ON cs.chore_id = c.id
       WHERE cs.crontab IS NULL
         AND cs.visible = 1
+        AND cs.calendar_match IS NULL
         AND EXISTS (
           SELECT 1 FROM chore_history ch
           WHERE ch.chore_schedule_id = cs.id
@@ -2723,8 +2725,8 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
     }
     const { dueTimeResult, dueDateResult, reminderResult } = dateFields;
     const insertStmt = db.prepare(`
-      INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, interval, visible, due_date, due_time, sound_enabled, sound, reminder_interval_minutes, transferable, can_snooze)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, interval, visible, due_date, due_time, sound_enabled, sound, reminder_interval_minutes, transferable, can_snooze, calendar_match)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const ids = [];
     const runTx = db.transaction((uIds) => {
@@ -2742,7 +2744,8 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
           sound || null,
           reminderResult.value,
           transferable !== undefined ? (transferable ? 1 : 0) : 1,
-          can_snooze !== undefined ? (can_snooze ? 1 : 0) : 1
+          can_snooze !== undefined ? (can_snooze ? 1 : 0) : 1,
+          body.calendar_match ? String(body.calendar_match).trim() : null
         );
         ids.push(res.lastInsertRowid);
       }
@@ -3182,6 +3185,34 @@ function isVacationActiveOn(dateStr) {
   }
 }
 
+// Returns calendar events from enabled sources that fall on `dateStr`
+// ('YYYY-MM-DD' local). All-day date handling is source-aware: Google stores
+// all-day events at UTC midnight (so date(start_time) is correct), while
+// ICS/CalDAV/Apple sources store them at local midnight (so the 'localtime'
+// conversion is needed). Timed events always use the localtime conversion.
+function getCalendarEventsOnDate(dateStr) {
+  return db.prepare(`
+    SELECT cec.title, cec.start_time, cec.all_day
+    FROM calendar_events_cache cec
+    JOIN calendar_sources cs ON cec.source_id = cs.id
+    WHERE cs.enabled = 1
+      AND (
+        (cec.all_day = 1 AND cs.type = 'Google' AND date(cec.start_time) = ?)
+        OR (cec.all_day = 1 AND cs.type != 'Google' AND date(cec.start_time, 'localtime') = ?)
+        OR (cec.all_day = 0 AND date(cec.start_time, 'localtime') = ?)
+      )
+  `).all(dateStr, dateStr, dateStr);
+}
+
+// Returns true if any calendar event on `dateStr` matches `matchStr`
+// (case-insensitive substring on the event title).
+function calendarMatchOnDate(matchStr, dateStr) {
+  if (!matchStr) return false;
+  const target = matchStr.toLowerCase().trim();
+  const events = getCalendarEventsOnDate(dateStr);
+  return events.some(ev => ev.title && ev.title.toLowerCase().includes(target));
+}
+
 // Returns the list of a user's regular (non-bonus) chore schedules that were
 // due on `dateStr` ('YYYY-MM-DD' local). `referenceNow` anchors the snooze
 // check: the award path uses real now (default); the nightly missed logger
@@ -3221,6 +3252,20 @@ function getTodaysRegularChoresForUser(userId, dateStr, referenceNow = new Date(
   // this works for past dates too.
   const todaysChores = [];
   for (const schedule of regularChores) {
+    // Calendar-matched chores are only due on days with a matching event.
+    // On non-event days they're excluded entirely: not shown, not logged as
+    // missed, and not required for the daily bonus. They also stay hidden
+    // until their due_date arrives, if one is set.
+    if (schedule.calendar_match) {
+      if (schedule.due_date && schedule.due_date > dateStr) {
+        continue;
+      }
+      if (calendarMatchOnDate(schedule.calendar_match, dateStr)) {
+        todaysChores.push(schedule);
+      }
+      continue;
+    }
+
     // schedules without crontab are one-time and always part of today's chores
     if (!schedule.crontab) {
       todaysChores.push(schedule);
