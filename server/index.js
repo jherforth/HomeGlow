@@ -3348,8 +3348,12 @@ function getTodaysRegularChoresForUser(userId, dateStr, referenceNow = new Date(
   for (const schedule of regularChores) {
     // Calendar-matched chores are only due on days with a matching event.
     // On non-event days they're excluded entirely: not shown, not logged as
-    // missed, and not required for the daily bonus.
+    // missed, and not required for the daily bonus. They also stay hidden
+    // until their due_date arrives, if one is set.
     if (schedule.calendar_match) {
+      if (schedule.due_date && schedule.due_date > dateStr) {
+        continue;
+      }
       if (calendarMatchOnDate(schedule.calendar_match, dateStr)) {
         todaysChores.push(schedule);
       }
