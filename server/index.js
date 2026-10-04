@@ -2689,6 +2689,68 @@ fastify.get('/api/chore-schedules/:id', async (request, reply) => {
 });
 
 fastify.post('/api/chore-schedules', async (request, reply) => {
+  const body = request.body || {};
+  // Multi-user batch support: create one schedule per user_id, with the same
+  // validation as the single-create path below.
+  if (Array.isArray(body.user_ids) && body.user_ids.length > 0) {
+    const { chore_id, crontab, duration, interval, visible, due_date, due_time, sound_enabled, sound, reminder_interval_minutes, transferable, can_snooze } = body;
+    if (!chore_id) {
+      return reply.status(400).send({ error: 'chore_id is required' });
+    }
+    const dateFields = validateScheduleDateFields(body, reply);
+    if (!dateFields) return;
+    const normalizedDuration = normalizeScheduleDuration(duration);
+    if (!ALLOWED_SCHEDULE_DURATIONS.has(normalizedDuration)) {
+      return reply.status(400).send({ error: `Invalid duration. Expected one of: ${Array.from(ALLOWED_SCHEDULE_DURATIONS).join(', ')}` });
+    }
+    const normalizedInterval = normalizeScheduleInterval(interval);
+    if (normalizedDuration === 'once-completed') {
+      if (!crontab) {
+        return reply.status(400).send({ error: 'once-completed schedules require a crontab expression' });
+      }
+      if (!isValidScheduleInterval(normalizedInterval)) {
+        return reply.status(400).send({ error: 'once-completed schedules require a valid interval like 30d, 3w, 2m, or 1y' });
+      }
+    } else if (normalizedInterval !== null) {
+      return reply.status(400).send({ error: 'interval is only allowed for once-completed schedules' });
+    }
+    if (crontab) {
+      try {
+        CronExpressionParser.parse(crontab);
+      } catch (e) {
+        return reply.status(400).send({ error: 'Invalid crontab expression: ' + e.message });
+      }
+    }
+    const { dueTimeResult, dueDateResult, reminderResult } = dateFields;
+    const insertStmt = db.prepare(`
+      INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, interval, visible, due_date, due_time, sound_enabled, sound, reminder_interval_minutes, transferable, can_snooze)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const ids = [];
+    const runTx = db.transaction((uIds) => {
+      for (const uId of uIds) {
+        const res = insertStmt.run(
+          chore_id,
+          uId === '' || uId === null ? null : uId,
+          crontab || null,
+          normalizedDuration,
+          normalizedDuration === 'once-completed' ? normalizedInterval : null,
+          visible !== undefined ? visible : 1,
+          dueDateResult.value,
+          dueTimeResult.value,
+          sound_enabled ? 1 : 0,
+          sound || null,
+          reminderResult.value,
+          transferable !== undefined ? (transferable ? 1 : 0) : 1,
+          can_snooze !== undefined ? (can_snooze ? 1 : 0) : 1
+        );
+        ids.push(res.lastInsertRowid);
+      }
+    });
+    runTx(body.user_ids);
+    return { success: true, ids, count: ids.length };
+  }
+
   const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until } = request.body;
   try {
     if (!chore_id) {
