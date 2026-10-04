@@ -1,4 +1,4 @@
-// Migration 28: Add calendar_match column to chore_schedules for calendar-event scheduling
+// Migration 27: Add calendar_match column to chore_schedules for calendar-event scheduling
 const context = globalThis.__HOMEGLOW_SCHEMA_MIGRATION_CONTEXT;
 if (!context) {
   throw new Error('Migration context is missing');
