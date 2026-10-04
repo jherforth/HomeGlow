@@ -2018,6 +2018,7 @@ async function dailyBackgroundProcessing() {
       JOIN chores c ON cs.chore_id = c.id
       WHERE cs.crontab IS NULL
         AND cs.visible = 1
+        AND cs.calendar_match IS NULL
         AND EXISTS (
           SELECT 1 FROM chore_history ch
           WHERE ch.chore_schedule_id = cs.id
@@ -2638,21 +2639,11 @@ fastify.delete('/api/chores/:id', async (request, reply) => {
 
 // Chore Schedules routes
 fastify.get('/api/chore-schedules', async (request, reply) => {
-    // Helper to evaluate calendar match for today.
-    // All-day events are stored as UTC midnight, so converting them with
-    // 'localtime' shifts them to the previous day in timezones behind UTC.
-    // An all-day event is the same date everywhere, so compare its UTC date
-    // directly; only timed events get the localtime conversion.
+    // Helper to evaluate calendar match for today. Uses the shared
+    // source-aware helper (getCalendarEventsOnDate): Google all-day events
+    // are at UTC midnight, ICS/CalDAV/Apple all-day events at local midnight.
     const todayStr = getTodayLocalDateString();
-    const todayEvents = db.prepare(`
-      SELECT title, start_time, all_day
-      FROM calendar_events_cache
-      WHERE source_id IN (SELECT id FROM calendar_sources WHERE enabled = 1)
-        AND (
-          (all_day = 1 AND date(start_time) = ?)
-          OR (all_day = 0 AND date(start_time, 'localtime') = ?)
-        )
-    `).all(todayStr, todayStr);
+    const todayEvents = getCalendarEventsOnDate(todayStr);
 
     const checkCalendarMatch = (matchStr) => {
       if (!matchStr) return null;
@@ -3288,6 +3279,34 @@ function isVacationActiveOn(dateStr) {
   }
 }
 
+// Returns calendar events from enabled sources that fall on `dateStr`
+// ('YYYY-MM-DD' local). All-day date handling is source-aware: Google stores
+// all-day events at UTC midnight (so date(start_time) is correct), while
+// ICS/CalDAV/Apple sources store them at local midnight (so the 'localtime'
+// conversion is needed). Timed events always use the localtime conversion.
+function getCalendarEventsOnDate(dateStr) {
+  return db.prepare(`
+    SELECT cec.title, cec.start_time, cec.all_day
+    FROM calendar_events_cache cec
+    JOIN calendar_sources cs ON cec.source_id = cs.id
+    WHERE cs.enabled = 1
+      AND (
+        (cec.all_day = 1 AND cs.type = 'Google' AND date(cec.start_time) = ?)
+        OR (cec.all_day = 1 AND cs.type != 'Google' AND date(cec.start_time, 'localtime') = ?)
+        OR (cec.all_day = 0 AND date(cec.start_time, 'localtime') = ?)
+      )
+  `).all(dateStr, dateStr, dateStr);
+}
+
+// Returns true if any calendar event on `dateStr` matches `matchStr`
+// (case-insensitive substring on the event title).
+function calendarMatchOnDate(matchStr, dateStr) {
+  if (!matchStr) return false;
+  const target = matchStr.toLowerCase().trim();
+  const events = getCalendarEventsOnDate(dateStr);
+  return events.some(ev => ev.title && ev.title.toLowerCase().includes(target));
+}
+
 // Returns the list of a user's regular (non-bonus) chore schedules that were
 // due on `dateStr` ('YYYY-MM-DD' local). `referenceNow` anchors the snooze
 // check: the award path uses real now (default); the nightly missed logger
@@ -3327,6 +3346,16 @@ function getTodaysRegularChoresForUser(userId, dateStr, referenceNow = new Date(
   // this works for past dates too.
   const todaysChores = [];
   for (const schedule of regularChores) {
+    // Calendar-matched chores are only due on days with a matching event.
+    // On non-event days they're excluded entirely: not shown, not logged as
+    // missed, and not required for the daily bonus.
+    if (schedule.calendar_match) {
+      if (calendarMatchOnDate(schedule.calendar_match, dateStr)) {
+        todaysChores.push(schedule);
+      }
+      continue;
+    }
+
     // schedules without crontab are one-time and always part of today's chores
     if (!schedule.crontab) {
       todaysChores.push(schedule);
