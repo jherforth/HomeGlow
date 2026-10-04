@@ -2020,6 +2020,7 @@ async function dailyBackgroundProcessing() {
       JOIN chores c ON cs.chore_id = c.id
       WHERE cs.crontab IS NULL
         AND cs.visible = 1
+        AND cs.calendar_match IS NULL
         AND EXISTS (
           SELECT 1 FROM chore_history ch
           WHERE ch.chore_schedule_id = cs.id
@@ -2682,21 +2683,11 @@ fastify.delete('/api/chores/:id', async (request, reply) => {
 
 // Chore Schedules routes
 fastify.get('/api/chore-schedules', async (request, reply) => {
-    // Helper to evaluate calendar match for today.
-    // All-day events are stored as UTC midnight, so converting them with
-    // 'localtime' shifts them to the previous day in timezones behind UTC.
-    // An all-day event is the same date everywhere, so compare its UTC date
-    // directly; only timed events get the localtime conversion.
+    // Helper to evaluate calendar match for today. Uses the shared
+    // source-aware helper (getCalendarEventsOnDate): Google all-day events
+    // are at UTC midnight, ICS/CalDAV/Apple all-day events at local midnight.
     const todayStr = getTodayLocalDateString();
-    const todayEvents = db.prepare(`
-      SELECT title, start_time, all_day
-      FROM calendar_events_cache
-      WHERE source_id IN (SELECT id FROM calendar_sources WHERE enabled = 1)
-        AND (
-          (all_day = 1 AND date(start_time) = ?)
-          OR (all_day = 0 AND date(start_time, 'localtime') = ?)
-        )
-    `).all(todayStr, todayStr);
+    const todayEvents = getCalendarEventsOnDate(todayStr);
 
     const checkCalendarMatch = (matchStr) => {
       if (!matchStr) return null;
@@ -2733,8 +2724,6 @@ fastify.get('/api/chore-schedules', async (request, reply) => {
       params.push(1);
       conditions.push('(cs.duration IS NULL OR cs.duration NOT IN (?, ?))');
       params.push('until-completed', 'once-completed');
-      conditions.push('(cs.due_date IS NULL OR cs.due_date <= ?)');
-      params.push(todayStr);
     }
     if (chore_id !== undefined) {
       conditions.push('cs.chore_id = ?');
@@ -2813,6 +2802,34 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
     // Multi-user batch support
     if (Array.isArray(body.user_ids) && body.user_ids.length > 0) {
       const { chore_id, crontab, duration, interval, visible, due_date, due_time, sound_enabled, sound, reminder_interval_minutes, transferable, can_snooze, calendar_match } = body;
+      // Validate before inserting (same rules as single-create path)
+      if (!chore_id) {
+        return reply.status(400).send({ error: 'chore_id is required' });
+      }
+      const dateFields = validateScheduleDateFields(body, reply);
+      if (!dateFields) return;
+      const normalizedDuration = normalizeScheduleDuration(duration);
+      if (!ALLOWED_SCHEDULE_DURATIONS.has(normalizedDuration)) {
+        return reply.status(400).send({ error: `Invalid duration. Expected one of: ${Array.from(ALLOWED_SCHEDULE_DURATIONS).join(', ')}` });
+      }
+      const normalizedInterval = normalizeScheduleInterval(interval);
+      if (normalizedDuration === 'once-completed') {
+        if (!crontab) {
+          return reply.status(400).send({ error: 'once-completed schedules require a crontab expression' });
+        }
+        if (!isValidScheduleInterval(normalizedInterval)) {
+          return reply.status(400).send({ error: 'once-completed schedules require a valid interval like 30d, 3w, 2m, or 1y' });
+        }
+      } else if (normalizedInterval !== null) {
+        return reply.status(400).send({ error: 'interval is only allowed for once-completed schedules' });
+      }
+      if (crontab) {
+        try {
+          CronExpressionParser.parse(crontab);
+        } catch (e) {
+          return reply.status(400).send({ error: 'Invalid crontab expression: ' + e.message });
+        }
+      }
       const insertStmt = db.prepare(`
         INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, interval, visible, due_date, due_time, sound_enabled, sound, reminder_interval_minutes, transferable, can_snooze, calendar_match)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -2880,6 +2897,9 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
 
     const normalizedInterval = normalizeScheduleInterval(interval);
     if (normalizedDuration === 'once-completed') {
+      if (!crontab) {
+        return reply.status(400).send({ error: 'once-completed schedules require a crontab expression' });
+      }
       if (!isValidScheduleInterval(normalizedInterval)) {
         return reply.status(400).send({ error: 'once-completed schedules require a valid interval like 30d, 3w, 2m, or 1y' });
       }
@@ -2927,6 +2947,21 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
       snoozedUntilResult.value,
       calendar_match ? String(calendar_match).trim() : null
     );
+    // For once-completed, create the initial child schedule so the chore appears immediately
+    if (normalizedDuration === 'once-completed' && !normalizedParentScheduleId) {
+      createInitialChildSchedule({
+        id: info.lastInsertRowid,
+        chore_id,
+        user_id: user_id || null,
+        due_date: dueDateResult.value,
+        due_time: dueTimeResult.value,
+        sound_enabled,
+        sound,
+        reminder_interval_minutes: reminderResult.value,
+        transferable,
+        can_snooze
+      });
+    }
     return { id: info.lastInsertRowid, success: true };
   } catch (error) {
     console.error('Error adding schedule:', error);
@@ -3017,6 +3052,9 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
     const nextCrontab = crontab !== undefined ? (crontab || null) : existingSchedule.crontab;
     const nextInterval = normalizeScheduleInterval(interval !== undefined ? interval : existingSchedule.interval);
     if (nextDuration === 'once-completed') {
+      if (!nextCrontab) {
+        return reply.status(400).send({ error: 'once-completed schedules require a crontab expression' });
+      }
       if (!isValidScheduleInterval(nextInterval)) {
         return reply.status(400).send({ error: 'once-completed schedules require a valid interval like 30d, 3w, 2m, or 1y' });
       }
@@ -3285,6 +3323,34 @@ function isVacationActiveOn(dateStr) {
   }
 }
 
+// Returns calendar events from enabled sources that fall on `dateStr`
+// ('YYYY-MM-DD' local). All-day date handling is source-aware: Google stores
+// all-day events at UTC midnight (so date(start_time) is correct), while
+// ICS/CalDAV/Apple sources store them at local midnight (so the 'localtime'
+// conversion is needed). Timed events always use the localtime conversion.
+function getCalendarEventsOnDate(dateStr) {
+  return db.prepare(`
+    SELECT cec.title, cec.start_time, cec.all_day
+    FROM calendar_events_cache cec
+    JOIN calendar_sources cs ON cec.source_id = cs.id
+    WHERE cs.enabled = 1
+      AND (
+        (cec.all_day = 1 AND cs.type = 'Google' AND date(cec.start_time) = ?)
+        OR (cec.all_day = 1 AND cs.type != 'Google' AND date(cec.start_time, 'localtime') = ?)
+        OR (cec.all_day = 0 AND date(cec.start_time, 'localtime') = ?)
+      )
+  `).all(dateStr, dateStr, dateStr);
+}
+
+// Returns true if any calendar event on `dateStr` matches `matchStr`
+// (case-insensitive substring on the event title).
+function calendarMatchOnDate(matchStr, dateStr) {
+  if (!matchStr) return false;
+  const target = matchStr.toLowerCase().trim();
+  const events = getCalendarEventsOnDate(dateStr);
+  return events.some(ev => ev.title && ev.title.toLowerCase().includes(target));
+}
+
 // Returns the list of a user's regular (non-bonus) chore schedules that were
 // due on `dateStr` ('YYYY-MM-DD' local). `referenceNow` anchors the snooze
 // check: the award path uses real now (default); the nightly missed logger
@@ -3324,11 +3390,22 @@ function getTodaysRegularChoresForUser(userId, dateStr, referenceNow = new Date(
   // this works for past dates too.
   const todaysChores = [];
   for (const schedule of regularChores) {
-    // schedules without crontab are one-time and always part of today's chores
-    if (!schedule.crontab) {
+    // Calendar-matched chores are only due on days with a matching event.
+    // On non-event days they're excluded entirely: not shown, not logged as
+    // missed, and not required for the daily bonus. They also stay hidden
+    // until their due_date arrives, if one is set.
+    if (schedule.calendar_match) {
       if (schedule.due_date && schedule.due_date > dateStr) {
         continue;
       }
+      if (calendarMatchOnDate(schedule.calendar_match, dateStr)) {
+        todaysChores.push(schedule);
+      }
+      continue;
+    }
+
+    // schedules without crontab are one-time and always part of today's chores
+    if (!schedule.crontab) {
       todaysChores.push(schedule);
       continue;
     }
