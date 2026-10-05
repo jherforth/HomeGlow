@@ -18,7 +18,7 @@ import {
 import { Delete, Refresh } from '@mui/icons-material';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
-import { stackableTableSx } from '../utils/responsiveTable.js';
+import { compactStackedTableSx } from '../utils/responsiveTable.js';
 import { formatLoggedAt } from '../utils/choreHelpers.js';
 
 export default function ChoreHistoryTab() {
@@ -92,7 +92,7 @@ export default function ChoreHistoryTab() {
         </Box>
       ) : (
         <TableContainer component={Paper} variant="outlined">
-          <Table size="small" sx={stackableTableSx}>
+          <Table size="small" sx={compactStackedTableSx}>
             <TableHead>
               <TableRow>
                 <TableCell sx={{ fontWeight: 600 }}>User</TableCell>
