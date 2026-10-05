@@ -131,6 +131,26 @@ test('the 3-hour forecast rolls into daily highs and lows at the location\'s mid
     assert.equal(typeof hourly[0].timestamp, 'number');
 });
 
+test("the free endpoint's full 40 points give five days, and the chart stays at eight", () => {
+    // OpenWeatherMap's free /forecast is 5 days of 3-hourly points. Starting
+    // at local midnight, that is exactly five local days.
+    const offset = -5 * 3600;
+    const base = Date.UTC(2026, 6, 8, 5, 0, 0) / 1000; // 00:00 Eastern
+    const list = [];
+    for (let i = 0; i < 40; i++) {
+        list.push({
+            dt: base + i * 3 * 3600,
+            main: { temp: 70, temp_min: 60, temp_max: 80 },
+            weather: [{ id: 800, icon: '01d', description: 'clear sky' }],
+        });
+    }
+
+    const { forecast, hourly } = owm.summarizeForecast(list, offset);
+
+    assert.deepEqual(forecast.map((day) => day.date), ['2026-07-08', '2026-07-09', '2026-07-10', '2026-07-11', '2026-07-12']);
+    assert.equal(hourly.length, 8, 'the hourly series is still the next 24 hours');
+});
+
 // --- Home Assistant --------------------------------------------------------
 
 test('Home Assistant units convert to whatever the widget asked for', () => {

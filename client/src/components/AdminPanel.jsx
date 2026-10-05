@@ -85,7 +85,7 @@ import RefreshIntervalSelect from './RefreshIntervalSelect';
 import ScreensaverIntervalSlider from './ScreensaverIntervalSlider';
 import GoogleAccountConnection from './GoogleAccountConnection';
 import ClamValueModal from './ClamValueModal';
-import { parseAdminHash, setAdminHash, buildAdminHash } from '../utils/adminNavigation.js';
+import { parseAdminHash, setAdminHash, isAdminHash, CHORES_TAB_INDEX } from '../utils/adminNavigation.js';
 import SoundPicker from './SoundPicker';
 import ControlsOnDisplay from './ControlsOnDisplay';
 import useFetchTabs from '../hooks/useFetchTabs.js';
@@ -93,7 +93,6 @@ import useIsMobile from '../hooks/useIsMobile.js';
 import { syncWidgetAssignments } from '../utils/assignmentSync.js';
 import { normalizeWidgetSettings as normalizeSharedWidgetSettings } from '../utils/widgetSettings.js';
 import { stackableTableSx } from '../utils/responsiveTable.js';
-import AdaptiveTableContainer from './AdaptiveTableContainer';
 import {
   INTERFACE_COLORS_STORAGE_KEY,
   SCREENSAVER_SETTINGS_STORAGE_KEY,
@@ -190,17 +189,17 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   const handleTabChange = useCallback((newTab) => {
     setActiveTab(newTab);
     // Reset subtab when switching tabs; keep chores subtab if staying on chores
-    const subtab = newTab === 3 ? choresSubTab : 0;
-    if (newTab !== 3) setChoresSubTab(0);
+    const subtab = newTab === CHORES_TAB_INDEX ? choresSubTab : 0;
+    if (newTab !== CHORES_TAB_INDEX) setChoresSubTab(0);
     setAdminHash(newTab, subtab);
   }, [choresSubTab]);
 
   const handleChoresSubTabChange = useCallback((newSubtab) => {
     setChoresSubTab(newSubtab);
-    setAdminHash(3, newSubtab);
+    setAdminHash(CHORES_TAB_INDEX, newSubtab);
   }, []);
 
-  // If the hash changes externally (back/forward button), sync the tabs.
+  // If the hash is edited while the panel is open, follow it.
   useEffect(() => {
     const onHashChange = () => {
       const parsed = parseAdminHash();
@@ -215,7 +214,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
 
   // Set initial hash if admin was opened without one (e.g. via button).
   useEffect(() => {
-    if (!window.location.hash.startsWith('#/admin')) {
+    if (!isAdminHash()) {
       setAdminHash(activeTab, choresSubTab);
     }
     // Only on mount.
@@ -310,8 +309,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   const [draggingTabNumber, setDraggingTabNumber] = useState(null);
   // User display order (issue #134): drag on desktop, arrows everywhere.
   const [draggingUserId, setDraggingUserId] = useState(null);
-  const [googleTasksStatuses, setGoogleTasksStatuses] = useState({});
-  const [syncingGoogleTasksUser, setSyncingGoogleTasksUser] = useState(null);
   const handleLanguageChange = async (code) => {
     try {
       await changeLanguage(code);
@@ -374,91 +371,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
       fetchWidgetAssignments();
       fetchPhotoData();
       fetchDevices();
-      fetchUsersGoogleTasksStatuses();
     }
   }, [isAuthenticated]);
-
-  const fetchUsersGoogleTasksStatuses = async () => {
-    try {
-      const res = await axios.get(`${API_BASE_URL}/api/users`);
-      const userList = Array.isArray(res.data) ? res.data : [];
-      const statusMap = {};
-      await Promise.all(
-        userList
-          .filter((u) => u.id !== 0)
-          .map(async (u) => {
-            try {
-              const statusRes = await axios.get(`${API_BASE_URL}/api/users/${u.id}/google-tasks/status`);
-              statusMap[u.id] = statusRes.data;
-            } catch (_) {
-              statusMap[u.id] = { connected: false };
-            }
-          })
-      );
-      setGoogleTasksStatuses(statusMap);
-    } catch (_) {}
-  };
-
-  useEffect(() => {
-    const handleGoogleTasksMessage = (event) => {
-      if (event.origin !== window.location.origin) return;
-      if (event.data?.type === 'homeglow:google-tasks-oauth') {
-        fetchUsersGoogleTasksStatuses();
-        fetchChores();
-        setSaveMessage({
-          show: true,
-          type: event.data.ok ? 'success' : 'error',
-          text: event.data.ok ? t('admin:users.googleTasks.connectedSuccess') : t('admin:users.googleTasks.connectionFailed'),
-        });
-        setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 4000);
-      }
-    };
-    window.addEventListener('message', handleGoogleTasksMessage);
-    return () => window.removeEventListener('message', handleGoogleTasksMessage);
-  }, []);
-
-  const handleConnectGoogleTasks = async (userId) => {
-    try {
-      const res = await axios.get(`${API_BASE_URL}/api/users/${userId}/google-tasks/auth-url`);
-      if (res.data?.url) {
-        window.open(res.data.url, 'google-tasks-oauth', 'width=550,height=650');
-      }
-    } catch (err) {
-      alert(err.response?.data?.error || t('admin:users.googleTasks.authStartFailed'));
-    }
-  };
-
-  const handleDisconnectGoogleTasks = async (userId) => {
-    if (!window.confirm(t('admin:users.googleTasks.disconnectConfirm'))) return;
-    try {
-      await axios.delete(`${API_BASE_URL}/api/users/${userId}/google-tasks`);
-      await fetchUsersGoogleTasksStatuses();
-      setSaveMessage({ show: true, type: 'success', text: t('admin:users.googleTasks.disconnected') });
-      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
-    } catch (err) {
-      alert(err.response?.data?.error || t('admin:users.googleTasks.disconnectFailed'));
-    }
-  };
-
-  const handleSyncGoogleTasks = async (userId) => {
-    setSyncingGoogleTasksUser(userId);
-    try {
-      const res = await axios.post(`${API_BASE_URL}/api/users/${userId}/google-tasks/sync`);
-      await fetchChores();
-      const imported = res.data.imported || 0;
-      const updated = res.data.updated || 0;
-      setSaveMessage({
-        show: true,
-        type: 'success',
-        text: t('admin:users.googleTasks.syncSuccess', { imported, updated }),
-      });
-      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
-    } catch (err) {
-      alert(err.response?.data?.error || t('admin:users.googleTasks.syncFailed'));
-    } finally {
-      setSyncingGoogleTasksUser(null);
-    }
-  };
 
   useEffect(() => {
     if (!isAuthenticated || activeTab !== 7) {
@@ -2197,6 +2111,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     return option ? option.label : t('admin:refresh.disabled');
   };
 
+  // Same order as ADMIN_TABS in utils/adminNavigation.js, which names these
+  // tabs in the URL hash by position.
   const adminTabs = [
     'Widgets',
     'Interface',
@@ -2254,21 +2170,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
         variant="scrollable"
         scrollButtons="auto"
         allowScrollButtonsMobile
-        sx={{
-          mb: 3,
-          // Compact tabs on mobile so more fit on screen; keep 44px+ touch targets.
-          '@media (max-width:599.95px)': {
-            '& .MuiTab-root': {
-              minWidth: 0,
-              px: 1.5,
-              fontSize: '0.75rem',
-              minHeight: 48,
-            },
-            '& .MuiTabs-scrollButtons': {
-              width: 32,
-            },
-          },
-        }}
+        sx={{ mb: 3 }}
       >
         {adminTabs.map((tab, index) => (
           <Tab key={tab} label={tab} />
@@ -2287,19 +2189,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                 variant="scrollable"
                 scrollButtons="auto"
                 allowScrollButtonsMobile
-                sx={{
-                  '@media (max-width:599.95px)': {
-                    '& .MuiTab-root': {
-                      minWidth: 0,
-                      px: 1.25,
-                      fontSize: '0.75rem',
-                      minHeight: 44,
-                    },
-                    '& .MuiTabs-scrollButtons': {
-                      width: 28,
-                    },
-                  },
-                }}
               >
                 <Tab label={t('admin:subTabs.widgets')} />
                 <Tab label={t('admin:subTabs.plugins')} />
@@ -2873,7 +2762,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                   </Button>
                 </Box>
 
-                <AdaptiveTableContainer component={Paper}>
+                <TableContainer component={Paper}>
                   <Table sx={stackableTableSx}>
                     <TableHead>
                       <TableRow>
@@ -2986,7 +2875,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                       })}
                     </TableBody>
                   </Table>
-                </AdaptiveTableContainer>
+                </TableContainer>
               </>
             )}
 
@@ -3008,7 +2897,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                   </Box>
                 </Box>
 
-                <AdaptiveTableContainer component={Paper}>
+                <TableContainer component={Paper}>
                   <Table sx={stackableTableSx}>
                     <TableHead>
                       <TableRow>
@@ -3072,7 +2961,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                       })}
                     </TableBody>
                   </Table>
-                </AdaptiveTableContainer>
+                </TableContainer>
               </>
             )}
           </CardContent>
@@ -3646,7 +3535,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                     </Button>
                   </Grid>
                   <Grid size={12}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       {newUser.profile_picture ? (
                         <img
                           src={`${API_BASE_URL}/Uploads/users/${newUser.profile_picture}`}
@@ -3659,7 +3548,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                       <Button size="small" variant="outlined" onClick={() => setAvatarPicker({ open: true, userId: null })}>
                         {t('admin:users.chooseAvatar')}
                       </Button>
-                      <Typography variant="caption" color="text.secondary" sx={{ flexBasis: { xs: '100%', sm: 'auto' } }}>
+                      <Typography variant="caption" color="text.secondary">
                         {t('admin:users.avatarHelp')}
                       </Typography>
                     </Box>
@@ -3668,7 +3557,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
               </Box>
             </AdminFormSection>
 
-            <AdaptiveTableContainer component={Paper}>
+            <TableContainer component={Paper}>
               <Table sx={stackableTableSx}>
                 <TableHead>
                   <TableRow>
@@ -3678,7 +3567,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                     <TableCell>{t('admin:users.email')}</TableCell>
                     <TableCell>{t('admin:users.clamTotal')}</TableCell>
                     <TableCell>{t('admin:users.chores')}</TableCell>
-                    <TableCell>{t('admin:users.googleTasks.title')}</TableCell>
                     <TableCell>{t('common:labels.actions')}</TableCell>
                   </TableRow>
                 </TableHead>
@@ -3819,45 +3707,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                           {getUserChoreCount(user.id)} chores
                         </Button>
                       </TableCell>
-                      <TableCell data-label={t('admin:users.googleTasks.title')}>
-                        {!isBonus && (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                            {googleTasksStatuses[user.id]?.connected ? (
-                              <>
-                                <Chip
-                                  size="small"
-                                  color="success"
-                                  label={googleTasksStatuses[user.id]?.email || t('admin:users.googleTasks.connected')}
-                                />
-                                <Button
-                                  size="small"
-                                  variant="outlined"
-                                  disabled={syncingGoogleTasksUser === user.id}
-                                  onClick={() => handleSyncGoogleTasks(user.id)}
-                                >
-                                  {syncingGoogleTasksUser === user.id ? t('admin:users.googleTasks.syncing') : t('admin:users.googleTasks.sync')}
-                                </Button>
-                                <Button
-                                  size="small"
-                                  variant="text"
-                                  color="error"
-                                  onClick={() => handleDisconnectGoogleTasks(user.id)}
-                                >
-                                  {t('admin:users.googleTasks.disconnect')}
-                                </Button>
-                              </>
-                            ) : (
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                onClick={() => handleConnectGoogleTasks(user.id)}
-                              >
-                                {t('admin:users.googleTasks.connect')}
-                              </Button>
-                            )}
-                          </Box>
-                        )}
-                      </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', gap: 1 }}>
                           {editingUser?.id === user.id ? (
@@ -3894,7 +3743,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                   })}
                 </TableBody>
               </Table>
-            </AdaptiveTableContainer>
+            </TableContainer>
           </CardContent>
         </Card>
       )}
@@ -3917,19 +3766,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                 variant="scrollable"
                 scrollButtons="auto"
                 allowScrollButtonsMobile
-                sx={{
-                  '@media (max-width:599.95px)': {
-                    '& .MuiTab-root': {
-                      minWidth: 0,
-                      px: 1.25,
-                      fontSize: '0.75rem',
-                      minHeight: 44,
-                    },
-                    '& .MuiTabs-scrollButtons': {
-                      width: 28,
-                    },
-                  },
-                }}
               >
                 <Tab label={t('admin:users.chores')} />
                 <Tab label={t('admin:chores.history')} />
@@ -4739,7 +4575,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
               {t('admin:chores.noChoresForUser')}
             </Typography>
           ) : (
-            <AdaptiveTableContainer component={Paper} sx={{ mt: 1 }}>
+            <TableContainer component={Paper} sx={{ mt: 1 }}>
               <Table sx={stackableTableSx}>
                 <TableHead>
                   <TableRow>
@@ -4803,7 +4639,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                   ))}
                 </TableBody>
               </Table>
-            </AdaptiveTableContainer>
+            </TableContainer>
           )}
         </DialogContent>
         <DialogActions>

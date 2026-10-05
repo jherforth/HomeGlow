@@ -1,3 +1,209 @@
+# HomeGlow v 1.9.1 Changelog
+
+## 🎉 Recent Updates
+
+A one-fix patch release for Google Calendar users.
+
+---
+
+## Fixes
+
+- **Google all-day events no longer appear a day early (#209, #212).** West of
+  UTC (the Americas, for example), an all-day event from Google Calendar showed
+  up on the previous day: in the calendar, on the screensaver agenda, and in
+  the event editor. Editing one even saved it back to Google a day early.
+  Google all-day events are now stored the same way as ICS, CalDAV and Apple
+  ones, so they land on their own date everywhere. Reported by **@Leesam**;
+  thanks to **@mrramam** (#159) and **@cosmosified** (#152) for the earlier
+  work on this.
+
+---
+
+## 📝 Notes
+
+**Upgrading is nothing more than pulling the new images.** Google all-day
+events correct themselves on the next calendar sync after upgrading, within
+15 minutes. Nothing else needs doing.
+
+For questions or issues, please visit our [GitHub Issues](https://github.com/jherforth/HomeGlow/issues) page.
+
+---
+
+# HomeGlow v 1.9 Changelog
+
+## 🎉 Recent Updates
+
+A release about the wall display. Each display can now decide which "parent"
+controls it offers, and remember the admin PIN; the photo screensaver gains a
+calendar and weather overlay plus collage and ambient layouts; the household
+time zone moves into the Admin Panel and follows the host by default; and a
+long-standing bug that broke chore days east of UTC is fixed. Around that, a
+run of layout fixes, quieter logs, and a Proxmox installer that walks you
+through setup.
+
+---
+
+## New Features
+
+### Control Limits: each display decides what it offers (#166, #181)
+- **Admin → Security → Controls on Displays.** Per display, choose which
+  "parent" controls appear: adding chores, transfer, snooze, prize approval,
+  quick-spend, and the calendar, photo and weather settings. A preset like
+  **Wall display** hides them all at once.
+- A hidden control is simply not rendered, so a kitchen screen no longer offers
+  them to anyone walking past.
+- This controls visibility, not access, and the UI says so. It ships inert:
+  nothing changes until a household configures it. — **@mrramam**
+
+### Remember the admin PIN on a device (#160)
+- An opt-in **"Remember PIN on this device"** checkbox. A remembered display
+  behaves as if no PIN were set, so a parent's own screen stops asking.
+- It's stored server-side, so it can be revoked from another device, and one
+  switch forgets every remembered device at once. — **@mrramam**
+
+### The household time zone, in the Admin Panel (#193, #195)
+- **Admin → Interface → Time Zone** shows the zone the server runs in and where
+  it came from. You can change it without editing `.env` or recreating the
+  container, and it offers this device's own zone when that differs.
+- Displays that are left running pick up the change within 15 minutes.
+- `TZ` is now optional. Unset, HomeGlow follows the host's time zone instead of
+  defaulting to New York. See the upgrade notes below.
+
+### Photo screensaver: calendar, weather, collage and ambient (#190, #192)
+- **On-screen overlay:** today's agenda (1 to 7 days) and the current weather
+  can be drawn over the slideshow in a quiet corner overlay. Both are off by
+  default.
+- **Photo layout:** choose **Fit** (as before), **Ambient** (a blurred copy of
+  the photo fills the bars), or **Collage** (several photos tiled across the
+  screen). The collage matches each photo to a space of its own shape, so
+  portraits aren't cropped into wide tiles, and it swaps one photo per interval
+  with a crossfade.
+
+### Deep links into the Admin Panel (#202)
+- The Admin Panel's tab is reflected in the address, such as
+  `#/admin/chores/history`, so a refresh or a bookmark returns to the same
+  place. The admin PIN still applies however the panel is opened.
+  — **@adamecker**
+
+### Chores
+- **Chore history shows when each entry was actually logged (#169)**, next to
+  the day it counts for. — **@mrramam**
+- **The chore admin tables sort by any column (#183).** — **@mrramam**
+
+### Proxmox installer: guided setup (#196, #197)
+- The LXC installer now uses the same blue dialogs as the community-scripts
+  installers:
+  - **Recommended** settings, or an **Advanced** wizard with Back on every
+    step.
+  - Storage pools and network bridges are picked from lists read from the
+    host, so a ZFS install no longer fails on a missing `local-lvm`.
+  - Static IP and VLAN options.
+  - It offers to clean up a container if the install fails.
+- It also stops the locale warnings during install, and shows a HomeGlow banner
+  in the logo's colors.
+
+### Logs you can turn down (#178)
+- New `LOG_LEVEL` (default `warn`) and `LOG_FORMAT` (`pretty` or `json`)
+  settings.
+- SQL statements are no longer printed on every query. They had filled the
+  journal and echoed calendar titles into it. — **@mrramam**
+
+---
+
+## For plugin authors
+
+- **Plugins receive the household's theme and colors (#182).** The dashboard
+  posts them into each plugin frame on load and on every change. The SDK
+  applies them as CSS variables and exposes `HomeGlow.theme` and
+  `HomeGlow.onTheme()`. Transparency now shows through. — **@mrramam**
+- **`/index.css` is the real stylesheet (#175).** In container installs,
+  plugins used to get a substitute with different variable names. Use
+  `--text`, not `--text-color`. — **@mrramam**
+- **`hideableControls` (#166):** declare controls a display may hide, and the
+  Admin Panel makes them per-display switches.
+- **`GET /api/settings?keys=…` (#172)** reads settings without a POST.
+  `POST /api/settings/search` remains supported. — **@mrramam**
+
+## Plugins
+
+From the [HomeGlowPlugins](https://github.com/jherforth/HomeGlowPlugins) repository:
+- **New:**
+  - **Weather Glance**: current conditions with a tap-for-details view and the
+    full forecast. Design by **@adamecker**.
+  - **Nightscout CGM** — **@adamecker**
+- **Restyled:** DateClock and SunriseSunset, with their settings in the Admin
+  Panel. — **@adamecker**
+- **Polls and Countdown** keep their data on the server, shared by every
+  display. — **@mrramam**
+- **Control Limits support:** TastyTiles, Countdown, Polls and Routines can hide
+  their management controls per display. — **@mrramam**
+- **Theme colors:** Polls, Countdown, TastyTiles and Chore Metrics follow the
+  theme colors. — **@mrramam**
+
+---
+
+## Fixes & Community Contributions
+
+- **Chore days east of UTC (#195).** In time zones ahead of UTC (Europe, Asia,
+  Australia), daily chores were treated as due the day before. Finishing the day
+  never paid the daily bonus, missed chores weren't logged, and sticky chores
+  were never created. Fixed, with tests across seven time zones. Thanks to
+  **@mrramam** for spotting it.
+- **Widget layouts:**
+  - Switching tabs no longer corrupts and scrambles the next tab's saved layout
+    (#176).
+  - The resize buttons can no longer grow a widget over its neighbor (#177).
+  - A newly enabled widget no longer lands on top of one with a saved position
+    (#188).
+
+  — **@mrramam**
+- **Widgets stop writing back settings they just read (#171).** Every widget
+  mount was a write, and a failed load could overwrite real settings with
+  defaults. — **@mrramam**
+- **Timestamps (#168).** Device "Last updated" times and chore history times are
+  no longer shown hours off. — **@mrramam**
+- **The PIN prompt can be cancelled (#167)** instead of trapping you until a
+  reload. — **@mrramam**
+- **Accent colors (#180).** Tints follow the picked accent color, and the
+  undefined CSS variables are gone. — **@mrramam**
+- **Weather (#204).** OpenWeatherMap now returns the full 5-day forecast for
+  plugins such as Weather Glance. The core weather widget stays at three days.
+  — **@adamecker**
+- **Immich (#189).** The connection test says what actually went wrong instead
+  of a bare 400.
+- **Plugins page (#165).** Cleaned up, with previews that open full size.
+
+---
+
+## Summary
+
+A release for the screen on the wall: per-display control limits and a PIN that
+can be remembered, a screensaver that shows your day over your photos and fills
+the screen, and a time zone you can set from the Admin Panel. Chore days work
+east of UTC, layouts stop rearranging themselves, the logs go quiet, and
+Proxmox users get a guided installer.
+
+---
+
+## 📝 Notes
+
+**Upgrading is nothing more than pulling the new images.**
+
+- **Time zone.**
+  - If your install never set `TZ`, it has been running on New York time. That
+    zone is kept, saved as your chosen zone, so nothing moves. Change it any
+    time in **Admin → Interface → Time Zone**.
+  - Installs that set `TZ` keep following it.
+  - To have new installs follow the host's zone, the updated
+    `docker-compose.yml` mounts `/etc/localtime` read-only. Your existing
+    compose file keeps working without it.
+- **Logging.** Logs are quieter by default (`LOG_LEVEL=warn`). Set
+  `LOG_LEVEL=info` to see startup lines and requests again.
+
+For questions or issues, please visit our [GitHub Issues](https://github.com/jherforth/HomeGlow/issues) page.
+
+---
+
 # HomeGlow v 1.8 Changelog
 
 ## 🎉 Recent Updates
