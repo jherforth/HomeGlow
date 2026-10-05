@@ -128,4 +128,17 @@ describe('buildLayout', () => {
     const out = buildLayout([plugin('a'), plugin('b'), plugin('c')], 12, false);
     out.forEach((i) => expect(i.x + i.w).toBeLessThanOrEqual(12));
   });
+
+  it('re-places a saved position that collides with an already-claimed one', () => {
+    // Regression for overlapping saved data (e.g. saved at a narrower width
+    // before edge-based scaling): the colliding widget is treated as unsaved
+    // and moved to a free cell instead of stacking on top of the first.
+    const a = { ...plugin('a'), savedLayout: { x: 0, y: 0, w: 6, h: 4 } };
+    const b = { ...plugin('b'), savedLayout: { x: 4, y: 0, w: 6, h: 4 } };
+    const out = buildLayout([a, b], 12, false);
+    expect(overlaps(out)).toBeNull();
+    // The first widget keeps its saved spot; the colliding one is re-placed.
+    expect(out[0]).toMatchObject({ x: 0, y: 0, w: 6, h: 4 });
+    expect(out[1]).not.toMatchObject({ x: 4, y: 0 });
+  });
 });
