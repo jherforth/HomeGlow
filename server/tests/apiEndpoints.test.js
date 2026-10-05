@@ -309,6 +309,22 @@ test('device settings GET supports conditional requests with ETag', async () => 
     assert.equal(secondRead.status, 304);
 });
 
+test('device reads tell browsers to revalidate instead of caching heuristically', async () => {
+    const deviceName = `no-cache-${Date.now()}`;
+
+    const writeRes = await api(`/api/devices/${encodeURIComponent(deviceName)}/settings`, {
+        method: 'PUT',
+        body: JSON.stringify({ theme: 'light' }),
+    });
+    assert.equal(writeRes.status, 200);
+
+    for (const suffix of ['settings', 'tabs', 'widget-assignments']) {
+        const read = await api(`/api/devices/${encodeURIComponent(deviceName)}/${suffix}`);
+        assert.equal(read.status, 200, suffix);
+        assert.equal(read.headers.get('cache-control'), 'no-cache', suffix);
+    }
+});
+
 test('If-None-Match mismatch returns 200 even when If-Modified-Since is in the future', async () => {
     const deviceName = `etag-precedence-${Date.now()}`;
 

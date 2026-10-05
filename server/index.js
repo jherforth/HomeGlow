@@ -2235,6 +2235,10 @@ function sendJsonWithConditionalCache(request, reply, payload, lastModifiedMs = 
   const serialized = JSON.stringify(payload);
   const etag = `W/"${crypto.createHash('sha1').update(serialized).digest('hex')}"`;
   reply.header('ETag', etag);
+  // Without this, browsers cache heuristically off Last-Modified (Chrome: 10% of
+  // its age), so a device idle for a week reads a stale copy for hours after an
+  // edit. no-cache forces a revalidation, which the ETag keeps to a 304.
+  reply.header('Cache-Control', 'no-cache');
 
   if (lastModifiedMs) {
     reply.header('Last-Modified', new Date(lastModifiedMs).toUTCString());
