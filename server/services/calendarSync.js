@@ -17,6 +17,14 @@ const CONSOLE_LOGGER = {
   error: (...args) => console.error(...args),
 };
 
+// Local midnight of a 'YYYY-MM-DD' date. Falls back to the plain parse for
+// anything else, so an unexpected value still produces a date.
+function localDateFromYmd(ymd) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd));
+  if (!match) return new Date(ymd);
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
 class CalendarSyncService {
   constructor(db, decryptPassword, logger = CONSOLE_LOGGER) {
     this.db = db;
@@ -254,10 +262,17 @@ class CalendarSyncService {
       const start = googleCalendar.parseEventDate(item.start);
       const end = googleCalendar.parseEventDate(item.end);
       if (!start || !end) continue;
-      const startDate = new Date(start.date);
-      let endDate = new Date(end.date);
+      // An all-day event arrives as a bare 'YYYY-MM-DD'. Store it the way the
+      // ICS, CalDAV and Apple paths store theirs: local midnight of that date,
+      // with an inclusive end. `new Date('YYYY-MM-DD')` parses as UTC
+      // midnight, which west of UTC is the evening before, so every view and
+      // the event editor put a Google all-day event a day early (#209).
+      const startDate = start.allDay ? localDateFromYmd(start.date) : new Date(start.date);
+      let endDate = end.allDay ? localDateFromYmd(end.date) : new Date(end.date);
       if (start.allDay) {
-        endDate = new Date(endDate.getTime() - 24 * 60 * 60 * 1000);
+        // Google's end date is exclusive. Step back a calendar day rather than
+        // 24 hours, so a daylight-saving change cannot shift it.
+        endDate = this.normalizeAllDayEnd(endDate);
       }
       // Custom-label events carry only eventLabelId; default-palette events
       // carry both. Prefer the label because its backgroundColor matches what
