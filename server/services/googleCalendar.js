@@ -134,17 +134,36 @@ async function listEvents(db, accountId, calendarId, { timeMin, timeMax } = {}) 
     return out;
 }
 
-function eventToBody({ title, description, location, start, end, allDay, timeZone }) {
+const toYmd = (value) => (typeof value === 'string' ? value.slice(0, 10) : new Date(value).toISOString().slice(0, 10));
+
+// The calendar day after a 'YYYY-MM-DD', with no time zone in play.
+function nextDay(ymd) {
+    const [y, m, d] = ymd.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+}
+
+// The event editor, like the rest of HomeGlow's API, says `all_day` and gives
+// an inclusive end date: a one-day event ends on the day it starts. Google's
+// all-day end is exclusive, so it gets one day added. `allDay` is the original
+// key, whose end is passed through unchanged as Google's own exclusive end.
+// Reading only `allDay` sent every edit from the editor down the timed branch,
+// saving an all-day event as a zero-length event at UTC midnight (#215).
+function eventToBody({ title, description, location, start, end, allDay, all_day: allDayInclusive, timeZone }) {
     const body = {};
     if (title !== undefined) body.summary = title;
     if (description !== undefined) body.description = description;
     if (location !== undefined) body.location = location;
 
-    if (start !== undefined || end !== undefined || allDay !== undefined) {
-        if (allDay) {
-            body.start = { date: typeof start === 'string' ? start.slice(0, 10) : new Date(start).toISOString().slice(0, 10) };
-            const endDateSource = end || start;
-            body.end = { date: typeof endDateSource === 'string' ? endDateSource.slice(0, 10) : new Date(endDateSource).toISOString().slice(0, 10) };
+    const inclusiveEnd = allDayInclusive !== undefined;
+    const isAllDay = inclusiveEnd ? !!allDayInclusive : !!allDay;
+
+    if (start !== undefined || end !== undefined || allDay !== undefined || inclusiveEnd) {
+        if (isAllDay) {
+            const startDate = toYmd(start);
+            let endDate = toYmd(end || start);
+            if (inclusiveEnd) endDate = nextDay(endDate < startDate ? startDate : endDate);
+            body.start = { date: startDate };
+            body.end = { date: endDate };
         } else {
             body.start = { dateTime: new Date(start).toISOString() };
             body.end = { dateTime: new Date(end).toISOString() };
@@ -161,6 +180,18 @@ async function createEvent(db, accountId, calendarId, event) {
 
 async function updateEvent(db, accountId, calendarId, eventId, event) {
     const body = eventToBody(event);
+    // An update merges into the stored start and end, so turning a timed event
+    // into an all-day one (or back) must clear the other kind of time, or Google
+    // is left holding both a date and a dateTime.
+    for (const edge of [body.start, body.end]) {
+        if (!edge) continue;
+        if (edge.date) {
+            edge.dateTime = null;
+            edge.timeZone = null;
+        } else if (edge.dateTime) {
+            edge.date = null;
+        }
+    }
     return await googleFetch(
         db,
         accountId,
