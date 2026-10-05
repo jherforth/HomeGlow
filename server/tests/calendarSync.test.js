@@ -380,3 +380,72 @@ test('fetchGoogleEvents falls through when the label id is not in the label map'
         restore();
     }
 });
+
+// Issue #209: Google sends an all-day date as a bare 'YYYY-MM-DD'. It must be
+// stored as local midnight of that date, the same as ICS/CalDAV, not as UTC
+// midnight, which west of UTC is the evening before.
+const localYmd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+async function googleAllDay(start, end) {
+    const restore = stubGoogle({
+        events: [{ id: 'all-day', status: 'confirmed', summary: 'Field trip', start: { date: start }, end: { date: end } }],
+    });
+    try {
+        const service = new CalendarSyncService({}, () => null);
+        const [event] = await service.fetchGoogleEvents({ id: 1, url: 'primary' });
+        return event;
+    } finally {
+        restore();
+    }
+}
+
+for (const zone of ['America/New_York', 'America/Los_Angeles', 'UTC', 'Europe/Berlin', 'Asia/Tokyo']) {
+    test(`a Google all-day event stays on its own day in ${zone} (#209)`, async () => {
+        const original = process.env.TZ;
+        process.env.TZ = zone;
+        try {
+            // One day: Friday 9 October. Google's end date is exclusive.
+            const event = await googleAllDay('2026-10-09', '2026-10-10');
+            assert.equal(event.all_day, true);
+            assert.equal(localYmd(event.start), '2026-10-09');
+            assert.equal(event.start.getHours(), 0);
+            assert.equal(localYmd(event.end), '2026-10-09', 'inclusive end, same day');
+        } finally {
+            process.env.TZ = original;
+        }
+    });
+}
+
+test('a multi-day Google all-day event keeps its last day across a DST change (#209)', async () => {
+    const original = process.env.TZ;
+    // Europe leaves summer time on Sunday 25 October 2026.
+    process.env.TZ = 'Europe/Berlin';
+    try {
+        const event = await googleAllDay('2026-10-24', '2026-10-27');
+        assert.equal(localYmd(event.start), '2026-10-24');
+        assert.equal(localYmd(event.end), '2026-10-26');
+        assert.equal(event.end.getHours(), 0, 'midnight, not 23:00 or 01:00');
+    } finally {
+        process.env.TZ = original;
+    }
+});
+
+test('Google and ICS store the same all-day event the same way (#209)', async () => {
+    const original = process.env.TZ;
+    process.env.TZ = 'America/New_York';
+    try {
+        const google = await googleAllDay('2026-10-09', '2026-10-10');
+        const ics = [
+            'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//HomeGlow Regression Test//EN',
+            'BEGIN:VEVENT', 'UID:field-trip@example.com', 'DTSTAMP:20261001T120000Z',
+            'DTSTART;VALUE=DATE:20261009', 'DTEND;VALUE=DATE:20261010', 'SUMMARY:Field trip',
+            'END:VEVENT', 'END:VCALENDAR',
+        ].join('\r\n');
+        const parsed = Object.values(nodeIcal.sync.parseICS(ics)).find((e) => e.type === 'VEVENT');
+        const service = new CalendarSyncService({}, () => null);
+        assert.equal(google.start.toISOString(), new Date(parsed.start).toISOString());
+        assert.equal(google.end.toISOString(), service.normalizeAllDayEnd(parsed.end).toISOString());
+    } finally {
+        process.env.TZ = original;
+    }
+});
