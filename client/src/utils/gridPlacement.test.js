@@ -128,4 +128,55 @@ describe('buildLayout', () => {
     const out = buildLayout([plugin('a'), plugin('b'), plugin('c')], 12, false);
     out.forEach((i) => expect(i.x + i.w).toBeLessThanOrEqual(12));
   });
+
+  it('re-places a saved position that collides with an already-claimed one', () => {
+    // Regression for overlapping saved data (e.g. saved at a narrower width
+    // before edge-based scaling): the colliding widget is treated as unsaved
+    // and moved to a free cell instead of stacking on top of the first.
+    const a = { ...plugin('a'), savedLayout: { x: 0, y: 0, w: 6, h: 4 } };
+    const b = { ...plugin('b'), savedLayout: { x: 4, y: 0, w: 6, h: 4 } };
+    const out = buildLayout([a, b], 12, false);
+    expect(overlaps(out)).toBeNull();
+    // The first widget keeps its saved spot; the colliding one is re-placed.
+    expect(out[0]).toMatchObject({ x: 0, y: 0, w: 6, h: 4 });
+    expect(out[1]).not.toMatchObject({ x: 4, y: 0 });
+  });
+
+  // Core widgets take buildLayout's default minimum of 3 (12-col units).
+  const core = (id, x, w) => ({
+    id,
+    defaultPosition: { x: 0, y: 0 },
+    defaultSize: { width: 4, height: 3 },
+    savedLayout: { x, y: 0, w, h: 3 },
+  });
+
+  it('keeps three 4-wide widgets in one row at 8 columns', () => {
+    // At 8 columns the row is 3+2+3. With the minimum left in 12-col units the
+    // middle widget was clamped back to 3 and the third pushed to a new row.
+    const out = buildLayout([core('a', 0, 4), core('b', 4, 4), core('c', 8, 4)], 8, false);
+    expect(overlaps(out)).toBeNull();
+    out.forEach((i) => expect(i.y).toBe(0));
+    expect(out.map((i) => i.x + i.w)).toEqual([3, 5, 8]);
+  });
+
+  it('keeps every row of widgets that fits 12 columns in one row at 8 columns', () => {
+    const rows = [];
+    for (let a = 3; a <= 9; a += 1) {
+      for (let b = 3; a + b <= 12; b += 1) {
+        rows.push([a, b]);
+        for (let c = 3; a + b + c <= 12; c += 1) rows.push([a, b, c]);
+      }
+    }
+    for (const widths of rows) {
+      let x = 0;
+      const widgets = widths.map((w, k) => {
+        const widget = core(`w${k}`, x, w);
+        x += w;
+        return widget;
+      });
+      const out = buildLayout(widgets, 8, true);
+      expect(overlaps(out), widths.join('+')).toBeNull();
+      out.forEach((i) => expect(i.y, widths.join('+')).toBe(0));
+    }
+  });
 });
