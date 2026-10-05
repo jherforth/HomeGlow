@@ -1,3 +1,34 @@
+# HomeGlow v 1.9.1 Changelog
+
+## 🎉 Recent Updates
+
+A one-fix patch release for Google Calendar users.
+
+---
+
+## Fixes
+
+- **Google all-day events no longer appear a day early (#209, #212).** West of
+  UTC (the Americas, for example), an all-day event from Google Calendar showed
+  up on the previous day: in the calendar, on the screensaver agenda, and in
+  the event editor. Editing one even saved it back to Google a day early.
+  Google all-day events are now stored the same way as ICS, CalDAV and Apple
+  ones, so they land on their own date everywhere. Reported by **@Leesam**;
+  thanks to **@mrramam** (#159) and **@cosmosified** (#152) for the earlier
+  work on this.
+
+---
+
+## 📝 Notes
+
+**Upgrading is nothing more than pulling the new images.** Google all-day
+events correct themselves on the next calendar sync after upgrading, within
+15 minutes. Nothing else needs doing.
+
+For questions or issues, please visit our [GitHub Issues](https://github.com/jherforth/HomeGlow/issues) page.
+
+---
+
 # HomeGlow v 1.9 Changelog
 
 ## 🎉 Recent Updates
