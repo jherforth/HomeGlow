@@ -46,6 +46,12 @@ export function scaleLayoutItem(item, fromCols, toCols) {
       ...item,
       x: left,
       w: Math.max(1, right - left),
+      // A minimum is a size too, so it scales with the columns. Left in 12-col
+      // units, the clamp below widens a scaled-down widget back into its
+      // neighbour: three 4-wide widgets in a row become 3+2+3 at 8 columns,
+      // and an unscaled minimum of 3 pushes the third onto the next row.
+      // Rounded down so a minimum never forces a widget wider than its share.
+      ...(item.minW != null ? { minW: Math.max(1, Math.floor(item.minW * scale)) } : {}),
     },
     toCols
   );

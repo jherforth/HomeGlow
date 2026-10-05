@@ -82,6 +82,15 @@ describe('scaleLayoutItem', () => {
     expect(left.x + left.w).toBe(right.x);
     expect(right.x + right.w).toBeLessThanOrEqual(12);
   });
+
+  it('scales the minimum width with the columns', () => {
+    // A 12-col minimum of 3 is a quarter of the grid; at 8 columns that is 2.
+    // Left at 3, the clamp would widen a 2-wide widget into its neighbour.
+    const down = scaleLayoutItem({ x: 4, y: 0, w: 4, h: 3, minW: 3, minH: 2 }, 12, 8);
+    expect(down).toMatchObject({ x: 3, w: 2, minW: 2 });
+    const up = scaleLayoutItem({ x: 3, y: 0, w: 2, h: 3, minW: 2, minH: 2 }, 8, 12);
+    expect(up.minW).toBe(3);
+  });
 });
 
 describe('normalized conversion', () => {
