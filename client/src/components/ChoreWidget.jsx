@@ -889,7 +889,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
       await axios.post(`${API_BASE_URL}/api/chore-schedules`, {
         chore_id: choreId,
         ...(isMultiCreate ? { user_ids: newChore.user_ids } : { user_id: newChore.user_id || null }),
-        crontab: isCalendarMode ? null : (cron || null),
+        crontab: (newChore.duration === 'once-completed' || newChore.isOneTime || isCalendarMode) ? null : (cron || null),
         duration: durationValue,
         interval: normalizedInterval,
         visible: 1,
