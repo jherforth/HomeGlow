@@ -15,7 +15,21 @@
     "accent": "#ff9900"
   },
   "fonts": [
-    "antonio"
+    {
+      "family": "Antonio",
+      "weight": 400,
+      "src": "fonts/antonio-400.woff2"
+    },
+    {
+      "family": "Antonio",
+      "weight": 600,
+      "src": "fonts/antonio-600.woff2"
+    },
+    {
+      "family": "Antonio",
+      "weight": 700,
+      "src": "fonts/antonio-700.woff2"
+    }
   ],
   "tokens": {
     "all": {

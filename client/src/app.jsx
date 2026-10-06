@@ -675,7 +675,7 @@ const App = () => {
   }, [activeTheme, displayTheme, themeColors, interfaceColors.primary, appearance.accent, backgroundKey, appearance.cardOpacity]);
 
   useEffect(() => {
-    void loadThemeFonts(activeTheme);
+    loadThemeFonts(activeTheme);
   }, [activeTheme]);
 
   useEffect(() => {

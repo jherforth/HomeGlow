@@ -16,7 +16,21 @@
     "accent": "#ff7f50"
   },
   "fonts": [
-    "nunito"
+    {
+      "family": "Nunito",
+      "weight": 400,
+      "src": "fonts/nunito-400.woff2"
+    },
+    {
+      "family": "Nunito",
+      "weight": 600,
+      "src": "fonts/nunito-600.woff2"
+    },
+    {
+      "family": "Nunito",
+      "weight": 700,
+      "src": "fonts/nunito-700.woff2"
+    }
   ],
   "tokens": {
     "all": {
