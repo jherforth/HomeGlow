@@ -1,4 +1,4 @@
-// Appearance (mode, interface colors, auto-dark location) resolves through a
+// Appearance (theme, mode, interface colors, auto-dark location) resolves through a
 // cascade: the household sets the default, and a display may override any
 // field. The household value lives in the settings table under
 // APPEARANCE_SETTING_KEY; a display's overrides live in its device settings
@@ -15,12 +15,14 @@ import {
   normalizeAutoDarkModeSettings,
   normalizeInterfaceColors,
 } from './interfaceSettings.js';
+import { BUILT_IN_THEMES, DEFAULT_THEME_ID } from './themes.js';
 
 export const APPEARANCE_SETTING_KEY = 'appearance';
-export const APPEARANCE_FIELDS = ['mode', 'colors', 'autoDark'];
+export const APPEARANCE_FIELDS = ['theme', 'mode', 'colors', 'autoDark'];
 export const MODES = ['light', 'dark', 'auto'];
 
 export const DEFAULT_APPEARANCE = {
+  theme: DEFAULT_THEME_ID,
   mode: 'light',
   colors: { ...DEFAULT_INTERFACE_COLORS },
   autoDark: { ...DEFAULT_AUTO_DARK_MODE_SETTINGS },
@@ -45,7 +47,10 @@ const parseMaybeJson = (raw) => {
   }
 };
 
+const THEME_IDS = BUILT_IN_THEMES.map((theme) => theme.id);
+
 const normalizeField = (field, value) => {
+  if (field === 'theme') return THEME_IDS.includes(value) ? value : undefined;
   if (field === 'mode') return MODES.includes(value) ? value : undefined;
   if (!isObject(value)) return undefined;
   return field === 'colors' ? normalizeInterfaceColors(value) : normalizeAutoDarkModeSettings(value);
@@ -208,8 +213,8 @@ export function readAppearanceCache(storage) {
 
 export function writeAppearanceCache(storage, appearance) {
   try {
-    const { mode, colors, autoDark } = appearance;
-    storage.setItem(APPEARANCE_CACHE_KEY, JSON.stringify({ mode, colors, autoDark }));
+    const { theme, mode, colors, autoDark } = appearance;
+    storage.setItem(APPEARANCE_CACHE_KEY, JSON.stringify({ theme, mode, colors, autoDark }));
   } catch {
     // A cache only; the server holds the settings.
   }

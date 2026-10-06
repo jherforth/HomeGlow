@@ -1,6 +1,6 @@
 // client/src/app.jsx
 import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
-import { IconButton, Box, Dialog, DialogContent, Typography } from '@mui/material';
+import { IconButton, Box, Dialog, DialogContent, Typography, ThemeProvider, createTheme } from '@mui/material';
 import { Close } from '@mui/icons-material';
 
 import axios from 'axios';
@@ -19,6 +19,7 @@ import useIsMobile from './hooks/useIsMobile.js';
 import useScreenActivity from './hooks/useScreenActivity.js';
 import {
   applyInterfaceColors,
+  hexToRgbTriplet,
   readLocalScreensaverSettings,
   readLocalVacationModeSettings,
   isVacationModeActiveToday,
@@ -36,6 +37,15 @@ import {
   resolveAppearance,
   writeAppearanceCache,
 } from './utils/appearance.js';
+import {
+  applyThemeTokens,
+  loadThemeFonts,
+  muiThemeOptions,
+  resolveTheme,
+  themeDisplayMode,
+  themeTokens,
+} from './utils/themes.js';
+import { ThemeContext } from './themes/ambience.jsx';
 import { normalizeWidgetSettings, BASE_WIDGET_SETTINGS } from './utils/widgetSettings.js';
 import { buildMobileWidgetList } from './utils/mobileWidgets.js';
 import { CORE_CONTROLS, resolveHiddenControls } from './utils/displayControls.js';
@@ -241,6 +251,21 @@ const App = () => {
   const themeMode = appearance.mode;
   const interfaceColors = appearance.colors;
   const autoDarkModeSettings = appearance.autoDark;
+
+  // The theme package. A theme that only supports some modes shows its own
+  // (Starship is dark only), and a theme with its own colors uses them in
+  // place of the household's interface colors, including for plugins.
+  const activeTheme = useMemo(() => resolveTheme(appearance.theme), [appearance.theme]);
+  const displayTheme = themeDisplayMode(activeTheme, theme);
+  const effectiveColors = useMemo(
+    () => (activeTheme.colors ? { ...interfaceColors, ...activeTheme.colors } : interfaceColors),
+    [activeTheme, interfaceColors],
+  );
+  // Always a provider, so switching between Classic and a themed look never
+  // changes the tree's shape (which would remount everything, Admin included).
+  // Classic gets MUI's default theme, which is what MUI uses with no provider.
+  const muiTheme = useMemo(() => createTheme(muiThemeOptions(activeTheme, displayTheme) || {}), [activeTheme, displayTheme]);
+  const themeTokenNamesRef = useRef([]);
 
   const fetchInstalledPlugins = async () => {
     try {
@@ -614,19 +639,36 @@ const App = () => {
     }
   }, [resolveAutoTheme, applyTheme]);
 
+  // Theme tokens first, which also clears any the previous theme set; then,
+  // for a theme without its own colors (Classic), the household's colors.
   useEffect(() => {
-    applyInterfaceColors(document.documentElement, interfaceColors);
-  }, [interfaceColors]);
+    const root = document.documentElement;
+    root.setAttribute('data-theme', displayTheme);
 
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    if (theme === 'light') {
-      document.documentElement.style.setProperty('--background', interfaceColors.primary);
-      return;
+    const colorTokens = activeTheme.colors ? {
+      '--primary': effectiveColors.primary,
+      '--secondary': effectiveColors.secondary,
+      '--accent': effectiveColors.accent,
+      ...(hexToRgbTriplet(effectiveColors.accent) ? { '--accent-rgb': hexToRgbTriplet(effectiveColors.accent) } : {}),
+    } : {};
+    themeTokenNamesRef.current = applyThemeTokens(
+      root,
+      { ...colorTokens, ...themeTokens(activeTheme, displayTheme) },
+      themeTokenNamesRef.current,
+    );
+    if (activeTheme.colors) return;
+
+    applyInterfaceColors(root, interfaceColors);
+    if (displayTheme === 'light') {
+      root.style.setProperty('--background', interfaceColors.primary);
+    } else {
+      root.style.removeProperty('--background');
     }
+  }, [activeTheme, displayTheme, interfaceColors, effectiveColors.primary, effectiveColors.secondary, effectiveColors.accent]);
 
-    document.documentElement.style.removeProperty('--background');
-  }, [theme, interfaceColors.primary]);
+  useEffect(() => {
+    void loadThemeFonts(activeTheme);
+  }, [activeTheme]);
 
   useEffect(() => {
     const handleDeviceSettingsUpdated = () => {
@@ -1172,8 +1214,8 @@ const App = () => {
         content: <PluginWidgetWrapper
           filename={plugin.filename}
           name={plugin.name}
-          theme={theme}
-          colors={interfaceColors}
+          theme={displayTheme}
+          colors={effectiveColors}
           transparentBackground={pSettings.transparent || false}
           events={plugin.manifest?.events || []}
           hiddenControls={unprefixedHiddenControlsFor(hiddenControls, plugin.manifest?.id)}
@@ -1182,7 +1224,7 @@ const App = () => {
     });
 
     return result;
-  }, [widgetSettings, pluginSettings, activeTab, widgetAssignments, installedPlugins, theme, interfaceColors, demoStatus.demo, hiddenControls]);
+  }, [widgetSettings, pluginSettings, activeTab, widgetAssignments, installedPlugins, displayTheme, effectiveColors, demoStatus.demo, hiddenControls]);
 
   // Mobile stack (issue #118): same widget content nodes, fixed order, photos
   // excluded, grid metadata ignored.
@@ -1222,7 +1264,7 @@ const App = () => {
     volume: Number.isFinite(parsedSoundVolume) ? parsedSoundVolume / 100 : 1,
   });
 
-  return (
+  const tree = (
     <>
       <Box sx={{ width: '100%', minHeight: '100vh', position: 'relative', pb: '80px' }}>
         {demoStatus.demo && (
@@ -1390,7 +1432,7 @@ const App = () => {
         onToggleLock={toggleWidgetsLock}
         onOpenSettings={toggleAdminPanel}
         onRefresh={handlePageRefresh}
-        theme={theme}
+        theme={displayTheme}
         themeMode={themeMode}
         screensaverCountdown={
           // No screensaver on mobile — don't show a countdown that never fires.
@@ -1440,6 +1482,14 @@ const App = () => {
       )}
     </>
   );
+
+  // Ambience runs only while someone could be looking at the widgets.
+  const themed = (
+    <ThemeContext.Provider value={{ theme: activeTheme, mode: displayTheme, active: widgetsActive }}>
+      {tree}
+    </ThemeContext.Provider>
+  );
+  return <ThemeProvider theme={muiTheme}>{themed}</ThemeProvider>;
 };
 
 export default App;

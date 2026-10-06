@@ -30,6 +30,7 @@ import {
   pruneMatchingOverrides,
   resolveAppearance,
 } from '../utils/appearance.js';
+import { BUILT_IN_THEMES, resolveTheme } from '../utils/themes.js';
 
 const INTERFACE_SETTINGS_UPDATED_EVENT = 'homeglow:interface-settings-updated';
 const COLOR_KEYS = ['primary', 'secondary', 'accent'];
@@ -47,7 +48,7 @@ const AppearanceSettings = () => {
   const [device, setDevice] = useState({});
   const [scope, setScope] = useState('device');
   const [draft, setDraft] = useState(null);
-  const [inherit, setInherit] = useState({ mode: true, colors: true, autoDark: true });
+  const [inherit, setInherit] = useState({ theme: true, mode: true, colors: true, autoDark: true });
   const [pickerAnchor, setPickerAnchor] = useState({ key: null, el: null });
   const [message, setMessage] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -258,7 +259,28 @@ const AppearanceSettings = () => {
 
       {message && <Alert severity={message.type} onClose={() => setMessage(null)} sx={{ mb: 2 }}>{message.text}</Alert>}
 
-      <Typography variant="subtitle2" sx={{ mt: 1 }}>{t('admin:appearance.mode')}</Typography>
+      <Typography variant="subtitle2" sx={{ mt: 1 }}>{t('admin:appearance.theme')}</Typography>
+      {inheritSwitch('theme')}
+      <FormControl fullWidth sx={{ mb: 1 }} disabled={locked('theme')}>
+        <InputLabel>{t('admin:appearance.theme')}</InputLabel>
+        <Select value={draft.theme} label={t('admin:appearance.theme')} onChange={(e) => updateDraft('theme', e.target.value)}>
+          {BUILT_IN_THEMES.map((theme) => (
+            <MenuItem key={theme.id} value={theme.id}>
+              {theme.name}
+              {theme.author && (
+                <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                  {t('admin:plugins.byAuthor', { author: theme.author })}
+                </Typography>
+              )}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 3 }}>
+        {t(`admin:appearance.themeDescriptions.${draft.theme}`)}
+      </Typography>
+
+      <Typography variant="subtitle2">{t('admin:appearance.mode')}</Typography>
       {inheritSwitch('mode')}
       <FormControl fullWidth sx={{ mb: 1 }} disabled={locked('mode')}>
         <InputLabel>{t('admin:appearance.mode')}</InputLabel>
@@ -274,6 +296,9 @@ const AppearanceSettings = () => {
 
       <Typography variant="subtitle2">{t('admin:appearance.colors')}</Typography>
       {inheritSwitch('colors')}
+      {resolveTheme(draft.theme).colors && (
+        <Alert severity="info" sx={{ mb: 2 }}>{t('admin:appearance.themeHasColors')}</Alert>
+      )}
       <Box sx={{ maxWidth: 600, mb: 2 }}>{COLOR_KEYS.map(colorPicker)}</Box>
 
       <Typography variant="subtitle2">{t('admin:appearance.autoDark')}</Typography>

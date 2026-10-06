@@ -9,8 +9,11 @@ export const frameDecoration = {
   position: 'absolute',
   inset: 0,
   borderRadius: 'inherit',
-  border: 'var(--hg-frame-decoration-border)',
+  borderWidth: 'var(--hg-frame-decoration-width)',
+  borderStyle: 'var(--hg-frame-decoration-style)',
+  borderColor: 'var(--hg-frame-decoration-color)',
   borderImage: 'var(--hg-frame-decoration-image)',
+  backgroundImage: 'var(--hg-frame-overlay)',
   pointerEvents: 'none',
   zIndex: 999,
 };

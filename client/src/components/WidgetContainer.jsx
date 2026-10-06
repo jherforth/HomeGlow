@@ -18,6 +18,7 @@ import { shouldAcceptLayoutChange } from '../utils/layoutSync';
 import { buildLayout, savedSourcesById } from '../utils/gridPlacement';
 import { readGridMetrics } from '../utils/gridMetrics';
 import { frameDecoration } from '../utils/widgetFrame';
+import { AmbienceLayer } from '../themes/ambience.jsx';
 
 // No auto-compaction; block overlaps (same as compactType={null} + preventCollision).
 const GRID_COMPACTOR = getCompactor(null, false, true);
@@ -524,6 +525,9 @@ const WidgetContainer = ({
         padding: 2,
         position: 'relative',
         backgroundColor: 'var(--background)',
+        // A theme's page image (Classic: none), pinned like the body's.
+        backgroundImage: 'var(--hg-page-image)',
+        backgroundAttachment: 'fixed',
         '& .react-grid-item': {
           transition: (selectedWidget || isLockTransitioning) ? 'none !important' : 'all 200ms ease',
           transitionProperty: 'left, top, width, height',
@@ -540,6 +544,7 @@ const WidgetContainer = ({
         },
       }}
     >
+      <AmbienceLayer />
       {layout.length > 0 && (
         <GridLayout
           className="layout"
@@ -637,11 +642,14 @@ const WidgetContainer = ({
                   position: 'relative',
                   border: isSelected ? '3px solid var(--accent)' : '3px solid transparent',
                   borderRadius: 'var(--hg-frame-radius)',
+                  padding: 'var(--hg-frame-inset)',
+                  backdropFilter: 'var(--hg-frame-backdrop)',
                   transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
                   boxShadow: isSelected
                     ? '0 8px 32px rgba(var(--accent-rgb), 0.3)'
                     : restingShadow,
                   background: widget.transparent ? 'transparent' : 'var(--hg-frame-bg)',
+                  backgroundImage: widget.transparent ? 'none' : 'var(--hg-frame-image)',
                   overflow: 'hidden',
                   cursor: locked ? 'default' : (isSelected ? 'move' : 'pointer'),
                   touchAction: locked ? 'auto' : (isSelected ? 'none' : 'manipulation'),

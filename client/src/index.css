@@ -40,6 +40,8 @@
   --dock-active-bg: var(--hg-white-20);
   --dock-active-border: var(--hg-white-30);
   --dock-active-icon: #ffffff;
+  /* An image over the active dock item's color, such as a flag. */
+  --dock-active-image: none;
 }
 
 [data-theme="light"] {
@@ -71,6 +73,7 @@
 body {
   font-family: var(--hg-font-body);
   background: var(--container-background-override);
+  background-image: var(--hg-page-image);
   background-attachment: fixed;
   color: var(--text);
   line-height: 1.6;
@@ -83,6 +86,7 @@ body {
   margin: 0 auto;
   padding: 20px;
   background: var(--container-background-override);
+  background-image: var(--hg-page-image);
   min-height: calc(100vh - var(--bottom-bar-height));
 }
 
