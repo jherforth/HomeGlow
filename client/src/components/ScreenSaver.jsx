@@ -136,11 +136,11 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange, keepS
             bottom: 12,
             left: '50%',
             transform: 'translateX(-50%)',
-            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            backgroundColor: 'var(--hg-black-70)',
             color: 'white',
             px: 2,
             py: 0.5,
-            borderRadius: 2,
+            borderRadius: 'var(--hg-radius-md)',
             fontSize: '0.75rem',
             opacity: 0,
             animation: 'fadeInOut 4s ease-in-out',
@@ -276,7 +276,7 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange, keepS
               maxWidth: '100%',
               maxHeight: '100%',
               objectFit: 'contain',
-              ...(ambient ? { boxShadow: '0 0 60px 10px rgba(0, 0, 0, 0.45)' } : {}),
+              ...(ambient ? { boxShadow: '0 0 60px 10px var(--hg-black-50)' } : {}),
               animation: 'sssFadeIn 1s ease-in-out',
               '@keyframes sssFadeIn': {
                 '0%': { opacity: 0 },
@@ -325,10 +325,10 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange, keepS
             top: 20,
             right: 20,
             color: 'white',
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            backgroundColor: 'var(--hg-black-50)',
             pointerEvents: 'auto',
             '&:hover': {
-              backgroundColor: 'rgba(0, 0, 0, 0.7)',
+              backgroundColor: 'var(--hg-black-70)',
             },
           }}
         >
@@ -349,10 +349,10 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange, keepS
                 top: '50%',
                 transform: 'translateY(-50%)',
                 color: 'white',
-                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                backgroundColor: 'var(--hg-black-50)',
                 pointerEvents: 'auto',
                 '&:hover': {
-                  backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                  backgroundColor: 'var(--hg-black-70)',
                 },
               }}
             >
@@ -370,10 +370,10 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange, keepS
                 top: '50%',
                 transform: 'translateY(-50%)',
                 color: 'white',
-                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                backgroundColor: 'var(--hg-black-50)',
                 pointerEvents: 'auto',
                 '&:hover': {
-                  backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                  backgroundColor: 'var(--hg-black-70)',
                 },
               }}
             >
@@ -387,10 +387,10 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange, keepS
                 left: '50%',
                 transform: 'translateX(-50%)',
                 color: 'white',
-                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                backgroundColor: 'var(--hg-black-50)',
                 px: 2,
                 py: 1,
-                borderRadius: 1,
+                borderRadius: 'var(--hg-radius-sm)',
               }}
             >
               {currentIndex + 1} / {photos.length}

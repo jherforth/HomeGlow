@@ -9,7 +9,7 @@ export const stackableTableSx = {
       display: 'block',
       mb: 1.5,
       border: '1px solid var(--card-border)',
-      borderRadius: 2,
+      borderRadius: 'var(--hg-radius-md)',
       p: 1,
     },
     '& td': {
@@ -50,7 +50,7 @@ export const compactStackedTableSx = {
       rowGap: 0.5,
       mb: 1,
       border: '1px solid var(--card-border)',
-      borderRadius: 2,
+      borderRadius: 'var(--hg-radius-md)',
       px: 1.25,
       py: 1,
     },

@@ -113,7 +113,7 @@ export default function ChoreHistoryTab() {
                   </TableCell>
                   <TableCell data-label="Title">
                     <Typography variant="body2">
-                      {entry.title || <span style={{ color: 'rgba(0,0,0,0.4)', fontStyle: 'italic' }}>Unknown</span>}
+                      {entry.title || <span style={{ color: 'var(--hg-black-50)', fontStyle: 'italic' }}>Unknown</span>}
                     </Typography>
                   </TableCell>
                   <TableCell data-label="Date">

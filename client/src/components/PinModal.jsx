@@ -190,7 +190,7 @@ const PinModal = ({ open, onClose, onVerify, mode = 'verify', title, allowRememb
             background: 'var(--card-bg)',
             backdropFilter: 'var(--backdrop-blur)',
             border: isMobile ? 'none' : '2px solid var(--accent)',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
+            boxShadow: '0 8px 32px var(--hg-black-30)'
           }
         }
       }}
@@ -270,8 +270,8 @@ const PinModal = ({ open, onClose, onVerify, mode = 'verify', title, allowRememb
             elevation={0}
             sx={{
               p: 3,
-              backgroundColor: 'rgba(0, 0, 0, 0.2)',
-              borderRadius: 2
+              backgroundColor: 'var(--hg-black-20)',
+              borderRadius: 'var(--hg-radius-md)'
             }}
           >
             <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
@@ -288,7 +288,7 @@ const PinModal = ({ open, onClose, onVerify, mode = 'verify', title, allowRememb
                     background: 'linear-gradient(135deg, var(--accent) 0%, var(--secondary) 100%)',
                     '&:hover': {
                       transform: 'scale(1.05)',
-                      boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)'
+                      boxShadow: '0 4px 20px var(--hg-black-30)'
                     },
                     transition: 'all 0.2s ease'
                   }}
@@ -327,7 +327,7 @@ const PinModal = ({ open, onClose, onVerify, mode = 'verify', title, allowRememb
                   background: 'linear-gradient(135deg, var(--accent) 0%, var(--secondary) 100%)',
                   '&:hover': {
                     transform: 'scale(1.05)',
-                    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)'
+                    boxShadow: '0 4px 20px var(--hg-black-30)'
                   },
                   transition: 'all 0.2s ease'
                 }}
@@ -340,7 +340,7 @@ const PinModal = ({ open, onClose, onVerify, mode = 'verify', title, allowRememb
                 disabled={isLoading}
                 sx={{
                   height: 60,
-                  borderRadius: 1,
+                  borderRadius: 'var(--hg-radius-sm)',
                   border: '2px solid var(--accent)',
                   color: 'var(--accent)',
                   '&:hover': {
@@ -385,7 +385,7 @@ const PinModal = ({ open, onClose, onVerify, mode = 'verify', title, allowRememb
                   fontWeight: 'bold',
                   '&:hover': {
                     transform: canSubmit ? 'translateY(-2px)' : 'none',
-                    boxShadow: canSubmit ? '0 4px 20px rgba(0, 0, 0, 0.3)' : 'none'
+                    boxShadow: canSubmit ? '0 4px 20px var(--hg-black-30)' : 'none'
                   },
                   transition: 'all 0.2s ease'
                 }}

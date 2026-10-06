@@ -117,7 +117,7 @@ const PluginWidgetWrapper = ({
           height: '100%',
           border: 'none',
           display: 'block',
-          background: transparentBackground ? 'transparent' : 'var(--card-bg)',
+          background: transparentBackground ? 'transparent' : 'var(--hg-frame-bg)',
           overflow: 'hidden',
         }}
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups"

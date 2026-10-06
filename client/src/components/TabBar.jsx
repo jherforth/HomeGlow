@@ -291,11 +291,11 @@ const TabBar = ({
           gap: 0.5,
           px: 2,
           py: 1,
-          borderRadius: '24px',
+          borderRadius: 'var(--hg-radius-2xl)',
           backgroundColor: 'var(--dock-bg)',
           border: '1px solid var(--dock-border)',
           backdropFilter: 'blur(20px)',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.2)',
+          boxShadow: '0 8px 32px var(--hg-black-30), 0 2px 8px var(--hg-black-20)',
           pointerEvents: 'auto',
         }}
       >
@@ -313,10 +313,10 @@ const TabBar = ({
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    borderRadius: '12px',
+                    borderRadius: 'var(--hg-radius-lg)',
                     transition: 'all 0.2s ease',
                     '&:hover': {
-                      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                      backgroundColor: 'var(--hg-white-10)',
                       transform: 'scale(1.05)',
                     },
                     '&:active': {
@@ -349,11 +349,11 @@ const TabBar = ({
                     flexDirection: 'column',
                     gap: 0.5,
                     p: 1,
-                    borderRadius: '16px',
+                    borderRadius: 'var(--hg-radius-xl)',
                     backgroundColor: 'var(--dock-bg)',
                     border: '1px solid var(--dock-border)',
                     backdropFilter: 'blur(20px)',
-                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.2)',
+                    boxShadow: '0 8px 32px var(--hg-black-30), 0 2px 8px var(--hg-black-20)',
                     minWidth: 180,
                     animation: 'menuSlideUp 0.2s ease-out',
                   }}
@@ -371,12 +371,12 @@ const TabBar = ({
                         gap: 1.5,
                         px: 2,
                         py: 1.25,
-                        borderRadius: '10px',
+                        borderRadius: 'var(--hg-radius-lg)',
                         cursor: 'pointer',
                         color: 'var(--text)',
                         transition: 'all 0.15s ease',
                         '&:hover': {
-                          backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                          backgroundColor: 'var(--hg-white-10)',
                         },
                       }}
                     >
@@ -434,11 +434,11 @@ const TabBar = ({
                     height: 16,
                     minWidth: 0,
                     padding: 0,
-                    backgroundColor: '#ff4444',
+                    backgroundColor: 'var(--hg-error)',
                     color: 'white',
                     zIndex: 10,
                     '&:hover': {
-                      backgroundColor: '#cc0000',
+                      backgroundColor: 'var(--hg-error-hover)',
                     },
                   }}
                 >
@@ -455,14 +455,14 @@ const TabBar = ({
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    borderRadius: '12px',
+                    borderRadius: 'var(--hg-radius-lg)',
                     position: 'relative',
                     transition: 'all 0.2s ease',
                     backgroundColor: isActive ? 'var(--dock-active-bg)' : 'transparent',
                     border: isActive ? '1.5px solid var(--dock-active-border)' : '1.5px solid transparent',
-                    boxShadow: isActive ? '0 2px 8px rgba(0, 0, 0, 0.2)' : 'none',
+                    boxShadow: isActive ? '0 2px 8px var(--hg-black-20)' : 'none',
                     '&:hover': {
-                      backgroundColor: isActive ? 'var(--dock-active-bg)' : 'rgba(255, 255, 255, 0.08)',
+                      backgroundColor: isActive ? 'var(--dock-active-bg)' : 'var(--hg-white-10)',
                       transform: 'translateY(-2px)',
                     },
                     '&:active': {
@@ -516,10 +516,10 @@ const TabBar = ({
                   alignItems: 'center',
                   justifyContent: 'center',
                   cursor: 'pointer',
-                  borderRadius: '12px',
+                  borderRadius: 'var(--hg-radius-lg)',
                   transition: 'all 0.2s ease',
                   '&:hover': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                    backgroundColor: 'var(--hg-white-10)',
                     transform: 'translateY(-2px)',
                   },
                 }}

@@ -89,7 +89,7 @@ const DraggableWidget = ({
         '& .react-grid-item.react-grid-placeholder': {
           background: 'var(--accent)',
           opacity: 0.2,
-          borderRadius: '8px',
+          borderRadius: 'var(--hg-radius-md)',
           zIndex: 2,
           transition: 'all 100ms ease',
         },
@@ -131,11 +131,11 @@ const DraggableWidget = ({
             height: '100%',
             position: 'relative',
             border: isSelected ? '3px solid var(--accent)' : '3px solid transparent',
-            borderRadius: 2,
+            borderRadius: 'var(--hg-radius-md)',
             transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
             boxShadow: isSelected
               ? '0 8px 32px rgba(var(--accent-rgb), 0.3)'
-              : '0 2px 8px rgba(0, 0, 0, 0.1)',
+              : '0 2px 8px var(--hg-black-10)',
             backgroundColor: 'var(--card-bg)',
             overflow: 'hidden',
             cursor: isSelected ? 'move' : 'pointer',
@@ -145,7 +145,7 @@ const DraggableWidget = ({
                 : '3px solid rgba(var(--accent-rgb), 0.3)',
               boxShadow: isSelected
                 ? '0 8px 32px rgba(var(--accent-rgb), 0.3)'
-                : '0 4px 16px rgba(0, 0, 0, 0.15)',
+                : '0 4px 16px var(--hg-black-20)',
             }
           }}
         >
@@ -195,7 +195,7 @@ const DraggableWidget = ({
                 padding: '8px 16px',
                 fontSize: '0.75rem',
                 textAlign: 'center',
-                boxShadow: '0 -2px 8px rgba(0, 0, 0, 0.2)',
+                boxShadow: '0 -2px 8px var(--hg-black-20)',
                 zIndex: 1001,
                 userSelect: 'none',
                 borderRadius: '0 0 8px 8px',
