@@ -762,6 +762,7 @@ const PLUGIN_MANIFEST_REGEX = /<script[^>]*id=["']homeglow-manifest["'][^>]*>([\
 const PLUGIN_ID_REGEX = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const PLUGIN_SETTING_KEY_REGEX = /^[a-zA-Z][a-zA-Z0-9]{0,63}$/;
 const PLUGIN_DESCRIPTION_MAX_LENGTH = 300;
+const PLUGIN_CATEGORY_MAX_LENGTH = 40;
 const PLUGIN_SETTING_TYPES = new Set(['number', 'string', 'boolean', 'select']);
 const PLUGIN_SETTING_SCOPES = new Set(['household', 'device']);
 
@@ -811,6 +812,16 @@ function extractPluginManifest(htmlContent) {
       errors.push('author must be a string.');
     } else if (manifest.author.trim().length > PLUGIN_AUTHOR_MAX_LENGTH) {
       errors.push(`author must be ${PLUGIN_AUTHOR_MAX_LENGTH} characters or fewer.`);
+    }
+  }
+  // Which heading the store lists it under. Only the type is checked: the
+  // client owns the category list and shows a slug it doesn't know under
+  // "Other", so a plugin written for a newer list still installs here.
+  if (manifest.category !== undefined) {
+    if (typeof manifest.category !== 'string') {
+      errors.push('category must be a string.');
+    } else if (manifest.category.trim().length > PLUGIN_CATEGORY_MAX_LENGTH) {
+      errors.push(`category must be ${PLUGIN_CATEGORY_MAX_LENGTH} characters or fewer.`);
     }
   }
   if (manifest.apiVersion !== undefined && manifest.apiVersion !== 'v1') {
@@ -1679,7 +1690,13 @@ async function fetchRemotePluginMetadata(downloadUrl, sha, filename) {
     return pluginMetadataCache.get(sha);
   }
 
-  let result = { description: null, pluginId: null, author: resolvePluginAuthor({ manifest: null, filename }) };
+  let result = {
+    description: null,
+    pluginId: null,
+    title: null,
+    category: null,
+    author: resolvePluginAuthor({ manifest: null, filename }),
+  };
   try {
     const response = await axios.get(downloadUrl, {
       headers: { 'User-Agent': 'HomeGlow-Server/1.0' },
@@ -1690,9 +1707,15 @@ async function fetchRemotePluginMetadata(downloadUrl, sha, filename) {
     const { manifest } = extractPluginManifest(String(response.data || ''));
     if (manifest) {
       const description = typeof manifest.description === 'string' ? manifest.description.trim() : '';
+      const title = typeof manifest.name === 'string' ? manifest.name.trim() : '';
+      const category = typeof manifest.category === 'string' ? manifest.category.trim().toLowerCase() : '';
       result = {
         description: description || null,
         pluginId: typeof manifest.id === 'string' ? manifest.id : null,
+        // The manifest's own name ("Family Countdown"); the list shows the
+        // file's ("Countdown"), so search matches either.
+        title: title || null,
+        category: category || null,
         author: resolvePluginAuthor({ manifest, filename }),
       };
     }
@@ -1810,6 +1833,8 @@ fastify.get('/api/widgets/github', async (request, reply) => {
       const meta = await fetchRemotePluginMetadata(widget.download_url, widget.sha, widget.filename);
       widget.description = meta.description;
       widget.author = meta.author;
+      widget.title = meta.title;
+      widget.category = meta.category;
       if (meta.pluginId) widget.pluginId = meta.pluginId;
     }));
 

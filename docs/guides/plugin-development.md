@@ -120,6 +120,7 @@ Embed a manifest as a JSON script block anywhere in your HTML (conventionally in
   "name": "My Plugin",
   "description": "One sentence on what this does, shown in the plugin list.",
   "author": "Your name or GitHub handle",
+  "category": "family-hub",
   "apiVersion": "v1",
   "storage": true,
   "settings": [ ... ],
@@ -147,6 +148,7 @@ serving your widget, and the SDK picks it up — you never pass your own id.
 | `name` | — | Display name shown in the Admin Panel (falls back to the filename). |
 | `description` | — | One sentence on what the plugin does, shown under its name in the Admin Panel and in the browse list. Max 300 characters — it is a card subtitle, not a README. Worth writing: without it the list shows only a filename. |
 | `author` | — | Who wrote the plugin, shown as "by …" beside its name in the Admin Panel and the browse list. Max 80 characters. Without it no author is shown, except on the plugins that shipped before v1.6, which are credited to HomeGlow. |
+| `category` | — | The heading the plugin store lists it under: `clock-calendar`, `news-weather`, `chores-rewards`, `family-hub`, `meals`, `household`, `health` or `games`. Without one, or with a value not on that list, it is listed under **Other**. |
 | `apiVersion` | — | `"v1"` — the API contract you target. |
 | `storage` | — | `true` to use the storage API. Without it, storage calls are 403. |
 | `settings` | — | Declared settings the Admin Panel renders (see §4). |
