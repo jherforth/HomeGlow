@@ -54,5 +54,9 @@
     "more_one": "+{{count}} más",
     "more_other": "+{{count}} más",
     "freeDay": "Nada programado"
+  },
+  "update": {
+    "available": "HomeGlow {{latest}} está disponible. Esta pantalla usa {{current}}.",
+    "details": "Las notas de la versión están en Ajustes → Acerca de."
   }
 }

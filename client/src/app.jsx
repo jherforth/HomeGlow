@@ -9,6 +9,7 @@ import WidgetContainer from './components/WidgetContainer.jsx';
 import MobileDashboard from './components/MobileDashboard.jsx';
 import TabBar from './components/TabBar.jsx';
 import ScreensaverCountdown from './components/ScreensaverCountdown.jsx';
+import UpdateIndicator from './components/UpdateIndicator.jsx';
 import { API_BASE_URL } from './utils/apiConfig.js';
 import { getDeviceApiBase } from './utils/deviceName.js';
 import { unlockAudio } from './utils/choreSound.js';
@@ -1191,6 +1192,7 @@ const App = () => {
             🏖️ Vacation Mode
           </Box>
         )}
+        <UpdateIndicator />
         {/* The one mobile/kiosk fork (issue #118): below 600px the grid —
             react-grid-layout, drag/resize, lock — never mounts. */}
         {isMobile && mobileWidgets.length > 0 && (

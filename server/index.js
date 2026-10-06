@@ -164,6 +164,7 @@ const {
   decryptLegacy,
 } = require('./utils/encryption');
 const { httpsAgentFor, isCertificateVerificationSkipped } = require('./utils/outboundTls');
+const { createUpdateChecker } = require('./services/updateCheck');
 const { sqliteUtcToIso, sqliteUtcToMs } = require('./utils/sqliteTime');
 const {
   DEVICE_NAME_RULE_MESSAGE,
@@ -686,6 +687,16 @@ fastify.get('/api/stats', async (request, reply) => {
     },
   };
 });
+
+// Issue #220: is a newer release out? Checked here and cached, so every
+// display can poll it without each one calling GitHub.
+const updateChecker = createUpdateChecker({
+  repository: DEFAULT_HOMEGLOW_REPOSITORY,
+  currentVersion: BACKEND_VERSION,
+  disabled: process.env.HOMEGLOW_DISABLE_UPDATE_CHECK === '1',
+});
+
+fastify.get('/api/update-status', async () => updateChecker.getStatus());
 
 // Serve the main CSS file for widgets
 fastify.get('/index.css', async (request, reply) => {

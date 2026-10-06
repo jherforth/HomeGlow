@@ -423,7 +423,11 @@
     "heading": "Acerca de",
     "help": "Esta pestaña muestra los metadatos de compilación del cliente y del servidor, además de las etiquetas de Git que apuntan a cada commit.",
     "frontend": "Cliente",
-    "backend": "Servidor"
+    "backend": "Servidor",
+    "updateAvailable": "HomeGlow {{latest}} está disponible. Estás usando {{current}}.",
+    "releaseNotes": "Notas de la versión",
+    "upToDate": "Tienes la última versión ({{current}}).",
+    "testBuild": "Esta es una versión de prueba. La última versión publicada es {{latest}}."
   },
   "timezone": {
     "heading": "Zona horaria",

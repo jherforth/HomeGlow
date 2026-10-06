@@ -40,7 +40,8 @@ import {
   Radio,
   Autocomplete,
   Tooltip,
-  Slider
+  Slider,
+  Link
 } from '@mui/material';
 import {
   Delete,
@@ -335,6 +336,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   const [aboutError, setAboutError] = useState('');
   const [frontendCommitTags, setFrontendCommitTags] = useState([]);
   const [backendCommitTags, setBackendCommitTags] = useState([]);
+  // Newest release vs the running one (issue #220); null until checked.
+  const [updateStatus, setUpdateStatus] = useState(null);
 
   // Refresh interval options in milliseconds
   const refreshIntervalOptions = [
@@ -653,6 +656,12 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   const refreshAboutData = async () => {
     setAboutLoading(true);
     setAboutError('');
+
+    // Separate from the build metadata: GitHub being unreachable must not
+    // fail the rest of the tab.
+    axios.get(`${API_BASE_URL}/api/update-status`)
+      .then((response) => setUpdateStatus(response.data))
+      .catch(() => setUpdateStatus(null));
 
     try {
       const statsResponse = await axios.get(`${API_BASE_URL}/api/stats`);
@@ -4380,6 +4389,27 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                 {aboutLoading ? 'Refreshing...' : 'Refresh Version Info'}
               </Button>
             </Box>
+
+            {updateStatus?.updateAvailable && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                {t('admin:about.updateAvailable', { latest: updateStatus.latest, current: updateStatus.current })}
+                {updateStatus.releaseUrl && (
+                  <>
+                    {' '}
+                    <Link href={updateStatus.releaseUrl} target="_blank" rel="noopener noreferrer">
+                      {t('admin:about.releaseNotes')}
+                    </Link>
+                  </>
+                )}
+              </Alert>
+            )}
+            {updateStatus?.latest && !updateStatus.updateAvailable && (
+              <Alert severity="success" sx={{ mb: 2 }}>
+                {updateStatus.isRelease
+                  ? t('admin:about.upToDate', { current: updateStatus.current })
+                  : t('admin:about.testBuild', { latest: updateStatus.latest })}
+              </Alert>
+            )}
 
             <Alert severity="info" sx={{ mb: 2 }}>
               {t('admin:about.help')}

@@ -54,5 +54,9 @@
     "more_one": "+{{count}} more",
     "more_other": "+{{count}} more",
     "freeDay": "Nothing scheduled"
+  },
+  "update": {
+    "available": "HomeGlow {{latest}} is available. This display is running {{current}}.",
+    "details": "Settings → About has the release notes."
   }
 }
