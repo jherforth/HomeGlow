@@ -2466,7 +2466,17 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                             </Box>
                           )}
                           <ListItemText
-                            primary={widget.name}
+                            primary={(
+                              <>
+                                {widget.name}
+                                {/* Who wrote it (issue #210), worked out by the server. */}
+                                {widget.author && (
+                                  <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                                    {t('admin:plugins.byAuthor', { author: widget.author })}
+                                  </Typography>
+                                )}
+                              </>
+                            )}
                             secondary={widget.description || t('admin:plugins.noDescription')}
                             slotProps={{ secondary: { sx: { fontStyle: widget.description ? 'normal' : 'italic' } } }}
                           />
@@ -2543,7 +2553,9 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                                 {plugin.name}
                               </Typography>
                               <Typography variant="caption" color="text.secondary">
-                                {plugin.filename}
+                                {plugin.author
+                                  ? `${plugin.filename} · ${t('admin:plugins.byAuthor', { author: plugin.author })}`
+                                  : plugin.filename}
                               </Typography>
                               {/* Straight from the plugin's own manifest (issue #147). A
                                   legacy widget has none, and says so rather than showing

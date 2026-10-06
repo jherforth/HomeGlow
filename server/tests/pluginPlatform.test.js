@@ -617,6 +617,62 @@ test('an unknown manifest field is ignored rather than rejected', async () => {
     assert.equal(upload.status, 200);
 });
 
+// --- Manifest author (issue #210) ---
+
+test('a manifest author is listed with the plugin', async () => {
+    const upload = await uploadWidget('authored.html', widgetHtml({
+        manifestVersion: 1,
+        id: 'authored-plugin',
+        author: '  adamecker  ',
+    }));
+    assert.equal(upload.status, 200);
+
+    const list = await api('/api/widgets');
+    assert.equal(list.body.find((w) => w.pluginId === 'authored-plugin').author, 'adamecker');
+});
+
+test('a plugin from before v1.6 is credited to HomeGlow, with or without a manifest', async () => {
+    // As installed from the store: the current manifest, and an early copy of
+    // the same plugin from before it had one.
+    const withManifest = await uploadWidget('Countdown.html', widgetHtml({ manifestVersion: 1, id: 'family-countdown' }));
+    assert.equal(withManifest.status, 200);
+    const withoutManifest = await uploadWidget('Scoreboard.html', widgetHtml(null));
+    assert.equal(withoutManifest.status, 200);
+
+    const list = await api('/api/widgets');
+    assert.equal(list.body.find((w) => w.filename === 'Countdown.html').author, 'HomeGlow');
+    assert.equal(list.body.find((w) => w.filename === 'Scoreboard.html').author, 'HomeGlow');
+});
+
+test('a household\'s own plugin without an author shows none', async () => {
+    const upload = await uploadWidget('our-own.html', widgetHtml({ manifestVersion: 1, id: 'our-own-plugin' }));
+    assert.equal(upload.status, 200);
+    const legacy = await uploadWidget('our-legacy.html', widgetHtml(null));
+    assert.equal(legacy.status, 200);
+
+    const list = await api('/api/widgets');
+    assert.equal(list.body.find((w) => w.pluginId === 'our-own-plugin').author, null);
+    assert.equal(list.body.find((w) => w.filename === 'our-legacy.html').author, null);
+});
+
+test('author must be a string within the length cap', async () => {
+    const wrongType = await uploadWidget('author-type.html', widgetHtml({
+        manifestVersion: 1,
+        id: 'author-type-plugin',
+        author: ['two', 'people'],
+    }));
+    assert.equal(wrongType.status, 400);
+    assert.match(wrongType.body.error, /author must be a string/);
+
+    const tooLong = await uploadWidget('author-long.html', widgetHtml({
+        manifestVersion: 1,
+        id: 'author-long-plugin',
+        author: 'x'.repeat(81),
+    }));
+    assert.equal(tooLong.status, 400);
+    assert.match(tooLong.body.error, /80 characters or fewer/);
+});
+
 // --- Declarative reactions (Phase 4) ---
 
 const SIPHON_PLUGIN_ID = 'siphon-test-plugin';
