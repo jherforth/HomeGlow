@@ -1,5 +1,31 @@
 import { layoutItemFromNormalized } from './gridLayout.js';
 
+// The 12-col rectangle a widget's saved layout describes, filled in exactly as
+// buildLayout reads it; null when the widget has none.
+function savedSourceFor(widget) {
+  if (!widget.savedLayout) return null;
+  return {
+    x: widget.savedLayout.x ?? widget.defaultPosition.x,
+    y: widget.savedLayout.y ?? widget.defaultPosition.y,
+    w: widget.savedLayout.w || widget.defaultSize.width,
+    h: widget.savedLayout.h || widget.defaultSize.height,
+    minW: widget.minWidth || 3,
+    minH: widget.minHeight || 2,
+  };
+}
+
+// Widget id → saved 12-col rectangle, for every widget that has one. What a
+// save compares the live layout against, so untouched widgets keep their
+// stored values (see layoutToNormalized).
+export function savedSourcesById(widgets) {
+  const sources = new Map();
+  widgets.forEach((widget) => {
+    const source = savedSourceFor(widget);
+    if (source) sources.set(widget.id, source);
+  });
+  return sources;
+}
+
 // Build a complete grid layout for a set of widgets.
 //
 // One entry per widget, never overlapping. A widget with a saved layout keeps
@@ -25,28 +51,17 @@ import { layoutItemFromNormalized } from './gridLayout.js';
 export function buildLayout(widgets, cols, locked) {
   // Scale each widget's source rectangle into live column units up front, so
   // both passes compare like with like.
-  const scaledFor = (widget) => {
-    const minW = widget.minWidth || 3;
-    const minH = widget.minHeight || 2;
-    const source = widget.savedLayout
-      ? {
-        x: widget.savedLayout.x ?? widget.defaultPosition.x,
-        y: widget.savedLayout.y ?? widget.defaultPosition.y,
-        w: widget.savedLayout.w || widget.defaultSize.width,
-        h: widget.savedLayout.h || widget.defaultSize.height,
-        minW,
-        minH,
-      }
-      : {
-        x: widget.defaultPosition.x,
-        y: widget.defaultPosition.y,
-        w: widget.defaultSize.width,
-        h: widget.defaultSize.height,
-        minW,
-        minH,
-      };
-    return layoutItemFromNormalized(source, cols);
-  };
+  const scaledFor = (widget) => layoutItemFromNormalized(
+    savedSourceFor(widget) ?? {
+      x: widget.defaultPosition.x,
+      y: widget.defaultPosition.y,
+      w: widget.defaultSize.width,
+      h: widget.defaultSize.height,
+      minW: widget.minWidth || 3,
+      minH: widget.minHeight || 2,
+    },
+    cols
+  );
 
   const scaled = new Map(widgets.map((widget) => [widget.id, scaledFor(widget)]));
 

@@ -7,14 +7,15 @@ import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
 import {
+  clampLayoutItem,
   layoutItemFromNormalized,
-  layoutItemToNormalized,
+  layoutToNormalized,
   scaleLayoutItem,
 } from '../utils/gridLayout.js';
 import CountdownCircle from './CountdownCircle';
 import { canCommitResize } from '../utils/resizeGuard';
 import { shouldAcceptLayoutChange } from '../utils/layoutSync';
-import { buildLayout } from '../utils/gridPlacement';
+import { buildLayout, savedSourcesById } from '../utils/gridPlacement';
 
 // No auto-compaction; block overlaps (same as compactType={null} + preventCollision).
 const GRID_COMPACTOR = getCompactor(null, false, true);
@@ -72,24 +73,29 @@ const WidgetContainer = ({
   // shouldAcceptLayoutChange.
   const layoutTabRef = useRef(null);
   const resizeTapGuardRef = useRef(new Map());
+  // The widgets of the latest render, whose savedLayout describes the active
+  // tab. Read when a save is requested, not when the debounced save fires.
+  const widgetsRef = useRef(widgets);
+  widgetsRef.current = widgets;
 
   const saveLayoutsToApi = useCallback((layoutItems, tabNumber, cols) => {
+    // Every widget is saved, but against what it was loaded from: one nobody
+    // moved keeps its stored 12-col values exactly instead of being re-rounded
+    // through the live column count (see layoutToNormalized).
+    const savedSources = savedSourcesById(widgetsRef.current);
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       // Persist in normalized (12-col) units so layouts round-trip across breakpoints.
-      const layouts = layoutItems
-        .filter(item => resolveWidgetName(item.i))
-        .map(item => {
-          const stored = layoutItemToNormalized(item, cols);
-          return {
-            widget_name: resolveWidgetName(item.i),
-            tabNumber: tabNumber,
-            layout_x: stored.x,
-            layout_y: stored.y,
-            layout_w: stored.w,
-            layout_h: stored.h,
-          };
-        });
+      const layouts = layoutToNormalized(layoutItems, cols, savedSources)
+        .filter(stored => resolveWidgetName(stored.i))
+        .map(stored => ({
+          widget_name: resolveWidgetName(stored.i),
+          tabNumber: tabNumber,
+          layout_x: stored.x,
+          layout_y: stored.y,
+          layout_w: stored.w,
+          layout_h: stored.h,
+        }));
 
       if (layouts.length > 0) {
         axios.patch(`${API_DEVICE_URL}/widget-assignments/layout/bulk`, { layouts }).catch(() => { });
@@ -149,10 +155,18 @@ const WidgetContainer = ({
       layoutTabRef.current = activeTab;
     } else if (colsChanged) {
       setLayout((currentLayout) => {
-        const nextLayout = currentLayout.map((item) => ({
-          ...scaleLayoutItem(item, prevCols, gridCols),
-          static: lockedRef.current,
-        }));
+        // Through the stored 12-col values rather than column to column: a
+        // phone turning between 4 and 8 columns would otherwise re-round every
+        // widget through the coarse grid, and the next save would keep it.
+        const stored = layoutToNormalized(currentLayout, prevCols, savedSourcesById(widgets));
+        const nextLayout = currentLayout.map((item, index) => {
+          const scaled = scaleLayoutItem(item, prevCols, gridCols);
+          const { x, w } = layoutItemFromNormalized(stored[index], gridCols);
+          return {
+            ...clampLayoutItem({ ...scaled, x, w }, gridCols),
+            static: lockedRef.current,
+          };
+        });
         return nextLayout;
       });
       layoutTabRef.current = activeTab;

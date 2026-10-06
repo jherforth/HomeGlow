@@ -66,3 +66,59 @@ export function layoutItemToNormalized(item, fromCols) {
 export function layoutItemFromNormalized(item, toCols) {
   return scaleLayoutItem(item, NORMALIZED_GRID_COLS, toCols);
 }
+
+/**
+ * Convert a whole live layout into normalized (12-col) units for storage,
+ * keeping the stored value of every edge the live layout has not moved.
+ *
+ * `storedById` maps item id → the 12-col rectangle the live layout was built
+ * from. Converting live units back to 12 columns is lossy below 12: a 12-col
+ * edge at 4 shows at 3 on an 8-col tablet and converts back to 5. Converting
+ * every item, every save, therefore nudged widgets nobody touched, and each
+ * nudge was saved. An edge still where its stored value puts it keeps that
+ * value exactly, so a save only changes what was actually moved.
+ *
+ * A moved edge that lands on a column line where a kept edge sits takes that
+ * edge's stored value, so a widget dragged against an untouched neighbour
+ * touches it in storage too instead of overlapping it by a column. A left edge
+ * takes the largest such value and a right edge the smallest: neither can
+ * then reach past a neighbour that ends or starts on the same line.
+ */
+export function layoutToNormalized(items, cols, storedById = new Map()) {
+  const scale = NORMALIZED_GRID_COLS / cols;
+  const plans = items.map((item) => {
+    const left = item.x ?? 0;
+    const right = left + (item.w ?? 1);
+    const stored = storedById.get(item.i);
+    const live = stored ? layoutItemFromNormalized(stored, cols) : null;
+    return {
+      item,
+      left,
+      right,
+      keptLeft: live && live.x === left ? stored.x : null,
+      keptRight: live && live.x + live.w === right ? stored.x + stored.w : null,
+    };
+  });
+
+  // Live column line → stored values of the kept edges on it.
+  const keptAt = new Map();
+  const note = (line, value) => {
+    if (value == null) return;
+    if (!keptAt.has(line)) keptAt.set(line, []);
+    keptAt.get(line).push(value);
+  };
+  plans.forEach(({ left, right, keptLeft, keptRight }) => {
+    note(left, keptLeft);
+    note(right, keptRight);
+  });
+
+  return plans.map(({ item, left, right, keptLeft, keptRight }) => {
+    const x = keptLeft
+      ?? (keptAt.has(left) ? Math.max(...keptAt.get(left)) : Math.round(left * scale));
+    const end = keptRight
+      ?? (keptAt.has(right) ? Math.min(...keptAt.get(right)) : Math.round(right * scale));
+    // y/h are row units and need no conversion; this also scales the minimum.
+    const normalized = layoutItemToNormalized(item, cols);
+    return clampLayoutItem({ ...normalized, x, w: Math.max(1, end - x) }, NORMALIZED_GRID_COLS);
+  });
+}

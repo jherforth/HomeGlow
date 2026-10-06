@@ -4,6 +4,7 @@ import {
   clampLayoutItem,
   layoutItemFromNormalized,
   layoutItemToNormalized,
+  layoutToNormalized,
   scaleLayoutItem,
 } from './gridLayout.js';
 
@@ -107,5 +108,75 @@ describe('normalized conversion', () => {
       4
     );
     expect(fromDesktop.x + fromDesktop.w).toBeLessThan(4);
+  });
+});
+
+describe('layoutToNormalized', () => {
+  // Three 4-wide widgets across a 12-col row. On an 8-col tablet they show as
+  // 0..3, 3..5 and 5..8; converted back one by one they would become 0..5,
+  // 5..8 and 8..12 — every width changed by a save that touched nothing.
+  const stored = new Map([
+    ['a', { x: 0, y: 0, w: 4, h: 3, minW: 2, minH: 2 }],
+    ['b', { x: 4, y: 0, w: 4, h: 3, minW: 2, minH: 2 }],
+    ['c', { x: 8, y: 0, w: 4, h: 3, minW: 2, minH: 2 }],
+  ]);
+  const liveAt = (cols, ids = [...stored.keys()]) =>
+    ids.map((i) => ({ i, ...layoutItemFromNormalized(stored.get(i), cols) }));
+  const edges = (items) => Object.fromEntries(items.map((item) => [item.i, [item.x, item.w, item.y, item.h]]));
+
+  it('saves untouched widgets exactly as they were stored', () => {
+    const live = liveAt(8);
+    expect(edges(live)).toEqual({ a: [0, 3, 0, 3], b: [3, 2, 0, 3], c: [5, 3, 0, 3] });
+    // What converting each widget on its own does.
+    expect(layoutItemToNormalized(live[1], 8)).toMatchObject({ x: 5, w: 3 });
+
+    expect(edges(layoutToNormalized(live, 8, stored))).toEqual({
+      a: [0, 4, 0, 3], b: [4, 4, 0, 3], c: [8, 4, 0, 3],
+    });
+  });
+
+  it('keeps the width of a widget that only changed height or row', () => {
+    const live = liveAt(8).map((item) => {
+      if (item.i === 'b') return { ...item, h: 5 };
+      if (item.i === 'c') return { ...item, y: 4 };
+      return item;
+    });
+    expect(edges(layoutToNormalized(live, 8, stored))).toEqual({
+      a: [0, 4, 0, 3], b: [4, 4, 0, 5], c: [8, 4, 4, 3],
+    });
+  });
+
+  it('stores a widget dragged against an untouched neighbour touching it, not overlapping', () => {
+    // 'd' dropped at 1..3 on the tablet, flush against 'b' (3..5). Converted
+    // alone its right edge is 5 — a column into 'b', which starts at 4.
+    const live = [...liveAt(8, ['b', 'c']), { i: 'd', x: 1, y: 0, w: 2, h: 3, minW: 1, minH: 2 }];
+    expect(layoutItemToNormalized(live[2], 8)).toMatchObject({ x: 2, w: 3 });
+    expect(edges(layoutToNormalized(live, 8, stored)).d).toEqual([2, 2, 0, 3]);
+
+    // Flush against the right of 'a' (0..3): starts where 'a' ends, at 4.
+    const rightOfA = [...liveAt(8, ['a']), { i: 'd', x: 3, y: 0, w: 2, h: 3, minW: 1, minH: 2 }];
+    expect(edges(layoutToNormalized(rightOfA, 8, stored)).d).toEqual([4, 4, 0, 3]);
+  });
+
+  it('converts a widget with no stored layout as before', () => {
+    const fresh = { i: 'new', x: 3, y: 6, w: 3, h: 2, minW: 1, minH: 2 };
+    const [saved] = layoutToNormalized([fresh], 8, stored);
+    expect(saved).toMatchObject(layoutItemToNormalized(fresh, 8));
+  });
+
+  it('saves a 12-col layout as it is', () => {
+    const live = [{ i: 'a', x: 1, y: 0, w: 5, h: 3, minW: 2, minH: 2 }, ...liveAt(12, ['b', 'c'])];
+    expect(edges(layoutToNormalized(live, 12, stored))).toEqual({
+      a: [1, 5, 0, 3], b: [4, 4, 0, 3], c: [8, 4, 0, 3],
+    });
+  });
+
+  it('turning a phone between 4 and 8 columns loses nothing', () => {
+    const portrait = liveAt(4);
+    const throughStored = layoutToNormalized(portrait, 4, stored)
+      .map((item) => layoutItemFromNormalized(item, 8));
+    expect(edges(throughStored)).toEqual(edges(liveAt(8)));
+    // Column to column re-rounds through the coarse grid: 'b' becomes 2..6.
+    expect(scaleLayoutItem(portrait[1], 4, 8)).toMatchObject({ x: 2, w: 4 });
   });
 });
