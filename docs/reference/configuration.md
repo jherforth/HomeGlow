@@ -18,6 +18,7 @@ database). This page covers both.
 | `LOG_FORMAT` | `pretty` | `pretty` for human-readable lines (`[2026-09-15 20:29:56] WARN: …`), `json` for one pino JSON object per line. Default is `pretty` because the usual reader is a person with `journalctl` open, and journald already stamps time, host and pid. Use `json` when feeding a log pipeline. |
 | `HOMEGLOW_DISABLE_BACKGROUND_JOBS` | `0` | Set to `1` to disable the nightly chore-pruning cron (useful in tests). |
 | `HOMEGLOW_DISABLE_CALENDAR_SYNC` | `0` | Set to `1` to disable the calendar sync service. |
+| `HOMEGLOW_DISABLE_UPDATE_CHECK` | `0` | Set to `1` to stop the server asking GitHub for the latest release. The update indicator then never shows. |
 | `DEMO_MODE` | `false` | Set to `true` to run a **public demo instance**: in-memory DB (wiped on stop), admin PIN disabled, sample data seeded and reset every 6h (incl. live demo calendar feeds and a static weather snapshot), and abuse-prone routes (uploads, CORS proxy, OAuth, calendar source management) return 403 — calendar sync only ever fetches the seeded demo feeds. See the [Demo Mode](../guides/demo-mode.md) guide. |
 | `BACKEND_VERSION` / `BACKEND_GIT_COMMIT` / `BACKEND_GITHUB_REPOSITORY` | build metadata | Surfaced by `GET /api/stats`; set by CI. |
 

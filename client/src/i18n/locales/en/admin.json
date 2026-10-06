@@ -423,7 +423,11 @@
     "heading": "About",
     "help": "This tab shows build metadata for the running client and server plus any Git tags that point to each commit.",
     "frontend": "Frontend",
-    "backend": "Backend"
+    "backend": "Backend",
+    "updateAvailable": "HomeGlow {{latest}} is available. You are running {{current}}.",
+    "releaseNotes": "Release notes",
+    "upToDate": "You are on the latest release ({{current}}).",
+    "testBuild": "This is a test build. The latest release is {{latest}}."
   },
   "timezone": {
     "heading": "Time Zone",

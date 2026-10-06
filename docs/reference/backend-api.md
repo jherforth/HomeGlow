@@ -93,6 +93,7 @@ segment (the browser's `localStorage` UUID).
 | --- | --- | --- |
 | GET | `/api/test` | Health check. |
 | GET | `/api/stats` | Backend version, git commit, repo, commit URL. |
+| GET | `/api/update-status` | Running version vs the latest GitHub release, checked at most every 6 hours. `HOMEGLOW_DISABLE_UPDATE_CHECK=1` turns it off. |
 | GET | `/api/timezone` | Server timezone. |
 | GET | `/api/system/backgroundTasks` | Manually trigger nightly processing. |
 | GET | `/index.css` | Serves the app CSS for custom widgets (with fallback). |

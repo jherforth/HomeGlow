@@ -72,6 +72,8 @@ test.before(async () => {
             TZ: 'UTC',
             HOMEGLOW_DISABLE_BACKGROUND_JOBS: '1',
             HOMEGLOW_DISABLE_CALENDAR_SYNC: '1',
+            // Tests never call GitHub; the checker itself is covered in updateCheck.test.js.
+            HOMEGLOW_DISABLE_UPDATE_CHECK: '1',
             ENCRYPTION_KEY: Buffer.alloc(32, 3).toString('base64'),
             BACKEND_VERSION: 'test-backend-version',
             BACKEND_GIT_COMMIT: '1234567890abcdef1234567890abcdef12345678',
@@ -174,6 +176,13 @@ test('GET /api/stats returns backend build metadata', async () => {
         body.backend.commitUrl,
         'https://github.com/jherforth/HomeGlow/commit/1234567890abcdef1234567890abcdef12345678'
     );
+});
+
+test('GET /api/update-status reports the check as off when it is disabled', async () => {
+    const { status, body } = await api('/api/update-status');
+
+    assert.equal(status, 200);
+    assert.deepEqual(body, { enabled: false, current: 'test-backend-version' });
 });
 
 test('tabs endpoint returns default Home tab when device has no persisted tabs yet', async () => {
