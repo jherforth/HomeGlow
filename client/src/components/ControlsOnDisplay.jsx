@@ -646,7 +646,7 @@ const ControlsOnDisplay = ({
   };
 
   return (
-    <Box sx={{ mt: 3, p: 3, border: '1px solid var(--card-border)', borderRadius: 2 }}>
+    <Box sx={{ mt: 3, p: 3, border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-md)' }}>
       <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'bold' }}>
         {t('admin:controls.heading')}
       </Typography>

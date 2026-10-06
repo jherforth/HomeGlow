@@ -73,7 +73,7 @@ const startOfKey = (key) => {
   return new Date(y, m - 1, d, 0, 0, 0, 0).toISOString();
 };
 
-const textShadow = '0 1px 2px rgba(0, 0, 0, 0.9), 0 0 10px rgba(0, 0, 0, 0.6), 0 0 22px rgba(0, 0, 0, 0.35)';
+const textShadow = '0 1px 2px var(--hg-black-90), 0 0 10px var(--hg-black-70), 0 0 22px var(--hg-black-30)';
 
 const ScreensaverOverlay = ({ showCalendar, calendarDays, showWeather, tabs, driftStep = 0 }) => {
   const { t, i18n } = useTranslation(['common', 'calendar', 'weather']);
@@ -167,7 +167,7 @@ const ScreensaverOverlay = ({ showCalendar, calendarDays, showWeather, tabs, dri
           left: `calc(clamp(20px, 3vw, 48px) + ${driftX}px)`,
           bottom: `calc(clamp(20px, 3vw, 48px) + ${driftY}px)`,
           maxWidth: 'min(460px, 40vw)',
-          color: '#fff',
+          color: 'var(--hg-on-overlay)',
           textShadow,
           fontSize: 'clamp(14px, 1.3vw, 22px)',
           fontWeight: 300,
@@ -191,7 +191,7 @@ const ScreensaverOverlay = ({ showCalendar, calendarDays, showWeather, tabs, dri
           sx={{
             position: 'absolute',
             inset: '-3.5em -4.5em -3em -4em',
-            background: 'radial-gradient(closest-side, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.46) 40%, rgba(0,0,0,0.22) 70%, rgba(0,0,0,0) 100%)',
+            background: 'radial-gradient(closest-side, var(--hg-black-70) 0%, var(--hg-black-50) 40%, var(--hg-black-20) 70%, transparent 100%)',
             filter: 'blur(6px)',
             pointerEvents: 'none',
             zIndex: -1,
@@ -199,7 +199,7 @@ const ScreensaverOverlay = ({ showCalendar, calendarDays, showWeather, tabs, dri
         />
         {current && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: '0.6em' }}>
-            <ConditionIcon sx={{ fontSize: '2.6em', opacity: 0.9, filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.7))' }} />
+            <ConditionIcon sx={{ fontSize: '2.6em', opacity: 0.9, filter: 'drop-shadow(0 1px 3px var(--hg-black-70))' }} />
             <Box>
               <Box sx={{ fontSize: '2.6em', fontWeight: 200, lineHeight: 1, letterSpacing: '-0.02em' }}>
                 {Math.round(current.temp)}°{unit}

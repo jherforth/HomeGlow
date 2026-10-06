@@ -277,7 +277,7 @@ const GoogleAccountConnection = ({ onMessage }) => {
             gap: 2,
             p: 2,
             border: '1px solid var(--card-border)',
-            borderRadius: 2,
+            borderRadius: 'var(--hg-radius-md)',
             bgcolor: 'rgba(74, 222, 128, 0.06)',
           }}
         >
@@ -323,7 +323,7 @@ const GoogleAccountConnection = ({ onMessage }) => {
           sx={{
             p: 2,
             border: '1px dashed var(--card-border)',
-            borderRadius: 2,
+            borderRadius: 'var(--hg-radius-md)',
             display: 'flex',
             flexDirection: { xs: 'column', sm: 'row' },
             alignItems: { sm: 'center' },

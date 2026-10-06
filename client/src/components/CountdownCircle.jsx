@@ -109,7 +109,7 @@ const CountdownCircle = ({ refreshInterval, onRefresh, isActive = true }) => {
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="rgba(255, 255, 255, 0.1)"
+          style={{ stroke: 'var(--hg-white-10)' }}
           strokeWidth={strokeWidth}
         />
         <circle
@@ -134,7 +134,7 @@ const CountdownCircle = ({ refreshInterval, onRefresh, isActive = true }) => {
           position: 'absolute',
           inset: 0,
           borderRadius: '50%',
-          backgroundColor: 'rgba(0, 0, 0, 0.35)',
+          backgroundColor: 'var(--hg-black-30)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -143,7 +143,7 @@ const CountdownCircle = ({ refreshInterval, onRefresh, isActive = true }) => {
           pointerEvents: 'none',
         }}
       >
-        <AutorenewIcon sx={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: 18 }} />
+        <AutorenewIcon sx={{ color: 'var(--hg-white-90)', fontSize: 18 }} />
       </Box>
     </Box>
   );

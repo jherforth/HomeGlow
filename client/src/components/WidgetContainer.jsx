@@ -7,14 +7,18 @@ import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
 import {
+  clampLayoutItem,
   layoutItemFromNormalized,
-  layoutItemToNormalized,
+  layoutToNormalized,
   scaleLayoutItem,
 } from '../utils/gridLayout.js';
 import CountdownCircle from './CountdownCircle';
 import { canCommitResize } from '../utils/resizeGuard';
 import { shouldAcceptLayoutChange } from '../utils/layoutSync';
-import { buildLayout } from '../utils/gridPlacement';
+import { buildLayout, savedSourcesById } from '../utils/gridPlacement';
+import { readGridMetrics } from '../utils/gridMetrics';
+import { frameDecoration } from '../utils/widgetFrame';
+import { AmbienceLayer } from '../themes/ambience.jsx';
 
 // No auto-compaction; block overlaps (same as compactType={null} + preventCollision).
 const GRID_COMPACTOR = getCompactor(null, false, true);
@@ -56,6 +60,8 @@ const WidgetContainer = ({
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [containerWidth, setContainerWidth] = useState(1200);
   const [gridCols, setGridCols] = useState(12);
+  // The theme's gap between widgets, read once from --hg-grid-gap.
+  const [gridMetrics] = useState(readGridMetrics);
   const [selectedWidget, setSelectedWidget] = useState(null);
   const [layout, setLayout] = useState([]);
   const [isLockTransitioning, setIsLockTransitioning] = useState(false);
@@ -71,44 +77,36 @@ const WidgetContainer = ({
   // rebuild lands. Guards against saving a layout mid tab change — see
   // shouldAcceptLayoutChange.
   const layoutTabRef = useRef(null);
-  const layoutRef = useRef(layout);
   const resizeTapGuardRef = useRef(new Map());
+  // The widgets of the latest render, whose savedLayout describes the active
+  // tab. Read when a save is requested, not when the debounced save fires.
+  const widgetsRef = useRef(widgets);
+  widgetsRef.current = widgets;
 
-  useEffect(() => {
-    layoutRef.current = layout;
-  }, [layout]);
-
-  const saveLayoutsToApi = useCallback((layoutItems, tabNumber, cols, immediate = false) => {
+  const saveLayoutsToApi = useCallback((layoutItems, tabNumber, cols) => {
+    // Every widget is saved, but against what it was loaded from: one nobody
+    // moved keeps its stored 12-col values exactly instead of being re-rounded
+    // through the live column count (see layoutToNormalized).
+    const savedSources = savedSourcesById(widgetsRef.current);
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    const doSave = () => {
+    saveTimerRef.current = setTimeout(() => {
       // Persist in normalized (12-col) units so layouts round-trip across breakpoints.
-      const layouts = layoutItems
-        .filter(item => resolveWidgetName(item.i))
-        .map(item => {
-          const stored = layoutItemToNormalized(item, cols);
-          return {
-            widget_name: resolveWidgetName(item.i),
-            tabNumber: tabNumber,
-            layout_x: stored.x,
-            layout_y: stored.y,
-            layout_w: stored.w,
-            layout_h: stored.h,
-          };
-        });
+      const layouts = layoutToNormalized(layoutItems, cols, savedSources)
+        .filter(stored => resolveWidgetName(stored.i))
+        .map(stored => ({
+          widget_name: resolveWidgetName(stored.i),
+          tabNumber: tabNumber,
+          layout_x: stored.x,
+          layout_y: stored.y,
+          layout_w: stored.w,
+          layout_h: stored.h,
+        }));
 
       if (layouts.length > 0) {
-        axios.patch(`${API_DEVICE_URL}/widget-assignments/layout/bulk`, { layouts }).catch((err) => {
-          console.error('Failed to save widget layout:', err?.response?.data || err?.message || err);
-        });
+        axios.patch(`${API_DEVICE_URL}/widget-assignments/layout/bulk`, { layouts }).catch(() => { });
       }
-    };
-
-    if (immediate) {
-      doSave();
-    } else {
-      saveTimerRef.current = setTimeout(doSave, 500);
-    }
-  }, [API_DEVICE_URL]);
+    }, 500);
+  }, []);
 
   // Update container width and grid columns based on screen size
   useEffect(() => {
@@ -137,49 +135,50 @@ const WidgetContainer = ({
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
 
-  const prevSavedLayoutKeyRef = useRef('');
-  const hasLoadedSavedLayoutsRef = useRef(false);
-
   useEffect(() => {
     lockedRef.current = locked;
   }, [locked]);
 
   useEffect(() => {
-    const widgetIdsKey = `${activeTab}:${widgets.map(w => w.id).sort().join(',')}`;
-    const savedLayoutKey = widgets.map(w => `${w.id}:${w.savedLayout ? `${w.savedLayout.x},${w.savedLayout.y},${w.savedLayout.w},${w.savedLayout.h}` : 'none'}`).sort().join(';');
-    const widgetIdsChanged = widgetIdsKey !== prevWidgetIdsRef.current;
-    const savedLayoutChanged = savedLayoutKey !== prevSavedLayoutKeyRef.current;
-    const hasAnySavedLayout = widgets.some(w => Boolean(w.savedLayout));
-    const firstSavedLayoutArrival = hasAnySavedLayout && !hasLoadedSavedLayoutsRef.current;
+    const currentCacheKey = `${activeTab}:${widgets.map(w => w.id).sort().join(',')}`;
+    const widgetsChanged = currentCacheKey !== prevWidgetIdsRef.current;
     const prevCols = prevGridColsRef.current;
     const colsChanged = prevCols != null && prevCols !== gridCols;
 
-    prevWidgetIdsRef.current = widgetIdsKey;
-    prevSavedLayoutKeyRef.current = savedLayoutKey;
+    // First paint / widget-set changes rebuild from saved (12-col) layouts.
+    // Column-only changes rescale the live layout so resize affordances stay correct.
+    if (!widgetsChanged && !colsChanged) {
+      prevGridColsRef.current = gridCols;
+      return;
+    }
 
-    const shouldRebuildLayout = widgetIdsChanged || layout.length === 0 || firstSavedLayoutArrival || (savedLayoutChanged && lockedRef.current);
+    if (widgetsChanged) {
+      prevWidgetIdsRef.current = currentCacheKey;
 
-    if (shouldRebuildLayout) {
-      if (hasAnySavedLayout) {
-        hasLoadedSavedLayoutsRef.current = true;
-      }
       const initialLayout = buildLayout(widgets, gridCols, lockedRef.current);
       setLayout(initialLayout);
-      layoutRef.current = initialLayout;
       layoutTabRef.current = activeTab;
     } else if (colsChanged) {
       setLayout((currentLayout) => {
-        const nextLayout = currentLayout.map((item) => ({
-          ...scaleLayoutItem(item, prevCols, gridCols),
-          static: lockedRef.current,
-        }));
+        // Through the stored 12-col values rather than column to column: a
+        // phone turning between 4 and 8 columns would otherwise re-round every
+        // widget through the coarse grid, and the next save would keep it.
+        const stored = layoutToNormalized(currentLayout, prevCols, savedSourcesById(widgets));
+        const nextLayout = currentLayout.map((item, index) => {
+          const scaled = scaleLayoutItem(item, prevCols, gridCols);
+          const { x, w } = layoutItemFromNormalized(stored[index], gridCols);
+          return {
+            ...clampLayoutItem({ ...scaled, x, w }, gridCols),
+            static: lockedRef.current,
+          };
+        });
         return nextLayout;
       });
       layoutTabRef.current = activeTab;
     }
 
     prevGridColsRef.current = gridCols;
-  }, [widgets, activeTab, gridCols, layout.length]);
+  }, [widgets, activeTab, gridCols]);
 
   useEffect(() => {
     const wasLocked = prevLockedRef.current;
@@ -187,30 +186,26 @@ const WidgetContainer = ({
 
     setIsLockTransitioning(true);
 
-    // Sync layout with widgets prop: preserve existing positions, add any
-    // missing widgets (from savedLayout or defaults), then flip static flag.
-    // This ensures entering edit mode shows exactly what's displayed in view mode.
-    const currentIds = new Set(layoutRef.current.map(item => item.i));
-    const missingWidgets = widgets.filter(w => !currentIds.has(w.id));
-    let syncedLayout = [...layoutRef.current];
-    if (missingWidgets.length > 0) {
-      const built = buildLayout(missingWidgets, gridCols, locked);
-      syncedLayout = [...syncedLayout, ...built];
-    }
-    const updatedLayout = syncedLayout.map(item => ({
-      ...item,
-      static: locked
-    }));
-    setLayout(updatedLayout);
-    layoutRef.current = updatedLayout;
+    setLayout((currentLayout) => {
+      const updatedLayout = currentLayout.map(item => ({
+        ...item,
+        static: locked
+      }));
 
-    const shouldPersistLockedLayouts = hasInitializedLockEffectRef.current
-      && !wasLocked
-      && locked
-      && layoutTabRef.current === activeTab;
-    if (shouldPersistLockedLayouts && updatedLayout.length > 0) {
-      saveLayoutsToApi(updatedLayout, activeTab, gridCols, true);
-    }
+      // Same invariant as handleLayoutChange: only persist when the layout state
+      // and the active tab agree. Locking mid tab change would otherwise write
+      // the previous tab's arrangement under the new tab's number by this path
+      // instead.
+      const shouldPersistLockedLayouts = hasInitializedLockEffectRef.current
+        && !wasLocked
+        && locked
+        && layoutTabRef.current === activeTab;
+      if (shouldPersistLockedLayouts) {
+        saveLayoutsToApi(updatedLayout, activeTab, gridCols);
+      }
+
+      return updatedLayout;
+    });
 
     if (!hasInitializedLockEffectRef.current) {
       hasInitializedLockEffectRef.current = true;
@@ -221,7 +216,7 @@ const WidgetContainer = ({
     }, 50);
 
     return () => clearTimeout(timer);
-  }, [locked, saveLayoutsToApi, activeTab, gridCols]);
+  }, [locked, saveLayoutsToApi, activeTab]);
 
   // Deselect widget when locked
   useEffect(() => {
@@ -504,28 +499,21 @@ const WidgetContainer = ({
   // so it is correct even mid-transition. Once the rebuild has landed for this
   // tab, live state wins so a drag in progress is not thrown away.
   const gridLayout = useMemo(() => {
-    // Build with locked=true so positions come from savedLayout/defaults;
-    // the `static` flag is overridden below from the live `locked` value.
-    // `locked` is intentionally NOT a dependency — toggling edit mode must
-    // not rebuild positions, only flip interactivity.
-    const built = buildLayout(widgets, gridCols, true);
-    const merged = layoutTabRef.current !== activeTab
-      ? built
-      : built.map((item) => layout.find((l) => l.i === item.i) || item);
-    // Apply the live locked state to every item without moving them.
-    return merged.map((item) => ({ ...item, static: locked }));
-  }, [widgets, layout, gridCols, activeTab]);
+    const built = buildLayout(widgets, gridCols, locked);
+    if (layoutTabRef.current !== activeTab) return built;
+    return built.map((item) => layout.find((l) => l.i === item.i) || item);
+  }, [widgets, layout, gridCols, locked, activeTab]);
 
   const resizeButtonBaseStyle = {
     fontSize: '1.5rem',
     userSelect: 'none',
     touchAction: 'none',
     WebkitTouchCallout: 'none',
-    filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
+    filter: 'drop-shadow(0 2px 4px var(--hg-black-30))',
     transition: 'transform 0.1s ease, filter 0.1s ease',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'var(--hg-black-50)',
     padding: '4px 8px',
-    borderRadius: '4px',
+    borderRadius: 'var(--hg-radius-sm)',
   };
 
   return (
@@ -537,6 +525,9 @@ const WidgetContainer = ({
         padding: 2,
         position: 'relative',
         backgroundColor: 'var(--background)',
+        // A theme's page image (Classic: none), pinned like the body's.
+        backgroundImage: 'var(--hg-page-image)',
+        backgroundAttachment: 'fixed',
         '& .react-grid-item': {
           transition: (selectedWidget || isLockTransitioning) ? 'none !important' : 'all 200ms ease',
           transitionProperty: 'left, top, width, height',
@@ -547,12 +538,13 @@ const WidgetContainer = ({
         '& .react-grid-item.react-grid-placeholder': {
           background: 'var(--accent)',
           opacity: 0.2,
-          borderRadius: '8px',
+          borderRadius: 'var(--hg-radius-md)',
           zIndex: 2,
           transition: 'all 100ms ease',
         },
       }}
     >
+      <AmbienceLayer />
       {layout.length > 0 && (
         <GridLayout
           className="layout"
@@ -560,8 +552,8 @@ const WidgetContainer = ({
           layout={gridLayout}
           gridConfig={{
             cols: gridCols,
-            rowHeight: 100,
-            margin: [16, 16],
+            rowHeight: gridMetrics.rowHeight,
+            margin: [gridMetrics.gap, gridMetrics.gap],
             containerPadding: [0, 0],
           }}
           dragConfig={{
@@ -578,16 +570,16 @@ const WidgetContainer = ({
             // A transparent widget shows the page background through its box: no
             // card color and no resting shadow, which would otherwise draw the
             // rectangle the setting is meant to remove. The selection border stays.
-            const restingShadow = widget.transparent ? 'none' : '0 2px 8px rgba(0, 0, 0, 0.1)';
+            const restingShadow = widget.transparent ? 'none' : 'var(--hg-frame-shadow)';
             const currentLayout = layout.find(l => l.i === widget.id);
             const fallbackLayout = {
               i: widget.id,
               ...layoutItemFromNormalized(
                 {
-                  x: widget.savedLayout?.x ?? widget.defaultPosition.x,
-                  y: widget.savedLayout?.y ?? widget.defaultPosition.y,
-                  w: widget.savedLayout?.w ?? widget.defaultSize.width,
-                  h: widget.savedLayout?.h ?? widget.defaultSize.height,
+                  x: widget.defaultPosition.x,
+                  y: widget.defaultPosition.y,
+                  w: widget.defaultSize.width,
+                  h: widget.defaultSize.height,
                   minW: widget.minWidth || 3,
                   minH: widget.minHeight || 2,
                 },
@@ -616,8 +608,8 @@ const WidgetContainer = ({
                   '&:hover': {
                     transform: enabled ? 'scale(1.2)' : 'none',
                     filter: enabled
-                      ? 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4))'
-                      : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
+                      ? 'drop-shadow(0 4px 8px var(--hg-black-50))'
+                      : 'drop-shadow(0 2px 4px var(--hg-black-30))',
                   },
                   '&:active': {
                     transform: enabled ? 'scale(1.1)' : 'none',
@@ -649,12 +641,15 @@ const WidgetContainer = ({
                   height: '100%',
                   position: 'relative',
                   border: isSelected ? '3px solid var(--accent)' : '3px solid transparent',
-                  borderRadius: 2,
+                  borderRadius: 'var(--hg-frame-radius)',
+                  padding: 'var(--hg-frame-inset)',
+                  backdropFilter: 'var(--hg-frame-backdrop)',
                   transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
                   boxShadow: isSelected
                     ? '0 8px 32px rgba(var(--accent-rgb), 0.3)'
                     : restingShadow,
-                  backgroundColor: widget.transparent ? 'transparent' : 'var(--card-bg)',
+                  background: widget.transparent ? 'transparent' : 'var(--hg-frame-bg)',
+                  backgroundImage: widget.transparent ? 'none' : 'var(--hg-frame-image)',
                   overflow: 'hidden',
                   cursor: locked ? 'default' : (isSelected ? 'move' : 'pointer'),
                   touchAction: locked ? 'auto' : (isSelected ? 'none' : 'manipulation'),
@@ -669,9 +664,10 @@ const WidgetContainer = ({
                         ? restingShadow
                         : (isSelected
                           ? '0 8px 32px rgba(var(--accent-rgb), 0.3)'
-                          : '0 4px 16px rgba(0, 0, 0, 0.15)'),
+                          : 'var(--hg-frame-shadow-hover)'),
                     }
-                  }
+                  },
+                  '&::after': frameDecoration,
                 }}
               >
                 {!locked && !isSelected && (

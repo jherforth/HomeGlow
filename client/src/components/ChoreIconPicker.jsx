@@ -27,7 +27,7 @@ const ChoreIconPicker = ({ value, onChange }) => {
     justifyContent: 'center',
     fontSize: '1.5rem',
     lineHeight: 1,
-    borderRadius: 1.5,
+    borderRadius: 'var(--hg-radius-md)',
     cursor: 'pointer',
     userSelect: 'none',
     border: selected ? '2px solid var(--accent)' : '2px solid transparent',

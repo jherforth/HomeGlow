@@ -1,5 +1,31 @@
 import { layoutItemFromNormalized } from './gridLayout.js';
 
+// The 12-col rectangle a widget's saved layout describes, filled in exactly as
+// buildLayout reads it; null when the widget has none.
+function savedSourceFor(widget) {
+  if (!widget.savedLayout) return null;
+  return {
+    x: widget.savedLayout.x ?? widget.defaultPosition.x,
+    y: widget.savedLayout.y ?? widget.defaultPosition.y,
+    w: widget.savedLayout.w || widget.defaultSize.width,
+    h: widget.savedLayout.h || widget.defaultSize.height,
+    minW: widget.minWidth || 3,
+    minH: widget.minHeight || 2,
+  };
+}
+
+// Widget id → saved 12-col rectangle, for every widget that has one. What a
+// save compares the live layout against, so untouched widgets keep their
+// stored values (see layoutToNormalized).
+export function savedSourcesById(widgets) {
+  const sources = new Map();
+  widgets.forEach((widget) => {
+    const source = savedSourceFor(widget);
+    if (source) sources.set(widget.id, source);
+  });
+  return sources;
+}
+
 // Build a complete grid layout for a set of widgets.
 //
 // One entry per widget, never overlapping. A widget with a saved layout keeps
@@ -25,42 +51,42 @@ import { layoutItemFromNormalized } from './gridLayout.js';
 export function buildLayout(widgets, cols, locked) {
   // Scale each widget's source rectangle into live column units up front, so
   // both passes compare like with like.
-  const scaledFor = (widget) => {
-    const minW = widget.minWidth || 3;
-    const minH = widget.minHeight || 2;
-    const source = widget.savedLayout
-      ? {
-        x: widget.savedLayout.x ?? widget.defaultPosition.x,
-        y: widget.savedLayout.y ?? widget.defaultPosition.y,
-        w: widget.savedLayout.w || widget.defaultSize.width,
-        h: widget.savedLayout.h || widget.defaultSize.height,
-        minW,
-        minH,
-      }
-      : {
-        x: widget.defaultPosition.x,
-        y: widget.defaultPosition.y,
-        w: widget.defaultSize.width,
-        h: widget.defaultSize.height,
-        minW,
-        minH,
-      };
-    return layoutItemFromNormalized(source, cols);
-  };
+  const scaledFor = (widget) => layoutItemFromNormalized(
+    savedSourceFor(widget) ?? {
+      x: widget.defaultPosition.x,
+      y: widget.defaultPosition.y,
+      w: widget.defaultSize.width,
+      h: widget.defaultSize.height,
+      minW: widget.minWidth || 3,
+      minH: widget.minHeight || 2,
+    },
+    cols
+  );
 
   const scaled = new Map(widgets.map((widget) => [widget.id, scaledFor(widget)]));
 
-  // Pass 1: claim every saved position.
-  const placed = widgets
-    .filter((widget) => widget.savedLayout)
-    .map((widget) => {
-      const item = scaled.get(widget.id);
-      return { x: item.x, y: item.y, w: item.w, h: item.h };
-    });
-
-  const collides = (x, y, w, h) => placed.some(
+  const collidesWith = (placedList, x, y, w, h) => placedList.some(
     (p) => x < p.x + p.w && x + w > p.x && y < p.y + p.h && y + h > p.y
   );
+
+  // Pass 1: claim every saved position that doesn't collide with one already
+  // claimed. A saved position that overlaps an already-placed widget is treated
+  // as unsaved and re-placed in Pass 2 — this self-repairs layouts whose saved
+  // data overlaps (e.g. saved at a narrower width before edge-based scaling),
+  // instead of shuffling on every edit-mode toggle.
+  const placed = [];
+  const needsPlacement = new Set();
+  for (const widget of widgets) {
+    if (!widget.savedLayout) continue;
+    const item = scaled.get(widget.id);
+    if (collidesWith(placed, item.x, item.y, item.w, item.h)) {
+      needsPlacement.add(widget.id);
+    } else {
+      placed.push({ x: item.x, y: item.y, w: item.w, h: item.h });
+    }
+  }
+
+  const collides = (x, y, w, h) => collidesWith(placed, x, y, w, h);
 
   // One row past everything claimed so far. A rectangle starting here cannot
   // collide with anything, which is what makes the search below terminate.
@@ -83,14 +109,16 @@ export function buildLayout(widgets, cols, locked) {
     return { x: 0, y: limit };
   };
 
-  // Pass 2: fill gaps with whatever has no saved position, in widget order.
+  // Pass 2: fill gaps with whatever has no saved position (or whose saved
+  // position collided and was treated as unsaved), in widget order.
   return widgets.map((widget) => {
     const item = scaled.get(widget.id);
-    const pos = widget.savedLayout
+    const hasValidSaved = widget.savedLayout && !needsPlacement.has(widget.id);
+    const pos = hasValidSaved
       ? { x: item.x, y: item.y }
       : findFreePosition(item.w, item.h);
 
-    if (!widget.savedLayout) {
+    if (!hasValidSaved) {
       placed.push({ x: pos.x, y: pos.y, w: item.w, h: item.h });
     }
 

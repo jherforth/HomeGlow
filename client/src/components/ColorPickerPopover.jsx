@@ -51,7 +51,7 @@ const SaturationSlider = ({ hsv, onChange }) => {
         sx={{
           position: 'relative',
           height: 8,
-          borderRadius: 4,
+          borderRadius: 'var(--hg-radius-xl)',
           background: `linear-gradient(to right, hsl(${hsv?.h || 0}, 0%, ${50 + ((hsv?.v || 1) * 50)}%) 0%, hsl(${hsv?.h || 0}, 100%, ${(hsv?.v || 1) * 50}%) 100%)`,
           cursor: 'pointer',
           userSelect: 'none',
@@ -68,7 +68,7 @@ const SaturationSlider = ({ hsv, onChange }) => {
             borderRadius: '50%',
             background: `hsl(${hsv?.h || 0}, ${saturation}%, ${(hsv?.v || 1) * 50}%)`,
             border: '2px solid white',
-            boxShadow: '0 0 0 1px rgba(0,0,0,0.3), 0 1px 4px rgba(0,0,0,0.4)',
+            boxShadow: '0 0 0 1px var(--hg-black-30), 0 1px 4px var(--hg-black-50)',
             pointerEvents: 'none',
           }}
         />
@@ -95,7 +95,7 @@ const ColorPickerInner = ({ hex, hsv, hsl, onChange }) => {
           position: 'relative',
           width: '100%',
           paddingBottom: '75%',
-          borderRadius: 1,
+          borderRadius: 'var(--hg-radius-sm)',
           overflow: 'hidden',
           mb: 1.5,
         }}
@@ -112,9 +112,9 @@ const ColorPickerInner = ({ hex, hsv, hsl, onChange }) => {
           sx={{
             width: 28,
             height: 28,
-            borderRadius: 1,
+            borderRadius: 'var(--hg-radius-sm)',
             backgroundColor: hex,
-            border: '1px solid rgba(0,0,0,0.15)',
+            border: '1px solid var(--hg-black-20)',
             flexShrink: 0,
           }}
         />
@@ -123,11 +123,11 @@ const ColorPickerInner = ({ hex, hsv, hsl, onChange }) => {
             style={{
               input: {
                 width: '100%',
-                border: '1px solid rgba(0,0,0,0.2)',
-                borderRadius: 4,
+                border: '1px solid var(--hg-black-20)',
+                borderRadius: 'var(--hg-radius-sm)',
                 padding: '4px 6px',
                 fontSize: 12,
-                fontFamily: 'monospace',
+                fontFamily: 'var(--hg-font-mono)',
                 outline: 'none',
                 background: 'var(--card-bg, #fff)',
                 color: 'var(--text)',
@@ -203,9 +203,9 @@ const ColorPickerPopover = ({ anchorEl, color, onChange, onClose }) => {
         left: position.left,
         zIndex: 99999,
         backgroundColor: 'var(--card-bg, #fff)',
-        border: '1px solid var(--card-border, rgba(0,0,0,0.15))',
-        borderRadius: 2,
-        boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
+        border: '1px solid var(--card-border, var(--hg-black-20))',
+        borderRadius: 'var(--hg-radius-md)',
+        boxShadow: '0 8px 32px var(--hg-black-30)',
       }}
     >
       <WrappedPicker color={color} onChange={onChange} />

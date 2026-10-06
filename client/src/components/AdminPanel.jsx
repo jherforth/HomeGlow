@@ -14,6 +14,10 @@ import {
   ListItem,
   ListItemText,
   ListItemSecondaryAction,
+  ListSubheader,
+  Collapse,
+  ButtonBase,
+  InputAdornment,
   IconButton,
   Dialog,
   DialogTitle,
@@ -40,7 +44,8 @@ import {
   Radio,
   Autocomplete,
   Tooltip,
-  Slider
+  Slider,
+  Link
 } from '@mui/material';
 import {
   Delete,
@@ -53,7 +58,6 @@ import {
   CloudDownload,
   Refresh,
   Warning,
-  RestartAlt,
   Timer,
   Lock,
   Nightlight,
@@ -65,9 +69,11 @@ import {
   OpenInNew,
   ArrowUpward,
   ArrowDownward,
-  Close
+  Close,
+  Search as SearchIcon,
+  ExpandMore
 } from '@mui/icons-material';
-import ColorPickerPopover from './ColorPickerPopover';
+import AppearanceSettings from './AppearanceSettings';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase, getDeviceName, setDeviceName, isValidDeviceName } from '../utils/deviceName.js';
@@ -80,6 +86,7 @@ import DeleteConfirmationDialog from './DeleteConfirmationDialog';
 import AdminFormSection from './AdminFormSection';
 import TimezoneSettings from './TimezoneSettings';
 import VersionInfoCard from './VersionInfoCard';
+import { groupPluginsByCategory } from '../utils/pluginCatalog.js';
 import LoadingBackdrop from './LoadingBackdrop';
 import RefreshIntervalSelect from './RefreshIntervalSelect';
 import ScreensaverIntervalSlider from './ScreensaverIntervalSlider';
@@ -94,19 +101,12 @@ import { syncWidgetAssignments } from '../utils/assignmentSync.js';
 import { normalizeWidgetSettings as normalizeSharedWidgetSettings } from '../utils/widgetSettings.js';
 import { stackableTableSx } from '../utils/responsiveTable.js';
 import {
-  INTERFACE_COLORS_STORAGE_KEY,
   SCREENSAVER_SETTINGS_STORAGE_KEY,
-  AUTO_DARK_MODE_SETTINGS_STORAGE_KEY,
   VACATION_MODE_STORAGE_KEY,
-  DEFAULT_INTERFACE_COLORS,
-  normalizeInterfaceColors,
   normalizeScreensaverSettings,
   normalizeVacationModeSettings,
-  readLocalInterfaceColors,
   readLocalScreensaverSettings,
-  readLocalAutoDarkModeSettings,
   readLocalVacationModeSettings,
-  applyInterfaceColors,
 } from '../utils/interfaceSettings.js';
 import { CONTROL_LIMITS_DEFAULT_KEY } from '../utils/displayControls.js';
 import { useTranslation } from 'react-i18next';
@@ -243,7 +243,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   const [widgetSettings, setLocalWidgetSettings] = useState({
     ...DEFAULT_WIDGET_SETTINGS
   });
-  const [interfaceColors, setInterfaceColors] = useState(readLocalInterfaceColors);
   const [users, setUsers] = useState([]);
   const [chores, setChores] = useState([]);
   const [prizes, setPrizes] = useState([]);
@@ -262,10 +261,21 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   // largely unreadable in the list. Holds { url, name } while one is enlarged.
   const [enlargedPreview, setEnlargedPreview] = useState(null);
   const [githubWidgets, setGithubWidgets] = useState([]);
+  // Quick search over the plugin store, by name.
+  const [pluginSearch, setPluginSearch] = useState('');
+  // Store categories start collapsed; these are the ones opened by hand.
+  const [expandedPluginCategories, setExpandedPluginCategories] = useState(() => new Set());
+  const togglePluginCategory = (category) => {
+    setExpandedPluginCategories((current) => {
+      const next = new Set(current);
+      if (next.has(category)) next.delete(category);
+      else next.add(category);
+      return next;
+    });
+  };
   // Which installed plugin is currently showing a live preview, if any.
   const [previewPlugin, setPreviewPlugin] = useState(null);
   const [loadingGithub, setLoadingGithub] = useState(false);
-  const [colorPickerAnchor, setColorPickerAnchor] = useState({ key: null, el: null });
   const [deleteUserDialog, setDeleteUserDialog] = useState({ open: false, user: null });
   const [choreModal, setChoreModal] = useState({ open: false, user: null, userChores: [] });
   const [isLoading, setIsLoading] = useState(false);
@@ -290,15 +300,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   const [photoItemCount, setPhotoItemCount] = useState(null); // null = unknown
   const [screensaverSettings, setScreensaverSettings] = useState(readLocalScreensaverSettings);
   const [vacationModeSettings, setVacationModeSettings] = useState(readLocalVacationModeSettings);
-  const [autoDarkModeSettings, setAutoDarkModeSettings] = useState(readLocalAutoDarkModeSettings);
-  const [isSavingAutoDarkMode, setIsSavingAutoDarkMode] = useState(false);
-  const [autoDarkModeSunTimes, setAutoDarkModeSunTimes] = useState({
-    sunrise: null,
-    sunset: null,
-    timezoneOffset: 0,
-  });
-  const [autoDarkModeSunTimesLoading, setAutoDarkModeSunTimesLoading] = useState(false);
-  const [autoDarkModeSunTimesError, setAutoDarkModeSunTimesError] = useState('');
   const [tabIconModalState, setTabIconModalState] = useState({
     open: false,
     mode: 'create',
@@ -335,6 +336,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   const [aboutError, setAboutError] = useState('');
   const [frontendCommitTags, setFrontendCommitTags] = useState([]);
   const [backendCommitTags, setBackendCommitTags] = useState([]);
+  // Newest release vs the running one (issue #220); null until checked.
+  const [updateStatus, setUpdateStatus] = useState(null);
 
   // Refresh interval options in milliseconds
   const refreshIntervalOptions = [
@@ -355,10 +358,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
 
   useEffect(() => {
     if (isAuthenticated) {
-      setInterfaceColors(readLocalInterfaceColors());
       setScreensaverSettings(readLocalScreensaverSettings());
       setVacationModeSettings(readLocalVacationModeSettings());
-      setAutoDarkModeSettings(readLocalAutoDarkModeSettings());
       fetchSettings();
       fetchWeatherConnectionStatus();
       fetchDeviceSettings();
@@ -653,6 +654,12 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   const refreshAboutData = async () => {
     setAboutLoading(true);
     setAboutError('');
+
+    // Separate from the build metadata: GitHub being unreachable must not
+    // fail the rest of the tab.
+    axios.get(`${API_BASE_URL}/api/update-status`)
+      .then((response) => setUpdateStatus(response.data))
+      .catch(() => setUpdateStatus(null));
 
     try {
       const statsResponse = await axios.get(`${API_BASE_URL}/api/stats`);
@@ -1349,44 +1356,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     }
   };
 
-  const saveInterfaceSettings = async () => {
-    try {
-      setIsLoading(true);
-      const normalizedColors = normalizeInterfaceColors(interfaceColors);
-      localStorage.setItem(INTERFACE_COLORS_STORAGE_KEY, JSON.stringify(normalizedColors));
-
-      // Apply CSS variables immediately
-      applyAccentColors();
-      window.dispatchEvent(new Event(INTERFACE_SETTINGS_UPDATED_EVENT));
-
-      setSaveMessage({ show: true, type: 'success', text: t('admin:messages.colorsSaved') });
-      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
-    } catch (error) {
-      console.error('Error saving accent colors:', error);
-      setSaveMessage({ show: true, type: 'error', text: t('admin:messages.colorsFailed') });
-      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const applyAccentColors = () => {
-    const root = document.documentElement;
-    const isLight = root.getAttribute('data-theme') === 'light';
-
-    applyInterfaceColors(root, interfaceColors);
-
-    if (isLight) {
-      root.style.setProperty('--background', interfaceColors.primary);
-    }
-  };
-
-  const resetToDefaults = () => {
-    setInterfaceColors({ ...DEFAULT_INTERFACE_COLORS });
-    setSaveMessage({ show: true, type: 'info', text: t('admin:messages.colorsReset') });
-    setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
-  };
-
   const saveScreensaverSettings = async () => {
     try {
       setIsLoading(true);
@@ -1433,150 +1402,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     }
   };
 
-  // Geocoding runs on the server, which holds the API key. Passing no query
-  // asks the server for the provider's own location, which is how a Home
-  // Assistant household gets coordinates without an OpenWeatherMap key at all.
-  const resolveAutoDarkModeLocation = async (locationQuery) => {
-    const normalized = (locationQuery || '').trim();
-    const response = await axios.get(`${API_BASE_URL}/api/weather/geocode`, {
-      params: normalized ? { q: normalized } : {},
-    });
-
-    const { lat, lon, resolvedName } = response.data || {};
-    if (typeof lat !== 'number' || typeof lon !== 'number') {
-      throw new Error('Location not found. Try a city, city/state, city/country, or ZIP code.');
-    }
-
-    return { lat, lon, resolvedName: resolvedName || normalized };
-  };
-
-  const saveAutoDarkModeSettings = async () => {
-    const trimmedLocation = autoDarkModeSettings.locationQuery.trim();
-
-    if (!autoDarkModeSettings.enabled) {
-      const nextSettings = {
-        ...autoDarkModeSettings,
-        locationQuery: trimmedLocation,
-      };
-      localStorage.setItem(AUTO_DARK_MODE_SETTINGS_STORAGE_KEY, JSON.stringify(nextSettings));
-      window.dispatchEvent(new Event(INTERFACE_SETTINGS_UPDATED_EVENT));
-      setAutoDarkModeSettings(nextSettings);
-      setSaveMessage({ show: true, type: 'success', text: t('admin:messages.autoDarkDisabled') });
-      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
-      return;
-    }
-
-    if (!trimmedLocation) {
-      setSaveMessage({
-        show: true,
-        type: 'error',
-        text: t('admin:messages.autoDarkNeedsLocation'),
-      });
-      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
-      return;
-    }
-
-    try {
-      setIsSavingAutoDarkMode(true);
-      const resolved = await resolveAutoDarkModeLocation(trimmedLocation);
-      const nextSettings = {
-        ...autoDarkModeSettings,
-        enabled: true,
-        locationQuery: trimmedLocation,
-        lat: resolved.lat,
-        lon: resolved.lon,
-        resolvedName: resolved.resolvedName,
-      };
-
-      localStorage.setItem(AUTO_DARK_MODE_SETTINGS_STORAGE_KEY, JSON.stringify(nextSettings));
-      window.dispatchEvent(new Event(INTERFACE_SETTINGS_UPDATED_EVENT));
-      setAutoDarkModeSettings(nextSettings);
-      setSaveMessage({
-        show: true,
-        type: 'success',
-        text: t('admin:messages.autoDarkSaved'),
-      });
-      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 4500);
-    } catch (error) {
-      console.error('Error saving auto dark mode settings:', error);
-      const message = error?.response?.data?.message || error.message || 'Failed to save auto dark mode settings.';
-      setSaveMessage({ show: true, type: 'error', text: message });
-      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3500);
-    } finally {
-      setIsSavingAutoDarkMode(false);
-    }
-  };
-
-  useEffect(() => {
-    const hasCoordinates = typeof autoDarkModeSettings.lat === 'number' && typeof autoDarkModeSettings.lon === 'number';
-
-    // No API key needed any more — the server computes these from coordinates.
-    if (!autoDarkModeSettings.resolvedName || !hasCoordinates) {
-      setAutoDarkModeSunTimes({ sunrise: null, sunset: null, timezoneOffset: 0 });
-      setAutoDarkModeSunTimesError('');
-      setAutoDarkModeSunTimesLoading(false);
-      return;
-    }
-
-    let isCancelled = false;
-    const fetchSunTimes = async () => {
-      setAutoDarkModeSunTimesLoading(true);
-      setAutoDarkModeSunTimesError('');
-
-      try {
-        const response = await axios.get(`${API_BASE_URL}/api/sun`, {
-          params: {
-            lat: autoDarkModeSettings.lat,
-            lon: autoDarkModeSettings.lon,
-          },
-        });
-
-        const { sunrise, sunset, alwaysUp, alwaysDown } = response?.data || {};
-
-        if (typeof sunrise !== 'number' || typeof sunset !== 'number') {
-          throw new Error(alwaysUp || alwaysDown
-            ? 'The sun does not rise or set at this location today.'
-            : 'Sunrise and sunset are unavailable for this location.');
-        }
-
-        if (!isCancelled) {
-          // The times come back as unix seconds; the preview renders them in
-          // the browser's own zone, which is the display the user is looking at.
-          setAutoDarkModeSunTimes({ sunrise, sunset, timezoneOffset: 0 });
-        }
-      } catch (error) {
-        if (!isCancelled) {
-          console.error('Error fetching auto dark mode sunrise/sunset:', error);
-          setAutoDarkModeSunTimes({ sunrise: null, sunset: null, timezoneOffset: 0 });
-          setAutoDarkModeSunTimesError(error.message || 'Unable to load today\'s sunrise and sunset.');
-        }
-      } finally {
-        if (!isCancelled) {
-          setAutoDarkModeSunTimesLoading(false);
-        }
-      }
-    };
-
-    void fetchSunTimes();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [autoDarkModeSettings.resolvedName, autoDarkModeSettings.lat, autoDarkModeSettings.lon]);
-
-  const formatAutoDarkModeLocationTime = (unixSeconds, timezoneOffsetSeconds = 0) => {
-    if (typeof unixSeconds !== 'number') {
-      return '--';
-    }
-
-    const shiftedTime = new Date((unixSeconds + timezoneOffsetSeconds) * 1000);
-    return shiftedTime.toLocaleTimeString([], {
-      hour: 'numeric',
-      minute: '2-digit',
-      timeZone: 'UTC',
-    });
-  };
-
   const sourcesLoaded = photoSources !== null;
   const hasImmichSource = sourcesLoaded && photoSources.some(s => s.type === 'Immich' && s.enabled === 1);
   const hasNonImmichPhotoSource = sourcesLoaded && photoSources.some(s => DB_BACKED_PHOTO_TYPES.includes(s.type) && s.enabled === 1);
@@ -1609,20 +1434,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
         ...prev[widget],
         refreshInterval: interval
       }
-    }));
-  };
-
-  const handleSettingChange = (setting, value) => {
-    setInterfaceColors(prev => ({
-      ...prev,
-      [setting]: value
-    }));
-  };
-
-  const handleColorChange = (colorKey, color) => {
-    setInterfaceColors(prev => ({
-      ...prev,
-      [colorKey]: color.hex
     }));
   };
 
@@ -2060,52 +1871,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     }
   };
 
-  const renderColorPicker = (key, label) => (
-    <Box key={key} sx={{ mb: 3 }}>
-      <Typography variant="body1" sx={{ mb: 1, fontWeight: 600 }}>
-        {label}
-      </Typography>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-        <Box
-          sx={{
-            width: 60,
-            height: 60,
-            backgroundColor: interfaceColors[key],
-            border: '3px solid var(--card-border)',
-            borderRadius: 2,
-            cursor: 'pointer',
-            transition: 'all 0.2s',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-            '&:hover': {
-              transform: 'scale(1.05)',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
-            }
-          }}
-          onClick={(e) => {
-            if (colorPickerAnchor.key === key) {
-              setColorPickerAnchor({ key: null, el: null });
-            } else {
-              setColorPickerAnchor({ key, el: e.currentTarget });
-            }
-          }}
-        />
-        <TextField
-          size="medium"
-          value={interfaceColors[key]}
-          onChange={(e) => handleSettingChange(key, e.target.value)}
-          sx={{ flex: 1 }}
-          placeholder="#000000"
-        />
-      </Box>
-      <ColorPickerPopover
-        anchorEl={colorPickerAnchor.key === key ? colorPickerAnchor.el : null}
-        color={interfaceColors[key]}
-        onChange={(color) => handleColorChange(key, color)}
-        onClose={() => setColorPickerAnchor({ key: null, el: null })}
-      />
-    </Box>
-  );
-
   const getRefreshIntervalLabel = (interval) => {
     const option = refreshIntervalOptions.find(opt => opt.value === interval);
     return option ? option.label : t('admin:refresh.disabled');
@@ -2222,7 +1987,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                   const hasRequiredTabsError = Boolean(config.enabled) && (!Array.isArray(widgetAssignments[widget]) || widgetAssignments[widget].length === 0);
 
                   return (
-                  <Box key={widget} sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
+                  <Box key={widget} sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)' }}>
                     <Typography variant="subtitle1" sx={{ mb: 2, textTransform: 'capitalize', fontWeight: 'bold' }}>
                       {widget} Widget
                     </Typography>
@@ -2295,7 +2060,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                   );
                 })}
 
-                <Box sx={{ mb: 3, p: 2, border: '2px solid var(--accent)', borderRadius: 1, backgroundColor: 'rgba(var(--accent-rgb), 0.05)' }}>
+                <Box sx={{ mb: 3, p: 2, border: '2px solid var(--accent)', borderRadius: 'var(--hg-radius-sm)', backgroundColor: 'rgba(var(--accent-rgb), 0.05)' }}>
                   <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>
                     {t('admin:widgets.weatherWidget')}
                   </Typography>
@@ -2420,62 +2185,163 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                         Relative to the viewport rather than a fixed height, so a
                         tall wall display shows more while a laptop does not end
                         up scrolling the list inside a scrolling dialog. */}
-                    <List sx={{ maxHeight: { xs: 360, md: '50vh' }, overflowY: 'auto' }}>
-                      {githubWidgets.map((widget) => (
-                        <ListItem key={widget.path} sx={{ border: '1px solid var(--card-border)', borderRadius: 1, mb: 1 }}>
-                          {/* Sibling image in the plugins repo (chore-metrics.png next to
-                              chore-metrics.html). Deliberately not carried in the manifest:
-                              older HomeGlow versions return the whole manifest in
-                              GET /api/widgets, which every dashboard fetches on boot. */}
-                          {widget.previewUrl && (
-                            // A button rather than a bare image, so the enlarged
-                            // view is reachable from a keyboard as well as a tap.
-                            <Box
-                              component="button"
-                              type="button"
-                              onClick={() => setEnlargedPreview({ url: widget.previewUrl, name: widget.name })}
-                              aria-label={t('admin:plugins.enlargePreview', { name: widget.name })}
-                              sx={{
-                                p: 0,
-                                mr: 2,
-                                border: 'none',
-                                background: 'none',
-                                cursor: 'zoom-in',
-                                flexShrink: 0,
-                                lineHeight: 0,
-                                borderRadius: 1,
-                                '&:focus-visible': { outline: '2px solid var(--accent)', outlineOffset: 2 }
-                              }}
+                    {/* Quick find for someone who knows the name, rather than
+                        scrolling the categories below. Matches the listed name or
+                        the manifest's; see utils/pluginCatalog.js. */}
+                    {githubWidgets.length > 0 && (
+                      <TextField
+                        fullWidth
+                        size="small"
+                        value={pluginSearch}
+                        onChange={(event) => setPluginSearch(event.target.value)}
+                        placeholder={t('admin:plugins.search')}
+                        sx={{ mb: 1 }}
+                        slotProps={{
+                          htmlInput: { 'aria-label': t('admin:plugins.search') },
+                          input: {
+                            startAdornment: (
+                              <InputAdornment position="start">
+                                <SearchIcon fontSize="small" />
+                              </InputAdornment>
+                            ),
+                            endAdornment: pluginSearch && (
+                              <InputAdornment position="end">
+                                <IconButton
+                                  size="small"
+                                  edge="end"
+                                  aria-label={t('common:actions.clear')}
+                                  onClick={() => setPluginSearch('')}
+                                >
+                                  <Close fontSize="small" />
+                                </IconButton>
+                              </InputAdornment>
+                            ),
+                          },
+                        }}
+                      />
+                    )}
+                    {githubWidgets.length > 0 && groupPluginsByCategory(githubWidgets, pluginSearch).length === 0 && (
+                      <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
+                        {t('admin:plugins.noMatches', { search: pluginSearch.trim() })}
+                      </Typography>
+                    )}
+
+                    <List sx={{ maxHeight: { xs: 360, md: '50vh' }, overflowY: 'auto', pt: 0 }}>
+                      {groupPluginsByCategory(githubWidgets, pluginSearch).map(({ category, plugins }) => {
+                        // Collapsed until opened. A search opens every group with
+                        // a match, since a closed heading would hide the result;
+                        // clearing it brings back whatever was open before.
+                        const isOpen = pluginSearch.trim() !== '' || expandedPluginCategories.has(category);
+                        const groupId = `plugin-category-${category}`;
+                        return (
+                          <React.Fragment key={category}>
+                            {/* Sticky, so the heading of the group being scrolled
+                                stays in view inside the capped list. */}
+                            <ListSubheader
+                              disableGutters
+                              sx={{ backgroundColor: 'var(--card-bg)', color: 'var(--text)', lineHeight: '36px', mb: 1 }}
                             >
-                              <Box
-                                component="img"
-                                src={widget.previewUrl}
-                                alt=""
-                                loading="lazy"
-                                sx={{ width: 96, height: 60, objectFit: 'cover', borderRadius: 1, display: 'block' }}
-                              />
-                            </Box>
-                          )}
-                          <ListItemText
-                            primary={widget.name}
-                            secondary={widget.description || t('admin:plugins.noDescription')}
-                            slotProps={{ secondary: { sx: { fontStyle: widget.description ? 'normal' : 'italic' } } }}
-                          />
-                          {/* Normal flow, not ListItemSecondaryAction: that is absolutely
-                              positioned and reserves only an icon-sized gap, so a wrapped
-                              description runs underneath the button (#147 follow-up). */}
-                          <Box sx={{ flexShrink: 0, ml: 2, alignSelf: 'center' }}>
-                            <Button
-                              onClick={() => installGithubWidget(widget)}
-                              startIcon={<CloudDownload />}
-                              size="small"
-                              variant="outlined"
-                            >
-                              {t('admin:widgets.install')}
-                            </Button>
-                          </Box>
-                        </ListItem>
-                      ))}
+                              <ButtonBase
+                                onClick={() => togglePluginCategory(category)}
+                                disabled={pluginSearch.trim() !== ''}
+                                aria-expanded={isOpen}
+                                aria-controls={groupId}
+                                sx={{
+                                  width: '100%',
+                                  justifyContent: 'flex-start',
+                                  gap: 1,
+                                  px: 1,
+                                  font: 'inherit',
+                                  fontWeight: 600,
+                                  color: 'inherit',
+                                  borderRadius: 'var(--hg-radius-sm)',
+                                  '&:hover': { backgroundColor: 'action.hover' },
+                                  '&.Mui-disabled': { color: 'inherit' },
+                                  '&:focus-visible': { outline: '2px solid var(--accent)', outlineOffset: -2 },
+                                }}
+                              >
+                                <ExpandMore
+                                  fontSize="small"
+                                  sx={{ transition: 'transform 150ms', transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)' }}
+                                />
+                                {t(`admin:plugins.categories.${category}`)}
+                                <Box component="span" sx={{ color: 'text.secondary', fontWeight: 400 }}>
+                                  ({plugins.length})
+                                </Box>
+                              </ButtonBase>
+                            </ListSubheader>
+                            <Collapse component="li" in={isOpen} timeout="auto" unmountOnExit id={groupId}>
+                              <List disablePadding>
+                                {plugins.map((widget) => (
+                                  <ListItem key={widget.path} sx={{ border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)', mb: 1 }}>
+                                    {/* Sibling image in the plugins repo (chore-metrics.png next to
+                                        chore-metrics.html). Deliberately not carried in the manifest:
+                                        older HomeGlow versions return the whole manifest in
+                                        GET /api/widgets, which every dashboard fetches on boot. */}
+                                    {widget.previewUrl && (
+                                      // A button rather than a bare image, so the enlarged
+                                      // view is reachable from a keyboard as well as a tap.
+                                      <Box
+                                        component="button"
+                                        type="button"
+                                        onClick={() => setEnlargedPreview({ url: widget.previewUrl, name: widget.name })}
+                                        aria-label={t('admin:plugins.enlargePreview', { name: widget.name })}
+                                        sx={{
+                                          p: 0,
+                                          mr: 2,
+                                          border: 'none',
+                                          background: 'none',
+                                          cursor: 'zoom-in',
+                                          flexShrink: 0,
+                                          lineHeight: 0,
+                                          borderRadius: 'var(--hg-radius-sm)',
+                                          '&:focus-visible': { outline: '2px solid var(--accent)', outlineOffset: 2 }
+                                        }}
+                                      >
+                                        <Box
+                                          component="img"
+                                          src={widget.previewUrl}
+                                          alt=""
+                                          loading="lazy"
+                                          sx={{ width: 96, height: 60, objectFit: 'cover', borderRadius: 'var(--hg-radius-sm)', display: 'block' }}
+                                        />
+                                      </Box>
+                                    )}
+                                    <ListItemText
+                                      primary={(
+                                        <>
+                                          {widget.name}
+                                          {/* Who wrote it (issue #210), worked out by the server. */}
+                                          {widget.author && (
+                                            <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                                              {t('admin:plugins.byAuthor', { author: widget.author })}
+                                            </Typography>
+                                          )}
+                                        </>
+                                      )}
+                                      secondary={widget.description || t('admin:plugins.noDescription')}
+                                      slotProps={{ secondary: { sx: { fontStyle: widget.description ? 'normal' : 'italic' } } }}
+                                    />
+                                    {/* Normal flow, not ListItemSecondaryAction: that is absolutely
+                                        positioned and reserves only an icon-sized gap, so a wrapped
+                                        description runs underneath the button (#147 follow-up). */}
+                                    <Box sx={{ flexShrink: 0, ml: 2, alignSelf: 'center' }}>
+                                      <Button
+                                        onClick={() => installGithubWidget(widget)}
+                                        startIcon={<CloudDownload />}
+                                        size="small"
+                                        variant="outlined"
+                                      >
+                                        {t('admin:widgets.install')}
+                                      </Button>
+                                    </Box>
+                                  </ListItem>
+                                ))}
+                              </List>
+                            </Collapse>
+                          </React.Fragment>
+                        );
+                      })}
                     </List>
                   </Box>
                 </Box>
@@ -2527,14 +2393,16 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                       const pluginWidgetName = `plugin:${plugin.filename}`;
                       const hasRequiredTabsError = Boolean(pSettings.enabled) && (!Array.isArray(pluginAssignments[pluginWidgetName]) || pluginAssignments[pluginWidgetName].length === 0);
                       return (
-                        <Box key={plugin.filename} sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
+                        <Box key={plugin.filename} sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)' }}>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                             <Box sx={{ pr: 1 }}>
                               <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
                                 {plugin.name}
                               </Typography>
                               <Typography variant="caption" color="text.secondary">
-                                {plugin.filename}
+                                {plugin.author
+                                  ? `${plugin.filename} · ${t('admin:plugins.byAuthor', { author: plugin.author })}`
+                                  : plugin.filename}
                               </Typography>
                               {/* Straight from the plugin's own manifest (issue #147). A
                                   legacy widget has none, and says so rather than showing
@@ -2567,7 +2435,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                           </Box>
 
                           {previewPlugin === plugin.filename && (
-                            <Box sx={{ mb: 2, border: '1px solid var(--card-border)', borderRadius: 1, overflow: 'hidden', height: 220 }}>
+                            <Box sx={{ mb: 2, border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)', overflow: 'hidden', height: 220 }}>
                               <iframe
                                 title={t('admin:plugins.previewTitle', { name: plugin.name })}
                                 // Same channel PluginWidgetWrapper uses, read from the root
@@ -2885,13 +2753,13 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                   {t('admin:devices.manageHelp')}
                 </Alert>
 
-                <Box sx={{ mb: 2, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
+                <Box sx={{ mb: 2, p: 2, border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)' }}>
                   <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
                     {t('admin:devices.currentName')}
                   </Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                     <Chip label={t('admin:devices.current')} color="primary" size="small" />
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                    <Typography variant="body2" sx={{ fontFamily: 'var(--hg-font-mono)' }}>
                       {currentDeviceName}
                     </Typography>
                   </Box>
@@ -2915,7 +2783,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                             <TableCell data-label={t('common:labels.name')}>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                                 {isCurrent && <Chip label={t('admin:devices.current')} color="primary" size="small" />}
-                                <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                                <Typography variant="body2" sx={{ fontFamily: 'var(--hg-font-mono)' }}>
                                   {device.name}
                                 </Typography>
                               </Box>
@@ -3011,52 +2879,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
               <TimezoneSettings />
             </AdminFormSection>
 
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-              <Typography variant="h6">{t('admin:colors.heading')}</Typography>
-              <Button
-                variant="outlined"
-                startIcon={<RestartAlt />}
-                onClick={resetToDefaults}
-                size="small"
-              >
-                {t('admin:colors.resetDefaults')}
-              </Button>
-            </Box>
-
-            {saveMessage.show && (
-              <Alert severity={saveMessage.type} sx={{ mb: 2 }}>
-                {saveMessage.text}
-              </Alert>
-            )}
-
-            <Alert severity="info" sx={{ mb: 3 }}>
-              {t('admin:colors.help')}
-            </Alert>
-
-            <Box sx={{ maxWidth: 600, mx: 'auto' }}>
-              {renderColorPicker('primary', '🎨 Background Color (Light Mode)')}
-              {renderColorPicker('secondary', '💎 Secondary Color')}
-              {renderColorPicker('accent', '✨ Accent Color')}
-            </Box>
-
-            <Box sx={{ mt: 4, display: 'flex', gap: 2, justifyContent: 'center' }}>
-              <Button
-                variant="contained"
-                onClick={saveInterfaceSettings}
-                startIcon={<Save />}
-                size="large"
-              >
-                {t('admin:colors.save')}
-              </Button>
-              <Button
-                variant="outlined"
-                onClick={() => window.location.reload()}
-                startIcon={<Refresh />}
-                size="large"
-              >
-                {t('admin:colors.refreshPage')}
-              </Button>
-            </Box>
+            <AppearanceSettings />
 
             <Divider sx={{ my: 4 }} />
 
@@ -3411,83 +3234,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
               >
                 {t('admin:vacation.save')}
               </Button>
-
-              <Divider sx={{ my: 4 }} />
-
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                <Nightlight />
-                <Typography variant="h6">{t('admin:autoDark.heading')}</Typography>
-              </Box>
-
-              <Alert severity="info" sx={{ mb: 2 }}>
-                {t('admin:autoDark.help')}
-              </Alert>
-
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={autoDarkModeSettings.enabled}
-                    onChange={(e) => {
-                      setAutoDarkModeSettings(prev => ({
-                        ...prev,
-                        enabled: e.target.checked,
-                      }));
-                    }}
-                  />
-                }
-                label={t('admin:autoDark.enable')}
-                sx={{ mb: 2 }}
-              />
-
-              <TextField
-                fullWidth
-                label={t('admin:autoDark.location')}
-                value={autoDarkModeSettings.locationQuery}
-                onChange={(e) => {
-                  const nextValue = e.target.value;
-                  setAutoDarkModeSettings(prev => ({
-                    ...prev,
-                    locationQuery: nextValue,
-                  }));
-                }}
-                helperText={t('admin:autoDark.locationHelp')}
-                sx={{ mb: 2 }}
-              />
-
-              {autoDarkModeSettings.resolvedName && (
-                <Alert severity="success" sx={{ mb: 2 }}>
-                  <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      Current resolved location: {autoDarkModeSettings.resolvedName}
-                    </Typography>
-                    {autoDarkModeSunTimesLoading && (
-                      <Typography variant="body2" sx={{ mt: 0.5 }}>
-                        {t('admin:autoDark.loadingSun')}
-                      </Typography>
-                    )}
-                    {!autoDarkModeSunTimesLoading && autoDarkModeSunTimes.sunrise && autoDarkModeSunTimes.sunset && (
-                      <Typography variant="body2" sx={{ mt: 0.5 }}>
-                        Today's sunrise: {formatAutoDarkModeLocationTime(autoDarkModeSunTimes.sunrise, autoDarkModeSunTimes.timezoneOffset)} | Sunset: {formatAutoDarkModeLocationTime(autoDarkModeSunTimes.sunset, autoDarkModeSunTimes.timezoneOffset)}
-                      </Typography>
-                    )}
-                    {!autoDarkModeSunTimesLoading && autoDarkModeSunTimesError && (
-                      <Typography variant="body2" sx={{ mt: 0.5 }}>
-                        {autoDarkModeSunTimesError}
-                      </Typography>
-                    )}
-                  </Box>
-                </Alert>
-              )}
-
-              <Button
-                variant="contained"
-                onClick={saveAutoDarkModeSettings}
-                startIcon={<Save />}
-                fullWidth
-                disabled={isSavingAutoDarkMode}
-              >
-                {isSavingAutoDarkMode ? 'Saving Auto Dark Mode...' : 'Save Auto Dark Mode Settings'}
-              </Button>
             </Box>
           </CardContent>
         </Card>
@@ -3780,7 +3526,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
             )}
             {choresSubTab === 2 && (
               <>
-            <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
+            <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)' }}>
               <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600 }}>
                 {t('admin:chores.rewards')}
               </Typography>
@@ -3823,7 +3569,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
               </Typography>
             </Box>
 
-            <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
+            <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)' }}>
               <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600 }}>
                 {t('admin:chores.soundsHeading')}
               </Typography>
@@ -3940,7 +3686,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
 
             <List>
               {prizes.map((prize) => (
-                <ListItem key={prize.id} sx={{ border: '1px solid var(--card-border)', borderRadius: 1, mb: 1 }}>
+                <ListItem key={prize.id} sx={{ border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)', mb: 1 }}>
                   {editingPrize?.id === prize.id ? (
                     <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, width: '100%', alignItems: { xs: 'stretch', sm: 'center' } }}>
                       <TextField
@@ -4013,7 +3759,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
               ) : (
                 <List>
                   {prizeOffers.map((offer) => (
-                    <ListItem key={offer.id} sx={{ border: '1px solid var(--card-border)', borderRadius: 1, mb: 1 }}>
+                    <ListItem key={offer.id} sx={{ border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)', mb: 1 }}>
                       <ListItemText
                         primary={`${offer.name} — ${offer.clam_cost} 🥟${offer.repeatable ? ' · 🔁' : ''}`}
                         secondary={
@@ -4054,7 +3800,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
               {t('admin:security.help')}
             </Alert>
 
-            <Box sx={{ p: 3, border: '2px solid var(--accent)', borderRadius: 2, backgroundColor: 'rgba(var(--accent-rgb), 0.05)' }}>
+            <Box sx={{ p: 3, border: '2px solid var(--accent)', borderRadius: 'var(--hg-radius-md)', backgroundColor: 'rgba(var(--accent-rgb), 0.05)' }}>
               <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Lock />
                 {t('admin:security.pinProtection')}
@@ -4068,7 +3814,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
 
               <Grid container spacing={2}>
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <Paper elevation={0} sx={{ p: 2, backgroundColor: 'rgba(0, 0, 0, 0.1)' }}>
+                  <Paper elevation={0} sx={{ p: 2, backgroundColor: 'var(--hg-black-10)' }}>
                     <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
                       {t('admin:security.requirements')}
                     </Typography>
@@ -4085,7 +3831,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                 </Grid>
 
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <Paper elevation={0} sx={{ p: 2, backgroundColor: 'rgba(0, 0, 0, 0.1)' }}>
+                  <Paper elevation={0} sx={{ p: 2, backgroundColor: 'var(--hg-black-10)' }}>
                     <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
                       {t('admin:security.currentStatus')}
                     </Typography>
@@ -4381,6 +4127,27 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
               </Button>
             </Box>
 
+            {updateStatus?.updateAvailable && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                {t('admin:about.updateAvailable', { latest: updateStatus.latest, current: updateStatus.current })}
+                {updateStatus.releaseUrl && (
+                  <>
+                    {' '}
+                    <Link href={updateStatus.releaseUrl} target="_blank" rel="noopener noreferrer">
+                      {t('admin:about.releaseNotes')}
+                    </Link>
+                  </>
+                )}
+              </Alert>
+            )}
+            {updateStatus?.latest && !updateStatus.updateAvailable && (
+              <Alert severity="success" sx={{ mb: 2 }}>
+                {updateStatus.isRelease
+                  ? t('admin:about.upToDate', { current: updateStatus.current })
+                  : t('admin:about.testBuild', { latest: updateStatus.latest })}
+              </Alert>
+            )}
+
             <Alert severity="info" sx={{ mb: 2 }}>
               {t('admin:about.help')}
             </Alert>
@@ -4601,7 +4368,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                         </Typography>
                       </TableCell>
                       <TableCell data-label={t('admin:chores.schedule')}>
-                        <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                        <Typography variant="body2" sx={{ fontFamily: 'var(--hg-font-mono)' }}>
                           {chore.crontab || 'One-time'}
                         </Typography>
                       </TableCell>
@@ -4690,7 +4457,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
               // maxWidth rather than width: these screenshots are around 620px
               // wide, and stretching one to fill a md dialog only makes it
               // blurrier — the opposite of why the enlarged view exists.
-              sx={{ maxWidth: '100%', height: 'auto', display: 'block', mx: 'auto', borderRadius: 1 }}
+              sx={{ maxWidth: '100%', height: 'auto', display: 'block', mx: 'auto', borderRadius: 'var(--hg-radius-sm)' }}
             />
           )}
         </DialogContent>
@@ -4734,7 +4501,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                     display: 'flex',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    borderRadius: 2,
+                    borderRadius: 'var(--hg-radius-md)',
                     p: 0.75,
                     '&:hover': { backgroundColor: 'rgba(var(--accent-rgb), 0.12)' },
                   }}

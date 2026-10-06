@@ -1,0 +1,99 @@
+{
+  "manifestVersion": 1,
+  "id": "starship",
+  "version": "1.0.0",
+  "author": "HomeGlow",
+  "name": "Starship",
+  "description": "A 24th-century bridge console: black field, pill controls, curved frame elbows.",
+  "extends": "classic",
+  "modes": [
+    "dark"
+  ],
+  "colors": {
+    "primary": "#000000",
+    "secondary": "#99ccff",
+    "accent": "#ff9900"
+  },
+  "fonts": [
+    "antonio"
+  ],
+  "tokens": {
+    "all": {
+      "--primary": "#000000",
+      "--secondary": "#99ccff",
+      "--accent": "#ff9900",
+      "--accent-rgb": "255, 153, 0",
+      "--background": "#000000",
+      "--surface": "#000000",
+      "--card-bg": "rgba(2, 2, 10, 0.8)",
+      "--hg-frame-bg": "rgba(2, 2, 10, 0.8)",
+      "--text": "#ffcc99",
+      "--text-secondary": "#cc99cc",
+      "--border": "#9977aa",
+      "--card-border": "#9977aa",
+      "--success": "#99cc66",
+      "--warning": "#ffcc66",
+      "--hg-error": "#cc4444",
+      "--hg-error-hover": "#ee5555",
+      "--hg-error-surface": "rgba(204, 68, 68, 0.2)",
+      "--hg-hover": "rgba(255, 153, 0, 0.15)",
+      "--hg-on-overlay": "#ffcc99",
+      "--shadow": "none",
+      "--hg-frame-shadow": "inset 0 0 28px rgba(153, 153, 204, 0.14)",
+      "--hg-frame-shadow-hover": "inset 0 0 28px rgba(153, 153, 204, 0.14), 0 0 0 2px #ffcc99",
+      "--hg-frame-radius": "40px 10px 10px 10px",
+      "--hg-frame-decoration-width": "10px 0 0 22px",
+      "--hg-frame-inset": "10px 0 0 22px",
+      "--hg-frame-decoration-style": "solid",
+      "--hg-frame-decoration-color": "#ff9966",
+      "--hg-radius-sm": "6px",
+      "--hg-radius-md": "14px",
+      "--hg-radius-lg": "999px",
+      "--hg-radius-xl": "999px",
+      "--hg-radius-2xl": "999px",
+      "--hg-font-body": "'Antonio', 'Arial Narrow', sans-serif",
+      "--hg-font-heading": "'Antonio', 'Arial Narrow', sans-serif",
+      "--hg-heading-transform": "uppercase",
+      "--hg-heading-letter-spacing": "0.06em",
+      "--hg-grid-gap": "16px",
+      "--bottom-bar-bg": "#000000",
+      "--dock-bg": "#000000",
+      "--dock-border": "#ff9966",
+      "--dock-separator": "#9977aa",
+      "--dock-icon": "#ffcc99",
+      "--dock-active-bg": "#ff9900",
+      "--dock-active-border": "#ffcc99",
+      "--dock-active-icon": "#000000",
+      "--dark-gradient-start": "#000000",
+      "--dark-gradient-end": "#000000",
+      "--dark-button-gradient-start": "#ff9900",
+      "--dark-button-gradient-end": "#cc99cc",
+      "--hg-page-image": "radial-gradient(ellipse 60% 45% at 82% 18%, rgba(130, 80, 210, 0.38), rgba(0, 0, 0, 0) 70%), radial-gradient(ellipse 50% 40% at 12% 78%, rgba(40, 100, 210, 0.3), rgba(0, 0, 0, 0) 70%), radial-gradient(ellipse 35% 28% at 55% 55%, rgba(210, 90, 150, 0.14), rgba(0, 0, 0, 0) 70%)",
+      "--hg-frame-image": "linear-gradient(180deg, rgba(153, 204, 255, 0.07) 0%, rgba(0, 0, 0, 0) 40%)",
+      "--hg-frame-overlay": "linear-gradient(115deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 30%)"
+    }
+  },
+  "mui": {
+    "mode": "dark",
+    "primary": "#ff9900",
+    "secondary": "#99ccff",
+    "error": "#cc4444",
+    "background": "#000000",
+    "paper": "#0b0b14",
+    "text": "#ffcc99",
+    "textSecondary": "#cc99cc",
+    "divider": "#9977aa",
+    "fontFamily": "'Antonio', 'Arial Narrow', sans-serif",
+    "headingTransform": "uppercase",
+    "radius": 14,
+    "pillButtons": true
+  },
+  "ambience": [
+    {
+      "effect": "starfield",
+      "options": {
+        "density": "medium"
+      }
+    }
+  ]
+}

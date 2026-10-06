@@ -90,16 +90,11 @@
     "cannotDeleteCurrentDevice": "You cannot delete the current device.",
     "deviceDeleted": "Device deleted successfully.",
     "deviceDeleteFailed": "Failed to delete device. Please try again.",
-    "colorsSaved": "Accent colors saved for this display.",
-    "colorsFailed": "Failed to save accent colors. Please try again.",
-    "colorsReset": "Reset to default colors. Click Save to apply.",
     "screensaverSaved": "Screensaver settings saved for this display.",
     "screensaverFailed": "Failed to save screensaver settings. Please try again.",
     "vacationSaved": "Vacation mode settings saved for this display.",
     "vacationFailed": "Failed to save vacation mode settings. Please try again.",
-    "autoDarkDisabled": "Auto dark mode disabled for this display.",
     "autoDarkNeedsLocation": "Enter a location before enabling auto dark mode.",
-    "autoDarkSaved": "Auto dark mode saved for this display. Use the bottom-bar theme button until the half sun/half moon icon appears.",
     "userDeleteFailed": "Failed to delete user. Please try again.",
     "prizeAddToStoreFailed": "Failed to add the prize to the store.",
     "prizeRemoveOfferFailed": "Failed to remove the offer.",
@@ -178,7 +173,21 @@
     "noneInstalled": "No plugins installed yet. Install one from the repository above, or upload your own.",
     "enlargePreview": "See a larger preview of {{name}}",
     "closePreview": "Close preview",
-    "previewAlt": "Preview of {{name}}"
+    "previewAlt": "Preview of {{name}}",
+    "byAuthor": "by {{author}}",
+    "search": "Search plugins by name",
+    "noMatches": "No plugins match \"{{search}}\".",
+    "categories": {
+      "clock-calendar": "Clock & Calendar",
+      "news-weather": "News & Weather",
+      "chores-rewards": "Chores & Rewards",
+      "family-hub": "Family Hub",
+      "meals": "Meals",
+      "household": "Household",
+      "health": "Health",
+      "games": "Games",
+      "other": "Other"
+    }
   },
   "devices": {
     "manageHelp": "Manage devices and copy tabs/widget settings between them. Copying will overwrite the current device tabs and widget assignments.",
@@ -198,13 +207,6 @@
     "newName": "New Device Name",
     "saveName": "Save Name",
     "nameRule": "Name must be 1–64 characters, contain at least one letter or digit, and may only include letters, digits, spaces, and _ - . ' ( )."
-  },
-  "colors": {
-    "heading": "Accent Colors",
-    "resetDefaults": "Reset to Defaults",
-    "help": "Background color applies to light mode only. Accent color is used throughout the dashboard for highlights and interactive elements.",
-    "save": "Save Accent Colors",
-    "refreshPage": "Refresh Page"
   },
   "screensaver": {
     "heading": "Screensaver",
@@ -253,12 +255,9 @@
     "save": "Save Vacation Mode Settings"
   },
   "autoDark": {
-    "heading": "Daylight Auto Dark Mode",
-    "help": "To enable auto mode: save an OpenWeather API key in Connections, enter a location here, save this section, then press the bottom-bar theme button until the half sun/half moon icon appears.",
     "enable": "Enable Daylight Auto Dark Mode",
     "location": "Location",
-    "locationHelp": "Examples: Dallas,TX,US, London,UK, or ZIP code like 76034",
-    "loadingSun": "Loading today's sunrise and sunset..."
+    "locationHelp": "Examples: Dallas,TX,US, London,UK, or ZIP code like 76034"
   },
   "users": {
     "management": "User Management",
@@ -439,7 +438,11 @@
     "heading": "About",
     "help": "This tab shows build metadata for the running client and server plus any Git tags that point to each commit.",
     "frontend": "Frontend",
-    "backend": "Backend"
+    "backend": "Backend",
+    "updateAvailable": "HomeGlow {{latest}} is available. You are running {{current}}.",
+    "releaseNotes": "Release notes",
+    "upToDate": "You are on the latest release ({{current}}).",
+    "testBuild": "This is a test build. The latest release is {{latest}}."
   },
   "timezone": {
     "heading": "Time Zone",
@@ -460,5 +463,43 @@
     "help": "Decides when each day starts for chores, due-time reminders and the midnight reset. A zone chosen here overrides TZ in .env and the server's own zone, and sticks without recreating the container. Calendar times on each display follow that device's own time zone.",
     "sourceHost": "this server's own time zone",
     "resetToHost": "Go back to the server's own time zone ({{zone}})"
+  },
+  "appearance": {
+    "theme": "Theme",
+    "themeDescriptions": {
+      "classic": "HomeGlow's own look.",
+      "starship": "A 24th-century bridge console: black field, pill controls, curved frame elbows. Dark only.",
+      "reef": "A dive: sunlit shallows in light mode, a night dive in dark. Water gradients, coral and bioluminescent accents, bubble-soft frames."
+    },
+    "themeHasColors": "This theme brings its own colors, so the colors below apply only when the theme is Classic.",
+    "heading": "Appearance",
+    "subtitle": "The household sets the default look. This display can override any part of it.",
+    "scopeDevice": "This display",
+    "scopeHousehold": "Household",
+    "useHousehold": "Use household",
+    "mode": "Mode",
+    "modes": {
+      "light": "Light",
+      "dark": "Dark",
+      "auto": "Auto (sunrise and sunset)"
+    },
+    "modeHelp": "On Auto, the dock's mode button switches to the other theme until the next sunrise or sunset. On Light or Dark, it switches this display.",
+    "colors": "Colors",
+    "colorLabels": {
+      "primary": "Background color (light mode)",
+      "secondary": "Secondary color",
+      "accent": "Accent color"
+    },
+    "autoDark": "Auto mode location",
+    "resolvedLocation": "Using {{name}}",
+    "locationNotFound": "Location not found. Try a city, city and state, city and country, or ZIP code.",
+    "saveDevice": "Save for this display",
+    "saveHousehold": "Save for the household",
+    "makeHouseholdDefault": "Make this display the household default",
+    "saved": "Appearance saved.",
+    "madeHouseholdDefault": "This display's look is now the household default.",
+    "saveFailed": "Could not save the appearance settings.",
+    "loadFailed": "Could not load the appearance settings.",
+    "savedButLocation": "Saved, except the auto mode location, which is unchanged: {{reason}}"
   }
 }

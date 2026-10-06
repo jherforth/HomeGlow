@@ -165,6 +165,8 @@ const {
   decryptLegacy,
 } = require('./utils/encryption');
 const { httpsAgentFor, isCertificateVerificationSkipped } = require('./utils/outboundTls');
+const { createUpdateChecker } = require('./services/updateCheck');
+const { PLUGIN_AUTHOR_MAX_LENGTH, resolvePluginAuthor } = require('./utils/pluginAuthor');
 const { sqliteUtcToIso, sqliteUtcToMs } = require('./utils/sqliteTime');
 const {
   DEVICE_NAME_RULE_MESSAGE,
@@ -690,6 +692,16 @@ fastify.get('/api/stats', async (request, reply) => {
   };
 });
 
+// Issue #220: is a newer release out? Checked here and cached, so every
+// display can poll it without each one calling GitHub.
+const updateChecker = createUpdateChecker({
+  repository: DEFAULT_HOMEGLOW_REPOSITORY,
+  currentVersion: BACKEND_VERSION,
+  disabled: process.env.HOMEGLOW_DISABLE_UPDATE_CHECK === '1',
+});
+
+fastify.get('/api/update-status', async () => updateChecker.getStatus());
+
 // Serve the main CSS file for widgets
 fastify.get('/index.css', async (request, reply) => {
   try {
@@ -753,6 +765,7 @@ const PLUGIN_MANIFEST_REGEX = /<script[^>]*id=["']homeglow-manifest["'][^>]*>([\
 const PLUGIN_ID_REGEX = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const PLUGIN_SETTING_KEY_REGEX = /^[a-zA-Z][a-zA-Z0-9]{0,63}$/;
 const PLUGIN_DESCRIPTION_MAX_LENGTH = 300;
+const PLUGIN_CATEGORY_MAX_LENGTH = 40;
 const PLUGIN_SETTING_TYPES = new Set(['number', 'string', 'boolean', 'select']);
 const PLUGIN_SETTING_SCOPES = new Set(['household', 'device']);
 
@@ -793,6 +806,25 @@ function extractPluginManifest(htmlContent) {
       errors.push('description must be a string.');
     } else if (manifest.description.trim().length > PLUGIN_DESCRIPTION_MAX_LENGTH) {
       errors.push(`description must be ${PLUGIN_DESCRIPTION_MAX_LENGTH} characters or fewer.`);
+    }
+  }
+  // Who wrote it, shown beside the name (issue #210). Optional for the same
+  // reason as description; see utils/pluginAuthor.js for plugins without one.
+  if (manifest.author !== undefined) {
+    if (typeof manifest.author !== 'string') {
+      errors.push('author must be a string.');
+    } else if (manifest.author.trim().length > PLUGIN_AUTHOR_MAX_LENGTH) {
+      errors.push(`author must be ${PLUGIN_AUTHOR_MAX_LENGTH} characters or fewer.`);
+    }
+  }
+  // Which heading the store lists it under. Only the type is checked: the
+  // client owns the category list and shows a slug it doesn't know under
+  // "Other", so a plugin written for a newer list still installs here.
+  if (manifest.category !== undefined) {
+    if (typeof manifest.category !== 'string') {
+      errors.push('category must be a string.');
+    } else if (manifest.category.trim().length > PLUGIN_CATEGORY_MAX_LENGTH) {
+      errors.push(`category must be ${PLUGIN_CATEGORY_MAX_LENGTH} characters or fewer.`);
     }
   }
   if (manifest.apiVersion !== undefined && manifest.apiVersion !== 'v1') {
@@ -957,15 +989,19 @@ async function loadWidgetRegistry() {
 function listInstalledPlugins() {
   return db.prepare(
     'SELECT filename, name, source, original_url, plugin_id, manifest_json, installed_at FROM plugins ORDER BY installed_at, filename'
-  ).all().map((row) => ({
-    name: row.name,
-    filename: row.filename,
-    uploadedAt: row.installed_at,
-    source: row.source,
-    ...(row.original_url ? { originalUrl: row.original_url } : {}),
-    ...(row.plugin_id ? { pluginId: row.plugin_id } : {}),
-    ...(row.manifest_json ? { manifest: parseJsonObject(row.manifest_json, null) } : {}),
-  }));
+  ).all().map((row) => {
+    const manifest = row.manifest_json ? parseJsonObject(row.manifest_json, null) : null;
+    return {
+      name: row.name,
+      filename: row.filename,
+      uploadedAt: row.installed_at,
+      source: row.source,
+      author: resolvePluginAuthor({ manifest, filename: row.filename }),
+      ...(row.original_url ? { originalUrl: row.original_url } : {}),
+      ...(row.plugin_id ? { pluginId: row.plugin_id } : {}),
+      ...(manifest ? { manifest } : {}),
+    };
+  });
 }
 
 // Endpoint: Upload a widget (HTML file)
@@ -1652,12 +1688,18 @@ function cachePluginMetadata(sha, value) {
 // no manifest (a legacy widget) or could not be read. Never throws: a plugin
 // that fails here should still be listed and installable, just without a
 // description.
-async function fetchRemotePluginMetadata(downloadUrl, sha) {
+async function fetchRemotePluginMetadata(downloadUrl, sha, filename) {
   if (sha && pluginMetadataCache.has(sha)) {
     return pluginMetadataCache.get(sha);
   }
 
-  let result = { description: null, pluginId: null };
+  let result = {
+    description: null,
+    pluginId: null,
+    title: null,
+    category: null,
+    author: resolvePluginAuthor({ manifest: null, filename }),
+  };
   try {
     const response = await axios.get(downloadUrl, {
       headers: { 'User-Agent': 'HomeGlow-Server/1.0' },
@@ -1668,9 +1710,16 @@ async function fetchRemotePluginMetadata(downloadUrl, sha) {
     const { manifest } = extractPluginManifest(String(response.data || ''));
     if (manifest) {
       const description = typeof manifest.description === 'string' ? manifest.description.trim() : '';
+      const title = typeof manifest.name === 'string' ? manifest.name.trim() : '';
+      const category = typeof manifest.category === 'string' ? manifest.category.trim().toLowerCase() : '';
       result = {
         description: description || null,
         pluginId: typeof manifest.id === 'string' ? manifest.id : null,
+        // The manifest's own name ("Family Countdown"); the list shows the
+        // file's ("Countdown"), so search matches either.
+        title: title || null,
+        category: category || null,
+        author: resolvePluginAuthor({ manifest, filename }),
       };
     }
   } catch (error) {
@@ -1784,8 +1833,11 @@ fastify.get('/api/widgets/github', async (request, reply) => {
     // unreadable file cannot fail the whole listing — it just lists without a
     // description. Cached by sha, so this is a one-time cost per plugin version.
     await Promise.allSettled(widgets.map(async (widget) => {
-      const meta = await fetchRemotePluginMetadata(widget.download_url, widget.sha);
+      const meta = await fetchRemotePluginMetadata(widget.download_url, widget.sha, widget.filename);
       widget.description = meta.description;
+      widget.author = meta.author;
+      widget.title = meta.title;
+      widget.category = meta.category;
       if (meta.pluginId) widget.pluginId = meta.pluginId;
     }));
 
@@ -2239,6 +2291,10 @@ function sendJsonWithConditionalCache(request, reply, payload, lastModifiedMs = 
   const serialized = JSON.stringify(payload);
   const etag = `W/"${crypto.createHash('sha1').update(serialized).digest('hex')}"`;
   reply.header('ETag', etag);
+  // Without this, browsers cache heuristically off Last-Modified (Chrome: 10% of
+  // its age), so a device idle for a week reads a stale copy for hours after an
+  // edit. no-cache forces a revalidation, which the ETag keeps to a 304.
+  reply.header('Cache-Control', 'no-cache');
 
   if (lastModifiedMs) {
     reply.header('Last-Modified', new Date(lastModifiedMs).toUTCString());

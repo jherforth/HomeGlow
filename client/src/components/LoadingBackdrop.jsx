@@ -4,10 +4,10 @@ import { Backdrop, Box, Typography, CircularProgress } from '@mui/material';
 const LoadingBackdrop = ({ open, message = 'Processing...' }) => (
   <Backdrop
     sx={{
-      color: '#fff',
+      color: 'var(--hg-on-overlay)',
       zIndex: (theme) => theme.zIndex.drawer + 1,
       backdropFilter: 'blur(10px)',
-      backgroundColor: 'rgba(0, 0, 0, 0.3)',
+      backgroundColor: 'var(--hg-black-30)',
     }}
     open={open}
   >
@@ -18,11 +18,11 @@ const LoadingBackdrop = ({ open, message = 'Processing...' }) => (
         alignItems: 'center',
         gap: 3,
         p: 4,
-        borderRadius: 3,
-        background: 'rgba(255, 255, 255, 0.1)',
+        borderRadius: 'var(--hg-radius-lg)',
+        background: 'var(--hg-white-10)',
         backdropFilter: 'blur(20px)',
-        border: '1px solid rgba(255, 255, 255, 0.2)',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+        border: '1px solid var(--hg-white-20)',
+        boxShadow: '0 8px 32px var(--hg-black-30)',
       }}
     >
       <Box
@@ -65,7 +65,7 @@ const LoadingBackdrop = ({ open, message = 'Processing...' }) => (
           color: 'white',
           fontWeight: 'bold',
           textAlign: 'center',
-          textShadow: '0 2px 4px rgba(0, 0, 0, 0.5)',
+          textShadow: '0 2px 4px var(--hg-black-50)',
         }}
       >
         {message}
@@ -75,7 +75,7 @@ const LoadingBackdrop = ({ open, message = 'Processing...' }) => (
         size={40}
         thickness={2}
         sx={{
-          color: 'rgba(255, 255, 255, 0.7)',
+          color: 'var(--hg-white-70)',
           '& .MuiCircularProgress-circle': {
             strokeLinecap: 'round',
           },

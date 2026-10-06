@@ -72,6 +72,8 @@ test.before(async () => {
             TZ: 'UTC',
             HOMEGLOW_DISABLE_BACKGROUND_JOBS: '1',
             HOMEGLOW_DISABLE_CALENDAR_SYNC: '1',
+            // Tests never call GitHub; the checker itself is covered in updateCheck.test.js.
+            HOMEGLOW_DISABLE_UPDATE_CHECK: '1',
             ENCRYPTION_KEY: Buffer.alloc(32, 3).toString('base64'),
             BACKEND_VERSION: 'test-backend-version',
             BACKEND_GIT_COMMIT: '1234567890abcdef1234567890abcdef12345678',
@@ -174,6 +176,13 @@ test('GET /api/stats returns backend build metadata', async () => {
         body.backend.commitUrl,
         'https://github.com/jherforth/HomeGlow/commit/1234567890abcdef1234567890abcdef12345678'
     );
+});
+
+test('GET /api/update-status reports the check as off when it is disabled', async () => {
+    const { status, body } = await api('/api/update-status');
+
+    assert.equal(status, 200);
+    assert.deepEqual(body, { enabled: false, current: 'test-backend-version' });
 });
 
 test('tabs endpoint returns default Home tab when device has no persisted tabs yet', async () => {
@@ -307,6 +316,22 @@ test('device settings GET supports conditional requests with ETag', async () => 
         },
     });
     assert.equal(secondRead.status, 304);
+});
+
+test('device reads tell browsers to revalidate instead of caching heuristically', async () => {
+    const deviceName = `no-cache-${Date.now()}`;
+
+    const writeRes = await api(`/api/devices/${encodeURIComponent(deviceName)}/settings`, {
+        method: 'PUT',
+        body: JSON.stringify({ theme: 'light' }),
+    });
+    assert.equal(writeRes.status, 200);
+
+    for (const suffix of ['settings', 'tabs', 'widget-assignments']) {
+        const read = await api(`/api/devices/${encodeURIComponent(deviceName)}/${suffix}`);
+        assert.equal(read.status, 200, suffix);
+        assert.equal(read.headers.get('cache-control'), 'no-cache', suffix);
+    }
 });
 
 test('If-None-Match mismatch returns 200 even when If-Modified-Since is in the future', async () => {
