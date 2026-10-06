@@ -178,7 +178,8 @@
     "noneInstalled": "Todavía no hay complementos instalados. Instala uno desde el repositorio de arriba o sube el tuyo.",
     "enlargePreview": "Ver una vista previa más grande de {{name}}",
     "closePreview": "Cerrar la vista previa",
-    "previewAlt": "Vista previa de {{name}}"
+    "previewAlt": "Vista previa de {{name}}",
+    "byAuthor": "por {{author}}"
   },
   "devices": {
     "manageHelp": "Gestiona los dispositivos y copia pestañas y ajustes de widgets entre ellos. Al copiar se sobrescriben las pestañas y widgets del dispositivo actual.",

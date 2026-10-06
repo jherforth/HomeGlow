@@ -165,6 +165,7 @@ const {
 } = require('./utils/encryption');
 const { httpsAgentFor, isCertificateVerificationSkipped } = require('./utils/outboundTls');
 const { createUpdateChecker } = require('./services/updateCheck');
+const { PLUGIN_AUTHOR_MAX_LENGTH, resolvePluginAuthor } = require('./utils/pluginAuthor');
 const { sqliteUtcToIso, sqliteUtcToMs } = require('./utils/sqliteTime');
 const {
   DEVICE_NAME_RULE_MESSAGE,
@@ -803,6 +804,15 @@ function extractPluginManifest(htmlContent) {
       errors.push(`description must be ${PLUGIN_DESCRIPTION_MAX_LENGTH} characters or fewer.`);
     }
   }
+  // Who wrote it, shown beside the name (issue #210). Optional for the same
+  // reason as description; see utils/pluginAuthor.js for plugins without one.
+  if (manifest.author !== undefined) {
+    if (typeof manifest.author !== 'string') {
+      errors.push('author must be a string.');
+    } else if (manifest.author.trim().length > PLUGIN_AUTHOR_MAX_LENGTH) {
+      errors.push(`author must be ${PLUGIN_AUTHOR_MAX_LENGTH} characters or fewer.`);
+    }
+  }
   if (manifest.apiVersion !== undefined && manifest.apiVersion !== 'v1') {
     errors.push("apiVersion must be 'v1'.");
   }
@@ -965,15 +975,19 @@ async function loadWidgetRegistry() {
 function listInstalledPlugins() {
   return db.prepare(
     'SELECT filename, name, source, original_url, plugin_id, manifest_json, installed_at FROM plugins ORDER BY installed_at, filename'
-  ).all().map((row) => ({
-    name: row.name,
-    filename: row.filename,
-    uploadedAt: row.installed_at,
-    source: row.source,
-    ...(row.original_url ? { originalUrl: row.original_url } : {}),
-    ...(row.plugin_id ? { pluginId: row.plugin_id } : {}),
-    ...(row.manifest_json ? { manifest: parseJsonObject(row.manifest_json, null) } : {}),
-  }));
+  ).all().map((row) => {
+    const manifest = row.manifest_json ? parseJsonObject(row.manifest_json, null) : null;
+    return {
+      name: row.name,
+      filename: row.filename,
+      uploadedAt: row.installed_at,
+      source: row.source,
+      author: resolvePluginAuthor({ manifest, filename: row.filename }),
+      ...(row.original_url ? { originalUrl: row.original_url } : {}),
+      ...(row.plugin_id ? { pluginId: row.plugin_id } : {}),
+      ...(manifest ? { manifest } : {}),
+    };
+  });
 }
 
 // Endpoint: Upload a widget (HTML file)
@@ -1660,12 +1674,12 @@ function cachePluginMetadata(sha, value) {
 // no manifest (a legacy widget) or could not be read. Never throws: a plugin
 // that fails here should still be listed and installable, just without a
 // description.
-async function fetchRemotePluginMetadata(downloadUrl, sha) {
+async function fetchRemotePluginMetadata(downloadUrl, sha, filename) {
   if (sha && pluginMetadataCache.has(sha)) {
     return pluginMetadataCache.get(sha);
   }
 
-  let result = { description: null, pluginId: null };
+  let result = { description: null, pluginId: null, author: resolvePluginAuthor({ manifest: null, filename }) };
   try {
     const response = await axios.get(downloadUrl, {
       headers: { 'User-Agent': 'HomeGlow-Server/1.0' },
@@ -1679,6 +1693,7 @@ async function fetchRemotePluginMetadata(downloadUrl, sha) {
       result = {
         description: description || null,
         pluginId: typeof manifest.id === 'string' ? manifest.id : null,
+        author: resolvePluginAuthor({ manifest, filename }),
       };
     }
   } catch (error) {
@@ -1792,8 +1807,9 @@ fastify.get('/api/widgets/github', async (request, reply) => {
     // unreadable file cannot fail the whole listing — it just lists without a
     // description. Cached by sha, so this is a one-time cost per plugin version.
     await Promise.allSettled(widgets.map(async (widget) => {
-      const meta = await fetchRemotePluginMetadata(widget.download_url, widget.sha);
+      const meta = await fetchRemotePluginMetadata(widget.download_url, widget.sha, widget.filename);
       widget.description = meta.description;
+      widget.author = meta.author;
       if (meta.pluginId) widget.pluginId = meta.pluginId;
     }));
 

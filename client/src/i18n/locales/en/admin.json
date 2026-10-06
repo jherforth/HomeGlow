@@ -178,7 +178,8 @@
     "noneInstalled": "No plugins installed yet. Install one from the repository above, or upload your own.",
     "enlargePreview": "See a larger preview of {{name}}",
     "closePreview": "Close preview",
-    "previewAlt": "Preview of {{name}}"
+    "previewAlt": "Preview of {{name}}",
+    "byAuthor": "by {{author}}"
   },
   "devices": {
     "manageHelp": "Manage devices and copy tabs/widget settings between them. Copying will overwrite the current device tabs and widget assignments.",
