@@ -14,6 +14,8 @@ import {
   ListItem,
   ListItemText,
   ListItemSecondaryAction,
+  ListSubheader,
+  InputAdornment,
   IconButton,
   Dialog,
   DialogTitle,
@@ -65,7 +67,8 @@ import {
   OpenInNew,
   ArrowUpward,
   ArrowDownward,
-  Close
+  Close,
+  Search as SearchIcon
 } from '@mui/icons-material';
 import AppearanceSettings from './AppearanceSettings';
 import axios from 'axios';
@@ -80,6 +83,7 @@ import DeleteConfirmationDialog from './DeleteConfirmationDialog';
 import AdminFormSection from './AdminFormSection';
 import TimezoneSettings from './TimezoneSettings';
 import VersionInfoCard from './VersionInfoCard';
+import { groupPluginsByCategory } from '../utils/pluginCatalog.js';
 import LoadingBackdrop from './LoadingBackdrop';
 import RefreshIntervalSelect from './RefreshIntervalSelect';
 import ScreensaverIntervalSlider from './ScreensaverIntervalSlider';
@@ -254,6 +258,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   // largely unreadable in the list. Holds { url, name } while one is enlarged.
   const [enlargedPreview, setEnlargedPreview] = useState(null);
   const [githubWidgets, setGithubWidgets] = useState([]);
+  // Quick search over the plugin store, by name.
+  const [pluginSearch, setPluginSearch] = useState('');
   // Which installed plugin is currently showing a live preview, if any.
   const [previewPlugin, setPreviewPlugin] = useState(null);
   const [loadingGithub, setLoadingGithub] = useState(false);
@@ -2166,71 +2172,124 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                         Relative to the viewport rather than a fixed height, so a
                         tall wall display shows more while a laptop does not end
                         up scrolling the list inside a scrolling dialog. */}
-                    <List sx={{ maxHeight: { xs: 360, md: '50vh' }, overflowY: 'auto' }}>
-                      {githubWidgets.map((widget) => (
-                        <ListItem key={widget.path} sx={{ border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)', mb: 1 }}>
-                          {/* Sibling image in the plugins repo (chore-metrics.png next to
-                              chore-metrics.html). Deliberately not carried in the manifest:
-                              older HomeGlow versions return the whole manifest in
-                              GET /api/widgets, which every dashboard fetches on boot. */}
-                          {widget.previewUrl && (
-                            // A button rather than a bare image, so the enlarged
-                            // view is reachable from a keyboard as well as a tap.
-                            <Box
-                              component="button"
-                              type="button"
-                              onClick={() => setEnlargedPreview({ url: widget.previewUrl, name: widget.name })}
-                              aria-label={t('admin:plugins.enlargePreview', { name: widget.name })}
-                              sx={{
-                                p: 0,
-                                mr: 2,
-                                border: 'none',
-                                background: 'none',
-                                cursor: 'zoom-in',
-                                flexShrink: 0,
-                                lineHeight: 0,
-                                borderRadius: 'var(--hg-radius-sm)',
-                                '&:focus-visible': { outline: '2px solid var(--accent)', outlineOffset: 2 }
-                              }}
-                            >
-                              <Box
-                                component="img"
-                                src={widget.previewUrl}
-                                alt=""
-                                loading="lazy"
-                                sx={{ width: 96, height: 60, objectFit: 'cover', borderRadius: 'var(--hg-radius-sm)', display: 'block' }}
-                              />
-                            </Box>
-                          )}
-                          <ListItemText
-                            primary={(
-                              <>
-                                {widget.name}
-                                {/* Who wrote it (issue #210), worked out by the server. */}
-                                {widget.author && (
-                                  <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                                    {t('admin:plugins.byAuthor', { author: widget.author })}
-                                  </Typography>
+                    {/* Quick find for someone who knows the name, rather than
+                        scrolling the categories below. Matches the listed name or
+                        the manifest's; see utils/pluginCatalog.js. */}
+                    {githubWidgets.length > 0 && (
+                      <TextField
+                        fullWidth
+                        size="small"
+                        value={pluginSearch}
+                        onChange={(event) => setPluginSearch(event.target.value)}
+                        placeholder={t('admin:plugins.search')}
+                        sx={{ mb: 1 }}
+                        slotProps={{
+                          htmlInput: { 'aria-label': t('admin:plugins.search') },
+                          input: {
+                            startAdornment: (
+                              <InputAdornment position="start">
+                                <SearchIcon fontSize="small" />
+                              </InputAdornment>
+                            ),
+                            endAdornment: pluginSearch && (
+                              <InputAdornment position="end">
+                                <IconButton
+                                  size="small"
+                                  edge="end"
+                                  aria-label={t('common:actions.clear')}
+                                  onClick={() => setPluginSearch('')}
+                                >
+                                  <Close fontSize="small" />
+                                </IconButton>
+                              </InputAdornment>
+                            ),
+                          },
+                        }}
+                      />
+                    )}
+                    {githubWidgets.length > 0 && groupPluginsByCategory(githubWidgets, pluginSearch).length === 0 && (
+                      <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
+                        {t('admin:plugins.noMatches', { search: pluginSearch.trim() })}
+                      </Typography>
+                    )}
+
+                    <List sx={{ maxHeight: { xs: 360, md: '50vh' }, overflowY: 'auto', pt: 0 }}>
+                      {groupPluginsByCategory(githubWidgets, pluginSearch).map(({ category, plugins }) => (
+                        <React.Fragment key={category}>
+                          {/* Sticky, so the heading of the group being scrolled
+                              stays in view inside the capped list. */}
+                          <ListSubheader
+                            disableGutters
+                            sx={{ backgroundColor: 'var(--card-bg)', color: 'var(--text)', fontWeight: 600, lineHeight: '36px' }}
+                          >
+                            {t(`admin:plugins.categories.${category}`)}
+                          </ListSubheader>
+                          {plugins.map((widget) => (
+                            <ListItem key={widget.path} sx={{ border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)', mb: 1 }}>
+                              {/* Sibling image in the plugins repo (chore-metrics.png next to
+                                  chore-metrics.html). Deliberately not carried in the manifest:
+                                  older HomeGlow versions return the whole manifest in
+                                  GET /api/widgets, which every dashboard fetches on boot. */}
+                              {widget.previewUrl && (
+                                // A button rather than a bare image, so the enlarged
+                                // view is reachable from a keyboard as well as a tap.
+                                <Box
+                                  component="button"
+                                  type="button"
+                                  onClick={() => setEnlargedPreview({ url: widget.previewUrl, name: widget.name })}
+                                  aria-label={t('admin:plugins.enlargePreview', { name: widget.name })}
+                                  sx={{
+                                    p: 0,
+                                    mr: 2,
+                                    border: 'none',
+                                    background: 'none',
+                                    cursor: 'zoom-in',
+                                    flexShrink: 0,
+                                    lineHeight: 0,
+                                    borderRadius: 'var(--hg-radius-sm)',
+                                    '&:focus-visible': { outline: '2px solid var(--accent)', outlineOffset: 2 }
+                                  }}
+                                >
+                                  <Box
+                                    component="img"
+                                    src={widget.previewUrl}
+                                    alt=""
+                                    loading="lazy"
+                                    sx={{ width: 96, height: 60, objectFit: 'cover', borderRadius: 'var(--hg-radius-sm)', display: 'block' }}
+                                  />
+                                </Box>
+                              )}
+                              <ListItemText
+                                primary={(
+                                  <>
+                                    {widget.name}
+                                    {/* Who wrote it (issue #210), worked out by the server. */}
+                                    {widget.author && (
+                                      <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                                        {t('admin:plugins.byAuthor', { author: widget.author })}
+                                      </Typography>
+                                    )}
+                                  </>
                                 )}
-                              </>
-                            )}
-                            secondary={widget.description || t('admin:plugins.noDescription')}
-                            slotProps={{ secondary: { sx: { fontStyle: widget.description ? 'normal' : 'italic' } } }}
-                          />
-                          {/* Normal flow, not ListItemSecondaryAction: that is absolutely
-                              positioned and reserves only an icon-sized gap, so a wrapped
-                              description runs underneath the button (#147 follow-up). */}
-                          <Box sx={{ flexShrink: 0, ml: 2, alignSelf: 'center' }}>
-                            <Button
-                              onClick={() => installGithubWidget(widget)}
-                              startIcon={<CloudDownload />}
-                              size="small"
-                              variant="outlined"
-                            >
-                              {t('admin:widgets.install')}
-                            </Button>
-                          </Box>
-                        </ListItem>
+                                secondary={widget.description || t('admin:plugins.noDescription')}
+                                slotProps={{ secondary: { sx: { fontStyle: widget.description ? 'normal' : 'italic' } } }}
+                              />
+                              {/* Normal flow, not ListItemSecondaryAction: that is absolutely
+                                  positioned and reserves only an icon-sized gap, so a wrapped
+                                  description runs underneath the button (#147 follow-up). */}
+                              <Box sx={{ flexShrink: 0, ml: 2, alignSelf: 'center' }}>
+                                <Button
+                                  onClick={() => installGithubWidget(widget)}
+                                  startIcon={<CloudDownload />}
+                                  size="small"
+                                  variant="outlined"
+                                >
+                                  {t('admin:widgets.install')}
+                                </Button>
+                              </Box>
+                            </ListItem>
+                          ))}
+                        </React.Fragment>
                       ))}
                     </List>
                   </Box>

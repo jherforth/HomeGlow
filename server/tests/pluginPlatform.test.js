@@ -673,6 +673,52 @@ test('author must be a string within the length cap', async () => {
     assert.match(tooLong.body.error, /80 characters or fewer/);
 });
 
+// --- Manifest category (store grouping) ---
+
+test('a manifest category is stored with the plugin', async () => {
+    const upload = await uploadWidget('categorised.html', widgetHtml({
+        manifestVersion: 1,
+        id: 'categorised-plugin',
+        category: 'games',
+    }));
+    assert.equal(upload.status, 200);
+
+    const list = await api('/api/widgets');
+    assert.equal(list.body.find((w) => w.pluginId === 'categorised-plugin').manifest.category, 'games');
+});
+
+test('a category this version does not know still installs', async () => {
+    // The client lists it under "Other"; a plugin written for a longer
+    // category list must not be rejected by an older server.
+    const upload = await uploadWidget('future-category.html', widgetHtml({
+        manifestVersion: 1,
+        id: 'future-category-plugin',
+        category: 'astronomy',
+    }));
+    assert.equal(upload.status, 200);
+
+    const list = await api('/api/widgets');
+    assert.equal(list.body.find((w) => w.pluginId === 'future-category-plugin').manifest.category, 'astronomy');
+});
+
+test('category must be a short string', async () => {
+    const wrongType = await uploadWidget('category-type.html', widgetHtml({
+        manifestVersion: 1,
+        id: 'category-type-plugin',
+        category: ['games', 'meals'],
+    }));
+    assert.equal(wrongType.status, 400);
+    assert.match(wrongType.body.error, /category must be a string/);
+
+    const tooLong = await uploadWidget('category-long.html', widgetHtml({
+        manifestVersion: 1,
+        id: 'category-long-plugin',
+        category: 'x'.repeat(41),
+    }));
+    assert.equal(tooLong.status, 400);
+    assert.match(tooLong.body.error, /40 characters or fewer/);
+});
+
 // --- Declarative reactions (Phase 4) ---
 
 const SIPHON_PLUGIN_ID = 'siphon-test-plugin';

@@ -174,7 +174,20 @@
     "enlargePreview": "Ver una vista previa más grande de {{name}}",
     "closePreview": "Cerrar la vista previa",
     "previewAlt": "Vista previa de {{name}}",
-    "byAuthor": "por {{author}}"
+    "byAuthor": "por {{author}}",
+    "search": "Buscar plugins por nombre",
+    "noMatches": "Ningún plugin coincide con \"{{search}}\".",
+    "categories": {
+      "clock-calendar": "Reloj y calendario",
+      "news-weather": "Noticias y tiempo",
+      "chores-rewards": "Tareas y recompensas",
+      "family-hub": "Familia",
+      "meals": "Comidas",
+      "household": "Hogar",
+      "health": "Salud",
+      "games": "Juegos",
+      "other": "Otros"
+    }
   },
   "devices": {
     "manageHelp": "Gestiona los dispositivos y copia pestañas y ajustes de widgets entre ellos. Al copiar se sobrescriben las pestañas y widgets del dispositivo actual.",

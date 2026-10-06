@@ -174,7 +174,20 @@
     "enlargePreview": "See a larger preview of {{name}}",
     "closePreview": "Close preview",
     "previewAlt": "Preview of {{name}}",
-    "byAuthor": "by {{author}}"
+    "byAuthor": "by {{author}}",
+    "search": "Search plugins by name",
+    "noMatches": "No plugins match \"{{search}}\".",
+    "categories": {
+      "clock-calendar": "Clock & Calendar",
+      "news-weather": "News & Weather",
+      "chores-rewards": "Chores & Rewards",
+      "family-hub": "Family Hub",
+      "meals": "Meals",
+      "household": "Household",
+      "health": "Health",
+      "games": "Games",
+      "other": "Other"
+    }
   },
   "devices": {
     "manageHelp": "Manage devices and copy tabs/widget settings between them. Copying will overwrite the current device tabs and widget assignments.",
