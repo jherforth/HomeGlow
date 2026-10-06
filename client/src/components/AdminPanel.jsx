@@ -15,6 +15,8 @@ import {
   ListItemText,
   ListItemSecondaryAction,
   ListSubheader,
+  Collapse,
+  ButtonBase,
   InputAdornment,
   IconButton,
   Dialog,
@@ -68,7 +70,8 @@ import {
   ArrowUpward,
   ArrowDownward,
   Close,
-  Search as SearchIcon
+  Search as SearchIcon,
+  ExpandMore
 } from '@mui/icons-material';
 import AppearanceSettings from './AppearanceSettings';
 import axios from 'axios';
@@ -260,6 +263,16 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   const [githubWidgets, setGithubWidgets] = useState([]);
   // Quick search over the plugin store, by name.
   const [pluginSearch, setPluginSearch] = useState('');
+  // Store categories start collapsed; these are the ones opened by hand.
+  const [expandedPluginCategories, setExpandedPluginCategories] = useState(() => new Set());
+  const togglePluginCategory = (category) => {
+    setExpandedPluginCategories((current) => {
+      const next = new Set(current);
+      if (next.has(category)) next.delete(category);
+      else next.add(category);
+      return next;
+    });
+  };
   // Which installed plugin is currently showing a live preview, if any.
   const [previewPlugin, setPreviewPlugin] = useState(null);
   const [loadingGithub, setLoadingGithub] = useState(false);
@@ -2214,83 +2227,121 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                     )}
 
                     <List sx={{ maxHeight: { xs: 360, md: '50vh' }, overflowY: 'auto', pt: 0 }}>
-                      {groupPluginsByCategory(githubWidgets, pluginSearch).map(({ category, plugins }) => (
-                        <React.Fragment key={category}>
-                          {/* Sticky, so the heading of the group being scrolled
-                              stays in view inside the capped list. */}
-                          <ListSubheader
-                            disableGutters
-                            sx={{ backgroundColor: 'var(--card-bg)', color: 'var(--text)', fontWeight: 600, lineHeight: '36px' }}
-                          >
-                            {t(`admin:plugins.categories.${category}`)}
-                          </ListSubheader>
-                          {plugins.map((widget) => (
-                            <ListItem key={widget.path} sx={{ border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)', mb: 1 }}>
-                              {/* Sibling image in the plugins repo (chore-metrics.png next to
-                                  chore-metrics.html). Deliberately not carried in the manifest:
-                                  older HomeGlow versions return the whole manifest in
-                                  GET /api/widgets, which every dashboard fetches on boot. */}
-                              {widget.previewUrl && (
-                                // A button rather than a bare image, so the enlarged
-                                // view is reachable from a keyboard as well as a tap.
-                                <Box
-                                  component="button"
-                                  type="button"
-                                  onClick={() => setEnlargedPreview({ url: widget.previewUrl, name: widget.name })}
-                                  aria-label={t('admin:plugins.enlargePreview', { name: widget.name })}
-                                  sx={{
-                                    p: 0,
-                                    mr: 2,
-                                    border: 'none',
-                                    background: 'none',
-                                    cursor: 'zoom-in',
-                                    flexShrink: 0,
-                                    lineHeight: 0,
-                                    borderRadius: 'var(--hg-radius-sm)',
-                                    '&:focus-visible': { outline: '2px solid var(--accent)', outlineOffset: 2 }
-                                  }}
-                                >
-                                  <Box
-                                    component="img"
-                                    src={widget.previewUrl}
-                                    alt=""
-                                    loading="lazy"
-                                    sx={{ width: 96, height: 60, objectFit: 'cover', borderRadius: 'var(--hg-radius-sm)', display: 'block' }}
-                                  />
+                      {groupPluginsByCategory(githubWidgets, pluginSearch).map(({ category, plugins }) => {
+                        // Collapsed until opened. A search opens every group with
+                        // a match, since a closed heading would hide the result;
+                        // clearing it brings back whatever was open before.
+                        const isOpen = pluginSearch.trim() !== '' || expandedPluginCategories.has(category);
+                        const groupId = `plugin-category-${category}`;
+                        return (
+                          <React.Fragment key={category}>
+                            {/* Sticky, so the heading of the group being scrolled
+                                stays in view inside the capped list. */}
+                            <ListSubheader
+                              disableGutters
+                              sx={{ backgroundColor: 'var(--card-bg)', color: 'var(--text)', lineHeight: '36px', mb: 1 }}
+                            >
+                              <ButtonBase
+                                onClick={() => togglePluginCategory(category)}
+                                disabled={pluginSearch.trim() !== ''}
+                                aria-expanded={isOpen}
+                                aria-controls={groupId}
+                                sx={{
+                                  width: '100%',
+                                  justifyContent: 'flex-start',
+                                  gap: 1,
+                                  px: 1,
+                                  font: 'inherit',
+                                  fontWeight: 600,
+                                  color: 'inherit',
+                                  borderRadius: 'var(--hg-radius-sm)',
+                                  '&:hover': { backgroundColor: 'action.hover' },
+                                  '&.Mui-disabled': { color: 'inherit' },
+                                  '&:focus-visible': { outline: '2px solid var(--accent)', outlineOffset: -2 },
+                                }}
+                              >
+                                <ExpandMore
+                                  fontSize="small"
+                                  sx={{ transition: 'transform 150ms', transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)' }}
+                                />
+                                {t(`admin:plugins.categories.${category}`)}
+                                <Box component="span" sx={{ color: 'text.secondary', fontWeight: 400 }}>
+                                  ({plugins.length})
                                 </Box>
-                              )}
-                              <ListItemText
-                                primary={(
-                                  <>
-                                    {widget.name}
-                                    {/* Who wrote it (issue #210), worked out by the server. */}
-                                    {widget.author && (
-                                      <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                                        {t('admin:plugins.byAuthor', { author: widget.author })}
-                                      </Typography>
+                              </ButtonBase>
+                            </ListSubheader>
+                            <Collapse component="li" in={isOpen} timeout="auto" unmountOnExit id={groupId}>
+                              <List disablePadding>
+                                {plugins.map((widget) => (
+                                  <ListItem key={widget.path} sx={{ border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)', mb: 1 }}>
+                                    {/* Sibling image in the plugins repo (chore-metrics.png next to
+                                        chore-metrics.html). Deliberately not carried in the manifest:
+                                        older HomeGlow versions return the whole manifest in
+                                        GET /api/widgets, which every dashboard fetches on boot. */}
+                                    {widget.previewUrl && (
+                                      // A button rather than a bare image, so the enlarged
+                                      // view is reachable from a keyboard as well as a tap.
+                                      <Box
+                                        component="button"
+                                        type="button"
+                                        onClick={() => setEnlargedPreview({ url: widget.previewUrl, name: widget.name })}
+                                        aria-label={t('admin:plugins.enlargePreview', { name: widget.name })}
+                                        sx={{
+                                          p: 0,
+                                          mr: 2,
+                                          border: 'none',
+                                          background: 'none',
+                                          cursor: 'zoom-in',
+                                          flexShrink: 0,
+                                          lineHeight: 0,
+                                          borderRadius: 'var(--hg-radius-sm)',
+                                          '&:focus-visible': { outline: '2px solid var(--accent)', outlineOffset: 2 }
+                                        }}
+                                      >
+                                        <Box
+                                          component="img"
+                                          src={widget.previewUrl}
+                                          alt=""
+                                          loading="lazy"
+                                          sx={{ width: 96, height: 60, objectFit: 'cover', borderRadius: 'var(--hg-radius-sm)', display: 'block' }}
+                                        />
+                                      </Box>
                                     )}
-                                  </>
-                                )}
-                                secondary={widget.description || t('admin:plugins.noDescription')}
-                                slotProps={{ secondary: { sx: { fontStyle: widget.description ? 'normal' : 'italic' } } }}
-                              />
-                              {/* Normal flow, not ListItemSecondaryAction: that is absolutely
-                                  positioned and reserves only an icon-sized gap, so a wrapped
-                                  description runs underneath the button (#147 follow-up). */}
-                              <Box sx={{ flexShrink: 0, ml: 2, alignSelf: 'center' }}>
-                                <Button
-                                  onClick={() => installGithubWidget(widget)}
-                                  startIcon={<CloudDownload />}
-                                  size="small"
-                                  variant="outlined"
-                                >
-                                  {t('admin:widgets.install')}
-                                </Button>
-                              </Box>
-                            </ListItem>
-                          ))}
-                        </React.Fragment>
-                      ))}
+                                    <ListItemText
+                                      primary={(
+                                        <>
+                                          {widget.name}
+                                          {/* Who wrote it (issue #210), worked out by the server. */}
+                                          {widget.author && (
+                                            <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                                              {t('admin:plugins.byAuthor', { author: widget.author })}
+                                            </Typography>
+                                          )}
+                                        </>
+                                      )}
+                                      secondary={widget.description || t('admin:plugins.noDescription')}
+                                      slotProps={{ secondary: { sx: { fontStyle: widget.description ? 'normal' : 'italic' } } }}
+                                    />
+                                    {/* Normal flow, not ListItemSecondaryAction: that is absolutely
+                                        positioned and reserves only an icon-sized gap, so a wrapped
+                                        description runs underneath the button (#147 follow-up). */}
+                                    <Box sx={{ flexShrink: 0, ml: 2, alignSelf: 'center' }}>
+                                      <Button
+                                        onClick={() => installGithubWidget(widget)}
+                                        startIcon={<CloudDownload />}
+                                        size="small"
+                                        variant="outlined"
+                                      >
+                                        {t('admin:widgets.install')}
+                                      </Button>
+                                    </Box>
+                                  </ListItem>
+                                ))}
+                              </List>
+                            </Collapse>
+                          </React.Fragment>
+                        );
+                      })}
                     </List>
                   </Box>
                 </Box>
