@@ -34,6 +34,7 @@ services:
       # Optional. Unset, the server follows the host's zone via the
       # localtime mount below; either can be overridden in the Admin Panel.
       - TZ=${TZ:-}
+      - DEMO_MODE=true
     networks:
       - homeglow-test-network
     dns:

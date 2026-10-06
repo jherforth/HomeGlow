@@ -26,6 +26,12 @@ export function clampLayoutItem(item, cols) {
 /**
  * Proportionally scale x/w from one column count to another, then clamp.
  * Row units (y/h) are unchanged — rowHeight is constant across breakpoints.
+ *
+ * The left and right edges are scaled and rounded independently, and the width
+ * is derived from them. Rounding x and w separately can push x+w past the grid
+ * width (e.g. 8-col x=5 w=3 → 12-col x=8 w=5 = 13 columns), which overlaps the
+ * neighbor and shuffles on every edit-mode toggle. Edge-based rounding keeps
+ * touching widgets touching and never overlapping.
  */
 export function scaleLayoutItem(item, fromCols, toCols) {
   if (!fromCols || !toCols || fromCols === toCols) {
@@ -33,11 +39,19 @@ export function scaleLayoutItem(item, fromCols, toCols) {
   }
 
   const scale = toCols / fromCols;
+  const left = Math.round((item.x ?? 0) * scale);
+  const right = Math.round(((item.x ?? 0) + (item.w ?? 1)) * scale);
   return clampLayoutItem(
     {
       ...item,
-      x: Math.round((item.x ?? 0) * scale),
-      w: Math.round((item.w ?? 1) * scale),
+      x: left,
+      w: Math.max(1, right - left),
+      // A minimum is a size too, so it scales with the columns. Left in 12-col
+      // units, the clamp below widens a scaled-down widget back into its
+      // neighbour: three 4-wide widgets in a row become 3+2+3 at 8 columns,
+      // and an unscaled minimum of 3 pushes the third onto the next row.
+      // Rounded down so a minimum never forces a widget wider than its share.
+      ...(item.minW != null ? { minW: Math.max(1, Math.floor(item.minW * scale)) } : {}),
     },
     toCols
   );

@@ -136,3 +136,71 @@ test('createEvent builds all-day payload and sends bearer token', async () => {
     assert.equal(body.start.dateTime, undefined);
     assert.equal(body.end.dateTime, undefined);
 });
+
+// Issue #215: the event editor sends `all_day` with an inclusive end date.
+// Capture the body each call would send to Google.
+function captureGoogleBody() {
+    const calls = [];
+    global.fetch = async (url, init) => {
+        calls.push({ url, method: init.method, body: JSON.parse(init.body) });
+        return { ok: true, status: 200, text: async () => JSON.stringify({ id: 'evt' }) };
+    };
+    return calls;
+}
+
+// Exactly what CalendarWidget's saveEvent posts for a one-day event on Oct 9.
+const editorAllDay = (start, end) => ({
+    title: 'Field trip', description: '', location: '', all_day: true, start, end,
+});
+
+test('an all-day event from the editor is saved as a Google all-day event (#215)', async () => {
+    const calls = captureGoogleBody();
+    await googleCalendar.createEvent({}, 1, 'primary', editorAllDay('2026-10-09', '2026-10-09'));
+
+    const { body } = calls[0];
+    assert.deepEqual(body.start, { date: '2026-10-09' });
+    // Google's all-day end is exclusive: a one-day event ends the next day.
+    assert.deepEqual(body.end, { date: '2026-10-10' });
+});
+
+test('the editor\'s inclusive end becomes Google\'s exclusive end (#215)', async () => {
+    const calls = captureGoogleBody();
+    await googleCalendar.createEvent({}, 1, 'primary', editorAllDay('2026-10-09', '2026-10-11'));
+    await googleCalendar.createEvent({}, 1, 'primary', editorAllDay('2026-12-31', '2026-12-31'));
+    await googleCalendar.createEvent({}, 1, 'primary', editorAllDay('2026-02-28', '2026-02-28'));
+    // An end before the start is treated as a one-day event, not a negative one.
+    await googleCalendar.createEvent({}, 1, 'primary', editorAllDay('2026-10-09', '2026-10-01'));
+
+    assert.deepEqual(calls.map((c) => [c.body.start.date, c.body.end.date]), [
+        ['2026-10-09', '2026-10-12'],
+        ['2026-12-31', '2027-01-01'],
+        ['2026-02-28', '2026-03-01'],
+        ['2026-10-09', '2026-10-10'],
+    ]);
+});
+
+test('a timed event from the editor is still saved as timed (#215)', async () => {
+    const calls = captureGoogleBody();
+    await googleCalendar.createEvent({}, 1, 'primary', {
+        title: 'Dentist', all_day: false, start: '2026-10-09T15:00:00Z', end: '2026-10-09T16:00:00Z',
+    });
+    const { body } = calls[0];
+    assert.equal(body.start.dateTime, '2026-10-09T15:00:00.000Z');
+    assert.equal(body.end.dateTime, '2026-10-09T16:00:00.000Z');
+    assert.equal(body.start.date, undefined);
+});
+
+test('editing an event into all-day clears its time, and back again (#215)', async () => {
+    const calls = captureGoogleBody();
+    await googleCalendar.updateEvent({}, 1, 'primary', 'evt', editorAllDay('2026-10-09', '2026-10-09'));
+    await googleCalendar.updateEvent({}, 1, 'primary', 'evt', {
+        title: 'Dentist', all_day: false, start: '2026-10-09T15:00:00Z', end: '2026-10-09T16:00:00Z',
+    });
+
+    assert.equal(calls[0].method, 'PATCH');
+    // An update merges into what Google holds, so the other kind of time is
+    // cleared explicitly rather than left beside the new one.
+    assert.deepEqual(calls[0].body.start, { date: '2026-10-09', dateTime: null, timeZone: null });
+    assert.deepEqual(calls[0].body.end, { date: '2026-10-10', dateTime: null, timeZone: null });
+    assert.deepEqual(calls[1].body.start, { dateTime: '2026-10-09T15:00:00.000Z', date: null });
+});

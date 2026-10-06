@@ -52,7 +52,7 @@ import ChoreIconPicker from './ChoreIconPicker.jsx';
 import { useTranslation } from 'react-i18next';
 import { getWeekdayLabels } from '../utils/dateUtils.js';
 import useIsMobile from '../hooks/useIsMobile.js';
-import { stackableTableSx } from '../utils/responsiveTable.js';
+import { compactStackedTableSx } from '../utils/responsiveTable.js';
 import { compareByKey } from '../utils/choreHelpers.js';
 
 // Day labels come from the locale (index 0 = Sunday, matching crontab).
@@ -619,7 +619,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
       </Alert>
 
       <TableContainer component={Paper} sx={{ mb: 4 }}>
-        <Table size="small" sx={stackableTableSx}>
+        <Table size="small" sx={compactStackedTableSx}>
           <TableHead>
             <TableRow>
               <SortableHeader column="title" sort={choreSort} onSort={sortChores}>
@@ -654,12 +654,15 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                       {c.title}
                     </Typography>
                   </TableCell>
-                  <TableCell data-label={t('common:labels.description')}>
+                  <TableCell
+                    data-label={t('common:labels.description')}
+                    className={c.description ? 'stack-full' : 'stack-empty'}
+                  >
                     <Typography variant="body2" color="text.secondary">
                       {c.description || <em style={{ opacity: 0.5 }}>{t('chores:schedules.noDescription')}</em>}
                     </Typography>
                   </TableCell>
-                  <TableCell data-label={t('chores:schedules.clams')}>
+                  <TableCell data-label={t('chores:schedules.clams')} className={c.clam_value > 0 ? undefined : 'stack-empty'}>
                     {c.clam_value > 0
                       ? <Chip label={`${c.clam_value} 🥟`} size="small" color="primary" />
                       : <Typography variant="caption" color="text.secondary">—</Typography>}
@@ -734,7 +737,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
       </Box>
 
       <TableContainer component={Paper}>
-        <Table size="small" sx={stackableTableSx}>
+        <Table size="small" sx={compactStackedTableSx}>
           <TableHead>
             <TableRow>
               <SortableHeader column="chore" sort={scheduleSort} onSort={sortSchedules}>
@@ -801,7 +804,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                       <Typography variant="caption" color="text.secondary">—</Typography>
                     )}
                   </TableCell>
-                  <TableCell data-label={t('chores:schedules.clams')}>
+                  <TableCell data-label={t('chores:schedules.clams')} className={s.clam_value > 0 ? undefined : 'stack-empty'}>
                     {s.clam_value > 0
                       ? <Chip label={`${s.clam_value} 🥟`} size="small" color="primary" />
                       : <Typography variant="caption" color="text.secondary">—</Typography>}
