@@ -459,6 +459,7 @@ const TabBar = ({
                     position: 'relative',
                     transition: 'all 0.2s ease',
                     backgroundColor: isActive ? 'var(--dock-active-bg)' : 'transparent',
+                    backgroundImage: isActive ? 'var(--dock-active-image)' : 'none',
                     border: isActive ? '1.5px solid var(--dock-active-border)' : '1.5px solid transparent',
                     boxShadow: isActive ? '0 2px 8px var(--hg-black-20)' : 'none',
                     '&:hover': {

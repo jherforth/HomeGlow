@@ -42,18 +42,38 @@
   --hg-error-hover: #dc2626;
   --hg-error-surface: rgba(239, 68, 68, 0.12);
 
+  /* Page background image, layered over --background (a gradient). */
+  --hg-page-image: none;
+
   /* Layout: the gap between widgets. One of 0, 8px, 16px or 24px; the row
      pitch stays fixed (utils/gridMetrics.js). */
   --hg-grid-gap: 16px;
 
   /* Widget frame. The decoration (border, border image) is drawn over the
-     frame's edge, so it never moves content or hides the selection border. */
+     frame's edge, so it never moves content or hides the selection border.
+     Per-side widths and a corner radius make shapes such as an elbow. */
   --hg-frame-bg: var(--card-bg);
   --hg-frame-radius: var(--hg-radius-md);
   --hg-frame-shadow: 0 2px 8px var(--hg-black-10);
   --hg-frame-shadow-hover: 0 4px 16px var(--hg-black-20);
-  --hg-frame-decoration-border: none;
+  --hg-frame-decoration-width: 0;
+  /* Padding inside the frame, so content clears a thick decoration. */
+  --hg-frame-inset: 0;
+  --hg-frame-decoration-style: none;
+  --hg-frame-decoration-color: transparent;
   --hg-frame-decoration-image: none;
+  /* An image under the frame's content (a glass tint, say) and one over it
+     (a reflection). Both take no space and no pointer events. */
+  --hg-frame-image: none;
+  --hg-frame-overlay: none;
+  /* Backdrop filter for frames, such as frosted glass: none or blur(Npx). */
+  --hg-frame-backdrop: none;
+
+  /* Headings, for theme-aware plugins. MUI text takes a theme's heading
+     style from its MUI options. */
+  --hg-font-heading: var(--hg-font-body);
+  --hg-heading-transform: none;
+  --hg-heading-letter-spacing: normal;
 }
 
 [data-theme="light"] {

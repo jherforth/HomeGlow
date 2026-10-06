@@ -2,6 +2,7 @@ import React from 'react';
 import { Box } from '@mui/material';
 import { needsFixedMobileHeight } from '../utils/mobileWidgets.js';
 import { frameDecoration } from '../utils/widgetFrame.js';
+import { AmbienceLayer } from '../themes/ambience.jsx';
 
 // Phone layout shell (issue #118): the active tab's widgets as one vertical,
 // scrollable column of full-width cards. Replaces WidgetContainer below 600px —
@@ -27,6 +28,7 @@ const MobileDashboard = ({ widgets }) => {
         boxSizing: 'border-box',
       }}
     >
+      <AmbienceLayer />
       {widgets.map((widget) => (
         <Box
           key={widget.id}
@@ -35,9 +37,12 @@ const MobileDashboard = ({ widgets }) => {
             width: '100%',
             position: 'relative',
             borderRadius: 'var(--hg-frame-radius)',
+            padding: 'var(--hg-frame-inset)',
+            backdropFilter: 'var(--hg-frame-backdrop)',
             overflow: 'hidden',
             border: '1px solid var(--card-border)',
             background: widget.transparent ? 'transparent' : 'var(--hg-frame-bg)',
+            backgroundImage: widget.transparent ? 'none' : 'var(--hg-frame-image)',
             boxShadow: widget.transparent ? 'none' : 'var(--shadow)',
             ...(needsFixedMobileHeight(widget) ? { height: '60vh', minHeight: 360 } : {}),
             '&::after': frameDecoration,

@@ -436,6 +436,13 @@
     "resetToHost": "Volver a la zona horaria del servidor ({{zone}})"
   },
   "appearance": {
+    "theme": "Tema",
+    "themeDescriptions": {
+      "classic": "El aspecto propio de HomeGlow.",
+      "starship": "Una consola de puente del siglo XXIV: fondo negro, controles en forma de píldora y codos curvos en los marcos. Solo oscuro.",
+      "reef": "Una inmersión: aguas poco profundas y soleadas en modo claro, una inmersión nocturna en oscuro. Degradados de agua, acentos de coral y bioluminiscentes, marcos suaves como burbujas."
+    },
+    "themeHasColors": "Este tema trae sus propios colores, así que los colores de abajo solo se aplican con el tema Classic.",
     "heading": "Apariencia",
     "subtitle": "El hogar define el aspecto predeterminado. Esta pantalla puede cambiar cualquier parte.",
     "scopeDevice": "Esta pantalla",

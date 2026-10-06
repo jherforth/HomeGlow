@@ -436,6 +436,13 @@
     "resetToHost": "Go back to the server's own time zone ({{zone}})"
   },
   "appearance": {
+    "theme": "Theme",
+    "themeDescriptions": {
+      "classic": "HomeGlow's own look.",
+      "starship": "A 24th-century bridge console: black field, pill controls, curved frame elbows. Dark only.",
+      "reef": "A dive: sunlit shallows in light mode, a night dive in dark. Water gradients, coral and bioluminescent accents, bubble-soft frames."
+    },
+    "themeHasColors": "This theme brings its own colors, so the colors below apply only when the theme is Classic.",
     "heading": "Appearance",
     "subtitle": "The household sets the default look. This display can override any part of it.",
     "scopeDevice": "This display",

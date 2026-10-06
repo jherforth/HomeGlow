@@ -55,7 +55,12 @@ describe('resolveAppearance', () => {
     const resolved = resolveAppearance({ mode: 'dark', colors: BERRY }, { mode: 'light' });
     expect(resolved.mode).toBe('light');
     expect(resolved.colors).toEqual(BERRY);
-    expect(resolved.source).toEqual({ mode: 'device', colors: 'household', autoDark: 'household' });
+    expect(resolved.source).toEqual({ theme: 'household', mode: 'device', colors: 'household', autoDark: 'household' });
+  });
+
+  it('lets a display pick its own theme, and ignores unknown themes', () => {
+    expect(resolveAppearance({ theme: 'starship' }, { theme: 'classic' }).theme).toBe('classic');
+    expect(resolveAppearance({ theme: 'warp-core' }, {}).theme).toBe('classic');
   });
 });
 
@@ -187,7 +192,7 @@ describe('appearance cache', () => {
   it('round-trips the resolved appearance', () => {
     const store = memoryStorage();
     writeAppearanceCache(store, { mode: 'dark', colors: BERRY, autoDark: SF, source: {} });
-    expect(readAppearanceCache(store)).toEqual({ mode: 'dark', colors: BERRY, autoDark: SF });
+    expect(readAppearanceCache(store)).toEqual({ theme: 'classic', mode: 'dark', colors: BERRY, autoDark: SF });
   });
 
   it('falls back to the legacy values before the upload, then the defaults', () => {
