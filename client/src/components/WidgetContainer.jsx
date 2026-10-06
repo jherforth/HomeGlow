@@ -527,6 +527,8 @@ const WidgetContainer = ({
         backgroundColor: 'var(--background)',
         // A theme's page image (Classic: none), pinned like the body's.
         backgroundImage: 'var(--hg-page-image)',
+        backgroundSize: 'var(--hg-page-image-size)',
+        backgroundPosition: 'var(--hg-page-image-position)',
         backgroundAttachment: 'fixed',
         '& .react-grid-item': {
           transition: (selectedWidget || isLockTransitioning) ? 'none !important' : 'all 200ms ease',

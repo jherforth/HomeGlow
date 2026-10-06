@@ -18,7 +18,6 @@ import useFetchTabs from './hooks/useFetchTabs.js';
 import useIsMobile from './hooks/useIsMobile.js';
 import useScreenActivity from './hooks/useScreenActivity.js';
 import {
-  applyInterfaceColors,
   hexToRgbTriplet,
   readLocalScreensaverSettings,
   readLocalVacationModeSettings,
@@ -45,6 +44,7 @@ import {
   themeDisplayMode,
   themeTokens,
 } from './utils/themes.js';
+import { personalizationTokens } from './utils/personalize.js';
 import { ThemeContext } from './themes/ambience.jsx';
 import { normalizeWidgetSettings, BASE_WIDGET_SETTINGS } from './utils/widgetSettings.js';
 import { buildMobileWidgetList } from './utils/mobileWidgets.js';
@@ -257,9 +257,15 @@ const App = () => {
   // place of the household's interface colors, including for plugins.
   const activeTheme = useMemo(() => resolveTheme(appearance.theme), [appearance.theme]);
   const displayTheme = themeDisplayMode(activeTheme, theme);
-  const effectiveColors = useMemo(
+  const themeColors = useMemo(
     () => (activeTheme.colors ? { ...interfaceColors, ...activeTheme.colors } : interfaceColors),
     [activeTheme, interfaceColors],
+  );
+  // What plugins are told: the theme's colors, with a personal accent on top.
+  const personalAccent = appearance.accent && appearance.accent !== 'theme' ? appearance.accent : null;
+  const effectiveColors = useMemo(
+    () => (personalAccent ? { ...themeColors, accent: personalAccent } : themeColors),
+    [themeColors, personalAccent],
   );
   // Always a provider, so switching between Classic and a themed look never
   // changes the tree's shape (which would remount everything, Admin included).
@@ -601,8 +607,7 @@ const App = () => {
   // mode no longer needs an OpenWeatherMap key — it works with Home Assistant
   // or with no weather provider configured at all.
   const resolveAutoTheme = useCallback(async () => {
-    const hasCoordinates = typeof autoDarkModeSettings.lat === 'number' && typeof autoDarkModeSettings.lon === 'number';
-    if (!autoDarkModeSettings.enabled || !hasCoordinates) {
+    if (!isAutoAvailable(autoDarkModeSettings)) {
       return null;
     }
 
@@ -639,32 +644,35 @@ const App = () => {
     }
   }, [resolveAutoTheme, applyTheme]);
 
-  // Theme tokens first, which also clears any the previous theme set; then,
-  // for a theme without its own colors (Classic), the household's colors.
+  // One ordered set of custom properties on the root: the interface colors,
+  // then the theme's tokens, then personalization. Applying it clears
+  // anything the previous set had that this one does not, so switching theme
+  // or personalization never leaves a value behind.
+  const backgroundKey = JSON.stringify(appearance.background ?? null);
   useEffect(() => {
     const root = document.documentElement;
     root.setAttribute('data-theme', displayTheme);
 
-    const colorTokens = activeTheme.colors ? {
-      '--primary': effectiveColors.primary,
-      '--secondary': effectiveColors.secondary,
-      '--accent': effectiveColors.accent,
-      ...(hexToRgbTriplet(effectiveColors.accent) ? { '--accent-rgb': hexToRgbTriplet(effectiveColors.accent) } : {}),
-    } : {};
-    themeTokenNamesRef.current = applyThemeTokens(
-      root,
-      { ...colorTokens, ...themeTokens(activeTheme, displayTheme) },
-      themeTokenNamesRef.current,
-    );
-    if (activeTheme.colors) return;
-
-    applyInterfaceColors(root, interfaceColors);
-    if (displayTheme === 'light') {
-      root.style.setProperty('--background', interfaceColors.primary);
-    } else {
-      root.style.removeProperty('--background');
+    const accentRgb = hexToRgbTriplet(themeColors.accent);
+    const base = {
+      '--primary': themeColors.primary,
+      '--secondary': themeColors.secondary,
+      '--accent': themeColors.accent,
+      ...(accentRgb ? { '--accent-rgb': accentRgb } : {}),
+      ...themeTokens(activeTheme, displayTheme),
+      // Classic's light background is the household's primary color.
+      ...(!activeTheme.colors && displayTheme === 'light' ? { '--background': interfaceColors.primary } : {}),
+    };
+    let names = applyThemeTokens(root, base, themeTokenNamesRef.current);
+    // Card opacity scales the frame color the theme resolved to, so read it
+    // back once the theme's own tokens are in place.
+    const frameBg = getComputedStyle(root).getPropertyValue('--hg-frame-bg').trim();
+    const personal = personalizationTokens(appearance, frameBg);
+    if (Object.keys(personal).length > 0) {
+      names = applyThemeTokens(root, { ...base, ...personal }, names);
     }
-  }, [activeTheme, displayTheme, interfaceColors, effectiveColors.primary, effectiveColors.secondary, effectiveColors.accent]);
+    themeTokenNamesRef.current = names;
+  }, [activeTheme, displayTheme, themeColors, interfaceColors.primary, appearance.accent, backgroundKey, appearance.cardOpacity]);
 
   useEffect(() => {
     void loadThemeFonts(activeTheme);

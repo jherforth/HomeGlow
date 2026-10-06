@@ -44,6 +44,8 @@
 
   /* Page background image, layered over --background (a gradient). */
   --hg-page-image: none;
+  --hg-page-image-size: auto;
+  --hg-page-image-position: 0% 0%;
 
   /* Layout: the gap between widgets. One of 0, 8px, 16px or 24px; the row
      pitch stays fixed (utils/gridMetrics.js). */
