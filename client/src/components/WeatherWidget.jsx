@@ -758,7 +758,7 @@ const WeatherWidget = ({
                 justifyContent: 'space-between',
                 p: 1,
                 border: '1px solid var(--card-border)',
-                borderRadius: 1,
+                borderRadius: 'var(--hg-radius-sm)',
                 bgcolor: 'rgba(var(--accent-rgb), 0.05)'
               }}
             >
@@ -843,7 +843,7 @@ const WeatherWidget = ({
                   width: '90%',
                   alignSelf: 'center',
                   border: '1px solid var(--card-border)',
-                  borderRadius: 2,
+                  borderRadius: 'var(--hg-radius-md)',
                   bgcolor: 'rgba(var(--accent-rgb), 0.05)',
                   textAlign: 'center'
                 }}
@@ -915,7 +915,7 @@ const WeatherWidget = ({
                     justifyContent: 'space-between',
                     p: 2,
                     border: '1px solid var(--card-border)',
-                    borderRadius: 1,
+                    borderRadius: 'var(--hg-radius-sm)',
                     bgcolor: 'rgba(var(--accent-rgb), 0.05)'
                   }}
                 >
@@ -1083,7 +1083,7 @@ const WeatherWidget = ({
         p: 2
       }}>
         <Typography variant="h6" sx={{ mb: 2 }}>🌤️ Weather</Typography>
-        <Box sx={{ p: 2, bgcolor: 'rgba(255, 0, 0, 0.1)', borderRadius: 1, mb: 2 }}>
+        <Box sx={{ p: 2, bgcolor: 'var(--hg-error-surface)', borderRadius: 'var(--hg-radius-sm)', mb: 2 }}>
           <Typography color="error" variant="body2">
             {error}
           </Typography>

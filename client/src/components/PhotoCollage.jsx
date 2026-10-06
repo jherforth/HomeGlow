@@ -316,7 +316,7 @@ const PhotoCollage = ({ photos, step, onUnavailable }) => {
               p: `${TILE_INSET}px`,
             }}
           >
-            <Box sx={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', borderRadius: '6px', backgroundColor: '#0b0b0b' }}>
+            <Box sx={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', borderRadius: 'var(--hg-radius-md)', backgroundColor: '#0b0b0b' }}>
               {/* The outgoing photo stays underneath while the new one fades
                   in over it, so a swap never flashes through to black. */}
               {tile.previous && (

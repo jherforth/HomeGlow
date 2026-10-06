@@ -1000,7 +1000,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
     const rowBgColor = schedule.completed
       ? 'rgba(0, 255, 0, 0.1)'
       : dueStatus === 'overdue'
-        ? 'rgba(244, 67, 54, 0.16)'
+        ? 'var(--hg-error-surface)'
         : dueStatus === 'due'
           ? 'rgba(255, 193, 7, 0.20)'
           : 'transparent';
@@ -1020,7 +1020,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
         sx={{
           p: 1.5,
           border: '1px solid var(--card-border)',
-          borderRadius: 2,
+          borderRadius: 'var(--hg-radius-md)',
           mb: 1,
           bgcolor: rowBgColor,
           display: 'flex',
@@ -1228,7 +1228,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                 flex: '1 1 0',
                 minWidth: '180px',
                 border: '2px dashed var(--card-border)',
-                borderRadius: 2,
+                borderRadius: 'var(--hg-radius-md)',
                 p: 3,
                 textAlign: 'center'
               }}>
@@ -1255,7 +1255,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                     minWidth: '180px',
                     maxWidth: '250px',
                     border: '2px solid var(--card-border)',
-                    borderRadius: 2,
+                    borderRadius: 'var(--hg-radius-md)',
                     p: 2,
                     bgcolor: allRegularChoresCompleted ? 'rgba(0, 255, 0, 0.05)' : 'transparent',
                     display: 'flex',
@@ -1298,7 +1298,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                   minWidth: '180px',
                   maxWidth: '250px',
                   border: '2px solid var(--accent)',
-                  borderRadius: 2,
+                  borderRadius: 'var(--hg-radius-md)',
                   p: 2,
                   bgcolor: 'rgba(var(--accent-rgb), 0.05)',
                   display: 'flex',
@@ -1325,7 +1325,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                         sx={{
                           p: 1,
                           border: '1px solid var(--accent)',
-                          borderRadius: 1,
+                          borderRadius: 'var(--hg-radius-sm)',
                           mb: 1,
                           bgcolor: 'rgba(var(--accent-rgb), 0.1)'
                         }}
@@ -1401,7 +1401,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                     sx={{
                       p: 2,
                       border: '1px solid var(--accent)',
-                      borderRadius: 2,
+                      borderRadius: 'var(--hg-radius-md)',
                       bgcolor: 'rgba(var(--accent-rgb), 0.1)'
                     }}
                   >
@@ -1456,7 +1456,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                     sx={{
                       p: 2,
                       border: '1px solid var(--card-border)',
-                      borderRadius: 2,
+                      borderRadius: 'var(--hg-radius-md)',
                       bgcolor: 'rgba(var(--accent-rgb), 0.05)'
                     }}
                   >
@@ -1611,7 +1611,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                 aria-label={t('common:actions.backspace')}
                 sx={{
                   height: 52,
-                  borderRadius: 1,
+                  borderRadius: 'var(--hg-radius-sm)',
                   border: '2px solid var(--accent)',
                   color: 'var(--accent)',
                 }}
@@ -1828,7 +1828,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                 ))}
             </List>
             {transferDialog.targetUserId && isUserDayComplete(transferDialog.targetUserId) && (
-              <Box sx={{ mt: 1, p: 1.5, border: '1px solid var(--card-border)', borderRadius: 2 }}>
+              <Box sx={{ mt: 1, p: 1.5, border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-md)' }}>
                 <Typography variant="body2" sx={{ mb: 1 }}>
                   {t('chores:transfer.alreadyFinished')}
                 </Typography>

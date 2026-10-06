@@ -1073,7 +1073,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                         <MenuItem key={p.key} value={p.value}>
                           <Box>
                             <Typography variant="body2">{t(`chores:presets.${p.key}`)}</Typography>
-                            <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                            <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'var(--hg-font-mono)' }}>
                               {p.value}
                             </Typography>
                           </Box>
@@ -1107,7 +1107,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                       ))}
                     </Box>
                     {scheduleForm.selectedDays.length > 0 && (
-                      <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block', fontFamily: 'monospace' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block', fontFamily: 'var(--hg-font-mono)' }}>
                         Generated: {daysToCrontab(scheduleForm.selectedDays)}
                       </Typography>
                     )}
@@ -1129,7 +1129,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                     placeholder="0 0 * * 1"
                     error={!!crontabError}
                     helperText={crontabError || 'Format: minute hour day-of-month month day-of-week'}
-                    InputProps={{ sx: { fontFamily: 'monospace' } }}
+                    InputProps={{ sx: { fontFamily: 'var(--hg-font-mono)' } }}
                   />
                 )}
               </>
@@ -1143,7 +1143,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                     : t('chores:schedules.nextOccurrenceIs', { when: nextOccurrence })}</strong>
                 </Typography>
                 {!scheduleForm.isOneTime && currentCrontab && (
-                  <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'var(--hg-font-mono)' }}>
                     {currentCrontab}
                   </Typography>
                 )}

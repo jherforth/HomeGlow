@@ -24,8 +24,6 @@ const MonthDayCell = ({
   const rafRef = useRef(null);
   const [maxItems, setMaxItems] = useState(3);
   const colorMode = getPreferredColorMode();
-  const cellHoverColor = colorMode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
-  const timedRowHoverColor = colorMode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
 
   const computeMax = useCallback(() => {
     const cellEl = cellRef.current;
@@ -133,7 +131,7 @@ const MonthDayCell = ({
       onClick={() => onSlotClick({ start: day.toDate() })}
       sx={{
         border: '1px solid var(--card-border)',
-        borderRadius: 1,
+        borderRadius: 'var(--hg-radius-sm)',
         p: 0.75,
         cursor: 'pointer',
         bgcolor: isToday ? 'rgba(var(--accent-rgb), 0.1)' : 'transparent',
@@ -143,7 +141,7 @@ const MonthDayCell = ({
         minHeight: 0,
         overflow: 'hidden',
         '&:hover': {
-          bgcolor: isToday ? 'rgba(var(--accent-rgb), 0.15)' : cellHoverColor
+          bgcolor: isToday ? 'rgba(var(--accent-rgb), 0.15)' : 'var(--hg-hover)'
         }
       }}
     >
@@ -165,7 +163,7 @@ const MonthDayCell = ({
               sx={{ mb: 0.25, height: pillHeight, minHeight: pillHeight, display: 'flex', alignItems: 'stretch', cursor: 'pointer' }}>
               <Box sx={{
                 flex: 1, display: 'flex', alignItems: 'center',
-                backgroundColor: palette.backgroundColor, borderRadius: '10px', px: 0.75, py: 0.125,
+                backgroundColor: palette.backgroundColor, borderRadius: 'var(--hg-radius-lg)', px: 0.75, py: 0.125,
                 border: `1px solid ${palette.borderColor}`, overflow: 'hidden',
                 '&:hover': { filter: 'brightness(1.1)' }
               }}>
@@ -187,7 +185,7 @@ const MonthDayCell = ({
           const palette = getEventPillPalette(event.event_color || event.source_color || eventColors.backgroundColor, colorMode);
           return (
             <Box key={`timed-${evIdx}`} onClick={(e) => { e.stopPropagation(); onEventClick(event); }}
-              sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5, mb: 0.25, cursor: 'pointer', borderRadius: 0.5, px: 0.25, '&:hover': { bgcolor: timedRowHoverColor } }}>
+              sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5, mb: 0.25, cursor: 'pointer', borderRadius: 'var(--hg-radius-xs)', px: 0.25, '&:hover': { bgcolor: 'var(--hg-hover)' } }}>
               <Box sx={{ width: displaySettings.bulletSize, height: displaySettings.bulletSize, minWidth: displaySettings.bulletSize, borderRadius: '50%', backgroundColor: palette.backgroundColor, flexShrink: 0, mt: displaySettings.bulletSize * 0.0625 }} />
               <Box sx={{ minWidth: 0 }}>
                 {displaySettings.showStartTimes && (

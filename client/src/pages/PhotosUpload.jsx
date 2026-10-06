@@ -183,7 +183,7 @@ const PhotosUpload = () => {
             onClick={handleDone}
             variant="contained"
             startIcon={<CheckCircle />}
-            sx={{ borderRadius: 2 }}
+            sx={{ borderRadius: 'var(--hg-radius-md)' }}
           >
             Done
           </Button>
@@ -231,9 +231,9 @@ const PhotosUpload = () => {
                 p: { xs: 2, sm: 3 },
                 border: '2px dashed',
                 borderColor: 'divider',
-                borderRadius: 3,
+                borderRadius: 'var(--hg-radius-lg)',
                 textAlign: 'center',
-                background: 'var(--card-bg, rgba(255,255,255,0.6))',
+                background: 'var(--card-bg, var(--hg-white-70))',
               }}
             >
               <input
@@ -253,7 +253,7 @@ const PhotosUpload = () => {
                 disabled={uploading || !selectedSourceId}
                 onClick={() => fileInputRef.current?.click()}
                 sx={{
-                  borderRadius: 2,
+                  borderRadius: 'var(--hg-radius-md)',
                   py: 1.5,
                   fontSize: '1rem',
                   textTransform: 'none',
@@ -304,9 +304,9 @@ const PhotosUpload = () => {
                       sx={{
                         position: 'relative',
                         aspectRatio: '1 / 1',
-                        borderRadius: 2,
+                        borderRadius: 'var(--hg-radius-md)',
                         overflow: 'hidden',
-                        bgcolor: 'rgba(0,0,0,0.08)',
+                        bgcolor: 'var(--hg-black-10)',
                       }}
                     >
                       <img
@@ -342,7 +342,7 @@ const PhotosUpload = () => {
                 variant="contained"
                 size="large"
                 startIcon={<CheckCircle />}
-                sx={{ borderRadius: 2, px: 4 }}
+                sx={{ borderRadius: 'var(--hg-radius-md)', px: 4 }}
               >
                 Done
               </Button>

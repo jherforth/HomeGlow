@@ -1,0 +1,81 @@
+/*
+ * Classic: HomeGlow's default look, as tokens.
+ *
+ * Primitives are the only place a raw color lives. Components use the role
+ * tokens where one fits and a primitive otherwise. Translucent black and white
+ * come in fixed steps; pick the nearest step rather than adding a new alpha.
+ */
+
+:root {
+  /* Primitives: translucent black */
+  --hg-black-05: rgba(0, 0, 0, 0.05);
+  --hg-black-10: rgba(0, 0, 0, 0.1);
+  --hg-black-20: rgba(0, 0, 0, 0.2);
+  --hg-black-30: rgba(0, 0, 0, 0.3);
+  --hg-black-50: rgba(0, 0, 0, 0.5);
+  --hg-black-70: rgba(0, 0, 0, 0.7);
+  --hg-black-90: rgba(0, 0, 0, 0.9);
+
+  /* Primitives: translucent white */
+  --hg-white-10: rgba(255, 255, 255, 0.1);
+  --hg-white-20: rgba(255, 255, 255, 0.2);
+  --hg-white-30: rgba(255, 255, 255, 0.3);
+  --hg-white-70: rgba(255, 255, 255, 0.7);
+  --hg-white-90: rgba(255, 255, 255, 0.9);
+
+  /* Primitives: corner radius */
+  --hg-radius-xs: 2px;
+  --hg-radius-sm: 4px;
+  --hg-radius-md: 8px;
+  --hg-radius-lg: 12px;
+  --hg-radius-xl: 16px;
+  --hg-radius-2xl: 24px;
+
+  /* Primitives: type */
+  --hg-font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  --hg-font-mono: monospace;
+
+  /* Roles */
+  --hg-hover: var(--hg-white-10);
+  --hg-on-overlay: #ffffff;
+  --hg-error: #ef4444;
+  --hg-error-hover: #dc2626;
+  --hg-error-surface: rgba(239, 68, 68, 0.12);
+
+  /* Page background image, layered over --background (a gradient). */
+  --hg-page-image: none;
+
+  /* Layout: the gap between widgets. One of 0, 8px, 16px or 24px; the row
+     pitch stays fixed (utils/gridMetrics.js). */
+  --hg-grid-gap: 16px;
+
+  /* Widget frame. The decoration (border, border image) is drawn over the
+     frame's edge, so it never moves content or hides the selection border.
+     Per-side widths and a corner radius make shapes such as an elbow. */
+  --hg-frame-bg: var(--card-bg);
+  --hg-frame-radius: var(--hg-radius-md);
+  --hg-frame-shadow: 0 2px 8px var(--hg-black-10);
+  --hg-frame-shadow-hover: 0 4px 16px var(--hg-black-20);
+  --hg-frame-decoration-width: 0;
+  /* Padding inside the frame, so content clears a thick decoration. */
+  --hg-frame-inset: 0;
+  --hg-frame-decoration-style: none;
+  --hg-frame-decoration-color: transparent;
+  --hg-frame-decoration-image: none;
+  /* An image under the frame's content (a glass tint, say) and one over it
+     (a reflection). Both take no space and no pointer events. */
+  --hg-frame-image: none;
+  --hg-frame-overlay: none;
+  /* Backdrop filter for frames, such as frosted glass: none or blur(Npx). */
+  --hg-frame-backdrop: none;
+
+  /* Headings, for theme-aware plugins. MUI text takes a theme's heading
+     style from its MUI options. */
+  --hg-font-heading: var(--hg-font-body);
+  --hg-heading-transform: none;
+  --hg-heading-letter-spacing: normal;
+}
+
+[data-theme="light"] {
+  --hg-hover: var(--hg-black-05);
+}

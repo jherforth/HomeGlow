@@ -1284,7 +1284,6 @@ const CalendarWidget = ({
   };
 
   const colorMode = getPreferredColorMode();
-  const eventRowHoverColor = colorMode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
 
   if (loading) {
     return (
@@ -1334,7 +1333,7 @@ const CalendarWidget = ({
               aria-label={t('calendar:widget.goToToday')}
               sx={{
                 minWidth: { xs: 0, sm: '200px' },
-                borderRadius: 1,
+                borderRadius: 'var(--hg-radius-sm)',
                 px: 1,
                 py: 0.5,
                 color: 'var(--text)',
@@ -1401,7 +1400,7 @@ const CalendarWidget = ({
       </Box>
 
       {error && (
-        <Box sx={{ mb: 2, p: 2, bgcolor: 'rgba(255, 0, 0, 0.1)', borderRadius: 1 }}>
+        <Box sx={{ mb: 2, p: 2, bgcolor: 'var(--hg-error-surface)', borderRadius: 'var(--hg-radius-sm)' }}>
           <Typography color="error" variant="body2">
             {error}
           </Typography>
@@ -1523,7 +1522,7 @@ const CalendarWidget = ({
                       key={`empty-${rowKey}-${dayIdx}`}
                       sx={{
                         border: '1px solid var(--card-border)',
-                        borderRadius: 1,
+                        borderRadius: 'var(--hg-radius-sm)',
                         backgroundColor: 'transparent',
                       }}
                     />
@@ -1677,7 +1676,7 @@ const CalendarWidget = ({
                     flex: 1,
                     minWidth: 0,
                     border: '1px solid var(--card-border)',
-                    borderRadius: 1,
+                    borderRadius: 'var(--hg-radius-sm)',
                     p: 1,
                     bgcolor: day.isToday ? 'rgba(var(--accent-rgb), 0.1)' : 'transparent',
                     display: 'flex',
@@ -1722,7 +1721,7 @@ const CalendarWidget = ({
                               display: 'flex',
                               alignItems: 'center',
                               backgroundColor: palette.backgroundColor,
-                              borderRadius: '12px',
+                              borderRadius: 'var(--hg-radius-lg)',
                               px: 1,
                               py: 0.125,
                               border: `1px solid ${palette.borderColor}`,
@@ -1764,8 +1763,8 @@ const CalendarWidget = ({
                             display: 'flex',
                             alignItems: 'flex-start',
                             gap: 0.5,
-                            borderRadius: 0.5,
-                            '&:hover': { backgroundColor: eventRowHoverColor }
+                            borderRadius: 'var(--hg-radius-xs)',
+                            '&:hover': { backgroundColor: 'var(--hg-hover)' }
                           }}
                         >
                           <Box
@@ -1850,7 +1849,7 @@ const CalendarWidget = ({
                     key={event.id || index}
                     sx={{
                       border: '1px solid var(--card-border)',
-                      borderRadius: 1,
+                      borderRadius: 'var(--hg-radius-sm)',
                       mb: 1,
                       bgcolor: 'rgba(var(--accent-rgb), 0.05)',
                       flexDirection: 'column',
@@ -2103,7 +2102,7 @@ const CalendarWidget = ({
                     key={calendar.id}
                     sx={{
                       border: '1px solid var(--card-border)',
-                      borderRadius: 1,
+                      borderRadius: 'var(--hg-radius-sm)',
                       mb: 1,
                       p: 1,
                       flexDirection: 'column',
@@ -2512,7 +2511,7 @@ const CalendarWidget = ({
                   height: 40,
                   backgroundColor: eventColors.backgroundColor,
                   border: '1px solid var(--card-border)',
-                  borderRadius: 1,
+                  borderRadius: 'var(--hg-radius-sm)',
                   cursor: 'pointer'
                 }}
                 onClick={() => setShowColorPicker(prev => ({ ...prev, background: !prev.background }))}
@@ -2539,7 +2538,7 @@ const CalendarWidget = ({
                   height: 40,
                   backgroundColor: eventColors.textColor,
                   border: '1px solid var(--card-border)',
-                  borderRadius: 1,
+                  borderRadius: 'var(--hg-radius-sm)',
                   cursor: 'pointer'
                 }}
                 onClick={() => setShowColorPicker(prev => ({ ...prev, text: !prev.text }))}
@@ -2795,7 +2794,7 @@ const CalendarWidget = ({
                     height: 40,
                     backgroundColor: calendarForm.color,
                     border: '1px solid var(--card-border)',
-                    borderRadius: 1,
+                    borderRadius: 'var(--hg-radius-sm)',
                     cursor: 'pointer'
                   }}
                   onClick={(e)=>setCalendarColorPickerAnchor(prev=>(prev ? null : e.currentTarget))}
