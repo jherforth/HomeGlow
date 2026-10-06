@@ -18,13 +18,24 @@ import useFetchTabs from './hooks/useFetchTabs.js';
 import useIsMobile from './hooks/useIsMobile.js';
 import useScreenActivity from './hooks/useScreenActivity.js';
 import {
-  readLocalInterfaceColors,
   applyInterfaceColors,
   readLocalScreensaverSettings,
-  readLocalAutoDarkModeSettings,
   readLocalVacationModeSettings,
   isVacationModeActiveToday,
 } from './utils/interfaceSettings.js';
+import {
+  APPEARANCE_SETTING_KEY,
+  LEGACY_MIGRATED_KEY,
+  activeTemporaryTheme,
+  dockToggleAction,
+  isAutoAvailable,
+  legacyLocalAppearance,
+  normalizeDeviceAppearance,
+  overridesFrom,
+  readAppearanceCache,
+  resolveAppearance,
+  writeAppearanceCache,
+} from './utils/appearance.js';
 import { normalizeWidgetSettings, BASE_WIDGET_SETTINGS } from './utils/widgetSettings.js';
 import { buildMobileWidgetList } from './utils/mobileWidgets.js';
 import { CORE_CONTROLS, resolveHiddenControls } from './utils/displayControls.js';
@@ -42,8 +53,8 @@ const loadVacationScreensaver = () => import('./components/VacationScreensaver.j
 
 const MAX_IDLE_WARM_IMPORTS = 3;
 const WIDGETS_LOCKED_STORAGE_KEY = 'widgetsLocked';
+// The displayed theme, cached so a reload paints it before the settings load.
 const THEME_STORAGE_KEY = 'theme';
-const THEME_MODE_STORAGE_KEY = 'themeMode';
 
 const shouldSkipWarmupForConnection = () => {
   if (typeof navigator === 'undefined') return false;
@@ -135,15 +146,6 @@ const readLocalTheme = () => {
   return savedTheme === 'dark' ? 'dark' : 'light';
 };
 
-const readLocalThemeMode = (fallbackTheme) => {
-  const savedThemeMode = localStorage.getItem(THEME_MODE_STORAGE_KEY);
-  if (savedThemeMode === 'light' || savedThemeMode === 'dark' || savedThemeMode === 'auto') {
-    return savedThemeMode;
-  }
-
-  return fallbackTheme === 'dark' ? 'dark' : 'light';
-};
-
 const readLocalWidgetsLocked = () => {
   const saved = localStorage.getItem(WIDGETS_LOCKED_STORAGE_KEY);
   if (saved === null) {
@@ -178,9 +180,9 @@ const App = () => {
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const isMobile = useIsMobile();
   const [theme, setTheme] = useState(readLocalTheme);
-  const [themeMode, setThemeMode] = useState(() => readLocalThemeMode(readLocalTheme()));
-  const [autoDarkModeSettings, setAutoDarkModeSettings] = useState(readLocalAutoDarkModeSettings);
-  const [interfaceColors, setInterfaceColors] = useState(readLocalInterfaceColors);
+  // Rendered until both the household and this display's settings have loaded.
+  const [appearanceCache] = useState(() => readAppearanceCache(localStorage));
+  const [householdSettingsLoaded, setHouseholdSettingsLoaded] = useState(false);
   const [widgetsLocked, setWidgetsLocked] = useState(readLocalWidgetsLocked);
   const [screensaverActive, setScreensaverActive] = useState(false);
   const [screensaverSettings, setScreensaverSettings] = useState(readLocalScreensaverSettings);
@@ -222,6 +224,23 @@ const App = () => {
   const [isFirstRunClient, setIsFirstRunClient] = useState(false);
   const [choreSoundDeviceEnabled, setChoreSoundDeviceEnabled] = useState(true);
   const [demoStatus, setDemoStatus] = useState({ demo: false, resetHours: null });
+
+  // Appearance: the household's default, then this display's overrides (see
+  // utils/appearance.js). Keyed on the stored values so an unchanged setting
+  // keeps its identity and the effects below do not re-run on every render.
+  const householdAppearance = householdSettings[APPEARANCE_SETTING_KEY];
+  const deviceAppearance = rawDeviceSettings?.appearance;
+  const appearanceTemp = rawDeviceSettings?.appearanceTemp ?? null;
+  const appearanceReady = householdSettingsLoaded && deviceSettingsLoaded;
+  const householdAppearanceKey = JSON.stringify(householdAppearance ?? null);
+  const deviceAppearanceKey = JSON.stringify(deviceAppearance ?? null);
+  const appearance = useMemo(
+    () => (appearanceReady ? resolveAppearance(householdAppearance, deviceAppearance) : appearanceCache),
+    [appearanceReady, householdAppearanceKey, deviceAppearanceKey, appearanceCache],
+  );
+  const themeMode = appearance.mode;
+  const interfaceColors = appearance.colors;
+  const autoDarkModeSettings = appearance.autoDark;
 
   const fetchInstalledPlugins = async () => {
     try {
@@ -271,6 +290,7 @@ const App = () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/settings`);
       setHouseholdSettings(response.data || {});
+      setHouseholdSettingsLoaded(true);
     } catch (error) {
       console.error('Error fetching household settings:', error);
     }
@@ -622,15 +642,11 @@ const App = () => {
     };
 
     const handleInterfaceSettingsUpdated = () => {
-      setInterfaceColors(readLocalInterfaceColors());
       setScreensaverSettings(readLocalScreensaverSettings());
-      setAutoDarkModeSettings(readLocalAutoDarkModeSettings());
       setVacationModeSettings(readLocalVacationModeSettings());
-
-      const localTheme = readLocalTheme();
-      const localThemeMode = readLocalThemeMode(localTheme);
-      setTheme(localTheme);
-      setThemeMode(localThemeMode);
+      // Appearance is saved to the server by Admin; reload both levels.
+      void fetchDeviceSettings();
+      void fetchHouseholdSettings();
     };
 
     window.addEventListener(DEVICE_SETTINGS_UPDATED_EVENT, handleDeviceSettingsUpdated);
@@ -679,7 +695,8 @@ const App = () => {
 
     let isMounted = true;
     const refresh = async () => {
-      const resolvedTheme = await resolveAutoTheme();
+      const temporaryTheme = activeTemporaryTheme(appearanceTemp, Date.now());
+      const resolvedTheme = temporaryTheme || await resolveAutoTheme();
       if (!isMounted || !resolvedTheme) {
         return;
       }
@@ -690,6 +707,11 @@ const App = () => {
     const intervalId = setInterval(() => {
       void refresh();
     }, 15 * 60 * 1000);
+    // A temporary theme from the dock ends at the next sunrise or sunset.
+    const tempEndsInMs = activeTemporaryTheme(appearanceTemp, Date.now())
+      ? appearanceTemp.until - Date.now() + 1000
+      : null;
+    const tempTimeoutId = tempEndsInMs !== null ? setTimeout(() => { void refresh(); }, tempEndsInMs) : null;
 
     const handleFocus = () => {
       void refresh();
@@ -706,25 +728,53 @@ const App = () => {
     return () => {
       isMounted = false;
       clearInterval(intervalId);
+      if (tempTimeoutId) clearTimeout(tempTimeoutId);
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [themeMode, resolveAutoTheme, applyTheme]);
+  }, [themeMode, resolveAutoTheme, applyTheme, appearanceTemp]);
+
+  // A fixed mode is simply shown. Auto without a location keeps whatever is
+  // on screen, as before.
+  useEffect(() => {
+    if (themeMode === 'light' || themeMode === 'dark') {
+      applyTheme(themeMode);
+    }
+  }, [themeMode, applyTheme]);
 
   useEffect(() => {
-    if (themeMode !== 'auto') {
-      return;
+    if (appearanceReady) {
+      writeAppearanceCache(localStorage, appearance);
     }
+  }, [appearanceReady, appearance]);
 
-    // Auto mode needs only coordinates now — sunrise is computed, not fetched.
-    const hasCoordinates = typeof autoDarkModeSettings.lat === 'number' && typeof autoDarkModeSettings.lon === 'number';
-    const autoModeAvailable = autoDarkModeSettings.enabled && hasCoordinates;
-    if (!autoModeAvailable) {
-      const fallbackMode = theme === 'dark' ? 'dark' : 'light';
-      setThemeMode(fallbackMode);
-      localStorage.setItem(THEME_MODE_STORAGE_KEY, fallbackMode);
-    }
-  }, [themeMode, autoDarkModeSettings, theme]);
+  // One-time upload of this browser's pre-cascade appearance as the display's
+  // overrides: only the fields that differ from the household, so the display
+  // looks exactly as it did. A display that already has overrides keeps them.
+  const appearanceUploadStartedRef = useRef(false);
+  useEffect(() => {
+    if (!appearanceReady || appearanceUploadStartedRef.current) return;
+    const local = legacyLocalAppearance(localStorage);
+    if (!local) return;
+    appearanceUploadStartedRef.current = true;
+
+    void (async () => {
+      const existing = normalizeDeviceAppearance(deviceAppearance);
+      const next = { ...overridesFrom(local, householdAppearance), ...existing };
+      try {
+        if (JSON.stringify(next) !== JSON.stringify(existing)) {
+          const response = await axios.patch(`${API_DEVICE_URL}/settings`, { appearance: next });
+          hydrateFromDeviceSettings(response.data || {});
+        }
+        // The old keys stay, so rolling back to a pre-cascade build still
+        // finds this display's look; the marker stops a second upload.
+        localStorage.setItem(LEGACY_MIGRATED_KEY, '1');
+      } catch (error) {
+        // Left in place; the next load tries again.
+        console.error('Error uploading appearance settings:', error);
+      }
+    })();
+  }, [appearanceReady]);
 
   useEffect(() => {
     document.documentElement.style.setProperty('--light-gradient-start', widgetSettings.lightGradientStart);
@@ -852,25 +902,56 @@ const App = () => {
     widgetsVisible: !(screensaverActive && screensaverSettings.mode === 'photos'),
   });
 
-  const toggleTheme = () => {
-    const hasCoordinates = typeof autoDarkModeSettings.lat === 'number' && typeof autoDarkModeSettings.lon === 'number';
-    const includeAutoMode = autoDarkModeSettings.enabled && hasCoordinates;
-    const themeModes = includeAutoMode ? ['light', 'dark', 'auto'] : ['light', 'dark'];
+  // The dock's mode button. On auto it shows the other theme until the next
+  // sunrise or sunset; on a fixed mode it overrides this display, and switching
+  // back to the household's mode removes the override (see dockToggleAction).
+  const toggleTheme = async () => {
+    if (!appearanceReady) return;
 
-    const currentIndex = themeModes.includes(themeMode) ? themeModes.indexOf(themeMode) : 0;
-    const nextMode = themeModes[(currentIndex + 1) % themeModes.length];
-
-    setThemeMode(nextMode);
-    localStorage.setItem(THEME_MODE_STORAGE_KEY, nextMode);
-
-    const nextTheme = nextMode === 'auto' ? theme : nextMode;
-
-    if (nextMode === 'auto') {
-      void applyAutoThemeNow();
-      return;
+    let sun = null;
+    if (themeMode === 'auto' && isAutoAvailable(autoDarkModeSettings)) {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/api/sun`, {
+          params: { lat: autoDarkModeSettings.lat, lon: autoDarkModeSettings.lon },
+        });
+        sun = response.data || null;
+      } catch (error) {
+        console.error('Error fetching sun times:', error);
+      }
     }
 
-    applyTheme(nextMode);
+    const action = dockToggleAction({
+      household: householdAppearance,
+      device: deviceAppearance,
+      displayedTheme: theme,
+      temp: appearanceTemp,
+      sun,
+      nowMs: Date.now(),
+    });
+
+    const overrides = normalizeDeviceAppearance(deviceAppearance);
+    let patch = null;
+    if (action.type === 'temp') {
+      applyTheme(action.theme);
+      patch = { appearanceTemp: { theme: action.theme, until: action.until } };
+    } else if (action.type === 'clearTemp') {
+      patch = { appearanceTemp: null };
+      void applyAutoThemeNow();
+    } else if (action.type === 'deviceMode') {
+      applyTheme(action.mode);
+      patch = { appearance: { ...overrides, mode: action.mode } };
+    } else if (action.type === 'clearDeviceMode') {
+      const { mode: _dropped, ...rest } = overrides;
+      patch = { appearance: rest };
+    }
+    if (!patch) return;
+
+    try {
+      const response = await axios.patch(`${API_DEVICE_URL}/settings`, patch);
+      hydrateFromDeviceSettings(response.data || {});
+    } catch (error) {
+      console.error('Error saving display mode:', error);
+    }
   };
 
   const toggleWidgetsLock = () => {

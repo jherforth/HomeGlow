@@ -54,7 +54,6 @@ import {
   CloudDownload,
   Refresh,
   Warning,
-  RestartAlt,
   Timer,
   Lock,
   Nightlight,
@@ -68,7 +67,7 @@ import {
   ArrowDownward,
   Close
 } from '@mui/icons-material';
-import ColorPickerPopover from './ColorPickerPopover';
+import AppearanceSettings from './AppearanceSettings';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase, getDeviceName, setDeviceName, isValidDeviceName } from '../utils/deviceName.js';
@@ -95,19 +94,12 @@ import { syncWidgetAssignments } from '../utils/assignmentSync.js';
 import { normalizeWidgetSettings as normalizeSharedWidgetSettings } from '../utils/widgetSettings.js';
 import { stackableTableSx } from '../utils/responsiveTable.js';
 import {
-  INTERFACE_COLORS_STORAGE_KEY,
   SCREENSAVER_SETTINGS_STORAGE_KEY,
-  AUTO_DARK_MODE_SETTINGS_STORAGE_KEY,
   VACATION_MODE_STORAGE_KEY,
-  DEFAULT_INTERFACE_COLORS,
-  normalizeInterfaceColors,
   normalizeScreensaverSettings,
   normalizeVacationModeSettings,
-  readLocalInterfaceColors,
   readLocalScreensaverSettings,
-  readLocalAutoDarkModeSettings,
   readLocalVacationModeSettings,
-  applyInterfaceColors,
 } from '../utils/interfaceSettings.js';
 import { CONTROL_LIMITS_DEFAULT_KEY } from '../utils/displayControls.js';
 import { useTranslation } from 'react-i18next';
@@ -244,7 +236,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   const [widgetSettings, setLocalWidgetSettings] = useState({
     ...DEFAULT_WIDGET_SETTINGS
   });
-  const [interfaceColors, setInterfaceColors] = useState(readLocalInterfaceColors);
   const [users, setUsers] = useState([]);
   const [chores, setChores] = useState([]);
   const [prizes, setPrizes] = useState([]);
@@ -266,7 +257,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   // Which installed plugin is currently showing a live preview, if any.
   const [previewPlugin, setPreviewPlugin] = useState(null);
   const [loadingGithub, setLoadingGithub] = useState(false);
-  const [colorPickerAnchor, setColorPickerAnchor] = useState({ key: null, el: null });
   const [deleteUserDialog, setDeleteUserDialog] = useState({ open: false, user: null });
   const [choreModal, setChoreModal] = useState({ open: false, user: null, userChores: [] });
   const [isLoading, setIsLoading] = useState(false);
@@ -291,15 +281,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   const [photoItemCount, setPhotoItemCount] = useState(null); // null = unknown
   const [screensaverSettings, setScreensaverSettings] = useState(readLocalScreensaverSettings);
   const [vacationModeSettings, setVacationModeSettings] = useState(readLocalVacationModeSettings);
-  const [autoDarkModeSettings, setAutoDarkModeSettings] = useState(readLocalAutoDarkModeSettings);
-  const [isSavingAutoDarkMode, setIsSavingAutoDarkMode] = useState(false);
-  const [autoDarkModeSunTimes, setAutoDarkModeSunTimes] = useState({
-    sunrise: null,
-    sunset: null,
-    timezoneOffset: 0,
-  });
-  const [autoDarkModeSunTimesLoading, setAutoDarkModeSunTimesLoading] = useState(false);
-  const [autoDarkModeSunTimesError, setAutoDarkModeSunTimesError] = useState('');
   const [tabIconModalState, setTabIconModalState] = useState({
     open: false,
     mode: 'create',
@@ -358,10 +339,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
 
   useEffect(() => {
     if (isAuthenticated) {
-      setInterfaceColors(readLocalInterfaceColors());
       setScreensaverSettings(readLocalScreensaverSettings());
       setVacationModeSettings(readLocalVacationModeSettings());
-      setAutoDarkModeSettings(readLocalAutoDarkModeSettings());
       fetchSettings();
       fetchWeatherConnectionStatus();
       fetchDeviceSettings();
@@ -1358,44 +1337,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     }
   };
 
-  const saveInterfaceSettings = async () => {
-    try {
-      setIsLoading(true);
-      const normalizedColors = normalizeInterfaceColors(interfaceColors);
-      localStorage.setItem(INTERFACE_COLORS_STORAGE_KEY, JSON.stringify(normalizedColors));
-
-      // Apply CSS variables immediately
-      applyAccentColors();
-      window.dispatchEvent(new Event(INTERFACE_SETTINGS_UPDATED_EVENT));
-
-      setSaveMessage({ show: true, type: 'success', text: t('admin:messages.colorsSaved') });
-      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
-    } catch (error) {
-      console.error('Error saving accent colors:', error);
-      setSaveMessage({ show: true, type: 'error', text: t('admin:messages.colorsFailed') });
-      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const applyAccentColors = () => {
-    const root = document.documentElement;
-    const isLight = root.getAttribute('data-theme') === 'light';
-
-    applyInterfaceColors(root, interfaceColors);
-
-    if (isLight) {
-      root.style.setProperty('--background', interfaceColors.primary);
-    }
-  };
-
-  const resetToDefaults = () => {
-    setInterfaceColors({ ...DEFAULT_INTERFACE_COLORS });
-    setSaveMessage({ show: true, type: 'info', text: t('admin:messages.colorsReset') });
-    setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
-  };
-
   const saveScreensaverSettings = async () => {
     try {
       setIsLoading(true);
@@ -1442,150 +1383,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     }
   };
 
-  // Geocoding runs on the server, which holds the API key. Passing no query
-  // asks the server for the provider's own location, which is how a Home
-  // Assistant household gets coordinates without an OpenWeatherMap key at all.
-  const resolveAutoDarkModeLocation = async (locationQuery) => {
-    const normalized = (locationQuery || '').trim();
-    const response = await axios.get(`${API_BASE_URL}/api/weather/geocode`, {
-      params: normalized ? { q: normalized } : {},
-    });
-
-    const { lat, lon, resolvedName } = response.data || {};
-    if (typeof lat !== 'number' || typeof lon !== 'number') {
-      throw new Error('Location not found. Try a city, city/state, city/country, or ZIP code.');
-    }
-
-    return { lat, lon, resolvedName: resolvedName || normalized };
-  };
-
-  const saveAutoDarkModeSettings = async () => {
-    const trimmedLocation = autoDarkModeSettings.locationQuery.trim();
-
-    if (!autoDarkModeSettings.enabled) {
-      const nextSettings = {
-        ...autoDarkModeSettings,
-        locationQuery: trimmedLocation,
-      };
-      localStorage.setItem(AUTO_DARK_MODE_SETTINGS_STORAGE_KEY, JSON.stringify(nextSettings));
-      window.dispatchEvent(new Event(INTERFACE_SETTINGS_UPDATED_EVENT));
-      setAutoDarkModeSettings(nextSettings);
-      setSaveMessage({ show: true, type: 'success', text: t('admin:messages.autoDarkDisabled') });
-      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
-      return;
-    }
-
-    if (!trimmedLocation) {
-      setSaveMessage({
-        show: true,
-        type: 'error',
-        text: t('admin:messages.autoDarkNeedsLocation'),
-      });
-      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
-      return;
-    }
-
-    try {
-      setIsSavingAutoDarkMode(true);
-      const resolved = await resolveAutoDarkModeLocation(trimmedLocation);
-      const nextSettings = {
-        ...autoDarkModeSettings,
-        enabled: true,
-        locationQuery: trimmedLocation,
-        lat: resolved.lat,
-        lon: resolved.lon,
-        resolvedName: resolved.resolvedName,
-      };
-
-      localStorage.setItem(AUTO_DARK_MODE_SETTINGS_STORAGE_KEY, JSON.stringify(nextSettings));
-      window.dispatchEvent(new Event(INTERFACE_SETTINGS_UPDATED_EVENT));
-      setAutoDarkModeSettings(nextSettings);
-      setSaveMessage({
-        show: true,
-        type: 'success',
-        text: t('admin:messages.autoDarkSaved'),
-      });
-      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 4500);
-    } catch (error) {
-      console.error('Error saving auto dark mode settings:', error);
-      const message = error?.response?.data?.message || error.message || 'Failed to save auto dark mode settings.';
-      setSaveMessage({ show: true, type: 'error', text: message });
-      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3500);
-    } finally {
-      setIsSavingAutoDarkMode(false);
-    }
-  };
-
-  useEffect(() => {
-    const hasCoordinates = typeof autoDarkModeSettings.lat === 'number' && typeof autoDarkModeSettings.lon === 'number';
-
-    // No API key needed any more — the server computes these from coordinates.
-    if (!autoDarkModeSettings.resolvedName || !hasCoordinates) {
-      setAutoDarkModeSunTimes({ sunrise: null, sunset: null, timezoneOffset: 0 });
-      setAutoDarkModeSunTimesError('');
-      setAutoDarkModeSunTimesLoading(false);
-      return;
-    }
-
-    let isCancelled = false;
-    const fetchSunTimes = async () => {
-      setAutoDarkModeSunTimesLoading(true);
-      setAutoDarkModeSunTimesError('');
-
-      try {
-        const response = await axios.get(`${API_BASE_URL}/api/sun`, {
-          params: {
-            lat: autoDarkModeSettings.lat,
-            lon: autoDarkModeSettings.lon,
-          },
-        });
-
-        const { sunrise, sunset, alwaysUp, alwaysDown } = response?.data || {};
-
-        if (typeof sunrise !== 'number' || typeof sunset !== 'number') {
-          throw new Error(alwaysUp || alwaysDown
-            ? 'The sun does not rise or set at this location today.'
-            : 'Sunrise and sunset are unavailable for this location.');
-        }
-
-        if (!isCancelled) {
-          // The times come back as unix seconds; the preview renders them in
-          // the browser's own zone, which is the display the user is looking at.
-          setAutoDarkModeSunTimes({ sunrise, sunset, timezoneOffset: 0 });
-        }
-      } catch (error) {
-        if (!isCancelled) {
-          console.error('Error fetching auto dark mode sunrise/sunset:', error);
-          setAutoDarkModeSunTimes({ sunrise: null, sunset: null, timezoneOffset: 0 });
-          setAutoDarkModeSunTimesError(error.message || 'Unable to load today\'s sunrise and sunset.');
-        }
-      } finally {
-        if (!isCancelled) {
-          setAutoDarkModeSunTimesLoading(false);
-        }
-      }
-    };
-
-    void fetchSunTimes();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [autoDarkModeSettings.resolvedName, autoDarkModeSettings.lat, autoDarkModeSettings.lon]);
-
-  const formatAutoDarkModeLocationTime = (unixSeconds, timezoneOffsetSeconds = 0) => {
-    if (typeof unixSeconds !== 'number') {
-      return '--';
-    }
-
-    const shiftedTime = new Date((unixSeconds + timezoneOffsetSeconds) * 1000);
-    return shiftedTime.toLocaleTimeString([], {
-      hour: 'numeric',
-      minute: '2-digit',
-      timeZone: 'UTC',
-    });
-  };
-
   const sourcesLoaded = photoSources !== null;
   const hasImmichSource = sourcesLoaded && photoSources.some(s => s.type === 'Immich' && s.enabled === 1);
   const hasNonImmichPhotoSource = sourcesLoaded && photoSources.some(s => DB_BACKED_PHOTO_TYPES.includes(s.type) && s.enabled === 1);
@@ -1618,20 +1415,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
         ...prev[widget],
         refreshInterval: interval
       }
-    }));
-  };
-
-  const handleSettingChange = (setting, value) => {
-    setInterfaceColors(prev => ({
-      ...prev,
-      [setting]: value
-    }));
-  };
-
-  const handleColorChange = (colorKey, color) => {
-    setInterfaceColors(prev => ({
-      ...prev,
-      [colorKey]: color.hex
     }));
   };
 
@@ -2068,52 +1851,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
       setIsLoading(false);
     }
   };
-
-  const renderColorPicker = (key, label) => (
-    <Box key={key} sx={{ mb: 3 }}>
-      <Typography variant="body1" sx={{ mb: 1, fontWeight: 600 }}>
-        {label}
-      </Typography>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-        <Box
-          sx={{
-            width: 60,
-            height: 60,
-            backgroundColor: interfaceColors[key],
-            border: '3px solid var(--card-border)',
-            borderRadius: 'var(--hg-radius-md)',
-            cursor: 'pointer',
-            transition: 'all 0.2s',
-            boxShadow: '0 2px 8px var(--hg-black-10)',
-            '&:hover': {
-              transform: 'scale(1.05)',
-              boxShadow: '0 4px 12px var(--hg-black-20)'
-            }
-          }}
-          onClick={(e) => {
-            if (colorPickerAnchor.key === key) {
-              setColorPickerAnchor({ key: null, el: null });
-            } else {
-              setColorPickerAnchor({ key, el: e.currentTarget });
-            }
-          }}
-        />
-        <TextField
-          size="medium"
-          value={interfaceColors[key]}
-          onChange={(e) => handleSettingChange(key, e.target.value)}
-          sx={{ flex: 1 }}
-          placeholder="#000000"
-        />
-      </Box>
-      <ColorPickerPopover
-        anchorEl={colorPickerAnchor.key === key ? colorPickerAnchor.el : null}
-        color={interfaceColors[key]}
-        onChange={(color) => handleColorChange(key, color)}
-        onClose={() => setColorPickerAnchor({ key: null, el: null })}
-      />
-    </Box>
-  );
 
   const getRefreshIntervalLabel = (interval) => {
     const option = refreshIntervalOptions.find(opt => opt.value === interval);
@@ -3032,52 +2769,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
               <TimezoneSettings />
             </AdminFormSection>
 
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-              <Typography variant="h6">{t('admin:colors.heading')}</Typography>
-              <Button
-                variant="outlined"
-                startIcon={<RestartAlt />}
-                onClick={resetToDefaults}
-                size="small"
-              >
-                {t('admin:colors.resetDefaults')}
-              </Button>
-            </Box>
-
-            {saveMessage.show && (
-              <Alert severity={saveMessage.type} sx={{ mb: 2 }}>
-                {saveMessage.text}
-              </Alert>
-            )}
-
-            <Alert severity="info" sx={{ mb: 3 }}>
-              {t('admin:colors.help')}
-            </Alert>
-
-            <Box sx={{ maxWidth: 600, mx: 'auto' }}>
-              {renderColorPicker('primary', '🎨 Background Color (Light Mode)')}
-              {renderColorPicker('secondary', '💎 Secondary Color')}
-              {renderColorPicker('accent', '✨ Accent Color')}
-            </Box>
-
-            <Box sx={{ mt: 4, display: 'flex', gap: 2, justifyContent: 'center' }}>
-              <Button
-                variant="contained"
-                onClick={saveInterfaceSettings}
-                startIcon={<Save />}
-                size="large"
-              >
-                {t('admin:colors.save')}
-              </Button>
-              <Button
-                variant="outlined"
-                onClick={() => window.location.reload()}
-                startIcon={<Refresh />}
-                size="large"
-              >
-                {t('admin:colors.refreshPage')}
-              </Button>
-            </Box>
+            <AppearanceSettings />
 
             <Divider sx={{ my: 4 }} />
 
@@ -3431,83 +3123,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                 sx={{ mt: 2 }}
               >
                 {t('admin:vacation.save')}
-              </Button>
-
-              <Divider sx={{ my: 4 }} />
-
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                <Nightlight />
-                <Typography variant="h6">{t('admin:autoDark.heading')}</Typography>
-              </Box>
-
-              <Alert severity="info" sx={{ mb: 2 }}>
-                {t('admin:autoDark.help')}
-              </Alert>
-
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={autoDarkModeSettings.enabled}
-                    onChange={(e) => {
-                      setAutoDarkModeSettings(prev => ({
-                        ...prev,
-                        enabled: e.target.checked,
-                      }));
-                    }}
-                  />
-                }
-                label={t('admin:autoDark.enable')}
-                sx={{ mb: 2 }}
-              />
-
-              <TextField
-                fullWidth
-                label={t('admin:autoDark.location')}
-                value={autoDarkModeSettings.locationQuery}
-                onChange={(e) => {
-                  const nextValue = e.target.value;
-                  setAutoDarkModeSettings(prev => ({
-                    ...prev,
-                    locationQuery: nextValue,
-                  }));
-                }}
-                helperText={t('admin:autoDark.locationHelp')}
-                sx={{ mb: 2 }}
-              />
-
-              {autoDarkModeSettings.resolvedName && (
-                <Alert severity="success" sx={{ mb: 2 }}>
-                  <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      Current resolved location: {autoDarkModeSettings.resolvedName}
-                    </Typography>
-                    {autoDarkModeSunTimesLoading && (
-                      <Typography variant="body2" sx={{ mt: 0.5 }}>
-                        {t('admin:autoDark.loadingSun')}
-                      </Typography>
-                    )}
-                    {!autoDarkModeSunTimesLoading && autoDarkModeSunTimes.sunrise && autoDarkModeSunTimes.sunset && (
-                      <Typography variant="body2" sx={{ mt: 0.5 }}>
-                        Today's sunrise: {formatAutoDarkModeLocationTime(autoDarkModeSunTimes.sunrise, autoDarkModeSunTimes.timezoneOffset)} | Sunset: {formatAutoDarkModeLocationTime(autoDarkModeSunTimes.sunset, autoDarkModeSunTimes.timezoneOffset)}
-                      </Typography>
-                    )}
-                    {!autoDarkModeSunTimesLoading && autoDarkModeSunTimesError && (
-                      <Typography variant="body2" sx={{ mt: 0.5 }}>
-                        {autoDarkModeSunTimesError}
-                      </Typography>
-                    )}
-                  </Box>
-                </Alert>
-              )}
-
-              <Button
-                variant="contained"
-                onClick={saveAutoDarkModeSettings}
-                startIcon={<Save />}
-                fullWidth
-                disabled={isSavingAutoDarkMode}
-              >
-                {isSavingAutoDarkMode ? 'Saving Auto Dark Mode...' : 'Save Auto Dark Mode Settings'}
               </Button>
             </Box>
           </CardContent>
