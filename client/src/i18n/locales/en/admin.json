@@ -94,7 +94,7 @@
     "screensaverFailed": "Failed to save screensaver settings. Please try again.",
     "vacationSaved": "Vacation mode settings saved for this display.",
     "vacationFailed": "Failed to save vacation mode settings. Please try again.",
-    "autoDarkNeedsLocation": "Enter a location before enabling auto dark mode.",
+    "autoDarkNeedsLocation": "Auto mode needs a location to work out sunrise and sunset.",
     "userDeleteFailed": "Failed to delete user. Please try again.",
     "prizeAddToStoreFailed": "Failed to add the prize to the store.",
     "prizeRemoveOfferFailed": "Failed to remove the offer.",
@@ -255,7 +255,6 @@
     "save": "Save Vacation Mode Settings"
   },
   "autoDark": {
-    "enable": "Enable Daylight Auto Dark Mode",
     "location": "Location",
     "locationHelp": "Examples: Dallas,TX,US, London,UK, or ZIP code like 76034"
   },
@@ -461,18 +460,16 @@
     "scopeDevice": "This display",
     "scopeHousehold": "Household",
     "useHousehold": "Use household",
-    "mode": "Mode",
+    "mode": "Light / Dark / Auto",
     "modes": {
       "light": "Light",
       "dark": "Dark",
       "auto": "Auto (sunrise and sunset)"
     },
-    "modeHelp": "On Auto, the dock's mode button switches to the other theme until the next sunrise or sunset. On Light or Dark, it switches this display.",
     "colors": "Colors",
     "colorLabels": {
       "primary": "Background color (light mode)",
-      "secondary": "Secondary color",
-      "accent": "Accent color"
+      "secondary": "Secondary color"
     },
     "autoDark": "Auto mode location",
     "resolvedLocation": "Using {{name}}",
@@ -485,5 +482,38 @@
     "saveFailed": "Could not save the appearance settings.",
     "loadFailed": "Could not load the appearance settings.",
     "savedButLocation": "Saved, except the auto mode location, which is unchanged: {{reason}}"
+  },
+  "personalize": {
+    "heading": "Personalize",
+    "help": "Your own accent, background and card opacity, over whichever theme is showing.",
+    "accent": "Accent",
+    "themeAccent": "Use the theme's accent",
+    "background": "Background",
+    "backgroundColor": "Background color",
+    "kinds": {
+      "none": "Theme's",
+      "color": "Color",
+      "gradient": "Gradient",
+      "image": "Photo"
+    },
+    "gradients": {
+      "dawn": "Dawn",
+      "ocean": "Ocean",
+      "forest": "Forest",
+      "dusk": "Dusk",
+      "slate": "Slate",
+      "midnight": "Midnight"
+    },
+    "useImage": "Use this photo",
+    "deleteImage": "Delete this photo",
+    "confirmDeleteImage": "Delete this photo for every display and tab that uses it?",
+    "noImages": "No photos yet. Upload one; it is resized for the screen first.",
+    "uploadImage": "Upload a photo",
+    "uploading": "Uploading...",
+    "uploadFailed": "Could not upload the photo.",
+    "deleteFailed": "Could not delete the photo.",
+    "cardOpacity": "Card opacity",
+    "seeThrough": "See-through",
+    "solid": "Solid"
   }
 }

@@ -151,6 +151,7 @@ const googleConnection = require('./services/googleConnection');
 const googleCalendar = require('./services/googleCalendar');
 const appleCalDAV = require('./services/appleCalDAV');
 const googlePhotos = require('./services/googlePhotos');
+const appearanceAssets = require('./services/appearanceAssets');
 const googlePhotosPicker = require('./services/googlePhotosPicker');
 const homeAssistant = require('./services/homeAssistant');
 const weatherService = require('./services/weather');
@@ -5969,6 +5970,69 @@ fastify.post('/api/photo-sources/:sourceId/uploaded', async (request, reply) => 
   } catch (error) {
     console.error('Error uploading photos:', error);
     reply.status(500).send({ error: 'Failed to upload photos' });
+  }
+});
+
+// Appearance backgrounds (household, display and tab). See
+// services/appearanceAssets.js: type checked by content, size capped.
+const UPLOADS_ROOT = path.join(__dirname, 'uploads');
+
+fastify.get('/api/appearance/backgrounds', async (request, reply) => {
+  try {
+    return await appearanceAssets.listBackgrounds(UPLOADS_ROOT);
+  } catch (error) {
+    console.error('Error listing appearance backgrounds:', error);
+    return reply.status(500).send({ error: 'Failed to list backgrounds' });
+  }
+});
+
+fastify.post('/api/appearance/backgrounds', async (request, reply) => {
+  if (demoBlocked(reply)) return;
+  try {
+    const part = await request.file({ limits: { fileSize: appearanceAssets.BACKGROUND_MAX_BYTES + 1 } });
+    if (!part) return reply.status(400).send({ error: 'No image received.' });
+    const buffer = await part.toBuffer();
+    if (part.file.truncated) {
+      return reply.status(413).send({ error: 'Background images must be 10 MB or smaller.' });
+    }
+    const saved = await appearanceAssets.saveBackground(UPLOADS_ROOT, buffer);
+    if (saved.error) return reply.status(saved.status).send({ error: saved.error });
+    return saved;
+  } catch (error) {
+    if (error.code === 'FST_REQ_FILE_TOO_LARGE') {
+      return reply.status(413).send({ error: 'Background images must be 10 MB or smaller.' });
+    }
+    console.error('Error saving appearance background:', error);
+    return reply.status(500).send({ error: 'Failed to save background' });
+  }
+});
+
+fastify.get('/api/appearance/backgrounds/:file', async (request, reply) => {
+  const resolved = appearanceAssets.resolveBackground(UPLOADS_ROOT, request.params.file);
+  if (!resolved) return reply.status(404).send({ error: 'Background not found' });
+  try {
+    const buffer = await fs.readFile(resolved.path);
+    // The name is random and never reused, so the bytes behind it never change.
+    reply.header('Content-Type', resolved.type);
+    reply.header('Cache-Control', 'public, max-age=31536000, immutable');
+    reply.header('X-Content-Type-Options', 'nosniff');
+    return reply.send(buffer);
+  } catch (error) {
+    if (error.code === 'ENOENT') return reply.status(404).send({ error: 'Background not found' });
+    console.error('Error serving appearance background:', error);
+    return reply.status(500).send({ error: 'Failed to load background' });
+  }
+});
+
+fastify.delete('/api/appearance/backgrounds/:file', async (request, reply) => {
+  if (demoBlocked(reply)) return;
+  try {
+    const removed = await appearanceAssets.deleteBackground(UPLOADS_ROOT, request.params.file);
+    if (!removed) return reply.status(404).send({ error: 'Background not found' });
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting appearance background:', error);
+    return reply.status(500).send({ error: 'Failed to delete background' });
   }
 });
 
