@@ -187,6 +187,7 @@
     "clearFilters": "Clear Filters",
     "noSchedules": "No schedules found.",
     "chore": "Chore",
+    "user": "User",
     "assignedTo": "Assigned To",
     "nextOccurrence": "Next Occurrence",
     "duration": "Duration",

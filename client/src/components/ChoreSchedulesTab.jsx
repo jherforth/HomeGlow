@@ -178,6 +178,9 @@ const defaultScheduleForm = {
   reminder_interval_minutes: '',
   transferable: true,
   can_snooze: true,
+  spawn_chore_id: null,
+  spawn_user_ids: [],
+  spawn_enabled: false
 };
 
 const defaultChoreForm = { title: '', description: '', clam_value: 0, icon: '' };
@@ -307,7 +310,10 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
       // Pre-migration rows may lack these columns; treat missing as enabled.
       transferable: schedule.transferable === undefined ? true : !!schedule.transferable,
       can_snooze: schedule.can_snooze === undefined ? true : !!schedule.can_snooze,
-      calendar_match: schedule.calendar_match || ''
+      calendar_match: schedule.calendar_match || '',
+      spawn_chore_id: schedule.spawn_chore_id || null,
+      spawn_user_ids: schedule.spawn_user_ids ? JSON.parse(schedule.spawn_user_ids) : [],
+      spawn_enabled: !!schedule.spawn_chore_id
     });
     setCrontabError(null);
     setScheduleDialogOpen(true);
@@ -364,7 +370,11 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
           : null,
         transferable: scheduleForm.transferable ? 1 : 0,
         can_snooze: scheduleForm.can_snooze ? 1 : 0,
-        calendar_match: isCalendarMode ? (scheduleForm.calendar_match?.trim() || null) : null
+        calendar_match: isCalendarMode ? (scheduleForm.calendar_match?.trim() || null) : null,
+        spawn_chore_id: scheduleForm.spawn_enabled ? (scheduleForm.spawn_chore_id || null) : null,
+        spawn_user_ids: scheduleForm.spawn_enabled && scheduleForm.spawn_user_ids?.length > 0
+          ? scheduleForm.spawn_user_ids
+          : null
       };
 
       if (editingSchedule) {
@@ -1163,6 +1173,73 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                   inputProps={{ min: 0 }}
                   sx={{ maxWidth: 280 }}
                 />
+              </Box>
+            )}
+
+            <Divider />
+
+            {/* Spawn child chores after completion. */}
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={!!scheduleForm.spawn_enabled}
+                  onChange={(e) => updateScheduleForm({
+                    spawn_enabled: e.target.checked,
+                    spawn_chore_id: e.target.checked ? scheduleForm.spawn_chore_id : null,
+                    spawn_user_ids: e.target.checked ? (scheduleForm.spawn_user_ids || []) : []
+                  })}
+                />
+              }
+              label="Spawn child chores on completion"
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ mt: -1.5, ml: 6 }}>
+              When this chore is completed, create a new chore for each selected user.
+            </Typography>
+
+            {!!scheduleForm.spawn_enabled && (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pl: 1 }}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Child chore</InputLabel>
+                  <Select
+                    value={scheduleForm.spawn_chore_id || ''}
+                    label="Child chore"
+                    onChange={(e) => updateScheduleForm({ spawn_chore_id: e.target.value || null })}
+                  >
+                    {choresByTitle
+                      .filter(c => c.id !== scheduleForm.chore_id)
+                      .map(c => (
+                        <MenuItem key={c.id} value={c.id}>{c.title}</MenuItem>
+                      ))}
+                  </Select>
+                </FormControl>
+
+                <FormControl fullWidth size="small">
+                  <InputLabel>For users</InputLabel>
+                  <Select
+                    multiple
+                    value={scheduleForm.spawn_user_ids || []}
+                    label="For users"
+                    onChange={(e) => {
+                      const val = typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value;
+                      updateScheduleForm({ spawn_user_ids: val });
+                    }}
+                    renderValue={(selected) => (
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {selected.map((uid) => {
+                          const u = users.find(user => user.id === uid);
+                          return <Chip key={uid} size="small" label={u ? u.username : uid} />;
+                        })}
+                      </Box>
+                    )}
+                  >
+                    {users.map((u) => (
+                      <MenuItem key={u.id} value={u.id}>
+                        <Checkbox checked={(scheduleForm.spawn_user_ids || []).indexOf(u.id) > -1} />
+                        <ListItemText primary={u.username} />
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
               </Box>
             )}
 
