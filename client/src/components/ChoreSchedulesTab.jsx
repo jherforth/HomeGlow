@@ -222,7 +222,8 @@ const defaultScheduleForm = {
   transferable: true,
   can_snooze: true,
   spawn_chore_id: null,
-  spawn_user_ids: []
+  spawn_user_ids: [],
+  spawn_enabled: false
 };
 
 const defaultChoreForm = { title: '', description: '', clam_value: 0, icon: '' };
@@ -376,7 +377,8 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
       transferable: schedule.transferable === undefined ? true : !!schedule.transferable,
       can_snooze: schedule.can_snooze === undefined ? true : !!schedule.can_snooze,
       spawn_chore_id: schedule.spawn_chore_id || null,
-      spawn_user_ids: schedule.spawn_user_ids ? JSON.parse(schedule.spawn_user_ids) : []
+      spawn_user_ids: schedule.spawn_user_ids ? JSON.parse(schedule.spawn_user_ids) : [],
+      spawn_enabled: !!schedule.spawn_chore_id
     });
     setCrontabError(null);
     setScheduleDialogOpen(true);
@@ -425,8 +427,8 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
           : null,
         transferable: scheduleForm.transferable ? 1 : 0,
         can_snooze: scheduleForm.can_snooze ? 1 : 0,
-        spawn_chore_id: scheduleForm.spawn_chore_id || null,
-        spawn_user_ids: scheduleForm.spawn_chore_id && scheduleForm.spawn_user_ids?.length > 0
+        spawn_chore_id: scheduleForm.spawn_enabled ? (scheduleForm.spawn_chore_id || null) : null,
+        spawn_user_ids: scheduleForm.spawn_enabled && scheduleForm.spawn_user_ids?.length > 0
           ? scheduleForm.spawn_user_ids
           : null
       };
@@ -1290,10 +1292,11 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
             <FormControlLabel
               control={
                 <Switch
-                  checked={!!scheduleForm.spawn_chore_id}
+                  checked={!!scheduleForm.spawn_enabled}
                   onChange={(e) => updateScheduleForm({
-                    spawn_chore_id: e.target.checked ? '' : null,
-                    spawn_user_ids: e.target.checked ? [] : null
+                    spawn_enabled: e.target.checked,
+                    spawn_chore_id: e.target.checked ? scheduleForm.spawn_chore_id : null,
+                    spawn_user_ids: e.target.checked ? (scheduleForm.spawn_user_ids || []) : []
                   })}
                 />
               }
@@ -1303,7 +1306,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
               When this chore is completed, create a new chore for each selected user.
             </Typography>
 
-            {!!scheduleForm.spawn_chore_id !== false && scheduleForm.spawn_chore_id !== null && (
+            {!!scheduleForm.spawn_enabled && (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pl: 1 }}>
                 <FormControl fullWidth size="small">
                   <InputLabel>Child chore</InputLabel>
