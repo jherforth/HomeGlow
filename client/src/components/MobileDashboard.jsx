@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box } from '@mui/material';
 import { needsFixedMobileHeight } from '../utils/mobileWidgets.js';
+import { frameDecoration } from '../utils/widgetFrame.js';
 
 // Phone layout shell (issue #118): the active tab's widgets as one vertical,
 // scrollable column of full-width cards. Replaces WidgetContainer below 600px —
@@ -17,7 +18,7 @@ const MobileDashboard = ({ widgets }) => {
       sx={{
         display: 'flex',
         flexDirection: 'column',
-        gap: 1.5,
+        gap: 'calc(var(--hg-grid-gap) * 0.75)',
         px: 1.5,
         pt: 1.5,
         // Clear the floating dock.
@@ -32,12 +33,14 @@ const MobileDashboard = ({ widgets }) => {
           data-widget-id={widget.id}
           sx={{
             width: '100%',
-            borderRadius: 2,
+            position: 'relative',
+            borderRadius: 'var(--hg-frame-radius)',
             overflow: 'hidden',
             border: '1px solid var(--card-border)',
-            backgroundColor: widget.transparent ? 'transparent' : 'var(--card-bg)',
+            background: widget.transparent ? 'transparent' : 'var(--hg-frame-bg)',
             boxShadow: widget.transparent ? 'none' : 'var(--shadow)',
             ...(needsFixedMobileHeight(widget) ? { height: '60vh', minHeight: 360 } : {}),
+            '&::after': frameDecoration,
           }}
         >
           {widget.content}

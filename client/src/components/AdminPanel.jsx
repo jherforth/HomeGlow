@@ -2081,13 +2081,13 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
             height: 60,
             backgroundColor: interfaceColors[key],
             border: '3px solid var(--card-border)',
-            borderRadius: 2,
+            borderRadius: 'var(--hg-radius-md)',
             cursor: 'pointer',
             transition: 'all 0.2s',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+            boxShadow: '0 2px 8px var(--hg-black-10)',
             '&:hover': {
               transform: 'scale(1.05)',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+              boxShadow: '0 4px 12px var(--hg-black-20)'
             }
           }}
           onClick={(e) => {
@@ -2231,7 +2231,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                   const hasRequiredTabsError = Boolean(config.enabled) && (!Array.isArray(widgetAssignments[widget]) || widgetAssignments[widget].length === 0);
 
                   return (
-                  <Box key={widget} sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
+                  <Box key={widget} sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)' }}>
                     <Typography variant="subtitle1" sx={{ mb: 2, textTransform: 'capitalize', fontWeight: 'bold' }}>
                       {widget} Widget
                     </Typography>
@@ -2304,7 +2304,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                   );
                 })}
 
-                <Box sx={{ mb: 3, p: 2, border: '2px solid var(--accent)', borderRadius: 1, backgroundColor: 'rgba(var(--accent-rgb), 0.05)' }}>
+                <Box sx={{ mb: 3, p: 2, border: '2px solid var(--accent)', borderRadius: 'var(--hg-radius-sm)', backgroundColor: 'rgba(var(--accent-rgb), 0.05)' }}>
                   <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>
                     {t('admin:widgets.weatherWidget')}
                   </Typography>
@@ -2431,7 +2431,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                         up scrolling the list inside a scrolling dialog. */}
                     <List sx={{ maxHeight: { xs: 360, md: '50vh' }, overflowY: 'auto' }}>
                       {githubWidgets.map((widget) => (
-                        <ListItem key={widget.path} sx={{ border: '1px solid var(--card-border)', borderRadius: 1, mb: 1 }}>
+                        <ListItem key={widget.path} sx={{ border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)', mb: 1 }}>
                           {/* Sibling image in the plugins repo (chore-metrics.png next to
                               chore-metrics.html). Deliberately not carried in the manifest:
                               older HomeGlow versions return the whole manifest in
@@ -2452,7 +2452,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                                 cursor: 'zoom-in',
                                 flexShrink: 0,
                                 lineHeight: 0,
-                                borderRadius: 1,
+                                borderRadius: 'var(--hg-radius-sm)',
                                 '&:focus-visible': { outline: '2px solid var(--accent)', outlineOffset: 2 }
                               }}
                             >
@@ -2461,7 +2461,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                                 src={widget.previewUrl}
                                 alt=""
                                 loading="lazy"
-                                sx={{ width: 96, height: 60, objectFit: 'cover', borderRadius: 1, display: 'block' }}
+                                sx={{ width: 96, height: 60, objectFit: 'cover', borderRadius: 'var(--hg-radius-sm)', display: 'block' }}
                               />
                             </Box>
                           )}
@@ -2546,7 +2546,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                       const pluginWidgetName = `plugin:${plugin.filename}`;
                       const hasRequiredTabsError = Boolean(pSettings.enabled) && (!Array.isArray(pluginAssignments[pluginWidgetName]) || pluginAssignments[pluginWidgetName].length === 0);
                       return (
-                        <Box key={plugin.filename} sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
+                        <Box key={plugin.filename} sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)' }}>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                             <Box sx={{ pr: 1 }}>
                               <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
@@ -2588,7 +2588,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                           </Box>
 
                           {previewPlugin === plugin.filename && (
-                            <Box sx={{ mb: 2, border: '1px solid var(--card-border)', borderRadius: 1, overflow: 'hidden', height: 220 }}>
+                            <Box sx={{ mb: 2, border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)', overflow: 'hidden', height: 220 }}>
                               <iframe
                                 title={t('admin:plugins.previewTitle', { name: plugin.name })}
                                 // Same channel PluginWidgetWrapper uses, read from the root
@@ -2906,13 +2906,13 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                   {t('admin:devices.manageHelp')}
                 </Alert>
 
-                <Box sx={{ mb: 2, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
+                <Box sx={{ mb: 2, p: 2, border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)' }}>
                   <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
                     {t('admin:devices.currentName')}
                   </Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                     <Chip label={t('admin:devices.current')} color="primary" size="small" />
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                    <Typography variant="body2" sx={{ fontFamily: 'var(--hg-font-mono)' }}>
                       {currentDeviceName}
                     </Typography>
                   </Box>
@@ -2936,7 +2936,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                             <TableCell data-label={t('common:labels.name')}>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                                 {isCurrent && <Chip label={t('admin:devices.current')} color="primary" size="small" />}
-                                <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                                <Typography variant="body2" sx={{ fontFamily: 'var(--hg-font-mono)' }}>
                                   {device.name}
                                 </Typography>
                               </Box>
@@ -3801,7 +3801,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
             )}
             {choresSubTab === 2 && (
               <>
-            <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
+            <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)' }}>
               <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600 }}>
                 {t('admin:chores.rewards')}
               </Typography>
@@ -3844,7 +3844,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
               </Typography>
             </Box>
 
-            <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 1 }}>
+            <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)' }}>
               <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600 }}>
                 {t('admin:chores.soundsHeading')}
               </Typography>
@@ -3961,7 +3961,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
 
             <List>
               {prizes.map((prize) => (
-                <ListItem key={prize.id} sx={{ border: '1px solid var(--card-border)', borderRadius: 1, mb: 1 }}>
+                <ListItem key={prize.id} sx={{ border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)', mb: 1 }}>
                   {editingPrize?.id === prize.id ? (
                     <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, width: '100%', alignItems: { xs: 'stretch', sm: 'center' } }}>
                       <TextField
@@ -4034,7 +4034,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
               ) : (
                 <List>
                   {prizeOffers.map((offer) => (
-                    <ListItem key={offer.id} sx={{ border: '1px solid var(--card-border)', borderRadius: 1, mb: 1 }}>
+                    <ListItem key={offer.id} sx={{ border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)', mb: 1 }}>
                       <ListItemText
                         primary={`${offer.name} — ${offer.clam_cost} 🥟${offer.repeatable ? ' · 🔁' : ''}`}
                         secondary={
@@ -4075,7 +4075,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
               {t('admin:security.help')}
             </Alert>
 
-            <Box sx={{ p: 3, border: '2px solid var(--accent)', borderRadius: 2, backgroundColor: 'rgba(var(--accent-rgb), 0.05)' }}>
+            <Box sx={{ p: 3, border: '2px solid var(--accent)', borderRadius: 'var(--hg-radius-md)', backgroundColor: 'rgba(var(--accent-rgb), 0.05)' }}>
               <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Lock />
                 {t('admin:security.pinProtection')}
@@ -4089,7 +4089,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
 
               <Grid container spacing={2}>
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <Paper elevation={0} sx={{ p: 2, backgroundColor: 'rgba(0, 0, 0, 0.1)' }}>
+                  <Paper elevation={0} sx={{ p: 2, backgroundColor: 'var(--hg-black-10)' }}>
                     <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
                       {t('admin:security.requirements')}
                     </Typography>
@@ -4106,7 +4106,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                 </Grid>
 
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <Paper elevation={0} sx={{ p: 2, backgroundColor: 'rgba(0, 0, 0, 0.1)' }}>
+                  <Paper elevation={0} sx={{ p: 2, backgroundColor: 'var(--hg-black-10)' }}>
                     <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
                       {t('admin:security.currentStatus')}
                     </Typography>
@@ -4643,7 +4643,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                         </Typography>
                       </TableCell>
                       <TableCell data-label={t('admin:chores.schedule')}>
-                        <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                        <Typography variant="body2" sx={{ fontFamily: 'var(--hg-font-mono)' }}>
                           {chore.crontab || 'One-time'}
                         </Typography>
                       </TableCell>
@@ -4732,7 +4732,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
               // maxWidth rather than width: these screenshots are around 620px
               // wide, and stretching one to fill a md dialog only makes it
               // blurrier — the opposite of why the enlarged view exists.
-              sx={{ maxWidth: '100%', height: 'auto', display: 'block', mx: 'auto', borderRadius: 1 }}
+              sx={{ maxWidth: '100%', height: 'auto', display: 'block', mx: 'auto', borderRadius: 'var(--hg-radius-sm)' }}
             />
           )}
         </DialogContent>
@@ -4776,7 +4776,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                     display: 'flex',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    borderRadius: 2,
+                    borderRadius: 'var(--hg-radius-md)',
                     p: 0.75,
                     '&:hover': { backgroundColor: 'rgba(var(--accent-rgb), 0.12)' },
                   }}

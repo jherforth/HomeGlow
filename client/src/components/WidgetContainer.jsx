@@ -16,6 +16,8 @@ import CountdownCircle from './CountdownCircle';
 import { canCommitResize } from '../utils/resizeGuard';
 import { shouldAcceptLayoutChange } from '../utils/layoutSync';
 import { buildLayout, savedSourcesById } from '../utils/gridPlacement';
+import { readGridMetrics } from '../utils/gridMetrics';
+import { frameDecoration } from '../utils/widgetFrame';
 
 // No auto-compaction; block overlaps (same as compactType={null} + preventCollision).
 const GRID_COMPACTOR = getCompactor(null, false, true);
@@ -57,6 +59,8 @@ const WidgetContainer = ({
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [containerWidth, setContainerWidth] = useState(1200);
   const [gridCols, setGridCols] = useState(12);
+  // The theme's gap between widgets, read once from --hg-grid-gap.
+  const [gridMetrics] = useState(readGridMetrics);
   const [selectedWidget, setSelectedWidget] = useState(null);
   const [layout, setLayout] = useState([]);
   const [isLockTransitioning, setIsLockTransitioning] = useState(false);
@@ -504,11 +508,11 @@ const WidgetContainer = ({
     userSelect: 'none',
     touchAction: 'none',
     WebkitTouchCallout: 'none',
-    filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
+    filter: 'drop-shadow(0 2px 4px var(--hg-black-30))',
     transition: 'transform 0.1s ease, filter 0.1s ease',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'var(--hg-black-50)',
     padding: '4px 8px',
-    borderRadius: '4px',
+    borderRadius: 'var(--hg-radius-sm)',
   };
 
   return (
@@ -530,7 +534,7 @@ const WidgetContainer = ({
         '& .react-grid-item.react-grid-placeholder': {
           background: 'var(--accent)',
           opacity: 0.2,
-          borderRadius: '8px',
+          borderRadius: 'var(--hg-radius-md)',
           zIndex: 2,
           transition: 'all 100ms ease',
         },
@@ -543,8 +547,8 @@ const WidgetContainer = ({
           layout={gridLayout}
           gridConfig={{
             cols: gridCols,
-            rowHeight: 100,
-            margin: [16, 16],
+            rowHeight: gridMetrics.rowHeight,
+            margin: [gridMetrics.gap, gridMetrics.gap],
             containerPadding: [0, 0],
           }}
           dragConfig={{
@@ -561,7 +565,7 @@ const WidgetContainer = ({
             // A transparent widget shows the page background through its box: no
             // card color and no resting shadow, which would otherwise draw the
             // rectangle the setting is meant to remove. The selection border stays.
-            const restingShadow = widget.transparent ? 'none' : '0 2px 8px rgba(0, 0, 0, 0.1)';
+            const restingShadow = widget.transparent ? 'none' : 'var(--hg-frame-shadow)';
             const currentLayout = layout.find(l => l.i === widget.id);
             const fallbackLayout = {
               i: widget.id,
@@ -599,8 +603,8 @@ const WidgetContainer = ({
                   '&:hover': {
                     transform: enabled ? 'scale(1.2)' : 'none',
                     filter: enabled
-                      ? 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4))'
-                      : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
+                      ? 'drop-shadow(0 4px 8px var(--hg-black-50))'
+                      : 'drop-shadow(0 2px 4px var(--hg-black-30))',
                   },
                   '&:active': {
                     transform: enabled ? 'scale(1.1)' : 'none',
@@ -632,12 +636,12 @@ const WidgetContainer = ({
                   height: '100%',
                   position: 'relative',
                   border: isSelected ? '3px solid var(--accent)' : '3px solid transparent',
-                  borderRadius: 2,
+                  borderRadius: 'var(--hg-frame-radius)',
                   transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
                   boxShadow: isSelected
                     ? '0 8px 32px rgba(var(--accent-rgb), 0.3)'
                     : restingShadow,
-                  backgroundColor: widget.transparent ? 'transparent' : 'var(--card-bg)',
+                  background: widget.transparent ? 'transparent' : 'var(--hg-frame-bg)',
                   overflow: 'hidden',
                   cursor: locked ? 'default' : (isSelected ? 'move' : 'pointer'),
                   touchAction: locked ? 'auto' : (isSelected ? 'none' : 'manipulation'),
@@ -652,9 +656,10 @@ const WidgetContainer = ({
                         ? restingShadow
                         : (isSelected
                           ? '0 8px 32px rgba(var(--accent-rgb), 0.3)'
-                          : '0 4px 16px rgba(0, 0, 0, 0.15)'),
+                          : 'var(--hg-frame-shadow-hover)'),
                     }
-                  }
+                  },
+                  '&::after': frameDecoration,
                 }}
               >
                 {!locked && !isSelected && (

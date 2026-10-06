@@ -477,7 +477,7 @@ const PhotoWidget = ({ refreshNonce = 0, isActive = true, hiddenControls = [] })
             position: 'relative',
             ...(photoHeight === 'auto' ? { flex: 1, minHeight: 0 } : { height: photoHeight }),
             overflow: 'hidden',
-            borderRadius: 2,
+            borderRadius: 'var(--hg-radius-md)',
             mb: 2
           }}>
             <Box
@@ -510,7 +510,7 @@ const PhotoWidget = ({ refreshNonce = 0, isActive = true, hiddenControls = [] })
               }}
             >
               {currentPhotos.map((photo, index) => (
-                <Box key={`${photo.id}-${index}`} sx={{ height: '100%', overflow: 'hidden', borderRadius: 1 }}>
+                <Box key={`${photo.id}-${index}`} sx={{ height: '100%', overflow: 'hidden', borderRadius: 'var(--hg-radius-sm)' }}>
                   <img
                     src={`${API_BASE_URL}${photo.url}`}
                     alt={t('photos:widget.photoAlt')}
@@ -518,7 +518,7 @@ const PhotoWidget = ({ refreshNonce = 0, isActive = true, hiddenControls = [] })
                       width: '100%',
                       height: '100%',
                       objectFit: 'contain',
-                      backgroundColor: 'rgba(0, 0, 0, 0.05)'
+                      backgroundColor: 'var(--hg-black-05)'
                     }}
                     onError={(e) => {
                       console.error('Image load error:', e);
@@ -538,9 +538,9 @@ const PhotoWidget = ({ refreshNonce = 0, isActive = true, hiddenControls = [] })
                     left: 8,
                     top: '50%',
                     transform: 'translateY(-50%)',
-                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                    backgroundColor: 'var(--hg-black-50)',
                     color: 'white',
-                    '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.7)' }
+                    '&:hover': { backgroundColor: 'var(--hg-black-70)' }
                   }}
                 >
                   <ChevronLeft />
@@ -552,9 +552,9 @@ const PhotoWidget = ({ refreshNonce = 0, isActive = true, hiddenControls = [] })
                     right: 8,
                     top: '50%',
                     transform: 'translateY(-50%)',
-                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                    backgroundColor: 'var(--hg-black-50)',
                     color: 'white',
-                    '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.7)' }
+                    '&:hover': { backgroundColor: 'var(--hg-black-70)' }
                   }}
                 >
                   <ChevronRight />
@@ -696,7 +696,7 @@ const PhotoWidget = ({ refreshNonce = 0, isActive = true, hiddenControls = [] })
                 sx={{
                   border: '1px solid',
                   borderColor: 'divider',
-                  borderRadius: 1,
+                  borderRadius: 'var(--hg-radius-sm)',
                   mb: 1
                 }}
               >
@@ -908,7 +908,7 @@ const PhotoWidget = ({ refreshNonce = 0, isActive = true, hiddenControls = [] })
                                 width: '100%',
                                 height: 80,
                                 objectFit: 'cover',
-                                borderRadius: 4,
+                                borderRadius: 'var(--hg-radius-sm)',
                                 display: 'block'
                               }}
                             />
@@ -919,9 +919,9 @@ const PhotoWidget = ({ refreshNonce = 0, isActive = true, hiddenControls = [] })
                                 position: 'absolute',
                                 top: 2,
                                 right: 2,
-                                backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                                backgroundColor: 'var(--hg-black-70)',
                                 color: 'white',
-                                '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.8)' }
+                                '&:hover': { backgroundColor: 'var(--hg-black-90)' }
                               }}
                             >
                               <Delete fontSize="small" />

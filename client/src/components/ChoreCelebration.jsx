@@ -43,9 +43,9 @@ const shapeSx = (shape, size, color) => {
     return { width: size, height: size, borderRadius: '50%', backgroundColor: color };
   }
   if (shape === 'streamer') {
-    return { width: Math.max(2, size * 0.3), height: size * 2, borderRadius: '2px', backgroundColor: color };
+    return { width: Math.max(2, size * 0.3), height: size * 2, borderRadius: 'var(--hg-radius-xs)', backgroundColor: color };
   }
-  return { width: size, height: size * 0.6, borderRadius: '1px', backgroundColor: color };
+  return { width: size, height: size * 0.6, borderRadius: 'var(--hg-radius-xs)', backgroundColor: color };
 };
 
 const SHAPES = ['square', 'circle', 'streamer'];

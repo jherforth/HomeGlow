@@ -1154,12 +1154,12 @@ const App = () => {
               zIndex: 1200,
               px: 2,
               py: 0.5,
-              borderRadius: '16px',
+              borderRadius: 'var(--hg-radius-xl)',
               backgroundColor: 'var(--accent)',
               color: '#fff',
               fontSize: '0.8rem',
               fontWeight: 600,
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+              boxShadow: '0 2px 8px var(--hg-black-30)',
               pointerEvents: 'none',
             }}
           >
@@ -1176,7 +1176,7 @@ const App = () => {
               zIndex: 1200,
               px: 1.5,
               py: 0.5,
-              borderRadius: '16px',
+              borderRadius: 'var(--hg-radius-xl)',
               backgroundColor: 'var(--card-bg)',
               border: '1px solid var(--card-border)',
               color: 'var(--text)',
@@ -1239,7 +1239,7 @@ const App = () => {
               sx={{
                 width: '100%',
                 maxWidth: 620,
-                borderRadius: 3,
+                borderRadius: 'var(--hg-radius-lg)',
                 border: '1px solid var(--card-border)',
                 backgroundColor: 'var(--card-bg)',
                 boxShadow: 'var(--shadow)',
