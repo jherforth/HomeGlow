@@ -7,14 +7,15 @@ import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
 import {
+  clampLayoutItem,
   layoutItemFromNormalized,
-  layoutItemToNormalized,
+  layoutToNormalized,
   scaleLayoutItem,
 } from '../utils/gridLayout.js';
 import CountdownCircle from './CountdownCircle';
 import { canCommitResize } from '../utils/resizeGuard';
 import { shouldAcceptLayoutChange } from '../utils/layoutSync';
-import { buildLayout } from '../utils/gridPlacement';
+import { buildLayout, savedSourcesById } from '../utils/gridPlacement';
 
 // No auto-compaction; block overlaps (same as compactType={null} + preventCollision).
 const GRID_COMPACTOR = getCompactor(null, false, true);
@@ -67,37 +68,34 @@ const WidgetContainer = ({
   const prevLockedRef = useRef(locked);
   const hasInitializedLockEffectRef = useRef(false);
   const saveTimerRef = useRef(null);
-  // Widget IDs moved or resized during the current edit session. Only these
-  // get their positions persisted — unmoved widgets keep their exact stored
-  // 12-col positions instead of being re-rounded through the live column
-  // count (which nudges widths when saving from a tablet).
-  const movedWidgetIdsRef = useRef(new Set());
   // Which tab the current `layout` state was built for. Null until the first
   // rebuild lands. Guards against saving a layout mid tab change — see
   // shouldAcceptLayoutChange.
   const layoutTabRef = useRef(null);
   const resizeTapGuardRef = useRef(new Map());
+  // The widgets of the latest render, whose savedLayout describes the active
+  // tab. Read when a save is requested, not when the debounced save fires.
+  const widgetsRef = useRef(widgets);
+  widgetsRef.current = widgets;
 
-  const saveLayoutsToApi = useCallback((layoutItems, tabNumber, cols, onlyIds = null) => {
+  const saveLayoutsToApi = useCallback((layoutItems, tabNumber, cols) => {
+    // Every widget is saved, but against what it was loaded from: one nobody
+    // moved keeps its stored 12-col values exactly instead of being re-rounded
+    // through the live column count (see layoutToNormalized).
+    const savedSources = savedSourcesById(widgetsRef.current);
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       // Persist in normalized (12-col) units so layouts round-trip across breakpoints.
-      // When onlyIds is given, only those widgets are saved — the rest keep
-      // their stored positions untouched.
-      const layouts = layoutItems
-        .filter(item => resolveWidgetName(item.i))
-        .filter(item => !onlyIds || onlyIds.has(item.i))
-        .map(item => {
-          const stored = layoutItemToNormalized(item, cols);
-          return {
-            widget_name: resolveWidgetName(item.i),
-            tabNumber: tabNumber,
-            layout_x: stored.x,
-            layout_y: stored.y,
-            layout_w: stored.w,
-            layout_h: stored.h,
-          };
-        });
+      const layouts = layoutToNormalized(layoutItems, cols, savedSources)
+        .filter(stored => resolveWidgetName(stored.i))
+        .map(stored => ({
+          widget_name: resolveWidgetName(stored.i),
+          tabNumber: tabNumber,
+          layout_x: stored.x,
+          layout_y: stored.y,
+          layout_w: stored.w,
+          layout_h: stored.h,
+        }));
 
       if (layouts.length > 0) {
         axios.patch(`${API_DEVICE_URL}/widget-assignments/layout/bulk`, { layouts }).catch(() => { });
@@ -157,10 +155,18 @@ const WidgetContainer = ({
       layoutTabRef.current = activeTab;
     } else if (colsChanged) {
       setLayout((currentLayout) => {
-        const nextLayout = currentLayout.map((item) => ({
-          ...scaleLayoutItem(item, prevCols, gridCols),
-          static: lockedRef.current,
-        }));
+        // Through the stored 12-col values rather than column to column: a
+        // phone turning between 4 and 8 columns would otherwise re-round every
+        // widget through the coarse grid, and the next save would keep it.
+        const stored = layoutToNormalized(currentLayout, prevCols, savedSourcesById(widgets));
+        const nextLayout = currentLayout.map((item, index) => {
+          const scaled = scaleLayoutItem(item, prevCols, gridCols);
+          const { x, w } = layoutItemFromNormalized(stored[index], gridCols);
+          return {
+            ...clampLayoutItem({ ...scaled, x, w }, gridCols),
+            static: lockedRef.current,
+          };
+        });
         return nextLayout;
       });
       layoutTabRef.current = activeTab;
@@ -190,17 +196,7 @@ const WidgetContainer = ({
         && locked
         && layoutTabRef.current === activeTab;
       if (shouldPersistLockedLayouts) {
-        // Persist only widgets moved during this edit session. Unmoved widgets
-        // keep their stored positions, so saving from a narrower screen can't
-        // nudge them via column-count rounding.
-        const movedIds = new Set(movedWidgetIdsRef.current);
-        if (movedIds.size > 0) {
-          saveLayoutsToApi(updatedLayout, activeTab, gridCols, movedIds);
-        }
-        movedWidgetIdsRef.current.clear();
-      } else if (!locked) {
-        // Entering edit mode starts a fresh moved set.
-        movedWidgetIdsRef.current.clear();
+        saveLayoutsToApi(updatedLayout, activeTab, gridCols);
       }
 
       return updatedLayout;
@@ -250,19 +246,13 @@ const WidgetContainer = ({
       };
     });
 
-    const changedIds = new Set();
     const hasChanged = safeLayout.some(item => {
       const existing = currentLayoutById.get(item.i);
-      if (!existing) { changedIds.add(item.i); return true; }
-      const changed = existing.x !== item.x || existing.y !== item.y || existing.w !== item.w || existing.h !== item.h;
-      if (changed) changedIds.add(item.i);
-      return changed;
+      if (!existing) return true;
+      return existing.x !== item.x || existing.y !== item.y || existing.w !== item.w || existing.h !== item.h;
     });
 
     if (!hasChanged) return;
-
-    // Remember which widgets moved so the save persists only those.
-    changedIds.forEach(id => movedWidgetIdsRef.current.add(id));
 
     const updatedLayout = safeLayout.map(item => ({
       ...item,
@@ -271,7 +261,7 @@ const WidgetContainer = ({
 
     setLayout(updatedLayout);
 
-    saveLayoutsToApi(updatedLayout, activeTab, gridCols, changedIds);
+    saveLayoutsToApi(updatedLayout, activeTab, gridCols);
 
     if (onLayoutChangeCallback) {
       onLayoutChangeCallback(updatedLayout);
@@ -365,8 +355,7 @@ const WidgetContainer = ({
         onLayoutChangeCallback(newLayout);
       }
 
-      movedWidgetIdsRef.current.add(widgetId);
-      saveLayoutsToApi(newLayout, activeTab, gridCols, new Set([widgetId]));
+      saveLayoutsToApi(newLayout, activeTab, gridCols);
       return newLayout;
     });
   };

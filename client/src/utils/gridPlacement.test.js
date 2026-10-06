@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { buildLayout } from './gridPlacement';
+import { buildLayout, savedSourcesById } from './gridPlacement';
+import { layoutToNormalized } from './gridLayout.js';
 
 const plugin = (id) => ({
   id,
@@ -178,5 +179,31 @@ describe('buildLayout', () => {
       expect(overlaps(out), widths.join('+')).toBeNull();
       out.forEach((i) => expect(i.y, widths.join('+')).toBe(0));
     }
+  });
+});
+
+describe('saving a built layout', () => {
+  // A board saved on a desktop, opened on a tablet, then locked again without
+  // moving anything: the save must hand back exactly what was stored.
+  it('round-trips untouched saved layouts at every column count', () => {
+    const widgets = [
+      { ...plugin('a'), savedLayout: { x: 0, y: 0, w: 4, h: 3 } },
+      { ...plugin('b'), savedLayout: { x: 4, y: 0, w: 4, h: 3 } },
+      { ...plugin('c'), savedLayout: { x: 8, y: 0, w: 4, h: 3 } },
+      { ...plugin('d'), savedLayout: { x: 0, y: 3, w: 7, h: 4 } },
+      { ...plugin('e'), savedLayout: { x: 7, y: 3, w: 5, h: 4 } },
+    ];
+    const rects = (items) => items.map(({ i, x, y, w, h }) => ({ i, x, y, w, h }));
+    const expected = widgets.map(({ id, savedLayout }) => ({ i: id, ...savedLayout }));
+
+    for (const cols of [4, 8, 12]) {
+      const saved = layoutToNormalized(buildLayout(widgets, cols, true), cols, savedSourcesById(widgets));
+      expect(rects(saved)).toEqual(expected);
+    }
+  });
+
+  it('has nothing to keep for a widget that was never saved', () => {
+    expect(savedSourcesById([plugin('a'), { ...plugin('b'), savedLayout: { x: 6, y: 0, w: 6, h: 4 } }]))
+      .toEqual(new Map([['b', { x: 6, y: 0, w: 6, h: 4, minW: 2, minH: 2 }]]));
   });
 });
