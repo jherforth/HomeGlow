@@ -15,11 +15,11 @@ import {
   normalizeAutoDarkModeSettings,
   normalizeInterfaceColors,
 } from './interfaceSettings.js';
-import { BUILT_IN_THEMES, DEFAULT_THEME_ID } from './themes.js';
-import { normalizeAccent, normalizeBackground, normalizeCardOpacity } from './personalize.js';
+import { DEFAULT_THEME_ID } from './themes.js';
+import { normalizeBackground, normalizeCardOpacity } from './personalize.js';
 
 export const APPEARANCE_SETTING_KEY = 'appearance';
-export const APPEARANCE_FIELDS = ['theme', 'mode', 'colors', 'autoDark', 'accent', 'background', 'cardOpacity'];
+export const APPEARANCE_FIELDS = ['theme', 'mode', 'colors', 'autoDark', 'background', 'cardOpacity'];
 export const MODES = ['light', 'dark', 'auto'];
 
 export const DEFAULT_APPEARANCE = {
@@ -28,7 +28,6 @@ export const DEFAULT_APPEARANCE = {
   colors: { ...DEFAULT_INTERFACE_COLORS },
   autoDark: { ...DEFAULT_AUTO_DARK_MODE_SETTINGS },
   // Personalization at its defaults leaves the theme as it is.
-  accent: 'theme',
   background: { kind: 'none' },
   cardOpacity: 1,
 };
@@ -52,12 +51,13 @@ const parseMaybeJson = (raw) => {
   }
 };
 
-const THEME_IDS = BUILT_IN_THEMES.map((theme) => theme.id);
+// Any theme id is kept, built in or not: installed themes arrive from the
+// server after this runs, and an id that isn't installed resolves to Classic.
+const THEME_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 const normalizeField = (field, value) => {
-  if (field === 'theme') return THEME_IDS.includes(value) ? value : undefined;
+  if (field === 'theme') return typeof value === 'string' && THEME_ID.test(value) ? value : undefined;
   if (field === 'mode') return MODES.includes(value) ? value : undefined;
-  if (field === 'accent') return normalizeAccent(value);
   if (field === 'background') return normalizeBackground(value);
   if (field === 'cardOpacity') return normalizeCardOpacity(value);
   if (!isObject(value)) return undefined;

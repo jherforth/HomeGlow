@@ -7,21 +7,23 @@ it. Themes never contain code, so they are safe to share.
 Related reading:
 - [Theme Architecture](../architecture/theme-architecture.md): the design and
   the rules behind it.
-- `client/src/themes/reef/` and `client/src/themes/starship/`: two complete
-  themes to copy from.
+- `reef/` and `starship/` in
+  [jherforth/HomeGlowThemes](https://github.com/jherforth/HomeGlowThemes):
+  two complete themes to copy from.
 
 ## 1. The folder
 
 ```
-client/src/themes/aurora/
+aurora/
   theme.json          the manifest
   assets/             pictures: .svg, .png, .webp or .jpg
   fonts/              .woff2 files, with their license
 ```
 
-Adding the folder is all it takes: HomeGlow finds it on the next build and
-lists the theme under Admin, Interface, Appearance. The folder name must match
-the manifest's `id`.
+Install the folder with **Add a theme folder** (§7) and choose the theme
+under Admin → Look → Appearance. To build a theme into the app instead, put
+the folder in `client/src/themes/`; HomeGlow finds it on the next build. The
+folder name must match the manifest's `id`.
 
 ## 2. The manifest
 
@@ -148,14 +150,38 @@ reports every problem as a readable sentence, and `npm test` runs it over every
 theme folder. Then pick the theme in Admin and look at it in light and dark,
 on a desktop and a phone width.
 
-## 7. Examples
+## 7. Installing and sharing a theme
 
-- **Starship** (`themes/starship/`) layers a sometimes-galaxy (`image`, picked
+HomeGlow builds in only Classic. Other themes are installed in Admin → Look →
+Themes:
+
+- **Get themes** lists the themes repository
+  ([jherforth/HomeGlowThemes](https://github.com/jherforth/HomeGlowThemes)),
+  one folder per theme at its root, named by the theme's `id`. A
+  `preview.png` beside `theme.json` shows in the list.
+- **Add a theme folder** installs a folder from your computer. The admin page
+  runs `validateThemePackage` before sending it, and shows what's wrong.
+
+Installed themes are kept by the server and offered to every display. Each
+display runs the same check before using one, so a theme that fails is listed
+as unusable and never partly applied. Files other than `theme.json`,
+`assets/` and `fonts/` (a README, a preview) are ignored. SVGs may not carry
+script. A theme may hold 64 files, 2 MB each, 8 MB in all.
+
+An installed theme with a built-in theme's id replaces it, except Classic.
+To share a theme, open a pull request adding its folder to the themes
+repository.
+
+## 8. Examples
+
+Both are in the themes repository.
+
+- **Starship** (`starship/`) layers a sometimes-galaxy (`image`, picked
   from three, at a random angle, with a `chance`), a starfield in stellar
   colors (`dots`), up to three planets (`sprites` with `lift` and `hue`),
   twinkles, shooting stars and meteor storms (`streaks` with `burst`), and
   two `flyby` layers: five kinds of ship, and the occasional tumbling alien. Its confetti mixes tinted sparkles, tiny ships and an alien into LCARS-colored streamers; Reef's throws fish, starfish, shells and bubbles.
-- **Reef** (`themes/reef/`) uses six layers: `field` caustics, `particles`
+- **Reef** (`reef/`) uses six layers: `field` caustics, `particles`
   bubbles from `bubble.svg`, a sea floor per mode (`image`), a still `sprites`
   layer scattering eight kinds of coral, swaying tinted kelp with a current,
   and a swaying mix of fans, whips and anemones. Every load is a new reef.

@@ -1,10 +1,9 @@
-// Personalization: an accent, a background and card opacity, set for the
-// household, a display or a tab, over whatever theme is showing. Unlike a
+// Personalization: a background and card opacity, set for the household or a
+// display, over whatever theme is showing. Unlike a
 // theme's tokens these are the app's own values, so a background image can be
 // a url() to the household's own uploads (see server/services/appearanceAssets).
 
 import { API_BASE_URL } from './apiConfig.js';
-import { hexToRgbTriplet } from './interfaceSettings.js';
 
 export const OPACITY_MIN = 0.4;
 export const OPACITY_MAX = 1;
@@ -21,8 +20,6 @@ export const GRADIENT_PRESETS = {
 
 const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 const BACKGROUND_FILE = /^[0-9a-f]{24}\.(jpg|png|webp)$/;
-
-export const normalizeAccent = (value) => (value === 'theme' || HEX.test(value) ? value : undefined);
 
 export function normalizeBackground(value) {
   if (!value || typeof value !== 'object') return undefined;
@@ -61,13 +58,8 @@ export function parseColor(value) {
  * the theme resolved to (needed to scale its opacity). Fields at their
  * defaults set nothing, so the theme shows through untouched.
  */
-export function personalizationTokens({ accent, background, cardOpacity }, frameBg) {
+export function personalizationTokens({ background, cardOpacity }, frameBg) {
   const tokens = {};
-  if (accent && accent !== 'theme') {
-    tokens['--accent'] = accent;
-    const rgb = hexToRgbTriplet(accent);
-    if (rgb) tokens['--accent-rgb'] = rgb;
-  }
   if (background?.kind === 'color') {
     tokens['--background'] = background.color;
     tokens['--hg-page-image'] = 'none';

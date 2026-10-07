@@ -57,24 +57,27 @@ describe('resolveAppearance', () => {
     expect(resolved.colors).toEqual(BERRY);
     expect(resolved.source).toEqual({
       theme: 'household', mode: 'device', colors: 'household', autoDark: 'household',
-      accent: 'household', background: 'household', cardOpacity: 'household',
+      background: 'household', cardOpacity: 'household',
     });
   });
 
   it('rejects personalization values it cannot trust', () => {
     const resolved = resolveAppearance({
-      accent: 'red; background: url(x)',
       background: { kind: 'image', file: '../../etc/passwd' },
       cardOpacity: 'lots',
     }, {});
-    expect(resolved.accent).toBe('theme');
+    // Accent is one of the colors now; a stray top-level value is dropped.
+    expect(resolved.accent).toBeUndefined();
     expect(resolved.background).toEqual({ kind: 'none' });
     expect(resolved.cardOpacity).toBe(1);
   });
 
-  it('lets a display pick its own theme, and ignores unknown themes', () => {
+  it('lets a display pick its own theme, keeps installed theme ids, and ignores malformed ones', () => {
     expect(resolveAppearance({ theme: 'starship' }, { theme: 'classic' }).theme).toBe('classic');
-    expect(resolveAppearance({ theme: 'warp-core' }, {}).theme).toBe('classic');
+    // Possibly an installed theme; resolveTheme shows Classic if it isn't.
+    expect(resolveAppearance({ theme: 'warp-core' }, {}).theme).toBe('warp-core');
+    expect(resolveAppearance({ theme: 'Warp Core!' }, {}).theme).toBe('classic');
+    expect(resolveAppearance({ theme: '../x' }, {}).theme).toBe('classic');
   });
 });
 

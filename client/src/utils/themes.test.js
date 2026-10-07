@@ -19,6 +19,29 @@ const css = ['index.css', 'themes/classic.css']
   .join('\n');
 
 const base = { manifestVersion: 1, id: 'probe', name: 'Probe' };
+
+// Stand-ins for installed themes (Reef and Starship live in HomeGlowThemes):
+// a dark-only one with fonts and pill buttons, and one with per-mode MUI.
+const starlight = {
+  manifestVersion: 1, id: 'starlight', name: 'Starlight', extends: 'classic', modes: ['dark'],
+  fonts: [
+    { family: 'Antonio', weight: 400, src: 'fonts/antonio-400.woff2' },
+    { family: 'Antonio', weight: 700, src: 'fonts/antonio-700.woff2' },
+  ],
+  mui: { mode: 'dark', primary: '#ff9900', radius: 14, pillButtons: true },
+};
+const lagoon = {
+  manifestVersion: 1, id: 'lagoon', name: 'Lagoon', extends: 'classic',
+  mui: { radius: 14 },
+  muiModes: { light: { primary: '#ff7f50' }, dark: { primary: '#3ee6ff' } },
+  tokens: { dark: { '--hg-page-image': 'linear-gradient(180deg, #021628 0%, #06223a 100%)' } },
+};
+const fixtures = [...BUILT_IN_THEMES, starlight, lagoon];
+const fixtureAssets = {
+  ...THEME_ASSETS,
+  starlight: { 'fonts/antonio-400.woff2': '/a/antonio-400.woff2', 'fonts/antonio-700.woff2': '/a/antonio-700.woff2' },
+};
+const fixture = (id) => resolveTheme(id, fixtures, fixtureAssets);
 const pkg = (tokens) => ({ ...base, tokens: { all: tokens } });
 
 describe('built-in themes', () => {
@@ -29,13 +52,18 @@ describe('built-in themes', () => {
   });
 
   it('are discovered from their folders, Classic first and then by name', () => {
-    expect(BUILT_IN_THEMES.map((theme) => theme.id)).toEqual(['classic', 'reef', 'starship']);
+    expect(BUILT_IN_THEMES.map((theme) => theme.id)).toEqual(['classic']);
   });
 
-  it('carry their fonts from their own folders', () => {
-    const starship = resolveTheme('starship');
-    expect(starship.fonts.map((font) => font.weight)).toEqual([400, 600, 700]);
-    starship.fonts.forEach((font) => expect(font.url).toMatch(/antonio-\d00.*\.woff2/));
+  it('the stand-in themes are valid packages', () => {
+    expect(validateThemePackage(starlight, { assets: Object.keys(fixtureAssets.starlight) })).toEqual([]);
+    expect(validateThemePackage(lagoon, { assets: [] })).toEqual([]);
+  });
+
+  it('a theme carries its fonts from its own folder', () => {
+    const resolved = fixture('starlight');
+    expect(resolved.fonts.map((font) => font.weight)).toEqual([400, 700]);
+    resolved.fonts.forEach((font) => expect(font.url).toMatch(/antonio-\d00\.woff2/));
   });
 
   it('only use tokens the stylesheets define', () => {
@@ -143,7 +171,7 @@ describe('resolveTheme', () => {
 
 describe('themeDisplayMode', () => {
   it('shows a supported mode, else the theme first mode', () => {
-    expect(themeDisplayMode(resolveTheme('starship'), 'light')).toBe('dark');
+    expect(themeDisplayMode(fixture('starlight'), 'light')).toBe('dark');
     expect(themeDisplayMode(resolveTheme('classic'), 'light')).toBe('light');
   });
 });
@@ -164,14 +192,14 @@ describe('muiThemeOptions', () => {
   });
 
   it('follows the displayed mode for a two-mode theme', () => {
-    const reef = resolveTheme('reef');
-    expect(muiThemeOptions(reef, 'light').palette).toMatchObject({ mode: 'light', primary: { main: '#ff7f50' } });
-    expect(muiThemeOptions(reef, 'dark').palette).toMatchObject({ mode: 'dark', primary: { main: '#3ee6ff' } });
-    expect(themeTokens(reef, 'dark')['--hg-page-image']).toMatch(/^linear-gradient/);
+    const resolved = fixture('lagoon');
+    expect(muiThemeOptions(resolved, 'light').palette).toMatchObject({ mode: 'light', primary: { main: '#ff7f50' } });
+    expect(muiThemeOptions(resolved, 'dark').palette).toMatchObject({ mode: 'dark', primary: { main: '#3ee6ff' } });
+    expect(themeTokens(resolved, 'dark')['--hg-page-image']).toMatch(/^linear-gradient/);
   });
 
-  it('builds a dark palette and pill buttons for Starship', () => {
-    const options = muiThemeOptions(resolveTheme('starship'), 'light');
+  it('builds a dark palette and pill buttons for a dark-only theme', () => {
+    const options = muiThemeOptions(fixture('starlight'), 'light');
     expect(options.palette.mode).toBe('dark');
     expect(options.palette.primary.main).toBe('#ff9900');
     expect(options.components.MuiButton.styleOverrides.root.borderRadius).toBe(999);

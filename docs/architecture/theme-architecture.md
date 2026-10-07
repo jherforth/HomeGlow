@@ -344,6 +344,11 @@ Differences from §3, each for a reason found while building it:
   these: a sometimes-galaxy, up to three planets, ships, meteor storms and the
   odd drifting alien, at 60 fps with the CPU throttled 4x.
 
+- **Reef and Starship live in the themes repository**, not the app.
+  HomeGlow builds in only Classic, and installs other themes from
+  [jherforth/HomeGlowThemes](https://github.com/jherforth/HomeGlowThemes) or
+  a folder (Admin → Look → Themes). Offline, Classic is the normal mode.
+
 Also as built: theme files are imported with `?no-inline`, because Vite inlines
 small SVGs as data URLs, which put every theme's art in a chunk every display
 loads.

@@ -110,6 +110,22 @@ segment (the browser's `localStorage` UUID).
 | GET | `/widgets/:filename` | Serve a widget's HTML (theme-aware, sandboxed). |
 | GET | `/plugin-sdk/v1.js` | Serve the plugin SDK (`window.HomeGlow`) loaded by manifest plugins. |
 
+### Themes
+Installed themes live under `uploads/themes/<id>/`, one folder per theme, laid
+out as in `client/src/themes/` (`services/themeStore.js`). The server checks
+structure: allowed paths, each file's type by its bytes, sizes, no script in
+SVGs, and a usable `id`. Every display runs the full `validateThemePackage`
+before it uses an installed theme.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/themes` | List installed themes: `{ id, manifest, files, source, ref, installedAt }`. |
+| POST | `/api/themes/upload` | Install a theme folder. Multipart, one field per file, named by its path (`theme.json`, `assets/x.svg`, `fonts/y.woff2`). Replaces an installed theme with the same id. |
+| GET | `/api/themes/store` | List the themes in the themes repository (`HOMEGLOW_THEMES_REPOSITORY`, default `jherforth/HomeGlowThemes`). |
+| POST | `/api/themes/store/install` | Install `{ id }` from the themes repository. |
+| GET | `/api/themes/:id/:dir/:file` | Serve an installed theme's asset or font, with a sandboxing CSP. URLs carry `?v=<installedAt>` and are cached as immutable. |
+| DELETE | `/api/themes/:id` | Remove an installed theme. |
+
 ### Plugin platform API (`/api/plugin/v1`)
 The **stable, versioned contract** that manifest plugins may rely on (issue #105).
 Unlike the rest of this surface, these routes are frozen — a breaking change means

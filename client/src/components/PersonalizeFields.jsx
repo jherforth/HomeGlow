@@ -4,10 +4,8 @@ import {
   Alert,
   Box,
   Button,
-  FormControlLabel,
   IconButton,
   Slider,
-  Switch,
   ToggleButton,
   ToggleButtonGroup,
   Tooltip,
@@ -33,7 +31,7 @@ const swatch = (selected) => ({
 // Accent, background and card opacity: over the theme, for whichever scope
 // the Appearance editor is showing. `locked` and `inheritSwitch` come from the
 // editor, so these fields inherit exactly like its others.
-const PersonalizeFields = ({ draft, classicAccent, updateDraft, locked, inheritSwitch, onError }) => {
+const PersonalizeFields = ({ draft, updateDraft, locked, inheritSwitch, onError }) => {
   const { t } = useTranslation(['admin']);
   const [anchor, setAnchor] = useState({ field: null, el: null });
   const [gallery, setGallery] = useState([]);
@@ -100,30 +98,10 @@ const PersonalizeFields = ({ draft, classicAccent, updateDraft, locked, inheritS
     </>
   );
 
-  const accentIsTheme = draft.accent === 'theme';
-  const accentLocked = locked('accent');
-
   return (
     <Box sx={{ mb: 3 }}>
       <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>{t('admin:personalize.heading')}</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{t('admin:personalize.help')}</Typography>
-
-      <Typography variant="subtitle2">{t('admin:personalize.accent')}</Typography>
-      {inheritSwitch('accent')}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-        <FormControlLabel
-          control={(
-            <Switch
-              checked={accentIsTheme}
-              disabled={accentLocked}
-              // Start from the accent already showing, so turning this off changes nothing yet.
-              onChange={(e) => updateDraft('accent', e.target.checked ? 'theme' : (classicAccent || '#f472b6'))}
-            />
-          )}
-          label={t('admin:personalize.themeAccent')}
-        />
-        {!accentIsTheme && colorBox('accent', draft.accent, (hex) => updateDraft('accent', hex), accentLocked)}
-      </Box>
 
       <Typography variant="subtitle2">{t('admin:personalize.background')}</Typography>
       {inheritSwitch('background')}

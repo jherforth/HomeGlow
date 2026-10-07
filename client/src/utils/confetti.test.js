@@ -1,6 +1,29 @@
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_CONFETTI_COLORS, DEFAULT_CONFETTI_SHAPES, confettiPiece, confettiPieceSx } from './confetti.js';
-import { resolveTheme } from './themes.js';
+import { BUILT_IN_THEMES, resolveTheme } from './themes.js';
+
+// Stand-ins for installed themes with confetti of their own.
+const starlight = {
+  manifestVersion: 1, id: 'starlight', name: 'Starlight', extends: 'classic',
+  confetti: {
+    colors: [{ color: '#ff9900', weight: 3 }, { color: '#99ccff', weight: 1 }],
+    shapes: ['streamer', 'square'],
+    pictures: [{ src: 'assets/sparkle.svg', tint: ['#ffffff'], weight: 3 }, { src: 'assets/ship.svg', aspect: 2 }],
+    mix: 0.55,
+  },
+};
+const lagoon = {
+  manifestVersion: 1, id: 'lagoon', name: 'Lagoon', extends: 'classic',
+  confetti: {
+    colors: { light: ['#ff7f6e', '#ffe066'], dark: ['#4fe3d6', '#b48cff'] },
+    pictures: [{ src: 'assets/fish.svg', tint: { light: ['#ff7f2a'], dark: ['#7cf5c6'] } }],
+  },
+};
+const assets = {
+  starlight: { 'assets/sparkle.svg': '/s.svg', 'assets/ship.svg': '/ship.svg' },
+  lagoon: { 'assets/fish.svg': '/fish.svg' },
+};
+const themed = (id) => resolveTheme(id, [...BUILT_IN_THEMES, starlight, lagoon], assets);
 import { seededRandom } from '../themes/engine/motion.js';
 
 describe('confetti', () => {
@@ -14,7 +37,7 @@ describe('confetti', () => {
   });
 
   it("a theme's confetti uses its colors, shapes and pictures", () => {
-    const starship = resolveTheme('starship');
+    const starship = themed('starlight');
     const random = seededRandom(5);
     const pieces = Array.from({ length: 400 }, (_, i) => confettiPiece(starship, 'dark', i, random));
     const shapes = pieces.filter((p) => !p.url);
@@ -28,7 +51,7 @@ describe('confetti', () => {
   });
 
   it("picks the mode's colors and tints", () => {
-    const reef = resolveTheme('reef');
+    const reef = themed('lagoon');
     const random = seededRandom(9);
     const dark = Array.from({ length: 300 }, (_, i) => confettiPiece(reef, 'dark', i, random));
     const allowed = new Set([...reef.confetti.colors.dark, ...reef.confetti.pictures.flatMap((p) => p.tint?.dark || [])]);
