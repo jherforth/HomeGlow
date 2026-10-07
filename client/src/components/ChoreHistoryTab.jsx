@@ -18,8 +18,7 @@ import {
 import { Delete, Refresh } from '@mui/icons-material';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
-import { stackableTableSx } from '../utils/responsiveTable.js';
-import AdaptiveTableContainer from './AdaptiveTableContainer';
+import { compactStackedTableSx } from '../utils/responsiveTable.js';
 import { formatLoggedAt } from '../utils/choreHelpers.js';
 
 export default function ChoreHistoryTab() {
@@ -92,8 +91,8 @@ export default function ChoreHistoryTab() {
           <Typography color="text.secondary">No clam-earning history in the last 7 days.</Typography>
         </Box>
       ) : (
-        <AdaptiveTableContainer component={Paper} variant="outlined">
-          <Table size="small" sx={stackableTableSx}>
+        <TableContainer component={Paper} variant="outlined">
+          <Table size="small" sx={compactStackedTableSx}>
             <TableHead>
               <TableRow>
                 <TableCell sx={{ fontWeight: 600 }}>User</TableCell>
@@ -114,7 +113,7 @@ export default function ChoreHistoryTab() {
                   </TableCell>
                   <TableCell data-label="Title">
                     <Typography variant="body2">
-                      {entry.title || <span style={{ color: 'rgba(0,0,0,0.4)', fontStyle: 'italic' }}>Unknown</span>}
+                      {entry.title || <span style={{ color: 'var(--hg-black-50)', fontStyle: 'italic' }}>Unknown</span>}
                     </Typography>
                   </TableCell>
                   <TableCell data-label="Date">
@@ -148,7 +147,7 @@ export default function ChoreHistoryTab() {
               ))}
             </TableBody>
           </Table>
-        </AdaptiveTableContainer>
+        </TableContainer>
       )}
     </Box>
   );

@@ -50,8 +50,7 @@ import ChoreIconPicker from './ChoreIconPicker.jsx';
 import ChoreScheduleFields from './ChoreScheduleFields.jsx';
 import { useTranslation } from 'react-i18next';
 import useIsMobile from '../hooks/useIsMobile.js';
-import { stackableTableSx } from '../utils/responsiveTable.js';
-import AdaptiveTableContainer from './AdaptiveTableContainer';
+import { compactStackedTableSx } from '../utils/responsiveTable.js';
 import {
   CRONTAB_PRESETS,
   DEFAULT_SCHEDULE_FIELDS,
@@ -596,7 +595,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
         {t('chores:schedules.definitionsHelp')}
       </Alert>
 
-      <AdaptiveTableContainer component={Paper} sx={{ mb: 4 }}>
+      <TableContainer component={Paper} sx={{ mb: 4 }}>
         {selectedChoreIds.size > 0 && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1, bgcolor: 'action.hover' }}>
             <Typography variant="body2" sx={{ ml: 1 }}>
@@ -616,7 +615,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
             </Button>
           </Box>
         )}
-        <Table size="small" sx={stackableTableSx}>
+        <Table size="small" sx={compactStackedTableSx}>
           <TableHead>
             <TableRow>
               <TableCell padding="checkbox">
@@ -666,12 +665,15 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                       {c.title}
                     </Typography>
                   </TableCell>
-                  <TableCell data-label={t('common:labels.description')}>
+                  <TableCell
+                    data-label={t('common:labels.description')}
+                    className={c.description ? 'stack-full' : 'stack-empty'}
+                  >
                     <Typography variant="body2" color="text.secondary">
                       <Box component="span" sx={{ whiteSpace: "pre-line" }}>{c.description || <em style={{ opacity: 0.5 }}>{t('chores:schedules.noDescription')}</em>}</Box>
                     </Typography>
                   </TableCell>
-                  <TableCell data-label={t('chores:schedules.clams')}>
+                  <TableCell data-label={t('chores:schedules.clams')} className={c.clam_value > 0 ? undefined : 'stack-empty'}>
                     {c.clam_value > 0
                       ? <Chip label={`${c.clam_value} 🥟`} size="small" color="primary" />
                       : <Typography variant="caption" color="text.secondary">—</Typography>}
@@ -702,7 +704,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
             )}
           </TableBody>
         </Table>
-      </AdaptiveTableContainer>
+      </TableContainer>
 
       {/* ── SCHEDULES ────────────────────────────────────── */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
@@ -745,8 +747,8 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
         </Typography>
       </Box>
 
-      <AdaptiveTableContainer component={Paper}>
-        <Table size="small" sx={stackableTableSx}>
+      <TableContainer component={Paper}>
+        <Table size="small" sx={compactStackedTableSx}>
           <TableHead>
             <TableRow>
               <SortableHeader column="chore" sort={scheduleSort} onSort={sortSchedules}>
@@ -823,7 +825,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                       <Typography variant="caption" color="text.secondary">—</Typography>
                     )}
                   </TableCell>
-                  <TableCell data-label={t('chores:schedules.clams')}>
+                  <TableCell data-label={t('chores:schedules.clams')} className={s.clam_value > 0 ? undefined : 'stack-empty'}>
                     {s.clam_value > 0
                       ? <Chip label={`${s.clam_value} 🥟`} size="small" color="primary" />
                       : <Typography variant="caption" color="text.secondary">—</Typography>}
@@ -857,7 +859,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
             )}
           </TableBody>
         </Table>
-      </AdaptiveTableContainer>
+      </TableContainer>
 
       {/* ── CHORE DIALOG ─────────────────────────────────── */}
       <Dialog
