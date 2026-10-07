@@ -267,9 +267,6 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
 
     if (isCalendar) {
       scheduleMode = 'calendar';
-    } else if (isOnceCompleted) {
-      scheduleMode = 'after-completion';
-      customCrontab = schedule.crontab || '0 0 * * *';
     } else if (!isOneTime && schedule.crontab) {
       const preset = CRONTAB_PRESETS.find(p => p.value === schedule.crontab);
       if (preset) {
@@ -326,13 +323,12 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
   const handleSaveSchedule = async () => {
     const cron = computeCrontab(scheduleForm);
     const isCalendarMode = !scheduleForm.isOneTime && scheduleForm.scheduleMode === 'calendar';
-    const isAfterCompletionMode = !scheduleForm.isOneTime && scheduleForm.scheduleMode === 'after-completion';
-    const err = (scheduleForm.isOneTime || isCalendarMode || isAfterCompletionMode) ? null : validateCrontab(cron);
+    const err = (scheduleForm.isOneTime || isCalendarMode) ? null : validateCrontab(cron);
     if (err) { setCrontabError(err); return; }
 
     setSavingSchedule(true);
     try {
-      const isIntervalSchedule = !scheduleForm.isOneTime && (isAfterCompletionMode || scheduleForm.duration === 'once-completed');
+      const isIntervalSchedule = !scheduleForm.isOneTime && scheduleForm.duration === 'once-completed';
       const normalizedInterval = isIntervalSchedule
         ? `${scheduleForm.sleepCount}${scheduleForm.sleepUnit}`
         : null;
@@ -350,13 +346,13 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
 
       const isMultiCreate = !editingSchedule && Array.isArray(scheduleForm.user_ids) && scheduleForm.user_ids.length > 0;
       const durationValue = !scheduleForm.isOneTime
-        ? (isAfterCompletionMode ? 'once-completed' : scheduleForm.duration)
+        ? scheduleForm.duration
         : 'day-of';
 
       const payload = {
         chore_id: scheduleForm.chore_id,
         ...(isMultiCreate ? { user_ids: scheduleForm.user_ids } : { user_id: scheduleForm.user_id === '' ? null : scheduleForm.user_id }),
-        crontab: (scheduleForm.duration === 'once-completed' || scheduleForm.isOneTime || isCalendarMode) ? null : (cron || null),
+        crontab: (scheduleForm.isOneTime || isCalendarMode) ? null : (cron || null),
         duration: durationValue,
         interval: normalizedInterval,
         visible: scheduleForm.visible ? 1 : 0,

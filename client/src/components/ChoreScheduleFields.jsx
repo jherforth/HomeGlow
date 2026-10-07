@@ -34,12 +34,10 @@ export default function ChoreScheduleFields({ form, onChange, crontabError }) {
     ? (form.calendar_match
       ? t('chores:schedules.eventMatches', { title: form.calendar_match, defaultValue: `When event matches "${form.calendar_match}"` })
       : t('chores:schedules.matchingEventOccurs', { defaultValue: 'When matching event occurs' }))
-    : form.scheduleMode === 'after-completion'
-      ? t('chores:schedules.immediatelyUntilCompleted')
-      : getNextOccurrence(currentCrontab);
+    : getNextOccurrence(currentCrontab);
 
   const isOnceCompletedMissingInterval = !form.isOneTime
-    && (form.scheduleMode === 'after-completion' || form.duration === 'once-completed')
+    && form.duration === 'once-completed'
     && !(Number.isInteger(Number.parseInt(form.sleepCount, 10)) && Number.parseInt(form.sleepCount, 10) > 0);
 
   const dayOptions = getDayOptions();
@@ -65,29 +63,31 @@ export default function ChoreScheduleFields({ form, onChange, crontabError }) {
           >
             <FormControlLabel value="preset" control={<Radio size="small" />} label={t('chores:schedules.modePreset')} />
             <FormControlLabel value="days" control={<Radio size="small" />} label={t('chores:schedules.modeDaysOfWeek')} />
-            <FormControlLabel value="after-completion" control={<Radio size="small" />} label={t('chores:schedules.modeAfterCompletion')} />
             <FormControlLabel value="custom" control={<Radio size="small" />} label={t('chores:schedules.modeCustomCrontab')} />
             <FormControlLabel value="calendar" control={<Radio size="small" />} label={t('chores:schedules.modeCalendar', { defaultValue: 'Calendar Event' })} />
           </RadioGroup>
 
-          {form.scheduleMode !== 'after-completion' ? (
-            <FormControl fullWidth size="small">
-              <InputLabel>{t('chores:schedules.duration')}</InputLabel>
-              <Select
-                value={form.duration}
-                label={t('chores:schedules.duration')}
-                onChange={(e) => onChange({ duration: e.target.value })}
-              >
-                <MenuItem value="day-of">{t('chores:schedules.dayOf')}</MenuItem>
-                <MenuItem value="until-completed">{t('chores:schedules.untilCompleted')}</MenuItem>
-              </Select>
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, ml: 1.5 }}>
-                {form.duration === 'until-completed'
-                  ? t('chores:schedules.durationHelpUntilCompleted', { defaultValue: 'This chore will appear daily until completed' })
+          <FormControl fullWidth size="small">
+            <InputLabel>{t('chores:schedules.duration')}</InputLabel>
+            <Select
+              value={form.duration}
+              label={t('chores:schedules.duration')}
+              onChange={(e) => onChange({ duration: e.target.value })}
+            >
+              <MenuItem value="day-of">{t('chores:schedules.dayOf')}</MenuItem>
+              <MenuItem value="until-completed">{t('chores:schedules.untilCompleted')}</MenuItem>
+              <MenuItem value="once-completed">{t('chores:schedules.onceCompleted')}</MenuItem>
+            </Select>
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, ml: 1.5 }}>
+              {form.duration === 'until-completed'
+                ? t('chores:schedules.durationHelpUntilCompleted', { defaultValue: 'This chore will appear daily until completed' })
+                : form.duration === 'once-completed'
+                  ? t('chores:schedules.durationHelpOnceCompleted', { defaultValue: 'This chore appears after a delay each time it is completed' })
                   : t('chores:schedules.durationHelpDayOf', { defaultValue: 'This chore will only appear on the day it is scheduled' })}
-              </Typography>
-            </FormControl>
-          ) : (
+            </Typography>
+          </FormControl>
+
+          {form.duration === 'once-completed' && (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
               <Grid container spacing={2}>
                 <Grid size={6}>
@@ -221,16 +221,16 @@ export default function ChoreScheduleFields({ form, onChange, crontabError }) {
           <Typography variant="body2">
             <strong>{form.isOneTime
               ? t('chores:schedules.oneTimeTaskShort')
-              : form.scheduleMode === 'after-completion'
+              : form.duration === 'once-completed'
                 ? t('chores:schedules.modeAfterCompletion')
                 : t('chores:schedules.nextOccurrenceIs', { when: nextOccurrence })}</strong>
           </Typography>
-          {!form.isOneTime && form.scheduleMode !== 'after-completion' && currentCrontab && (
+          {!form.isOneTime && form.duration !== 'once-completed' && currentCrontab && (
             <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
               {currentCrontab}
             </Typography>
           )}
-          {form.scheduleMode === 'after-completion' && (
+          {form.duration === 'once-completed' && (
             <Typography variant="caption" color="text.secondary">
               {getAfterCompletionExplanation(form, t)}
             </Typography>
