@@ -191,8 +191,7 @@ const defaultScheduleForm = {
   can_snooze: true,
   spawn_chore_id: null,
   spawn_user_ids: [],
-  spawn_enabled: false,
-  calendar_match: ''
+  spawn_enabled: false
 };
 
 const defaultChoreForm = { title: '', description: '', clam_value: 0, icon: '' };
@@ -271,17 +270,14 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
 
   const openEditSchedule = (schedule) => {
     setEditingSchedule(schedule);
-    const isCalendar = !!schedule.calendar_match;
-    const isOneTime = !schedule.crontab && !isCalendar;
+    const isOneTime = !schedule.crontab;
     const isOnceCompleted = schedule.duration === 'once-completed';
-    let scheduleMode = isCalendar ? 'calendar' : 'preset';
+    let scheduleMode = 'preset';
     let selectedPreset = '0 0 * * *';
     let selectedDays = [];
     let customCrontab = '';
 
-    if (isCalendar) {
-      scheduleMode = 'calendar';
-    } else if (!isOneTime && schedule.crontab) {
+    if (!isOneTime && schedule.crontab) {
       const preset = CRONTAB_PRESETS.find(p => p.value === schedule.crontab);
       if (preset) {
         scheduleMode = 'preset';
@@ -322,7 +318,6 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
       // Pre-migration rows may lack these columns; treat missing as enabled.
       transferable: schedule.transferable === undefined ? true : !!schedule.transferable,
       can_snooze: schedule.can_snooze === undefined ? true : !!schedule.can_snooze,
-      calendar_match: schedule.calendar_match || '',
       spawn_chore_id: schedule.spawn_chore_id || null,
       spawn_user_ids: schedule.spawn_user_ids ? JSON.parse(schedule.spawn_user_ids) : [],
       spawn_enabled: !!schedule.spawn_chore_id
@@ -338,8 +333,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
 
   const handleSaveSchedule = async () => {
     const cron = computeCrontab(scheduleForm);
-    const isCalendarMode = !scheduleForm.isOneTime && scheduleForm.scheduleMode === 'calendar';
-    const err = (scheduleForm.isOneTime || isCalendarMode) ? null : validateCrontab(cron);
+    const err = scheduleForm.isOneTime ? null : validateCrontab(cron);
     if (err) { setCrontabError(err); return; }
 
     setSavingSchedule(true);
@@ -385,7 +379,6 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
           : null,
         transferable: scheduleForm.transferable ? 1 : 0,
         can_snooze: scheduleForm.can_snooze ? 1 : 0,
-        calendar_match: isCalendarMode ? (scheduleForm.calendar_match?.trim() || null) : null,
         spawn_chore_id: scheduleForm.spawn_enabled ? (scheduleForm.spawn_chore_id || null) : null,
         spawn_user_ids: scheduleForm.spawn_enabled && scheduleForm.spawn_user_ids?.length > 0
           ? scheduleForm.spawn_user_ids
@@ -814,27 +807,17 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
                       editing the schedule. */}
                   <TableCell data-label={t('chores:schedules.nextOccurrence')}>
                     <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
-                      {s.calendar_match ? (
-                      <Chip
-                        label={`📅 ${t('chores:schedules.calendarOn', { keyword: s.calendar_match })} ${s.calendar_matched_today ? '✓' : '✗'}`}
-                        size="small"
-                        color={s.calendar_matched_today ? "success" : "default"}
-                        variant="outlined"
-                        title={s.calendar_matched_today
-                          ? t('chores:schedules.calendarMatchToday')
-                          : t('chores:schedules.calendarNoMatchToday')}
-                      />
-                    ) : getNextOccurrence(s.crontab, s)}
+                      {getNextOccurrence(s.crontab, s)}
                     </Typography>
                   </TableCell>
                   <TableCell data-label={t('chores:schedules.duration')}>
-                    {(s.crontab || s.calendar_match) && s.duration === 'until-completed' ? (
+                    {s.crontab && s.duration === 'until-completed' ? (
                       <Chip label={t('chores:schedules.untilCompleted')} size="small" color="warning" />
-                    ) : (s.crontab || s.calendar_match) && s.duration === 'once-completed' ? (
+                    ) : s.crontab && s.duration === 'once-completed' ? (
                       <Chip label={s.interval
                           ? t('chores:schedules.onceCompletedWithInterval', { interval: formatScheduleInterval(s.interval) })
                           : t('chores:schedules.onceCompleted')} size="small" color="secondary" />
-                    ) : (s.crontab || s.calendar_match) ? (
+                    ) : s.crontab ? (
                       <Chip label={t('chores:schedules.dayOf')} size="small" variant="outlined" />
                     ) : (
                       <Typography variant="caption" color="text.secondary">—</Typography>

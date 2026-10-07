@@ -30,11 +30,7 @@ export default function ChoreScheduleFields({ form, onChange, crontabError }) {
   const { t } = useTranslation(['chores', 'common']);
 
   const currentCrontab = computeCrontab(form);
-  const nextOccurrence = form.scheduleMode === 'calendar'
-    ? (form.calendar_match
-      ? t('chores:schedules.eventMatches', { title: form.calendar_match, defaultValue: `When event matches "${form.calendar_match}"` })
-      : t('chores:schedules.matchingEventOccurs', { defaultValue: 'When matching event occurs' }))
-    : getNextOccurrence(currentCrontab);
+  const nextOccurrence = getNextOccurrence(currentCrontab);
 
   const isOnceCompletedMissingInterval = !form.isOneTime
     && form.duration === 'once-completed'
@@ -199,20 +195,6 @@ export default function ChoreScheduleFields({ form, onChange, crontabError }) {
             />
           )}
 
-          {form.scheduleMode === 'calendar' && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              <TextField
-                fullWidth
-                size="small"
-                label={t('chores:schedules.calendarMatch', { defaultValue: 'Event Title Contains...' })}
-                value={form.calendar_match}
-                onChange={(e) => onChange({ calendar_match: e.target.value })}
-                placeholder={t('chores:schedules.calendarMatchPlaceholder')}
-                helperText={t('chores:schedules.calendarMatchHelp', { defaultValue: 'Triggers on days matching this event. The chore is due at the event start time and remains visible for the entire day.' })}
-                required
-              />
-            </Box>
-          )}
         </>
       )}
 

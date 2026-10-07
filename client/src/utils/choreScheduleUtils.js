@@ -17,8 +17,7 @@ export const DEFAULT_SCHEDULE_FIELDS = {
   isOneTime: false,
   duration: 'day-of',
   sleepCount: '',
-  sleepUnit: 'd',
-  calendar_match: ''
+  sleepUnit: 'd'
 };
 
 export const getDayOptions = () => getWeekdayLabels(0).map((label, value) => ({ label, value }));
@@ -26,9 +25,6 @@ export const getDayOptions = () => getWeekdayLabels(0).map((label, value) => ({ 
 export function getNextOccurrence(crontab, schedule) {
   if (schedule?.duration === 'once-completed') {
     return schedule.interval ? `Once completed (+${formatScheduleInterval(schedule.interval)})` : 'Once completed';
-  }
-  if (schedule?.calendar_match) {
-    return schedule.calendar_matched_today ? 'Today' : 'No matching event';
   }
   if (!crontab) return 'One-time';
   const next = nextOccurrenceAt(crontab, schedule);
@@ -39,13 +35,10 @@ export function getNextOccurrence(crontab, schedule) {
 
 // The date the Next Occurrence label is built from, exposed on its own so
 // the column can sort on the instant rather than on the formatted string.
-// Null means there is no next occurrence: a one-time task, an expression
-// that does not parse, or a calendar schedule with no matching event today.
+// Null means there is no next occurrence: a one-time task or an expression
+// that does not parse.
 export function nextOccurrenceAt(crontab, schedule) {
   if (schedule?.duration === 'once-completed') return null;
-  if (schedule?.calendar_match) {
-    return schedule.calendar_matched_today ? new Date() : null;
-  }
   if (!crontab) return null;
   try {
     const tz = getServerTimezoneSync();
@@ -139,9 +132,6 @@ export function getAfterCompletionExplanation(form, t) {
 
 export function isScheduleFormInvalid(form, crontabError) {
   if (form.isOneTime) return false;
-  if (form.scheduleMode === 'calendar') {
-    return !form.calendar_match?.trim();
-  }
   if (form.scheduleMode === 'after-completion' || form.duration === 'once-completed') {
     const parsed = Number.parseInt(form.sleepCount, 10);
     return !Number.isInteger(parsed) || parsed <= 0;

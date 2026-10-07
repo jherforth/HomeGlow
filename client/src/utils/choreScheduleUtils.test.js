@@ -23,15 +23,6 @@ describe('nextOccurrenceAt', () => {
         expect(d.toISOString()).toBe('2026-09-28T09:00:00.000Z');
     });
 
-    it('returns a date for a calendar schedule matching today', () => {
-        const d = nextOccurrenceAt('', { calendar_match: 'Practice', calendar_matched_today: true });
-        expect(d).toBeInstanceOf(Date);
-    });
-
-    it('returns null for a calendar schedule with no match today (sorts last)', () => {
-        expect(nextOccurrenceAt('', { calendar_match: 'Practice', calendar_matched_today: false })).toBeNull();
-    });
-
     it('returns null for one-time schedules', () => {
         expect(nextOccurrenceAt('', {})).toBeNull();
     });
