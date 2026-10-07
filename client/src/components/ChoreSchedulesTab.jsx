@@ -197,30 +197,6 @@ const defaultScheduleForm = {
 
 const defaultChoreForm = { title: '', description: '', clam_value: 0, icon: '' };
 
-// A header cell that re-sorts its table. `sortDirection` on the cell is what
-// puts `aria-sort` on the <th>, so the state is announced without a second
-// visually-hidden copy of it.
-function SortableHeader({ column, sort, onSort, children }) {
-  const active = sort.column === column;
-  return (
-    <TableCell sortDirection={active ? sort.direction : false}>
-      <TableSortLabel
-        active={active}
-        direction={active ? sort.direction : 'asc'}
-        onClick={() => onSort(column)}
-      >
-        {children}
-      </TableSortLabel>
-    </TableCell>
-  );
-}
-
-// Clicking the active column flips it; clicking a new one starts ascending,
-// which is the reading order for names and "soonest first" for dates.
-function nextSort(sort, column) {
-  if (sort.column !== column) return { column, direction: 'asc' };
-  return { column, direction: sort.direction === 'asc' ? 'desc' : 'asc' };
-}
 
 export default function ChoreSchedulesTab({ setSaveMessage }) {
   const { t } = useTranslation(['chores', 'common']);
