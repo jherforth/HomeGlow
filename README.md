@@ -81,7 +81,7 @@ docker compose up -d
 ```
 Configure API keys and widgets in the Admin Panel (⚙️ icon).
 
-**Time zone:** HomeGlow uses the host machine's time zone unless `TZ` is set. To change it without editing `.env` or recreating the container, use Admin Panel → Interface → Time Zone. A zone set there takes priority over both, and resetting it goes back to `TZ`, or to the host's zone if `TZ` isn't set. Installs from before this change that never set `TZ` were running on New York time; they keep it, saved as their chosen zone.
+**Time zone:** HomeGlow uses the host machine's time zone unless `TZ` is set. To change it without editing `.env` or recreating the container, use Admin Panel → System → Language & time. A zone set there takes priority over both, and resetting it goes back to `TZ`, or to the host's zone if `TZ` isn't set. Installs from before this change that never set `TZ` were running on New York time; they keep it, saved as their chosen zone.
 
 **Updating:** `docker compose pull && docker compose up -d`
 
@@ -133,7 +133,7 @@ DISCLAIMER: This project uses AI in its development process. While you are right
 
 ## 🛠️ Troubleshooting
 
-**Widgets not loading**: Check Admin Panel → Plugins and browser console for errors
+**Widgets not loading**: Check Admin Panel → Dashboard → Plugins and browser console for errors
 
 **Calendar issues**: Verify calendar sources are enabled, test ICS URLs in browser
 

@@ -12,7 +12,8 @@ import {
     VACATION_MODE_STORAGE_KEY,
     DEFAULT_VACATION_MODE_SETTINGS,
     normalizeVacationModeSettings,
-    readLocalVacationModeSettings,
+    parseVacationModeSetting,
+    vacationSaveNeedsPin,
     isVacationModeActiveToday,
     normalizeScreensaverSettings,
     DEFAULT_SCREENSAVER_SETTINGS,
@@ -35,27 +36,48 @@ describe('normalizeVacationModeSettings', () => {
     });
 });
 
-describe('readLocalVacationModeSettings', () => {
+describe('parseVacationModeSetting', () => {
     beforeEach(() => {
         localStorage.clear();
     });
 
-    it('returns defaults when nothing is stored or JSON is malformed', () => {
-        expect(readLocalVacationModeSettings()).toEqual(DEFAULT_VACATION_MODE_SETTINGS);
-        localStorage.setItem(VACATION_MODE_STORAGE_KEY, '{not json');
-        expect(readLocalVacationModeSettings()).toEqual(DEFAULT_VACATION_MODE_SETTINGS);
-    });
-
-    it('round-trips stored settings', () => {
-        localStorage.setItem(
-            VACATION_MODE_STORAGE_KEY,
-            JSON.stringify({ enabled: true, muteSounds: false })
-        );
-        expect(readLocalVacationModeSettings()).toEqual({
+    it('reads the household setting as stored by the server, a JSON string', () => {
+        expect(parseVacationModeSetting(JSON.stringify({ enabled: true, muteSounds: false, endDate: '2026-10-12' }))).toEqual({
             ...DEFAULT_VACATION_MODE_SETTINGS,
             enabled: true,
             muteSounds: false,
+            endDate: '2026-10-12',
         });
+        expect(parseVacationModeSetting({ enabled: true }).enabled).toBe(true);
+    });
+
+    it('is "not on vacation" when the setting is missing or unreadable', () => {
+        for (const raw of [undefined, null, '', '{not json', 42]) {
+            expect(parseVacationModeSetting(raw), String(raw)).toEqual(DEFAULT_VACATION_MODE_SETTINGS);
+        }
+    });
+
+    it('ignores a value left in this browser from before it was a household setting (#230)', () => {
+        localStorage.setItem(VACATION_MODE_STORAGE_KEY, JSON.stringify({ enabled: true }));
+        expect(parseVacationModeSetting(undefined).enabled).toBe(false);
+    });
+});
+
+describe('vacationSaveNeedsPin', () => {
+    const off = { ...DEFAULT_VACATION_MODE_SETTINGS };
+    const on = { ...DEFAULT_VACATION_MODE_SETTINGS, enabled: true, startDate: '2026-10-10', endDate: '2026-10-17' };
+
+    it('asks when vacation is switched on, or its dates move while it is on', () => {
+        expect(vacationSaveNeedsPin(off, on)).toBe(true);
+        expect(vacationSaveNeedsPin(on, { ...on, endDate: '2026-10-31' })).toBe(true);
+        expect(vacationSaveNeedsPin(on, { ...on, startDate: '' })).toBe(true);
+    });
+
+    it('does not ask to turn it off, to change only the chimes, or to save it unchanged', () => {
+        expect(vacationSaveNeedsPin(on, off)).toBe(false);
+        expect(vacationSaveNeedsPin(on, { ...on, muteSounds: false })).toBe(false);
+        expect(vacationSaveNeedsPin(on, { ...on })).toBe(false);
+        expect(vacationSaveNeedsPin(off, { ...off, endDate: '2026-12-01' })).toBe(false);
     });
 });
 

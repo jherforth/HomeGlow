@@ -58,8 +58,8 @@
       "startFailed": "Could not start a Google Photos picker session.",
       "ingestFailed": "Could not download the photos you picked.",
       "result": "Added {{added}}, skipped {{skipped}}, failed {{failed}} of {{total}}.",
-      "noAccount": "Connect a Google account first from the Admin Panel → Connections tab, then come back here.",
-      "missingScope": "This Google connection does not include Photos permission. Reconnect from Admin Panel → Connections with the Photos option enabled.",
+      "noAccount": "Connect a Google account first from Admin Panel → System → Connections, then come back here.",
+      "missingScope": "This Google connection does not include Photos permission. Reconnect from Admin Panel → System → Connections with the Photos option enabled.",
       "pickedTitle": "Picked photos ({{count}})",
       "pickedEmpty": "No photos picked yet. Use the pick button above to choose some."
     }

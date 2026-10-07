@@ -246,13 +246,15 @@
   },
   "vacation": {
     "heading": "Modo vacaciones",
-    "help": "Durante las vacaciones se silencian los avisos de las tareas y el salvapantallas pasa a ser una animación divertida. Los ajustes se aplican a esta pantalla y se mantienen hasta que desactives el modo vacaciones.",
+    "help": "El modo vacaciones es para todo el hogar. Mientras está activo, todas las pantallas muestran una animación de vacaciones como salvapantallas y pueden silenciar los avisos de las tareas, y las tareas no realizadas no cuentan. Activarlo pide el PIN de administrador.",
     "enable": "Activar el modo vacaciones",
     "muteSounds": "Silenciar los sonidos de las tareas durante las vacaciones",
     "startDate": "Fecha de inicio (opcional)",
     "endDate": "Fecha de fin (opcional)",
     "dateHelp": "Con fechas, las vacaciones empiezan y terminan solas, el seguimiento de tareas no realizadas se pausa esos días y las rachas se mantienen. Sin fechas, el modo sigue activo hasta que lo desactives.",
-    "save": "Guardar los ajustes del modo vacaciones"
+    "save": "Guardar los ajustes del modo vacaciones",
+    "pinTitle": "Introduce el PIN de administrador para activar el modo vacaciones",
+    "pinWrong": "Ese PIN no es correcto. El modo vacaciones no se ha guardado."
   },
   "autoDark": {
     "location": "Ubicación",
@@ -515,5 +517,28 @@
     "cardOpacity": "Opacidad de las tarjetas",
     "seeThrough": "Transparente",
     "solid": "Sólida"
-  }
+  },
+  "panelTabs": {
+    "dashboard": "Panel",
+    "look": "Aspecto",
+    "displays": "Pantallas",
+    "family": "Familia",
+    "security": "Seguridad",
+    "system": "Sistema"
+  },
+  "sections": {
+    "widgets": "Widgets",
+    "plugins": "Plugins",
+    "tabs": "Pestañas",
+    "devices": "Dispositivos",
+    "screensaver": "Salvapantallas",
+    "users": "Usuarios",
+    "chores": "Tareas",
+    "prizes": "Premios",
+    "vacation": "Vacaciones",
+    "region": "Idioma y hora",
+    "connections": "Conexiones",
+    "about": "Acerca de"
+  },
+  "panelTitle": "Panel de administración"
 }

@@ -75,7 +75,7 @@ Create a single HTML file:
 </html>
 ```
 
-Install it via **Admin Panel → Widgets → Plugins → Upload Widget**, enable it,
+Install it via **Admin Panel → Dashboard → Plugins → Upload Widget**, enable it,
 assign it to a tab. Test both themes with `?theme=dark` / `?theme=light` while
 developing. For external services without CORS headers, use the proxy:
 `GET /api/proxy?url=...`.
@@ -520,7 +520,7 @@ How the pieces cooperate:
 ## 8. Development workflow & debugging
 
 1. Write the HTML file; test standalone in a browser with `?theme=dark`.
-2. Upload via **Admin Panel → Widgets → Plugins**. Re-uploading the same
+2. Upload via **Admin Panel → Dashboard → Plugins**. Re-uploading the same
    filename replaces the content in place (manifest re-validated each time).
 3. Enable it, assign it to a tab, check both themes + transparency.
 4. Debugging:

@@ -73,7 +73,7 @@ custom properties.
 | `ColorPickerPopover.jsx` | Reusable color picker (`react-color`) for theme/gradient/source colors. |
 | `DeleteConfirmationDialog.jsx` | Reusable delete confirmation modal with Warning icon, alert, and Cancel/Delete actions (used for Tabs, Devices, Users). |
 | `AdminFormSection.jsx` | Thin wrapper for admin form sections: title, subtitle, bordered container, children. |
-| `VersionInfoCard.jsx` | Version info card showing label, version chip, commit link, repo link, and Git tags (used in About tab). |
+| `VersionInfoCard.jsx` | Version info card showing label, version chip, commit link, repo link, and Git tags (used in Admin → System → About). |
 | `LoadingBackdrop.jsx` | Shared glass-morphism loading backdrop with 3 bouncing clam emojis (used in AdminPanel + ChoreWidget). |
 | `RefreshIntervalSelect.jsx` | Reusable refresh interval dropdown (FormControl + Select + Timer icon). |
 | `ScreensaverIntervalSlider.jsx` | Reusable interval slider with label, value display, and marks (used for Photo and Tab cycle modes). |
