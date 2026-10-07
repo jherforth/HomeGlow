@@ -230,7 +230,11 @@
     "onceCompletedWithInterval": "Una vez completada ({{interval}})",
     "oneTimeTaskShort": "Tarea única",
     "deleteChoreWarning": "Esto eliminará de forma permanente la tarea y las {{count}} programaciones vinculadas a ella. El historial de finalización se conserva.",
-    "deleteChorePrompt": "Eliminar"
+    "deleteChorePrompt": "Eliminar",
+    "assignHelp": "Elige una o varias personas, o ninguna para una tarea extra sin asignar.",
+    "assignManyHelp": "Crea {{count}} programaciones, una para cada persona.",
+    "assignEveryone": "Todos",
+    "createdForEach": "Se crearon {{count}} programaciones, una para cada persona."
   },
   "presets": {
     "daily": "A diario",
