@@ -3391,18 +3391,25 @@ function isVacationActiveOn(dateStr) {
 // all-day events at UTC midnight (so date(start_time) is correct), while
 // ICS/CalDAV/Apple sources store them at local midnight (so the 'localtime'
 // conversion is needed). Timed events always use the localtime conversion.
+// Returns empty array on error (e.g. tables missing, sync failed) so calendar
+// chores are safely excluded rather than breaking bonus calculations.
 function getCalendarEventsOnDate(dateStr) {
-  return db.prepare(`
-    SELECT cec.title, cec.start_time, cec.all_day
-    FROM calendar_events_cache cec
-    JOIN calendar_sources cs ON cec.source_id = cs.id
-    WHERE cs.enabled = 1
-      AND (
-        (cec.all_day = 1 AND cs.type = 'Google' AND date(cec.start_time) = ?)
-        OR (cec.all_day = 1 AND cs.type != 'Google' AND date(cec.start_time, 'localtime') = ?)
-        OR (cec.all_day = 0 AND date(cec.start_time, 'localtime') = ?)
-      )
-  `).all(dateStr, dateStr, dateStr);
+  try {
+    return db.prepare(`
+      SELECT cec.title, cec.start_time, cec.all_day
+      FROM calendar_events_cache cec
+      JOIN calendar_sources cs ON cec.source_id = cs.id
+      WHERE cs.enabled = 1
+        AND (
+          (cec.all_day = 1 AND cs.type = 'Google' AND date(cec.start_time) = ?)
+          OR (cec.all_day = 1 AND cs.type != 'Google' AND date(cec.start_time, 'localtime') = ?)
+          OR (cec.all_day = 0 AND date(cec.start_time, 'localtime') = ?)
+        )
+    `).all(dateStr, dateStr, dateStr);
+  } catch (err) {
+    console.warn(`[CalendarMatch] Failed to fetch events for ${dateStr}:`, err.message);
+    return [];
+  }
 }
 
 // Returns true if any calendar event on `dateStr` matches `matchStr`
