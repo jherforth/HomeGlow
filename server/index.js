@@ -152,6 +152,7 @@ const googleCalendar = require('./services/googleCalendar');
 const appleCalDAV = require('./services/appleCalDAV');
 const googlePhotos = require('./services/googlePhotos');
 const appearanceAssets = require('./services/appearanceAssets');
+const themeStore = require('./services/themeStore');
 const googlePhotosPicker = require('./services/googlePhotosPicker');
 const homeAssistant = require('./services/homeAssistant');
 const weatherService = require('./services/weather');
@@ -6071,6 +6072,108 @@ fastify.delete('/api/appearance/backgrounds/:file', async (request, reply) => {
   } catch (error) {
     console.error('Error deleting appearance background:', error);
     return reply.status(500).send({ error: 'Failed to delete background' });
+  }
+});
+
+// Themes: installed from the themes repository or uploaded as a folder, kept
+// under uploads/themes. See services/themeStore.js for what is checked here
+// and what every display checks before it uses one.
+const DEFAULT_THEMES_REPOSITORY = 'jherforth/HomeGlowThemes';
+const THEMES_REPOSITORY = isValidRepositorySlug((process.env.HOMEGLOW_THEMES_REPOSITORY || '').trim())
+  ? process.env.HOMEGLOW_THEMES_REPOSITORY.trim()
+  : DEFAULT_THEMES_REPOSITORY;
+
+const sendThemeError = (reply, result) => reply.status(result.status || 400)
+  .send({ error: result.error, ...(result.problems ? { problems: result.problems } : {}) });
+
+fastify.get('/api/themes', async (request, reply) => {
+  try {
+    reply.header('Cache-Control', 'no-cache');
+    return { themes: await themeStore.listThemes(UPLOADS_ROOT) };
+  } catch (error) {
+    console.error('Error listing themes:', error);
+    return reply.status(500).send({ error: 'Failed to list themes' });
+  }
+});
+
+// Upload: one multipart field per file, named by its path in the theme folder
+// (theme.json, assets/x.svg, fonts/y.woff2).
+fastify.post('/api/themes/upload', async (request, reply) => {
+  if (demoBlocked(reply)) return;
+  try {
+    const files = [];
+    for await (const part of request.parts({ limits: { fileSize: themeStore.MAX_FILE_BYTES + 1, files: themeStore.MAX_FILES + 1 } })) {
+      if (part.type !== 'file') continue;
+      const buffer = await part.toBuffer();
+      if (part.file.truncated) {
+        return reply.status(413).send({ error: `${part.fieldname} is larger than ${themeStore.MAX_FILE_BYTES / (1024 * 1024)} MB` });
+      }
+      files.push({ path: part.fieldname, buffer });
+    }
+    const installed = await themeStore.installTheme(UPLOADS_ROOT, files, { source: 'upload' });
+    if (installed.error) return sendThemeError(reply, installed);
+    return installed;
+  } catch (error) {
+    if (error.code === 'FST_REQ_FILE_TOO_LARGE' || error.code === 'FST_FILES_LIMIT') {
+      return reply.status(413).send({ error: 'That theme is too large.' });
+    }
+    console.error('Error uploading theme:', error);
+    return reply.status(500).send({ error: 'Failed to install theme' });
+  }
+});
+
+fastify.get('/api/themes/store', async (request, reply) => {
+  try {
+    return { repository: THEMES_REPOSITORY, themes: await themeStore.listRepositoryThemes(axios, THEMES_REPOSITORY) };
+  } catch (error) {
+    console.error(`Error listing themes from ${THEMES_REPOSITORY}:`, error.message);
+    const status = error.response?.status === 404 ? 404 : 502;
+    return reply.status(status).send({ error: `Could not read ${THEMES_REPOSITORY}` });
+  }
+});
+
+fastify.post('/api/themes/store/install', async (request, reply) => {
+  if (demoBlocked(reply)) return;
+  try {
+    const fetched = await themeStore.fetchRepositoryTheme(axios, THEMES_REPOSITORY, request.body?.id);
+    if (fetched.error) return sendThemeError(reply, fetched);
+    const installed = await themeStore.installTheme(UPLOADS_ROOT, fetched.files, { source: 'store', ref: fetched.ref });
+    if (installed.error) return sendThemeError(reply, installed);
+    return installed;
+  } catch (error) {
+    console.error('Error installing theme from the store:', error.message);
+    return reply.status(502).send({ error: `Could not download the theme from ${THEMES_REPOSITORY}` });
+  }
+});
+
+fastify.get('/api/themes/:id/:dir/:file', async (request, reply) => {
+  const { id, dir, file } = request.params;
+  const resolved = themeStore.resolveThemeFile(UPLOADS_ROOT, id, `${dir}/${file}`);
+  if (!resolved) return reply.status(404).send({ error: 'Theme file not found' });
+  try {
+    const buffer = await fs.readFile(resolved.path);
+    // URLs carry the install time (?v=), so a reinstall gets new ones.
+    reply.header('Content-Type', resolved.type);
+    reply.header('Cache-Control', 'public, max-age=31536000, immutable');
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('Content-Security-Policy', resolved.csp);
+    return reply.send(buffer);
+  } catch (error) {
+    if (error.code === 'ENOENT') return reply.status(404).send({ error: 'Theme file not found' });
+    console.error('Error serving theme file:', error);
+    return reply.status(500).send({ error: 'Failed to load theme file' });
+  }
+});
+
+fastify.delete('/api/themes/:id', async (request, reply) => {
+  if (demoBlocked(reply)) return;
+  try {
+    const removed = await themeStore.removeTheme(UPLOADS_ROOT, request.params.id);
+    if (!removed) return reply.status(404).send({ error: 'Theme not found' });
+    return { success: true };
+  } catch (error) {
+    console.error('Error removing theme:', error);
+    return reply.status(500).send({ error: 'Failed to remove theme' });
   }
 });
 

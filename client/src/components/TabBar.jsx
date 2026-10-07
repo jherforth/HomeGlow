@@ -349,7 +349,10 @@ const TabBar = ({
                     flexDirection: 'column',
                     gap: 0.5,
                     p: 1,
-                    borderRadius: 'var(--hg-radius-xl)',
+                    // Capped near an item's half height plus the padding, so
+                    // the corners follow the items: a pill theme (999px) would
+                    // otherwise curve the ends into the first and last item.
+                    borderRadius: 'min(var(--hg-radius-xl), 28px)',
                     backgroundColor: 'var(--dock-bg)',
                     border: '1px solid var(--dock-border)',
                     backdropFilter: 'blur(20px)',

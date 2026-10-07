@@ -452,11 +452,8 @@
   "appearance": {
     "theme": "Tema",
     "themeDescriptions": {
-      "classic": "El aspecto propio de HomeGlow.",
-      "starship": "Una consola de puente del siglo XXIV: fondo negro, controles en forma de píldora y codos curvos en los marcos. Solo oscuro.",
-      "reef": "Una inmersión: aguas poco profundas y soleadas en modo claro, una inmersión nocturna en oscuro. Degradados de agua, acentos de coral y bioluminiscentes, marcos suaves como burbujas."
+      "classic": "El aspecto propio de HomeGlow."
     },
-    "themeHasColors": "Este tema trae sus propios colores, así que los colores de abajo solo se aplican con el tema Classic.",
     "heading": "Apariencia",
     "subtitle": "El hogar define el aspecto predeterminado. Esta pantalla puede cambiar cualquier parte.",
     "scopeDevice": "Esta pantalla",
@@ -471,7 +468,8 @@
     "colors": "Colores",
     "colorLabels": {
       "primary": "Color de fondo (modo claro)",
-      "secondary": "Color secundario"
+      "secondary": "Color secundario",
+      "accent": "Color de acento"
     },
     "autoDark": "Ubicación del modo automático",
     "resolvedLocation": "Usando {{name}}",
@@ -487,9 +485,7 @@
   },
   "personalize": {
     "heading": "Personalizar",
-    "help": "Tu propio acento, fondo y opacidad de las tarjetas, sobre el tema que se muestre.",
-    "accent": "Acento",
-    "themeAccent": "Usar el acento del tema",
+    "help": "Tu propio fondo y opacidad de tarjetas, sobre el tema que se muestre.",
     "background": "Fondo",
     "backgroundColor": "Color de fondo",
     "kinds": {
@@ -540,5 +536,29 @@
     "connections": "Conexiones",
     "about": "Acerca de"
   },
-  "panelTitle": "Panel de administración"
+  "panelTitle": "Panel de administración",
+  "themes": {
+    "heading": "Temas",
+    "subtitle": "Instala temas desde el repositorio de temas o agrega una carpeta de tema propia. Elige el tema en Apariencia, arriba.",
+    "onThisHomeGlow": "En este HomeGlow",
+    "builtIn": "Incluido",
+    "remove": "Quitar",
+    "confirmRemove": "¿Quitar el tema {{name}}? Las pantallas que lo usan mostrarán Classic.",
+    "removed": "Se quitó {{name}}.",
+    "installed": "Se instaló {{name}}. Elígelo en Apariencia, arriba.",
+    "failed": "No funcionó. Inténtalo de nuevo.",
+    "cannotUse": "No se puede usar: {{problem}}",
+    "notInstalled": "{{id}} (no instalado)",
+    "getMore": "Obtener temas",
+    "refresh": "Actualizar",
+    "fromRepository": "Desde {{repository}}",
+    "storeFailed": "No se pudo acceder al repositorio de temas.",
+    "storeEmpty": "El repositorio de temas aún no tiene temas.",
+    "install": "Instalar",
+    "update": "Actualizar",
+    "upToDate": "Instalado",
+    "addFolder": "Agregar una carpeta de tema",
+    "addFolderHelp": "Elige una carpeta con theme.json y, a su lado, assets/ y fonts/. Consulta la guía de desarrollo de temas.",
+    "folderInvalid": "Esa carpeta no es un tema utilizable: {{problems}}"
+  }
 }

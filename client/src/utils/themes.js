@@ -236,11 +236,15 @@ export function discoverThemes(manifests, files) {
     const relative = path.slice(path.indexOf(`themes/${folder}/`) + `themes/${folder}/`.length);
     (assets[folder] = assets[folder] || {})[relative] = url;
   });
-  const themes = Object.entries(manifests)
+  const themes = sortThemes(Object.entries(manifests)
     .filter(([path, manifest]) => manifest && manifest.id === folderOf(path))
-    .map(([, manifest]) => manifest)
-    .sort((a, b) => (a.id === DEFAULT_THEME_ID ? -1 : b.id === DEFAULT_THEME_ID ? 1 : a.name.localeCompare(b.name)));
+    .map(([, manifest]) => manifest));
   return { themes, assets };
+}
+
+/** Classic first, then by name. */
+export function sortThemes(themes) {
+  return [...themes].sort((a, b) => (a.id === DEFAULT_THEME_ID ? -1 : b.id === DEFAULT_THEME_ID ? 1 : a.name.localeCompare(b.name)));
 }
 
 const DISCOVERED = discoverThemes(MANIFESTS, FILES);

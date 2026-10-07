@@ -74,6 +74,7 @@ import {
   ExpandMore
 } from '@mui/icons-material';
 import AppearanceSettings from './AppearanceSettings';
+import ThemeLibrary from './ThemeLibrary';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase, getDeviceName, setDeviceName, isValidDeviceName } from '../utils/deviceName.js';
@@ -2766,6 +2767,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
         <Card>
           <CardContent>
             <AppearanceSettings />
+
+            <ThemeLibrary />
           </CardContent>
         </Card>
       )}
