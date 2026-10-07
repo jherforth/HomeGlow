@@ -52,6 +52,25 @@
   var HEX_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
   var RGB_TRIPLET = /^\d{1,3}, \d{1,3}, \d{1,3}$/;
   var THEME_VARIABLES = [['primary', '--primary'], ['secondary', '--secondary'], ['accent', '--accent']];
+  // Version 2 adds the theme's role tokens: colors, radii, type and meters,
+  // named for what a thing does, so plugin CSS written against them follows
+  // every theme. The list matches the dashboard's (PLUGIN_ROLE_TOKENS in
+  // client/src/utils/pluginThemeBridge.js); a server test holds them equal.
+  // Values are checked as theme tokens are: no way out of a declaration,
+  // nothing fetched.
+  var ROLE_TOKENS = [
+    '--background', '--surface', '--card-bg', '--text', '--text-secondary', '--border',
+    '--success', '--warning', '--hg-error',
+    '--hg-radius-sm', '--hg-radius-md', '--hg-radius-lg',
+    '--hg-font-body', '--hg-font-heading', '--hg-heading-transform', '--hg-heading-letter-spacing',
+    '--hg-meter-track', '--hg-meter-fill', '--hg-meter-thickness', '--hg-meter-cap',
+  ];
+  var UNSAFE_VALUE = /[;{}<>\\@]|url\s*\(|expression|javascript:/i;
+  // A theme's font files come from its installed folder, which the API serves:
+  // the same origin as this document.
+  var FONT_URL = /^(?:https?:\/\/[^/?#]+)?\/api\/themes\/[a-z0-9][a-z0-9-]{0,63}\/fonts\/[A-Za-z0-9._-]+\.woff2(?:\?[A-Za-z0-9._%:-]*=?[A-Za-z0-9._%:-]*)?$/;
+  var FONT_FAMILY = /^[A-Za-z0-9][A-Za-z0-9 -]{0,63}$/;
+  var loadedFonts = {};
   var currentTheme = null;
   var themeHandlers = [];
   function applyTheme(data) {
@@ -66,12 +85,49 @@
     if (typeof colors.accentRgb === 'string' && RGB_TRIPLET.test(colors.accentRgb)) {
       root.style.setProperty('--accent-rgb', colors.accentRgb);
     }
-    currentTheme = { theme: theme, colors: colors };
+    var tokens = {};
+    var sent = data.tokens && typeof data.tokens === 'object' ? data.tokens : {};
+    ROLE_TOKENS.forEach(function (name) {
+      var value = sent[name];
+      if (typeof value === 'string' && value.length <= 300 && !UNSAFE_VALUE.test(value)) {
+        root.style.setProperty(name, value);
+        tokens[name] = value;
+      }
+    });
+    loadFonts(data.fonts);
+    currentTheme = { theme: theme, colors: colors, tokens: tokens };
     themeHandlers.slice().forEach(function (handler) {
       try {
         handler(currentTheme);
       } catch (error) {
         console.error('HomeGlow SDK: theme handler failed', error);
+      }
+    });
+  }
+
+  // Registered, not fetched: like an @font-face rule, a FontFace downloads its
+  // file only when text uses the family.
+  function loadFonts(fonts) {
+    if (!Array.isArray(fonts) || typeof FontFace !== 'function' || !document.fonts) return;
+    fonts.forEach(function (font) {
+      if (!font || !FONT_FAMILY.test(font.family) || !FONT_URL.test(font.url)) return;
+      var origin;
+      try {
+        origin = new URL(font.url, window.location.href).origin;
+      } catch (error) {
+        return;
+      }
+      if (origin !== window.location.origin) return;
+      var weight = Number(font.weight);
+      if (!(weight >= 100 && weight <= 900)) return;
+      var style = font.style === 'italic' ? 'italic' : 'normal';
+      var key = font.family + '|' + weight + '|' + style + '|' + font.url;
+      if (loadedFonts[key]) return;
+      loadedFonts[key] = true;
+      try {
+        document.fonts.add(new FontFace(font.family, 'url("' + font.url + '")', { weight: String(weight), style: style }));
+      } catch (error) {
+        console.error('HomeGlow SDK: could not register font ' + font.family, error);
       }
     });
   }
@@ -139,9 +195,9 @@
 
     /**
      * The last theme the dashboard sent: { theme: 'dark'|'light', colors: {
-     * primary, secondary, accent, accentRgb } }, or null before the first
-     * message. CSS that reads var(--accent) needs none of this; it is for
-     * canvas drawing and the like.
+     * primary, secondary, accent, accentRgb }, tokens: { '--text': ..., ... } },
+     * or null before the first message. CSS that reads var(--accent) or
+     * var(--text) needs none of this; it is for canvas drawing and the like.
      */
     get theme() {
       return currentTheme;

@@ -25,7 +25,7 @@ test('a theme is refused for a bad manifest, a disguised file or script', () => 
     assert.equal(problem(theme().slice(1)), 'theme.json is missing');
     assert.match(problem(theme([], { id: 'Not A Slug' })), /needs an id/);
     assert.match(problem(theme([], { id: 'classic' })), /built in/);
-    assert.match(problem(theme([], { manifestVersion: 2 })), /manifestVersion 1/);
+    assert.equal(problem(theme([], { manifestVersion: 99 })), 'Nebula needs a newer version of HomeGlow. Update HomeGlow to use it.');
     assert.match(problem([{ path: 'theme.json', buffer: Buffer.from('{nope') }]), /not valid JSON/);
     assert.match(problem(theme([{ path: 'assets/photo.png', buffer: SVG }])), /assets\/photo\.png is not a PNG image/);
     assert.match(problem(theme([{ path: 'fonts/x.woff2', buffer: PNG }])), /not a WOFF2 font/);
@@ -128,7 +128,7 @@ test('the repository lists one theme per folder whose id matches it', async () =
         'wrong/theme.json': manifest({ id: 'other' }),
         'broken/theme.json': Buffer.from('{'),
     });
-    const listed = await store.listRepositoryThemes(github, 'someone/HomeGlowThemes');
+    const { themes: listed } = await store.listRepositoryThemes(github, 'someone/HomeGlowThemes');
     assert.deepEqual(listed.map((t) => t.id), ['nebula']);
     assert.equal(listed[0].author, 'Ram');
     assert.equal(listed[0].ref, 'tree-nebula');
@@ -214,10 +214,33 @@ test('files are read at the listed commit, so a cached HEAD never serves an old 
         { 'nebula/theme.json': current, 'nebula/assets/cloud.svg': SVG },
         { 'nebula/theme.json': manifest({ version: '1.0.0', author: 'HomeGlow' }) },
     );
-    const [listed] = await store.listRepositoryThemes(github, 'someone/HomeGlowThemes');
+    const { themes: [listed] } = await store.listRepositoryThemes(github, 'someone/HomeGlowThemes');
     assert.equal(listed.version, '1.0.1');
     assert.equal(listed.author, 'mrramam');
     const fetched = await store.fetchRepositoryTheme(github, 'someone/HomeGlowThemes', 'nebula');
     assert.deepEqual(fetched.files.find((file) => file.path === 'theme.json').buffer, current);
     assert.ok(github.calls.every((url) => !url.includes('/HEAD/')));
+});
+
+test('a theme newer than this core is refused at install and listed apart by the store', async () => {
+    const newer = store.MANIFEST_VERSION + 1;
+    const refused = store.checkTheme(theme([], { manifestVersion: newer }));
+    assert.equal(refused.error, 'Nebula needs a newer version of HomeGlow. Update HomeGlow to use it.');
+    assert.equal(refused.needsNewer, true);
+    assert.equal(refused.name, 'Nebula');
+    assert.equal(store.checkTheme(theme([], { manifestVersion: 2 })).error, undefined);
+    assert.match(store.checkTheme(theme([], { manifestVersion: 0 })).error, /needs a manifestVersion/);
+
+    const github = fakeGitHub({
+        'nebula/theme.json': manifest(),
+        'future/theme.json': manifest({ id: 'future', name: 'Future', manifestVersion: newer }),
+    });
+    const { themes, unsupported } = await store.listRepositoryThemes(github, 'someone/HomeGlowThemes');
+    assert.deepEqual(themes.map((t) => t.id), ['nebula']);
+    assert.deepEqual(unsupported.map((t) => [t.id, t.name, t.version, t.manifestVersion]), [['future', 'Future', '1.0.0', newer]]);
+});
+
+test("the server's manifest version is the client's", () => {
+    const client = fs.readFileSync(path.resolve(__dirname, '..', '..', 'client', 'src', 'utils', 'themes.js'), 'utf8');
+    assert.equal(Number(client.match(/export const MANIFEST_VERSION = (\d+);/)[1]), store.MANIFEST_VERSION);
 });

@@ -1,8 +1,9 @@
 import React, { useMemo } from 'react';
 import { Box } from '@mui/material';
-import { bob, draw, forMode, pick, pickWeighted, pulse, reducedMotion, spread, sway } from '../motion.js';
+import { bob, clumped, draw, forMode, pick, pickWeighted, pulse, reducedMotion, spread, sway } from '../motion.js';
 
-// Copies of pictures spread across the screen. One picture (`src`), or a
+// Copies of pictures spread across the screen, or gathered into `clumps`
+// (patches `clumpWidth` percent wide, open ground between). One picture (`src`), or a
 // list (`pictures`) each copy picks from, by weight, with its own proportions,
 // size and tint, so one layer can scatter several kinds of thing. Each copy
 // may be mirrored (`flip`) and moves on its own: sway (anchored at its base,
@@ -24,7 +25,10 @@ function Sprites({ options, assets, random, mode }) {
   const { items, currentSeconds } = useMemo(() => {
     const pictures = options.pictures || [{ src: options.src, aspect: options.aspect, height: options.height, tint: options.tint }];
     const count = draw(random, options.count, { integer: true });
-    const list = spread(random, count, options.span).map((x) => {
+    const positions = options.clumps === undefined
+      ? spread(random, count, options.span)
+      : clumped(random, count, draw(random, options.clumps, { integer: true }), options.clumpWidth ?? [6, 12], options.span);
+    const list = positions.map((x) => {
       const picture = pickWeighted(random, pictures);
       const seconds = draw(random, options.seconds ?? [6, 10]);
       const amount = kind === 'bob' ? draw(random, options.distance ?? [6, 14]) : draw(random, options.angle ?? [2, 5]);

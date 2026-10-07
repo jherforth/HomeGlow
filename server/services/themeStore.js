@@ -18,6 +18,10 @@ const path = require('path');
 const crypto = require('crypto');
 
 const THEME_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
+// The newest theme manifest this core understands (client/src/utils/themes.js,
+// MANIFEST_VERSION; a test holds them equal). Newer themes are refused at
+// install and left out of the store's list.
+const MANIFEST_VERSION = 2;
 // Classic is the stylesheet itself; no package can replace it.
 const RESERVED_IDS = new Set(['classic']);
 const MAX_FILES = 64;
@@ -88,7 +92,14 @@ function readManifest(buffer) {
         return { error: 'theme.json is not valid JSON' };
     }
     if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) return { error: 'theme.json must be an object' };
-    if (manifest.manifestVersion !== 1) return { error: 'theme.json must have manifestVersion 1' };
+    if (!Number.isInteger(manifest.manifestVersion) || manifest.manifestVersion < 1) {
+        return { error: 'theme.json needs a manifestVersion' };
+    }
+    if (manifest.manifestVersion > MANIFEST_VERSION) {
+        const name = typeof manifest.name === 'string' && manifest.name.trim() ? manifest.name.trim() : 'This theme';
+        console.warn(`Theme ${manifest.id}: manifestVersion ${manifest.manifestVersion}; this HomeGlow supports up to ${MANIFEST_VERSION}.`);
+        return { error: `${name} needs a newer version of HomeGlow. Update HomeGlow to use it.`, status: 422, needsNewer: true, name };
+    }
     if (typeof manifest.id !== 'string' || !THEME_ID.test(manifest.id)) {
         return { error: 'theme.json needs an id: lowercase letters, digits and hyphens' };
     }
@@ -124,7 +135,9 @@ function checkTheme(files) {
     }
     const manifestFile = kept.find((file) => file.path === 'theme.json');
     if (!manifestFile && !problems.some((p) => p.startsWith('theme.json'))) problems.unshift('theme.json is missing');
-    const { manifest, error } = manifestFile ? readManifest(manifestFile.buffer) : {};
+    const read = manifestFile ? readManifest(manifestFile.buffer) : {};
+    const { manifest, error } = read;
+    if (read.needsNewer) return { error, status: 422, needsNewer: true, name: read.name };
     if (error) problems.unshift(error);
     if (problems.length) return { error: problems[0], problems, status: 422 };
     return { manifest, files: kept, skipped };
@@ -292,8 +305,14 @@ async function listRepositoryThemes(http, repository) {
         try {
             let manifest = manifestCache.get(entry.sha);
             if (!manifest) {
-                const read = readManifest(await fetchRaw(http, repository, commit, entry.path));
-                if (read.error) return null;
+                const buffer = await fetchRaw(http, repository, commit, entry.path);
+                const read = readManifest(buffer);
+                if (read.error) {
+                    // Newer than this core: listed apart, so the admin page
+                    // can say why it is not offered.
+                    const newer = newerManifest(buffer);
+                    return newer && newer.id === folder ? { unsupported: newer } : null;
+                }
                 manifest = read.manifest;
                 manifestCache.set(entry.sha, manifest);
             }
@@ -314,7 +333,31 @@ async function listRepositoryThemes(http, repository) {
             return null;
         }
     }));
-    return themes.filter(Boolean).sort((a, b) => a.name.localeCompare(b.name));
+    const listed = themes.filter(Boolean);
+    return {
+        themes: listed.filter((theme) => !theme.unsupported).sort((a, b) => a.name.localeCompare(b.name)),
+        unsupported: listed.filter((theme) => theme.unsupported).map((theme) => theme.unsupported),
+    };
+}
+
+// A manifest too new for this core, as { id, name, manifestVersion }, or null.
+function newerManifest(buffer) {
+    try {
+        const manifest = JSON.parse(buffer.toString('utf8'));
+        if (!manifest || typeof manifest.id !== 'string' || !Number.isInteger(manifest.manifestVersion)) return null;
+        if (manifest.manifestVersion <= MANIFEST_VERSION) return null;
+        const text = (value) => (typeof value === 'string' && value.trim() ? value.trim() : null);
+        return {
+            id: manifest.id,
+            name: text(manifest.name) || manifest.id,
+            version: text(manifest.version),
+            author: text(manifest.author),
+            description: text(manifest.description),
+            manifestVersion: manifest.manifestVersion,
+        };
+    } catch {
+        return null;
+    }
 }
 
 /** One theme folder's files from the repository, as [{ path, buffer }]. */
@@ -338,6 +381,7 @@ async function fetchRepositoryTheme(http, repository, folder) {
 }
 
 module.exports = {
+    MANIFEST_VERSION,
     MAX_FILES,
     MAX_FILE_BYTES,
     MAX_TOTAL_BYTES,

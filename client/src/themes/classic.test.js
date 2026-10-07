@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join, relative, sep } from 'node:path';
 
 const srcDir = join(__dirname, '..');
 const classic = readFileSync(join(__dirname, 'classic.css'), 'utf8');
@@ -17,7 +17,9 @@ function sourceFiles(dir) {
 }
 
 const files = sourceFiles(srcDir)
-  .map((path) => ({ rel: relative(srcDir, path), text: readFileSync(path, 'utf8') }))
+  // Forward slashes on every platform: Windows paths use backslashes, which
+  // the 'themes/' prefix and the exemption list would never match.
+  .map((path) => ({ rel: relative(srcDir, path).split(sep).join('/'), text: readFileSync(path, 'utf8') }))
   .filter(({ rel }) => !rel.startsWith('themes/') && !EXEMPT.has(rel));
 
 describe('Classic tokens', () => {

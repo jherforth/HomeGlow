@@ -55,6 +55,8 @@ export const LAYER_SCHEMAS = {
     base: { type: 'length' },
     lift: range(0, 100),
     hue: range(0, 360),
+    clumps: range(1, 8, { integer: true }),
+    clumpWidth: range(1, 50),
     opacity: num(0, 1),
   },
   particles: {
@@ -260,6 +262,53 @@ export function validateConfetti(confetti, { assets, isColor }) {
     }
     const result = checkOption(spec, value, { assets, isColor });
     if (result !== true) errors.push(`confetti.${key} ${result}`);
+  });
+  return errors;
+}
+
+// A theme's ornaments: pictures from its folder drawn on every widget frame,
+// native or plugin, anchored to a corner, an edge or the center. `corners`
+// puts one picture in all four, mirrored to fit, so a bezel is one quarter.
+// `stretch` runs an edge picture along the whole edge. They take no space:
+// a theme makes room for them with --hg-frame-inset (at most 24px a side).
+export const MAX_ORNAMENTS = 8;
+export const ORNAMENT_ANCHORS = ['corners', 'top-left', 'top', 'top-right', 'right', 'bottom-right', 'bottom', 'bottom-left', 'left', 'center'];
+export const ORNAMENT_SCHEMA = {
+  src: { type: 'picture', required: true },
+  anchor: { type: 'enum', values: ORNAMENT_ANCHORS, required: true },
+  size: { type: 'length' },
+  aspect: num(0.05, 4),
+  stretch: { type: 'bool' },
+  tint: { type: 'tints' },
+  opacity: num(0, 1),
+};
+
+/** Problems with a theme's `ornaments`, as readable strings. */
+export function validateOrnaments(ornaments, { assets, isColor }) {
+  if (!Array.isArray(ornaments)) return ['ornaments must be a list'];
+  if (ornaments.length > MAX_ORNAMENTS) return [`ornaments may have at most ${MAX_ORNAMENTS} entries`];
+  const errors = [];
+  ornaments.forEach((entry, i) => {
+    const where = `ornaments[${i}]`;
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      errors.push(`${where} must be an object`);
+      return;
+    }
+    Object.entries(entry).forEach(([key, value]) => {
+      const spec = ORNAMENT_SCHEMA[key];
+      if (!spec) {
+        errors.push(`${where} has no option ${key}`);
+        return;
+      }
+      const result = checkOption(spec, value, { assets, isColor });
+      if (result !== true) errors.push(`${where}.${key} ${result}`);
+    });
+    Object.entries(ORNAMENT_SCHEMA).forEach(([key, spec]) => {
+      if (spec.required && entry[key] === undefined) errors.push(`${where}.${key} is required`);
+    });
+    if (entry.stretch && !['top', 'right', 'bottom', 'left'].includes(entry.anchor)) {
+      errors.push(`${where}.stretch only applies to an edge (top, right, bottom or left)`);
+    }
   });
   return errors;
 }

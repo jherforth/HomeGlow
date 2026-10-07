@@ -15,7 +15,7 @@ import { Delete, Download, DriveFolderUpload, Refresh } from '@mui/icons-materia
 import { useTranslation } from 'react-i18next';
 import AdminFormSection from './AdminFormSection';
 import { API_BASE_URL } from '../utils/apiConfig.js';
-import { BUILT_IN_THEMES } from '../utils/themes.js';
+import { BUILT_IN_THEMES, NEEDS_NEWER_HOMEGLOW } from '../utils/themes.js';
 import { checkThemeFolder, loadInstalledThemes, themeFolderFiles, useThemeRegistry } from '../utils/installedThemes.js';
 
 const BUILT_IN_IDS = new Set(BUILT_IN_THEMES.map((theme) => theme.id));
@@ -28,7 +28,7 @@ export default function ThemeLibrary() {
   const { t } = useTranslation(['admin']);
   const registry = useThemeRegistry();
   const [installed, setInstalled] = useState([]);
-  const [store, setStore] = useState({ loading: true, themes: [], repository: null, error: null });
+  const [store, setStore] = useState({ loading: true, themes: [], unsupported: [], repository: null, error: null });
   const [busy, setBusy] = useState(null);
   const [message, setMessage] = useState(null);
   const folderInput = useRef(null);
@@ -47,9 +47,9 @@ export default function ThemeLibrary() {
     setStore((current) => ({ ...current, loading: true, error: null }));
     try {
       const { data } = await axios.get(`${API_BASE_URL}/api/themes/store`);
-      setStore({ loading: false, themes: data.themes || [], repository: data.repository, error: null });
+      setStore({ loading: false, themes: data.themes || [], unsupported: data.unsupported || [], repository: data.repository, error: null });
     } catch (error) {
-      setStore({ loading: false, themes: [], repository: null, error: errorText(error, t('admin:themes.storeFailed')) });
+      setStore({ loading: false, themes: [], unsupported: [], repository: null, error: errorText(error, t('admin:themes.storeFailed')) });
     }
   }, [t]);
 
@@ -66,7 +66,10 @@ export default function ThemeLibrary() {
       await refreshInstalled();
       setMessage({ type: 'success', text: success });
     } catch (error) {
-      setMessage({ type: 'error', text: errorText(error, t('admin:themes.failed')) });
+      const data = error?.response?.data;
+      setMessage(data?.needsNewer
+        ? { type: 'warning', text: t('admin:themes.needsNewer', { name: data.name || t('admin:themes.thisTheme') }) }
+        : { type: 'error', text: errorText(error, t('admin:themes.failed')) });
     } finally {
       setBusy(null);
     }
@@ -88,6 +91,10 @@ export default function ThemeLibrary() {
     if (folderInput.current) folderInput.current.value = '';
     if (entries.length === 0) return;
     const { manifest, errors } = await checkThemeFolder(entries);
+    if (errors.includes(NEEDS_NEWER_HOMEGLOW)) {
+      setMessage({ type: 'warning', text: t('admin:themes.needsNewer', { name: manifest?.name || t('admin:themes.thisTheme') }) });
+      return;
+    }
     if (errors.length) {
       setMessage({ type: 'error', text: t('admin:themes.folderInvalid', { problems: errors.join('; ') }) });
       return;
@@ -146,7 +153,7 @@ export default function ThemeLibrary() {
           >
             <ListItemText
               primary={entry.name}
-              secondary={t('admin:themes.cannotUse', { problem: entry.errors[0] })}
+              secondary={entry.needsNewer ? t('admin:themes.needsNewer', { name: entry.name }) : t('admin:themes.cannotUse', { problem: entry.errors[0] })}
               slotProps={{ secondary: { color: 'error' } }}
             />
           </ListItem>
@@ -166,10 +173,23 @@ export default function ThemeLibrary() {
       )}
       {store.loading && <CircularProgress size={20} sx={{ my: 1 }} />}
       {store.error && <Alert severity="warning" sx={{ my: 1 }}>{store.error}</Alert>}
-      {!store.loading && !store.error && store.themes.length === 0 && (
+      {!store.loading && !store.error && store.themes.length === 0 && store.unsupported.length === 0 && (
         <Typography variant="body2" color="text.secondary" sx={{ my: 1 }}>{t('admin:themes.storeEmpty')}</Typography>
       )}
       <List dense sx={{ mb: 2 }}>
+        {store.unsupported.map((theme) => (
+          <ListItem key={`newer-${theme.id}`}>
+            <ListItemText
+              primary={(
+                <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                  {theme.name}
+                  {theme.version && <Typography component="span" variant="caption" color="text.secondary">{theme.version}</Typography>}
+                </Box>
+              )}
+              secondary={t('admin:themes.needsNewer', { name: theme.name })}
+            />
+          </ListItem>
+        ))}
         {store.themes.map((theme) => {
           const entry = installedById.get(theme.id);
           const current = entry && entry.source === 'store' && entry.ref === theme.ref;
@@ -206,6 +226,7 @@ export default function ThemeLibrary() {
           );
         })}
       </List>
+
 
       <input
         ref={folderInput}

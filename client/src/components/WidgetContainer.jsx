@@ -18,6 +18,7 @@ import { shouldAcceptLayoutChange } from '../utils/layoutSync';
 import { buildLayout, savedSourcesById } from '../utils/gridPlacement';
 import { readGridMetrics } from '../utils/gridMetrics';
 import { frameDecoration } from '../utils/widgetFrame';
+import FrameOrnaments from './FrameOrnaments';
 import ThemeAmbience from '../themes/engine/ThemeAmbience.jsx';
 
 // No auto-compaction; block overlaps (same as compactType={null} + preventCollision).
@@ -672,6 +673,7 @@ const WidgetContainer = ({
                   '&::after': frameDecoration,
                 }}
               >
+                <FrameOrnaments />
                 {!locked && !isSelected && (
                   <Box
                     className="selection-overlay"
