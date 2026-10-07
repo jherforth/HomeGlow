@@ -2871,9 +2871,7 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
       }
       const normalizedInterval = normalizeScheduleInterval(interval);
       if (normalizedDuration === 'once-completed') {
-        if (!crontab) {
-          return reply.status(400).send({ error: 'once-completed schedules require a crontab expression' });
-        }
+        // Crontab is optional for once-completed; interval drives the repeat.
         if (!isValidScheduleInterval(normalizedInterval)) {
           return reply.status(400).send({ error: 'once-completed schedules require a valid interval like 30d, 3w, 2m, or 1y' });
         }
@@ -2956,9 +2954,7 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
 
     const normalizedInterval = normalizeScheduleInterval(interval);
     if (normalizedDuration === 'once-completed') {
-      if (!crontab) {
-        return reply.status(400).send({ error: 'once-completed schedules require a crontab expression' });
-      }
+        // Crontab is optional for once-completed; interval drives the repeat.
       if (!isValidScheduleInterval(normalizedInterval)) {
         return reply.status(400).send({ error: 'once-completed schedules require a valid interval like 30d, 3w, 2m, or 1y' });
       }
@@ -3113,9 +3109,7 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
     const nextCrontab = crontab !== undefined ? (crontab || null) : existingSchedule.crontab;
     const nextInterval = normalizeScheduleInterval(interval !== undefined ? interval : existingSchedule.interval);
     if (nextDuration === 'once-completed') {
-      if (!nextCrontab) {
-        return reply.status(400).send({ error: 'once-completed schedules require a crontab expression' });
-      }
+      // Crontab is optional for once-completed; interval drives the repeat.
       if (!isValidScheduleInterval(nextInterval)) {
         return reply.status(400).send({ error: 'once-completed schedules require a valid interval like 30d, 3w, 2m, or 1y' });
       }
