@@ -3417,7 +3417,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
               </Tabs>
             </Box>
             {location.subsection === 'definitions' && (
-              <ChoreSchedulesTab saveMessage={saveMessage} setSaveMessage={setSaveMessage} />
+              <ChoreSchedulesTab setSaveMessage={setSaveMessage} />
             )}
             {location.subsection === 'history' && (
               <ChoreHistoryTab />

@@ -30,7 +30,9 @@ import {
   CircularProgress,
   RadioGroup,
   Radio,
-  Grid
+  Grid,
+  Checkbox,
+  ListItemText
 } from '@mui/material';
 import {
   Add,
@@ -204,6 +206,9 @@ function buildDueDateFromOffset(createdAt, dueDays) {
 const defaultScheduleForm = {
   chore_id: '',
   user_id: '',
+  // Create mode only: the same schedule for each person picked, one row
+  // each. Empty means an unassigned bonus chore, as user_id '' does.
+  user_ids: [],
   scheduleMode: 'preset',
   selectedPreset: '0 0 * * *',
   selectedDays: [],
@@ -250,7 +255,7 @@ function nextSort(sort, column) {
   return { column, direction: sort.direction === 'asc' ? 'desc' : 'asc' };
 }
 
-export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
+export default function ChoreSchedulesTab({ setSaveMessage }) {
   const { t } = useTranslation(['chores', 'common']);
   const isMobile = useIsMobile();
   const [schedules, setSchedules] = useState([]);
@@ -355,6 +360,9 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
     setScheduleForm({
       chore_id: schedule.chore_id,
       user_id: schedule.user_id ?? '',
+      // A duplicate opens in create mode with this person picked, so the
+      // same chore can go to the others in one step.
+      user_ids: schedule.user_id ? [schedule.user_id] : [],
       scheduleMode,
       selectedPreset,
       selectedDays,
@@ -405,9 +413,18 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
         return;
       }
 
+      // Editing changes one schedule, so one person. Creating can pick several:
+      // two or more go as user_ids, one schedule each.
+      const pickedUserIds = editingSchedule ? [] : scheduleForm.user_ids;
+      const assignee = editingSchedule
+        ? { user_id: scheduleForm.user_id === '' ? null : scheduleForm.user_id }
+        : pickedUserIds.length > 1
+          ? { user_ids: pickedUserIds }
+          : { user_id: pickedUserIds[0] ?? null };
+
       const payload = {
         chore_id: scheduleForm.chore_id,
-        user_id: scheduleForm.user_id === '' ? null : scheduleForm.user_id,
+        ...assignee,
         crontab: cron || null,
         duration: !scheduleForm.isOneTime ? scheduleForm.duration : 'day-of',
         interval: normalizedInterval,
@@ -428,7 +445,9 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
         showMessage('success', 'Schedule updated.');
       } else {
         await axios.post(`${API_BASE_URL}/api/chore-schedules`, payload);
-        showMessage('success', 'Schedule created.');
+        showMessage('success', pickedUserIds.length > 1
+          ? t('chores:schedules.createdForEach', { count: pickedUserIds.length })
+          : 'Schedule created.');
       }
       setScheduleDialogOpen(false);
       await fetchAll();
@@ -595,11 +614,8 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
 
   return (
     <Box>
-      {saveMessage?.show && (
-        <Alert severity={saveMessage.type} sx={{ mb: 2 }}>
-          {saveMessage.text}
-        </Alert>
-      )}
+      {/* Messages from here show in the Admin Panel's one message area
+          under its tab bars (#230), so this tab no longer draws its own. */}
 
       {/* ── CHORE DEFINITIONS ────────────────────────────── */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
@@ -970,17 +986,65 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
               </Select>
             </FormControl>
 
-            <FormControl fullWidth size="small">
-              <InputLabel>{t('chores:schedules.assignedTo')}</InputLabel>
-              <Select
-                value={scheduleForm.user_id}
-                label={t('chores:schedules.assignedTo')}
-                onChange={(e) => updateScheduleForm({ user_id: e.target.value })}
-              >
-                <MenuItem value="">{t('chores:schedules.unassignedBonusChore')}</MenuItem>
-                {users.map(u => <MenuItem key={u.id} value={u.id}>{u.username}</MenuItem>)}
-              </Select>
-            </FormControl>
+            {editingSchedule ? (
+              <FormControl fullWidth size="small">
+                <InputLabel>{t('chores:schedules.assignedTo')}</InputLabel>
+                <Select
+                  value={scheduleForm.user_id}
+                  label={t('chores:schedules.assignedTo')}
+                  onChange={(e) => updateScheduleForm({ user_id: e.target.value })}
+                >
+                  <MenuItem value="">{t('chores:schedules.unassignedBonusChore')}</MenuItem>
+                  {users.map(u => <MenuItem key={u.id} value={u.id}>{u.username}</MenuItem>)}
+                </Select>
+              </FormControl>
+            ) : (
+              // New schedules can go to several people at once: one schedule
+              // each, exactly as if added one at a time. None picked is an
+              // unassigned bonus chore, as before.
+              <FormControl fullWidth size="small">
+                <InputLabel shrink>{t('chores:schedules.assignedTo')}</InputLabel>
+                <Select
+                  multiple
+                  displayEmpty
+                  notched
+                  value={scheduleForm.user_ids}
+                  label={t('chores:schedules.assignedTo')}
+                  onChange={(e) => updateScheduleForm({ user_ids: e.target.value })}
+                  renderValue={(selected) => (selected.length === 0
+                    ? <Box component="span" sx={{ color: 'text.secondary' }}>{t('chores:schedules.unassignedBonusChore')}</Box>
+                    : selected.map(getUserName).join(', '))}
+                >
+                  {users.map(u => (
+                    <MenuItem key={u.id} value={u.id}>
+                      <Checkbox size="small" checked={scheduleForm.user_ids.includes(u.id)} sx={{ p: 0.5, mr: 1 }} />
+                      <ListItemText primary={u.username} />
+                    </MenuItem>
+                  ))}
+                </Select>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
+                    {scheduleForm.user_ids.length > 1
+                      ? t('chores:schedules.assignManyHelp', { count: scheduleForm.user_ids.length })
+                      : t('chores:schedules.assignHelp')}
+                  </Typography>
+                  <Button
+                    size="small"
+                    onClick={() => updateScheduleForm({ user_ids: users.map(u => u.id) })}
+                    disabled={users.length === 0 || scheduleForm.user_ids.length === users.length}
+                  >
+                    {t('chores:schedules.assignEveryone')}
+                  </Button>
+                  <Button
+                    size="small"
+                    onClick={() => updateScheduleForm({ user_ids: [] })}
+                    disabled={scheduleForm.user_ids.length === 0}
+                  >
+                    {t('common:actions.clear')}
+                  </Button>
+                </Box>
+              </FormControl>
+            )}
 
             <Divider />
 

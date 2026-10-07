@@ -2745,8 +2745,38 @@ fastify.get('/api/chore-schedules/:id', async (request, reply) => {
   }
 });
 
+// Who a new schedule is for. `user_id` (one person, or none for an unassigned
+// bonus chore) works as it always has; `user_ids` creates the same schedule
+// for several people at once, one row each, so it behaves exactly as if each
+// had been added separately. Returns { userIds, batch } or { error }.
+function resolveScheduleUsers(body) {
+  if (body.user_ids === undefined) {
+    return { userIds: [body.user_id || null], batch: false };
+  }
+  if (body.user_id !== undefined && body.user_id !== null && body.user_id !== '') {
+    return { error: 'Send user_id or user_ids, not both.' };
+  }
+  if (!Array.isArray(body.user_ids) || body.user_ids.length === 0) {
+    return { error: 'user_ids must be a non-empty list of user ids.' };
+  }
+  const userIds = [];
+  for (const raw of body.user_ids) {
+    const id = typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : raw;
+    if (!Number.isInteger(id) || id <= 0) {
+      return { error: `Invalid user id: ${JSON.stringify(raw)}` };
+    }
+    if (!userIds.includes(id)) userIds.push(id);
+  }
+  const userExists = db.prepare('SELECT 1 FROM users WHERE id = ?');
+  const unknown = userIds.find((id) => !userExists.get(id));
+  if (unknown !== undefined) {
+    return { error: `Unknown user id: ${unknown}` };
+  }
+  return { userIds, batch: true };
+}
+
 fastify.post('/api/chore-schedules', async (request, reply) => {
-  const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until } = request.body;
+  const { chore_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until } = request.body;
   try {
     if (!chore_id) {
       return reply.status(400).send({ error: 'chore_id is required' });
@@ -2799,10 +2829,17 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
       normalizedParentScheduleId = parsedParentScheduleId;
     }
 
+    const targets = resolveScheduleUsers(request.body);
+    if (targets.error) {
+      return reply.status(400).send({ error: targets.error });
+    }
+
     const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-    const info = stmt.run(
+    // One row per person, all or none: a batch never leaves half the
+    // family scheduled.
+    const insertAll = db.transaction((userIds) => userIds.map((userId) => stmt.run(
       chore_id,
-      user_id || null,
+      userId,
       crontab || null,
       normalizedDuration,
       visible !== undefined ? visible : 1,
@@ -2816,8 +2853,9 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
       transferable !== undefined ? (transferable ? 1 : 0) : 1,
       can_snooze !== undefined ? (can_snooze ? 1 : 0) : 1,
       snoozedUntilResult.value
-    );
-    return { id: info.lastInsertRowid, success: true };
+    ).lastInsertRowid));
+    const ids = insertAll(targets.userIds);
+    return targets.batch ? { id: ids[0], ids, success: true } : { id: ids[0], success: true };
   } catch (error) {
     console.error('Error adding schedule:', error);
     reply.status(500).send({ error: 'Failed to add schedule' });

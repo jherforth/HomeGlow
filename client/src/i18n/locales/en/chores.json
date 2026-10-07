@@ -230,7 +230,11 @@
     "onceCompletedWithInterval": "Once Completed ({{interval}})",
     "oneTimeTaskShort": "One-time task",
     "deleteChoreWarning": "This will permanently delete the chore and all {{count}} schedule(s) linked to it. Completion history is preserved.",
-    "deleteChorePrompt": "Delete"
+    "deleteChorePrompt": "Delete",
+    "assignHelp": "Pick one or more people, or none for an unassigned bonus chore.",
+    "assignManyHelp": "Creates {{count}} schedules, one for each person.",
+    "assignEveryone": "Everyone",
+    "createdForEach": "Created {{count}} schedules, one for each person."
   },
   "presets": {
     "daily": "Daily",
