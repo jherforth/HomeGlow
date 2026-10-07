@@ -14,10 +14,11 @@ function loadSdk() {
   const listeners = [];
   const vars = new Map();
   const attrs = new Map();
+  const fonts = [];
   const parent = {};
   const window = {
     parent,
-    location: { search: '' },
+    location: { search: '', href: 'https://hg.example/widgets/x.html', origin: 'https://hg.example' },
     addEventListener: (type, handler) => { if (type === 'message') listeners.push(handler); },
   };
   const document = {
@@ -25,11 +26,17 @@ function loadSdk() {
       style: { setProperty: (name, value) => vars.set(name, value) },
       setAttribute: (name, value) => attrs.set(name, value),
     },
+    fonts: { add: (face) => fonts.push(face) },
   };
-  const context = { window, document, URLSearchParams, console, fetch: () => Promise.reject(new Error('no network')) };
+  function FontFace(family, source, descriptors) {
+    this.family = family;
+    this.source = source;
+    this.descriptors = descriptors;
+  }
+  const context = { window, document, URLSearchParams, URL, FontFace, console, fetch: () => Promise.reject(new Error('no network')) };
   vm.runInNewContext(sdkSource, context);
   const deliver = (data, source = parent) => listeners.forEach((handler) => handler({ source, data }));
-  return { HomeGlow: window.HomeGlow, deliver, vars, attrs };
+  return { HomeGlow: window.HomeGlow, deliver, vars, attrs, fonts };
 }
 
 test('a theme message from the parent lands on the root as CSS variables', () => {
@@ -81,4 +88,61 @@ test('event messages still reach on() handlers after the theme branch was added'
   HomeGlow.on('chore.completed', (payload) => payloads.push(payload));
   deliver({ type: 'homeglow:event', event: 'chore.completed', payload: { id: 7 }, emittedAt: 'now' });
   assert.deepEqual(payloads, [{ id: 7 }]);
+});
+
+test("the SDK's role list is the dashboard's", () => {
+  // A plugin is promised the same names by both sides; a drift would silently
+  // drop a token the dashboard sends.
+  const read = (source, name) => JSON.parse(source.match(new RegExp(`${name} = (\\[[\\s\\S]*?\\]);`))[1].replace(/'/g, '"').replace(/,\s*\]/, ']'));
+  const client = fs.readFileSync(path.resolve(__dirname, '..', '..', 'client', 'src', 'utils', 'pluginThemeBridge.js'), 'utf8');
+  assert.deepEqual(read(sdkSource, 'var ROLE_TOKENS'), read(client, 'export const PLUGIN_ROLE_TOKENS'));
+});
+
+test('role tokens (version 2) land on the root; others and unsafe values do not', () => {
+  const { HomeGlow, deliver, vars } = loadSdk();
+  deliver({
+    type: 'homeglow:theme', version: 2, theme: 'dark', colors: {},
+    tokens: {
+      '--text': '#ffcc99',
+      '--hg-radius-md': '14px',
+      '--hg-font-body': "'Antonio', 'Arial Narrow', sans-serif",
+      '--hg-meter-fill': '#ff9900',
+      '--dock-bg': '#000000',
+      '--border': 'red; background: url(x)',
+      '--surface': 'url(https://evil.example/x.png)',
+    },
+  });
+  assert.equal(vars.get('--text'), '#ffcc99');
+  assert.equal(vars.get('--hg-radius-md'), '14px');
+  assert.equal(vars.get('--hg-font-body'), "'Antonio', 'Arial Narrow', sans-serif");
+  assert.equal(vars.get('--hg-meter-fill'), '#ff9900');
+  assert.equal(vars.has('--dock-bg'), false);
+  assert.equal(vars.has('--border'), false);
+  assert.equal(vars.has('--surface'), false);
+  assert.equal(HomeGlow.theme.tokens['--text'], '#ffcc99');
+});
+
+test("theme fonts register from this origin's theme folders only, once each", () => {
+  const { deliver, fonts } = loadSdk();
+  const good = { family: 'Antonio', weight: 700, style: 'normal', url: '/api/themes/starship/fonts/antonio-700.woff2?v=1' };
+  const message = (list) => ({ type: 'homeglow:theme', version: 2, theme: 'dark', colors: {}, tokens: {}, fonts: list });
+  deliver(message([
+    good,
+    { ...good, url: 'https://hg.example/api/themes/reef/fonts/nunito-400.woff2', family: 'Nunito', weight: 400 },
+    { ...good, url: 'https://evil.example/api/themes/x/fonts/a.woff2' },
+    { ...good, url: '/api/themes/x/assets/a.svg' },
+    { ...good, family: 'Bad; family' },
+    { ...good, weight: 1000 },
+  ]));
+  deliver(message([good]));
+  assert.deepEqual(fonts.map((face) => [face.family, face.descriptors.weight]), [['Antonio', '700'], ['Nunito', '400']]);
+  assert.equal(fonts[0].source, 'url("/api/themes/starship/fonts/antonio-700.woff2?v=1")');
+});
+
+test('a version 1 message still works: no tokens, no fonts', () => {
+  const { HomeGlow, deliver, vars, fonts } = loadSdk();
+  deliver({ type: 'homeglow:theme', theme: 'dark', colors: { accent: '#ff9900' } });
+  assert.equal(vars.get('--accent'), '#ff9900');
+  assert.equal(Object.keys(HomeGlow.theme.tokens).length, 0);
+  assert.equal(fonts.length, 0);
 });

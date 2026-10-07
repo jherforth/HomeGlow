@@ -76,6 +76,14 @@
   --hg-font-heading: var(--hg-font-body);
   --hg-heading-transform: none;
   --hg-heading-letter-spacing: normal;
+
+  /* Meters: anything that shows a level or progress (the refresh countdown,
+     a plugin's gauge). Named for the role, so each theme gives meters its own
+     character: a thick glowing fill, flat square bars. */
+  --hg-meter-track: var(--hg-white-10);
+  --hg-meter-fill: var(--accent);
+  --hg-meter-thickness: 3px;
+  --hg-meter-cap: round;
 }
 
 [data-theme="light"] {

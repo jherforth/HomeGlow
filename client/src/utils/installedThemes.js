@@ -9,7 +9,7 @@
 import { useSyncExternalStore } from 'react';
 import axios from 'axios';
 import { API_BASE_URL } from './apiConfig.js';
-import { BUILT_IN_THEMES, DEFAULT_THEME_ID, THEME_ASSETS, sortThemes, validateThemePackage } from './themes.js';
+import { BUILT_IN_THEMES, DEFAULT_THEME_ID, MANIFEST_VERSION, NEEDS_NEWER_HOMEGLOW, THEME_ASSETS, sortThemes, validateThemePackage } from './themes.js';
 
 const CACHE_KEY = 'homeglow_installed_themes';
 
@@ -33,7 +33,10 @@ export function mergeInstalledThemes(installed, { builtIn = BUILT_IN_THEMES, bui
     const list = Array.isArray(files) ? files : [];
     const errors = validateThemePackage(manifest, { assets: list });
     if (errors.length) {
-      rejected.push({ id, name: manifest.name || id, errors });
+      if (errors.includes(NEEDS_NEWER_HOMEGLOW)) {
+        console.warn(`Theme ${id}: manifestVersion ${manifest.manifestVersion}; this HomeGlow supports up to ${MANIFEST_VERSION}.`);
+      }
+      rejected.push({ id, name: manifest.name || id, errors, needsNewer: errors.includes(NEEDS_NEWER_HOMEGLOW) });
       return;
     }
     const stamp = encodeURIComponent(installedAt || '');

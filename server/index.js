@@ -6083,8 +6083,12 @@ const THEMES_REPOSITORY = isValidRepositorySlug((process.env.HOMEGLOW_THEMES_REP
   ? process.env.HOMEGLOW_THEMES_REPOSITORY.trim()
   : DEFAULT_THEMES_REPOSITORY;
 
-const sendThemeError = (reply, result) => reply.status(result.status || 400)
-  .send({ error: result.error, ...(result.problems ? { problems: result.problems } : {}) });
+const sendThemeError = (reply, result) => reply.status(result.status || 400).send({
+  error: result.error,
+  ...(result.problems ? { problems: result.problems } : {}),
+  // The page shows its own translated sentence for this one.
+  ...(result.needsNewer ? { needsNewer: true, name: result.name } : {}),
+});
 
 fastify.get('/api/themes', async (request, reply) => {
   try {
@@ -6124,7 +6128,8 @@ fastify.post('/api/themes/upload', async (request, reply) => {
 
 fastify.get('/api/themes/store', async (request, reply) => {
   try {
-    return { repository: THEMES_REPOSITORY, themes: await themeStore.listRepositoryThemes(axios, THEMES_REPOSITORY) };
+    const { themes, unsupported } = await themeStore.listRepositoryThemes(axios, THEMES_REPOSITORY);
+    return { repository: THEMES_REPOSITORY, themes, unsupported };
   } catch (error) {
     console.error(`Error listing themes from ${THEMES_REPOSITORY}:`, error.message);
     const status = error.response?.status === 404 ? 404 : 502;

@@ -559,6 +559,8 @@
     "upToDate": "Instalado",
     "addFolder": "Agregar una carpeta de tema",
     "addFolderHelp": "Elige una carpeta con theme.json y, a su lado, assets/ y fonts/. Consulta la guía de desarrollo de temas.",
-    "folderInvalid": "Esa carpeta no es un tema utilizable: {{problems}}"
+    "folderInvalid": "Esa carpeta no es un tema utilizable: {{problems}}",
+    "needsNewer": "{{name}} necesita una versión más reciente de HomeGlow. Actualiza HomeGlow para usarlo.",
+    "thisTheme": "Este tema"
   }
 }

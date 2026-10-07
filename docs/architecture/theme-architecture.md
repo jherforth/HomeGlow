@@ -260,6 +260,15 @@ No theme packages exist outside this repository yet, so the `fonts` and
 `ambience` shapes can change under `manifestVersion` 1. Once community themes
 can be installed, any further change to these shapes needs a version bump.
 
+Version history:
+- **1:** tokens, fonts, ambience, confetti.
+- **2:** ornaments, the meter roles (`--hg-meter-*`) and clumped sprites
+  (`clumps`, `clumpWidth`). A theme that uses them declares
+  `manifestVersion: 2`. A core accepts versions up to its own
+  (`MANIFEST_VERSION` in `utils/themes.js` and `services/themeStore.js`), refuses
+  newer ones at install, and its store lists them apart as needing a newer
+  HomeGlow.
+
 ## 6. Implementation order
 
 1. **PR 1, no visual change:** theme folders and discovery (§3.1 to §3.2) and

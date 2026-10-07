@@ -45,6 +45,7 @@ import {
   themeTokens,
 } from './utils/themes.js';
 import { personalizationTokens } from './utils/personalize.js';
+import { THEME_TOKENS_APPLIED_EVENT } from './utils/pluginThemeBridge.js';
 import { loadInstalledThemes, useThemeRegistry } from './utils/installedThemes.js';
 import { ThemeContext } from './themes/engine/ThemeContext.js';
 import { normalizeWidgetSettings, BASE_WIDGET_SETTINGS } from './utils/widgetSettings.js';
@@ -689,6 +690,8 @@ const App = () => {
       names = applyThemeTokens(root, { ...base, ...personal }, names);
     }
     themeTokenNamesRef.current = names;
+    // Plugins are told the resolved role tokens, which only now hold.
+    window.dispatchEvent(new Event(THEME_TOKENS_APPLIED_EVENT));
   }, [activeTheme, displayTheme, themeColors, interfaceColors.primary, backgroundKey, appearance.cardOpacity]);
 
   useEffect(() => {

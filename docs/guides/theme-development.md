@@ -48,7 +48,7 @@ folder name must match the manifest's `id`.
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `manifestVersion` | yes | Always `1`. |
+| `manifestVersion` | yes | `1`, or `2` for a theme that uses `ornaments`, the meter tokens or `clumps`. A HomeGlow older than the version refuses the theme. |
 | `id` | yes | Lowercase slug (a-z, 0-9, hyphens), the same as the folder name. |
 | `name` | yes | Shown in the theme picker. |
 | `version`, `author`, `description` | | As in a plugin manifest. The author shows as "by ...". |
@@ -60,6 +60,7 @@ folder name must match the manifest's `id`.
 | `tokens` | | Values for the CSS custom properties, in `all`, `light` and `dark`. See §3. |
 | `mui`, `muiModes` | | Options for buttons, inputs, dialogs and sliders; `muiModes.light` and `.dark` override per mode. See `utils/themes.js`, `MUI_TYPES`. |
 | `ambience` | | Layers drawn behind the widgets. See §4. |
+| `ornaments` | | Pictures drawn on every widget frame. See §4a. |
 | `confetti` | | The theme's own celebration confetti: `colors` (a list, or per mode), `shapes` (some of `square`, `circle`, `streamer`), `pictures` (as in a `sprites` layer, `height` in px) and `mix` (the share of pieces that are pictures, 0 to 1). Without it, a theme gets Classic's confetti. |
 
 ## 3. Tokens
@@ -76,11 +77,13 @@ the most useful:
 | `--hg-page-image` | gradient | An image over the page background |
 | `--hg-frame-bg`, `--hg-frame-radius`, `--hg-frame-shadow` | color, lengths, shadow | Each widget's frame |
 | `--hg-frame-decoration-width`, `-style`, `-color` | lengths, keyword, up to four colors | A border drawn over the frame's edge (Starship's elbows) |
-| `--hg-frame-inset` | lengths | Padding so content clears a thick decoration |
+| `--hg-frame-inset` | 0 to `24px` a side | Room inside the frame for its decoration and ornaments; widget content, plugins included, sits inside it |
 | `--hg-frame-image`, `--hg-frame-overlay` | gradient | A tint under the frame's content, a reflection over it (Reef's glass) |
 | `--dock-bg`, `--dock-active-bg`, `--dock-active-image` | color, gradient | The dock |
 | `--hg-font-body`, `--hg-font-heading` | font list | Type |
 | `--hg-grid-gap` | `0`, `8px`, `16px` or `24px` | The gap between widgets; rows keep their pitch |
+| `--hg-meter-track`, `--hg-meter-fill` | color | The empty and filled parts of anything showing a level or progress |
+| `--hg-meter-thickness`, `--hg-meter-cap` | `1px` to `12px`; `round`, `square` or `butt` | A meter's line and its ends |
 
 Themes never change spacing, font size or line height: widget heights are
 fixed, and content must still fit.
@@ -111,7 +114,7 @@ stars.
 | Layer | Draws | Options |
 | --- | --- | --- |
 | `image` | A still picture, or one of a list | `src` (a picture or a list), `anchor` (`bottom`, `top`, `center`, `fill`), `height` (e.g. `"42vh"`), `angle` (turns it, growing it to cover the screen), `flip`, `opacity` |
-| `sprites` | Copies of a picture, or a mix of pictures, spread across the screen | `src` or `pictures`, `count`, `height` (vh), `aspect` (width ÷ height), `span` (`[from, to]` %), `base` (distance from the bottom), `lift` (percent of the screen above `base`, drawn per copy), `hue` (degrees to turn each copy's colors), `motion` (`sway`, `bob`, `pulse`, `none`), `angle` (sway degrees) or `distance` (bob px), `seconds`, `tint`, `flip`, `current`, `opacity` |
+| `sprites` | Copies of a picture, or a mix of pictures, spread across the screen | `src` or `pictures`, `count`, `height` (vh), `aspect` (width ÷ height), `span` (`[from, to]` %), `base` (distance from the bottom), `clumps` and `clumpWidth` (gather copies into that many patches, each that many percent wide, with open ground between, as plants grow), `lift` (percent of the screen above `base`, drawn per copy), `hue` (degrees to turn each copy's colors), `motion` (`sway`, `bob`, `pulse`, `none`), `angle` (sway degrees) or `distance` (bob px), `seconds`, `tint`, `flip`, `current`, `opacity` |
 | `particles` | Many small things | `src` or `colors` (plain dots), `motion` (`rise`, `fall`, `twinkle`), `count`, `size` (px), `seconds`, `drift` (px), `span`, `opacity` |
 | `dots` | A still field of dots, painted once | `count`, `colors`, `size`, `opacity`. Each dot's size and opacity follow one brightness, mostly dim, so dim dots are small; the brightest get a halo. |
 | `field` | Drifting light (caustics) | `strength` (`soft`, `bright`), `spacing`, `seconds` |
@@ -128,6 +131,33 @@ sprites like a passing current.
 
 Limits: 12 layers, 40 particles and 16 sprites per layer, 400 dots, durations of
 1 to 120 seconds (a flyby's pause, up to an hour).
+
+## 4a. Ornaments: pictures on every frame
+
+`ornaments` is a list (at most 8) of pictures from your `assets/` folder, drawn
+on every widget frame, native and plugin alike, above the frame and under its
+decoration. They are still, take no pointer events, and are clipped to the
+frame's shape.
+
+| Option | Meaning |
+| --- | --- |
+| `src` | A picture, or `{ "light", "dark" }` pictures |
+| `anchor` | `top-left`, `top`, `top-right`, `right`, `bottom-right`, `bottom`, `bottom-left`, `left`, `center`, or `corners`: one picture drawn for the top-left corner, mirrored into all four |
+| `size` | Height of the picture (an edge picture's thickness), e.g. `"28px"`; default `24px` |
+| `aspect` | Width ÷ height, default 1 |
+| `stretch` | For an edge: run the picture along the whole edge |
+| `tint` | Recolor a one-color silhouette, as for sprites; may differ by mode |
+| `opacity` | 0 to 1 |
+
+Ornaments take no space. Make room for them with `--hg-frame-inset`, at most
+24px a side, since every pixel comes out of a fixed-height widget. Keep each
+ornament inside that room, or it will sit over the widget's content.
+
+```json
+"ornaments": [
+  { "src": "assets/bezel.svg", "anchor": "corners", "size": "26px", "tint": { "light": ["#0b6e8a"], "dark": ["#4fe3d6"] } }
+]
+```
 
 ## 5. Performance rules
 

@@ -90,6 +90,23 @@ export function spread(random, count, [from, to] = [0, 100]) {
   return Array.from({ length: count }, (_, i) => from + slot * (i + 0.15 + random() * 0.7));
 }
 
+/**
+ * `count` positions gathered into clumps, as plants grow in patches: `clumps`
+ * centers spread across the span (so patches don't pile up on one side), and
+ * each item placed around a center, closer in more often than far out, within
+ * `width` percent. Leaves open ground between patches, unlike spread().
+ */
+export function clumped(random, count, clumps, width, [from, to] = [0, 100]) {
+  const centers = spread(random, Math.max(1, Math.min(clumps, count)), [from, to]);
+  return Array.from({ length: count }, () => {
+    const center = centers[Math.floor(random() * centers.length)];
+    const across = draw(random, width);
+    // The sum of two draws peaks in the middle: most stems near the holdfast.
+    const offset = (random() + random() - 1) * (across / 2);
+    return Math.min(to, Math.max(from, center + offset));
+  });
+}
+
 export const sway = keyframes`
   from { transform: rotate(var(--angle-from)); }
   to { transform: rotate(var(--angle-to)); }
@@ -119,8 +136,9 @@ export const fall = keyframes`
   100% { transform: translate3d(var(--drift), 115vh, 0); opacity: 0; }
 `;
 
+// Dim means small, as in a still starfield: a twinkle shrinks as it fades.
 export const twinkle = keyframes`
-  from { opacity: 0.15; transform: scale(0.7); }
+  from { opacity: 0.15; transform: scale(0.4); }
   to { opacity: 1; transform: scale(1); }
 `;
 

@@ -53,8 +53,10 @@ const CountdownCircle = ({ refreshInterval, onRefresh, isActive = true }) => {
   }
 
   const size = 32;
-  const strokeWidth = 3;
-  const radius = (size - strokeWidth) / 2;
+  // The ring is sized for Classic's 3px meter. A theme's thicker meter
+  // (--hg-meter-thickness, up to 12px) draws past the box rather than
+  // shrinking the ring, so Classic stays exactly as it was.
+  const radius = (size - 3) / 2;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (progress / 100) * circumference;
 
@@ -102,6 +104,7 @@ const CountdownCircle = ({ refreshInterval, onRefresh, isActive = true }) => {
         height={size}
         style={{
           transform: 'rotate(-90deg)',
+          overflow: 'visible',
         }}
       >
         <circle
@@ -109,20 +112,19 @@ const CountdownCircle = ({ refreshInterval, onRefresh, isActive = true }) => {
           cy={size / 2}
           r={radius}
           fill="none"
-          style={{ stroke: 'var(--hg-white-10)' }}
-          strokeWidth={strokeWidth}
+          style={{ stroke: 'var(--hg-meter-track)', strokeWidth: 'var(--hg-meter-thickness)' }}
         />
         <circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="var(--accent)"
-          strokeWidth={strokeWidth}
           strokeDasharray={circumference}
           strokeDashoffset={strokeDashoffset}
-          strokeLinecap="round"
           style={{
+            stroke: 'var(--hg-meter-fill)',
+            strokeWidth: 'var(--hg-meter-thickness)',
+            strokeLinecap: 'var(--hg-meter-cap)',
             transition: 'stroke-dashoffset 0.1s linear',
             filter: 'drop-shadow(0 0 4px rgba(var(--accent-rgb), 0.5))',
           }}

@@ -121,7 +121,7 @@ before it uses an installed theme.
 | --- | --- | --- |
 | GET | `/api/themes` | List installed themes: `{ id, manifest, files, source, ref, installedAt }`. |
 | POST | `/api/themes/upload` | Install a theme folder. Multipart, one field per file, named by its path (`theme.json`, `assets/x.svg`, `fonts/y.woff2`). Replaces an installed theme with the same id. |
-| GET | `/api/themes/store` | List the themes in the themes repository (`HOMEGLOW_THEMES_REPOSITORY`, default `jherforth/HomeGlowThemes`). |
+| GET | `/api/themes/store` | List the themes in the themes repository (`HOMEGLOW_THEMES_REPOSITORY`, default `jherforth/HomeGlowThemes`): `{ themes, unsupported }`, where `unsupported` lists themes whose `manifestVersion` is newer than this HomeGlow understands. |
 | POST | `/api/themes/store/install` | Install `{ id }` from the themes repository. |
 | GET | `/api/themes/:id/:dir/:file` | Serve an installed theme's asset or font, with a sandboxing CSP. URLs carry `?v=<installedAt>` and are cached as immutable. |
 | DELETE | `/api/themes/:id` | Remove an installed theme. |

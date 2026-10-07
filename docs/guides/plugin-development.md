@@ -107,6 +107,45 @@ value in JavaScript, `HomeGlow.theme` holds the last message and
 param is still on the URL, so a widget without the SDK starts in the right theme
 and only misses the colors.
 
+### Theme roles: text, shapes, type and meters
+
+Version 2 of the message also carries the theme's **role tokens** and its fonts,
+so a plugin can look native under any theme, not only take its accent:
+
+```js
+{ type: 'homeglow:theme', version: 2, theme, colors, tokens: { '--text': '#ffcc99', ... }, fonts: [ ... ] }
+```
+
+The SDK writes each token onto your root, so plugin CSS just uses them:
+
+| Role | Tokens |
+| --- | --- |
+| Surfaces and text | `--background`, `--surface`, `--card-bg`, `--text`, `--text-secondary`, `--border` |
+| Status | `--success`, `--warning`, `--hg-error` |
+| Shape | `--hg-radius-sm`, `--hg-radius-md`, `--hg-radius-lg` |
+| Type | `--hg-font-body`, `--hg-font-heading`, `--hg-heading-transform`, `--hg-heading-letter-spacing` |
+| Meters (progress, levels, gauges) | `--hg-meter-track`, `--hg-meter-fill`, `--hg-meter-thickness`, `--hg-meter-cap` |
+
+```css
+body { color: var(--text); font-family: var(--hg-font-body, system-ui); }
+.card { background: var(--card-bg); border-radius: var(--hg-radius-md, 8px); }
+.ring-fill { stroke: var(--hg-meter-fill); stroke-width: var(--hg-meter-thickness, 3px); stroke-linecap: var(--hg-meter-cap, round); }
+```
+
+- **Roles, not looks.** Each name says what a thing does. A theme decides how it
+  looks: Starship's meters can be flat orange bars and another theme's a thick
+  glowing ring, and the same plugin CSS draws both. The list only grows; names
+  are never renamed or removed.
+- **Fonts load for you.** When a theme brings its own fonts, the SDK registers
+  them in your document, so `var(--hg-font-body)` renders in the theme's face.
+  A font downloads only if your text uses it.
+- **Frames are the dashboard's.** Your widget sits inside the theme's frame,
+  and the dashboard keeps your content clear of any frame decoration. Don't
+  draw a frame of your own.
+- **Keep fallbacks** (`var(--text, #e8e8e8)`), for a direct load of the file and
+  for dashboards older than version 2. `HomeGlow.theme.tokens` has the values in
+  JavaScript.
+
 ## 2. Becoming a platform plugin: the manifest
 
 Embed a manifest as a JSON script block anywhere in your HTML (conventionally in

@@ -559,6 +559,8 @@
     "upToDate": "Installed",
     "addFolder": "Add a theme folder",
     "addFolderHelp": "Choose a folder holding theme.json, with assets/ and fonts/ beside it. See the theme development guide.",
-    "folderInvalid": "That folder isn't a usable theme: {{problems}}"
+    "folderInvalid": "That folder isn't a usable theme: {{problems}}",
+    "needsNewer": "{{name}} needs a newer version of HomeGlow. Update HomeGlow to use it.",
+    "thisTheme": "This theme"
   }
 }
