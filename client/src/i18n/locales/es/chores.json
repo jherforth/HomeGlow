@@ -230,7 +230,11 @@
     "onceCompletedWithInterval": "Una vez completada ({{interval}})",
     "oneTimeTaskShort": "Tarea única",
     "deleteChoreWarning": "Esto eliminará de forma permanente la tarea y las {{count}} programaciones vinculadas a ella. El historial de finalización se conserva.",
-    "deleteChorePrompt": "Eliminar"
+    "deleteChorePrompt": "Eliminar",
+    "modeCalendarEvent": "Evento de calendario",
+    "calendarEventName": "Nombre del evento",
+    "calendarEventHelp": "La tarea aparece los días con un evento coincidente. Complétala ese día para el bono.",
+    "calendarEventRequired": "Se requiere el nombre del evento."
   },
   "presets": {
     "daily": "A diario",

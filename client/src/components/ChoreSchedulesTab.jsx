@@ -306,6 +306,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
 
   const computeCrontab = (f) => {
     if (f.isOneTime) return '';
+    if (f.scheduleMode === 'calendar') return '';
     if (f.scheduleMode === 'preset') return f.selectedPreset;
     if (f.scheduleMode === 'days') return f.selectedDays.length > 0 ? daysToCrontab(f.selectedDays) : '';
     return f.customCrontab;
@@ -329,13 +330,15 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
 
   const openEditSchedule = (schedule) => {
     setEditingSchedule(schedule);
-    const isOneTime = !schedule.crontab;
+    const isOneTime = !schedule.crontab && !schedule.calendar_match;
     let scheduleMode = 'preset';
     let selectedPreset = '0 0 * * *';
     let selectedDays = [];
     let customCrontab = '';
 
-    if (!isOneTime) {
+    if (schedule.calendar_match) {
+      scheduleMode = 'calendar';
+    } else if (!isOneTime) {
       const preset = CRONTAB_PRESETS.find(p => p.value === schedule.crontab);
       if (preset) {
         scheduleMode = 'preset';
@@ -385,8 +388,13 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
 
   const handleSaveSchedule = async () => {
     const cron = computeCrontab(scheduleForm);
-    const err = scheduleForm.isOneTime ? null : validateCrontab(cron);
+    const isCalendarMode = scheduleForm.scheduleMode === 'calendar';
+    const err = (scheduleForm.isOneTime || isCalendarMode) ? null : validateCrontab(cron);
     if (err) { setCrontabError(err); return; }
+    if (isCalendarMode && !scheduleForm.calendar_match?.trim()) {
+      showMessage('error', t('chores:schedules.calendarEventRequired', 'Calendar event name is required.'));
+      return;
+    }
 
     setSavingSchedule(true);
     try {

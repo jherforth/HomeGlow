@@ -230,7 +230,11 @@
     "onceCompletedWithInterval": "Once Completed ({{interval}})",
     "oneTimeTaskShort": "One-time task",
     "deleteChoreWarning": "This will permanently delete the chore and all {{count}} schedule(s) linked to it. Completion history is preserved.",
-    "deleteChorePrompt": "Delete"
+    "deleteChorePrompt": "Delete",
+    "modeCalendarEvent": "Calendar Event",
+    "calendarEventName": "Calendar event name",
+    "calendarEventHelp": "Chore appears on days with a matching calendar event. Complete it that day for the bonus.",
+    "calendarEventRequired": "Calendar event name is required."
   },
   "presets": {
     "daily": "Daily",

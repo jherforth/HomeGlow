@@ -2724,6 +2724,25 @@ fastify.get('/api/chore-schedules', async (request, reply) => {
     }
 
     const rows = db.prepare(query).all(...params);
+
+    // Annotate calendar-matched schedules with today's match status.
+    // Uses the same calendarMatchOnDate logic as the bonus calculation
+    // (getTodaysRegularChoresForUser) to ensure display and bonus agree.
+    // Wrapped per-row so a single bad row can't break the whole endpoint.
+    const todayStr = getTodayLocalDateString();
+    for (const s of rows) {
+      try {
+        if (s.calendar_match) {
+          s.calendar_matched_today = calendarMatchOnDate(s.calendar_match, todayStr) ? 1 : 0;
+        } else {
+          s.calendar_matched_today = 0;
+        }
+      } catch (err) {
+        console.warn(`[CalendarMatch] Failed to check match for schedule ${s.id}:`, err.message);
+        s.calendar_matched_today = 0;
+      }
+    }
+
     return rows;
   } catch (error) {
     console.error('Error fetching chore schedules:', error);
@@ -2746,6 +2765,119 @@ fastify.get('/api/chore-schedules/:id', async (request, reply) => {
 });
 
 fastify.post('/api/chore-schedules', async (request, reply) => {
+  const body = request.body || {};
+  // Multi-user batch creation: accepts user_ids array to create one schedule per user.
+  // Deduplicates user IDs and validates each user exists.
+  if (Array.isArray(body.user_ids) && body.user_ids.length > 0) {
+    const { chore_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until } = body;
+    if (!chore_id) {
+      return reply.status(400).send({ error: 'chore_id is required' });
+    }
+    // Deduplicate user IDs (normalize to numbers, drop empties)
+    const seen = new Set();
+    const uniqueUserIds = [];
+    for (const rawId of body.user_ids) {
+      if (rawId === '' || rawId === null || rawId === undefined) continue;
+      const id = typeof rawId === 'number' ? rawId : parseInt(rawId, 10);
+      if (Number.isNaN(id)) {
+        return reply.status(400).send({ error: `Invalid user ID: ${rawId}` });
+      }
+      if (!seen.has(id)) {
+        seen.add(id);
+        uniqueUserIds.push(id);
+      }
+    }
+    if (uniqueUserIds.length === 0) {
+      return reply.status(400).send({ error: 'user_ids must contain at least one valid user ID' });
+    }
+    // Validate each user exists
+    const userCheck = db.prepare('SELECT id FROM users WHERE id = ?');
+    for (const uid of uniqueUserIds) {
+      if (!userCheck.get(uid)) {
+        return reply.status(400).send({ error: `Unknown user ID: ${uid}` });
+      }
+    }
+
+    const dateFields = validateScheduleDateFields(body, reply);
+    if (!dateFields) return;
+    const { dueTimeResult, dueDateResult, reminderResult } = dateFields;
+
+    const snoozedUntilResult = normalizeSnoozedUntil(snoozed_until);
+    if (snoozed_until !== undefined && !snoozedUntilResult.valid) {
+      return reply.status(400).send({ error: 'snoozed_until must be a valid date/time' });
+    }
+
+    const normalizedDuration = normalizeScheduleDuration(duration);
+    if (!ALLOWED_SCHEDULE_DURATIONS.has(normalizedDuration)) {
+      return reply.status(400).send({ error: `Invalid duration. Expected one of: ${Array.from(ALLOWED_SCHEDULE_DURATIONS).join(', ')}` });
+    }
+
+    const normalizedInterval = normalizeScheduleInterval(interval);
+    if (normalizedDuration === 'once-completed') {
+      if (!crontab) {
+        return reply.status(400).send({ error: 'once-completed schedules require a crontab expression' });
+      }
+      if (!isValidScheduleInterval(normalizedInterval)) {
+        return reply.status(400).send({ error: 'once-completed schedules require a valid interval like 30d, 3w, 2m, or 1y' });
+      }
+    } else if (normalizedInterval !== null) {
+      return reply.status(400).send({ error: 'interval is only allowed for once-completed schedules' });
+    }
+
+    if (crontab) {
+      try {
+        CronExpressionParser.parse(crontab);
+      } catch (e) {
+        return reply.status(400).send({ error: 'Invalid crontab expression: ' + e.message });
+      }
+    }
+
+    let normalizedParentScheduleId = null;
+    if (parent_schedule_id !== undefined && parent_schedule_id !== null && parent_schedule_id !== '') {
+      const parsedParentScheduleId = parseInt(parent_schedule_id, 10);
+      if (Number.isNaN(parsedParentScheduleId)) {
+        return reply.status(400).send({ error: 'parent_schedule_id must be a number' });
+      }
+      const parentExists = db.prepare('SELECT id FROM chore_schedules WHERE id = ?').get(parsedParentScheduleId);
+      if (!parentExists) {
+        return reply.status(400).send({ error: 'parent_schedule_id must reference an existing schedule' });
+      }
+      normalizedParentScheduleId = parsedParentScheduleId;
+    }
+
+    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const ids = [];
+    try {
+      const runTx = db.transaction((uIds) => {
+        for (const uid of uIds) {
+          const info = stmt.run(
+            chore_id,
+            uid,
+            crontab || null,
+            normalizedDuration,
+            visible !== undefined ? visible : 1,
+            normalizedDuration === 'once-completed' ? normalizedInterval : null,
+            normalizedParentScheduleId,
+            dueTimeResult.value,
+            sound || null,
+            sound_enabled ? 1 : 0,
+            reminderResult.value,
+            dueDateResult.value,
+            transferable !== undefined ? (transferable ? 1 : 0) : 1,
+            can_snooze !== undefined ? (can_snooze ? 1 : 0) : 1,
+            snoozedUntilResult.value
+          );
+          ids.push(info.lastInsertRowid);
+        }
+      });
+      runTx(uniqueUserIds);
+    } catch (error) {
+      console.error('Error batch adding schedules:', error);
+      return reply.status(500).send({ error: 'Failed to add schedules' });
+    }
+    return { ids, success: true, count: ids.length };
+  }
+
   const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until } = request.body;
   try {
     if (!chore_id) {
