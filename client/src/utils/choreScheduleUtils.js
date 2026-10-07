@@ -93,7 +93,7 @@ export function formatScheduleInterval(interval) {
 }
 
 export function computeCrontab(f) {
-  if (f.isOneTime || f.duration === 'once-completed' || f.scheduleMode === 'calendar') return '';
+  if (f.isOneTime || f.scheduleMode === 'calendar') return '';
   if (f.scheduleMode === 'after-completion') return f.customCrontab || '0 0 * * *';
   if (f.scheduleMode === 'preset') return f.selectedPreset;
   if (f.scheduleMode === 'days') return f.selectedDays.length > 0 ? daysToCrontab(f.selectedDays) : '';
