@@ -1,11 +1,10 @@
 # Theme Architecture: Self-Contained Theme Folders and a Data-Driven Ambience Engine
 
-> **Status: proposed, not implemented.** This is a design for review, written
-> after theme packages shipped in PR #226 (issue
-> [#218 "Proposal: themes"](https://github.com/jherforth/HomeGlow/issues/218)).
-> Nothing here has been built. §2 describes the code as it is today, and §3 to §7
-> are the proposal. If you are an agent picking this up, read §2.3 (rules to
-> keep) before changing anything, and build in the order of §6.
+> **Status: implemented** (steps 1 and 2 of §6). §2 describes the code as it
+> was before; §3 to §7 are now how it works, with the differences listed in §9.
+> The author's guide is [Theme Development](../guides/theme-development.md).
+> If you are an agent picking this up, read §2.3 (rules to keep) before
+> changing anything.
 
 ## 1. Problem
 
@@ -312,3 +311,40 @@ can be installed, any further change to these shapes needs a version bump.
 - **Recolouring multi-colour SVGs** (palette substitution) is deferred. For now,
   multi-colour assets ship one file per mode, and one-colour silhouettes use
   `tint`.
+
+## 9. As built
+
+Differences from §3, each for a reason found while building it:
+
+- **Layer schemas live in `engine/schemas.js`**, as data, not in each layer
+  module. Validation runs in the main bundle, and importing the layer modules
+  there would pull the engine into every display, defeating §3.6.
+  `engine.test.js` keeps the schemas and `engine/layers/` in step.
+- **Scenes vary.** Numbers in a layer may be ranges (`[low, high]`), sprites are
+  placed by `count` and `span` rather than a fixed `at` list, and a manifest's
+  `variety` picks the seed: `load` (default, a new scene each page load), `day`
+  (shared by every display, new each day) or `fixed`. Each sprite moves on two
+  uneven periods so its motion never repeats, and `current` adds a slow wave
+  across a group. Section 7's screenshot parity is replaced by visual review,
+  because a varying scene has no fixed frame to compare.
+- **`sprites` takes `base`**, its distance from the bottom of the screen, so a
+  theme can place things other than at the floor.
+- **`sprites` can mix pictures.** `pictures` lists `{ src, aspect, height,
+  tint, weight }` and each copy picks one; `motion` may be `none`, and `flip`
+  mirrors copies at random. Any `src` or `tint` may differ by mode
+  (`{ light, dark }`). Reef's coral scene is scattered this way instead of
+  being one fixed picture, which also brings Reef to six layers from twelve.
+- **Scenes vary in what is in them, not only where.** Any layer may set
+  `chance` (0 to 1), drawn from its own seed so it never reshuffles the rest.
+  `image` may pick its `src` from a list and turn it by a drawn `angle`.
+  `sprites` take `lift` (placed anywhere, not only along a floor) and `hue` (a
+  still filter, painted once). `streaks` take `burst` (a shower per pass). A
+  new block, `flyby`, sends one picture across the screen every so often, with
+  a drawn picture, side, height, climb, speed and tumble. Starship uses all of
+  these: a sometimes-galaxy, up to three planets, ships, meteor storms and the
+  odd drifting alien, at 60 fps with the CPU throttled 4x.
+
+Also as built: theme files are imported with `?no-inline`, because Vite inlines
+small SVGs as data URLs, which put every theme's art in a chunk every display
+loads.
+

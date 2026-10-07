@@ -138,37 +138,356 @@
   },
   "ambience": [
     {
-      "effect": "caustics",
+      "layer": "field",
       "modes": [
         "light"
       ],
-      "options": {
-        "strength": "soft"
-      }
+      "strength": "soft"
     },
     {
-      "effect": "bubbles",
-      "options": {
-        "density": "medium"
-      }
-    },
-    {
-      "effect": "seafloor",
-      "modes": [
-        "light"
+      "layer": "particles",
+      "src": "assets/bubble.svg",
+      "motion": "rise",
+      "count": [
+        10,
+        18
       ],
-      "options": {
-        "palette": "sand"
+      "size": [
+        6,
+        22
+      ],
+      "seconds": [
+        16,
+        34
+      ],
+      "drift": [
+        0,
+        40
+      ]
+    },
+    {
+      "layer": "image",
+      "src": {
+        "light": "assets/floor-day.svg",
+        "dark": "assets/floor-night.svg"
+      },
+      "anchor": "bottom",
+      "height": "42vh",
+      "opacity": 0.95
+    },
+    {
+      "layer": "sprites",
+      "motion": "none",
+      "count": [
+        7,
+        11
+      ],
+      "span": [
+        0,
+        100
+      ],
+      "base": "1vh",
+      "flip": true,
+      "opacity": 0.95,
+      "pictures": [
+        {
+          "src": {
+            "light": "assets/rock-day.svg",
+            "dark": "assets/rock-night.svg"
+          },
+          "aspect": 2.1,
+          "height": [
+            8,
+            12
+          ],
+          "weight": 1.5
+        },
+        {
+          "src": {
+            "light": "assets/table-day.svg",
+            "dark": "assets/table-night.svg"
+          },
+          "aspect": 1.62,
+          "height": [
+            11,
+            16
+          ]
+        },
+        {
+          "src": {
+            "light": "assets/brain-day.svg",
+            "dark": "assets/brain-night.svg"
+          },
+          "aspect": 1.93,
+          "height": [
+            6,
+            10
+          ],
+          "weight": 1.5
+        },
+        {
+          "src": {
+            "light": "assets/staghorn-day.svg",
+            "dark": "assets/staghorn-night.svg"
+          },
+          "aspect": 1.2,
+          "height": [
+            13,
+            20
+          ]
+        },
+        {
+          "src": {
+            "light": "assets/pillar-day.svg",
+            "dark": "assets/pillar-night.svg"
+          },
+          "aspect": 0.62,
+          "height": [
+            13,
+            20
+          ],
+          "weight": 0.8
+        },
+        {
+          "src": {
+            "light": "assets/sponges-day.svg",
+            "dark": "assets/sponges-night.svg"
+          },
+          "aspect": 0.75,
+          "height": [
+            8,
+            13
+          ]
+        },
+        {
+          "src": {
+            "light": "assets/tree-day.svg",
+            "dark": "assets/tree-night.svg"
+          },
+          "aspect": 0.72,
+          "height": [
+            9,
+            14
+          ]
+        },
+        {
+          "src": {
+            "light": "assets/mushroom-day.svg",
+            "dark": "assets/mushroom-night.svg"
+          },
+          "aspect": 2.4,
+          "height": [
+            2.5,
+            3.5
+          ]
+        }
+      ]
+    },
+    {
+      "layer": "sprites",
+      "src": "assets/kelp.svg",
+      "motion": "sway",
+      "count": [
+        6,
+        9
+      ],
+      "span": [
+        0,
+        100
+      ],
+      "height": [
+        18,
+        34
+      ],
+      "aspect": 0.2,
+      "angle": [
+        3,
+        5
+      ],
+      "seconds": [
+        6,
+        10
+      ],
+      "current": true,
+      "base": "4vh",
+      "opacity": 0.95,
+      "tint": {
+        "light": [
+          "#3f8f6b",
+          "#4d9e5a",
+          "#6a9a3f"
+        ],
+        "dark": [
+          "#06384a",
+          "#073f4f",
+          "#0a4552"
+        ]
       }
     },
     {
-      "effect": "seafloor",
-      "modes": [
-        "dark"
+      "layer": "sprites",
+      "motion": "sway",
+      "count": [
+        3,
+        6
       ],
-      "options": {
-        "palette": "night"
-      }
+      "span": [
+        5,
+        95
+      ],
+      "angle": [
+        2,
+        5
+      ],
+      "seconds": [
+        5,
+        10
+      ],
+      "base": "3vh",
+      "opacity": 0.95,
+      "pictures": [
+        {
+          "src": "assets/fan.svg",
+          "aspect": 1,
+          "height": [
+            10,
+            16
+          ],
+          "tint": {
+            "light": [
+              "#e2556b"
+            ],
+            "dark": [
+              "#0b3c50"
+            ]
+          }
+        },
+        {
+          "src": "assets/whips.svg",
+          "aspect": 0.5,
+          "height": [
+            9,
+            14
+          ],
+          "tint": {
+            "light": [
+              "#ff7a3d"
+            ],
+            "dark": [
+              "#0c4155"
+            ]
+          }
+        },
+        {
+          "src": {
+            "light": "assets/anemone-day.svg",
+            "dark": "assets/anemone-night.svg"
+          },
+          "aspect": 1,
+          "height": [
+            4,
+            7
+          ]
+        }
+      ]
     }
-  ]
+  ],
+  "variety": "load",
+  "confetti": {
+    "colors": {
+      "light": [
+        "#ff7f6e",
+        "#ffb347",
+        "#ffe066",
+        "#4fd1c5",
+        "#2bb3c0",
+        "#ff8fab"
+      ],
+      "dark": [
+        "#4fe3d6",
+        "#7cf5c6",
+        "#b48cff",
+        "#5fb8ff",
+        "#ff8fab"
+      ]
+    },
+    "shapes": [
+      "circle",
+      "square"
+    ],
+    "pictures": [
+      {
+        "src": "assets/fish.svg",
+        "aspect": 1.67,
+        "height": [
+          12,
+          18
+        ],
+        "tint": {
+          "light": [
+            "#ff7f2a",
+            "#ffd23f",
+            "#3fb8ff",
+            "#ff5d8f"
+          ],
+          "dark": [
+            "#4fe3d6",
+            "#7cf5c6",
+            "#b48cff",
+            "#5fb8ff"
+          ]
+        },
+        "weight": 4
+      },
+      {
+        "src": "assets/starfish.svg",
+        "aspect": 1,
+        "height": [
+          14,
+          20
+        ],
+        "tint": {
+          "light": [
+            "#ff7f6e",
+            "#ffb347",
+            "#e85d75"
+          ],
+          "dark": [
+            "#ff8fab",
+            "#b48cff"
+          ]
+        },
+        "weight": 2
+      },
+      {
+        "src": "assets/shell.svg",
+        "aspect": 1.53,
+        "height": [
+          12,
+          18
+        ],
+        "tint": {
+          "light": [
+            "#ffe3c8",
+            "#ffc2a8"
+          ],
+          "dark": [
+            "#cfd8ff",
+            "#a8f0e0"
+          ]
+        },
+        "weight": 1.5
+      },
+      {
+        "src": "assets/bubble.svg",
+        "aspect": 1,
+        "height": [
+          8,
+          16
+        ],
+        "weight": 2
+      }
+    ],
+    "mix": 0.6
+  }
 }

@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "author": "HomeGlow",
   "name": "Starship",
-  "description": "A 24th-century bridge console: black field, pill controls, curved frame elbows.",
+  "description": "A 24th-century bridge console: black field, pill controls, curved frame elbows. Outside the viewport, planets, the odd galaxy, passing ships and the occasional drifting alien.",
   "extends": "classic",
   "modes": [
     "dark"
@@ -104,10 +104,391 @@
   },
   "ambience": [
     {
-      "effect": "starfield",
-      "options": {
-        "density": "medium"
-      }
+      "layer": "image",
+      "src": [
+        "assets/sky-milkyway.svg",
+        "assets/sky-nebula.svg",
+        "assets/sky-oort.svg"
+      ],
+      "anchor": "fill",
+      "angle": [
+        -60,
+        60
+      ],
+      "flip": true,
+      "opacity": 0.8,
+      "chance": 0.6
+    },
+    {
+      "layer": "dots",
+      "count": [
+        260,
+        340
+      ],
+      "colors": [
+        {
+          "color": "#9bb0ff",
+          "weight": 1
+        },
+        {
+          "color": "#aabfff",
+          "weight": 1
+        },
+        {
+          "color": "#cad7ff",
+          "weight": 2
+        },
+        {
+          "color": "#f8f7ff",
+          "weight": 3
+        },
+        {
+          "color": "#ffffff",
+          "weight": 1
+        },
+        {
+          "color": "#fff4ea",
+          "weight": 2
+        },
+        {
+          "color": "#ffe9c4",
+          "weight": 1
+        },
+        {
+          "color": "#ffd2a1",
+          "weight": 2
+        },
+        {
+          "color": "#ffb56c",
+          "weight": 1
+        },
+        {
+          "color": "#ff9b5e",
+          "weight": 1
+        }
+      ],
+      "size": [
+        0.35,
+        1.9
+      ],
+      "opacity": [
+        0.25,
+        1
+      ]
+    },
+    {
+      "layer": "sprites",
+      "pictures": [
+        {
+          "src": "assets/planet-ringed.svg",
+          "aspect": 1.71,
+          "height": [
+            7,
+            13
+          ]
+        },
+        {
+          "src": "assets/planet-giant.svg",
+          "aspect": 1,
+          "height": [
+            8,
+            16
+          ]
+        },
+        {
+          "src": "assets/planet-rocky.svg",
+          "aspect": 1,
+          "height": [
+            3,
+            6
+          ]
+        },
+        {
+          "src": "assets/planet-ocean.svg",
+          "aspect": 1,
+          "height": [
+            5,
+            9
+          ]
+        }
+      ],
+      "count": [
+        1,
+        3
+      ],
+      "span": [
+        6,
+        94
+      ],
+      "lift": [
+        22,
+        70
+      ],
+      "motion": "none",
+      "flip": true,
+      "hue": [
+        0,
+        360
+      ],
+      "chance": 0.75
+    },
+    {
+      "layer": "particles",
+      "motion": "twinkle",
+      "count": 16,
+      "size": [
+        2,
+        4
+      ],
+      "seconds": [
+        2,
+        6
+      ],
+      "colors": [
+        {
+          "color": "#9bb0ff",
+          "weight": 1
+        },
+        {
+          "color": "#aabfff",
+          "weight": 1
+        },
+        {
+          "color": "#cad7ff",
+          "weight": 2
+        },
+        {
+          "color": "#f8f7ff",
+          "weight": 3
+        },
+        {
+          "color": "#ffffff",
+          "weight": 1
+        },
+        {
+          "color": "#fff4ea",
+          "weight": 2
+        },
+        {
+          "color": "#ffe9c4",
+          "weight": 1
+        },
+        {
+          "color": "#ffd2a1",
+          "weight": 2
+        },
+        {
+          "color": "#ffb56c",
+          "weight": 1
+        },
+        {
+          "color": "#ff9b5e",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "layer": "streaks",
+      "color": "#ffffff",
+      "length": [
+        90,
+        200
+      ],
+      "every": [
+        10,
+        30
+      ],
+      "seconds": [
+        1,
+        2.4
+      ]
+    },
+    {
+      "layer": "streaks",
+      "color": "#ffdcae",
+      "burst": [
+        10,
+        22
+      ],
+      "length": [
+        60,
+        150
+      ],
+      "every": [
+        150,
+        420
+      ],
+      "seconds": [
+        0.7,
+        1.4
+      ]
+    },
+    {
+      "layer": "flyby",
+      "pictures": [
+        {
+          "src": "assets/ship-cruiser.svg",
+          "aspect": 2.2
+        },
+        {
+          "src": "assets/ship-shuttle.svg",
+          "aspect": 1.8
+        },
+        {
+          "src": "assets/ship-saucer.svg",
+          "aspect": 2
+        },
+        {
+          "src": "assets/ship-rocket.svg",
+          "aspect": 2.67
+        },
+        {
+          "src": "assets/ship-raptor.svg",
+          "aspect": 1.73
+        }
+      ],
+      "height": [
+        4,
+        8
+      ],
+      "every": [
+        90,
+        300
+      ],
+      "seconds": [
+        12,
+        26
+      ],
+      "span": [
+        8,
+        80
+      ],
+      "tilt": [
+        0,
+        10
+      ],
+      "opacity": 0.95
+    },
+    {
+      "layer": "flyby",
+      "pictures": [
+        {
+          "src": "assets/alien-suited.svg",
+          "aspect": 0.75,
+          "weight": 2
+        },
+        {
+          "src": "assets/alien-bare.svg",
+          "aspect": 0.73
+        },
+        {
+          "src": "assets/alien-squid.svg",
+          "aspect": 0.87
+        }
+      ],
+      "height": [
+        5,
+        9
+      ],
+      "every": [
+        300,
+        900
+      ],
+      "seconds": [
+        40,
+        80
+      ],
+      "span": [
+        10,
+        70
+      ],
+      "tilt": [
+        0,
+        15
+      ],
+      "spin": [
+        90,
+        360
+      ]
     }
-  ]
+  ],
+  "variety": "load",
+  "confetti": {
+    "colors": [
+      {
+        "color": "#ff9900",
+        "weight": 3
+      },
+      {
+        "color": "#ffcc99",
+        "weight": 2
+      },
+      {
+        "color": "#cc99cc",
+        "weight": 2
+      },
+      {
+        "color": "#99ccff",
+        "weight": 2
+      },
+      {
+        "color": "#9977aa",
+        "weight": 1
+      },
+      {
+        "color": "#ff9966",
+        "weight": 1
+      }
+    ],
+    "shapes": [
+      "streamer",
+      "square"
+    ],
+    "pictures": [
+      {
+        "src": "assets/sparkle.svg",
+        "aspect": 1,
+        "height": [
+          12,
+          22
+        ],
+        "tint": [
+          {
+            "color": "#ffffff",
+            "weight": 2
+          },
+          "#ffcc99",
+          "#99ccff",
+          "#ffd2a1"
+        ],
+        "weight": 6
+      },
+      {
+        "src": "assets/ship-saucer.svg",
+        "aspect": 2,
+        "height": [
+          14,
+          20
+        ]
+      },
+      {
+        "src": "assets/ship-rocket.svg",
+        "aspect": 2.67,
+        "height": [
+          12,
+          16
+        ]
+      },
+      {
+        "src": "assets/alien-bare.svg",
+        "aspect": 0.73,
+        "height": [
+          20,
+          26
+        ],
+        "weight": 0.5
+      }
+    ],
+    "mix": 0.55
+  }
 }

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 130 150">
+  <defs>
+    <radialGradient id="s" cx="0.4" cy="0.3" r="0.8"><stop offset="0" stop-color="#f3b6ff"/><stop offset="1" stop-color="#8c3fb8"/></radialGradient>
+    <radialGradient id="bowl" cx="0.4" cy="0.3" r="0.7"><stop offset="0" stop-color="#e8fbff" stop-opacity="0.45"/><stop offset="1" stop-color="#9fd8ff" stop-opacity="0.15"/></radialGradient>
+  </defs>
+  <g stroke="#a552cf" stroke-width="8" stroke-linecap="round" fill="none">
+    <path d="M40 84 Q30 110 44 126 Q54 138 42 146"/>
+    <path d="M56 88 Q52 116 64 132"/>
+    <path d="M72 88 Q80 114 70 134"/>
+    <path d="M88 84 Q102 104 92 122 Q86 134 98 144"/>
+  </g>
+  <ellipse cx="64" cy="58" rx="38" ry="36" fill="url(#s)"/>
+  <circle cx="50" cy="56" r="9" fill="#fff"/><circle cx="78" cy="56" r="9" fill="#fff"/>
+  <circle cx="52" cy="58" r="5" fill="#2a1038"/><circle cx="80" cy="58" r="5" fill="#2a1038"/>
+  <path d="M56 76 Q64 80 72 76" stroke="#5a1f7a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <circle cx="64" cy="54" r="48" fill="url(#bowl)" stroke="#d8f3ff" stroke-width="2" stroke-opacity="0.6"/>
+  <path d="M34 30 Q42 18 56 14" stroke="#fff" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.7"/>
+</svg>

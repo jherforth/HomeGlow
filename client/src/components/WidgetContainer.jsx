@@ -18,7 +18,7 @@ import { shouldAcceptLayoutChange } from '../utils/layoutSync';
 import { buildLayout, savedSourcesById } from '../utils/gridPlacement';
 import { readGridMetrics } from '../utils/gridMetrics';
 import { frameDecoration } from '../utils/widgetFrame';
-import { AmbienceLayer } from '../themes/ambience.jsx';
+import ThemeAmbience from '../themes/engine/ThemeAmbience.jsx';
 
 // No auto-compaction; block overlaps (same as compactType={null} + preventCollision).
 const GRID_COMPACTOR = getCompactor(null, false, true);
@@ -546,7 +546,7 @@ const WidgetContainer = ({
         },
       }}
     >
-      <AmbienceLayer />
+      <ThemeAmbience />
       {layout.length > 0 && (
         <GridLayout
           className="layout"
