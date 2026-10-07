@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 110 150">
+  <defs>
+    <radialGradient id="skin" cx="0.4" cy="0.3" r="0.8"><stop offset="0" stop-color="#b9ff9c"/><stop offset="1" stop-color="#4caa45"/></radialGradient>
+  </defs>
+  <path d="M38 14 Q30 2 22 4" stroke="#6fd05e" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="21" cy="4" r="4" fill="#ffe066"/>
+  <path d="M72 14 Q82 2 90 6" stroke="#6fd05e" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="91" cy="6" r="4" fill="#ffe066"/>
+  <path d="M42 80 Q55 74 68 80 L70 116 Q55 122 40 116 Z" fill="url(#skin)"/>
+  <path d="M66 86 Q86 80 96 62" stroke="#6fd05e" stroke-width="7" stroke-linecap="round" fill="none"/>
+  <g fill="#6fd05e"><circle cx="98" cy="58" r="5"/><circle cx="104" cy="62" r="3"/><circle cx="94" cy="52" r="3"/></g>
+  <path d="M44 88 Q30 100 26 114" stroke="#6fd05e" stroke-width="7" stroke-linecap="round" fill="none"/>
+  <path d="M48 116 L42 144" stroke="#5cbf4f" stroke-width="8" stroke-linecap="round"/>
+  <path d="M62 116 L70 144" stroke="#5cbf4f" stroke-width="8" stroke-linecap="round"/>
+  <ellipse cx="55" cy="44" rx="34" ry="32" fill="url(#skin)"/>
+  <ellipse cx="42" cy="44" rx="10" ry="14" fill="#0b130b" transform="rotate(-14 42 44)"/>
+  <ellipse cx="68" cy="44" rx="10" ry="14" fill="#0b130b" transform="rotate(14 68 44)"/>
+  <circle cx="45" cy="38" r="3" fill="#fff"/><circle cx="71" cy="38" r="3" fill="#fff"/>
+  <path d="M46 64 Q55 70 64 64" stroke="#2d6a26" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+</svg>

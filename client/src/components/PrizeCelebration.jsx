@@ -1,7 +1,9 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useContext, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Box, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { ThemeContext } from '../themes/engine/ThemeContext.js';
+import { confettiPiece, confettiPieceSx } from '../utils/confetti.js';
 
 // Full-screen confetti celebration for a prize redemption (prize store).
 // Pure CSS — ~60 confetti pieces with randomized fall/spin animations — no
@@ -10,16 +12,20 @@ import { useTranslation } from 'react-i18next';
 // Rendered through a portal to document.body: the chore widget lives inside a
 // react-grid-layout item whose CSS transform creates a stacking context, which
 // would trap the overlay's z-index below MUI dialogs and break position:fixed.
+// A theme with its own confetti (utils/confetti.js) gets its pieces; Classic
+// keeps these.
 const CONFETTI_COLORS = ['#f94144', '#f8961e', '#f9c74f', '#90be6d', '#43aa8b', '#577590', '#b5179e'];
 const PIECE_COUNT = 60;
 const AUTO_DISMISS_MS = 4500;
 
 const PrizeCelebration = ({ username, prizeName, onDismiss }) => {
   const { t } = useTranslation(['chores']);
+  const { theme, mode } = useContext(ThemeContext);
   const pieces = useMemo(
     () =>
       Array.from({ length: PIECE_COUNT }, (_, i) => ({
         id: i,
+        themed: theme?.confetti ? confettiPiece(theme, mode, i) : null,
         left: Math.random() * 100,
         delay: Math.random() * 0.8,
         duration: 2.2 + Math.random() * 1.8,
@@ -28,7 +34,7 @@ const PrizeCelebration = ({ username, prizeName, onDismiss }) => {
         spin: Math.random() > 0.5 ? 360 : -360,
         sway: (Math.random() - 0.5) * 120,
       })),
-    []
+    [theme, mode]
   );
 
   useEffect(() => {
@@ -68,10 +74,14 @@ const PrizeCelebration = ({ username, prizeName, onDismiss }) => {
             position: 'absolute',
             top: 0,
             left: `${piece.left}%`,
-            width: `${piece.size}px`,
-            height: `${piece.size * 0.45}px`,
-            backgroundColor: piece.color,
-            borderRadius: 'var(--hg-radius-xs)',
+            ...(piece.themed
+              ? confettiPieceSx(piece.themed)
+              : {
+                width: `${piece.size}px`,
+                height: `${piece.size * 0.45}px`,
+                backgroundColor: piece.color,
+                borderRadius: 'var(--hg-radius-xs)',
+              }),
             '--sway': `${piece.sway}px`,
             '--spin': `${piece.spin}deg`,
             animation: `confetti-fall ${piece.duration}s linear ${piece.delay}s both`,

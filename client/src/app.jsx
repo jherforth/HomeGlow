@@ -45,7 +45,7 @@ import {
   themeTokens,
 } from './utils/themes.js';
 import { personalizationTokens } from './utils/personalize.js';
-import { ThemeContext } from './themes/ambience.jsx';
+import { ThemeContext } from './themes/engine/ThemeContext.js';
 import { normalizeWidgetSettings, BASE_WIDGET_SETTINGS } from './utils/widgetSettings.js';
 import { buildMobileWidgetList } from './utils/mobileWidgets.js';
 import { CORE_CONTROLS, resolveHiddenControls } from './utils/displayControls.js';

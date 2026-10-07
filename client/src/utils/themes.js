@@ -6,7 +6,8 @@
 //
 // {
 //   manifestVersion: 1, id, name, version, description, author,  // as in a plugin manifest
-//   ambience: [{ effect, modes, options }],  // built-in background effects (themes/ambience.jsx)
+//   ambience: [{ layer, modes, ...options }],  // building blocks drawn behind the widgets (themes/engine)
+//   variety: 'load' | 'day' | 'fixed',  // a new scene each page load (default), each day, or never
 //   extends: 'classic',                // optional; tokens and options merge over the parent
 //   modes: ['light', 'dark'],          // the modes it supports; others show modes[0]
 //   colors: { primary, secondary, accent },  // what plugins are told (light-mode background, secondary, accent)
@@ -16,11 +17,15 @@
 //   muiModes: { light: {}, dark: {} }  // per-mode MUI options over `mui`
 // }
 
+import { validateAmbience, validateConfetti } from '../themes/engine/schemas.js';
+
 // Each theme is a folder: themes/<id>/theme.json, with its own fonts/ and
 // assets/. Adding a theme means adding a folder; nothing here lists them.
 // The files come in as URLs only; nothing downloads until a theme uses it.
+// `no-inline` keeps even a small SVG a separate file: inlined, every theme's
+// art would ride in a chunk that every display loads.
 const MANIFESTS = import.meta.glob('../themes/*/theme.json', { eager: true, import: 'default' });
-const FILES = import.meta.glob('../themes/*/{assets,fonts}/*', { eager: true, query: '?url', import: 'default' });
+const FILES = import.meta.glob('../themes/*/{assets,fonts}/*', { eager: true, query: '?no-inline', import: 'default' });
 
 const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 const FUNC_COLOR = /^(?:rgb|rgba|hsl|hsla)\(\s*[\d.%\s,/-]+\)$/i;
@@ -139,14 +144,6 @@ function checkFonts(fonts, assets, errors) {
   });
 }
 
-/** Ambience effects a theme may switch on, and the options each accepts. */
-export const AMBIENCE_SCHEMA = {
-  bubbles: { density: ['low', 'medium', 'high'] },
-  caustics: { strength: ['soft', 'bright'] },
-  seafloor: { palette: ['sand', 'night'] },
-  starfield: { density: ['low', 'medium', 'high'] },
-};
-
 const MODES = ['light', 'dark'];
 const isObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 
@@ -178,22 +175,9 @@ export function validateThemePackage(pkg, { assets } = {}) {
   if (pkg.version !== undefined && (typeof pkg.version !== 'string' || !pkg.version.trim() || pkg.version.length > 32)) errors.push('version must be a short string');
   if (pkg.description !== undefined && (typeof pkg.description !== 'string' || pkg.description.trim().length > 300)) errors.push('description must be 300 characters or fewer');
   if (pkg.author !== undefined && (typeof pkg.author !== 'string' || pkg.author.trim().length > 80)) errors.push('author must be 80 characters or fewer');
-  if (pkg.ambience !== undefined) {
-    if (!Array.isArray(pkg.ambience) || pkg.ambience.length > 4) errors.push('ambience must list up to 4 effects');
-    else pkg.ambience.forEach((entry, i) => {
-      const schema = isObject(entry) ? AMBIENCE_SCHEMA[entry.effect] : null;
-      if (!schema) {
-        errors.push(`ambience[${i}]: unknown effect ${JSON.stringify(entry?.effect)}`);
-        return;
-      }
-      if (entry.modes !== undefined && (!Array.isArray(entry.modes) || !entry.modes.every((m) => MODES.includes(m)))) {
-        errors.push(`ambience[${i}].modes must list light and/or dark`);
-      }
-      Object.entries(entry.options || {}).forEach(([key, value]) => {
-        if (!schema[key]?.includes(value)) errors.push(`ambience[${i}].options.${key} is not valid: ${JSON.stringify(value)}`);
-      });
-    });
-  }
+  if (pkg.ambience !== undefined) errors.push(...validateAmbience(pkg.ambience, { assets, isColor }));
+  if (pkg.confetti !== undefined) errors.push(...validateConfetti(pkg.confetti, { assets, isColor }));
+  if (pkg.variety !== undefined && !['load', 'day', 'fixed'].includes(pkg.variety)) errors.push('variety must be load, day or fixed');
   if (pkg.extends !== undefined && typeof pkg.extends !== 'string') errors.push('extends must be a theme id');
   if (pkg.modes !== undefined && (!Array.isArray(pkg.modes) || !pkg.modes.length || !pkg.modes.every((m) => MODES.includes(m)))) {
     errors.push('modes must list light and/or dark');
@@ -284,7 +268,12 @@ export function resolveTheme(id, themes = BUILT_IN_THEMES, assets = THEME_ASSETS
     colors: theme.colors ? { ...merged.colors, ...theme.colors } : merged.colors,
     // Each font keeps the URL from the folder of the theme that named it.
     fonts: [...(merged.fonts || []), ...(theme.fonts || []).map((font) => ({ ...font, url: assets[theme.id]?.[font.src] }))],
+    // Ambience and its pictures come from the theme that lists them.
     ambience: theme.ambience || merged.ambience,
+    ambienceAssets: theme.ambience ? assets[theme.id] : merged.ambienceAssets,
+    // So does confetti.
+    confetti: theme.confetti || merged.confetti,
+    confettiAssets: theme.confetti ? assets[theme.id] : merged.confettiAssets,
     tokens: Object.fromEntries(['all', ...MODES].map((key) => [key, { ...merged.tokens?.[key], ...theme.tokens?.[key] }])),
     mui: theme.mui ? { ...merged.mui, ...theme.mui } : merged.mui,
     muiModes: theme.muiModes

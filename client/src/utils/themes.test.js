@@ -87,11 +87,6 @@ describe('validateThemePackage', () => {
     expect(validateThemePackage({ ...base, author: { name: 'Jane' } })).toHaveLength(1);
   });
 
-  it('accepts only built-in ambience effects with known options', () => {
-    expect(validateThemePackage({ ...base, ambience: [{ effect: 'bubbles', modes: ['dark'], options: { density: 'low' } }] })).toEqual([]);
-    expect(validateThemePackage({ ...base, ambience: [{ effect: 'fireworks' }] })).toHaveLength(1);
-    expect(validateThemePackage({ ...base, ambience: [{ effect: 'bubbles', options: { density: 'blizzard' } }] })).toHaveLength(1);
-  });
 });
 
 describe('discoverThemes', () => {
