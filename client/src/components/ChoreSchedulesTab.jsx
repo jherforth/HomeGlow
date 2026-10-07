@@ -321,9 +321,19 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
   };
 
   const handleSaveSchedule = async () => {
+    console.log('[DEBUG] handleSaveSchedule called, form:', JSON.stringify({
+      isOneTime: scheduleForm.isOneTime,
+      scheduleMode: scheduleForm.scheduleMode,
+      duration: scheduleForm.duration,
+      spawn_enabled: scheduleForm.spawn_enabled,
+      spawn_chore_id: scheduleForm.spawn_chore_id,
+      spawn_user_ids: scheduleForm.spawn_user_ids,
+    }));
     const cron = computeCrontab(scheduleForm);
+    console.log('[DEBUG] computed cron:', cron);
     const isCalendarMode = !scheduleForm.isOneTime && scheduleForm.scheduleMode === 'calendar';
     const err = (scheduleForm.isOneTime || isCalendarMode) ? null : validateCrontab(cron);
+    console.log('[DEBUG] validation err:', err);
     if (err) { setCrontabError(err); return; }
 
     setSavingSchedule(true);
@@ -373,15 +383,18 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
       };
 
       if (editingSchedule) {
+        console.log('[DEBUG] Sending PATCH to', `${API_BASE_URL}/api/chore-schedules/${editingSchedule.id}`, 'payload:', JSON.stringify(payload));
         await axios.patch(`${API_BASE_URL}/api/chore-schedules/${editingSchedule.id}`, payload);
         showMessage('success', 'Schedule updated.');
       } else {
+        console.log('[DEBUG] Sending POST to', `${API_BASE_URL}/api/chore-schedules`, 'payload:', JSON.stringify(payload));
         await axios.post(`${API_BASE_URL}/api/chore-schedules`, payload);
         showMessage('success', 'Schedule created.');
       }
       setScheduleDialogOpen(false);
       await fetchAll();
     } catch (err) {
+      console.log('[DEBUG] Save failed with error:', err.message, err.response?.data);
       showMessage('error', err.response?.data?.error || 'Failed to save schedule.');
     } finally {
       setSavingSchedule(false);
