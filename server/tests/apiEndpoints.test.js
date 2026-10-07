@@ -689,6 +689,106 @@ test('chore schedule rejects an invalid due_time', async () => {
     assert.match(createRes.body.error, /due_time/);
 });
 
+// --- One chore for several people at once (rebuilt from PR #234) ---
+
+async function newUser(username) {
+    const res = await api('/api/users', { method: 'POST', body: JSON.stringify({ username }) });
+    assert.equal(res.status, 200, res.text);
+    return res.body.id;
+}
+
+async function newChore(title) {
+    const res = await api('/api/chores', { method: 'POST', body: JSON.stringify({ title, description: '', clam_value: 2 }) });
+    assert.equal(res.status, 200);
+    return res.body.id;
+}
+
+const schedulesOf = async (choreId) => (await api(`/api/chore-schedules?chore_id=${choreId}`)).body;
+
+test('user_ids creates the same schedule for each person, as if added one by one', async () => {
+    const ann = await newUser('Batch Ann');
+    const ben = await newUser('Batch Ben');
+    const choreId = await newChore('Feed the cat');
+
+    const res = await api('/api/chore-schedules', {
+        method: 'POST',
+        body: JSON.stringify({
+            chore_id: choreId, user_ids: [ann, ben], crontab: '0 0 * * 1,3,5', duration: 'day-of',
+            due_time: '17:00', sound_enabled: 1, sound: 'bell.wav', transferable: 0,
+        }),
+    });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.equal(res.body.ids.length, 2);
+    assert.equal(res.body.id, res.body.ids[0]);
+
+    const rows = await schedulesOf(choreId);
+    assert.deepEqual(rows.map((s) => s.user_id).sort(), [ann, ben].sort());
+    for (const s of rows) {
+        assert.equal(s.crontab, '0 0 * * 1,3,5');
+        assert.equal(s.due_time, '17:00');
+        assert.equal(s.sound, 'bell.wav');
+        assert.equal(s.transferable, 0);
+    }
+    // Separate rows: changing one person's schedule leaves the other alone.
+    await api(`/api/chore-schedules/${res.body.ids[0]}`, { method: 'PATCH', body: JSON.stringify({ due_time: '08:00' }) });
+    const after = await schedulesOf(choreId);
+    assert.deepEqual(after.map((s) => s.due_time).sort(), ['08:00', '17:00']);
+});
+
+test('user_ids ignores repeats, and takes ids as numbers or numeric strings', async () => {
+    const cal = await newUser('Batch Cal');
+    const dee = await newUser('Batch Dee');
+    const choreId = await newChore('Water plants');
+
+    const res = await api('/api/chore-schedules', {
+        method: 'POST',
+        body: JSON.stringify({ chore_id: choreId, user_ids: [cal, String(cal), dee, dee], crontab: '0 0 * * *' }),
+    });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.equal(res.body.ids.length, 2);
+    assert.deepEqual((await schedulesOf(choreId)).map((s) => s.user_id).sort(), [cal, dee].sort());
+});
+
+test('a bad user_ids creates nothing, and says what was wrong', async () => {
+    const eve = await newUser('Batch Eve');
+    const choreId = await newChore('Sweep');
+    const attempt = (body) => api('/api/chore-schedules', { method: 'POST', body: JSON.stringify({ chore_id: choreId, crontab: '0 0 * * *', ...body }) });
+
+    const unknown = await attempt({ user_ids: [eve, 999999] });
+    assert.equal(unknown.status, 400);
+    assert.match(unknown.body.error, /Unknown user id: 999999/);
+
+    for (const [user_ids, pattern] of [[[], /non-empty/], ['1,2', /non-empty/], [[eve, 'abc'], /Invalid user id/], [[eve, 0], /Invalid user id/], [[1.5], /Invalid user id/]]) {
+        const res = await attempt({ user_ids });
+        assert.equal(res.status, 400, JSON.stringify(user_ids));
+        assert.match(res.body.error, pattern);
+    }
+
+    const both = await attempt({ user_ids: [eve], user_id: eve });
+    assert.equal(both.status, 400);
+    assert.match(both.body.error, /not both/);
+
+    // A schedule problem is still caught before anything is written.
+    const badCron = await attempt({ user_ids: [eve], crontab: 'not a cron' });
+    assert.equal(badCron.status, 400);
+
+    assert.deepEqual(await schedulesOf(choreId), []);
+});
+
+test('user_id alone works as before, including an unassigned bonus chore', async () => {
+    const fay = await newUser('Batch Fay');
+    const choreId = await newChore('Tidy shoes');
+
+    const one = await api('/api/chore-schedules', { method: 'POST', body: JSON.stringify({ chore_id: choreId, user_id: fay, crontab: '0 0 * * *' }) });
+    assert.equal(one.status, 200);
+    assert.equal(one.body.ids, undefined);
+
+    const bonus = await api('/api/chore-schedules', { method: 'POST', body: JSON.stringify({ chore_id: choreId, crontab: '0 0 * * *' }) });
+    assert.equal(bonus.status, 200);
+
+    assert.deepEqual((await schedulesOf(choreId)).map((s) => s.user_id).sort(), [fay, null].sort());
+});
+
 test('chore schedule persists transferable, can_snooze, and snoozed_until (issue #122)', async () => {
     const choreRes = await api('/api/chores', {
         method: 'POST',

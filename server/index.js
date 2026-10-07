@@ -151,6 +151,7 @@ const googleConnection = require('./services/googleConnection');
 const googleCalendar = require('./services/googleCalendar');
 const appleCalDAV = require('./services/appleCalDAV');
 const googlePhotos = require('./services/googlePhotos');
+const appearanceAssets = require('./services/appearanceAssets');
 const googlePhotosPicker = require('./services/googlePhotosPicker');
 const googleTasks = require('./services/googleTasks');
 const homeAssistant = require('./services/homeAssistant');
@@ -2830,111 +2831,38 @@ fastify.get('/api/chore-schedules/:id', async (request, reply) => {
   }
 });
 
-
-function createInitialChildSchedule(parentSchedule) {
-  const stmt = db.prepare(`
-    INSERT INTO chore_schedules (
-      chore_id, user_id, crontab, duration, visible, parent_schedule_id,
-      due_date, due_time, sound_enabled, sound, reminder_interval_minutes,
-      transferable, can_snooze
-    )
-    VALUES (?, ?, NULL, 'day-of', 1, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  return stmt.run(
-    parentSchedule.chore_id,
-    parentSchedule.user_id,
-    parentSchedule.id,
-    parentSchedule.due_date || null,
-    parentSchedule.due_time || null,
-    parentSchedule.sound_enabled ? 1 : 0,
-    parentSchedule.sound || null,
-    parentSchedule.reminder_interval_minutes || null,
-    parentSchedule.transferable !== undefined ? (parentSchedule.transferable ? 1 : 0) : 1,
-    parentSchedule.can_snooze !== undefined ? (parentSchedule.can_snooze ? 1 : 0) : 1
-  );
+// Who a new schedule is for. `user_id` (one person, or none for an unassigned
+// bonus chore) works as it always has; `user_ids` creates the same schedule
+// for several people at once, one row each, so it behaves exactly as if each
+// had been added separately. Returns { userIds, batch } or { error }.
+function resolveScheduleUsers(body) {
+  if (body.user_ids === undefined) {
+    return { userIds: [body.user_id || null], batch: false };
+  }
+  if (body.user_id !== undefined && body.user_id !== null && body.user_id !== '') {
+    return { error: 'Send user_id or user_ids, not both.' };
+  }
+  if (!Array.isArray(body.user_ids) || body.user_ids.length === 0) {
+    return { error: 'user_ids must be a non-empty list of user ids.' };
+  }
+  const userIds = [];
+  for (const raw of body.user_ids) {
+    const id = typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : raw;
+    if (!Number.isInteger(id) || id <= 0) {
+      return { error: `Invalid user id: ${JSON.stringify(raw)}` };
+    }
+    if (!userIds.includes(id)) userIds.push(id);
+  }
+  const userExists = db.prepare('SELECT 1 FROM users WHERE id = ?');
+  const unknown = userIds.find((id) => !userExists.get(id));
+  if (unknown !== undefined) {
+    return { error: `Unknown user id: ${unknown}` };
+  }
+  return { userIds, batch: true };
 }
 
 fastify.post('/api/chore-schedules', async (request, reply) => {
-    const body = request.body || {};
-    // Multi-user batch support
-    if (Array.isArray(body.user_ids) && body.user_ids.length > 0) {
-      const { chore_id, crontab, duration, interval, visible, due_date, due_time, sound_enabled, sound, reminder_interval_minutes, transferable, can_snooze, calendar_match, spawn_chore_id, spawn_user_ids } = body;
-      // Validate before inserting (same rules as single-create path)
-      if (!chore_id) {
-        return reply.status(400).send({ error: 'chore_id is required' });
-      }
-      const dateFields = validateScheduleDateFields(body, reply);
-      if (!dateFields) return;
-      const normalizedDuration = normalizeScheduleDuration(duration);
-      if (!ALLOWED_SCHEDULE_DURATIONS.has(normalizedDuration)) {
-        return reply.status(400).send({ error: `Invalid duration. Expected one of: ${Array.from(ALLOWED_SCHEDULE_DURATIONS).join(', ')}` });
-      }
-      const normalizedInterval = normalizeScheduleInterval(interval);
-      if (normalizedDuration === 'once-completed') {
-        if (!crontab) {
-          return reply.status(400).send({ error: 'once-completed schedules require a crontab expression' });
-        }
-        if (!isValidScheduleInterval(normalizedInterval)) {
-          return reply.status(400).send({ error: 'once-completed schedules require a valid interval like 30d, 3w, 2m, or 1y' });
-        }
-      } else if (normalizedInterval !== null) {
-        return reply.status(400).send({ error: 'interval is only allowed for once-completed schedules' });
-      }
-      if (crontab) {
-        try {
-          CronExpressionParser.parse(crontab);
-        } catch (e) {
-          return reply.status(400).send({ error: 'Invalid crontab expression: ' + e.message });
-        }
-      }
-      const insertStmt = db.prepare(`
-        INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, interval, visible, due_date, due_time, sound_enabled, sound, reminder_interval_minutes, transferable, can_snooze, calendar_match, spawn_chore_id, spawn_user_ids)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-      const ids = [];
-      const runTx = db.transaction((uIds) => {
-        for (const uId of uIds) {
-          const res = insertStmt.run(
-            chore_id,
-            uId === '' || uId === null ? null : uId,
-            crontab || null,
-            duration || 'day-of',
-            interval || null,
-            visible !== undefined ? visible : 1,
-            due_date || null,
-            due_time || null,
-            sound_enabled ? 1 : 0,
-            sound || null,
-            reminder_interval_minutes || null,
-            transferable !== undefined ? (transferable ? 1 : 0) : 1,
-            can_snooze !== undefined ? (can_snooze ? 1 : 0) : 1,
-            calendar_match ? String(calendar_match).trim() : null,
-            spawn_chore_id || null,
-            spawn_user_ids ? JSON.stringify(spawn_user_ids) : null
-          );
-          const parentId = res.lastInsertRowid;
-          ids.push(parentId);
-          if (duration === 'once-completed') {
-            createInitialChildSchedule({
-              id: parentId,
-              chore_id,
-              user_id: uId === '' || uId === null ? null : uId,
-              due_date: due_date || null,
-              due_time: due_time || null,
-              sound_enabled,
-              sound,
-              reminder_interval_minutes,
-              transferable,
-              can_snooze
-            });
-          }
-        }
-      });
-      runTx(body.user_ids);
-      return { success: true, ids, count: ids.length };
-    }
-
-  const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until, calendar_match, spawn_chore_id, spawn_user_ids } = request.body;
+  const { chore_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until, calendar_match, spawn_chore_id, spawn_user_ids } = request.body;
   try {
     if (!chore_id) {
       return reply.status(400).send({ error: 'chore_id is required' });
@@ -2987,10 +2915,17 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
       normalizedParentScheduleId = parsedParentScheduleId;
     }
 
+    const targets = resolveScheduleUsers(request.body);
+    if (targets.error) {
+      return reply.status(400).send({ error: targets.error });
+    }
+
     const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until, calendar_match, spawn_chore_id, spawn_user_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-    const info = stmt.run(
+    // One row per person, all or none: a batch never leaves half the
+    // family scheduled.
+    const insertAll = db.transaction((userIds) => userIds.map((userId) => stmt.run(
       chore_id,
-      user_id || null,
+      userId,
       crontab || null,
       normalizedDuration,
       visible !== undefined ? visible : 1,
@@ -3004,26 +2939,12 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
       transferable !== undefined ? (transferable ? 1 : 0) : 1,
       can_snooze !== undefined ? (can_snooze ? 1 : 0) : 1,
       snoozedUntilResult.value,
-      calendar_match ? String(calendar_match).trim() : null,
+      calendar_match ? String(calendar_match).trim() || null : null,
       spawn_chore_id || null,
       spawn_user_ids ? JSON.stringify(spawn_user_ids) : null
-    );
-    // For once-completed, create the initial child schedule so the chore appears immediately
-    if (normalizedDuration === 'once-completed' && !normalizedParentScheduleId) {
-      createInitialChildSchedule({
-        id: info.lastInsertRowid,
-        chore_id,
-        user_id: user_id || null,
-        due_date: dueDateResult.value,
-        due_time: dueTimeResult.value,
-        sound_enabled,
-        sound,
-        reminder_interval_minutes: reminderResult.value,
-        transferable,
-        can_snooze
-      });
-    }
-    return { id: info.lastInsertRowid, success: true };
+    ).lastInsertRowid));
+    const ids = insertAll(targets.userIds);
+    return targets.batch ? { id: ids[0], ids, success: true } : { id: ids[0], success: true };
   } catch (error) {
     console.error('Error adding schedule:', error);
     reply.status(500).send({ error: 'Failed to add schedule' });
@@ -6344,6 +6265,69 @@ fastify.post('/api/photo-sources/:sourceId/uploaded', async (request, reply) => 
   } catch (error) {
     console.error('Error uploading photos:', error);
     reply.status(500).send({ error: 'Failed to upload photos' });
+  }
+});
+
+// Appearance backgrounds (household, display and tab). See
+// services/appearanceAssets.js: type checked by content, size capped.
+const UPLOADS_ROOT = path.join(__dirname, 'uploads');
+
+fastify.get('/api/appearance/backgrounds', async (request, reply) => {
+  try {
+    return await appearanceAssets.listBackgrounds(UPLOADS_ROOT);
+  } catch (error) {
+    console.error('Error listing appearance backgrounds:', error);
+    return reply.status(500).send({ error: 'Failed to list backgrounds' });
+  }
+});
+
+fastify.post('/api/appearance/backgrounds', async (request, reply) => {
+  if (demoBlocked(reply)) return;
+  try {
+    const part = await request.file({ limits: { fileSize: appearanceAssets.BACKGROUND_MAX_BYTES + 1 } });
+    if (!part) return reply.status(400).send({ error: 'No image received.' });
+    const buffer = await part.toBuffer();
+    if (part.file.truncated) {
+      return reply.status(413).send({ error: 'Background images must be 10 MB or smaller.' });
+    }
+    const saved = await appearanceAssets.saveBackground(UPLOADS_ROOT, buffer);
+    if (saved.error) return reply.status(saved.status).send({ error: saved.error });
+    return saved;
+  } catch (error) {
+    if (error.code === 'FST_REQ_FILE_TOO_LARGE') {
+      return reply.status(413).send({ error: 'Background images must be 10 MB or smaller.' });
+    }
+    console.error('Error saving appearance background:', error);
+    return reply.status(500).send({ error: 'Failed to save background' });
+  }
+});
+
+fastify.get('/api/appearance/backgrounds/:file', async (request, reply) => {
+  const resolved = appearanceAssets.resolveBackground(UPLOADS_ROOT, request.params.file);
+  if (!resolved) return reply.status(404).send({ error: 'Background not found' });
+  try {
+    const buffer = await fs.readFile(resolved.path);
+    // The name is random and never reused, so the bytes behind it never change.
+    reply.header('Content-Type', resolved.type);
+    reply.header('Cache-Control', 'public, max-age=31536000, immutable');
+    reply.header('X-Content-Type-Options', 'nosniff');
+    return reply.send(buffer);
+  } catch (error) {
+    if (error.code === 'ENOENT') return reply.status(404).send({ error: 'Background not found' });
+    console.error('Error serving appearance background:', error);
+    return reply.status(500).send({ error: 'Failed to load background' });
+  }
+});
+
+fastify.delete('/api/appearance/backgrounds/:file', async (request, reply) => {
+  if (demoBlocked(reply)) return;
+  try {
+    const removed = await appearanceAssets.deleteBackground(UPLOADS_ROOT, request.params.file);
+    if (!removed) return reply.status(404).send({ error: 'Background not found' });
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting appearance background:', error);
+    return reply.status(500).send({ error: 'Failed to delete background' });
   }
 });
 

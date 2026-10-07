@@ -255,7 +255,11 @@
     "intervalUnit": "Unidad",
     "intervalRequired": "Obligatorio. Use solo dígitos.",
     "afterCompletionHelp": "Esta tarea aparece en el panel inmediatamente y permanece visible hasta marcarse como completada. Una vez completada, reaparecerá {{count}} {{unit}} después.",
-    "immediatelyUntilCompleted": "Inmediatamente (permanece visible hasta completarse)"
+    "immediatelyUntilCompleted": "Inmediatamente (permanece visible hasta completarse)",
+    "assignHelp": "Elige una o varias personas, o ninguna para una tarea extra sin asignar.",
+    "assignManyHelp": "Crea {{count}} programaciones, una para cada persona.",
+    "assignEveryone": "Todos",
+    "createdForEach": "Se crearon {{count}} programaciones, una para cada persona."
   },
   "presets": {
     "daily": "A diario",

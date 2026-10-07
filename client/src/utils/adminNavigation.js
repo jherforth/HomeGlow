@@ -1,40 +1,61 @@
 // URL hash navigation for the Admin Panel.
-// Format: #/admin/{tab}/{subtab}
+// Format: #/admin/{tab}/{section}/{subsection}
 // Examples:
-//   #/admin              — admin open, default tab
-//   #/admin/chores       — admin open, Chores tab
-//   #/admin/chores/history — admin open, Chores tab, History sub-tab
+//   #/admin                        — admin open, first tab
+//   #/admin/family                 — Family tab, its first section (Users)
+//   #/admin/family/chores/history  — Family tab, Chores section, History
 // No hash (or unrecognized) — admin closed.
 //
 // The hash is kept current with history.replaceState, so a refresh or a
 // bookmark returns to the same place without every tab click adding a history
 // entry. Editing the hash by hand while the panel is open switches tabs.
 
-// Same order as the Admin Panel's tabs (adminTabs in AdminPanel.jsx): the
-// position in this list is the tab index.
-export const ADMIN_TABS = [
-  'widgets',
-  'interface',
-  'users',
-  'chores',
-  'prizes',
-  'security',
-  'connections',
-  'about',
+// The panel's tabs, grouped by what you're managing (issue #230), each with
+// its sections in display order. The first section of each list is the one a
+// tab opens on. Section names are unique across tabs.
+export const ADMIN_LAYOUT = [
+  { tab: 'dashboard', sections: ['widgets', 'plugins', 'tabs'] },
+  { tab: 'look', sections: [] },
+  { tab: 'displays', sections: ['devices', 'screensaver'] },
+  {
+    tab: 'family',
+    sections: ['users', 'chores', 'prizes', 'vacation'],
+    subsections: { chores: ['definitions', 'history', 'settings'] },
+  },
+  { tab: 'security', sections: [] },
+  { tab: 'system', sections: ['region', 'connections', 'about'] },
 ];
 
-export const CHORES_TAB_INDEX = ADMIN_TABS.indexOf('chores');
+export const ADMIN_TABS = ADMIN_LAYOUT.map((entry) => entry.tab);
 
-// Same order as the Chores tab's sub-tabs.
-export const CHORES_SUBTABS = [
-  'definitions',
-  'history',
-  'settings',
-];
+// Names from before #230, so old bookmarks and links land in the section's
+// new home. The hash is then rewritten to the new name.
+const LEGACY_TABS = {
+  widgets: { tab: 'dashboard', section: 'widgets' },
+  interface: { tab: 'look' },
+  users: { tab: 'family', section: 'users' },
+  chores: { tab: 'family', section: 'chores' },
+  prizes: { tab: 'family', section: 'prizes' },
+  connections: { tab: 'system', section: 'connections' },
+  about: { tab: 'system', section: 'about' },
+};
 
-// "#/admin", "#/admin/<tab>" or "#/admin/<tab>/<subtab>", optionally with a
-// trailing slash, and nothing else: "#/administrator" is not the Admin Panel.
-const ADMIN_HASH = /^#\/admin(?:\/([^/]+))?(?:\/([^/]+))?\/?$/;
+const layoutFor = (tab) => ADMIN_LAYOUT.find((entry) => entry.tab === tab) || ADMIN_LAYOUT[0];
+
+// Fill in and correct a location: an unknown tab is the first tab, an unknown
+// or missing section the tab's first, and likewise for a subsection.
+export function normalizeAdminLocation({ tab, section, subsection } = {}) {
+  const layout = layoutFor(tab);
+  const sections = layout.sections;
+  const normalSection = sections.includes(section) ? section : (sections[0] || null);
+  const subsections = (normalSection && layout.subsections?.[normalSection]) || [];
+  const normalSubsection = subsections.includes(subsection) ? subsection : (subsections[0] || null);
+  return { tab: layout.tab, section: normalSection, subsection: normalSubsection };
+}
+
+// "#/admin" with up to three path segments, optionally with a trailing slash,
+// and nothing else: "#/administrator" is not the Admin Panel.
+const ADMIN_HASH = /^#\/admin(?:\/([^/]+))?(?:\/([^/]+))?(?:\/([^/]+))?\/?$/;
 
 export function isAdminHash(hash = window.location.hash) {
   return ADMIN_HASH.test(hash || '');
@@ -43,30 +64,28 @@ export function isAdminHash(hash = window.location.hash) {
 export function parseAdminHash(hash = window.location.hash) {
   const match = (hash || '').match(ADMIN_HASH);
   if (!match) return null;
-  const tabName = (match[1] || '').toLowerCase();
-  const subName = (match[2] || '').toLowerCase();
-  const tabIndex = ADMIN_TABS.indexOf(tabName);
-  const result = {
-    tab: tabIndex >= 0 ? tabIndex : 0,
-    subtab: 0,
-  };
-  // Only chores has sub-tabs for now
-  if (result.tab === CHORES_TAB_INDEX && subName) {
-    const subIndex = CHORES_SUBTABS.indexOf(subName);
-    if (subIndex >= 0) result.subtab = subIndex;
+  const [first, second, third] = match.slice(1).map((part) => (part || '').toLowerCase());
+
+  const legacy = LEGACY_TABS[first];
+  if (legacy) {
+    // Old links had at most one level below the tab: chores/history.
+    return normalizeAdminLocation({ ...legacy, subsection: second });
   }
-  return result;
+  return normalizeAdminLocation({ tab: first, section: second, subsection: third });
 }
 
-export function buildAdminHash(tabIndex, subtabIndex = 0) {
-  const tabName = ADMIN_TABS[tabIndex] || ADMIN_TABS[0];
-  let hash = `#/admin/${tabName}`;
-  // Only include subtab for chores tab when it's not the default
-  if (tabIndex === CHORES_TAB_INDEX && subtabIndex > 0) {
-    const subName = CHORES_SUBTABS[subtabIndex];
-    if (subName) hash += `/${subName}`;
-  }
-  return hash;
+// The canonical hash for a location. A section or subsection that is the
+// default for its parent is left off, so "#/admin/family" rather than
+// "#/admin/family/users".
+export function buildAdminHash(location) {
+  const { tab, section, subsection } = normalizeAdminLocation(location);
+  const layout = layoutFor(tab);
+  const parts = [tab];
+  const subsections = (section && layout.subsections?.[section]) || [];
+  const subsectionShown = subsection && subsection !== subsections[0];
+  if (section && (section !== layout.sections[0] || subsectionShown)) parts.push(section);
+  if (subsectionShown) parts.push(subsection);
+  return `#/admin/${parts.join('/')}`;
 }
 
 export function clearAdminHash() {
@@ -75,8 +94,8 @@ export function clearAdminHash() {
   }
 }
 
-export function setAdminHash(tabIndex, subtabIndex = 0) {
-  const hash = buildAdminHash(tabIndex, subtabIndex);
+export function setAdminHash(location) {
+  const hash = buildAdminHash(location);
   if (window.location.hash !== hash) {
     window.history.replaceState(null, '', hash);
   }

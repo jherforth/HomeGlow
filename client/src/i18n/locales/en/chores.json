@@ -256,7 +256,11 @@
     "calendarMatchToday": "Matches a calendar event today",
     "calendarNoMatchToday": "No calendar event matches this keyword today — check the spelling against the event title",
     "crontabFormatHelp": "Format: minute hour day-of-month month day-of-week",
-    "calendarMatchPlaceholder": "e.g. Practice, Gymnastics"
+    "calendarMatchPlaceholder": "e.g. Practice, Gymnastics",
+    "assignHelp": "Pick one or more people, or none for an unassigned bonus chore.",
+    "assignManyHelp": "Creates {{count}} schedules, one for each person.",
+    "assignEveryone": "Everyone",
+    "createdForEach": "Created {{count}} schedules, one for each person."
   },
   "presets": {
     "daily": "Daily",

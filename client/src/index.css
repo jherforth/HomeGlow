@@ -74,6 +74,8 @@ body {
   font-family: var(--hg-font-body);
   background: var(--container-background-override);
   background-image: var(--hg-page-image);
+  background-size: var(--hg-page-image-size);
+  background-position: var(--hg-page-image-position);
   background-attachment: fixed;
   color: var(--text);
   line-height: 1.6;
@@ -87,6 +89,8 @@ body {
   padding: 20px;
   background: var(--container-background-override);
   background-image: var(--hg-page-image);
+  background-size: var(--hg-page-image-size);
+  background-position: var(--hg-page-image-position);
   min-height: calc(100vh - var(--bottom-bar-height));
 }
 

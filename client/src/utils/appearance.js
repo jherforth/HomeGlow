@@ -16,9 +16,10 @@ import {
   normalizeInterfaceColors,
 } from './interfaceSettings.js';
 import { BUILT_IN_THEMES, DEFAULT_THEME_ID } from './themes.js';
+import { normalizeAccent, normalizeBackground, normalizeCardOpacity } from './personalize.js';
 
 export const APPEARANCE_SETTING_KEY = 'appearance';
-export const APPEARANCE_FIELDS = ['theme', 'mode', 'colors', 'autoDark'];
+export const APPEARANCE_FIELDS = ['theme', 'mode', 'colors', 'autoDark', 'accent', 'background', 'cardOpacity'];
 export const MODES = ['light', 'dark', 'auto'];
 
 export const DEFAULT_APPEARANCE = {
@@ -26,6 +27,10 @@ export const DEFAULT_APPEARANCE = {
   mode: 'light',
   colors: { ...DEFAULT_INTERFACE_COLORS },
   autoDark: { ...DEFAULT_AUTO_DARK_MODE_SETTINGS },
+  // Personalization at its defaults leaves the theme as it is.
+  accent: 'theme',
+  background: { kind: 'none' },
+  cardOpacity: 1,
 };
 
 // Pre-cascade localStorage keys, and the marker set once they are uploaded.
@@ -52,6 +57,9 @@ const THEME_IDS = BUILT_IN_THEMES.map((theme) => theme.id);
 const normalizeField = (field, value) => {
   if (field === 'theme') return THEME_IDS.includes(value) ? value : undefined;
   if (field === 'mode') return MODES.includes(value) ? value : undefined;
+  if (field === 'accent') return normalizeAccent(value);
+  if (field === 'background') return normalizeBackground(value);
+  if (field === 'cardOpacity') return normalizeCardOpacity(value);
   if (!isObject(value)) return undefined;
   return field === 'colors' ? normalizeInterfaceColors(value) : normalizeAutoDarkModeSettings(value);
 };
@@ -94,8 +102,9 @@ export function resolveAppearance(household, device) {
   return resolved;
 }
 
+// Choosing Auto mode is what turns it on; a saved location is all it needs.
+// (The stored `enabled` flag is kept for older builds and no longer read.)
 export const isAutoAvailable = (autoDark) => !!autoDark
-  && autoDark.enabled === true
   && typeof autoDark.lat === 'number'
   && typeof autoDark.lon === 'number';
 
@@ -213,8 +222,8 @@ export function readAppearanceCache(storage) {
 
 export function writeAppearanceCache(storage, appearance) {
   try {
-    const { theme, mode, colors, autoDark } = appearance;
-    storage.setItem(APPEARANCE_CACHE_KEY, JSON.stringify({ theme, mode, colors, autoDark }));
+    const fields = Object.fromEntries(APPEARANCE_FIELDS.map((field) => [field, appearance[field]]));
+    storage.setItem(APPEARANCE_CACHE_KEY, JSON.stringify(fields));
   } catch {
     // A cache only; the server holds the settings.
   }

@@ -18,10 +18,9 @@ import useFetchTabs from './hooks/useFetchTabs.js';
 import useIsMobile from './hooks/useIsMobile.js';
 import useScreenActivity from './hooks/useScreenActivity.js';
 import {
-  applyInterfaceColors,
   hexToRgbTriplet,
   readLocalScreensaverSettings,
-  readLocalVacationModeSettings,
+  parseVacationModeSetting,
   isVacationModeActiveToday,
 } from './utils/interfaceSettings.js';
 import {
@@ -45,7 +44,8 @@ import {
   themeDisplayMode,
   themeTokens,
 } from './utils/themes.js';
-import { ThemeContext } from './themes/ambience.jsx';
+import { personalizationTokens } from './utils/personalize.js';
+import { ThemeContext } from './themes/engine/ThemeContext.js';
 import { normalizeWidgetSettings, BASE_WIDGET_SETTINGS } from './utils/widgetSettings.js';
 import { buildMobileWidgetList } from './utils/mobileWidgets.js';
 import { CORE_CONTROLS, resolveHiddenControls } from './utils/displayControls.js';
@@ -137,6 +137,10 @@ const ADMIN_PIN_EXISTS_RETRY_DELAYS_MS = [500, 1500, 4000];
 // the recovery effect), and it stops the moment one lands.
 const ADMIN_PIN_EXISTS_RECOVERY_INTERVAL_MS = 5 * 60 * 1000;
 
+// How often every display rereads the household settings, so a change made on
+// another display (vacation, appearance) arrives without a reload.
+const HOUSEHOLD_SETTINGS_REFRESH_MS = 5 * 60 * 1000;
+
 /**
  * Control Limits ids are namespaced in storage (`plugin:<pluginId>:<control>`)
  * so two plugins cannot collide. A plugin only ever knows its own unprefixed
@@ -196,11 +200,6 @@ const App = () => {
   const [widgetsLocked, setWidgetsLocked] = useState(readLocalWidgetsLocked);
   const [screensaverActive, setScreensaverActive] = useState(false);
   const [screensaverSettings, setScreensaverSettings] = useState(readLocalScreensaverSettings);
-  const [vacationModeSettings, setVacationModeSettings] = useState(readLocalVacationModeSettings);
-  // Range-aware (issue #121 v2): with dates set, vacation activates/expires on
-  // its own; recomputed each render, which the kiosk's periodic refreshes keep
-  // current across midnight.
-  const vacationActiveToday = isVacationModeActiveToday(vacationModeSettings);
   const inactivityTimerRef = useRef(null);
   const lastActivityRef = useRef(Date.now());
   const [widgetSettings, setWidgetSettings] = useState({ ...DEFAULT_WIDGET_SETTINGS });
@@ -210,6 +209,16 @@ const App = () => {
   // Credentials are no longer among them — GET /api/settings redacts secrets,
   // and weather is fetched server-side.
   const [householdSettings, setHouseholdSettings] = useState({});
+  // Vacation is a household setting every display follows (issue #230): the
+  // vacation screensaver and, with muteSounds, silent chore chimes.
+  const vacationModeSettings = useMemo(
+    () => parseVacationModeSetting(householdSettings.vacation_mode),
+    [householdSettings.vacation_mode],
+  );
+  // Range-aware (issue #121 v2): with dates set, vacation activates/expires on
+  // its own; recomputed each render, which the kiosk's periodic refreshes keep
+  // current across midnight.
+  const vacationActiveToday = isVacationModeActiveToday(vacationModeSettings);
   // The raw device settings blob, kept alongside the hydrated view above:
   // Control Limits reads keys this component does not otherwise model
   // (`controlLimits`, `adminPinRemembered`), and resolveHiddenControls wants the
@@ -257,9 +266,15 @@ const App = () => {
   // place of the household's interface colors, including for plugins.
   const activeTheme = useMemo(() => resolveTheme(appearance.theme), [appearance.theme]);
   const displayTheme = themeDisplayMode(activeTheme, theme);
-  const effectiveColors = useMemo(
+  const themeColors = useMemo(
     () => (activeTheme.colors ? { ...interfaceColors, ...activeTheme.colors } : interfaceColors),
     [activeTheme, interfaceColors],
+  );
+  // What plugins are told: the theme's colors, with a personal accent on top.
+  const personalAccent = appearance.accent && appearance.accent !== 'theme' ? appearance.accent : null;
+  const effectiveColors = useMemo(
+    () => (personalAccent ? { ...themeColors, accent: personalAccent } : themeColors),
+    [themeColors, personalAccent],
   );
   // Always a provider, so switching between Classic and a themed look never
   // changes the tree's shape (which would remount everything, Admin included).
@@ -314,7 +329,10 @@ const App = () => {
   const fetchHouseholdSettings = useCallback(async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/settings`);
-      setHouseholdSettings(response.data || {});
+      const next = response.data || {};
+      // Polled (below), so keep the same object when nothing changed rather
+      // than re-rendering everything that reads it.
+      setHouseholdSettings((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next));
       setHouseholdSettingsLoaded(true);
     } catch (error) {
       console.error('Error fetching household settings:', error);
@@ -601,8 +619,7 @@ const App = () => {
   // mode no longer needs an OpenWeatherMap key — it works with Home Assistant
   // or with no weather provider configured at all.
   const resolveAutoTheme = useCallback(async () => {
-    const hasCoordinates = typeof autoDarkModeSettings.lat === 'number' && typeof autoDarkModeSettings.lon === 'number';
-    if (!autoDarkModeSettings.enabled || !hasCoordinates) {
+    if (!isAutoAvailable(autoDarkModeSettings)) {
       return null;
     }
 
@@ -639,35 +656,38 @@ const App = () => {
     }
   }, [resolveAutoTheme, applyTheme]);
 
-  // Theme tokens first, which also clears any the previous theme set; then,
-  // for a theme without its own colors (Classic), the household's colors.
+  // One ordered set of custom properties on the root: the interface colors,
+  // then the theme's tokens, then personalization. Applying it clears
+  // anything the previous set had that this one does not, so switching theme
+  // or personalization never leaves a value behind.
+  const backgroundKey = JSON.stringify(appearance.background ?? null);
   useEffect(() => {
     const root = document.documentElement;
     root.setAttribute('data-theme', displayTheme);
 
-    const colorTokens = activeTheme.colors ? {
-      '--primary': effectiveColors.primary,
-      '--secondary': effectiveColors.secondary,
-      '--accent': effectiveColors.accent,
-      ...(hexToRgbTriplet(effectiveColors.accent) ? { '--accent-rgb': hexToRgbTriplet(effectiveColors.accent) } : {}),
-    } : {};
-    themeTokenNamesRef.current = applyThemeTokens(
-      root,
-      { ...colorTokens, ...themeTokens(activeTheme, displayTheme) },
-      themeTokenNamesRef.current,
-    );
-    if (activeTheme.colors) return;
-
-    applyInterfaceColors(root, interfaceColors);
-    if (displayTheme === 'light') {
-      root.style.setProperty('--background', interfaceColors.primary);
-    } else {
-      root.style.removeProperty('--background');
+    const accentRgb = hexToRgbTriplet(themeColors.accent);
+    const base = {
+      '--primary': themeColors.primary,
+      '--secondary': themeColors.secondary,
+      '--accent': themeColors.accent,
+      ...(accentRgb ? { '--accent-rgb': accentRgb } : {}),
+      ...themeTokens(activeTheme, displayTheme),
+      // Classic's light background is the household's primary color.
+      ...(!activeTheme.colors && displayTheme === 'light' ? { '--background': interfaceColors.primary } : {}),
+    };
+    let names = applyThemeTokens(root, base, themeTokenNamesRef.current);
+    // Card opacity scales the frame color the theme resolved to, so read it
+    // back once the theme's own tokens are in place.
+    const frameBg = getComputedStyle(root).getPropertyValue('--hg-frame-bg').trim();
+    const personal = personalizationTokens(appearance, frameBg);
+    if (Object.keys(personal).length > 0) {
+      names = applyThemeTokens(root, { ...base, ...personal }, names);
     }
-  }, [activeTheme, displayTheme, interfaceColors, effectiveColors.primary, effectiveColors.secondary, effectiveColors.accent]);
+    themeTokenNamesRef.current = names;
+  }, [activeTheme, displayTheme, themeColors, interfaceColors.primary, appearance.accent, backgroundKey, appearance.cardOpacity]);
 
   useEffect(() => {
-    void loadThemeFonts(activeTheme);
+    loadThemeFonts(activeTheme);
   }, [activeTheme]);
 
   useEffect(() => {
@@ -685,8 +705,7 @@ const App = () => {
 
     const handleInterfaceSettingsUpdated = () => {
       setScreensaverSettings(readLocalScreensaverSettings());
-      setVacationModeSettings(readLocalVacationModeSettings());
-      // Appearance is saved to the server by Admin; reload both levels.
+      // Appearance and vacation are saved to the server by Admin; reload both levels.
       void fetchDeviceSettings();
       void fetchHouseholdSettings();
     };
@@ -698,6 +717,17 @@ const App = () => {
       window.removeEventListener(INTERFACE_SETTINGS_UPDATED_EVENT, handleInterfaceSettingsUpdated);
     };
   }, [fetchDeviceSettings, fetchHouseholdSettings, fetchAdminPinExists]);
+
+  // Household settings change on other displays too: vacation turned on in the
+  // kitchen has to reach the hallway display without a reload (issue #230).
+  // A slow poll, not the plugin event stream, which does not reliably reach
+  // every install's browser.
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      void fetchHouseholdSettings();
+    }, HOUSEHOLD_SETTINGS_REFRESH_MS);
+    return () => clearInterval(intervalId);
+  }, [fetchHouseholdSettings]);
 
   // Recovery for a PIN check that never landed.
   //
@@ -1386,7 +1416,15 @@ const App = () => {
         )}
       </Box>
 
-      <Dialog open={showAdminPanel} onClose={toggleAdminPanel} maxWidth="lg" fullScreen={isMobile}>
+      <Dialog
+        open={showAdminPanel}
+        onClose={toggleAdminPanel}
+        maxWidth="lg"
+        fullScreen={isMobile}
+        // An edge for the floating panel, which can sink into a page background
+        // of a similar solid color (#230). Full screen on a phone needs none.
+        slotProps={{ paper: { sx: isMobile ? {} : { border: '1px solid var(--card-border)' } } }}
+      >
         <DialogContent sx={{ position: 'relative', '@media (max-width:599.95px)': { p: 1.5 } }}>
           <IconButton
             onClick={toggleAdminPanel}

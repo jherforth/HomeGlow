@@ -92,7 +92,7 @@ import RefreshIntervalSelect from './RefreshIntervalSelect';
 import ScreensaverIntervalSlider from './ScreensaverIntervalSlider';
 import GoogleAccountConnection from './GoogleAccountConnection';
 import ClamValueModal from './ClamValueModal';
-import { parseAdminHash, setAdminHash, isAdminHash, CHORES_TAB_INDEX } from '../utils/adminNavigation.js';
+import { ADMIN_LAYOUT, ADMIN_TABS, normalizeAdminLocation, parseAdminHash, setAdminHash } from '../utils/adminNavigation.js';
 import SoundPicker from './SoundPicker';
 import ControlsOnDisplay from './ControlsOnDisplay';
 import useFetchTabs from '../hooks/useFetchTabs.js';
@@ -105,8 +105,9 @@ import {
   VACATION_MODE_STORAGE_KEY,
   normalizeScreensaverSettings,
   normalizeVacationModeSettings,
+  parseVacationModeSetting,
   readLocalScreensaverSettings,
-  readLocalVacationModeSettings,
+  vacationSaveNeedsPin,
 } from '../utils/interfaceSettings.js';
 import { CONTROL_LIMITS_DEFAULT_KEY } from '../utils/displayControls.js';
 import { useTranslation } from 'react-i18next';
@@ -181,42 +182,33 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     chores: { w: 6, h: 4 },
     photos: { w: 6, h: 4 },
   };
-  const [activeTab, setActiveTab] = useState(() => parseAdminHash()?.tab ?? 0);
-  const [choresSubTab, setChoresSubTab] = useState(() => parseAdminHash()?.subtab ?? 0);
-  const [widgetsSubTab, setWidgetsSubTab] = useState(0);
+  // Where the panel is: { tab, section, subsection }, named as in the URL hash
+  // (utils/adminNavigation.js). Tabs group what you're managing (issue #230).
+  const [location, setLocation] = useState(() => parseAdminHash() || normalizeAdminLocation());
+  const sections = ADMIN_LAYOUT.find((entry) => entry.tab === location.tab)?.sections || [];
+  const choresSubsections = ADMIN_LAYOUT.find((entry) => entry.tab === 'family').subsections.chores;
 
-  // Sync tab changes to the URL hash for deep linking and refresh restore.
-  const handleTabChange = useCallback((newTab) => {
-    setActiveTab(newTab);
-    // Reset subtab when switching tabs; keep chores subtab if staying on chores
-    const subtab = newTab === CHORES_TAB_INDEX ? choresSubTab : 0;
-    if (newTab !== CHORES_TAB_INDEX) setChoresSubTab(0);
-    setAdminHash(newTab, subtab);
-  }, [choresSubTab]);
-
-  const handleChoresSubTabChange = useCallback((newSubtab) => {
-    setChoresSubTab(newSubtab);
-    setAdminHash(CHORES_TAB_INDEX, newSubtab);
+  // Every move goes through here, so the hash always names where the panel is.
+  const navigate = useCallback((next) => {
+    const normalized = normalizeAdminLocation(next);
+    setLocation(normalized);
+    setAdminHash(normalized);
   }, []);
 
   // If the hash is edited while the panel is open, follow it.
   useEffect(() => {
     const onHashChange = () => {
       const parsed = parseAdminHash();
-      if (parsed) {
-        setActiveTab(parsed.tab);
-        setChoresSubTab(parsed.subtab);
-      }
+      if (parsed) setLocation(parsed);
     };
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
-  // Set initial hash if admin was opened without one (e.g. via button).
+  // On opening, write the canonical hash: one for a panel opened from the
+  // dock, and the new name for a link from before the regroup.
   useEffect(() => {
-    if (!isAdminHash()) {
-      setAdminHash(activeTab, choresSubTab);
-    }
+    setAdminHash(location);
     // Only on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -299,7 +291,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   const [photoSources, setPhotoSources] = useState(null); // null = not yet loaded
   const [photoItemCount, setPhotoItemCount] = useState(null); // null = unknown
   const [screensaverSettings, setScreensaverSettings] = useState(readLocalScreensaverSettings);
-  const [vacationModeSettings, setVacationModeSettings] = useState(readLocalVacationModeSettings);
+  // The form, and the household value it was loaded from (fetchSettings).
+  const [vacationModeSettings, setVacationModeSettings] = useState(() => parseVacationModeSetting(null));
+  const [savedVacationMode, setSavedVacationMode] = useState(() => parseVacationModeSetting(null));
+  const [vacationPinOpen, setVacationPinOpen] = useState(false);
   const [tabIconModalState, setTabIconModalState] = useState({
     open: false,
     mode: 'create',
@@ -359,7 +354,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   useEffect(() => {
     if (isAuthenticated) {
       setScreensaverSettings(readLocalScreensaverSettings());
-      setVacationModeSettings(readLocalVacationModeSettings());
       fetchSettings();
       fetchWeatherConnectionStatus();
       fetchDeviceSettings();
@@ -376,7 +370,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   }, [isAuthenticated]);
 
   useEffect(() => {
-    if (!isAuthenticated || activeTab !== 7) {
+    if (!isAuthenticated || location.section !== 'about') {
       return;
     }
 
@@ -385,7 +379,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     }
 
     void refreshAboutData();
-  }, [activeTab, aboutLoading, backendStats, isAuthenticated]);
+  }, [location.section, aboutLoading, backendStats, isAuthenticated]);
 
   const fetchDevices = async () => {
     try {
@@ -452,6 +446,9 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
       // No filter: this panel edits the whole table.
       const response = await axios.get(`${API_BASE_URL}/api/settings`);
       setSettings(response.data);
+      const vacation = parseVacationModeSetting(response.data?.vacation_mode);
+      setVacationModeSettings(vacation);
+      setSavedVacationMode(vacation);
     } catch (error) {
       console.error('Error fetching settings:', error);
     }
@@ -1373,24 +1370,22 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     }
   };
 
-  const saveVacationModeSettings = async () => {
+  // Vacation is one household setting that every display follows (issue #230):
+  // the server pauses missed-chore logging and the metrics plugin bridges
+  // streaks, and each display mutes chimes and shows the vacation screensaver.
+  const writeVacationMode = async (normalizedVacationMode) => {
     try {
       setIsLoading(true);
-      const normalizedVacationMode = normalizeVacationModeSettings(vacationModeSettings);
-      localStorage.setItem(VACATION_MODE_STORAGE_KEY, JSON.stringify(normalizedVacationMode));
+      await axios.post(`${API_BASE_URL}/api/settings`, {
+        key: 'vacation_mode',
+        value: JSON.stringify(normalizedVacationMode),
+      });
+      setSavedVacationMode(normalizedVacationMode);
+      // The per-display copy from before #230 is no longer read.
+      localStorage.removeItem(VACATION_MODE_STORAGE_KEY);
+      // This display picks the change up at once; the others on their next
+      // household settings refresh.
       window.dispatchEvent(new Event(INTERFACE_SETTINGS_UPDATED_EVENT));
-      // Household-wide vacation state (issues #121/#72): the server pauses
-      // missed-chore logging while active, and the metrics plugin bridges
-      // streaks across vacation days. Display behavior (chime mute,
-      // screensaver) stays per-display via localStorage above.
-      try {
-        await axios.post(`${API_BASE_URL}/api/settings`, {
-          key: 'vacation_mode',
-          value: JSON.stringify(normalizedVacationMode),
-        });
-      } catch (serverError) {
-        console.warn('Vacation mode saved for this display, but the household setting could not be updated:', serverError);
-      }
       setSaveMessage({ show: true, type: 'success', text: t('admin:messages.vacationSaved') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } catch (error) {
@@ -1400,6 +1395,31 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Switching vacation on, or moving its dates, asks for the admin PIN even on
+  // a display that remembers it: it pauses chore tracking for everyone, which
+  // is exactly what a child at an unlocked display should not be able to do.
+  const saveVacationModeSettings = () => {
+    const normalizedVacationMode = normalizeVacationModeSettings(vacationModeSettings);
+    if (pinExists && vacationSaveNeedsPin(savedVacationMode, normalizedVacationMode)) {
+      setVacationPinOpen(true);
+      return;
+    }
+    void writeVacationMode(normalizedVacationMode);
+  };
+
+  const handleVacationPinVerify = async (pin) => {
+    let valid = false;
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/admin-pin/verify`, { pin });
+      valid = response.data?.valid === true;
+    } catch (error) {
+      throw new Error(error.response?.data?.error || t('admin:vacation.pinWrong'));
+    }
+    if (!valid) throw new Error(t('admin:vacation.pinWrong'));
+    setVacationPinOpen(false);
+    await writeVacationMode(normalizeVacationModeSettings(vacationModeSettings));
   };
 
   const sourcesLoaded = photoSources !== null;
@@ -1876,18 +1896,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     return option ? option.label : t('admin:refresh.disabled');
   };
 
-  // Same order as ADMIN_TABS in utils/adminNavigation.js, which names these
-  // tabs in the URL hash by position.
-  const adminTabs = [
-    'Widgets',
-    'Interface',
-    'Users',
-    'Chores',
-    'Prizes',
-    'Security',
-    'Connections',
-    'About'
-  ];
 
   const frontendRepository = isValidRepositorySlug(FRONTEND_GITHUB_REPOSITORY)
     ? FRONTEND_GITHUB_REPOSITORY
@@ -1926,49 +1934,52 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   return (
     <Box sx={{ width: '100%', maxWidth: 1200, mx: 'auto' }}>
       <Typography variant="h4" gutterBottom sx={{ pr: { xs: 5, sm: 0 } }}>
-        ⚙️ Admin Panel
+        ⚙️ {t('admin:panelTitle')}
       </Typography>
 
       <Tabs
-        value={activeTab}
-        onChange={(e, newValue) => handleTabChange(newValue)}
+        value={ADMIN_TABS.indexOf(location.tab)}
+        onChange={(e, index) => navigate({ tab: ADMIN_TABS[index] })}
         variant="scrollable"
         scrollButtons="auto"
         allowScrollButtonsMobile
         sx={{ mb: 3 }}
       >
-        {adminTabs.map((tab, index) => (
-          <Tab key={tab} label={tab} />
+        {ADMIN_TABS.map((name) => (
+          <Tab key={name} label={t(`admin:panelTabs.${name}`)} />
         ))}
       </Tabs>
 
-      {/* Widgets Tab */}
-      {activeTab === 0 && (
+      {sections.length > 0 && (
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+          <Tabs
+            value={Math.max(0, sections.indexOf(location.section))}
+            onChange={(_, index) => navigate({ tab: location.tab, section: sections[index] })}
+            size="small"
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
+          >
+            {sections.map((name) => (
+              <Tab key={name} label={t(`admin:sections.${name}`)} />
+            ))}
+          </Tabs>
+        </Box>
+      )}
+
+      {/* One place for every tab, rather than a copy per tab that most
+          tabs lacked (screensaver and vacation saves showed nothing). */}
+      {saveMessage.show && (
+        <Alert severity={saveMessage.type} sx={{ mb: 2 }}>
+          {saveMessage.text}
+        </Alert>
+      )}
+
+      {/* Dashboard: what is on the screens */}
+      {location.tab === 'dashboard' && (
         <Card>
           <CardContent>
-            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-              <Tabs
-                value={widgetsSubTab}
-                onChange={(_, v) => setWidgetsSubTab(v)}
-                size="small"
-                variant="scrollable"
-                scrollButtons="auto"
-                allowScrollButtonsMobile
-              >
-                <Tab label={t('admin:subTabs.widgets')} />
-                <Tab label={t('admin:subTabs.plugins')} />
-                <Tab label={t('admin:subTabs.tabs')} />
-                <Tab label={t('admin:subTabs.devices')} />
-              </Tabs>
-            </Box>
-
-            {saveMessage.show && (
-              <Alert severity={saveMessage.type} sx={{ mb: 2 }}>
-                {saveMessage.text}
-              </Alert>
-            )}
-
-            {widgetsSubTab === 0 && (
+            {location.section === 'widgets' && (
               <Box
                 component="form"
                 noValidate
@@ -2137,7 +2148,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
               </Box>
             )}
 
-            {widgetsSubTab === 1 && (
+            {location.section === 'plugins' && (
               <>
                 {/* The uploaded-widget list that used to sit beside this was a
                     second view of the same array the Plugin Settings section
@@ -2619,7 +2630,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
               </>
             )}
 
-            {widgetsSubTab === 2 && (
+            {location.section === 'tabs' && (
               <>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                   <Alert severity="info" sx={{ mb: 0, flex: 1, mr: 2 }}>
@@ -2746,8 +2757,24 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                 </TableContainer>
               </>
             )}
+          </CardContent>
+        </Card>
+      )}
 
-            {widgetsSubTab === 3 && (
+      {/* Look */}
+      {location.tab === 'look' && (
+        <Card>
+          <CardContent>
+            <AppearanceSettings />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Displays: each display, and this display's screensaver */}
+      {location.tab === 'displays' && (
+        <Card>
+          <CardContent>
+            {location.section === 'devices' && (
               <>
                 <Alert severity="info" sx={{ mb: 2 }}>
                   {t('admin:devices.manageHelp')}
@@ -2832,415 +2859,293 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                 </TableContainer>
               </>
             )}
-          </CardContent>
-        </Card>
-      )}
 
-      {/* Interface Tab */}
-      {activeTab === 1 && (
-        <Card>
-          <CardContent>
-            {/* Language (issue #137), per display like the other interface
-                settings. Week start deliberately lives in the calendar
-                widget's own settings, which has had per-tab week/month start
-                controls since #127 — a second global control would fight it. */}
-            <AdminFormSection
-              title={t('admin:interface.languageSection')}
-              subtitle={t('admin:interface.languageSubtitle')}
-            >
-              <Grid container spacing={2}>
-                <Grid size={{ xs: 12, sm: 6 }}>
-                  <FormControl fullWidth>
-                    <InputLabel>{t('common:language.label')}</InputLabel>
-                    <Select
-                      value={i18n.language?.split('-')[0] || 'en'}
-                      label={t('common:language.label')}
-                      onChange={(e) => handleLanguageChange(e.target.value)}
-                    >
-                      {SUPPORTED_LANGUAGES.map((lang) => (
-                        <MenuItem key={lang.code} value={lang.code}>
-                          {lang.endonym}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
-                      {t('common:language.helper')}
-                    </Typography>
-                  </FormControl>
-                </Grid>
-              </Grid>
-            </AdminFormSection>
+            {location.section === 'screensaver' && (
+              <>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+                  <Nightlight />
+                  <Typography variant="h6">{t('admin:screensaver.heading')}</Typography>
+                </Box>
 
-            {/* Household-wide, unlike the rest of this tab (issue #193). */}
-            <AdminFormSection
-              title={t('admin:timezone.heading')}
-              subtitle={t('admin:timezone.subtitle')}
-            >
-              <TimezoneSettings />
-            </AdminFormSection>
+                <Alert severity="info" sx={{ mb: 3 }}>
+                  {t('admin:screensaver.help')}
+                </Alert>
 
-            <AppearanceSettings />
-
-            <Divider sx={{ my: 4 }} />
-
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-              <Nightlight />
-              <Typography variant="h6">{t('admin:screensaver.heading')}</Typography>
-            </Box>
-
-            <Alert severity="info" sx={{ mb: 3 }}>
-              {t('admin:screensaver.help')}
-            </Alert>
-
-            <Box sx={{ maxWidth: 600, mx: 'auto' }}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={screensaverSettings.enabled}
-                    onChange={(e) => setScreensaverSettings(prev => ({ ...prev, enabled: e.target.checked }))}
-                  />
-                }
-                label={t('admin:screensaver.enable')}
-                sx={{ mb: 3 }}
-              />
-
-              <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold' }}>
-                {t('admin:screensaver.mode')}
-              </Typography>
-
-              <RadioGroup
-                value={screensaverSettings.mode}
-                onChange={(e) => setScreensaverSettings(prev => ({ ...prev, mode: e.target.value }))}
-                sx={{ mb: 3 }}
-              >
-                <Tooltip
-                  title={!hasTabsCreated ? "Create tabs in the dashboard to use this mode" : ""}
-                  placement="right"
-                >
+                <Box sx={{ maxWidth: 600, mx: 'auto' }}>
                   <FormControlLabel
-                    value="tabs"
-                    control={<Radio disabled={!hasTabsCreated} />}
-                    label={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <TabIcon fontSize="small" />
-                        <Box>
-                          <Typography
-                            variant="body2"
-                            sx={{
-                              fontWeight: 'bold',
-                              color: !hasTabsCreated ? 'text.disabled' : 'inherit'
-                            }}
-                          >
-                            {t('admin:screensaver.cycleTabs')}
-                          </Typography>
-                          <Typography
-                            variant="caption"
-                            color={!hasTabsCreated ? 'text.disabled' : 'text.secondary'}
-                          >
-                            {hasTabsCreated
-                              ? t('admin:screensaver.cycleTabsHelp', { count: tabs.length })
-                              : 'No tabs created yet'}
-                          </Typography>
-                        </Box>
-                        {!hasTabsCreated && (
-                          <Tooltip title={t('admin:screensaver.cycleTabsDisabled')}>
-                            <Info fontSize="small" color="disabled" />
-                          </Tooltip>
-                        )}
-                      </Box>
+                    control={
+                      <Switch
+                        checked={screensaverSettings.enabled}
+                        onChange={(e) => setScreensaverSettings(prev => ({ ...prev, enabled: e.target.checked }))}
+                      />
                     }
-                    sx={{ opacity: !hasTabsCreated ? 0.6 : 1 }}
+                    label={t('admin:screensaver.enable')}
+                    sx={{ mb: 3 }}
                   />
-                </Tooltip>
 
-                <Tooltip
-                  title={!canUsePhotoSlideshow ? (photoDisabledReason || '') : ""}
-                  placement="right"
-                >
-                  <FormControlLabel
-                    value="photos"
-                    control={<Radio disabled={!canUsePhotoSlideshow} />}
-                    label={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <PhotoLibrary fontSize="small" />
-                        <Box>
-                          <Typography
-                            variant="body2"
-                            sx={{
-                              fontWeight: 'bold',
-                              color: !canUsePhotoSlideshow ? 'text.disabled' : 'inherit'
-                            }}
-                          >
-                            {t('admin:screensaver.photoSlideshow')}
-                          </Typography>
-                          <Typography
-                            variant="caption"
-                            color={!canUsePhotoSlideshow ? 'text.disabled' : 'text.secondary'}
-                          >
-                            {canUsePhotoSlideshow
-                              ? t('admin:screensaver.photoSlideshowHelp')
-                              : (photoDisabledReason || '')}
-                          </Typography>
-                        </Box>
-                        {!canUsePhotoSlideshow && photoDisabledReason && (
-                          <Tooltip title={photoDisabledReason}>
-                            <Info fontSize="small" color="disabled" />
-                          </Tooltip>
-                        )}
-                      </Box>
-                    }
-                    sx={{ opacity: !canUsePhotoSlideshow ? 0.6 : 1 }}
-                  />
-                </Tooltip>
-              </RadioGroup>
-
-              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                Inactivity Timeout: {screensaverSettings.timeout} minute{screensaverSettings.timeout !== 1 ? 's' : ''}
-              </Typography>
-              <Slider
-                value={screensaverSettings.timeout}
-                onChange={(e, value) => setScreensaverSettings(prev => ({ ...prev, timeout: value }))}
-                min={1}
-                max={30}
-                marks={[
-                  { value: 1, label: '1m' },
-                  { value: 5, label: '5m' },
-                  { value: 10, label: '10m' },
-                  { value: 15, label: '15m' },
-                  { value: 30, label: '30m' }
-                ]}
-                sx={{ mb: 4 }}
-              />
-
-              {screensaverSettings.mode === 'photos' && (
-                <ScreensaverIntervalSlider
-                  label={t('admin:screensaver.photoInterval')}
-                  value={screensaverSettings.slideshowInterval}
-                  onChange={(value) => setScreensaverSettings(prev => ({ ...prev, slideshowInterval: value }))}
-                  min={3}
-                  max={60}
-                  marks={[
-                    { value: 3, label: '3s' },
-                    { value: 10, label: '10s' },
-                    { value: 30, label: '30s' },
-                    { value: 60, label: '60s' }
-                  ]}
-                />
-              )}
-
-              {/* How each photo uses the screen. Fit is the original look;
-                  the other two fill the bars a photo of a different shape
-                  leaves. */}
-              {screensaverSettings.mode === 'photos' && (
-                <Box sx={{ mb: 3 }}>
-                  <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                    {t('admin:screensaver.layoutHeading')}
+                  <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold' }}>
+                    {t('admin:screensaver.mode')}
                   </Typography>
+
                   <RadioGroup
-                    value={screensaverSettings.photoLayout || 'fit'}
-                    onChange={(e) => setScreensaverSettings(prev => ({ ...prev, photoLayout: e.target.value }))}
+                    value={screensaverSettings.mode}
+                    onChange={(e) => setScreensaverSettings(prev => ({ ...prev, mode: e.target.value }))}
+                    sx={{ mb: 3 }}
                   >
-                    {['fit', 'ambient', 'collage'].map((layout) => (
+                    <Tooltip
+                      title={!hasTabsCreated ? "Create tabs in the dashboard to use this mode" : ""}
+                      placement="right"
+                    >
                       <FormControlLabel
-                        key={layout}
-                        value={layout}
-                        control={<Radio />}
-                        sx={{ alignItems: 'flex-start', mb: 1, '& .MuiRadio-root': { pt: 0.25 } }}
+                        value="tabs"
+                        control={<Radio disabled={!hasTabsCreated} />}
                         label={
-                          <Box>
-                            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                              {t(`admin:screensaver.layout.${layout}`)}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {t(`admin:screensaver.layout.${layout}Help`)}
-                            </Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <TabIcon fontSize="small" />
+                            <Box>
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  fontWeight: 'bold',
+                                  color: !hasTabsCreated ? 'text.disabled' : 'inherit'
+                                }}
+                              >
+                                {t('admin:screensaver.cycleTabs')}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                color={!hasTabsCreated ? 'text.disabled' : 'text.secondary'}
+                              >
+                                {hasTabsCreated
+                                  ? t('admin:screensaver.cycleTabsHelp', { count: tabs.length })
+                                  : 'No tabs created yet'}
+                              </Typography>
+                            </Box>
+                            {!hasTabsCreated && (
+                              <Tooltip title={t('admin:screensaver.cycleTabsDisabled')}>
+                                <Info fontSize="small" color="disabled" />
+                              </Tooltip>
+                            )}
                           </Box>
                         }
+                        sx={{ opacity: !hasTabsCreated ? 0.6 : 1 }}
                       />
-                    ))}
+                    </Tooltip>
+
+                    <Tooltip
+                      title={!canUsePhotoSlideshow ? (photoDisabledReason || '') : ""}
+                      placement="right"
+                    >
+                      <FormControlLabel
+                        value="photos"
+                        control={<Radio disabled={!canUsePhotoSlideshow} />}
+                        label={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <PhotoLibrary fontSize="small" />
+                            <Box>
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  fontWeight: 'bold',
+                                  color: !canUsePhotoSlideshow ? 'text.disabled' : 'inherit'
+                                }}
+                              >
+                                {t('admin:screensaver.photoSlideshow')}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                color={!canUsePhotoSlideshow ? 'text.disabled' : 'text.secondary'}
+                              >
+                                {canUsePhotoSlideshow
+                                  ? t('admin:screensaver.photoSlideshowHelp')
+                                  : (photoDisabledReason || '')}
+                              </Typography>
+                            </Box>
+                            {!canUsePhotoSlideshow && photoDisabledReason && (
+                              <Tooltip title={photoDisabledReason}>
+                                <Info fontSize="small" color="disabled" />
+                              </Tooltip>
+                            )}
+                          </Box>
+                        }
+                        sx={{ opacity: !canUsePhotoSlideshow ? 0.6 : 1 }}
+                      />
+                    </Tooltip>
                   </RadioGroup>
-                </Box>
-              )}
 
-              {/* Corner overlay (issue #190). Photo mode only: in tab mode the
-                  dashboard itself is on screen, so there is nothing to overlay. */}
-              {screensaverSettings.mode === 'photos' && (
-                <Box sx={{ mb: 3 }}>
-                  <Typography variant="subtitle2" sx={{ mb: 0.5, fontWeight: 'bold' }}>
-                    {t('admin:screensaver.overlayHeading')}
+                  <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                    Inactivity Timeout: {screensaverSettings.timeout} minute{screensaverSettings.timeout !== 1 ? 's' : ''}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                    {t('admin:screensaver.overlayHelp')}
-                  </Typography>
-
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={screensaverSettings.overlayCalendar === true}
-                        onChange={(e) => setScreensaverSettings(prev => ({ ...prev, overlayCalendar: e.target.checked }))}
-                      />
-                    }
-                    label={t('admin:screensaver.overlayCalendar')}
+                  <Slider
+                    value={screensaverSettings.timeout}
+                    onChange={(e, value) => setScreensaverSettings(prev => ({ ...prev, timeout: value }))}
+                    min={1}
+                    max={30}
+                    marks={[
+                      { value: 1, label: '1m' },
+                      { value: 5, label: '5m' },
+                      { value: 10, label: '10m' },
+                      { value: 15, label: '15m' },
+                      { value: 30, label: '30m' }
+                    ]}
+                    sx={{ mb: 4 }}
                   />
-                  {screensaverSettings.overlayCalendar === true && (
-                    <FormControl size="small" sx={{ display: 'flex', ml: 6, mt: 1, mb: 1.5, maxWidth: 320 }}>
-                      <InputLabel id="screensaver-overlay-days-label">{t('admin:screensaver.overlayDays')}</InputLabel>
-                      <Select
-                        labelId="screensaver-overlay-days-label"
-                        value={screensaverSettings.overlayCalendarDays || 1}
-                        label={t('admin:screensaver.overlayDays')}
-                        onChange={(e) => setScreensaverSettings(prev => ({ ...prev, overlayCalendarDays: Number(e.target.value) }))}
+
+                  {screensaverSettings.mode === 'photos' && (
+                    <ScreensaverIntervalSlider
+                      label={t('admin:screensaver.photoInterval')}
+                      value={screensaverSettings.slideshowInterval}
+                      onChange={(value) => setScreensaverSettings(prev => ({ ...prev, slideshowInterval: value }))}
+                      min={3}
+                      max={60}
+                      marks={[
+                        { value: 3, label: '3s' },
+                        { value: 10, label: '10s' },
+                        { value: 30, label: '30s' },
+                        { value: 60, label: '60s' }
+                      ]}
+                    />
+                  )}
+
+                  {/* How each photo uses the screen. Fit is the original look;
+                      the other two fill the bars a photo of a different shape
+                      leaves. */}
+                  {screensaverSettings.mode === 'photos' && (
+                    <Box sx={{ mb: 3 }}>
+                      <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                        {t('admin:screensaver.layoutHeading')}
+                      </Typography>
+                      <RadioGroup
+                        value={screensaverSettings.photoLayout || 'fit'}
+                        onChange={(e) => setScreensaverSettings(prev => ({ ...prev, photoLayout: e.target.value }))}
                       >
-                        {[1, 2, 3, 4, 5, 6, 7].map((days) => (
-                          <MenuItem key={days} value={days}>
-                            {days === 1
-                              ? t('admin:screensaver.overlayDaysToday')
-                              : t('admin:screensaver.overlayDaysPlus', { count: days - 1 })}
-                          </MenuItem>
+                        {['fit', 'ambient', 'collage'].map((layout) => (
+                          <FormControlLabel
+                            key={layout}
+                            value={layout}
+                            control={<Radio />}
+                            sx={{ alignItems: 'flex-start', mb: 1, '& .MuiRadio-root': { pt: 0.25 } }}
+                            label={
+                              <Box>
+                                <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                  {t(`admin:screensaver.layout.${layout}`)}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {t(`admin:screensaver.layout.${layout}Help`)}
+                                </Typography>
+                              </Box>
+                            }
+                          />
                         ))}
-                      </Select>
-                    </FormControl>
+                      </RadioGroup>
+                    </Box>
+                  )}
+
+                  {/* Corner overlay (issue #190). Photo mode only: in tab mode the
+                      dashboard itself is on screen, so there is nothing to overlay. */}
+                  {screensaverSettings.mode === 'photos' && (
+                    <Box sx={{ mb: 3 }}>
+                      <Typography variant="subtitle2" sx={{ mb: 0.5, fontWeight: 'bold' }}>
+                        {t('admin:screensaver.overlayHeading')}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                        {t('admin:screensaver.overlayHelp')}
+                      </Typography>
+
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={screensaverSettings.overlayCalendar === true}
+                            onChange={(e) => setScreensaverSettings(prev => ({ ...prev, overlayCalendar: e.target.checked }))}
+                          />
+                        }
+                        label={t('admin:screensaver.overlayCalendar')}
+                      />
+                      {screensaverSettings.overlayCalendar === true && (
+                        <FormControl size="small" sx={{ display: 'flex', ml: 6, mt: 1, mb: 1.5, maxWidth: 320 }}>
+                          <InputLabel id="screensaver-overlay-days-label">{t('admin:screensaver.overlayDays')}</InputLabel>
+                          <Select
+                            labelId="screensaver-overlay-days-label"
+                            value={screensaverSettings.overlayCalendarDays || 1}
+                            label={t('admin:screensaver.overlayDays')}
+                            onChange={(e) => setScreensaverSettings(prev => ({ ...prev, overlayCalendarDays: Number(e.target.value) }))}
+                          >
+                            {[1, 2, 3, 4, 5, 6, 7].map((days) => (
+                              <MenuItem key={days} value={days}>
+                                {days === 1
+                                  ? t('admin:screensaver.overlayDaysToday')
+                                  : t('admin:screensaver.overlayDaysPlus', { count: days - 1 })}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      )}
+
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={screensaverSettings.overlayWeather === true}
+                            onChange={(e) => setScreensaverSettings(prev => ({ ...prev, overlayWeather: e.target.checked }))}
+                          />
+                        }
+                        label={t('admin:screensaver.overlayWeather')}
+                      />
+                      {screensaverSettings.overlayWeather === true && (
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 6 }}>
+                          {t('admin:screensaver.overlayWeatherHelp')}
+                        </Typography>
+                      )}
+                    </Box>
+                  )}
+
+                  {screensaverSettings.mode === 'tabs' && (
+                    <ScreensaverIntervalSlider
+                      label={t('admin:screensaver.tabInterval')}
+                      value={screensaverSettings.slideshowInterval}
+                      onChange={(value) => setScreensaverSettings(prev => ({ ...prev, slideshowInterval: value }))}
+                      min={5}
+                      max={120}
+                      marks={[
+                        { value: 5, label: '5s' },
+                        { value: 30, label: '30s' },
+                        { value: 60, label: '60s' },
+                        { value: 120, label: '2m' }
+                      ]}
+                    />
                   )}
 
                   <FormControlLabel
                     control={
                       <Switch
-                        checked={screensaverSettings.overlayWeather === true}
-                        onChange={(e) => setScreensaverSettings(prev => ({ ...prev, overlayWeather: e.target.checked }))}
+                        checked={screensaverSettings.keepScreenAwake}
+                        onChange={(e) => setScreensaverSettings(prev => ({ ...prev, keepScreenAwake: e.target.checked }))}
                       />
                     }
-                    label={t('admin:screensaver.overlayWeather')}
+                    label={t('admin:screensaver.keepScreenAwake')}
+                    sx={{ mb: 1 }}
                   />
-                  {screensaverSettings.overlayWeather === true && (
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 6 }}>
-                      {t('admin:screensaver.overlayWeatherHelp')}
-                    </Typography>
-                  )}
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                    {t('admin:screensaver.keepScreenAwakeHelp')}
+                  </Typography>
+
+                  <Button
+                    variant="contained"
+                    onClick={saveScreensaverSettings}
+                    startIcon={<Save />}
+                    fullWidth
+                    sx={{ mt: 2 }}
+                  >
+                    {t('admin:screensaver.save')}
+                  </Button>
                 </Box>
-              )}
-
-              {screensaverSettings.mode === 'tabs' && (
-                <ScreensaverIntervalSlider
-                  label={t('admin:screensaver.tabInterval')}
-                  value={screensaverSettings.slideshowInterval}
-                  onChange={(value) => setScreensaverSettings(prev => ({ ...prev, slideshowInterval: value }))}
-                  min={5}
-                  max={120}
-                  marks={[
-                    { value: 5, label: '5s' },
-                    { value: 30, label: '30s' },
-                    { value: 60, label: '60s' },
-                    { value: 120, label: '2m' }
-                  ]}
-                />
-              )}
-
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={screensaverSettings.keepScreenAwake}
-                    onChange={(e) => setScreensaverSettings(prev => ({ ...prev, keepScreenAwake: e.target.checked }))}
-                  />
-                }
-                label={t('admin:screensaver.keepScreenAwake')}
-                sx={{ mb: 1 }}
-              />
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                {t('admin:screensaver.keepScreenAwakeHelp')}
-              </Typography>
-
-              <Button
-                variant="contained"
-                onClick={saveScreensaverSettings}
-                startIcon={<Save />}
-                fullWidth
-                sx={{ mt: 2 }}
-              >
-                {t('admin:screensaver.save')}
-              </Button>
-
-              <Divider sx={{ my: 4 }} />
-
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                <BeachAccess />
-                <Typography variant="h6">{t('admin:vacation.heading')}</Typography>
-              </Box>
-
-              <Alert severity="info" sx={{ mb: 2 }}>
-                {t('admin:vacation.help')}
-                fun vacation animation. Settings apply to this display and persist until you turn
-                vacation mode off.
-              </Alert>
-
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={vacationModeSettings.enabled}
-                    onChange={(e) => setVacationModeSettings(prev => ({ ...prev, enabled: e.target.checked }))}
-                  />
-                }
-                label={t('admin:vacation.enable')}
-                sx={{ mb: 1, display: 'block' }}
-              />
-
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={vacationModeSettings.muteSounds}
-                    disabled={!vacationModeSettings.enabled}
-                    onChange={(e) => setVacationModeSettings(prev => ({ ...prev, muteSounds: e.target.checked }))}
-                  />
-                }
-                label={t('admin:vacation.muteSounds')}
-                sx={{ mb: 1, display: 'block' }}
-              />
-
-              {vacationModeSettings.enabled && (
-                <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
-                  <TextField
-                    size="small"
-                    type="date"
-                    label={t('admin:vacation.startDate')}
-                    value={vacationModeSettings.startDate || ''}
-                    onChange={(e) => setVacationModeSettings(prev => ({ ...prev, startDate: e.target.value }))}
-                    slotProps={{ inputLabel: { shrink: true } }}
-                    sx={{ flex: 1 }}
-                  />
-                  <TextField
-                    size="small"
-                    type="date"
-                    label={t('admin:vacation.endDate')}
-                    value={vacationModeSettings.endDate || ''}
-                    onChange={(e) => setVacationModeSettings(prev => ({ ...prev, endDate: e.target.value }))}
-                    slotProps={{ inputLabel: { shrink: true } }}
-                    sx={{ flex: 1 }}
-                  />
-                </Box>
-              )}
-              {vacationModeSettings.enabled && (
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                  {t('admin:vacation.dateHelp')}
-                  for those days, and streaks bridge across them permanently. Without dates, vacation
-                  stays on until you turn it off.
-                </Typography>
-              )}
-
-              <Button
-                variant="contained"
-                onClick={saveVacationModeSettings}
-                startIcon={<Save />}
-                fullWidth
-                sx={{ mt: 2 }}
-              >
-                {t('admin:vacation.save')}
-              </Button>
-            </Box>
+              </>
+            )}
           </CardContent>
         </Card>
       )}
 
-      {/* Users Tab */}
-      {activeTab === 2 && (
+      {/* Family: users, chores, prizes and vacation */}
+      {location.section === 'users' && (
         <Card>
           <CardContent>
             <AdminFormSection title={t('admin:users.management')} subtitle={t('admin:users.addNew')}>
@@ -3494,20 +3399,13 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
         </Card>
       )}
 
-      {/* Chores Tab */}
-      {activeTab === 3 && (
+      {location.section === 'chores' && (
         <Card>
           <CardContent>
-            {saveMessage.show && (
-              <Alert severity={saveMessage.type} sx={{ mb: 2 }}>
-                {saveMessage.text}
-              </Alert>
-            )}
-
             <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
               <Tabs
-                value={choresSubTab}
-                onChange={(_, v) => handleChoresSubTabChange(v)}
+                value={Math.max(0, choresSubsections.indexOf(location.subsection))}
+                onChange={(_, v) => navigate({ tab: 'family', section: 'chores', subsection: choresSubsections[v] })}
                 size="small"
                 variant="scrollable"
                 scrollButtons="auto"
@@ -3518,13 +3416,13 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                 <Tab label={t('admin:chores.settings')} />
               </Tabs>
             </Box>
-            {choresSubTab === 0 && (
-              <ChoreSchedulesTab saveMessage={saveMessage} setSaveMessage={setSaveMessage} />
+            {location.subsection === 'definitions' && (
+              <ChoreSchedulesTab setSaveMessage={setSaveMessage} />
             )}
-            {choresSubTab === 1 && (
+            {location.subsection === 'history' && (
               <ChoreHistoryTab />
             )}
-            {choresSubTab === 2 && (
+            {location.subsection === 'settings' && (
               <>
             <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)' }}>
               <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600 }}>
@@ -3626,8 +3524,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
         </Card>
       )}
 
-      {/* Prizes Tab */}
-      {activeTab === 4 && (
+      {location.section === 'prizes' && (
         <Card>
           <CardContent>
             <AdminFormSection title={t('admin:prizes.management')} subtitle={t('admin:prizes.addNew')}>
@@ -3784,17 +3681,89 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
         </Card>
       )}
 
-      {/* Security Tab */}
-      {activeTab === 5 && (
+      {location.section === 'vacation' && (
+        <Card>
+          <CardContent>
+            <Box sx={{ maxWidth: 600, mx: 'auto' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                <BeachAccess />
+                <Typography variant="h6">{t('admin:vacation.heading')}</Typography>
+              </Box>
+
+              <Alert severity="info" sx={{ mb: 2 }}>
+                {t('admin:vacation.help')}
+              </Alert>
+
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={vacationModeSettings.enabled}
+                    onChange={(e) => setVacationModeSettings(prev => ({ ...prev, enabled: e.target.checked }))}
+                  />
+                }
+                label={t('admin:vacation.enable')}
+                sx={{ mb: 1, display: 'block' }}
+              />
+
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={vacationModeSettings.muteSounds}
+                    disabled={!vacationModeSettings.enabled}
+                    onChange={(e) => setVacationModeSettings(prev => ({ ...prev, muteSounds: e.target.checked }))}
+                  />
+                }
+                label={t('admin:vacation.muteSounds')}
+                sx={{ mb: 1, display: 'block' }}
+              />
+
+              {vacationModeSettings.enabled && (
+                <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
+                  <TextField
+                    size="small"
+                    type="date"
+                    label={t('admin:vacation.startDate')}
+                    value={vacationModeSettings.startDate || ''}
+                    onChange={(e) => setVacationModeSettings(prev => ({ ...prev, startDate: e.target.value }))}
+                    slotProps={{ inputLabel: { shrink: true } }}
+                    sx={{ flex: 1 }}
+                  />
+                  <TextField
+                    size="small"
+                    type="date"
+                    label={t('admin:vacation.endDate')}
+                    value={vacationModeSettings.endDate || ''}
+                    onChange={(e) => setVacationModeSettings(prev => ({ ...prev, endDate: e.target.value }))}
+                    slotProps={{ inputLabel: { shrink: true } }}
+                    sx={{ flex: 1 }}
+                  />
+                </Box>
+              )}
+              {vacationModeSettings.enabled && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                  {t('admin:vacation.dateHelp')}
+                </Typography>
+              )}
+
+              <Button
+                variant="contained"
+                onClick={saveVacationModeSettings}
+                startIcon={<Save />}
+                fullWidth
+                sx={{ mt: 2 }}
+              >
+                {t('admin:vacation.save')}
+              </Button>
+            </Box>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Security */}
+      {location.tab === 'security' && (
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>{t('admin:security.heading')}</Typography>
-
-            {saveMessage.show && (
-              <Alert severity={saveMessage.type} sx={{ mb: 2 }}>
-                {saveMessage.text}
-              </Alert>
-            )}
 
             <Alert severity="info" sx={{ mb: 3 }}>
               {t('admin:security.help')}
@@ -3908,17 +3877,56 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
         </Card>
       )}
 
-      {/* Connections Tab */}
-      {activeTab === 6 && (
+      {/* System: language and time, connections, about */}
+      {location.section === 'region' && (
+        <Card>
+          <CardContent>
+            {/* Language (issue #137), per display like the other interface
+                settings. Week start deliberately lives in the calendar
+                widget's own settings, which has had per-tab week/month start
+                controls since #127 — a second global control would fight it. */}
+            <AdminFormSection
+              title={t('admin:interface.languageSection')}
+              subtitle={t('admin:interface.languageSubtitle')}
+            >
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <FormControl fullWidth>
+                    <InputLabel>{t('common:language.label')}</InputLabel>
+                    <Select
+                      value={i18n.language?.split('-')[0] || 'en'}
+                      label={t('common:language.label')}
+                      onChange={(e) => handleLanguageChange(e.target.value)}
+                    >
+                      {SUPPORTED_LANGUAGES.map((lang) => (
+                        <MenuItem key={lang.code} value={lang.code}>
+                          {lang.endonym}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                      {t('common:language.helper')}
+                    </Typography>
+                  </FormControl>
+                </Grid>
+              </Grid>
+            </AdminFormSection>
+
+            {/* Household-wide, unlike the rest of this tab (issue #193). */}
+            <AdminFormSection
+              title={t('admin:timezone.heading')}
+              subtitle={t('admin:timezone.subtitle')}
+            >
+              <TimezoneSettings />
+            </AdminFormSection>
+          </CardContent>
+        </Card>
+      )}
+
+      {location.section === 'connections' && (
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>{t('admin:connections.heading')}</Typography>
-
-            {saveMessage.show && (
-              <Alert severity={saveMessage.type} sx={{ mb: 2 }}>
-                {saveMessage.text}
-              </Alert>
-            )}
 
             <Box sx={{ maxWidth: 700 }}>
               <Typography variant="subtitle1" sx={{ mt: 1, mb: 1.5, fontWeight: 600 }}>
@@ -4111,8 +4119,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
         </Card>
       )}
 
-      {/* About Tab */}
-      {activeTab === 7 && (
+      {location.section === 'about' && (
         <Card>
           <CardContent>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -4427,6 +4434,16 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
         mode={pinModal.mode}
         title={pinModal.title}
         allowRemember
+      />
+
+      {/* Confirms switching vacation on (issue #230). Never "remember": this
+          prompt exists for displays that already remember the PIN. */}
+      <PinModal
+        open={vacationPinOpen}
+        onClose={() => setVacationPinOpen(false)}
+        onVerify={handleVacationPinVerify}
+        mode="verify"
+        title={t('admin:vacation.pinTitle')}
       />
 
       {/* Enlarged plugin preview (issue #162). The list thumbnails are cropped

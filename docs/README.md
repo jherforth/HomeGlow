@@ -25,6 +25,7 @@ stays relevant.
 - [Frontend Reference](reference/frontend.md) — React component map, state, and data flow.
 - [Mobile Experience (Phase 2)](architecture/mobile-experience.md) — the phone-native view (vertical stack, week calendar, no grid) that leaves the kiosk untouched.
 - [Plugin Platform (Issue #105)](architecture/plugin-platform.md) — proposed design for advanced plugins: manifest, versioned API, events, storage, and settings.
+- [Theme Architecture (proposed)](architecture/theme-architecture.md) — how theming works today, and a proposed redesign: one self-contained folder per theme and animated backgrounds described as data.
 - [Chores Refactor History](architecture/chores-refactor-history.md) — the (implemented) original design spec for the three-table chore system.
 
 ### Feature deep-dives

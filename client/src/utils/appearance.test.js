@@ -55,7 +55,21 @@ describe('resolveAppearance', () => {
     const resolved = resolveAppearance({ mode: 'dark', colors: BERRY }, { mode: 'light' });
     expect(resolved.mode).toBe('light');
     expect(resolved.colors).toEqual(BERRY);
-    expect(resolved.source).toEqual({ theme: 'household', mode: 'device', colors: 'household', autoDark: 'household' });
+    expect(resolved.source).toEqual({
+      theme: 'household', mode: 'device', colors: 'household', autoDark: 'household',
+      accent: 'household', background: 'household', cardOpacity: 'household',
+    });
+  });
+
+  it('rejects personalization values it cannot trust', () => {
+    const resolved = resolveAppearance({
+      accent: 'red; background: url(x)',
+      background: { kind: 'image', file: '../../etc/passwd' },
+      cardOpacity: 'lots',
+    }, {});
+    expect(resolved.accent).toBe('theme');
+    expect(resolved.background).toEqual({ kind: 'none' });
+    expect(resolved.cardOpacity).toBe(1);
   });
 
   it('lets a display pick its own theme, and ignores unknown themes', () => {
@@ -174,6 +188,13 @@ describe('dockToggleAction', () => {
     expect(action).toEqual({ type: 'clearDeviceMode' });
   });
 
+  it('makes auto usable with a saved location, whatever the old enabled flag says', () => {
+    const action = dockToggleAction({
+      household: { mode: 'auto', autoDark: { ...SF, enabled: false } }, device: {}, displayedTheme: 'light', temp: null, sun, nowMs: 2000 * 1000,
+    });
+    expect(action.type).toBe('temp');
+  });
+
   it('treats auto without a location as a fixed mode', () => {
     const action = dockToggleAction({ household: { mode: 'auto' }, device: {}, displayedTheme: 'light', sun, nowMs: 0 });
     expect(action).toEqual({ type: 'deviceMode', mode: 'dark' });
@@ -192,7 +213,7 @@ describe('appearance cache', () => {
   it('round-trips the resolved appearance', () => {
     const store = memoryStorage();
     writeAppearanceCache(store, { mode: 'dark', colors: BERRY, autoDark: SF, source: {} });
-    expect(readAppearanceCache(store)).toEqual({ theme: 'classic', mode: 'dark', colors: BERRY, autoDark: SF });
+    expect(readAppearanceCache(store)).toEqual({ ...DEFAULT_APPEARANCE, mode: 'dark', colors: BERRY, autoDark: SF });
   });
 
   it('falls back to the legacy values before the upload, then the defaults', () => {

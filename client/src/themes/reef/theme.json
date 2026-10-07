@@ -1,0 +1,493 @@
+{
+  "manifestVersion": 1,
+  "id": "reef",
+  "version": "1.0.0",
+  "author": "HomeGlow",
+  "name": "Reef",
+  "description": "A dive: sunlit shallows in light mode, a night dive in dark. Water gradients, coral and bioluminescent accents, bubble-soft frames.",
+  "extends": "classic",
+  "modes": [
+    "light",
+    "dark"
+  ],
+  "colors": {
+    "primary": "#c8f4ff",
+    "secondary": "#00a6c8",
+    "accent": "#ff7f50"
+  },
+  "fonts": [
+    {
+      "family": "Nunito",
+      "weight": 400,
+      "src": "fonts/nunito-400.woff2"
+    },
+    {
+      "family": "Nunito",
+      "weight": 600,
+      "src": "fonts/nunito-600.woff2"
+    },
+    {
+      "family": "Nunito",
+      "weight": 700,
+      "src": "fonts/nunito-700.woff2"
+    }
+  ],
+  "tokens": {
+    "all": {
+      "--hg-font-body": "'Nunito', 'Segoe UI', sans-serif",
+      "--hg-font-heading": "'Nunito', 'Segoe UI', sans-serif",
+      "--hg-radius-sm": "10px",
+      "--hg-radius-md": "16px",
+      "--hg-radius-lg": "22px",
+      "--hg-frame-radius": "24px",
+      "--hg-frame-decoration-width": "2px",
+      "--hg-frame-decoration-style": "solid",
+      "--success": "#2bb673",
+      "--warning": "#f4a261",
+      "--hg-error": "#e0453a",
+      "--hg-error-hover": "#c7362c",
+      "--hg-error-surface": "rgba(224, 69, 58, 0.14)",
+      "--dock-active-image": "linear-gradient(135deg, rgba(0, 0, 0, 0) 0 38%, #ffffff 38% 62%, rgba(0, 0, 0, 0) 62%)",
+      "--hg-frame-overlay": "linear-gradient(115deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.06) 28%, rgba(255, 255, 255, 0) 42%, rgba(255, 255, 255, 0) 72%, rgba(255, 255, 255, 0.07) 84%, rgba(255, 255, 255, 0) 92%)"
+    },
+    "light": {
+      "--primary": "#c8f4ff",
+      "--secondary": "#00a6c8",
+      "--accent": "#ff7f50",
+      "--accent-rgb": "255, 127, 80",
+      "--background": "#0a5f8c",
+      "--hg-page-image": "linear-gradient(180deg, #c8f4ff 0%, #5fd0e8 35%, #1a8fbf 70%, #0a5f8c 100%)",
+      "--surface": "#f2fbfd",
+      "--card-bg": "rgba(225, 248, 255, 0.55)",
+      "--hg-frame-bg": "rgba(225, 248, 255, 0.55)",
+      "--text": "#06324a",
+      "--text-secondary": "#2f6d84",
+      "--border": "#b8dde8",
+      "--card-border": "#b8dde8",
+      "--hg-hover": "rgba(0, 166, 200, 0.12)",
+      "--hg-frame-decoration-color": "rgba(255, 255, 255, 0.95) rgba(255, 255, 255, 0.45) rgba(0, 50, 80, 0.35) rgba(255, 255, 255, 0.75)",
+      "--hg-frame-shadow": "inset 0 2px 1px rgba(255, 255, 255, 0.8), inset 0 -4px 8px rgba(0, 50, 80, 0.22), inset 0 0 36px rgba(0, 70, 110, 0.22), 0 14px 32px rgba(2, 40, 70, 0.4)",
+      "--hg-frame-shadow-hover": "inset 0 2px 1px rgba(255, 255, 255, 0.9), inset 0 -4px 8px rgba(0, 50, 80, 0.22), inset 0 0 36px rgba(0, 70, 110, 0.22), 0 18px 40px rgba(2, 40, 70, 0.5)",
+      "--shadow": "0 6px 24px rgba(4, 60, 90, 0.25)",
+      "--bottom-bar-bg": "rgba(240, 252, 255, 0.78)",
+      "--dock-bg": "rgba(240, 252, 255, 0.78)",
+      "--dock-border": "rgba(255, 255, 255, 0.9)",
+      "--dock-separator": "rgba(10, 95, 140, 0.25)",
+      "--dock-icon": "#0a5f8c",
+      "--dock-active-bg": "#d7263d",
+      "--dock-active-border": "#ffb199",
+      "--dock-active-icon": "#06324a",
+      "--hg-frame-image": "linear-gradient(180deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.08) 35%, rgba(0, 70, 110, 0.12) 100%)"
+    },
+    "dark": {
+      "--primary": "#c8f4ff",
+      "--secondary": "#ff7f50",
+      "--accent": "#3ee6ff",
+      "--accent-rgb": "62, 230, 255",
+      "--background": "#010812",
+      "--hg-page-image": "linear-gradient(180deg, #0b4a6e 0%, #052a45 35%, #021628 70%, #010812 100%)",
+      "--surface": "#04182b",
+      "--card-bg": "rgba(4, 28, 48, 0.6)",
+      "--hg-frame-bg": "rgba(4, 28, 48, 0.6)",
+      "--text": "#d8f6ff",
+      "--text-secondary": "#7fc8dc",
+      "--border": "#1d4f6b",
+      "--card-border": "#1d4f6b",
+      "--hg-hover": "rgba(62, 230, 255, 0.12)",
+      "--hg-frame-decoration-color": "rgba(160, 240, 255, 0.55) rgba(62, 230, 255, 0.25) rgba(0, 0, 0, 0.5) rgba(120, 220, 255, 0.4)",
+      "--hg-frame-shadow": "inset 0 2px 1px rgba(160, 240, 255, 0.35), inset 0 -4px 8px rgba(0, 0, 0, 0.4), inset 0 0 40px rgba(0, 0, 0, 0.45), 0 14px 36px rgba(0, 0, 0, 0.55)",
+      "--hg-frame-shadow-hover": "inset 0 2px 1px rgba(160, 240, 255, 0.45), inset 0 -4px 8px rgba(0, 0, 0, 0.4), inset 0 0 40px rgba(0, 0, 0, 0.45), 0 0 32px rgba(62, 230, 255, 0.3)",
+      "--shadow": "0 0 24px rgba(62, 230, 255, 0.12)",
+      "--bottom-bar-bg": "rgba(2, 22, 40, 0.8)",
+      "--dock-bg": "rgba(2, 22, 40, 0.8)",
+      "--dock-border": "rgba(62, 230, 255, 0.35)",
+      "--dock-separator": "rgba(62, 230, 255, 0.25)",
+      "--dock-icon": "#9fe6f5",
+      "--dock-active-bg": "#d7263d",
+      "--dock-active-border": "#b6f6ff",
+      "--dock-active-icon": "#021628",
+      "--hg-frame-image": "linear-gradient(180deg, rgba(120, 220, 255, 0.12) 0%, rgba(120, 220, 255, 0.02) 35%, rgba(0, 0, 0, 0.25) 100%)"
+    }
+  },
+  "mui": {
+    "fontFamily": "'Nunito', 'Segoe UI', sans-serif",
+    "radius": 14,
+    "pillButtons": true
+  },
+  "muiModes": {
+    "light": {
+      "primary": "#ff7f50",
+      "secondary": "#00a6c8",
+      "error": "#e0453a",
+      "background": "#e9f9fd",
+      "paper": "#f7fdff",
+      "text": "#06324a",
+      "textSecondary": "#2f6d84",
+      "divider": "#b8dde8"
+    },
+    "dark": {
+      "primary": "#3ee6ff",
+      "secondary": "#ff7f50",
+      "error": "#e0453a",
+      "background": "#021628",
+      "paper": "#06223a",
+      "text": "#d8f6ff",
+      "textSecondary": "#7fc8dc",
+      "divider": "#1d4f6b"
+    }
+  },
+  "ambience": [
+    {
+      "layer": "field",
+      "modes": [
+        "light"
+      ],
+      "strength": "soft"
+    },
+    {
+      "layer": "particles",
+      "src": "assets/bubble.svg",
+      "motion": "rise",
+      "count": [
+        10,
+        18
+      ],
+      "size": [
+        6,
+        22
+      ],
+      "seconds": [
+        16,
+        34
+      ],
+      "drift": [
+        0,
+        40
+      ]
+    },
+    {
+      "layer": "image",
+      "src": {
+        "light": "assets/floor-day.svg",
+        "dark": "assets/floor-night.svg"
+      },
+      "anchor": "bottom",
+      "height": "42vh",
+      "opacity": 0.95
+    },
+    {
+      "layer": "sprites",
+      "motion": "none",
+      "count": [
+        7,
+        11
+      ],
+      "span": [
+        0,
+        100
+      ],
+      "base": "1vh",
+      "flip": true,
+      "opacity": 0.95,
+      "pictures": [
+        {
+          "src": {
+            "light": "assets/rock-day.svg",
+            "dark": "assets/rock-night.svg"
+          },
+          "aspect": 2.1,
+          "height": [
+            8,
+            12
+          ],
+          "weight": 1.5
+        },
+        {
+          "src": {
+            "light": "assets/table-day.svg",
+            "dark": "assets/table-night.svg"
+          },
+          "aspect": 1.62,
+          "height": [
+            11,
+            16
+          ]
+        },
+        {
+          "src": {
+            "light": "assets/brain-day.svg",
+            "dark": "assets/brain-night.svg"
+          },
+          "aspect": 1.93,
+          "height": [
+            6,
+            10
+          ],
+          "weight": 1.5
+        },
+        {
+          "src": {
+            "light": "assets/staghorn-day.svg",
+            "dark": "assets/staghorn-night.svg"
+          },
+          "aspect": 1.2,
+          "height": [
+            13,
+            20
+          ]
+        },
+        {
+          "src": {
+            "light": "assets/pillar-day.svg",
+            "dark": "assets/pillar-night.svg"
+          },
+          "aspect": 0.62,
+          "height": [
+            13,
+            20
+          ],
+          "weight": 0.8
+        },
+        {
+          "src": {
+            "light": "assets/sponges-day.svg",
+            "dark": "assets/sponges-night.svg"
+          },
+          "aspect": 0.75,
+          "height": [
+            8,
+            13
+          ]
+        },
+        {
+          "src": {
+            "light": "assets/tree-day.svg",
+            "dark": "assets/tree-night.svg"
+          },
+          "aspect": 0.72,
+          "height": [
+            9,
+            14
+          ]
+        },
+        {
+          "src": {
+            "light": "assets/mushroom-day.svg",
+            "dark": "assets/mushroom-night.svg"
+          },
+          "aspect": 2.4,
+          "height": [
+            2.5,
+            3.5
+          ]
+        }
+      ]
+    },
+    {
+      "layer": "sprites",
+      "src": "assets/kelp.svg",
+      "motion": "sway",
+      "count": [
+        6,
+        9
+      ],
+      "span": [
+        0,
+        100
+      ],
+      "height": [
+        18,
+        34
+      ],
+      "aspect": 0.2,
+      "angle": [
+        3,
+        5
+      ],
+      "seconds": [
+        6,
+        10
+      ],
+      "current": true,
+      "base": "4vh",
+      "opacity": 0.95,
+      "tint": {
+        "light": [
+          "#3f8f6b",
+          "#4d9e5a",
+          "#6a9a3f"
+        ],
+        "dark": [
+          "#06384a",
+          "#073f4f",
+          "#0a4552"
+        ]
+      }
+    },
+    {
+      "layer": "sprites",
+      "motion": "sway",
+      "count": [
+        3,
+        6
+      ],
+      "span": [
+        5,
+        95
+      ],
+      "angle": [
+        2,
+        5
+      ],
+      "seconds": [
+        5,
+        10
+      ],
+      "base": "3vh",
+      "opacity": 0.95,
+      "pictures": [
+        {
+          "src": "assets/fan.svg",
+          "aspect": 1,
+          "height": [
+            10,
+            16
+          ],
+          "tint": {
+            "light": [
+              "#e2556b"
+            ],
+            "dark": [
+              "#0b3c50"
+            ]
+          }
+        },
+        {
+          "src": "assets/whips.svg",
+          "aspect": 0.5,
+          "height": [
+            9,
+            14
+          ],
+          "tint": {
+            "light": [
+              "#ff7a3d"
+            ],
+            "dark": [
+              "#0c4155"
+            ]
+          }
+        },
+        {
+          "src": {
+            "light": "assets/anemone-day.svg",
+            "dark": "assets/anemone-night.svg"
+          },
+          "aspect": 1,
+          "height": [
+            4,
+            7
+          ]
+        }
+      ]
+    }
+  ],
+  "variety": "load",
+  "confetti": {
+    "colors": {
+      "light": [
+        "#ff7f6e",
+        "#ffb347",
+        "#ffe066",
+        "#4fd1c5",
+        "#2bb3c0",
+        "#ff8fab"
+      ],
+      "dark": [
+        "#4fe3d6",
+        "#7cf5c6",
+        "#b48cff",
+        "#5fb8ff",
+        "#ff8fab"
+      ]
+    },
+    "shapes": [
+      "circle",
+      "square"
+    ],
+    "pictures": [
+      {
+        "src": "assets/fish.svg",
+        "aspect": 1.67,
+        "height": [
+          12,
+          18
+        ],
+        "tint": {
+          "light": [
+            "#ff7f2a",
+            "#ffd23f",
+            "#3fb8ff",
+            "#ff5d8f"
+          ],
+          "dark": [
+            "#4fe3d6",
+            "#7cf5c6",
+            "#b48cff",
+            "#5fb8ff"
+          ]
+        },
+        "weight": 4
+      },
+      {
+        "src": "assets/starfish.svg",
+        "aspect": 1,
+        "height": [
+          14,
+          20
+        ],
+        "tint": {
+          "light": [
+            "#ff7f6e",
+            "#ffb347",
+            "#e85d75"
+          ],
+          "dark": [
+            "#ff8fab",
+            "#b48cff"
+          ]
+        },
+        "weight": 2
+      },
+      {
+        "src": "assets/shell.svg",
+        "aspect": 1.53,
+        "height": [
+          12,
+          18
+        ],
+        "tint": {
+          "light": [
+            "#ffe3c8",
+            "#ffc2a8"
+          ],
+          "dark": [
+            "#cfd8ff",
+            "#a8f0e0"
+          ]
+        },
+        "weight": 1.5
+      },
+      {
+        "src": "assets/bubble.svg",
+        "aspect": 1,
+        "height": [
+          8,
+          16
+        ],
+        "weight": 2
+      }
+    ],
+    "mix": 0.6
+  }
+}

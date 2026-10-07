@@ -3,7 +3,9 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   BUILT_IN_THEMES,
+  THEME_ASSETS,
   THEME_TOKENS,
+  discoverThemes,
   applyThemeTokens,
   muiThemeOptions,
   resolveTheme,
@@ -20,8 +22,20 @@ const base = { manifestVersion: 1, id: 'probe', name: 'Probe' };
 const pkg = (tokens) => ({ ...base, tokens: { all: tokens } });
 
 describe('built-in themes', () => {
-  it('are valid packages', () => {
-    BUILT_IN_THEMES.forEach((theme) => expect(validateThemePackage(theme), theme.id).toEqual([]));
+  it('are valid packages, against the files in their own folders', () => {
+    BUILT_IN_THEMES.forEach((theme) => {
+      expect(validateThemePackage(theme, { assets: Object.keys(THEME_ASSETS[theme.id] || {}) }), theme.id).toEqual([]);
+    });
+  });
+
+  it('are discovered from their folders, Classic first and then by name', () => {
+    expect(BUILT_IN_THEMES.map((theme) => theme.id)).toEqual(['classic', 'reef', 'starship']);
+  });
+
+  it('carry their fonts from their own folders', () => {
+    const starship = resolveTheme('starship');
+    expect(starship.fonts.map((font) => font.weight)).toEqual([400, 600, 700]);
+    starship.fonts.forEach((font) => expect(font.url).toMatch(/antonio-\d00.*\.woff2/));
   });
 
   it('only use tokens the stylesheets define', () => {
@@ -63,7 +77,6 @@ describe('validateThemePackage', () => {
   it('checks the package shape', () => {
     expect(validateThemePackage({ manifestVersion: 1, id: 'Bad Id', name: '' })).toHaveLength(2);
     expect(validateThemePackage({ ...base, modes: ['sepia'] })).toHaveLength(1);
-    expect(validateThemePackage({ ...base, fonts: ['comic-sans'] })).toHaveLength(1);
     expect(validateThemePackage({ ...base, mui: { radius: 500, wobble: true } })).toHaveLength(2);
   });
 
@@ -74,10 +87,36 @@ describe('validateThemePackage', () => {
     expect(validateThemePackage({ ...base, author: { name: 'Jane' } })).toHaveLength(1);
   });
 
-  it('accepts only built-in ambience effects with known options', () => {
-    expect(validateThemePackage({ ...base, ambience: [{ effect: 'bubbles', modes: ['dark'], options: { density: 'low' } }] })).toEqual([]);
-    expect(validateThemePackage({ ...base, ambience: [{ effect: 'fireworks' }] })).toHaveLength(1);
-    expect(validateThemePackage({ ...base, ambience: [{ effect: 'bubbles', options: { density: 'blizzard' } }] })).toHaveLength(1);
+});
+
+describe('discoverThemes', () => {
+  it('picks up a new folder without any other file changing', () => {
+    const found = discoverThemes(
+      {
+        '../themes/classic/theme.json': { id: 'classic', name: 'Classic' },
+        '../themes/aurora/theme.json': { id: 'aurora', name: 'Aurora' },
+        '../themes/zz/theme.json': { id: 'imposter', name: 'Imposter' },
+      },
+      { '../themes/aurora/fonts/a-400.woff2': '/assets/a-400-hash.woff2' },
+    );
+    expect(found.themes.map((theme) => theme.id)).toEqual(['classic', 'aurora']);
+    expect(found.assets.aurora).toEqual({ 'fonts/a-400.woff2': '/assets/a-400-hash.woff2' });
+  });
+});
+
+describe('font entries', () => {
+  const withFont = (font) => ({ ...base, fonts: [font] });
+  const ok = { family: 'Aurora Sans', weight: 400, src: 'fonts/aurora-400.woff2' };
+  it('accept a woff2 file in the theme folder', () => {
+    expect(validateThemePackage(withFont(ok), { assets: ['fonts/aurora-400.woff2'] })).toEqual([]);
+  });
+  it('reject missing files, other folders, bad weights and odd names', () => {
+    expect(validateThemePackage(withFont(ok), { assets: [] })).toHaveLength(1);
+    expect(validateThemePackage(withFont({ ...ok, src: '../reef/fonts/nunito-400.woff2' }), { assets: [] })).toHaveLength(1);
+    expect(validateThemePackage(withFont({ ...ok, src: 'fonts/a.ttf' }))).toHaveLength(1);
+    expect(validateThemePackage(withFont({ ...ok, weight: 1000 }), { assets: ['fonts/aurora-400.woff2'] })).toHaveLength(1);
+    expect(validateThemePackage(withFont({ ...ok, family: "x'; } body {" }), { assets: ['fonts/aurora-400.woff2'] })).toHaveLength(1);
+    expect(validateThemePackage({ ...base, fonts: ['antonio'] })).toHaveLength(1);
   });
 });
 

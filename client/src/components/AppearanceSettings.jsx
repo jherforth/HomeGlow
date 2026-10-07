@@ -18,6 +18,7 @@ import {
 import { Save } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import ColorPickerPopover from './ColorPickerPopover';
+import PersonalizeFields from './PersonalizeFields';
 import AdminFormSection from './AdminFormSection';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase, getDeviceName } from '../utils/deviceName.js';
@@ -33,14 +34,15 @@ import {
 import { BUILT_IN_THEMES, resolveTheme } from '../utils/themes.js';
 
 const INTERFACE_SETTINGS_UPDATED_EVENT = 'homeglow:interface-settings-updated';
-const COLOR_KEYS = ['primary', 'secondary', 'accent'];
+// The accent is set once, under Personalize, for every theme.
+const COLOR_KEYS = ['primary', 'secondary'];
 
 const pickFields = (appearance) => Object.fromEntries(APPEARANCE_FIELDS.map((field) => [field, appearance[field]]));
 
 // Appearance for the household and for this display. The household sets the
-// default; this display can override mode, colors and the auto-dark location,
-// each on its own. "Use household" removes an override rather than copying the
-// household's value, so the display keeps following later household changes.
+// default; this display can override any field on its own. "Use household"
+// removes an override rather than copying the household's value, so the
+// display keeps following later household changes.
 const AppearanceSettings = () => {
   const { t } = useTranslation(['admin']);
   const apiDeviceUrl = getDeviceApiBase(API_BASE_URL);
@@ -48,7 +50,7 @@ const AppearanceSettings = () => {
   const [device, setDevice] = useState({});
   const [scope, setScope] = useState('device');
   const [draft, setDraft] = useState(null);
-  const [inherit, setInherit] = useState({ theme: true, mode: true, colors: true, autoDark: true });
+  const [inherit, setInherit] = useState(() => Object.fromEntries(APPEARANCE_FIELDS.map((field) => [field, true])));
   const [pickerAnchor, setPickerAnchor] = useState({ key: null, el: null });
   const [message, setMessage] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -104,18 +106,20 @@ const AppearanceSettings = () => {
 
   const updateDraft = (field, value) => setDraft((prev) => ({ ...prev, [field]: value }));
 
+  // The location only matters in Auto mode, so it is only looked up then.
   // Geocoding runs on the server, which holds the provider credentials.
-  const resolveLocation = async (autoDark) => {
-    if (!autoDark.enabled) return autoDark;
+  // `enabled` is still written for older builds, which read it.
+  const resolveLocation = async (autoDark, mode) => {
+    if (mode !== 'auto') return autoDark;
     const query = autoDark.locationQuery.trim();
     if (!query) throw new Error(t('admin:messages.autoDarkNeedsLocation'));
     const stored = scope === 'household' ? household.autoDark : resolveAppearance(household, device).autoDark;
-    if (query === stored.locationQuery && typeof stored.lat === 'number') return { ...autoDark, locationQuery: query };
+    if (query === stored.locationQuery && typeof stored.lat === 'number') return { ...autoDark, enabled: true, locationQuery: query };
     const { data } = await axios.get(`${API_BASE_URL}/api/weather/geocode`, { params: { q: query } });
     if (typeof data?.lat !== 'number' || typeof data?.lon !== 'number') {
       throw new Error(t('admin:appearance.locationNotFound'));
     }
-    return { ...autoDark, locationQuery: query, lat: data.lat, lon: data.lon, resolvedName: data.resolvedName || query };
+    return { ...autoDark, enabled: true, locationQuery: query, lat: data.lat, lon: data.lon, resolvedName: data.resolvedName || query };
   };
 
   const saveHousehold = (appearance) => axios.post(`${API_BASE_URL}/api/settings`, {
@@ -142,7 +146,7 @@ const AppearanceSettings = () => {
       let locationProblem = null;
       if (fields.includes('autoDark')) {
         try {
-          next.autoDark = await resolveLocation(draft.autoDark);
+          next.autoDark = await resolveLocation(draft.autoDark, draft.mode);
         } catch (error) {
           locationProblem = reasonFor(error);
           if (scope === 'household') next.autoDark = household.autoDark;
@@ -257,6 +261,7 @@ const AppearanceSettings = () => {
         <ToggleButton value="household">{t('admin:appearance.scopeHousehold')}</ToggleButton>
       </ToggleButtonGroup>
 
+
       {message && <Alert severity={message.type} onClose={() => setMessage(null)} sx={{ mb: 2 }}>{message.text}</Alert>}
 
       <Typography variant="subtitle2" sx={{ mt: 1 }}>{t('admin:appearance.theme')}</Typography>
@@ -282,7 +287,7 @@ const AppearanceSettings = () => {
 
       <Typography variant="subtitle2">{t('admin:appearance.mode')}</Typography>
       {inheritSwitch('mode')}
-      <FormControl fullWidth sx={{ mb: 1 }} disabled={locked('mode')}>
+      <FormControl fullWidth sx={{ mb: 3 }} disabled={locked('mode')}>
         <InputLabel>{t('admin:appearance.mode')}</InputLabel>
         <Select value={draft.mode} label={t('admin:appearance.mode')} onChange={(e) => updateDraft('mode', e.target.value)}>
           {MODES.map((mode) => (
@@ -290,9 +295,25 @@ const AppearanceSettings = () => {
           ))}
         </Select>
       </FormControl>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 3 }}>
-        {t('admin:appearance.modeHelp')}
-      </Typography>
+
+      {draft.mode === 'auto' && (
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="subtitle2">{t('admin:appearance.autoDark')}</Typography>
+          {inheritSwitch('autoDark')}
+          <TextField
+            fullWidth
+            required
+            disabled={locked('autoDark')}
+            label={t('admin:autoDark.location')}
+            value={draft.autoDark.locationQuery}
+            onChange={(e) => updateDraft('autoDark', { ...draft.autoDark, locationQuery: e.target.value })}
+            helperText={draft.autoDark.resolvedName
+              ? t('admin:appearance.resolvedLocation', { name: draft.autoDark.resolvedName })
+              : t('admin:autoDark.locationHelp')}
+          />
+        </Box>
+      )}
+
 
       <Typography variant="subtitle2">{t('admin:appearance.colors')}</Typography>
       {inheritSwitch('colors')}
@@ -301,29 +322,13 @@ const AppearanceSettings = () => {
       )}
       <Box sx={{ maxWidth: 600, mb: 2 }}>{COLOR_KEYS.map(colorPicker)}</Box>
 
-      <Typography variant="subtitle2">{t('admin:appearance.autoDark')}</Typography>
-      {inheritSwitch('autoDark')}
-      <FormControlLabel
-        control={(
-          <Switch
-            checked={draft.autoDark.enabled}
-            disabled={locked('autoDark')}
-            onChange={(e) => updateDraft('autoDark', { ...draft.autoDark, enabled: e.target.checked })}
-          />
-        )}
-        label={t('admin:autoDark.enable')}
-        sx={{ mb: 1, display: 'block' }}
-      />
-      <TextField
-        fullWidth
-        disabled={locked('autoDark')}
-        label={t('admin:autoDark.location')}
-        value={draft.autoDark.locationQuery}
-        onChange={(e) => updateDraft('autoDark', { ...draft.autoDark, locationQuery: e.target.value })}
-        helperText={draft.autoDark.resolvedName
-          ? t('admin:appearance.resolvedLocation', { name: draft.autoDark.resolvedName })
-          : t('admin:autoDark.locationHelp')}
-        sx={{ mb: 3 }}
+      <PersonalizeFields
+        draft={draft}
+        classicAccent={draft.colors?.accent}
+        updateDraft={updateDraft}
+        locked={locked}
+        inheritSwitch={inheritSwitch}
+        onError={(text) => flash('error', text)}
       />
 
       <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>

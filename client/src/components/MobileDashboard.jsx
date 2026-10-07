@@ -2,7 +2,7 @@ import React from 'react';
 import { Box } from '@mui/material';
 import { needsFixedMobileHeight } from '../utils/mobileWidgets.js';
 import { frameDecoration } from '../utils/widgetFrame.js';
-import { AmbienceLayer } from '../themes/ambience.jsx';
+import ThemeAmbience from '../themes/engine/ThemeAmbience.jsx';
 
 // Phone layout shell (issue #118): the active tab's widgets as one vertical,
 // scrollable column of full-width cards. Replaces WidgetContainer below 600px —
@@ -28,7 +28,7 @@ const MobileDashboard = ({ widgets }) => {
         boxSizing: 'border-box',
       }}
     >
-      <AmbienceLayer />
+      <ThemeAmbience />
       {widgets.map((widget) => (
         <Box
           key={widget.id}

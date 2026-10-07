@@ -94,7 +94,7 @@
     "screensaverFailed": "No se pudieron guardar los ajustes del salvapantallas. Inténtalo de nuevo.",
     "vacationSaved": "Ajustes del modo vacaciones guardados para esta pantalla.",
     "vacationFailed": "No se pudieron guardar los ajustes del modo vacaciones. Inténtalo de nuevo.",
-    "autoDarkNeedsLocation": "Introduce una ubicación antes de activar el modo oscuro automático.",
+    "autoDarkNeedsLocation": "El modo automático necesita una ubicación para calcular el amanecer y el atardecer.",
     "userDeleteFailed": "No se pudo eliminar a la persona. Inténtalo de nuevo.",
     "prizeAddToStoreFailed": "No se pudo añadir el premio a la tienda.",
     "prizeRemoveOfferFailed": "No se pudo quitar la oferta.",
@@ -246,16 +246,17 @@
   },
   "vacation": {
     "heading": "Modo vacaciones",
-    "help": "Durante las vacaciones se silencian los avisos de las tareas y el salvapantallas pasa a ser una animación divertida. Los ajustes se aplican a esta pantalla y se mantienen hasta que desactives el modo vacaciones.",
+    "help": "El modo vacaciones es para todo el hogar. Mientras está activo, todas las pantallas muestran una animación de vacaciones como salvapantallas y pueden silenciar los avisos de las tareas, y las tareas no realizadas no cuentan. Activarlo pide el PIN de administrador.",
     "enable": "Activar el modo vacaciones",
     "muteSounds": "Silenciar los sonidos de las tareas durante las vacaciones",
     "startDate": "Fecha de inicio (opcional)",
     "endDate": "Fecha de fin (opcional)",
     "dateHelp": "Con fechas, las vacaciones empiezan y terminan solas, el seguimiento de tareas no realizadas se pausa esos días y las rachas se mantienen. Sin fechas, el modo sigue activo hasta que lo desactives.",
-    "save": "Guardar los ajustes del modo vacaciones"
+    "save": "Guardar los ajustes del modo vacaciones",
+    "pinTitle": "Introduce el PIN de administrador para activar el modo vacaciones",
+    "pinWrong": "Ese PIN no es correcto. El modo vacaciones no se ha guardado."
   },
   "autoDark": {
-    "enable": "Activar el modo oscuro automático",
     "location": "Ubicación",
     "locationHelp": "Ejemplos: Dallas,TX,US, London,UK o un código postal como 76034"
   },
@@ -477,18 +478,16 @@
     "scopeDevice": "Esta pantalla",
     "scopeHousehold": "Hogar",
     "useHousehold": "Usar el del hogar",
-    "mode": "Modo",
+    "mode": "Claro / Oscuro / Automático",
     "modes": {
       "light": "Claro",
       "dark": "Oscuro",
       "auto": "Automático (amanecer y atardecer)"
     },
-    "modeHelp": "En Automático, el botón de modo de la barra cambia al otro tema hasta el próximo amanecer o atardecer. En Claro u Oscuro, cambia esta pantalla.",
     "colors": "Colores",
     "colorLabels": {
       "primary": "Color de fondo (modo claro)",
-      "secondary": "Color secundario",
-      "accent": "Color de acento"
+      "secondary": "Color secundario"
     },
     "autoDark": "Ubicación del modo automático",
     "resolvedLocation": "Usando {{name}}",
@@ -501,5 +500,61 @@
     "saveFailed": "No se pudo guardar la apariencia.",
     "loadFailed": "No se pudo cargar la apariencia.",
     "savedButLocation": "Guardado, salvo la ubicación del modo automático, que no cambia: {{reason}}"
-  }
+  },
+  "personalize": {
+    "heading": "Personalizar",
+    "help": "Tu propio acento, fondo y opacidad de las tarjetas, sobre el tema que se muestre.",
+    "accent": "Acento",
+    "themeAccent": "Usar el acento del tema",
+    "background": "Fondo",
+    "backgroundColor": "Color de fondo",
+    "kinds": {
+      "none": "El del tema",
+      "color": "Color",
+      "gradient": "Degradado",
+      "image": "Foto"
+    },
+    "gradients": {
+      "dawn": "Amanecer",
+      "ocean": "Océano",
+      "forest": "Bosque",
+      "dusk": "Atardecer",
+      "slate": "Pizarra",
+      "midnight": "Medianoche"
+    },
+    "useImage": "Usar esta foto",
+    "deleteImage": "Eliminar esta foto",
+    "confirmDeleteImage": "¿Eliminar esta foto de todas las pantallas y pestañas que la usan?",
+    "noImages": "Aún no hay fotos. Sube una; primero se ajusta a la pantalla.",
+    "uploadImage": "Subir una foto",
+    "uploading": "Subiendo...",
+    "uploadFailed": "No se pudo subir la foto.",
+    "deleteFailed": "No se pudo eliminar la foto.",
+    "cardOpacity": "Opacidad de las tarjetas",
+    "seeThrough": "Transparente",
+    "solid": "Sólida"
+  },
+  "panelTabs": {
+    "dashboard": "Panel",
+    "look": "Aspecto",
+    "displays": "Pantallas",
+    "family": "Familia",
+    "security": "Seguridad",
+    "system": "Sistema"
+  },
+  "sections": {
+    "widgets": "Widgets",
+    "plugins": "Plugins",
+    "tabs": "Pestañas",
+    "devices": "Dispositivos",
+    "screensaver": "Salvapantallas",
+    "users": "Usuarios",
+    "chores": "Tareas",
+    "prizes": "Premios",
+    "vacation": "Vacaciones",
+    "region": "Idioma y hora",
+    "connections": "Conexiones",
+    "about": "Acerca de"
+  },
+  "panelTitle": "Panel de administración"
 }

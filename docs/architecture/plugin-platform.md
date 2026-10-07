@@ -25,7 +25,7 @@ deliberately minimal:
 
 | Piece | Today |
 | --- | --- |
-| **Format** | A single `.html` file uploaded via Admin Panel → Plugins, or installed from the `jherforth/HomeGlowPlugins` GitHub repo. |
+| **Format** | A single `.html` file uploaded via Admin Panel → Dashboard → Plugins, or installed from the `jherforth/HomeGlowPlugins` GitHub repo. |
 | **Storage** | ~~`server/widgets/<file>.html` + `widgets_registry.json`~~ → now the `plugins` table in `tasks.db` (§10, implemented). |
 | **Serving** | `GET /widgets/:filename` — backend rewrites `localhost:PORT` to the live origin and injects an overflow-fix `<style>`. |
 | **Rendering** | [`PluginWidgetWrapper.jsx`](../../client/src/components/PluginWidgetWrapper.jsx) renders an `<iframe sandbox="allow-scripts allow-same-origin allow-forms allow-popups">` at `/widgets/<file>?theme=<t>`. |

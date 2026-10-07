@@ -1,6 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useContext, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Box } from '@mui/material';
+import { ThemeContext } from '../themes/engine/ThemeContext.js';
+import { confettiPiece, confettiPieceSx } from '../utils/confetti.js';
 
 // Confetti for finishing every regular chore for the day (issue #140).
 //
@@ -20,8 +22,9 @@ import { Box } from '@mui/material';
 //
 // Rendered through a portal to document.body because the chore widget sits in a
 // react-grid-layout item whose transform would otherwise trap position: fixed.
-
-const CONFETTI_COLORS = ['#f94144', '#f3722c', '#f9c74f', '#90be6d', '#43aa8b', '#4d908e', '#577590', '#b5179e'];
+//
+// The pieces are the theme's (utils/confetti.js): Classic's are the colored
+// squares, circles and streamers this always had.
 
 const PIECE_COUNT = 70;
 const GRAVITY_PX_S2 = 1400;
@@ -38,19 +41,9 @@ const prefersReducedMotion = () =>
   && typeof window.matchMedia === 'function'
   && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-const shapeSx = (shape, size, color) => {
-  if (shape === 'circle') {
-    return { width: size, height: size, borderRadius: '50%', backgroundColor: color };
-  }
-  if (shape === 'streamer') {
-    return { width: Math.max(2, size * 0.3), height: size * 2, borderRadius: 'var(--hg-radius-xs)', backgroundColor: color };
-  }
-  return { width: size, height: size * 0.6, borderRadius: 'var(--hg-radius-xs)', backgroundColor: color };
-};
-
-const SHAPES = ['square', 'circle', 'streamer'];
 
 const ChoreCelebration = ({ onDismiss }) => {
+  const { theme, mode } = useContext(ThemeContext);
   const [pieces, setPieces] = useState([]);
   const pieceStateRef = useRef(new Map());
   const nodesRef = useRef(new Map());
@@ -72,6 +65,7 @@ const ChoreCelebration = ({ onDismiss }) => {
     const spawned = [];
     for (let i = 0; i < PIECE_COUNT; i++) {
       const id = i;
+      const piece = confettiPiece(theme, mode, i);
       // Launch from behind the bottom dock, spread across the middle of the
       // screen the way the vacation emoji do.
       const x = width / 2 + randomBetween(-width * 0.32, width * 0.32);
@@ -84,19 +78,15 @@ const ChoreCelebration = ({ onDismiss }) => {
         vx,
         vy,
         rotation: randomBetween(0, 360),
-        spin: randomBetween(-260, 260),
+        // Pictures (a fish, a ship) tumble slower than paper does.
+        spin: randomBetween(-260, 260) * (piece.url ? 0.35 : 1),
         // Staggered launch: until its delay elapses the piece just waits
         // off-screen below the fold.
         delay: randomBetween(0, LAUNCH_WINDOW_MS),
         elapsed: 0,
       });
 
-      spawned.push({
-        id,
-        shape: SHAPES[i % SHAPES.length],
-        size: 7 + Math.random() * 9,
-        color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
-      });
+      spawned.push({ id, ...piece });
     }
     setPieces(spawned);
 
@@ -190,7 +180,7 @@ const ChoreCelebration = ({ onDismiss }) => {
             position: 'absolute',
             top: 0,
             left: 0,
-            ...shapeSx(piece.shape, piece.size, piece.color),
+            ...confettiPieceSx(piece),
             pointerEvents: 'none',
             willChange: 'transform',
             // First paint is off-screen; the rAF loop takes over immediately.

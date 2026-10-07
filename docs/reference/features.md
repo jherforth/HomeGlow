@@ -11,7 +11,7 @@ code, so you know where to look when working on a given domain.
   can drag widgets and resize them with edge +/- buttons.
 - Layout is persisted to the backend via the `widget-assignments/layout` endpoints,
   which store it inside `tabs.config_json` (see [Database](../architecture/database.md)).
-- **Tab order** is managed in Admin → Widgets → Tabs: up/down arrows (the only
+- **Tab order** is managed in Admin → Dashboard → Tabs: up/down arrows (the only
   control that works on touch, since HTML5 drag events never fire there) plus
   row dragging on desktop. Home is fixed at position 1. Both paths post the
   full desired order to `PATCH /api/devices/:deviceName/tabs/reorder`.
@@ -75,7 +75,7 @@ The chore system uses a **three-table model** (see [Database](../architecture/da
   - Fires once per user per day, from whichever route emptied the list —
     completing, receiving a transfer, or snoozing the last chore out of today.
     Undoing the last chore revokes the daily bonus, so redoing it celebrates again.
-  - Toggle in **Admin Panel → Chores → Settings** (on by default); it is a
+  - Toggle in **Admin Panel → Family → Chores → Settings** (on by default); it is a
     display preference, so the event still reaches plugins when it is off.
   - Skipped entirely under `prefers-reduced-motion` — the effect is nothing but
     motion, so there is no meaningful reduced version.
@@ -111,7 +111,7 @@ optional follow-up **reminder interval** that repeats until the chore is complet
   `uploads/sounds/`; users can **upload their own** sounds (`.mp3/.wav/.ogg/...`) via
   the picker. Managed through `/api/sounds*` and served from `/Uploads/sounds/`.
 - **Layered gating** — all three must be on for a chore to ring:
-  1. **Global master** (`CHORE_SOUND_ENABLED`) in Admin → Chores + a default sound and volume.
+  1. **Global master** (`CHORE_SOUND_ENABLED`) in Admin → Family → Chores → Settings + a default sound and volume.
   2. **Per-device mute** — the 🔔/🔕 button on the chore widget (stored in
      `choreWidgetSettings.soundEnabled` in device settings) silences one display.
 
@@ -233,7 +233,7 @@ and the `photo-sources` / `photo-items` routes.
 
 - Current conditions + 3-day forecast with interactive temperature and
   precipitation graphs.
-- **Two sources** (issue #57), chosen in Admin Panel → Connections:
+- **Two sources** (issue #57), chosen in Admin Panel → System → Connections:
   **OpenWeatherMap** (free API key, location by city/zip/coords) or
   **Home Assistant** (reads an existing `weather.*` entity, no API key needed).
 - Fetched **server-side**. Credentials stay on the server, and one upstream call
@@ -275,17 +275,25 @@ calculation); `server/services/homeAssistant.js` for the connection.
 
 ## Vacation mode
 
-- A per-display toggle (Admin Panel → Interface, issue #121) for when the family
-  is away: chore due-time chimes are muted and the screensaver becomes a playful
-  vacation animation — vacation emoji pop up from behind the dock like popcorn
-  and fall back out of view. A subtle 🏖️ badge shows top-right while active.
-- Stored in `localStorage` (`vacationModeSettings`) alongside the screensaver
-  settings; the mute can be toggled independently of the screensaver swap.
+- A **household** setting (Admin Panel → Family → Vacation; issues #121, #230)
+  for when the family is away. On every display, the screensaver becomes a
+  playful vacation animation (vacation emoji pop up from behind the dock like
+  popcorn and fall back out of view), chore due-time chimes are muted if "mute"
+  is on, and a subtle 🏖️ badge shows top-right while active.
+- Stored as the household `vacation_mode` setting. Each display reads it on
+  load and rereads household settings every 5 minutes, so vacation turned on
+  at one display reaches the others without a reload. (Before #230 the display
+  side lived in each browser's `localStorage`, so only the display it was
+  turned on from changed; that copy is no longer read.)
+- **PIN-protected:** when an admin PIN is set, switching vacation on, or moving
+  its dates while it is on, asks for the PIN, even on a display that remembers
+  it, because it pauses chore tracking for the whole house. Turning it off, or
+  changing only the chime setting, does not ask.
 - **Optional date range**: start/end pickers appear when enabled. A bounded
   vacation activates and **auto-expires** on its own (chimes, badge, and the
   vacation screensaver all key off "active today", not just the toggle).
-- **Metrics-aware** (issue #72): saving also writes a household-wide
-  `vacation_mode` server setting. While active, the nightly job **skips
+- **Metrics-aware** (issue #72): the same `vacation_mode` setting drives the
+  server. While active, the nightly job **skips
   missed-chore logging** (days off never count against completion rates) and
   the Chore Metrics plugin treats vacation days as neutral, **bridging
   streaks** across them. Date-bounded vacations bridge past gaps permanently;
@@ -310,7 +318,7 @@ gates in `app.jsx` (sound scheduler + screensaver render), UI in `AdminPanel.jsx
   above.
 - Access can be gated by an optional **PIN** (on-screen pad or keyboard entry),
   hashed in the `admin_pin` table.
-- **User display order** (issue #134): the Users tab controls what order family
+- **User display order** (issue #134): Admin → Family → Users controls what order family
   members appear in — drag a row on desktop, or use the up/down arrows, which
   are the primary control on touch screens since HTML5 drag events never fire
   there (tab reordering works the same way). The order is stored on the user
