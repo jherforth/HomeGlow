@@ -212,6 +212,7 @@ const defaultScheduleForm = {
   duration: 'day-of',
   sleepCount: '',
   sleepUnit: 'd',
+  calendar_match: '',
   visible: true,
   due_date: '',
   due_days: '',
@@ -306,6 +307,9 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
 
   const computeCrontab = (f) => {
     if (f.isOneTime) return '';
+    // Calendar mode: visibility is driven by calendar_match, not crontab.
+    // Send a valid placeholder so the schedule isn't treated as one-time.
+    if (f.scheduleMode === 'calendar') return '0 0 * * *';
     if (f.scheduleMode === 'preset') return f.selectedPreset;
     if (f.scheduleMode === 'days') return f.selectedDays.length > 0 ? daysToCrontab(f.selectedDays) : '';
     return f.customCrontab;
@@ -329,13 +333,18 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
 
   const openEditSchedule = (schedule) => {
     setEditingSchedule(schedule);
-    const isOneTime = !schedule.crontab;
+    // Calendar-matched schedules are never "one-time": visibility is driven by events.
+    const isOneTime = !schedule.crontab && !schedule.calendar_match;
     let scheduleMode = 'preset';
     let selectedPreset = '0 0 * * *';
     let selectedDays = [];
     let customCrontab = '';
+    const calendarMatch = schedule.calendar_match || '';
 
-    if (!isOneTime) {
+    if (schedule.calendar_match) {
+      // Calendar mode takes precedence for visibility, even if a crontab is also set.
+      scheduleMode = 'calendar';
+    } else if (!isOneTime) {
       const preset = CRONTAB_PRESETS.find(p => p.value === schedule.crontab);
       if (preset) {
         scheduleMode = 'preset';
@@ -363,6 +372,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
       duration: schedule.duration || 'day-of',
       sleepCount: schedule.interval ? (schedule.interval.match(/^(\d+)/)?.[1] || '') : '',
       sleepUnit: schedule.interval ? (schedule.interval.match(/[dwmy]$/i)?.[0].toLowerCase() || 'd') : 'd',
+      calendar_match: calendarMatch,
       visible: !!schedule.visible,
       due_date: schedule.due_date || '',
       due_days: !isOneTime ? getDueDaysOffset(schedule.created_at, schedule.due_date) : '',
@@ -385,8 +395,13 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
 
   const handleSaveSchedule = async () => {
     const cron = computeCrontab(scheduleForm);
+    const isCalendarMode = !scheduleForm.isOneTime && scheduleForm.scheduleMode === 'calendar';
     const err = scheduleForm.isOneTime ? null : validateCrontab(cron);
     if (err) { setCrontabError(err); return; }
+    if (isCalendarMode && !scheduleForm.calendar_match.trim()) {
+      showMessage('error', t('chores:schedules.calendarMatchRequired'));
+      return;
+    }
 
     setSavingSchedule(true);
     try {
@@ -420,7 +435,8 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
           ? parseInt(scheduleForm.reminder_interval_minutes, 10)
           : null,
         transferable: scheduleForm.transferable ? 1 : 0,
-        can_snooze: scheduleForm.can_snooze ? 1 : 0
+        can_snooze: scheduleForm.can_snooze ? 1 : 0,
+        calendar_match: isCalendarMode ? (scheduleForm.calendar_match.trim() || null) : null
       };
 
       if (editingSchedule) {
@@ -578,12 +594,17 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
     && scheduleForm.due_days !== ''
     && (!Number.isInteger(parsedDueDays) || parsedDueDays < 0);
 
+  const isCalendarModeInvalid = !scheduleForm.isOneTime
+    && scheduleForm.scheduleMode === 'calendar'
+    && !scheduleForm.calendar_match.trim();
+
   const isScheduleSaveDisabled = savingSchedule
     || !scheduleForm.chore_id
     || (!scheduleForm.isOneTime && !!crontabError)
     || (!scheduleForm.isOneTime && scheduleForm.scheduleMode === 'custom' && !scheduleForm.customCrontab.trim())
     || isOnceCompletedMissingInterval
-    || hasInvalidDueDays;
+    || hasInvalidDueDays
+    || isCalendarModeInvalid;
 
   if (loading) {
     return (
@@ -1004,6 +1025,7 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                   <FormControlLabel value="preset" control={<Radio size="small" />} label={t('chores:schedules.modePreset')} />
                   <FormControlLabel value="days" control={<Radio size="small" />} label={t('chores:schedules.modeDaysOfWeek')} />
                   <FormControlLabel value="custom" control={<Radio size="small" />} label={t('chores:schedules.modeCustomCrontab')} />
+                  <FormControlLabel value="calendar" control={<Radio size="small" />} label={t('chores:schedules.modeCalendarEvent')} />
                 </RadioGroup>
 
                 <FormControl fullWidth size="small">
@@ -1132,6 +1154,19 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                     InputProps={{ sx: { fontFamily: 'var(--hg-font-mono)' } }}
                   />
                 )}
+
+                {scheduleForm.scheduleMode === 'calendar' && (
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label={t('chores:schedules.calendarMatchLabel')}
+                    value={scheduleForm.calendar_match}
+                    onChange={(e) => updateScheduleForm({ calendar_match: e.target.value })}
+                    placeholder="France"
+                    error={isCalendarModeInvalid}
+                    helperText={isCalendarModeInvalid ? t('chores:schedules.calendarMatchRequired') : t('chores:schedules.calendarMatchHelp')}
+                  />
+                )}
               </>
             )}
 
@@ -1140,9 +1175,11 @@ export default function ChoreSchedulesTab({ saveMessage, setSaveMessage }) {
                 <Typography variant="body2">
                   <strong>{scheduleForm.isOneTime
                     ? t('chores:schedules.oneTimeTaskShort')
-                    : t('chores:schedules.nextOccurrenceIs', { when: nextOccurrence })}</strong>
+                    : (!scheduleForm.isOneTime && scheduleForm.scheduleMode === 'calendar')
+                      ? t('chores:schedules.calendarModeNextOccurrence')
+                      : t('chores:schedules.nextOccurrenceIs', { when: nextOccurrence })}</strong>
                 </Typography>
-                {!scheduleForm.isOneTime && currentCrontab && (
+                {!scheduleForm.isOneTime && scheduleForm.scheduleMode !== 'calendar' && currentCrontab && (
                   <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'var(--hg-font-mono)' }}>
                     {currentCrontab}
                   </Typography>

@@ -230,7 +230,12 @@
     "onceCompletedWithInterval": "Una vez completada ({{interval}})",
     "oneTimeTaskShort": "Tarea única",
     "deleteChoreWarning": "Esto eliminará de forma permanente la tarea y las {{count}} programaciones vinculadas a ella. El historial de finalización se conserva.",
-    "deleteChorePrompt": "Eliminar"
+    "deleteChorePrompt": "Eliminar",
+    "modeCalendarEvent": "Evento de calendario",
+    "calendarMatchLabel": "Texto del evento a buscar",
+    "calendarMatchHelp": "No distingue mayúsculas. La tarea aparece los días en que un evento del calendario contiene este texto. Ejemplo: 'France' coincide con 'France soccer practice'.",
+    "calendarMatchRequired": "Introduce el texto para buscar en los eventos",
+    "calendarModeNextOccurrence": "Aparece los días con eventos coincidentes"
   },
   "presets": {
     "daily": "A diario",

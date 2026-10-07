@@ -230,7 +230,12 @@
     "onceCompletedWithInterval": "Once Completed ({{interval}})",
     "oneTimeTaskShort": "One-time task",
     "deleteChoreWarning": "This will permanently delete the chore and all {{count}} schedule(s) linked to it. Completion history is preserved.",
-    "deleteChorePrompt": "Delete"
+    "deleteChorePrompt": "Delete",
+    "modeCalendarEvent": "Calendar Event",
+    "calendarMatchLabel": "Calendar event text to match",
+    "calendarMatchHelp": "Case-insensitive. The chore appears on days when a calendar event contains this text. Example: 'France' matches 'France soccer practice'.",
+    "calendarMatchRequired": "Enter text to match calendar events",
+    "calendarModeNextOccurrence": "Appears on days with matching calendar events"
   },
   "presets": {
     "daily": "Daily",
