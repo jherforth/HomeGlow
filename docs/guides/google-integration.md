@@ -55,7 +55,7 @@ briefly, so give it a minute or two before retrying.
 
 ## 3. Give HomeGlow the credentials
 
-**Admin Panel → Connections → Google.**
+**Admin Panel → System → Connections → Google.**
 
 1. Paste the **Client ID** and **Client secret**, then **Save Credentials**.
 2. Look at the **Redirect URI** field. HomeGlow derives it from the address you

@@ -59,7 +59,7 @@
   "errors": {
     "enterLocation": "Introduce una ubicación.",
     "invalidLocation": "Ubicación no válida. Prueba con una ciudad y código de país como \"Sydney,AU\" o un código postal como \"14818,US\".",
-    "badCredentials": "El proveedor meteorológico rechazó las credenciales guardadas. Compruébalas en la pestaña Conexiones del panel de administración.",
+    "badCredentials": "El proveedor meteorológico rechazó las credenciales guardadas. Compruébalas en Panel de administración → Sistema → Conexiones.",
     "providerUnreachable": "No se pudo contactar con el proveedor meteorológico. Comprueba que esté funcionando y sea accesible desde HomeGlow.",
     "fetchFailed": "No se pudieron obtener los datos meteorológicos. Inténtalo de nuevo más tarde."
   }

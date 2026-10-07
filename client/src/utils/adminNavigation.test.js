@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
+  ADMIN_LAYOUT,
   ADMIN_TABS,
-  CHORES_TAB_INDEX,
   isAdminHash,
   parseAdminHash,
   buildAdminHash,
@@ -31,28 +31,49 @@ function stubWindow(initial = 'http://homeglow.local/?device=kitchen') {
   return { url, replaceState };
 }
 
+const at = (tab, section = null, subsection = null) => ({ tab, section, subsection });
+
 describe('adminNavigation', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
   describe('parseAdminHash', () => {
-    it('reads the tab and the chores sub-tab', () => {
-      expect(parseAdminHash('#/admin')).toEqual({ tab: 0, subtab: 0 });
-      expect(parseAdminHash('#/admin/users')).toEqual({ tab: 2, subtab: 0 });
-      expect(parseAdminHash('#/admin/chores/history')).toEqual({ tab: CHORES_TAB_INDEX, subtab: 1 });
-      expect(parseAdminHash('#/admin/Chores/Settings/')).toEqual({ tab: CHORES_TAB_INDEX, subtab: 2 });
+    it('reads the tab, section and chores subsection', () => {
+      expect(parseAdminHash('#/admin')).toEqual(at('dashboard', 'widgets'));
+      expect(parseAdminHash('#/admin/look')).toEqual(at('look'));
+      expect(parseAdminHash('#/admin/family')).toEqual(at('family', 'users'));
+      expect(parseAdminHash('#/admin/family/chores')).toEqual(at('family', 'chores', 'definitions'));
+      expect(parseAdminHash('#/admin/family/chores/history')).toEqual(at('family', 'chores', 'history'));
+      expect(parseAdminHash('#/admin/Family/Chores/Settings/')).toEqual(at('family', 'chores', 'settings'));
+      expect(parseAdminHash('#/admin/system/about')).toEqual(at('system', 'about'));
+      expect(parseAdminHash('#/admin/displays/screensaver')).toEqual(at('displays', 'screensaver'));
     });
 
-    it('falls back to the first tab, or no sub-tab, for names it does not know', () => {
-      expect(parseAdminHash('#/admin/nonsense')).toEqual({ tab: 0, subtab: 0 });
-      expect(parseAdminHash('#/admin/chores/nonsense')).toEqual({ tab: CHORES_TAB_INDEX, subtab: 0 });
-      // Only Chores has sub-tabs.
-      expect(parseAdminHash('#/admin/users/history')).toEqual({ tab: 2, subtab: 0 });
+    it('sends the names from before the regroup to their new homes (#230)', () => {
+      expect(parseAdminHash('#/admin/widgets')).toEqual(at('dashboard', 'widgets'));
+      expect(parseAdminHash('#/admin/interface')).toEqual(at('look'));
+      expect(parseAdminHash('#/admin/users')).toEqual(at('family', 'users'));
+      expect(parseAdminHash('#/admin/chores')).toEqual(at('family', 'chores', 'definitions'));
+      expect(parseAdminHash('#/admin/chores/history')).toEqual(at('family', 'chores', 'history'));
+      expect(parseAdminHash('#/admin/chores/settings')).toEqual(at('family', 'chores', 'settings'));
+      expect(parseAdminHash('#/admin/prizes')).toEqual(at('family', 'prizes'));
+      expect(parseAdminHash('#/admin/security')).toEqual(at('security'));
+      expect(parseAdminHash('#/admin/connections')).toEqual(at('system', 'connections'));
+      expect(parseAdminHash('#/admin/about')).toEqual(at('system', 'about'));
     });
 
-    it('returns null when the hash is not the Admin Panel', () => {
-      for (const hash of ['', '#', '#/', '#/photos', '#/administrator', '#/adminfoo', '#/admin/a/b/c', 'admin']) {
+    it('falls back to defaults for unknown parts', () => {
+      expect(parseAdminHash('#/admin/nonsense')).toEqual(at('dashboard', 'widgets'));
+      expect(parseAdminHash('#/admin/family/nonsense')).toEqual(at('family', 'users'));
+      expect(parseAdminHash('#/admin/family/chores/nonsense')).toEqual(at('family', 'chores', 'definitions'));
+      // A subsection only exists under a section that has them.
+      expect(parseAdminHash('#/admin/family/users/history')).toEqual(at('family', 'users'));
+      expect(parseAdminHash('#/admin/users/history')).toEqual(at('family', 'users'));
+    });
+
+    it('is null for anything that is not the Admin Panel', () => {
+      for (const hash of ['', '#', '#/', '#/photos', '#/administrator', '#/adminfoo', '#/admin/a/b/c/d', 'admin']) {
         expect(parseAdminHash(hash), hash).toBeNull();
         expect(isAdminHash(hash), hash).toBe(false);
       }
@@ -60,21 +81,32 @@ describe('adminNavigation', () => {
   });
 
   describe('buildAdminHash', () => {
-    it('round-trips every tab', () => {
-      ADMIN_TABS.forEach((name, index) => {
-        expect(buildAdminHash(index)).toBe(`#/admin/${name}`);
-        expect(parseAdminHash(buildAdminHash(index))).toEqual({ tab: index, subtab: 0 });
-      });
+    it('leaves default sections off and round-trips every place', () => {
+      expect(buildAdminHash(at('dashboard', 'widgets'))).toBe('#/admin/dashboard');
+      expect(buildAdminHash(at('family', 'users'))).toBe('#/admin/family');
+      expect(buildAdminHash(at('family', 'chores', 'definitions'))).toBe('#/admin/family/chores');
+      expect(buildAdminHash(at('family', 'chores', 'history'))).toBe('#/admin/family/chores/history');
+      expect(buildAdminHash(at('system', 'about'))).toBe('#/admin/system/about');
+
+      for (const { tab, sections, subsections } of ADMIN_LAYOUT) {
+        const places = sections.length
+          ? sections.flatMap((section) => (subsections?.[section] || [null]).map((sub) => at(tab, section, sub)))
+          : [at(tab)];
+        for (const place of places) {
+          expect(parseAdminHash(buildAdminHash(place)), JSON.stringify(place)).toEqual(place);
+        }
+      }
     });
 
-    it('names a chores sub-tab only when it is not the first', () => {
-      expect(buildAdminHash(CHORES_TAB_INDEX, 0)).toBe('#/admin/chores');
-      expect(buildAdminHash(CHORES_TAB_INDEX, 1)).toBe('#/admin/chores/history');
-      expect(buildAdminHash(2, 1)).toBe('#/admin/users');
+    it('falls back to the first tab', () => {
+      expect(buildAdminHash(at('nonsense'))).toBe('#/admin/dashboard');
+      expect(buildAdminHash()).toBe('#/admin/dashboard');
     });
 
-    it('falls back to the first tab for an index out of range', () => {
-      expect(buildAdminHash(99)).toBe('#/admin/widgets');
+    it('lists six tabs, with section names unique across them', () => {
+      expect(ADMIN_TABS).toEqual(['dashboard', 'look', 'displays', 'family', 'security', 'system']);
+      const sections = ADMIN_LAYOUT.flatMap((entry) => entry.sections);
+      expect(new Set(sections).size).toBe(sections.length);
     });
   });
 
@@ -85,16 +117,22 @@ describe('adminNavigation', () => {
     });
 
     it('replaces the hash without adding history, and skips a no-op', () => {
-      setAdminHash(CHORES_TAB_INDEX, 1);
-      expect(win.url.hash).toBe('#/admin/chores/history');
+      setAdminHash(at('family', 'chores', 'history'));
+      expect(win.url.hash).toBe('#/admin/family/chores/history');
       // The device query string survives.
       expect(win.url.search).toBe('?device=kitchen');
-      setAdminHash(CHORES_TAB_INDEX, 1);
+      setAdminHash(at('family', 'chores', 'history'));
       expect(win.replaceState).toHaveBeenCalledTimes(1);
     });
 
+    it('rewrites an old link to its new home', () => {
+      win = stubWindow('http://homeglow.local/?device=kitchen#/admin/chores/history');
+      setAdminHash(parseAdminHash(win.url.hash));
+      expect(win.url.hash).toBe('#/admin/family/chores/history');
+    });
+
     it('clears an admin hash and keeps the path and query', () => {
-      setAdminHash(2);
+      setAdminHash(at('family'));
       clearAdminHash();
       expect(win.url.hash).toBe('');
       expect(win.url.href).toBe('http://homeglow.local/?device=kitchen');

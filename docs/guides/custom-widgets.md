@@ -10,7 +10,7 @@ app required.
 
 ## How custom widgets work
 
-- A widget is a single `.html` file uploaded via **Admin Panel → Plugins** (or
+- A widget is a single `.html` file uploaded via **Admin Panel → Dashboard → Plugins** (or
   installed from the `jherforth/HomeGlowPlugins` GitHub repo).
 - Uploaded widgets are stored **in the database** (the `plugins` table in
   `tasks.db`) and served at `/widgets/:filename` — so installed plugins survive
@@ -56,7 +56,7 @@ colors: light `#333`, dark `#a6a6d1`. A full template is in the
 
 1. Write your HTML file (start from the template).
 2. Test locally in a browser with `?theme=dark` / `?theme=light`.
-3. Upload via **Admin Panel → Plugins → Upload Widget**.
+3. Upload via **Admin Panel → Dashboard → Plugins → Upload Widget**.
 4. Enable it and assign it to a tab.
 5. Verify transparency and both themes.
 
@@ -200,7 +200,7 @@ reactions that run without a mounted widget are issue #105 Phase 4).
 ## Debugging
 
 - Browser console inside the iframe shows widget JS errors.
-- **Admin Panel → Plugins → Debug** and `GET /api/widgets/debug` list the
+- **Admin Panel → Dashboard → Plugins → Debug** and `GET /api/widgets/debug` list the
   installed plugins in the DB store (plus any legacy on-disk files and the old
   registry, for troubleshooting migrations).
 - Toggle the theme param in the URL to check theming.

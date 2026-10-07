@@ -1,5 +1,6 @@
 // Single source of truth for the "interface" settings that live in localStorage:
-// interface colors, screensaver settings, and auto-dark-mode settings.
+// interface colors, screensaver settings, and auto-dark-mode settings. Also
+// the reader for the household vacation setting, which every display follows.
 //
 // These readers/normalizers were previously copy-pasted in both app.jsx (which
 // reads them on mount) and AdminPanel.jsx (which reads and writes them). Keeping
@@ -10,6 +11,8 @@
 export const INTERFACE_COLORS_STORAGE_KEY = 'interfaceColors';
 export const SCREENSAVER_SETTINGS_STORAGE_KEY = 'screensaverSettings';
 export const AUTO_DARK_MODE_SETTINGS_STORAGE_KEY = 'autoDarkModeSettings';
+// Where vacation mode lived per display before it became a household setting
+// (issue #230). No longer read; cleared on the next vacation save.
 export const VACATION_MODE_STORAGE_KEY = 'vacationModeSettings';
 
 export const DEFAULT_INTERFACE_COLORS = {
@@ -45,9 +48,10 @@ export const DEFAULT_AUTO_DARK_MODE_SETTINGS = {
   resolvedName: '',
 };
 
-// Vacation mode (issue #121): mutes chore due-time sounds and swaps the
-// screensaver for the vacation-emoji one. startDate/endDate are reserved for a
-// future date-range version; the MVP is a simple toggle.
+// Vacation mode (issues #121, #72, #230): a household setting. While it is on,
+// every display swaps its screensaver for the vacation-emoji one and, with
+// muteSounds, mutes chore due-time chimes; the server pauses missed-chore
+// logging. startDate/endDate ('YYYY-MM-DD', empty = unbounded) bound it.
 export const DEFAULT_VACATION_MODE_SETTINGS = {
   enabled: false,
   startDate: '',
@@ -178,13 +182,25 @@ export const isVacationModeActiveToday = (settings, today = null) => {
   return true;
 };
 
-export const readLocalVacationModeSettings = () => {
+// The household's vacation state: the `vacation_mode` setting, stored as JSON
+// (issue #230). Every display follows it. Anything unreadable is "not on
+// vacation", not an error.
+export const parseVacationModeSetting = (raw) => {
+  if (raw && typeof raw === 'object') return normalizeVacationModeSettings(raw);
+  if (typeof raw !== 'string' || raw === '') return { ...DEFAULT_VACATION_MODE_SETTINGS };
   try {
-    const raw = localStorage.getItem(VACATION_MODE_STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_VACATION_MODE_SETTINGS };
     return normalizeVacationModeSettings(JSON.parse(raw));
   } catch {
     return { ...DEFAULT_VACATION_MODE_SETTINGS };
   }
 };
+
+// Whether saving `next` over `saved` needs the admin PIN. Vacation pauses chore
+// tracking for the whole house, so switching it on, or moving its dates while
+// it is on, is the kind of change a child should not be able to make at a
+// display that remembers the PIN. Turning it off, or changing only the chime
+// setting, is not.
+export const vacationSaveNeedsPin = (saved, next) => next.enabled === true && (
+  saved.enabled !== true || saved.startDate !== next.startDate || saved.endDate !== next.endDate
+);
 

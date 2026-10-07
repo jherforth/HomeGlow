@@ -20,7 +20,7 @@ import useScreenActivity from './hooks/useScreenActivity.js';
 import {
   hexToRgbTriplet,
   readLocalScreensaverSettings,
-  readLocalVacationModeSettings,
+  parseVacationModeSetting,
   isVacationModeActiveToday,
 } from './utils/interfaceSettings.js';
 import {
@@ -137,6 +137,10 @@ const ADMIN_PIN_EXISTS_RETRY_DELAYS_MS = [500, 1500, 4000];
 // the recovery effect), and it stops the moment one lands.
 const ADMIN_PIN_EXISTS_RECOVERY_INTERVAL_MS = 5 * 60 * 1000;
 
+// How often every display rereads the household settings, so a change made on
+// another display (vacation, appearance) arrives without a reload.
+const HOUSEHOLD_SETTINGS_REFRESH_MS = 5 * 60 * 1000;
+
 /**
  * Control Limits ids are namespaced in storage (`plugin:<pluginId>:<control>`)
  * so two plugins cannot collide. A plugin only ever knows its own unprefixed
@@ -196,11 +200,6 @@ const App = () => {
   const [widgetsLocked, setWidgetsLocked] = useState(readLocalWidgetsLocked);
   const [screensaverActive, setScreensaverActive] = useState(false);
   const [screensaverSettings, setScreensaverSettings] = useState(readLocalScreensaverSettings);
-  const [vacationModeSettings, setVacationModeSettings] = useState(readLocalVacationModeSettings);
-  // Range-aware (issue #121 v2): with dates set, vacation activates/expires on
-  // its own; recomputed each render, which the kiosk's periodic refreshes keep
-  // current across midnight.
-  const vacationActiveToday = isVacationModeActiveToday(vacationModeSettings);
   const inactivityTimerRef = useRef(null);
   const lastActivityRef = useRef(Date.now());
   const [widgetSettings, setWidgetSettings] = useState({ ...DEFAULT_WIDGET_SETTINGS });
@@ -210,6 +209,16 @@ const App = () => {
   // Credentials are no longer among them — GET /api/settings redacts secrets,
   // and weather is fetched server-side.
   const [householdSettings, setHouseholdSettings] = useState({});
+  // Vacation is a household setting every display follows (issue #230): the
+  // vacation screensaver and, with muteSounds, silent chore chimes.
+  const vacationModeSettings = useMemo(
+    () => parseVacationModeSetting(householdSettings.vacation_mode),
+    [householdSettings.vacation_mode],
+  );
+  // Range-aware (issue #121 v2): with dates set, vacation activates/expires on
+  // its own; recomputed each render, which the kiosk's periodic refreshes keep
+  // current across midnight.
+  const vacationActiveToday = isVacationModeActiveToday(vacationModeSettings);
   // The raw device settings blob, kept alongside the hydrated view above:
   // Control Limits reads keys this component does not otherwise model
   // (`controlLimits`, `adminPinRemembered`), and resolveHiddenControls wants the
@@ -320,7 +329,10 @@ const App = () => {
   const fetchHouseholdSettings = useCallback(async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/settings`);
-      setHouseholdSettings(response.data || {});
+      const next = response.data || {};
+      // Polled (below), so keep the same object when nothing changed rather
+      // than re-rendering everything that reads it.
+      setHouseholdSettings((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next));
       setHouseholdSettingsLoaded(true);
     } catch (error) {
       console.error('Error fetching household settings:', error);
@@ -693,8 +705,7 @@ const App = () => {
 
     const handleInterfaceSettingsUpdated = () => {
       setScreensaverSettings(readLocalScreensaverSettings());
-      setVacationModeSettings(readLocalVacationModeSettings());
-      // Appearance is saved to the server by Admin; reload both levels.
+      // Appearance and vacation are saved to the server by Admin; reload both levels.
       void fetchDeviceSettings();
       void fetchHouseholdSettings();
     };
@@ -706,6 +717,17 @@ const App = () => {
       window.removeEventListener(INTERFACE_SETTINGS_UPDATED_EVENT, handleInterfaceSettingsUpdated);
     };
   }, [fetchDeviceSettings, fetchHouseholdSettings, fetchAdminPinExists]);
+
+  // Household settings change on other displays too: vacation turned on in the
+  // kitchen has to reach the hallway display without a reload (issue #230).
+  // A slow poll, not the plugin event stream, which does not reliably reach
+  // every install's browser.
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      void fetchHouseholdSettings();
+    }, HOUSEHOLD_SETTINGS_REFRESH_MS);
+    return () => clearInterval(intervalId);
+  }, [fetchHouseholdSettings]);
 
   // Recovery for a PIN check that never landed.
   //
@@ -1394,7 +1416,15 @@ const App = () => {
         )}
       </Box>
 
-      <Dialog open={showAdminPanel} onClose={toggleAdminPanel} maxWidth="lg" fullScreen={isMobile}>
+      <Dialog
+        open={showAdminPanel}
+        onClose={toggleAdminPanel}
+        maxWidth="lg"
+        fullScreen={isMobile}
+        // An edge for the floating panel, which can sink into a page background
+        // of a similar solid color (#230). Full screen on a phone needs none.
+        slotProps={{ paper: { sx: isMobile ? {} : { border: '1px solid var(--card-border)' } } }}
+      >
         <DialogContent sx={{ position: 'relative', '@media (max-width:599.95px)': { p: 1.5 } }}>
           <IconButton
             onClick={toggleAdminPanel}

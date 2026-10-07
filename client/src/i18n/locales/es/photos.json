@@ -58,8 +58,8 @@
       "startFailed": "No se pudo iniciar la sesión del selector de Google Fotos.",
       "ingestFailed": "No se pudieron descargar las fotos que elegiste.",
       "result": "Añadidas {{added}}, omitidas {{skipped}}, fallidas {{failed}} de {{total}}.",
-      "noAccount": "Primero conecta una cuenta de Google desde el Panel de administración → pestaña Conexiones y luego vuelve aquí.",
-      "missingScope": "Esta conexión de Google no incluye el permiso de Fotos. Vuelve a conectarla desde el Panel de administración → Conexiones con la opción de Fotos activada.",
+      "noAccount": "Primero conecta una cuenta de Google desde Panel de administración → Sistema → Conexiones y luego vuelve aquí.",
+      "missingScope": "Esta conexión de Google no incluye el permiso de Fotos. Vuelve a conectarla desde Panel de administración → Sistema → Conexiones con la opción de Fotos activada.",
       "pickedTitle": "Fotos elegidas ({{count}})",
       "pickedEmpty": "Aún no has elegido fotos. Usa el botón de arriba para elegir algunas."
     }

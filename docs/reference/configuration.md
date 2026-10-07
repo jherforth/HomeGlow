@@ -10,7 +10,7 @@ database). This page covers both.
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `PORT` | `5000` | Port Fastify listens on. |
-| `TZ` | host's zone | IANA timezone. Drives the nightly cron job and date math. Optional: unset, the server follows the host (in Docker, via the `/etc/localtime:/host/localtime:ro` mount), and `America/New_York` only if the host's zone can't be read. A zone chosen in Admin Panel → Interface → Time Zone overrides it. |
+| `TZ` | host's zone | IANA timezone. Drives the nightly cron job and date math. Optional: unset, the server follows the host (in Docker, via the `/etc/localtime:/host/localtime:ro` mount), and `America/New_York` only if the host's zone can't be read. A zone chosen in Admin Panel → System → Language & time overrides it. |
 | `DB_PATH` | `server/data/tasks.db` | Override the SQLite file location. |
 | `ENCRYPTION_KEY` | _auto-generated_ | **Optional.** Key used to encrypt stored third-party credentials. If unset, one is generated on first start — see below. Set it only to supply your own key or share one across instances; must decode to 32 bytes (`openssl rand -base64 32`). Changing it after credentials are stored invalidates them. |
 | `NODE_ENV` | — | `production` / `development`. |
@@ -112,21 +112,26 @@ Open with the gear (⚙️) icon. These persist server-side (global settings in 
 
 | Section | What it configures | Storage |
 | --- | --- | --- |
-| **Connections → Weather** | Provider choice (`WEATHER_PROVIDER`: `openweathermap` \| `homeassistant`), OpenWeatherMap key (`WEATHER_API_KEY`, write-only) | `settings` (global) |
-| **Connections → Home Assistant** | Base URL (`HOME_ASSISTANT_URL`), long-lived token (`HOME_ASSISTANT_TOKEN_ENC`, encrypted + write-only), weather entity (`HOME_ASSISTANT_WEATHER_ENTITY`) | `settings` (global) |
-| **APIs** | ICS calendar URL | `settings` (global) |
-| **Chores → rewards** | Daily completion bonus (`daily_completion_clam_reward`), all-chores-done celebration (`CHORE_CELEBRATION_ENABLED`, default on) | `settings` (global) |
-| **Chores → sounds** | Master enable (`CHORE_SOUND_ENABLED`), default sound (`CHORE_SOUND_DEFAULT`), volume (`CHORE_SOUND_VOLUME`) | `settings` (global) |
-| **Widgets** | Enable/disable built-ins, per-widget auto-refresh interval, transparency | `devices.device_settings_json` (per device) |
-| **Users** | Family members, avatars, clam adjustments | `users`, `chore_history` |
-| **Chores** | Chore definitions, schedules (cron/duration/interval), history | `chores`, `chore_schedules`, `chore_history` |
-| **Prizes** | Clam-purchasable rewards | `prizes` |
+| **Dashboard → Widgets** | Enable/disable built-ins, per-widget auto-refresh interval, transparency | `devices.device_settings_json` (per device) |
+| **Dashboard → Plugins** | Upload/install/enable custom widgets; the store groups them by category | `plugins` table, per-device plugin settings |
+| **Dashboard → Tabs** | Dashboard tabs, their order and icons | `tabs` (per device) |
+| **Look** | Theme, light/dark mode, interface colors, accent, background, card opacity | `settings` (`appearance`, household) with per-device overrides in `device_settings_json` |
+| **Displays → Devices** | Name this display; list and manage the others | `devices` |
+| **Displays → Screensaver** | Screensaver for this display | `localStorage` (per display) |
+| **Family → Users** | Family members, avatars, clam adjustments | `users`, `chore_history` |
+| **Family → Chores** | Chore definitions, schedules (cron/duration/interval), history | `chores`, `chore_schedules`, `chore_history` |
+| **Family → Chores → Settings: rewards** | Daily completion bonus (`daily_completion_clam_reward`), all-chores-done celebration (`CHORE_CELEBRATION_ENABLED`, default on) | `settings` (global) |
+| **Family → Chores → Settings: sounds** | Master enable (`CHORE_SOUND_ENABLED`), default sound (`CHORE_SOUND_DEFAULT`), volume (`CHORE_SOUND_VOLUME`) | `settings` (global) |
+| **Family → Prizes** | Clam-purchasable rewards | `prizes` |
+| **Family → Vacation** | Vacation mode for the household: dates, chime mute (switching it on asks for the admin PIN) | `settings` (`vacation_mode`, household) |
+| **Security** | Admin PIN, controls on displays | `admin_pin`, `device_settings_json` |
+| **System → Language & time** | Language for this display; the household time zone | `localStorage` (language); `settings` (`APP_TIMEZONE`) |
+| **System → Connections → Weather** | Provider choice (`WEATHER_PROVIDER`: `openweathermap` \| `homeassistant`), OpenWeatherMap key (`WEATHER_API_KEY`, write-only) | `settings` (global) |
+| **System → Connections → Home Assistant** | Base URL (`HOME_ASSISTANT_URL`), long-lived token (`HOME_ASSISTANT_TOKEN_ENC`, encrypted + write-only), weather entity (`HOME_ASSISTANT_WEATHER_ENTITY`) | `settings` (global) |
+| **System → Connections → Google** | Google OAuth linking | `google_accounts` |
 | **Calendar** | ICS/CalDAV/Google sources, colors, sync intervals | `calendar_sources`, `calendar_sync_status` |
 | **Photos** | Immich/Google/upload sources | `photo_sources`, media tables |
-| **Connections** | Google OAuth linking | `google_accounts` |
-| **Plugins** | Upload/install/enable custom widgets | `server/widgets/`, `widgets_registry.json`, per-device plugin settings |
-| **Interface** | Theme mode, gradients, interface colors, screensaver | `localStorage` + `device_settings_json` |
-| **Security** | Admin PIN | `admin_pin` |
+| **APIs** | ICS calendar URL | `settings` (global) |
 
 ## Refresh intervals
 

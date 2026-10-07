@@ -59,7 +59,7 @@
   "errors": {
     "enterLocation": "Please enter a location.",
     "invalidLocation": "Invalid location. Try a city and country code like \"Sydney,AU\" or a postal code like \"14818,US\".",
-    "badCredentials": "The weather provider rejected the saved credentials. Check them in the Admin Panel's Connections tab.",
+    "badCredentials": "The weather provider rejected the saved credentials. Check them in Admin Panel → System → Connections.",
     "providerUnreachable": "Could not reach the weather provider. Check that it is running and reachable from HomeGlow.",
     "fetchFailed": "Failed to fetch weather data. Please try again later."
   }

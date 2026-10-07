@@ -246,13 +246,15 @@
   },
   "vacation": {
     "heading": "Vacation Mode",
-    "help": "While on vacation, chore due-time chimes are muted and the screensaver becomes a fun vacation animation. Settings apply to this display and persist until you turn vacation mode off.",
+    "help": "Vacation mode is for the whole household. While it is on, every display shows a vacation animation as its screensaver and can mute chore due-time chimes, and missed chores are not counted. Switching it on asks for the admin PIN.",
     "enable": "Enable Vacation Mode",
     "muteSounds": "Mute chore sounds while on vacation",
     "startDate": "Start date (optional)",
     "endDate": "End date (optional)",
     "dateHelp": "With dates set, vacation starts and ends automatically, missed-chore tracking pauses for those days, and streaks bridge across them permanently. Without dates, vacation stays on until you turn it off.",
-    "save": "Save Vacation Mode Settings"
+    "save": "Save Vacation Mode Settings",
+    "pinTitle": "Enter the admin PIN to turn on vacation mode",
+    "pinWrong": "That PIN is not right. Vacation mode was not saved."
   },
   "autoDark": {
     "location": "Location",
@@ -515,5 +517,28 @@
     "cardOpacity": "Card opacity",
     "seeThrough": "See-through",
     "solid": "Solid"
-  }
+  },
+  "panelTabs": {
+    "dashboard": "Dashboard",
+    "look": "Look",
+    "displays": "Displays",
+    "family": "Family",
+    "security": "Security",
+    "system": "System"
+  },
+  "sections": {
+    "widgets": "Widgets",
+    "plugins": "Plugins",
+    "tabs": "Tabs",
+    "devices": "Devices",
+    "screensaver": "Screensaver",
+    "users": "Users",
+    "chores": "Chores",
+    "prizes": "Prizes",
+    "vacation": "Vacation",
+    "region": "Language & time",
+    "connections": "Connections",
+    "about": "About"
+  },
+  "panelTitle": "Admin Panel"
 }
