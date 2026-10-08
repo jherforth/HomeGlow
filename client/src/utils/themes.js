@@ -19,7 +19,7 @@
 //                                      // scenes that follow the weather (utils/weatherScenes.js)
 // }
 
-import { FLYBY_CURVE_OPTIONS, validateAmbience, validateConfetti, validateOrnaments } from '../themes/engine/schemas.js';
+import { FLYBY_CURVE_OPTIONS, FLYBY_ORBIT_OPTIONS, validateAmbience, validateConfetti, validateOrnaments } from '../themes/engine/schemas.js';
 import { WEATHER_SCENE_KEYS } from './weatherScenes.js';
 
 // Each theme is a folder: themes/<id>/theme.json, with its own fonts/ and
@@ -273,8 +273,8 @@ export function validateThemePackage(pkg, { assets } = {}) {
     // Each version adds things a theme may use: 2, ornaments, the meter roles
     // and clumped sprites; 3, the button roles and curved flyby crossings
     // (path, count, begin and the rest); 4, weather scenes and lightning
-    // flashes. A theme that uses them says so, so a core too old to draw
-    // them refuses it plainly.
+    // flashes; 5, orbits. A theme that uses them says so, so a core too old
+    // to draw them refuses it plainly.
     const tokenNames = ['all', ...MODES].flatMap((key) => Object.keys(pkg.tokens?.[key] || {}));
     const layers = allAmbience(pkg);
     const needs = (version, uses) => {
@@ -294,6 +294,10 @@ export function validateThemePackage(pkg, { assets } = {}) {
     needs(4, [
       pkg.weather !== undefined && 'weather',
       layers.some((layer) => layer?.layer === 'flash') && 'flash',
+    ]);
+    needs(5, [
+      layers.some((layer) => layer?.layer === 'flyby'
+        && (layer.path === 'orbit' || FLYBY_ORBIT_OPTIONS.some((key) => layer[key] !== undefined))) && 'orbits',
     ]);
   }
   if (typeof pkg.id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(pkg.id)) errors.push('id must be a lowercase slug (a-z, 0-9, hyphens, max 64)');
@@ -342,10 +346,10 @@ export const DEFAULT_THEME_ID = 'classic';
  * manifest (a new section, new tokens) raises it, so an older core refuses a
  * theme it cannot draw rather than half-applying it (theme-architecture.md
  * §5). 2: ornaments and the meter roles. 3: the button roles and curved
- * flybys. 4: weather scenes and the flash layer. The server's MANIFEST_VERSION
+ * flybys. 4: weather scenes and the flash layer. 5: orbits. The server's MANIFEST_VERSION
  * (services/themeStore.js) matches; a server test holds them equal.
  */
-export const MANIFEST_VERSION = 4;
+export const MANIFEST_VERSION = 5;
 
 /** The problem reported for a theme newer than this core; the admin page words it for people. */
 export const NEEDS_NEWER_HOMEGLOW = 'needs a newer version of HomeGlow';

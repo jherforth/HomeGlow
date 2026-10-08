@@ -48,7 +48,7 @@ folder name must match the manifest's `id`.
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `manifestVersion` | yes | `1`; `2` for a theme that uses `ornaments`, the meter tokens or `clumps`; `3` for one that uses the button tokens or curved flybys; `4` for one with `weather` scenes or a `flash` layer. A HomeGlow older than the version refuses the theme. |
+| `manifestVersion` | yes | `1`; `2` for a theme that uses `ornaments`, the meter tokens or `clumps`; `3` for one that uses the button tokens or curved flybys; `4` for one with `weather` scenes or a `flash` layer; `5` for one that uses orbits. A HomeGlow older than the version refuses the theme. |
 | `id` | yes | Lowercase slug (a-z, 0-9, hyphens), the same as the folder name. |
 | `name` | yes | Shown in the theme picker. |
 | `version`, `author`, `description` | | As in a plugin manifest. The author shows as "by ...". |
@@ -146,8 +146,19 @@ A `flyby` can follow a curve instead of a straight line (manifest version 3):
 | `hue` | Degrees of hue shift, drawn per picture, to vary colors |
 | `angle` | A fixed tilt for the whole crossing, in degrees, either way: a ringed planet's ring at a slant |
 
-Starship's planets arc slowly across the sky. A `wander` path with `turn` suits
-fish: they face where they swim and sometimes turn back.
+A flyby can also orbit (manifest version 5). With `path: orbit`, every picture
+in the layer circles one focus, picked once per page load, and they all go the
+same way round. Each gets its own ellipse through a point within `span`, and
+moves quicker nearer the focus.
+
+| Option | What it does |
+| --- | --- |
+| `focusX`, `focusY` | Where the shared focus may fall, in vw and vh. Keep it off screen; the default is below the screen, so orbits arch across the sky |
+| `eccentricity` | 0 (a circle) to 0.9: how oval each orbit is |
+| `direction` | `clockwise`, `counterclockwise` or `either` (the default: picked once per page load) |
+
+Starship's planets orbit slowly across the sky. A `wander` path with `turn`
+suits fish: they face where they swim and sometimes turn back.
 
 A picture can animate itself: an SVG with its own CSS animation, or an animated
 WebP or PNG. The engine draws it like any other picture. Keep such loops small

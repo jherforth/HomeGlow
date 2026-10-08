@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import useDataRefresh from '../hooks/useDataRefresh.js';
 import {
   Typography,
@@ -23,6 +23,7 @@ import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
 import { formatTime, formatWeekdayShort } from '../utils/dateUtils.js';
 import { isControlHidden } from '../utils/displayControls.js';
+import { coordinateBackfill, hasChosenLocation, parseTabConfigJson, tabSettingsReady } from '../utils/weatherTabSettings.js';
 
 const DEFAULT_LOCATION_QUERY = '14818';
 const VALID_LAYOUT_MODES = new Set(['auto', 'compact', 'medium', 'full']);
@@ -79,6 +80,9 @@ const WeatherWidget = ({
   const [coordinates, setCoordinates] = useState(null);
   const [layoutMode, setLayoutMode] = useState('auto');
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  // Whether the place shown was saved by someone, not the default; only a
+  // chosen place is ever written back (utils/weatherTabSettings.js).
+  const locationChosen = useRef(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
 
   // Control Limits (issue #166): the gear and the error-state button both open
@@ -122,19 +126,6 @@ const WeatherWidget = ({
     return 'F';
   };
 
-  const parseTabConfigJson = (configJson) => {
-    if (!configJson) return {};
-    if (typeof configJson === 'object' && !Array.isArray(configJson)) return configJson;
-    if (typeof configJson !== 'string') return {};
-
-    try {
-      const parsed = JSON.parse(configJson);
-      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
-    } catch {
-      return {};
-    }
-  };
-
   const readWeatherSettingsFromTabConfig = (configJson) => {
     const layoutMap = parseTabConfigJson(configJson);
     const weatherEntry = layoutMap.weather;
@@ -153,6 +144,7 @@ const WeatherWidget = ({
       layoutMode: VALID_LAYOUT_MODES.has(weatherEntry.layoutMode) ? weatherEntry.layoutMode : 'auto',
       coordinates,
       resolvedName: weatherEntry.resolvedName || '',
+      chosen: hasChosenLocation(weatherEntry),
     };
   };
 
@@ -174,6 +166,7 @@ const WeatherWidget = ({
         layoutMode: VALID_LAYOUT_MODES.has(override.layoutMode) ? override.layoutMode : 'auto',
         coordinates: isValidCoordinates(override) ? { lat: override.lat, lon: override.lon } : null,
         resolvedName: override.resolvedName || '',
+        chosen: hasChosenLocation(override),
       };
     }
 
@@ -363,6 +356,7 @@ const WeatherWidget = ({
     setTempUnit(savedTempUnit);
     setCoordinates(savedCoordinates);
     setLayoutMode(savedLayoutMode);
+    locationChosen.current = !!resolvedSettings?.chosen;
     setDraftLocationQuery(savedLocationQuery);
     setDraftTempUnit(savedTempUnit);
     setDraftLayoutMode(savedLayoutMode);
@@ -401,11 +395,15 @@ const WeatherWidget = ({
     });
   };
 
+  // Until the tabs load, "no place saved" and "not loaded yet" look the
+  // same; wait rather than fall back to the default and fetch it.
+  const tabsReady = tabSettingsReady(activeTabConfigJson, allTabConfigs);
   useEffect(() => {
+    if (!tabsReady) return;
     const tabSettings = getEffectiveWeatherSettingsForTab(activeTab, activeTabConfigJson);
     setSettingsLoaded(false);
     applyResolvedTabSettings(tabSettings);
-  }, [activeTab, activeTabConfigJson, refreshNonce]);
+  }, [activeTab, activeTabConfigJson, refreshNonce, tabsReady]);
 
   // Demo mode needs no special case any more: the server picks the demo
   // provider behind GET /api/weather, so the widget takes the same path it
@@ -436,6 +434,7 @@ const WeatherWidget = ({
         tempUnit,
         layoutMode: layoutMode || 'auto',
         coordinates: isValidCoordinates(coordinates) ? coordinates : null,
+        chosen: locationChosen.current,
       });
     }
 
@@ -452,6 +451,7 @@ const WeatherWidget = ({
         tempUnit: weatherSettings.tempUnit,
         layoutMode: weatherSettings.layoutMode || 'auto',
         coordinates: isValidCoordinates(weatherSettings.coordinates) ? weatherSettings.coordinates : null,
+        chosen: weatherSettings.chosen,
       });
     }
 
@@ -471,19 +471,9 @@ const WeatherWidget = ({
           targetCoordinates: target.coordinates,
         });
 
-        if (
-          Number.isFinite(target.tabNumber)
-          && !isValidCoordinates(target.coordinates)
-          && isValidCoordinates(payload?.coordinates)
-        ) {
-          await saveInstanceSettingsToTab(target.tabNumber, {
-            locationQuery: target.locationQuery,
-            tempUnit: target.tempUnit,
-            layoutMode: target.layoutMode || 'auto',
-            lat: payload.coordinates.lat,
-            lon: payload.coordinates.lon,
-            ...(payload.resolvedName ? { resolvedName: payload.resolvedName } : {}),
-          });
+        const backfill = coordinateBackfill(target, payload);
+        if (Number.isFinite(target.tabNumber) && backfill) {
+          await saveInstanceSettingsToTab(target.tabNumber, backfill);
         }
       } catch {
         // Keep prefetch failures non-blocking.
@@ -529,8 +519,10 @@ const WeatherWidget = ({
       applyWeatherPayloadToState(payload);
       if (isValidCoordinates(payload.coordinates)) {
         setCoordinates(payload.coordinates);
-
-        // Backfill coordinates for existing tabs that were saved before coordinate persistence.
+      }
+      // Backfill coordinates for tabs saved before coordinates were kept, but
+      // only for a place someone chose: never write the default back.
+      if (isValidCoordinates(payload.coordinates) && locationChosen.current) {
         void persistActiveTabSettingsIfChanged({
           nextLocationQuery: locationQuery,
           nextTempUnit: tempUnit,
@@ -609,6 +601,7 @@ const WeatherWidget = ({
     setTempUnit(normalizedTempUnit);
     setCoordinates(resolvedCoordinates);
     setLayoutMode(normalizedLayoutMode);
+    locationChosen.current = true;
 
     if (shouldRefreshForDataChange) {
       setShouldFetchNow(true);

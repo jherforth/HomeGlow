@@ -276,6 +276,8 @@ Version history:
   theme's), and the `flash` layer for lightning (issue #247). `resolveTheme`
   takes the scene to show; `app.jsx` picks it from the condition at the
   appearance location (`utils/weatherScenes.js`, `utils/useWeatherCondition.js`).
+- **5:** orbits (`path: orbit` with `focusX`, `focusY`, `eccentricity` and
+  `direction`): every picture in a layer circles one focus, the same way round.
 
 ## 6. Implementation order
 

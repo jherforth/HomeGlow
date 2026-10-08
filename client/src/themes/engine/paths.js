@@ -11,6 +11,9 @@
 //           off screen, so the visible part is a gentle curve (planets)
 //   wander  a meander up and down (fish); with `turn`, some swim partway in,
 //           turn around and leave the way they came
+//   orbit   a piece of an ellipse around a focus the whole layer shares, all
+//           going the same way round (planets): each picture its own ellipse,
+//           quicker nearer the focus, as Kepler has it
 
 import { draw } from './motion.js';
 
@@ -58,14 +61,71 @@ function distanceFn(random, options) {
 }
 
 /**
+ * What every orbit in a layer shares, drawn once per page load: the focus
+ * (x in vw, y in vh; it belongs off screen) and the way round, 1 clockwise
+ * on screen and -1 counterclockwise.
+ */
+export function planOrbitSystem(random, options) {
+  const focusX = draw(random, options.focusX ?? [-40, 140]);
+  const focusY = draw(random, options.focusY ?? [150, 260]);
+  const way = options.direction === 'clockwise' ? 1
+    : options.direction === 'counterclockwise' ? -1
+      : sign(random);
+  return { focusX, focusY, way };
+}
+
+const ORBIT_STEP = 0.002; // radians, when finding where an orbit leaves the screen
+
+/** One pass along an orbit: enter off screen, cross within `span`, leave off screen. */
+function planOrbit(random, options, picture, aspect, system) {
+  // Work in vh on both axes so the ellipse is not squashed by the screen's shape.
+  const fx = system.focusX * aspect;
+  const fy = system.focusY;
+  const [from, to] = options.span ?? [10, 70];
+  // The point where this orbit crosses the screen, then the ellipse through it.
+  const cx = (30 + random() * 40) * aspect;
+  const cy = from + random() * (to - from);
+  const thetaC = Math.atan2(cy - fy, cx - fx);
+  const e = clamp(draw(random, options.eccentricity ?? [0, 0.3]), 0, 0.9);
+  const omega = random() * Math.PI * 2;
+  const p = Math.hypot(cx - fx, cy - fy) * (1 + e * Math.cos(thetaC - omega));
+  const radius = (theta) => p / (1 + e * Math.cos(theta - omega));
+  const at = (theta) => ({ X: fx + radius(theta) * Math.cos(theta), Y: fy + radius(theta) * Math.sin(theta) });
+  const margin = (picture.width ?? 5) * 1.2;
+  const offScreen = ({ X, Y }) => X < -margin || X > 100 * aspect + margin || Y < -margin || Y > 100 + margin;
+  // Walk out from the crossing both ways until off screen (half an orbit at most).
+  const reach = (direction) => {
+    let d = 0;
+    while (d < Math.PI && !offScreen(at(thetaC + direction * d))) d += ORBIT_STEP;
+    return d;
+  };
+  const start = thetaC - system.way * reach(-system.way);
+  const end = thetaC + system.way * reach(system.way);
+
+  // Equal areas in equal times: time grows with r squared per step of angle.
+  const thetas = Array.from({ length: SAMPLES + 1 }, (_, i) => start + ((end - start) * i) / SAMPLES);
+  const weights = thetas.map((theta) => radius(theta) ** 2);
+  const elapsed = [0];
+  for (let i = 1; i < thetas.length; i += 1) elapsed.push(elapsed[i - 1] + (weights[i - 1] + weights[i]) / 2);
+  const total = elapsed[elapsed.length - 1] || 1;
+  const frames = thetas.map((theta, i) => {
+    const { X, Y } = at(theta);
+    return { at: (elapsed[i] / total) * 100, x: X / aspect, y: Y, angle: 0, flip: 1 };
+  });
+  return { frames, rightward: frames[frames.length - 1].x > frames[0].x, turns: false };
+}
+
+/**
  * One pass of a curved crossing.
  *
  * picture: { width } in vh. aspect: the screen's width over its height.
+ * system: for an orbit, the layer's shared planOrbitSystem().
  * Returns { frames: [{ at, x, y, angle, flip }], rightward }, `at` in percent
  * of the pass, `flip` 1 facing right and -1 mirrored (it passes through 0
  * during a turn-around).
  */
-export function planPath(random, options, picture, aspect = 16 / 9) {
+export function planPath(random, options, picture, aspect = 16 / 9, system = null) {
+  if (options.path === 'orbit') return planOrbit(random, options, picture, aspect, system ?? planOrbitSystem(random, options));
   const path = options.path === 'arc' ? 'arc' : 'wander';
   const facing = options.facing ?? (path === 'arc' ? 'fixed' : 'path');
   const pitch = draw(random, options.pitch ?? 15);

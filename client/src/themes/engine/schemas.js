@@ -98,7 +98,7 @@ export const LAYER_SCHEMAS = {
     spin: range(0, 1440),
     opacity: num(0, 1),
     // Curved crossings (manifest version 3); see paths.js.
-    path: { type: 'enum', values: ['line', 'arc', 'wander'] },
+    path: { type: 'enum', values: ['line', 'arc', 'wander', 'orbit'] },
     bend: range(0, 60),
     wander: range(0, 30),
     facing: { type: 'enum', values: ['path', 'fixed'] },
@@ -109,6 +109,11 @@ export const LAYER_SCHEMAS = {
     begin: { type: 'enum', values: ['waiting', 'underway'] },
     hue: range(0, 360),
     angle: range(0, 90),
+    // Orbits (manifest version 5): the shared focus, how oval, which way round.
+    focusX: range(-300, 400),
+    focusY: range(-300, 400),
+    eccentricity: range(0, 0.9),
+    direction: { type: 'enum', values: ['either', 'clockwise', 'counterclockwise'] },
   },
   blobs: {
     colors: { type: 'colors', required: true },
@@ -131,6 +136,9 @@ export const LAYER_NAMES = Object.keys(LAYER_SCHEMAS);
 
 /** The flyby options manifest version 3 added: curved crossings, several at once. */
 export const FLYBY_CURVE_OPTIONS = ['path', 'bend', 'wander', 'facing', 'pitch', 'glide', 'turn', 'count', 'begin', 'hue', 'angle'];
+
+/** The flyby options manifest version 5 added: orbits around a shared focus. */
+export const FLYBY_ORBIT_OPTIONS = ['focusX', 'focusY', 'eccentricity', 'direction'];
 
 // A theme's own confetti (chore and prize celebrations): its colors, which of
 // the standard shapes, and pictures from its folder mixed in. `pictures`
