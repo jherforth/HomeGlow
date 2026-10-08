@@ -2823,7 +2823,7 @@ function resolveScheduleUsers(body) {
 }
 
 fastify.post('/api/chore-schedules', async (request, reply) => {
-  const { chore_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until, spawn_chore_id, spawn_user_ids } = request.body;
+  const { chore_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until } = request.body;
   try {
     if (!chore_id) {
       return reply.status(400).send({ error: 'chore_id is required' });
@@ -2881,7 +2881,7 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
       return reply.status(400).send({ error: targets.error });
     }
 
-    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until, spawn_chore_id, spawn_user_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     // One row per person, all or none: a batch never leaves half the
     // family scheduled.
     const insertAll = db.transaction((userIds) => userIds.map((userId) => stmt.run(
@@ -2899,9 +2899,7 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
       dueDateResult.value,
       transferable !== undefined ? (transferable ? 1 : 0) : 1,
       can_snooze !== undefined ? (can_snooze ? 1 : 0) : 1,
-      snoozedUntilResult.value,
-      spawn_chore_id || null,
-      spawn_user_ids ? JSON.stringify(spawn_user_ids) : null
+      snoozedUntilResult.value
     ).lastInsertRowid));
     const ids = insertAll(targets.userIds);
     return targets.batch ? { id: ids[0], ids, success: true } : { id: ids[0], success: true };
@@ -2947,7 +2945,7 @@ fastify.post('/api/chore-schedules/bulk', async (request, reply) => {
 
 fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
   const { id } = request.params;
-  const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until, revoke_daily_bonus, transfer_bonus_clams, spawn_chore_id, spawn_user_ids } = request.body;
+  const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until, revoke_daily_bonus, transfer_bonus_clams } = request.body;
   try {
     const dueTimeResult = normalizeDueTime(due_time);
     if (due_time !== undefined && !dueTimeResult.valid) {
@@ -3044,8 +3042,6 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
     if (can_snooze !== undefined) { updates.push('can_snooze = ?'); params.push(can_snooze ? 1 : 0); }
     if (snoozed_until !== undefined) { updates.push('snoozed_until = ?'); params.push(snoozedUntilResult.value); }
     if (transfer_bonus_clams !== undefined) { updates.push('transfer_bonus_clams = ?'); params.push(normalizedTransferBonus); }
-    if (spawn_chore_id !== undefined) { updates.push('spawn_chore_id = ?'); params.push(spawn_chore_id || null); }
-    if (spawn_user_ids !== undefined) { updates.push('spawn_user_ids = ?'); params.push(spawn_user_ids ? JSON.stringify(spawn_user_ids) : null); }
 
     if (updates.length === 0) {
       return reply.status(400).send({ error: 'No fields to update' });
@@ -3454,37 +3450,6 @@ fastify.post('/api/chores/complete', async (request, reply) => {
     });
 
     awardDailyRegularBonusIfDue(user_id, date);
-
-    // Spawn child chores if this schedule has spawn rules configured. Each
-    // user in spawn_user_ids gets a new visible one-time schedule for the
-    // spawn chore (e.g. parent completes "Fold laundry" → each kid gets
-    // "Put away laundry").
-    if (schedule.spawn_chore_id && schedule.spawn_user_ids) {
-      try {
-        const spawnUserIds = JSON.parse(schedule.spawn_user_ids);
-        if (Array.isArray(spawnUserIds) && spawnUserIds.length > 0) {
-          const spawnChore = db.prepare('SELECT id FROM chores WHERE id = ?').get(schedule.spawn_chore_id);
-          if (spawnChore) {
-            const insertSpawn = db.prepare(
-              `INSERT INTO chore_schedules
-               (chore_id, user_id, crontab, duration, visible, due_date, parent_schedule_id)
-               VALUES (?, ?, NULL, 'day-of', 1, ?, ?)`
-            );
-            for (const spawnUserId of spawnUserIds) {
-              // Don't create duplicates if the completion is somehow replayed.
-              const existingSpawn = db.prepare(
-                'SELECT id FROM chore_schedules WHERE chore_id = ? AND user_id = ? AND parent_schedule_id = ? AND visible = 1'
-              ).get(schedule.spawn_chore_id, spawnUserId, chore_schedule_id);
-              if (!existingSpawn) {
-                insertSpawn.run(schedule.spawn_chore_id, spawnUserId, date, chore_schedule_id);
-              }
-            }
-          }
-        }
-      } catch (spawnError) {
-        console.warn(`Failed to spawn child chores for schedule ${chore_schedule_id}:`, spawnError.message);
-      }
-    }
 
     // Read the total after the award so the response includes the bonus.
     const totalResult = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(user_id);
