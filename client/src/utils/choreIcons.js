@@ -95,6 +95,20 @@ export const CHORE_ICON_GROUPS = [
     ],
   },
   {
+    // Practice, games and putting the gear away.
+    key: 'sports',
+    icons: [
+      { key: 'soccer', emoji: '⚽' },
+      { key: 'basketball', emoji: '🏀' },
+      { key: 'americanFootball', emoji: '🏈' },
+      { key: 'baseball', emoji: '⚾' },
+      { key: 'softball', emoji: '🥎' },
+      { key: 'tennis', emoji: '🎾' },
+      { key: 'volleyball', emoji: '🏐' },
+      { key: 'rugby', emoji: '🏉' },
+    ],
+  },
+  {
     key: 'school',
     icons: [
       { key: 'homework', emoji: '📝' },
