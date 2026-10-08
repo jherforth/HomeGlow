@@ -154,6 +154,41 @@ done" bonus for **both** the previous and new owner and never removes points.
 **Code:** reassign UI in `ChoreWidget.jsx`; `PATCH /api/chore-schedules/:id` +
 `awardDailyRegularBonusIfDue` in `server/index.js`.
 
+### Follow-up chores (issue #241)
+
+Some chores can only start once another is finished: the dishwasher has run, so
+*Unload the dishwasher*. A chore can have **up to 3 follow-ups**, set in its edit dialog
+under **When it's done**: *"Then give **Unload the dishwasher** to **Liam**, **after 2
+hours**."*
+
+- **Trigger:** completing the chore **today**, from any schedule, by anyone, including
+  plugins such as Routines. Each person named gets an ordinary one-time schedule of the
+  follow-up chore. Back-dated completions in the Admin Panel don't hand work on.
+- **Delay:** right away, or after N minutes or hours (up to 7 days). A delay is a snooze,
+  so the follow-up stays hidden, and out of the bonus, until it ends. Follow-ups have no
+  due date or time.
+- **Fairness:** a follow-up doesn't count toward the daily bonus, or get logged as
+  missed, on the day it appeared, since it can arrive at 9 pm. From the next day it
+  counts like any one-time chore, and it stays until it's done.
+- **No stacking:** while a person still has an open follow-up from a rule, finishing the
+  chore again doesn't give them a second one.
+- **Undo:** unticking the trigger removes the follow-ups it handed out that nobody has
+  done. Ones already done are kept.
+- **Chains** (A, then B, then C) work. Loops are refused when saving.
+- **Deleting** either chore removes the rule. Follow-ups already handed out stay until
+  done.
+- **Display:**
+  - the widget shows "↪ after Run the dishwasher" on a follow-up;
+  - the definitions table shows a chip per follow-up;
+  - the schedules table marks follow-up schedules.
+
+**Code:** `chore_followups` table and `chore_schedules.followup_rule_id`,
+`triggered_by_schedule_id` and `triggered_on` (migration `schema27-choreFollowups`).
+`createFollowupsForCompletion`, `removeOpenFollowupsFrom` and the first-day rule in
+`getTodaysRegularChoresForUser` are in `server/index.js`. The dialog is in
+`ChoreSchedulesTab.jsx`, and `countsTowardDailyBonus` (`utils/choreHelpers.js`) keeps the
+widget in step with the server.
+
 ### Metrics-ready history (issue #72)
 
 Every `chore_history` row carries a **`kind`** (`completion`, `daily_bonus`,

@@ -39,7 +39,7 @@ import PinModal from './PinModal';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
 import { fetchPinRemembered, setPinRemembered, shouldPromptForPin } from '../utils/adminPinDevice.js';
-import { shouldShowChoreToday, getTodayDateString, convertDaysToCrontab, getDueDateStatus, formatDueDate, hasOutstandingBonusChore } from '../utils/choreHelpers.js';
+import { shouldShowChoreToday, getTodayDateString, convertDaysToCrontab, getDueDateStatus, formatDueDate, hasOutstandingBonusChore, countsTowardDailyBonus } from '../utils/choreHelpers.js';
 import { filterVisibleUsers, toggleHiddenUserId, pruneHiddenUserIds } from '../utils/choreUserVisibility.js';
 import { isControlHidden } from '../utils/displayControls.js';
 import { subscribePluginEvents } from '../utils/pluginEventBridge.js';
@@ -715,9 +715,10 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
   };
 
   // Mirrors the server's daily-bonus rule: a user's day is complete when they
-  // have at least one regular (zero-clam) chore today and none are open.
+  // have at least one regular (zero-clam) chore today and none are open. A
+  // follow-up handed out today doesn't count yet (issue #241).
   const isUserDayComplete = (userId) => {
-    const regular = getUserChoresForToday(userId).filter(c => c.clam_value === 0);
+    const regular = getUserChoresForToday(userId).filter(c => countsTowardDailyBonus(c));
     return regular.length > 0 && regular.every(c => c.completed);
   };
 
@@ -1062,6 +1063,12 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
               />
             )}
           </Typography>
+          {schedule.followup_of && (
+            // Why it appeared: handed on when someone finished another chore (#241).
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.72rem' }}>
+              {t('chores:widget.followupOf', { title: schedule.followup_of })}
+            </Typography>
+          )}
           {schedule.description && (
             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
               {schedule.description}
@@ -1242,8 +1249,8 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
             )}
             {visibleUsers.map(user => {
               const userChores = getUserChoresForToday(user.id);
-              const completedChores = userChores.filter(c => c.completed && c.clam_value === 0).length;
-              const totalRegularChores = userChores.filter(c => c.clam_value === 0).length;
+              const completedChores = userChores.filter(c => c.completed && countsTowardDailyBonus(c)).length;
+              const totalRegularChores = userChores.filter(c => countsTowardDailyBonus(c)).length;
               const allRegularChoresCompleted = totalRegularChores > 0 && completedChores === totalRegularChores;
 
               return (

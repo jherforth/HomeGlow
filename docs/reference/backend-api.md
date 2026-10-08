@@ -176,8 +176,9 @@ static route.
 ### Chores, schedules & history
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET/POST | `/api/chores` | List / create chore definitions. |
-| PATCH/DELETE | `/api/chores/:id` | Update / delete a chore. |
+| GET/POST | `/api/chores` | List / create chore definitions. Each listed chore carries `followups: [{ id, followup_chore_id, title }]`. |
+| PATCH/DELETE | `/api/chores/:id` | Update / delete a chore. Deleting removes its follow-up rules and any rule that names it. |
+| GET/PUT | `/api/chores/:id/followups` | A chore's follow-ups (issue #241). PUT replaces them with `{ followups: [{ followup_chore_id, user_ids, delay_minutes }] }`: at most 3, not the chore itself, no loops, at least one person, delay 0–10080 minutes. |
 | GET/POST | `/api/chore-schedules` | List (filter by `user_id`, `visible`, `usage`, `chore_id`) / create. Accepts `due_time` (`HH:MM`), `sound`, `sound_enabled`, `reminder_interval_minutes` for due-time sounds, and `due_date` (`YYYY-MM-DD`) for calendar deadlines. PATCH `user_id` reassigns a chore and re-checks the daily bonus for both owners. |
 | GET/PATCH/DELETE | `/api/chore-schedules/:id` | Single schedule CRUD. |
 | POST | `/api/chore-schedules/bulk` | Bulk create schedules. |
@@ -186,8 +187,8 @@ static route.
 | GET | `/api/chore-history/summary/:userId` | Summary/aggregate for a user. |
 | GET | `/api/chore-history/recent` | Recent (last 7 days) completions. |
 | DELETE | `/api/chore-history/:id` | Delete a history entry. |
-| POST | `/api/chores/complete` | Mark a chore complete (awards clams / daily bonus). |
-| POST | `/api/chores/uncomplete` | Undo a completion. |
+| POST | `/api/chores/complete` | Mark a chore complete (awards clams / daily bonus). A completion dated today hands out the chore's follow-ups; the response lists them in `followups_created`. |
+| POST | `/api/chores/uncomplete` | Undo a completion, and remove the follow-ups it handed out that nobody has done (`followups_removed`). |
 
 ### Users & clams
 | Method | Path | Purpose |
