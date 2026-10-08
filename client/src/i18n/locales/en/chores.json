@@ -7,6 +7,7 @@
     "living": "Living areas",
     "pets": "Pets",
     "outdoor": "Outdoors",
+    "sports": "Sports",
     "school": "School & routine"
   },
   "icons": {
@@ -62,7 +63,15 @@
     "music": "Music practice",
     "computer": "Screen time",
     "clock": "On time",
-    "star": "Star"
+    "star": "Star",
+    "soccer": "Soccer ball",
+    "basketball": "Basketball",
+    "americanFootball": "Football",
+    "baseball": "Baseball",
+    "softball": "Softball",
+    "tennis": "Tennis ball",
+    "volleyball": "Volleyball",
+    "rugby": "Rugby ball"
   },
   "widget": {
     "title": "🥟 Daily Chores",

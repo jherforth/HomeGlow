@@ -7,6 +7,7 @@
     "living": "Zonas comunes",
     "pets": "Mascotas",
     "outdoor": "Exterior",
+    "sports": "Deportes",
     "school": "Escuela y rutina"
   },
   "icons": {
@@ -62,7 +63,15 @@
     "music": "Práctica de música",
     "computer": "Tiempo de pantalla",
     "clock": "Puntualidad",
-    "star": "Estrella"
+    "star": "Estrella",
+    "soccer": "Balón de fútbol",
+    "basketball": "Balón de baloncesto",
+    "americanFootball": "Balón de fútbol americano",
+    "baseball": "Pelota de béisbol",
+    "softball": "Pelota de sóftbol",
+    "tennis": "Pelota de tenis",
+    "volleyball": "Balón de voleibol",
+    "rugby": "Balón de rugby"
   },
   "widget": {
     "title": "🥟 Tareas del día",
