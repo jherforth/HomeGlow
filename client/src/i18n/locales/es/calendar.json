@@ -18,6 +18,21 @@
     "start": "Inicio",
     "end": "Fin",
     "location": "Ubicación",
+    "color": "Color",
+    "colorDefault": "Color del calendario",
+    "colors": {
+      "tomato": "Tomate",
+      "flamingo": "Flamenco",
+      "tangerine": "Mandarina",
+      "banana": "Plátano",
+      "sage": "Salvia",
+      "basil": "Albahaca",
+      "peacock": "Pavo real",
+      "blueberry": "Arándano",
+      "lavender": "Lavanda",
+      "grape": "Uva",
+      "graphite": "Grafito"
+    },
     "confirmDelete": "¿Eliminar este evento de Google Calendar?"
   },
   "sources": {

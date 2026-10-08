@@ -25,45 +25,33 @@ async function listCalendars(db, accountId) {
     }));
 }
 
-// Google's event palette is effectively static, so a long TTL avoids an extra
-// API round trip on every sync.
-const EVENT_COLOR_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const eventColorCache = new Map();
+// Google's per-event colorId ('1'...'11') and the hex Google's own UI shows
+// for it (Lavender, Sage, Grape, Flamingo, Banana, Tangerine, Peacock,
+// Graphite, Blueberry, Basil, Tomato). The API's /colors endpoint still
+// returns the pre-2016 hexes (colorId 8 -> #e1e1e1 near-white where the UI
+// shows #616161 dark grey), so sync resolves colorId here instead. The event
+// editor offers the same eleven swatches (issue #244), so a color picked in
+// HomeGlow is the color the dashboard and Google both show.
+const EVENT_COLORS = Object.freeze({
+    '1': '#7986cb',
+    '2': '#33b679',
+    '3': '#8e24aa',
+    '4': '#e67c73',
+    '5': '#f6bf26',
+    '6': '#f4511e',
+    '7': '#039be5',
+    '8': '#616161',
+    '9': '#3f51b5',
+    '10': '#0b8043',
+    '11': '#d50000',
+});
 
-// Maps Google's per-event colorId ('1'...'11') to its background hex. Returns
-// an empty map if the palette can't be fetched, which leaves events falling
-// back to their calendar's color rather than showing a wrong one.
-async function listEventColors(db, accountId) {
-    const cached = eventColorCache.get(accountId);
-    if (cached && Date.now() - cached.fetchedAt < EVENT_COLOR_CACHE_TTL_MS) {
-        return cached.colors;
-    }
-
-    try {
-        const colors = {};
-        const data = await googleFetch(db, accountId, 'GET', '/colors');
-        if (data && data.event) {
-            for (const [colorId, value] of Object.entries(data.event)) {
-                if (value && value.background) colors[colorId] = value.background;
-            }
-        }
-        // Only successful fetches are cached. Caching an empty palette after a
-        // transient failure would strip per-event colors for the whole TTL —
-        // and since the hex is resolved into raw_data at sync time, events
-        // synced during that window stay uncolored until a later sync. Retrying
-        // on the next sync costs one request and surfaces the error in the log.
-        eventColorCache.set(accountId, { colors, fetchedAt: Date.now() });
-        return colors;
-    } catch (error) {
-        console.error('Error fetching Google event colors:', error.message);
-        return {};
-    }
-}
-
-// Event labels supersede the legacy /colors palette: a label's backgroundColor
-// is the color Google's own UI shows. They live on the calendar resource, so a
-// per-(account, calendar) cache is the tightest key; a shared TTL with the
-// legacy palette keeps both refreshes on the same cadence.
+// Event labels supersede the colorId palette: a custom label has a name and
+// color of its own, and its backgroundColor is what Google's UI shows. Labels
+// live on the calendar resource, so a per-(account, calendar) cache is the
+// tightest key; they change rarely, so a day avoids an extra API round trip on
+// every sync.
+const EVENT_LABEL_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const eventLabelCache = new Map();
 
 function eventLabelCacheKey(accountId, calendarId) {
@@ -71,12 +59,12 @@ function eventLabelCacheKey(accountId, calendarId) {
 }
 
 // Maps a calendar's eventLabelId (UUID) to its backgroundColor hex. Returns an
-// empty map on failure so callers fall through to the legacy colorId path
-// rather than dropping color entirely.
+// empty map on failure so callers fall through to the colorId palette rather
+// than dropping color entirely.
 async function listEventLabels(db, accountId, calendarId) {
     const cacheKey = eventLabelCacheKey(accountId, calendarId);
     const cached = eventLabelCache.get(cacheKey);
-    if (cached && Date.now() - cached.fetchedAt < EVENT_COLOR_CACHE_TTL_MS) {
+    if (cached && Date.now() - cached.fetchedAt < EVENT_LABEL_CACHE_TTL_MS) {
         return cached.labels;
     }
 
@@ -91,10 +79,10 @@ async function listEventLabels(db, accountId, calendarId) {
                 }
             }
         }
-        // Same reasoning as listEventColors: only cache successful fetches.
-        // A transient failure returning an empty map, if cached, would strip
-        // label colors for the whole TTL and freeze that state into raw_data
-        // for every event synced in that window.
+        // Only successful fetches are cached. A transient failure returning an
+        // empty map, if cached, would strip label colors for the whole TTL and
+        // freeze that state into raw_data for every event synced in that
+        // window; retrying on the next sync costs one request.
         eventLabelCache.set(cacheKey, { labels, fetchedAt: Date.now() });
         return labels;
     } catch (error) {
@@ -142,17 +130,34 @@ function nextDay(ymd) {
     return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
 }
 
+// undefined (leave the color alone), null (back to the calendar's color), or
+// a colorId string. Anything else is the caller's mistake, so it is a 400
+// rather than something passed on for Google to reject.
+function normalizeEventColorId(value) {
+    if (value === undefined) return undefined;
+    if (value === null || value === '') return null;
+    const id = String(value);
+    if (Object.prototype.hasOwnProperty.call(EVENT_COLORS, id)) return id;
+    const error = new Error('color_id must be a Google event color from 1 to 11.');
+    error.status = 400;
+    throw error;
+}
+
 // The event editor, like the rest of HomeGlow's API, says `all_day` and gives
 // an inclusive end date: a one-day event ends on the day it starts. Google's
 // all-day end is exclusive, so it gets one day added. `allDay` is the original
 // key, whose end is passed through unchanged as Google's own exclusive end.
 // Reading only `allDay` sent every edit from the editor down the timed branch,
 // saving an all-day event as a zero-length event at UTC midnight (#215).
-function eventToBody({ title, description, location, start, end, allDay, all_day: allDayInclusive, timeZone }) {
+function eventToBody({ title, description, location, start, end, allDay, all_day: allDayInclusive, timeZone, color_id: colorId }) {
     const body = {};
     if (title !== undefined) body.summary = title;
     if (description !== undefined) body.description = description;
     if (location !== undefined) body.location = location;
+    // `color_id` is one of Google's eleven event colors, or null (or '') for
+    // the calendar's own color. Left out, the event's color is not touched.
+    const color = normalizeEventColorId(colorId);
+    if (color !== undefined) body.colorId = color;
 
     const inclusiveEnd = allDayInclusive !== undefined;
     const isAllDay = inclusiveEnd ? !!allDayInclusive : !!allDay;
@@ -175,6 +180,8 @@ function eventToBody({ title, description, location, start, end, allDay, all_day
 
 async function createEvent(db, accountId, calendarId, event) {
     const body = eventToBody(event);
+    // A new event already wears its calendar's color; there is nothing to clear.
+    if (body.colorId === null) delete body.colorId;
     return await googleFetch(db, accountId, 'POST', `/calendars/${encodeURIComponent(calendarId)}/events`, body);
 }
 
@@ -211,8 +218,8 @@ async function deleteEvent(db, accountId, calendarId, eventId) {
 }
 
 module.exports = {
+    EVENT_COLORS,
     listCalendars,
-    listEventColors,
     listEventLabels,
     listEvents,
     createEvent,
