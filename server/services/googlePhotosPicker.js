@@ -1,6 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { Readable } = require('stream');
+const { pipeline } = require('stream/promises');
 const googleConnection = require('./googleConnection');
 
 const API_BASE = 'https://photospicker.googleapis.com/v1';
@@ -51,19 +53,27 @@ async function downloadMedia(db, accountId, sourceId, pickedItem) {
 
     const accessToken = await googleConnection.getValidAccessToken(db, accountId);
     const fullUrl = `${mediaFile.baseUrl}=d`;
-    const res = await fetch(fullUrl, {
+    const res = await googleConnection.googleRequest(fullUrl, {
         headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    }, googleConnection.timeouts.downloadMs);
     if (!res.ok) {
         throw new Error(`Failed to download picked media (${res.status})`);
     }
-    const buf = Buffer.from(await res.arrayBuffer());
 
     const mimeType = mediaFile.mimeType || res.headers.get('content-type') || 'image/jpeg';
     const ext = extensionForMime(mimeType);
     const safeName = crypto.randomBytes(12).toString('hex') + ext;
     const localPath = path.join(sourceDir(sourceId), safeName);
-    fs.writeFileSync(localPath, buf);
+    // Straight to disk: a video held in memory whole could exhaust the server's.
+    try {
+        await pipeline(Readable.fromWeb(res.body), fs.createWriteStream(localPath));
+    } catch (err) {
+        fs.rmSync(localPath, { force: true });
+        if (err.name === 'TimeoutError') {
+            throw new Error(`Google did not finish sending picked media within ${Math.round(googleConnection.timeouts.downloadMs / 1000)} seconds`);
+        }
+        throw err;
+    }
     return {
         localPath,
         mimeType,
