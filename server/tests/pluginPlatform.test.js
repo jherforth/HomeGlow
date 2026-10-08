@@ -914,4 +914,12 @@ test('the plugin SDK is served as JavaScript', async () => {
     assert.match(sdk.headers.get('content-type'), /javascript/);
     assert.ok(sdk.body.includes('window.HomeGlow'));
     assert.ok(sdk.body.includes('/api/plugin/v1'));
+    // Revalidated on every load, so an upgrade reaches plugins at once.
+    assert.equal(sdk.headers.get('cache-control'), 'no-cache');
+    const etag = sdk.headers.get('etag');
+    assert.match(etag, /^"[0-9a-f]{40}"$/);
+    const again = await api('/plugin-sdk/v1.js', { headers: { 'If-None-Match': etag } });
+    assert.equal(again.status, 304);
+    const other = await api('/plugin-sdk/v1.js', { headers: { 'If-None-Match': '"stale"' } });
+    assert.equal(other.status, 200);
 });

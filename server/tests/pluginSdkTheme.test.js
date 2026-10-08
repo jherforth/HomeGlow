@@ -107,6 +107,7 @@ test('role tokens (version 2) land on the root; others and unsafe values do not'
       '--hg-radius-md': '14px',
       '--hg-font-body': "'Antonio', 'Arial Narrow', sans-serif",
       '--hg-meter-fill': '#ff9900',
+      '--hg-button-bg': 'linear-gradient(45deg, #99ccff, #ff9900)',
       '--dock-bg': '#000000',
       '--border': 'red; background: url(x)',
       '--surface': 'url(https://evil.example/x.png)',
@@ -116,6 +117,7 @@ test('role tokens (version 2) land on the root; others and unsafe values do not'
   assert.equal(vars.get('--hg-radius-md'), '14px');
   assert.equal(vars.get('--hg-font-body'), "'Antonio', 'Arial Narrow', sans-serif");
   assert.equal(vars.get('--hg-meter-fill'), '#ff9900');
+  assert.equal(vars.get('--hg-button-bg'), 'linear-gradient(45deg, #99ccff, #ff9900)');
   assert.equal(vars.has('--dock-bg'), false);
   assert.equal(vars.has('--border'), false);
   assert.equal(vars.has('--surface'), false);

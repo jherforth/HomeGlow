@@ -27,6 +27,7 @@ export const PLUGIN_ROLE_TOKENS = [
   '--hg-radius-sm', '--hg-radius-md', '--hg-radius-lg',
   '--hg-font-body', '--hg-font-heading', '--hg-heading-transform', '--hg-heading-letter-spacing',
   '--hg-meter-track', '--hg-meter-fill', '--hg-meter-thickness', '--hg-meter-cap',
+  '--hg-button-bg', '--hg-button-text', '--hg-button-radius', '--hg-button-weight', '--hg-button-quiet-border',
 ];
 
 /** The role tokens' current values on `root`, resolved (var() substituted). */

@@ -48,6 +48,7 @@ import { personalizationTokens } from './utils/personalize.js';
 import { THEME_TOKENS_APPLIED_EVENT } from './utils/pluginThemeBridge.js';
 import { loadInstalledThemes, useThemeRegistry } from './utils/installedThemes.js';
 import { ThemeContext } from './themes/engine/ThemeContext.js';
+import ThemeAmbience from './themes/engine/ThemeAmbience.jsx';
 import { normalizeWidgetSettings, BASE_WIDGET_SETTINGS } from './utils/widgetSettings.js';
 import { buildMobileWidgetList } from './utils/mobileWidgets.js';
 import { CORE_CONTROLS, resolveHiddenControls } from './utils/displayControls.js';
@@ -1305,6 +1306,10 @@ const App = () => {
   const tree = (
     <>
       <Box sx={{ width: '100%', minHeight: '100vh', position: 'relative', pb: '80px' }}>
+        {/* The theme's scene. The widget grid and the phone layout each
+            draw it over their own page background; a tab with no widgets
+            mounts neither, so it is drawn here instead. */}
+        {(isMobile ? mobileWidgets.length === 0 : widgets.length === 0) && <ThemeAmbience />}
         {demoStatus.demo && (
           <Box
             sx={{

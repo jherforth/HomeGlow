@@ -109,7 +109,7 @@ describe('validateThemePackage', () => {
   });
 
   it('follows the plugin manifest rules for manifestVersion, author and version', () => {
-    expect(validateThemePackage({ id: 'probe', name: 'Probe' })).toEqual(['manifestVersion must be 1 to 2']);
+    expect(validateThemePackage({ id: 'probe', name: 'Probe' })).toEqual(['manifestVersion must be 1 to 3']);
     expect(validateThemePackage({ ...base, author: 'Jane Diver', version: '2.1.0' })).toEqual([]);
     expect(validateThemePackage({ ...base, author: 'x'.repeat(81) })).toHaveLength(1);
     expect(validateThemePackage({ ...base, author: { name: 'Jane' } })).toHaveLength(1);

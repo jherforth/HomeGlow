@@ -84,6 +84,16 @@
   --hg-meter-fill: var(--accent);
   --hg-meter-thickness: 3px;
   --hg-meter-cap: round;
+
+  /* Buttons in plugins: the main action's fill, its text, its corners and
+     weight, and the border of a quiet one (a small remove or edit button).
+     Classic's are the look plugin buttons have always had, a blend of the
+     two interface colors. */
+  --hg-button-bg: linear-gradient(45deg, var(--secondary), var(--accent));
+  --hg-button-text: var(--text);
+  --hg-button-radius: 8px;
+  --hg-button-weight: 600;
+  --hg-button-quiet-border: rgba(128, 128, 128, 0.3);
 }
 
 [data-theme="light"] {

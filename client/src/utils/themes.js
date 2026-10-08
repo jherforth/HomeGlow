@@ -17,7 +17,7 @@
 //   muiModes: { light: {}, dark: {} }  // per-mode MUI options over `mui`
 // }
 
-import { validateAmbience, validateConfetti, validateOrnaments } from '../themes/engine/schemas.js';
+import { FLYBY_CURVE_OPTIONS, validateAmbience, validateConfetti, validateOrnaments } from '../themes/engine/schemas.js';
 
 // Each theme is a folder: themes/<id>/theme.json, with its own fonts/ and
 // assets/. Adding a theme means adding a folder; nothing here lists them.
@@ -76,6 +76,9 @@ const TYPES = {
   lineCap: oneOf('round', 'square', 'butt'),
   // A meter's line: 1 to 12px, so it fits the controls that draw one.
   meterThickness: (v) => /^(?:[1-9]|1[0-2])px$/.test(v),
+  // A fill: one color, or a gradient (Classic's buttons blend two).
+  paint: (v) => isColor(v) || isGradient(v),
+  fontWeight: (v) => /^[1-9]00$/.test(v),
 };
 
 const tokenTypes = (type, names) => Object.fromEntries(names.map((name) => [name, type]));
@@ -115,6 +118,11 @@ export const THEME_TOKENS = {
   '--hg-meter-fill': 'color',
   '--hg-meter-thickness': 'meterThickness',
   '--hg-meter-cap': 'lineCap',
+  '--hg-button-bg': 'paint',
+  '--hg-button-text': 'color',
+  '--hg-button-radius': 'length',
+  '--hg-button-weight': 'fontWeight',
+  '--hg-button-quiet-border': 'color',
 };
 
 const MUI_TYPES = {
@@ -189,15 +197,26 @@ export function validateThemePackage(pkg, { assets } = {}) {
     errors.push(NEEDS_NEWER_HOMEGLOW);
   } else if (!Number.isInteger(pkg.manifestVersion) || pkg.manifestVersion < 1) {
     errors.push(`manifestVersion must be 1 to ${MANIFEST_VERSION}`);
-  } else if (pkg.manifestVersion < 2) {
-    // Version 2 added ornaments, the meter roles and clumped sprites. A theme
-    // that uses them says so, so a core too old to draw them refuses it plainly.
-    const uses = [
+  } else {
+    // Each version adds things a theme may use: 2, ornaments, the meter roles
+    // and clumped sprites; 3, the button roles and curved flyby crossings
+    // (path, count, begin and the rest). A theme that uses them says
+    // so, so a core too old to draw them refuses it plainly.
+    const tokenNames = ['all', ...MODES].flatMap((key) => Object.keys(pkg.tokens?.[key] || {}));
+    const needs = (version, uses) => {
+      const named = [...new Set(uses.filter(Boolean))];
+      if (pkg.manifestVersion < version && named.length) errors.push(`${named.join(', ')} need manifestVersion ${version}`);
+    };
+    needs(2, [
       pkg.ornaments !== undefined && 'ornaments',
       Array.isArray(pkg.ambience) && pkg.ambience.some((layer) => layer?.clumps !== undefined || layer?.clumpWidth !== undefined) && 'clumps',
-      ...['all', ...MODES].flatMap((key) => Object.keys(pkg.tokens?.[key] || {})).filter((name) => name.startsWith('--hg-meter-')),
-    ].filter(Boolean);
-    if (uses.length) errors.push(`${[...new Set(uses)].join(', ')} need manifestVersion 2`);
+      ...tokenNames.filter((name) => name.startsWith('--hg-meter-')),
+    ]);
+    needs(3, [
+      ...tokenNames.filter((name) => name.startsWith('--hg-button-')),
+      Array.isArray(pkg.ambience) && pkg.ambience.some((layer) => layer?.layer === 'flyby'
+        && FLYBY_CURVE_OPTIONS.some((key) => layer[key] !== undefined)) && 'curved flybys',
+    ]);
   }
   if (typeof pkg.id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(pkg.id)) errors.push('id must be a lowercase slug (a-z, 0-9, hyphens, max 64)');
   if (typeof pkg.name !== 'string' || !pkg.name.trim() || pkg.name.length > 60) errors.push('name is required');
@@ -256,10 +275,11 @@ export const DEFAULT_THEME_ID = 'classic';
  * The newest theme manifest this core understands. A shape change to the
  * manifest (a new section, new tokens) raises it, so an older core refuses a
  * theme it cannot draw rather than half-applying it (theme-architecture.md
- * §5). 2: ornaments and the meter roles. The server's MANIFEST_VERSION
+ * §5). 2: ornaments and the meter roles. 3: the button roles and curved
+ * flybys. The server's MANIFEST_VERSION
  * (services/themeStore.js) matches; a server test holds them equal.
  */
-export const MANIFEST_VERSION = 2;
+export const MANIFEST_VERSION = 3;
 
 /** The problem reported for a theme newer than this core; the admin page words it for people. */
 export const NEEDS_NEWER_HOMEGLOW = 'needs a newer version of HomeGlow';

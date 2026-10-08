@@ -651,15 +651,26 @@ fastify.get('/widgets/:filename', async (request, reply) => {
 });
 
 // Serve the plugin SDK (issue #105). Cached after first read; versioned by
-// path so a future v2 can coexist with v1.
+// path so a future v2 can coexist with v1. The path stays the same across
+// HomeGlow upgrades while the file changes, so browsers must revalidate it:
+// with a max-age, a display kept the previous release's SDK for an hour after
+// an upgrade, and a hard reload of the dashboard does not refetch what plugin
+// frames load. no-cache plus an ETag costs a 304 when nothing changed.
 let pluginSdkV1Cache = null;
+let pluginSdkV1Etag = null;
 fastify.get('/plugin-sdk/v1.js', async (request, reply) => {
   try {
     if (!pluginSdkV1Cache) {
       pluginSdkV1Cache = await fs.readFile(path.join(__dirname, 'plugin-sdk', 'v1.js'), 'utf-8');
+      pluginSdkV1Etag = `"${crypto.createHash('sha1').update(pluginSdkV1Cache).digest('hex')}"`;
     }
     reply.header('Content-Type', 'application/javascript');
-    reply.header('Cache-Control', 'public, max-age=3600');
+    reply.header('Cache-Control', 'no-cache');
+    reply.header('ETag', pluginSdkV1Etag);
+    const ifNoneMatch = request.headers['if-none-match'];
+    if (ifNoneMatch && ifNoneMatch.split(',').some((tag) => tag.trim().replace(/^W\//, '') === pluginSdkV1Etag)) {
+      return reply.code(304).send();
+    }
     return pluginSdkV1Cache;
   } catch (error) {
     console.error('Error serving plugin SDK:', error);
