@@ -29,9 +29,21 @@ code, so you know where to look when working on a given domain.
   `<html>`. Gradients and interface colors are configurable in the Admin Panel and
   pushed to CSS variables at runtime.
 - Preferences persist in `localStorage` (`theme`, `themeMode`, `interfaceColors`).
+- **Weather scenes** (issue #247): a theme can list a scene per weather
+  condition (manifest version 4, `weather`). The display shows the scene for
+  the weather at the appearance location (the one Auto mode uses), checked
+  every 10 minutes through `GET /api/weather/condition`, which answers from
+  any fresh reading of the place, so it costs no extra provider calls. Night
+  is each scene's dark look, so on Auto it follows sunset. A missing scene
+  falls back to a related one, then the theme's default. Admin → Look →
+  Appearance shows what the theme would show now and can preview each scene
+  on the display for 10 minutes. The Weather theme itself ships from
+  HomeGlowThemes.
 
 **Code:** theme logic in `app.jsx`, colors in `index.css`,
-`ColorPickerPopover.jsx`, `colorContrast.js`.
+`ColorPickerPopover.jsx`, `colorContrast.js`; weather scenes in
+`utils/weatherScenes.js`, `utils/useWeatherCondition.js`, `resolveTheme` in
+`utils/themes.js`, and `getCondition` in `server/services/weather/index.js`.
 
 ## Chores & the clam reward system
 

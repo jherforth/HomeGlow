@@ -2,7 +2,14 @@ import React, { useContext, useMemo } from 'react';
 import { Box } from '@mui/material';
 import { ThemeContext, ambienceFor } from './ThemeContext.js';
 import { LAYERS } from './registry.js';
-import { sceneSeed, seededRandom } from './motion.js';
+import { reducedMotion, sceneSeed, seededRandom } from './motion.js';
+import { keyframes } from '@emotion/react';
+
+// A new weather scene (#247) fades in over the old look rather than cutting.
+const fadeIn = keyframes`
+  from { opacity: 0; }
+  to { opacity: 1; }
+`;
 
 // Draws the active theme's ambience for the displayed mode, behind the
 // widgets, in the order the theme lists it. Loaded only when a theme has
@@ -13,7 +20,10 @@ import { sceneSeed, seededRandom } from './motion.js';
 export default function AmbienceLayer() {
   const { theme, mode, active } = useContext(ThemeContext);
   const layers = ambienceFor(theme, mode);
-  const seed = useMemo(() => sceneSeed(theme?.variety, theme?.id), [theme?.id, theme?.variety]);
+  // A weather scene is a scene of its own: its own seed, so each kind of
+  // weather varies independently, and its own keys, so it is drawn afresh.
+  const scene = theme?.scene ? `${theme.id}:${theme.scene}` : theme?.id;
+  const seed = useMemo(() => sceneSeed(theme?.variety, scene), [scene, theme?.variety]);
   const sources = useMemo(
     () => layers.map((_, i) => seededRandom(seed + i * 7919)),
     [seed, layers.length, mode],
@@ -28,11 +38,20 @@ export default function AmbienceLayer() {
     // As wide as the window including its scrollbar (100vw), not the space
     // beside it: a dialog hides the scrollbar, and a scene sized to the space
     // would grow by its width and every star would shift.
-    <Box aria-hidden="true" data-hg-ambience="" sx={{ position: 'fixed', top: 0, bottom: 0, left: 0, width: '100vw', overflow: 'hidden', pointerEvents: 'none' }}>
+    <Box
+      key={scene}
+      aria-hidden="true"
+      data-hg-ambience=""
+      data-hg-scene={theme.scene || undefined}
+      sx={{
+        position: 'fixed', top: 0, bottom: 0, left: 0, width: '100vw', overflow: 'hidden', pointerEvents: 'none',
+        ...(theme.scene ? { animation: `${fadeIn} 2.5s ease-out`, ...reducedMotion } : {}),
+      }}
+    >
       {layers.map((options, i) => {
         const Layer = LAYERS[options.layer];
         return Layer && shown[i] ? (
-          <Box key={`${theme.id}-${mode}-${i}`} sx={{ position: 'absolute', inset: 0 }}>
+          <Box key={`${scene}-${mode}-${i}`} sx={{ position: 'absolute', inset: 0 }}>
             <Layer options={options} assets={assets} random={sources[i]} mode={mode} />
           </Box>
         ) : null;

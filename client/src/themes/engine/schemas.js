@@ -117,6 +117,14 @@ export const LAYER_SCHEMAS = {
     seconds: range(10, 120),
     opacity: num(0, 1),
   },
+  // Lightning (manifest version 4). Gentle by design: at most half strength
+  // and at least four seconds between strikes (see layers/flash.jsx).
+  flash: {
+    color: { type: 'color' },
+    every: range(4, 600),
+    strength: num(0.05, 0.5),
+    double: { type: 'bool' },
+  },
 };
 
 export const LAYER_NAMES = Object.keys(LAYER_SCHEMAS);

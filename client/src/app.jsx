@@ -47,6 +47,8 @@ import {
 import { personalizationTokens } from './utils/personalize.js';
 import { THEME_TOKENS_APPLIED_EVENT } from './utils/pluginThemeBridge.js';
 import { loadInstalledThemes, useThemeRegistry } from './utils/installedThemes.js';
+import { useWeatherCondition, useWeatherScenePreview } from './utils/useWeatherCondition.js';
+import { pickWeatherScene } from './utils/weatherScenes.js';
 import { ThemeContext } from './themes/engine/ThemeContext.js';
 import ThemeAmbience from './themes/engine/ThemeAmbience.jsx';
 import { normalizeWidgetSettings, BASE_WIDGET_SETTINGS } from './utils/widgetSettings.js';
@@ -274,9 +276,22 @@ const App = () => {
   useEffect(() => {
     if (!themeKnown) loadInstalledThemes();
   }, [themeKnown, appearance.theme]);
-  const activeTheme = useMemo(
+  const baseTheme = useMemo(
     () => resolveTheme(appearance.theme, themeRegistry.themes, themeRegistry.assets),
     [appearance.theme, themeRegistry],
+  );
+  // A theme with weather scenes (#247) shows the scene for the weather
+  // outside, or one previewed from Admin. Night is the scene's dark look.
+  const weatherCondition = useWeatherCondition({
+    enabled: !!baseTheme.weather,
+    lat: appearance.autoDark?.lat,
+    lon: appearance.autoDark?.lon,
+  });
+  const previewScene = useWeatherScenePreview();
+  const weatherScene = baseTheme.weather ? (previewScene || pickWeatherScene(baseTheme.weather, weatherCondition)) : null;
+  const activeTheme = useMemo(
+    () => (weatherScene ? resolveTheme(appearance.theme, themeRegistry.themes, themeRegistry.assets, { scene: weatherScene }) : baseTheme),
+    [baseTheme, weatherScene, appearance.theme, themeRegistry],
   );
   const displayTheme = themeDisplayMode(activeTheme, theme);
   const themeColors = useMemo(

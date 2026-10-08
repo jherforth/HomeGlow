@@ -481,7 +481,19 @@
     "madeHouseholdDefault": "El aspecto de esta pantalla es ahora el predeterminado del hogar.",
     "saveFailed": "No se pudo guardar la apariencia.",
     "loadFailed": "No se pudo cargar la apariencia.",
-    "savedButLocation": "Guardado, salvo la ubicación del modo automático, que no cambia: {{reason}}"
+    "savedButLocation": "Guardado, salvo la ubicación del modo automático, que no cambia: {{reason}}",
+    "weather": {
+      "location": "Ubicación (para el tiempo, y para el amanecer y el atardecer en modo Automático)",
+      "heading": "Escenas del tiempo",
+      "help": "Este tema cambia con el tiempo que hace fuera, comprobado cada 10 minutos. De noche muestra el aspecto oscuro de cada escena.",
+      "now": "Fuera ahora: {{condition}}. Se muestra la escena {{scene}}.",
+      "unavailable": "No se puede leer el tiempo, así que el tema muestra su escena predeterminada: {{reason}}",
+      "nightHint": "Las escenas de noche son el modo oscuro de este tema. Elige el modo Automático para que sigan la puesta de sol.",
+      "preview": "Ver una escena",
+      "live": "El tiempo que hace fuera",
+      "previewHelp": "Muestra la escena en esta pantalla durante {{minutes}} minutos, si muestra este tema. No se guarda nada. El botón de modo del dock muestra su aspecto de noche.",
+      "defaultScene": "Predeterminada"
+    }
   },
   "personalize": {
     "heading": "Personalizar",

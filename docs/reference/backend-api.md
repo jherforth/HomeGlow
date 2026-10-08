@@ -242,6 +242,7 @@ Every provider returns the same payload — see
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/api/weather` | Current conditions, 3-day forecast, hourly series, air quality. Params: `location` or `lat`+`lon`, `units` (`imperial`\|`metric`), `lang`, `refresh=1`. |
+| GET | `/api/weather/condition` | `{condition, checkedAt, maxAgeMs}` for a theme's weather scenes: the current condition token at `lat`/`lon` (Home Assistant needs neither). Answered from any reading of the place under 10 minutes old, whatever its units or language, else one ordinary fetch. 400 when OpenWeatherMap has no location. |
 | GET | `/api/weather/geocode` | Resolve a free-text location to `{lat, lon, resolvedName}`. With **no** `q`, returns Home Assistant's own configured location when that is the provider. |
 | GET | `/api/sun` | `{sunrise, sunset, alwaysUp, alwaysDown}` (unix seconds) computed from `lat`/`lon`. No provider or API key involved — auto dark mode works with nothing configured. |
 
