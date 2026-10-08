@@ -87,10 +87,21 @@ describe('manifest version', () => {
     expect(validateThemePackage({ ...base, manifestVersion: 2, ambience: [flyby] }, { assets: files })).toEqual(['curved flybys need manifestVersion 3']);
     // A straight flyby is still version 1.
     expect(validateThemePackage({ ...base, manifestVersion: 1, ambience: [{ layer: 'flyby', pictures: [{ src: 'assets/ring.svg' }], tilt: [0, 5] }] }, { assets: files })).toEqual([]);
-    expect(validateThemePackage({ ...base, manifestVersion: 3, ambience: [{ ...flyby, path: 'zigzag' }] }, { assets: files })[0]).toMatch(/path must be one of line, arc, wander/);
+    expect(validateThemePackage({ ...base, manifestVersion: 3, ambience: [{ ...flyby, path: 'zigzag' }] }, { assets: files })[0]).toMatch(/path must be one of line, arc, wander, orbit/);
     const tilted = { layer: 'flyby', pictures: [{ src: 'assets/ring.svg' }], angle: [0, 35] };
     expect(validateThemePackage({ ...base, manifestVersion: 3, ambience: [tilted] }, { assets: files })).toEqual([]);
     expect(validateThemePackage({ ...base, manifestVersion: 2, ambience: [tilted] }, { assets: files })).toEqual(['curved flybys need manifestVersion 3']);
+  });
+
+  it('needs version 5 for orbits', () => {
+    const orbit = { layer: 'flyby', pictures: [{ src: 'assets/ring.svg' }], path: 'orbit', eccentricity: [0, 0.3] };
+    expect(validateThemePackage({ ...base, manifestVersion: 5, ambience: [orbit] }, { assets: files })).toEqual([]);
+    expect(validateThemePackage({ ...base, manifestVersion: 4, ambience: [orbit] }, { assets: files })).toEqual(['orbits need manifestVersion 5']);
+    // An orbit option on an arc still asks for 5: an older core would not know the option.
+    const arc = { layer: 'flyby', pictures: [{ src: 'assets/ring.svg' }], path: 'arc', focusY: [150, 200] };
+    expect(validateThemePackage({ ...base, manifestVersion: 4, ambience: [arc] }, { assets: files })).toEqual(['orbits need manifestVersion 5']);
+    expect(validateThemePackage({ ...base, manifestVersion: 5, ambience: [{ ...orbit, eccentricity: [0, 1.5] }] }, { assets: files })[0]).toMatch(/eccentricity/);
+    expect(validateThemePackage({ ...base, manifestVersion: 5, ambience: [{ ...orbit, direction: 'sideways' }] }, { assets: files })[0]).toMatch(/direction must be one of/);
   });
 
   it('needs version 3 for button tokens, and checks their values', () => {

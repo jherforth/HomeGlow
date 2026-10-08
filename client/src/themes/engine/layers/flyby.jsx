@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Box } from '@mui/material';
 import { keyframes } from '@emotion/react';
 import { cross, draw, forMode, pick, pickWeighted } from '../motion.js';
-import { pathKeyframes, planPath } from '../paths.js';
+import { pathKeyframes, planOrbitSystem, planPath } from '../paths.js';
 
 // Now and then, one picture crosses the screen: a ship, a passing whale, a
 // drifting astronaut. Each pass picks a picture (weighted), a side to enter
@@ -14,12 +14,14 @@ import { pathKeyframes, planPath } from '../paths.js';
 // (paths.js): a slice of a long parabola, or a meander that faces where it
 // goes and may turn around. `count` keeps several in flight at once, each on
 // its own loop, and `begin: underway` puts the first of each partway along
-// its path when the page loads, so the scene does not start empty.
+// its path when the page loads, so the scene does not start empty. With
+// `path: orbit`, every picture in the layer circles one focus, the same way
+// round, each on its own ellipse.
 const screenAspect = () => (typeof window !== 'undefined' && window.innerHeight
   ? window.innerWidth / window.innerHeight
   : 16 / 9);
 
-function nextPass(random, options, mode, first = false) {
+function nextPass(random, options, mode, first = false, system = null) {
   const picture = pickWeighted(random, options.pictures);
   const height = draw(random, picture.height ?? options.height ?? [5, 9]);
   const width = height * (picture.aspect ?? 1);
@@ -42,8 +44,8 @@ function nextPass(random, options, mode, first = false) {
     // Underway: already some way along, with no wait; otherwise the pause first.
     pause: underway ? (-(0.15 + random() * 0.7) * seconds).toFixed(1) : draw(random, options.every ?? [60, 180]).toFixed(1),
   };
-  if (options.path === 'arc' || options.path === 'wander') {
-    const { frames } = planPath(random, options, { width }, screenAspect());
+  if (options.path === 'arc' || options.path === 'wander' || options.path === 'orbit') {
+    const { frames } = planPath(random, options, { width }, screenAspect(), system);
     return {
       id: random(),
       src: forMode(picture.src, mode),
@@ -77,8 +79,8 @@ function nextPass(random, options, mode, first = false) {
 const prefersReducedMotion = () => typeof window !== 'undefined'
   && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-function Traveler({ options, assets, random, mode }) {
-  const [pass, setPass] = useState(() => nextPass(random, options, mode, true));
+function Traveler({ options, assets, random, mode, system }) {
+  const [pass, setPass] = useState(() => nextPass(random, options, mode, true, system));
   const travel = useMemo(() => (pass.frames ? keyframes`${pass.frames}` : null), [pass.frames]);
   const url = assets[pass.src];
   if (!url) return null;
@@ -96,7 +98,7 @@ function Traveler({ options, assets, random, mode }) {
   return (
     <Box
       key={pass.id}
-      onAnimationEnd={() => setPass(nextPass(random, options, mode))}
+      onAnimationEnd={() => setPass(nextPass(random, options, mode, false, system))}
       sx={{
         position: 'absolute',
         left: 0,
@@ -137,9 +139,11 @@ function Traveler({ options, assets, random, mode }) {
 function Flyby({ options, assets, random, mode }) {
   const [still] = useState(prefersReducedMotion);
   const [count] = useState(() => Math.max(1, draw(random, options.count ?? 1, { integer: true })));
+  // One focus and one way round for the whole layer, so the planets keep company.
+  const [system] = useState(() => (options.path === 'orbit' ? planOrbitSystem(random, options) : null));
   if (still) return null;
   return Array.from({ length: count }, (_, i) => (
-    <Traveler key={i} options={options} assets={assets} random={random} mode={mode} />
+    <Traveler key={i} options={options} assets={assets} random={random} mode={mode} system={system} />
   ));
 }
 

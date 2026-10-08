@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { seededRandom } from './motion.js';
-import { pathKeyframes, planPath } from './paths.js';
+import { pathKeyframes, planOrbitSystem, planPath } from './paths.js';
 
 const plans = (options, n = 40, width = 10) => Array.from({ length: n }, (_, i) => planPath(seededRandom(i + 1), options, { width }, 16 / 9));
 const visible = (frames) => frames.filter((f) => f.x >= 0 && f.x <= 100);
@@ -60,5 +60,81 @@ describe('curved crossings', () => {
     const css = pathKeyframes(a.frames);
     expect(css).toMatch(/^0\.00% \{ transform: translate\(-?[\d.]+vw, -?[\d.]+vh\) rotate\(-?[\d.]+deg\) scaleX\(-?[\d.]+\); \}/);
     expect(css).not.toMatch(/NaN|Infinity/);
+  });
+
+  describe('orbits', () => {
+    const aspect = 16 / 9;
+    const options = { path: 'orbit', span: [10, 55], eccentricity: [0, 0.35] };
+    // Several planets of one layer: one shared system, each its own pass.
+    const layer = (seed, extra = {}) => {
+      const random = seededRandom(seed);
+      const system = planOrbitSystem(random, { ...options, ...extra });
+      return { system, passes: Array.from({ length: 6 }, () => planPath(random, { ...options, ...extra }, { width: 10 }, aspect, system)) };
+    };
+    // Angle about the focus, in vh on both axes, as the planner works.
+    const angleAbout = (system, f) => Math.atan2(f.y - system.focusY, f.x * aspect - system.focusX * aspect);
+
+    it('every pass enters and leaves off screen, crossing it within `span`', () => {
+      for (let seed = 1; seed <= 30; seed += 1) {
+        for (const { frames } of layer(seed).passes) {
+          const off = (f) => f.x < 0 || f.x > 100 || f.y < 0 || f.y > 100;
+          expect(off(frames[0])).toBe(true);
+          expect(off(frames[frames.length - 1])).toBe(true);
+          expect(frames.some((f) => f.x > 25 && f.x < 75 && f.y >= 10 - 1e-6 && f.y <= 55 + 1e-6)).toBe(true);
+          frames.forEach((f) => { expect(f.angle).toBe(0); expect(f.flip).toBe(1); });
+        }
+      }
+    });
+
+    it('all the planets of a layer go the same way round the one focus', () => {
+      const ways = new Set();
+      for (let seed = 1; seed <= 30; seed += 1) {
+        const { system, passes } = layer(seed);
+        ways.add(system.way);
+        for (const { frames } of passes) {
+          // Unwrapped angle about the focus moves steadily in the layer's direction.
+          let previous = angleAbout(system, frames[0]);
+          for (const f of frames.slice(1)) {
+            let step = angleAbout(system, f) - previous;
+            if (step > Math.PI) step -= 2 * Math.PI;
+            if (step < -Math.PI) step += 2 * Math.PI;
+            expect(Math.sign(step)).toBe(system.way);
+            previous += step;
+          }
+        }
+      }
+      expect([...ways].sort()).toEqual([-1, 1]); // either, across page loads
+      expect(layer(3, { direction: 'clockwise' }).system.way).toBe(1);
+      expect(layer(3, { direction: 'counterclockwise' }).system.way).toBe(-1);
+    });
+
+    it('each planet is on its own ellipse with the focus at a focus', () => {
+      const { system, passes } = layer(7);
+      const fit = (frames) => {
+        // r(theta) = p / (1 + e cos(theta - omega)) means 1/r is linear in cos(theta) and sin(theta).
+        const rows = frames.map((f) => { const X = f.x * aspect - system.focusX * aspect; const Y = f.y - system.focusY; return [1, Math.cos(Math.atan2(Y, X)), Math.sin(Math.atan2(Y, X)), 1 / Math.hypot(X, Y)]; });
+        const [a, b, c] = [0, 1, 2].map((k) => rows.reduce((sum, r) => sum + r[k] * r[3], 0));
+        return rows.every((r) => Number.isFinite(r[3])) && [a, b, c];
+      };
+      const shapes = passes.map(({ frames }) => JSON.stringify(fit(frames).map((n) => n.toFixed(3))));
+      expect(new Set(shapes).size).toBe(passes.length);
+    });
+
+    it('moves quicker nearer the focus (equal areas in equal times)', () => {
+      const { system, passes } = layer(11, { eccentricity: [0.6, 0.6] });
+      for (const { frames } of passes) {
+        const r = (f) => Math.hypot(f.x * aspect - system.focusX * aspect, f.y - system.focusY);
+        // Angular speed times r squared is the same all along.
+        const swept = frames.slice(1).map((f, i) => {
+          let step = angleAbout(system, f) - angleAbout(system, frames[i]);
+          if (step > Math.PI) step -= 2 * Math.PI;
+          if (step < -Math.PI) step += 2 * Math.PI;
+          const rr = (r(f) + r(frames[i])) / 2;
+          return (Math.abs(step) * rr * rr) / (f.at - frames[i].at);
+        });
+        const mean = swept.reduce((a, b) => a + b, 0) / swept.length;
+        swept.forEach((v) => expect(Math.abs(v - mean) / mean).toBeLessThan(0.02));
+      }
+    });
   });
 });
