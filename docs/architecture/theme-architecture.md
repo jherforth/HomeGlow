@@ -268,6 +268,9 @@ Version history:
   (`MANIFEST_VERSION` in `utils/themes.js` and `services/themeStore.js`), refuses
   newer ones at install, and its store lists them apart as needing a newer
   HomeGlow.
+- **3:** the button roles (`--hg-button-*`), which plugins draw their buttons
+  with, and curved flyby crossings (`path`, `count`, `begin` and the options
+  that go with them).
 
 ## 6. Implementation order
 

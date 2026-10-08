@@ -75,9 +75,40 @@ describe('manifest version', () => {
     expect(validateThemePackage({ ...base, manifestVersion: 1, ornaments }, { assets: files })).toEqual(['ornaments need manifestVersion 2']);
     expect(validateThemePackage({ ...base, manifestVersion: 1, tokens: { dark: { '--hg-meter-fill': '#ff9900' } } })).toEqual(['--hg-meter-fill need manifestVersion 2']);
     expect(validateThemePackage({ ...base, manifestVersion: 1, tokens: { all: { '--accent': '#ff9900' } } })).toEqual([]);
-    expect(validateThemePackage({ ...base, manifestVersion: 3 })).toEqual([NEEDS_NEWER_HOMEGLOW]);
+    expect(validateThemePackage({ ...base, manifestVersion: 4 })).toEqual([NEEDS_NEWER_HOMEGLOW]);
     const clumpy = { ambience: [{ layer: 'dots', count: 10 }, { layer: 'sprites', src: 'assets/ring.svg', count: 4, height: 10, clumps: 2 }] };
     expect(validateThemePackage({ ...base, manifestVersion: 1, ...clumpy }, { assets: files })).toEqual(['clumps need manifestVersion 2']);
     expect(validateThemePackage({ ...base, manifestVersion: 2, ...clumpy }, { assets: files })).toEqual([]);
+  });
+
+  it('needs version 3 for curved flybys', () => {
+    const flyby = { layer: 'flyby', pictures: [{ src: 'assets/ring.svg' }], path: 'arc', bend: [4, 10], count: [1, 3], begin: 'underway', hue: [0, 360] };
+    expect(validateThemePackage({ ...base, manifestVersion: 3, ambience: [flyby] }, { assets: files })).toEqual([]);
+    expect(validateThemePackage({ ...base, manifestVersion: 2, ambience: [flyby] }, { assets: files })).toEqual(['curved flybys need manifestVersion 3']);
+    // A straight flyby is still version 1.
+    expect(validateThemePackage({ ...base, manifestVersion: 1, ambience: [{ layer: 'flyby', pictures: [{ src: 'assets/ring.svg' }], tilt: [0, 5] }] }, { assets: files })).toEqual([]);
+    expect(validateThemePackage({ ...base, manifestVersion: 3, ambience: [{ ...flyby, path: 'zigzag' }] }, { assets: files })[0]).toMatch(/path must be one of line, arc, wander/);
+    const tilted = { layer: 'flyby', pictures: [{ src: 'assets/ring.svg' }], angle: [0, 35] };
+    expect(validateThemePackage({ ...base, manifestVersion: 3, ambience: [tilted] }, { assets: files })).toEqual([]);
+    expect(validateThemePackage({ ...base, manifestVersion: 2, ambience: [tilted] }, { assets: files })).toEqual(['curved flybys need manifestVersion 3']);
+  });
+
+  it('needs version 3 for button tokens, and checks their values', () => {
+    const buttons = { '--hg-button-bg': '#ff9900', '--hg-button-text': '#000000', '--hg-button-radius': '999px', '--hg-button-weight': '700', '--hg-button-quiet-border': '#9977aa' };
+    expect(validateThemePackage({ ...base, manifestVersion: 3, tokens: { dark: buttons } })).toEqual([]);
+    expect(validateThemePackage({ ...base, manifestVersion: 2, tokens: { dark: buttons } })).toEqual([
+      '--hg-button-bg, --hg-button-text, --hg-button-radius, --hg-button-weight, --hg-button-quiet-border need manifestVersion 3',
+    ]);
+    // Version 1 with both: each version names what it is missing.
+    expect(validateThemePackage({ ...base, manifestVersion: 1, tokens: { all: { '--hg-meter-fill': '#ff9900', '--hg-button-text': '#000000' } } })).toEqual([
+      '--hg-meter-fill need manifestVersion 2', '--hg-button-text need manifestVersion 3',
+    ]);
+    expect(validateThemePackage({ ...base, manifestVersion: 3, tokens: { light: { '--hg-button-bg': 'linear-gradient(135deg, #ff9f7a, #ff7f50)' } } })).toEqual([]);
+    expect(validateThemePackage({ ...base, manifestVersion: 3, tokens: { light: { '--hg-button-weight': 'bold' } } })).toEqual([
+      'tokens.light: --hg-button-weight is not a valid fontWeight: "bold"',
+    ]);
+    expect(validateThemePackage({ ...base, manifestVersion: 3, tokens: { light: { '--hg-button-text': 'linear-gradient(#000, #fff)' } } })).toEqual([
+      'tokens.light: --hg-button-text is not a valid color: "linear-gradient(#000, #fff)"',
+    ]);
   });
 });

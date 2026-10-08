@@ -48,7 +48,7 @@ folder name must match the manifest's `id`.
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `manifestVersion` | yes | `1`, or `2` for a theme that uses `ornaments`, the meter tokens or `clumps`. A HomeGlow older than the version refuses the theme. |
+| `manifestVersion` | yes | `1`; `2` for a theme that uses `ornaments`, the meter tokens or `clumps`; `3` for one that uses the button tokens or curved flybys. A HomeGlow older than the version refuses the theme. |
 | `id` | yes | Lowercase slug (a-z, 0-9, hyphens), the same as the folder name. |
 | `name` | yes | Shown in the theme picker. |
 | `version`, `author`, `description` | | As in a plugin manifest. The author shows as "by ...". |
@@ -84,6 +84,9 @@ the most useful:
 | `--hg-grid-gap` | `0`, `8px`, `16px` or `24px` | The gap between widgets; rows keep their pitch |
 | `--hg-meter-track`, `--hg-meter-fill` | color | The empty and filled parts of anything showing a level or progress |
 | `--hg-meter-thickness`, `--hg-meter-cap` | `1px` to `12px`; `round`, `square` or `butt` | A meter's line and its ends |
+| `--hg-button-bg`, `--hg-button-text` | color or gradient; color | A plugin's main buttons. Keep the text readable on the fill |
+| `--hg-button-radius`, `--hg-button-weight` | length; `100` to `900` | Their corners (`999px` for pills) and type weight |
+| `--hg-button-quiet-border` | color | The outline of a plugin's small, quiet buttons |
 
 Themes never change spacing, font size or line height: widget heights are
 fixed, and content must still fit.
@@ -124,6 +127,31 @@ stars.
 
 `colors` and `tint` take a list, or `{ "color": "#...", "weight": 3 }` entries
 for a weighted pick.
+
+A `flyby` can follow a curve instead of a straight line (manifest version 3):
+
+| Option | What it does |
+| --- | --- |
+| `path` | `line` (the default), `arc` (a slice of a long parabola, mostly off screen, so the visible part is a gentle curve) or `wander` (a meander) |
+| `bend` | An arc's rise or fall across the screen, in vh |
+| `wander` | How far a meander drifts up and down, in vh |
+| `facing` | `path` (tilts to follow the curve) or `fixed` (stays level). Arcs default to `fixed`, meanders to `path` |
+| `pitch` | The most a picture tilts when facing the path, in degrees |
+| `glide` | 0 to 0.8: how much the speed rises and falls along the way |
+| `turn` | 0 to 1: the chance a meander swims partway in, turns around and leaves the way it came |
+| `count` | How many travel at once, each on its own loop |
+| `begin` | `underway` puts the first of each partway along its path when the page loads, so the scene does not start empty |
+| `hue` | Degrees of hue shift, drawn per picture, to vary colors |
+| `angle` | A fixed tilt for the whole crossing, in degrees, either way: a ringed planet's ring at a slant |
+
+Starship's planets arc slowly across the sky. A `wander` path with `turn` suits
+fish: they face where they swim and sometimes turn back.
+
+A picture can animate itself: an SVG with its own CSS animation, or an animated
+WebP or PNG. The engine draws it like any other picture. Keep such loops small
+and slow, and stop an SVG's own animation under
+`@media (prefers-reduced-motion: reduce)`, since the engine cannot reach inside a
+picture. Starship's turning planets do this.
 
 Each sprite moves on two periods that don't divide evenly, so its motion never
 quite repeats. With `"current": true`, a slow third motion rolls across the

@@ -125,11 +125,17 @@ The SDK writes each token onto your root, so plugin CSS just uses them:
 | Shape | `--hg-radius-sm`, `--hg-radius-md`, `--hg-radius-lg` |
 | Type | `--hg-font-body`, `--hg-font-heading`, `--hg-heading-transform`, `--hg-heading-letter-spacing` |
 | Meters (progress, levels, gauges) | `--hg-meter-track`, `--hg-meter-fill`, `--hg-meter-thickness`, `--hg-meter-cap` |
+| Buttons | `--hg-button-bg`, `--hg-button-text`, `--hg-button-radius`, `--hg-button-weight`, `--hg-button-quiet-border` |
 
 ```css
 body { color: var(--text); font-family: var(--hg-font-body, system-ui); }
 .card { background: var(--card-bg); border-radius: var(--hg-radius-md, 8px); }
 .ring-fill { stroke: var(--hg-meter-fill); stroke-width: var(--hg-meter-thickness, 3px); stroke-linecap: var(--hg-meter-cap, round); }
+.save {
+  background: var(--hg-button-bg, var(--accent)); color: var(--hg-button-text, #fff);
+  border-radius: var(--hg-button-radius, 8px); font-weight: var(--hg-button-weight, 600);
+  font-family: var(--hg-font-heading, inherit); text-transform: var(--hg-heading-transform, none);
+}
 ```
 
 - **Roles, not looks.** Each name says what a thing does. A theme decides how it

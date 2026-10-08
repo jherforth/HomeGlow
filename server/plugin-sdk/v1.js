@@ -64,6 +64,7 @@
     '--hg-radius-sm', '--hg-radius-md', '--hg-radius-lg',
     '--hg-font-body', '--hg-font-heading', '--hg-heading-transform', '--hg-heading-letter-spacing',
     '--hg-meter-track', '--hg-meter-fill', '--hg-meter-thickness', '--hg-meter-cap',
+    '--hg-button-bg', '--hg-button-text', '--hg-button-radius', '--hg-button-weight', '--hg-button-quiet-border',
   ];
   var UNSAFE_VALUE = /[;{}<>\\@]|url\s*\(|expression|javascript:/i;
   // A theme's font files come from its installed folder, which the API serves:

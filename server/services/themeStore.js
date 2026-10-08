@@ -21,7 +21,7 @@ const THEME_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 // The newest theme manifest this core understands (client/src/utils/themes.js,
 // MANIFEST_VERSION; a test holds them equal). Newer themes are refused at
 // install and left out of the store's list.
-const MANIFEST_VERSION = 2;
+const MANIFEST_VERSION = 3;
 // Classic is the stylesheet itself; no package can replace it.
 const RESERVED_IDS = new Set(['classic']);
 const MAX_FILES = 64;

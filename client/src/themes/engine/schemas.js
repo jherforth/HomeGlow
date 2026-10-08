@@ -97,6 +97,18 @@ export const LAYER_SCHEMAS = {
     tilt: range(0, 30),
     spin: range(0, 1440),
     opacity: num(0, 1),
+    // Curved crossings (manifest version 3); see paths.js.
+    path: { type: 'enum', values: ['line', 'arc', 'wander'] },
+    bend: range(0, 60),
+    wander: range(0, 30),
+    facing: { type: 'enum', values: ['path', 'fixed'] },
+    pitch: range(0, 45),
+    glide: range(0, 0.8),
+    turn: num(0, 1),
+    count: range(1, 8, { integer: true }),
+    begin: { type: 'enum', values: ['waiting', 'underway'] },
+    hue: range(0, 360),
+    angle: range(0, 90),
   },
   blobs: {
     colors: { type: 'colors', required: true },
@@ -108,6 +120,9 @@ export const LAYER_SCHEMAS = {
 };
 
 export const LAYER_NAMES = Object.keys(LAYER_SCHEMAS);
+
+/** The flyby options manifest version 3 added: curved crossings, several at once. */
+export const FLYBY_CURVE_OPTIONS = ['path', 'bend', 'wander', 'facing', 'pitch', 'glide', 'turn', 'count', 'begin', 'hue', 'angle'];
 
 // A theme's own confetti (chore and prize celebrations): its colors, which of
 // the standard shapes, and pictures from its folder mixed in. `pictures`
