@@ -154,6 +154,41 @@ done" bonus for **both** the previous and new owner and never removes points.
 **Code:** reassign UI in `ChoreWidget.jsx`; `PATCH /api/chore-schedules/:id` +
 `awardDailyRegularBonusIfDue` in `server/index.js`.
 
+### Follow-up chores (issue #241)
+
+Some chores can only start once another is finished: the dishwasher has run, so
+*Unload the dishwasher*. A chore can have **up to 3 follow-ups**, set in its edit dialog
+under **When it's done**: *"Then give **Unload the dishwasher** to **Liam**, **after 2
+hours**."*
+
+- **Trigger:** completing the chore **today**, from any schedule, by anyone, including
+  plugins such as Routines. Each person named gets an ordinary one-time schedule of the
+  follow-up chore. Back-dated completions in the Admin Panel don't hand work on.
+- **Delay:** right away, or after N minutes or hours (up to 7 days). A delay is a snooze,
+  so the follow-up stays hidden, and out of the bonus, until it ends. Follow-ups have no
+  due date or time.
+- **Fairness:** a follow-up doesn't count toward the daily bonus, or get logged as
+  missed, on the day it appeared, since it can arrive at 9 pm. From the next day it
+  counts like any one-time chore, and it stays until it's done.
+- **No stacking:** while a person still has an open follow-up from a rule, finishing the
+  chore again doesn't give them a second one.
+- **Undo:** unticking the trigger removes the follow-ups it handed out that nobody has
+  done. Ones already done are kept.
+- **Chains** (A, then B, then C) work. Loops are refused when saving.
+- **Deleting** either chore removes the rule. Follow-ups already handed out stay until
+  done.
+- **Display:**
+  - the widget shows "↪ after Run the dishwasher" on a follow-up;
+  - the definitions table shows a chip per follow-up;
+  - the schedules table marks follow-up schedules.
+
+**Code:** `chore_followups` table and `chore_schedules.followup_rule_id`,
+`triggered_by_schedule_id` and `triggered_on` (migration `schema27-choreFollowups`).
+`createFollowupsForCompletion`, `removeOpenFollowupsFrom` and the first-day rule in
+`getTodaysRegularChoresForUser` are in `server/index.js`. The dialog is in
+`ChoreSchedulesTab.jsx`, and `countsTowardDailyBonus` (`utils/choreHelpers.js`) keeps the
+widget in step with the server.
+
 ### Metrics-ready history (issue #72)
 
 Every `chore_history` row carries a **`kind`** (`completion`, `daily_bonus`,
@@ -194,6 +229,19 @@ in `server/index.js`.
   calendar colors, so it keeps answering "which calendars is this on?"
 - **Per-event Google colors** (PR #133): an event individually recolored in
   Google keeps that color in HomeGlow instead of inheriting its calendar's.
+  Sync resolves the event's custom label color, else its `colorId` through
+  Google's current eleven-color palette (`EVENT_COLORS` in
+  `services/googleCalendar.js`; the API's `/colors` endpoint still returns
+  pre-2016 hexes, such as near-white for Graphite). It stores both in the
+  existing `raw_data` column, which `getCachedEvents` surfaces as
+  `event_color` and `color_id`. Every view prefers `event_color` and falls
+  back to `source_color`, so events left on a calendar's default color — and
+  all non-Google sources — look exactly as before. No schema migration.
+- **Event color in the editor** (issue #244): creating or editing a Google
+  event offers the calendar's own color plus Google's eleven swatches
+  (`EventColorPicker.jsx`), saved as the event's `colorId`. An edit sends the
+  color only when it changed, so editing an event never touches a custom
+  label it wears.
 - **Return to today**: the period label is a button — tap it to jump back.
   Desktop also gets a 📅 button; on a phone the header has no room for one. The
   control stays live even when already on today: whether "today" is still today
@@ -203,12 +251,6 @@ in `server/index.js`.
   default 20 minutes, 0 disables): returns to today after that long without
   interaction, so a wall display left on last month stops looking current. Resets
   the date only, not the view.
-  Sync resolves the event's `colorId` to a hex through Google's `/colors`
-  palette (cached 24h) and stores it in the existing `raw_data` column, which
-  `getCachedEvents` surfaces as `event_color`. Every view prefers
-  `event_color` and falls back to `source_color`, so events left on a
-  calendar's default color — and all non-Google sources — look exactly as
-  before. No schema migration.
 - Credentials are encrypted at rest.
 
 **Code:** `CalendarWidget.jsx`, `MonthDayCell.jsx`; backend

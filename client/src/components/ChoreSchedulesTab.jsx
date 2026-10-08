@@ -193,6 +193,52 @@ const defaultScheduleForm = {
 
 const defaultChoreForm = { title: '', description: '', clam_value: 0, icon: '' };
 
+// Follow-ups (issue #241): "when this is done, give that chore to them".
+const MAX_FOLLOWUPS = 3;
+const newFollowupRow = () => ({ followup_chore_id: '', user_ids: [], timing: 'now', amount: 1, unit: 'hours' });
+// The server stores a delay in minutes; the form shows whole hours when it can.
+const followupRowFromRule = (rule) => {
+  const minutes = rule.delay_minutes || 0;
+  if (!minutes) return { followup_chore_id: rule.followup_chore_id, user_ids: rule.user_ids, timing: 'now', amount: 1, unit: 'hours' };
+  const hours = minutes % 60 === 0;
+  return {
+    followup_chore_id: rule.followup_chore_id,
+    user_ids: rule.user_ids,
+    timing: 'after',
+    amount: hours ? minutes / 60 : minutes,
+    unit: hours ? 'hours' : 'minutes',
+  };
+};
+const followupRuleFromRow = (row) => ({
+  followup_chore_id: row.followup_chore_id,
+  user_ids: row.user_ids,
+  delay_minutes: row.timing === 'after' ? Math.round(Number(row.amount) * (row.unit === 'hours' ? 60 : 1)) : 0,
+});
+
+// A header cell that re-sorts its table. `sortDirection` on the cell is what
+// puts `aria-sort` on the <th>, so the state is announced without a second
+// visually-hidden copy of it.
+function SortableHeader({ column, sort, onSort, children }) {
+  const active = sort.column === column;
+  return (
+    <TableCell sortDirection={active ? sort.direction : false}>
+      <TableSortLabel
+        active={active}
+        direction={active ? sort.direction : 'asc'}
+        onClick={() => onSort(column)}
+      >
+        {children}
+      </TableSortLabel>
+    </TableCell>
+  );
+}
+
+// Clicking the active column flips it; clicking a new one starts ascending,
+// which is the reading order for names and "soonest first" for dates.
+function nextSort(sort, column) {
+  if (sort.column !== column) return { column, direction: 'asc' };
+  return { column, direction: sort.direction === 'asc' ? 'desc' : 'asc' };
+}
 
 export default function ChoreSchedulesTab({ setSaveMessage }) {
   const { t } = useTranslation(['chores', 'common']);
@@ -200,6 +246,9 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
   const [schedules, setSchedules] = useState([]);
   const [chores, setChores] = useState([]);
   const [users, setUsers] = useState([]);
+  // The chore dialog's follow-ups, as form rows (issue #241).
+  const [followupRows, setFollowupRows] = useState([]);
+  const [followupError, setFollowupError] = useState('');
   const [loading, setLoading] = useState(true);
 
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
@@ -419,6 +468,8 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
   const openCreateChore = () => {
     setEditingChore(null);
     setChoreForm(defaultChoreForm);
+    setFollowupRows([]);
+    setFollowupError('');
     setChoreDialogOpen(true);
   };
 
@@ -430,24 +481,66 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
       clam_value: chore.clam_value || 0,
       icon: chore.icon || '',
     });
+    setFollowupRows([]);
+    setFollowupError('');
     setChoreDialogOpen(true);
+    axios.get(`${API_BASE_URL}/api/chores/${chore.id}/followups`)
+      .then((res) => setFollowupRows((res.data || []).map(followupRowFromRule)))
+      .catch(() => setFollowupRows([]));
+  };
+
+  const updateFollowupRow = (index, changes) => {
+    setFollowupError('');
+    setFollowupRows((rows) => rows.map((row, i) => (i === index ? { ...row, ...changes } : row)));
+  };
+
+  // What the form can check before anything is saved; the server checks the
+  // rest (loops, people who no longer exist).
+  const followupFormError = () => {
+    for (const [index, row] of followupRows.entries()) {
+      const n = index + 1;
+      if (!row.followup_chore_id) return t('chores:followups.errorChore', { n });
+      if (!row.user_ids.length) return t('chores:followups.errorPeople', { n });
+      const minutes = followupRuleFromRow(row).delay_minutes;
+      if (row.timing === 'after' && (!(minutes > 0) || minutes > 7 * 24 * 60)) return t('chores:followups.errorDelay', { n });
+    }
+    return '';
   };
 
   const handleSaveChore = async () => {
     if (!choreForm.title.trim()) return;
+    const formError = followupFormError();
+    if (formError) { setFollowupError(formError); return; }
     setSavingChore(true);
+    let choreId = editingChore?.id;
     try {
       if (editingChore) {
         await axios.patch(`${API_BASE_URL}/api/chores/${editingChore.id}`, choreForm);
-        showMessage('success', 'Chore updated.');
       } else {
-        await axios.post(`${API_BASE_URL}/api/chores`, choreForm);
-        showMessage('success', 'Chore created.');
+        const res = await axios.post(`${API_BASE_URL}/api/chores`, choreForm);
+        choreId = res.data?.id;
+        // Saved: from here on this dialog is editing it, so a follow-up
+        // problem below can be fixed and saved again without a duplicate.
+        if (choreId) setEditingChore({ id: choreId, ...choreForm });
       }
+    } catch (err) {
+      showMessage('error', err.response?.data?.error || 'Failed to save chore.');
+      setSavingChore(false);
+      return;
+    }
+    try {
+      if (choreId && (editingChore || followupRows.length)) {
+        await axios.put(`${API_BASE_URL}/api/chores/${choreId}/followups`, {
+          followups: followupRows.map(followupRuleFromRow),
+        });
+      }
+      showMessage('success', editingChore ? 'Chore updated.' : 'Chore created.');
       setChoreDialogOpen(false);
       await fetchAll();
     } catch (err) {
-      showMessage('error', err.response?.data?.error || 'Failed to save chore.');
+      // The chore itself is saved; the dialog stays open on the follow-ups.
+      setFollowupError(err.response?.data?.error || t('chores:followups.errorSave'));
+      await fetchAll();
     } finally {
       setSavingChore(false);
     }
@@ -662,6 +755,13 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
                       {c.icon && <Box component="span" sx={{ mr: 0.75 }}>{c.icon}</Box>}
                       {c.title}
                     </Typography>
+                    {c.followups?.length > 0 && (
+                      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
+                        {c.followups.map((f) => (
+                          <Chip key={f.id} size="small" variant="outlined" label={`↪ ${f.title}`} />
+                        ))}
+                      </Box>
+                    )}
                   </TableCell>
                   <TableCell
                     data-label={t('common:labels.description')}
@@ -778,7 +878,17 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
                 <TableRow key={s.id} sx={{ opacity: s.visible ? 1 : 0.5 }}>
                   <TableCell data-label={t('chores:schedules.chore')}>
                     <Box>
-                      <Typography variant="body2" fontWeight="bold">{s.title}</Typography>
+                      <Typography variant="body2" fontWeight="bold">
+                        {s.title}
+                        {s.triggered_on && (
+                          <Chip label={t('chores:followups.chip')} size="small" variant="outlined" sx={{ ml: 1 }} />
+                        )}
+                      </Typography>
+                      {s.followup_of && (
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                          {t('chores:widget.followupOf', { title: s.followup_of })}
+                        </Typography>
+                      )}
                       {s.description && (
                         <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "pre-line" }}>{s.description}</Typography>
                       )}
@@ -901,6 +1011,117 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
               value={choreForm.icon}
               onChange={(icon) => setChoreForm(f => ({ ...f, icon }))}
             />
+
+            {/* Follow-ups (issue #241). Nothing but one button until used. */}
+            <Divider />
+            <Box>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                {t('chores:followups.heading')}{' '}
+                <Typography component="span" variant="caption" color="text.secondary">{t('chores:followups.optional')}</Typography>
+              </Typography>
+              {followupRows.length > 0 && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                  {t('chores:followups.help')}
+                </Typography>
+              )}
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1.5 }}>
+                {followupRows.map((row, index) => (
+                  <Box
+                    key={index}
+                    sx={{ border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)', p: 1.5, display: 'flex', flexDirection: 'column', gap: 1.5 }}
+                  >
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                      <FormControl fullWidth size="small">
+                        <InputLabel>{t('chores:followups.give')}</InputLabel>
+                        <Select
+                          value={row.followup_chore_id}
+                          label={t('chores:followups.give')}
+                          onChange={(e) => updateFollowupRow(index, { followup_chore_id: e.target.value })}
+                        >
+                          {chores.filter((c) => c.id !== editingChore?.id).map((c) => (
+                            <MenuItem key={c.id} value={c.id}>{c.icon ? `${c.icon} ` : ''}{c.title}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      <Tooltip title={t('chores:followups.remove')}>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          aria-label={t('chores:followups.remove')}
+                          onClick={() => { setFollowupError(''); setFollowupRows((rows) => rows.filter((_, i) => i !== index)); }}
+                        >
+                          <Delete fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                    <FormControl fullWidth size="small">
+                      <InputLabel>{t('chores:followups.to')}</InputLabel>
+                      <Select
+                        multiple
+                        value={row.user_ids}
+                        label={t('chores:followups.to')}
+                        onChange={(e) => updateFollowupRow(index, { user_ids: e.target.value })}
+                        renderValue={(ids) => ids.map(getUserName).join(', ')}
+                      >
+                        {users.filter((u) => u.id > 0).map((u) => (
+                          <MenuItem key={u.id} value={u.id}>
+                            <Checkbox size="small" checked={row.user_ids.includes(u.id)} sx={{ p: 0.5, mr: 1 }} />
+                            <ListItemText primary={u.username} />
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <FormControl size="small" sx={{ minWidth: 150 }}>
+                        <InputLabel>{t('chores:followups.when')}</InputLabel>
+                        <Select
+                          value={row.timing}
+                          label={t('chores:followups.when')}
+                          onChange={(e) => updateFollowupRow(index, { timing: e.target.value })}
+                        >
+                          <MenuItem value="now">{t('chores:followups.rightAway')}</MenuItem>
+                          <MenuItem value="after">{t('chores:followups.after')}</MenuItem>
+                        </Select>
+                      </FormControl>
+                      {row.timing === 'after' && (
+                        <>
+                          <TextField
+                            size="small"
+                            type="number"
+                            value={row.amount}
+                            onChange={(e) => updateFollowupRow(index, { amount: e.target.value })}
+                            slotProps={{ htmlInput: { min: 1, 'aria-label': t('chores:followups.amount') } }}
+                            sx={{ width: 90 }}
+                          />
+                          <FormControl size="small" sx={{ minWidth: 110 }}>
+                            <Select
+                              value={row.unit}
+                              onChange={(e) => updateFollowupRow(index, { unit: e.target.value })}
+                              inputProps={{ 'aria-label': t('chores:followups.unit') }}
+                            >
+                              <MenuItem value="minutes">{t('chores:followups.minutes')}</MenuItem>
+                              <MenuItem value="hours">{t('chores:followups.hours')}</MenuItem>
+                            </Select>
+                          </FormControl>
+                        </>
+                      )}
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+              {followupError && <Alert severity="error" sx={{ mt: 1.5 }}>{followupError}</Alert>}
+              {followupRows.length < MAX_FOLLOWUPS && (
+                <Button
+                  type="button"
+                  size="small"
+                  startIcon={<Add />}
+                  sx={{ mt: 1 }}
+                  onClick={() => { setFollowupError(''); setFollowupRows((rows) => [...rows, newFollowupRow()]); }}
+                >
+                  {t('chores:followups.add')}
+                </Button>
+              )}
+            </Box>
           </Box>
         </DialogContent>
         <DialogActions>

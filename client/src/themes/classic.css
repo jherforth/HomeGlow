@@ -76,6 +76,24 @@
   --hg-font-heading: var(--hg-font-body);
   --hg-heading-transform: none;
   --hg-heading-letter-spacing: normal;
+
+  /* Meters: anything that shows a level or progress (the refresh countdown,
+     a plugin's gauge). Named for the role, so each theme gives meters its own
+     character: a thick glowing fill, flat square bars. */
+  --hg-meter-track: var(--hg-white-10);
+  --hg-meter-fill: var(--accent);
+  --hg-meter-thickness: 3px;
+  --hg-meter-cap: round;
+
+  /* Buttons in plugins: the main action's fill, its text, its corners and
+     weight, and the border of a quiet one (a small remove or edit button).
+     Classic's are the look plugin buttons have always had, a blend of the
+     two interface colors. */
+  --hg-button-bg: linear-gradient(45deg, var(--secondary), var(--accent));
+  --hg-button-text: var(--text);
+  --hg-button-radius: 8px;
+  --hg-button-weight: 600;
+  --hg-button-quiet-border: rgba(128, 128, 128, 0.3);
 }
 
 [data-theme="light"] {

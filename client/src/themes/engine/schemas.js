@@ -55,6 +55,8 @@ export const LAYER_SCHEMAS = {
     base: { type: 'length' },
     lift: range(0, 100),
     hue: range(0, 360),
+    clumps: range(1, 8, { integer: true }),
+    clumpWidth: range(1, 50),
     opacity: num(0, 1),
   },
   particles: {
@@ -95,6 +97,18 @@ export const LAYER_SCHEMAS = {
     tilt: range(0, 30),
     spin: range(0, 1440),
     opacity: num(0, 1),
+    // Curved crossings (manifest version 3); see paths.js.
+    path: { type: 'enum', values: ['line', 'arc', 'wander'] },
+    bend: range(0, 60),
+    wander: range(0, 30),
+    facing: { type: 'enum', values: ['path', 'fixed'] },
+    pitch: range(0, 45),
+    glide: range(0, 0.8),
+    turn: num(0, 1),
+    count: range(1, 8, { integer: true }),
+    begin: { type: 'enum', values: ['waiting', 'underway'] },
+    hue: range(0, 360),
+    angle: range(0, 90),
   },
   blobs: {
     colors: { type: 'colors', required: true },
@@ -106,6 +120,9 @@ export const LAYER_SCHEMAS = {
 };
 
 export const LAYER_NAMES = Object.keys(LAYER_SCHEMAS);
+
+/** The flyby options manifest version 3 added: curved crossings, several at once. */
+export const FLYBY_CURVE_OPTIONS = ['path', 'bend', 'wander', 'facing', 'pitch', 'glide', 'turn', 'count', 'begin', 'hue', 'angle'];
 
 // A theme's own confetti (chore and prize celebrations): its colors, which of
 // the standard shapes, and pictures from its folder mixed in. `pictures`
@@ -260,6 +277,53 @@ export function validateConfetti(confetti, { assets, isColor }) {
     }
     const result = checkOption(spec, value, { assets, isColor });
     if (result !== true) errors.push(`confetti.${key} ${result}`);
+  });
+  return errors;
+}
+
+// A theme's ornaments: pictures from its folder drawn on every widget frame,
+// native or plugin, anchored to a corner, an edge or the center. `corners`
+// puts one picture in all four, mirrored to fit, so a bezel is one quarter.
+// `stretch` runs an edge picture along the whole edge. They take no space:
+// a theme makes room for them with --hg-frame-inset (at most 24px a side).
+export const MAX_ORNAMENTS = 8;
+export const ORNAMENT_ANCHORS = ['corners', 'top-left', 'top', 'top-right', 'right', 'bottom-right', 'bottom', 'bottom-left', 'left', 'center'];
+export const ORNAMENT_SCHEMA = {
+  src: { type: 'picture', required: true },
+  anchor: { type: 'enum', values: ORNAMENT_ANCHORS, required: true },
+  size: { type: 'length' },
+  aspect: num(0.05, 4),
+  stretch: { type: 'bool' },
+  tint: { type: 'tints' },
+  opacity: num(0, 1),
+};
+
+/** Problems with a theme's `ornaments`, as readable strings. */
+export function validateOrnaments(ornaments, { assets, isColor }) {
+  if (!Array.isArray(ornaments)) return ['ornaments must be a list'];
+  if (ornaments.length > MAX_ORNAMENTS) return [`ornaments may have at most ${MAX_ORNAMENTS} entries`];
+  const errors = [];
+  ornaments.forEach((entry, i) => {
+    const where = `ornaments[${i}]`;
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      errors.push(`${where} must be an object`);
+      return;
+    }
+    Object.entries(entry).forEach(([key, value]) => {
+      const spec = ORNAMENT_SCHEMA[key];
+      if (!spec) {
+        errors.push(`${where} has no option ${key}`);
+        return;
+      }
+      const result = checkOption(spec, value, { assets, isColor });
+      if (result !== true) errors.push(`${where}.${key} ${result}`);
+    });
+    Object.entries(ORNAMENT_SCHEMA).forEach(([key, spec]) => {
+      if (spec.required && entry[key] === undefined) errors.push(`${where}.${key} is required`);
+    });
+    if (entry.stretch && !['top', 'right', 'bottom', 'left'].includes(entry.anchor)) {
+      errors.push(`${where}.stretch only applies to an edge (top, right, bottom or left)`);
+    }
   });
   return errors;
 }

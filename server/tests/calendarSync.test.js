@@ -146,6 +146,18 @@ test('parseEventColor extracts a valid hex and rejects anything else', () => {
     assert.equal(service.parseEventColor(null), null);
 });
 
+test('parseEventColorId keeps only a colorId Google defines (#244)', () => {
+    const service = new CalendarSyncService({}, () => null);
+
+    assert.equal(service.parseEventColorId(JSON.stringify({ colorId: '11' })), '11');
+    assert.equal(service.parseEventColorId(JSON.stringify({ colorId: '1' })), '1');
+    assert.equal(service.parseEventColorId(JSON.stringify({ colorId: null })), null);
+    assert.equal(service.parseEventColorId(JSON.stringify({ colorId: '99' })), null);
+    assert.equal(service.parseEventColorId(JSON.stringify({ eventLabelId: 'label-uuid' })), null);
+    assert.equal(service.parseEventColorId('not json'), null);
+    assert.equal(service.parseEventColorId(null), null);
+});
+
 test('getCachedEvents surfaces per-event color and leaves it null otherwise', () => {
     const rows = [
         {
@@ -181,38 +193,36 @@ test('getCachedEvents surfaces per-event color and leaves it null otherwise', ()
 
     assert.equal(mapped.length, 2);
     assert.equal(mapped[0].event_color, '#dc2127');
+    assert.equal(mapped[0].color_id, '11');
     assert.equal(mapped[0].source_color, '#123456');
     assert.equal(mapped[1].event_color, null);
+    assert.equal(mapped[1].color_id, null);
     assert.equal(mapped[1].source_color, '#123456');
 });
 
-function stubGoogle({ events, colors = {}, labels = {} }) {
+function stubGoogle({ events, labels = {} }) {
     const googleCalendar = require('../services/googleCalendar');
     const googleConnection = require('../services/googleConnection');
 
     const original = {
         getConnectedAccount: googleConnection.getConnectedAccount,
         listEvents: googleCalendar.listEvents,
-        listEventColors: googleCalendar.listEventColors,
         listEventLabels: googleCalendar.listEventLabels,
     };
 
     googleConnection.getConnectedAccount = () => ({ id: 'acct-1' });
     googleCalendar.listEvents = async () => events;
-    googleCalendar.listEventColors = async () => colors;
     googleCalendar.listEventLabels = async () => labels;
 
     return () => {
         googleConnection.getConnectedAccount = original.getConnectedAccount;
         googleCalendar.listEvents = original.listEvents;
-        googleCalendar.listEventColors = original.listEventColors;
         googleCalendar.listEventLabels = original.listEventLabels;
     };
 }
 
-test('fetchGoogleEvents resolves colorId to a hex via the Google palette', async () => {
+test('fetchGoogleEvents resolves colorId through Google\'s current palette (#244)', async () => {
     const restore = stubGoogle({
-        colors: { '11': '#dc2127' },
         events: [
             {
                 id: 'evt-recolored', status: 'confirmed', summary: 'Recolored',
@@ -234,7 +244,7 @@ test('fetchGoogleEvents resolves colorId to a hex via the Google palette', async
 
         assert.equal(events.length, 2);
         assert.equal(events[0].raw.colorId, '11');
-        assert.equal(events[0].raw.eventColor, '#dc2127');
+        assert.equal(events[0].raw.eventColor, '#d50000');
         assert.equal(events[1].raw.colorId, null);
         assert.equal(events[1].raw.eventColor, null);
     } finally {
@@ -242,14 +252,14 @@ test('fetchGoogleEvents resolves colorId to a hex via the Google palette', async
     }
 });
 
-test('fetchGoogleEvents leaves color null when the palette is unavailable', async () => {
+test('fetchGoogleEvents leaves color null for a colorId Google does not define', async () => {
     const restore = stubGoogle({
         events: [
             {
                 id: 'evt-recolored', status: 'confirmed', summary: 'Recolored',
                 start: { dateTime: '2026-05-01T13:00:00Z' },
                 end: { dateTime: '2026-05-01T14:00:00Z' },
-                colorId: '11',
+                colorId: '99',
             },
         ],
     });
@@ -258,7 +268,7 @@ test('fetchGoogleEvents leaves color null when the palette is unavailable', asyn
         const service = new CalendarSyncService({}, () => null);
         const events = await service.fetchGoogleEvents({ id: 1, url: 'primary' });
 
-        assert.equal(events[0].raw.colorId, '11');
+        assert.equal(events[0].raw.colorId, '99');
         assert.equal(events[0].raw.eventColor, null);
     } finally {
         restore();
@@ -290,14 +300,11 @@ test('fetchGoogleEvents resolves a custom-label event via its eventLabelId', asy
     }
 });
 
-test('fetchGoogleEvents prefers the label color over the legacy palette when both are present', async () => {
-    // The regression that motivates this change: colorId 8 resolves to the
-    // pre-2016 #e1e1e1, but the current label color for the same event is
-    // #616161. If we ever regress to colorId-first, this flips back to the
-    // wrong color.
+test('fetchGoogleEvents prefers the label color over the colorId palette when both are present', async () => {
+    // A custom label has a color of its own, which may differ from the
+    // palette color of the colorId Google also sends (graphite, #616161).
     const restore = stubGoogle({
-        colors: { '8': '#e1e1e1' },
-        labels: { 'label-uuid-b': '#616161' },
+        labels: { 'label-uuid-b': '#a79b8e' },
         events: [
             {
                 id: 'evt-both', status: 'confirmed', summary: 'Default palette',
@@ -315,7 +322,7 @@ test('fetchGoogleEvents prefers the label color over the legacy palette when bot
 
         assert.equal(events[0].raw.colorId, '8');
         assert.equal(events[0].raw.eventLabelId, 'label-uuid-b');
-        assert.equal(events[0].raw.eventColor, '#616161');
+        assert.equal(events[0].raw.eventColor, '#a79b8e');
     } finally {
         restore();
     }
@@ -323,7 +330,6 @@ test('fetchGoogleEvents prefers the label color over the legacy palette when bot
 
 test('fetchGoogleEvents leaves color null when neither colorId nor label are set', async () => {
     const restore = stubGoogle({
-        colors: { '11': '#dc2127' },
         labels: { 'label-uuid-c': '#616161' },
         events: [
             {
@@ -351,7 +357,6 @@ test('fetchGoogleEvents falls through when the label id is not in the label map'
     // have a color for, but it also has a colorId. The colorId must win over
     // dropping color entirely.
     const restore = stubGoogle({
-        colors: { '11': '#dc2127' },
         labels: {},
         events: [
             {
@@ -374,7 +379,7 @@ test('fetchGoogleEvents falls through when the label id is not in the label map'
         const service = new CalendarSyncService({}, () => null);
         const events = await service.fetchGoogleEvents({ id: 1, url: 'primary' });
 
-        assert.equal(events[0].raw.eventColor, '#dc2127');
+        assert.equal(events[0].raw.eventColor, '#d50000');
         assert.equal(events[1].raw.eventColor, null);
     } finally {
         restore();

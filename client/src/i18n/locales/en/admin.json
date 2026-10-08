@@ -468,11 +468,8 @@
   "appearance": {
     "theme": "Theme",
     "themeDescriptions": {
-      "classic": "HomeGlow's own look.",
-      "starship": "A 24th-century bridge console: black field, pill controls, curved frame elbows. Dark only.",
-      "reef": "A dive: sunlit shallows in light mode, a night dive in dark. Water gradients, coral and bioluminescent accents, bubble-soft frames."
+      "classic": "HomeGlow's own look."
     },
-    "themeHasColors": "This theme brings its own colors, so the colors below apply only when the theme is Classic.",
     "heading": "Appearance",
     "subtitle": "The household sets the default look. This display can override any part of it.",
     "scopeDevice": "This display",
@@ -487,7 +484,8 @@
     "colors": "Colors",
     "colorLabels": {
       "primary": "Background color (light mode)",
-      "secondary": "Secondary color"
+      "secondary": "Secondary color",
+      "accent": "Accent color"
     },
     "autoDark": "Auto mode location",
     "resolvedLocation": "Using {{name}}",
@@ -503,9 +501,7 @@
   },
   "personalize": {
     "heading": "Personalize",
-    "help": "Your own accent, background and card opacity, over whichever theme is showing.",
-    "accent": "Accent",
-    "themeAccent": "Use the theme's accent",
+    "help": "Your own background and card opacity, over whichever theme is showing.",
     "background": "Background",
     "backgroundColor": "Background color",
     "kinds": {
@@ -556,5 +552,31 @@
     "connections": "Connections",
     "about": "About"
   },
-  "panelTitle": "Admin Panel"
+  "panelTitle": "Admin Panel",
+  "themes": {
+    "heading": "Themes",
+    "subtitle": "Install themes from the themes repository, or add a theme folder of your own. Choose the theme under Appearance, above.",
+    "onThisHomeGlow": "On this HomeGlow",
+    "builtIn": "Built in",
+    "remove": "Remove",
+    "confirmRemove": "Remove the {{name}} theme? Displays using it will show Classic.",
+    "removed": "Removed {{name}}.",
+    "installed": "Installed {{name}}. Choose it under Appearance, above.",
+    "failed": "That didn't work. Try again.",
+    "cannotUse": "Can't be used: {{problem}}",
+    "notInstalled": "{{id}} (not installed)",
+    "getMore": "Get themes",
+    "refresh": "Refresh",
+    "fromRepository": "From {{repository}}",
+    "storeFailed": "Couldn't reach the themes repository.",
+    "storeEmpty": "The themes repository has no themes yet.",
+    "install": "Install",
+    "update": "Update",
+    "upToDate": "Installed",
+    "addFolder": "Add a theme folder",
+    "addFolderHelp": "Choose a folder holding theme.json, with assets/ and fonts/ beside it. See the theme development guide.",
+    "folderInvalid": "That folder isn't a usable theme: {{problems}}",
+    "needsNewer": "{{name}} needs a newer version of HomeGlow. Update HomeGlow to use it.",
+    "thisTheme": "This theme"
+  }
 }

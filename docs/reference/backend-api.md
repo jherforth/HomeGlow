@@ -110,6 +110,22 @@ segment (the browser's `localStorage` UUID).
 | GET | `/widgets/:filename` | Serve a widget's HTML (theme-aware, sandboxed). |
 | GET | `/plugin-sdk/v1.js` | Serve the plugin SDK (`window.HomeGlow`) loaded by manifest plugins. |
 
+### Themes
+Installed themes live under `uploads/themes/<id>/`, one folder per theme, laid
+out as in `client/src/themes/` (`services/themeStore.js`). The server checks
+structure: allowed paths, each file's type by its bytes, sizes, no script in
+SVGs, and a usable `id`. Every display runs the full `validateThemePackage`
+before it uses an installed theme.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/themes` | List installed themes: `{ id, manifest, files, source, ref, installedAt }`. |
+| POST | `/api/themes/upload` | Install a theme folder. Multipart, one field per file, named by its path (`theme.json`, `assets/x.svg`, `fonts/y.woff2`). Replaces an installed theme with the same id. |
+| GET | `/api/themes/store` | List the themes in the themes repository (`HOMEGLOW_THEMES_REPOSITORY`, default `jherforth/HomeGlowThemes`): `{ themes, unsupported }`, where `unsupported` lists themes whose `manifestVersion` is newer than this HomeGlow understands. |
+| POST | `/api/themes/store/install` | Install `{ id }` from the themes repository. |
+| GET | `/api/themes/:id/:dir/:file` | Serve an installed theme's asset or font, with a sandboxing CSP. URLs carry `?v=<installedAt>` and are cached as immutable. |
+| DELETE | `/api/themes/:id` | Remove an installed theme. |
+
 ### Plugin platform API (`/api/plugin/v1`)
 The **stable, versioned contract** that manifest plugins may rely on (issue #105).
 Unlike the rest of this surface, these routes are frozen — a breaking change means
@@ -160,8 +176,9 @@ static route.
 ### Chores, schedules & history
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET/POST | `/api/chores` | List / create chore definitions. |
-| PATCH/DELETE | `/api/chores/:id` | Update / delete a chore. |
+| GET/POST | `/api/chores` | List / create chore definitions. Each listed chore carries `followups: [{ id, followup_chore_id, title }]`. |
+| PATCH/DELETE | `/api/chores/:id` | Update / delete a chore. Deleting removes its follow-up rules and any rule that names it. |
+| GET/PUT | `/api/chores/:id/followups` | A chore's follow-ups (issue #241). PUT replaces them with `{ followups: [{ followup_chore_id, user_ids, delay_minutes }] }`: at most 3, not the chore itself, no loops, at least one person, delay 0–10080 minutes. |
 | GET/POST | `/api/chore-schedules` | List (filter by `user_id`, `visible`, `usage`, `chore_id`) / create. Accepts `due_time` (`HH:MM`), `sound`, `sound_enabled`, `reminder_interval_minutes` for due-time sounds, and `due_date` (`YYYY-MM-DD`) for calendar deadlines. PATCH `user_id` reassigns a chore and re-checks the daily bonus for both owners. |
 | GET/PATCH/DELETE | `/api/chore-schedules/:id` | Single schedule CRUD. |
 | POST | `/api/chore-schedules/bulk` | Bulk create schedules. |
@@ -170,8 +187,8 @@ static route.
 | GET | `/api/chore-history/summary/:userId` | Summary/aggregate for a user. |
 | GET | `/api/chore-history/recent` | Recent (last 7 days) completions. |
 | DELETE | `/api/chore-history/:id` | Delete a history entry. |
-| POST | `/api/chores/complete` | Mark a chore complete (awards clams / daily bonus). |
-| POST | `/api/chores/uncomplete` | Undo a completion. |
+| POST | `/api/chores/complete` | Mark a chore complete (awards clams / daily bonus). A completion dated today hands out the chore's follow-ups; the response lists them in `followups_created`. |
+| POST | `/api/chores/uncomplete` | Undo a completion, and remove the follow-ups it handed out that nobody has done (`followups_removed`). |
 
 ### Users & clams
 | Method | Path | Purpose |
@@ -242,9 +259,9 @@ that failed contract validation).
 | GET/POST | `/api/calendar-sources` | List / create calendar sources. |
 | PATCH/DELETE | `/api/calendar-sources/:id` | Update / delete a source. |
 | POST | `/api/calendar-sources/:id/test` | Test connectivity to a source. |
-| POST | `/api/calendar-sources/:id/events` | Add an event to a (writable) source. |
-| PATCH/DELETE | `/api/calendar-sources/:id/events/:eventId` | Edit / delete an event. |
-| GET | `/api/calendar-events` | Read cached events for the widget. |
+| POST | `/api/calendar-sources/:id/events` | Add an event to a (writable) source. Optional `color_id`: a Google event color `'1'`–`'11'`. |
+| PATCH/DELETE | `/api/calendar-sources/:id/events/:eventId` | Edit / delete an event. `color_id` as above, or `null` for the calendar's color; left out, the color is unchanged. Any other value is a 400. |
+| GET | `/api/calendar-events` | Read cached events for the widget. Google events carry `event_color` (hex) and `color_id`. |
 | GET | `/api/calendar-sync/status` | Overall sync status. |
 | GET | `/api/calendar-sync/status/:sourceId` | Per-source status. |
 | POST | `/api/calendar-sync/:sourceId` | Force sync one source. |

@@ -7,6 +7,7 @@
     "living": "Living areas",
     "pets": "Pets",
     "outdoor": "Outdoors",
+    "sports": "Sports",
     "school": "School & routine"
   },
   "icons": {
@@ -64,7 +65,15 @@
     "music": "Music practice",
     "computer": "Screen time",
     "clock": "On time",
-    "star": "Star"
+    "star": "Star",
+    "soccer": "Soccer ball",
+    "basketball": "Basketball",
+    "americanFootball": "Football",
+    "baseball": "Baseball",
+    "softball": "Softball",
+    "tennis": "Tennis ball",
+    "volleyball": "Volleyball",
+    "rugby": "Rugby ball"
   },
   "widget": {
     "title": "🥟 Daily Chores",
@@ -76,7 +85,8 @@
     "uncompleteAria": "Undo \"{{title}}\"",
     "dueOn": "Due {{date}}",
     "overdue": "⚠️ Overdue",
-    "redeemClamsFor": "Redeem clams for {{name}}"
+    "redeemClamsFor": "Redeem clams for {{name}}",
+    "followupOf": "↪ after {{title}}"
   },
   "days": {
     "sunday": "Sunday",
@@ -267,5 +277,26 @@
     "thu": "Thu",
     "fri": "Fri",
     "sat": "Sat"
+  },
+  "followups": {
+    "heading": "When it's done",
+    "optional": "(optional)",
+    "help": "Follow-ups appear on each person's list when this chore is ticked off. They count toward the daily bonus from the next day.",
+    "add": "Add a follow-up",
+    "give": "Then give",
+    "to": "To",
+    "when": "When",
+    "rightAway": "Right away",
+    "after": "After…",
+    "amount": "How long after",
+    "unit": "Minutes or hours",
+    "minutes": "minutes",
+    "hours": "hours",
+    "remove": "Remove this follow-up",
+    "chip": "Follow-up",
+    "errorChore": "Follow-up {{n}}: choose a chore.",
+    "errorPeople": "Follow-up {{n}}: choose at least one person.",
+    "errorDelay": "Follow-up {{n}}: the delay must be between 1 minute and 7 days.",
+    "errorSave": "The chore was saved, but its follow-ups could not be."
   }
 }

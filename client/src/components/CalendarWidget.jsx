@@ -20,6 +20,8 @@ import {
 } from '../utils/calendarIdleReturn.js';
 import MonthDayCell from './MonthDayCell.jsx';
 import ColorPickerPopover from './ColorPickerPopover.jsx';
+import EventColorPicker from './EventColorPicker.jsx';
+import { eventColorToSend } from '../utils/googleEventColors.js';
 import { shouldPersistSettings } from '../utils/widgetSettingsPersist';
 import { isControlHidden } from '../utils/displayControls.js';
 import {
@@ -279,7 +281,7 @@ const CalendarWidget = ({
       setEventDialog((prev) => (prev.open ? { open: false, mode: 'create', event: null, sourceId: '' } : prev));
     }
   }, [hideCalendarSettings, hideEditEvents]);
-  const [eventForm, setEventForm] = useState({ title: '', description: '', location: '', all_day: false, start: '', end: '' });
+  const [eventForm, setEventForm] = useState({ title: '', description: '', location: '', all_day: false, start: '', end: '', color_id: '' });
   const [eventSaving, setEventSaving] = useState(false);
   const [eventError, setEventError] = useState('');
   const [syncStatus, setSyncStatus] = useState({});
@@ -677,6 +679,8 @@ const CalendarWidget = ({
           // Per-event color set in Google; null unless the event was
           // individually recolored, in which case it wins over source_color.
           event_color: event.event_color || null,
+          // Google's colorId behind event_color, for the event editor (#244).
+          color_id: event.color_id || null,
           // Cross-calendar dedup metadata (issue #125): which other calendars
           // this event was merged from — drives the pie dot in the day view.
           merged_from: Array.isArray(event.merged_from) ? event.merged_from : undefined
@@ -927,6 +931,7 @@ const CalendarWidget = ({
       all_day: false,
       start: start.format('YYYY-MM-DDTHH:mm'),
       end: end.format('YYYY-MM-DDTHH:mm'),
+      color_id: '',
     });
     setEventError('');
     setEventDialog({ open: true, mode: 'create', event: null, sourceId: googleSources[0].id });
@@ -948,6 +953,7 @@ const CalendarWidget = ({
       all_day: allDay,
       start: startStr,
       end: endStr,
+      color_id: event.color_id || '',
     });
     setEventError('');
     setEventDialog({ open: true, mode: 'edit', event, sourceId: event.source_id });
@@ -975,6 +981,9 @@ const CalendarWidget = ({
         start: eventForm.start,
         end: eventForm.end,
       };
+      // Only a picked or changed color is sent (#244).
+      const colorId = eventColorToSend(eventDialog.mode, eventForm.color_id, eventDialog.event?.color_id);
+      if (colorId !== undefined) payload.color_id = colorId;
       if (eventDialog.mode === 'create') {
         await axios.post(`${API_BASE_URL}/api/calendar-sources/${eventDialog.sourceId}/events`, payload);
       } else {
@@ -2035,6 +2044,14 @@ const CalendarWidget = ({
                 onChange={(e) => setEventForm({ ...eventForm, end: e.target.value })}
                 InputLabelProps={{ shrink: true }}
                 required
+              />
+            </Box>
+
+            <Box sx={{ mb: 2 }}>
+              <EventColorPicker
+                value={eventForm.color_id}
+                onChange={(colorId) => setEventForm((prev) => ({ ...prev, color_id: colorId }))}
+                calendarColor={calendarSources.find((s) => s.id === eventDialog.sourceId)?.color}
               />
             </Box>
 

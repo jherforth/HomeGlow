@@ -152,6 +152,7 @@ const googleCalendar = require('./services/googleCalendar');
 const appleCalDAV = require('./services/appleCalDAV');
 const googlePhotos = require('./services/googlePhotos');
 const appearanceAssets = require('./services/appearanceAssets');
+const themeStore = require('./services/themeStore');
 const googlePhotosPicker = require('./services/googlePhotosPicker');
 const googleTasks = require('./services/googleTasks');
 const homeAssistant = require('./services/homeAssistant');
@@ -231,9 +232,12 @@ const schemaMigrations = [
   { schemaId: 24, migrationPath: './migrations/schema24-choreIcon', },
   { schemaId: 25, migrationPath: './migrations/schema25-unifyCredentialEncryption', },
   { schemaId: 26, migrationPath: './migrations/schema26-keepLegacyTimezone', },
-  { schemaId: 27, migrationPath: './migrations/schema27-userGoogleTasks', },
-  { schemaId: 28, migrationPath: './migrations/schema28-choreCalendarMatch', },
-  { schemaId: 29, migrationPath: './migrations/schema29-choreSpawn', },
+  { schemaId: 27, migrationPath: './migrations/schema27-choreFollowups', },
+  { schemaId: 28, migrationPath: './migrations/schema28-userGoogleTasks', },
+  { schemaId: 29, migrationPath: './migrations/schema29-choreCalendarMatch', },
+  { schemaId: 30, migrationPath: './migrations/schema30-choreSpawn', },
+  { schemaId: 31, migrationPath: './migrations/schema31-removeCalendarMatch', },
+  { schemaId: 32, migrationPath: './migrations/schema32-removeSpawn', },
 ];
 
 const ALLOWED_SCHEDULE_DURATIONS = new Set(['day-of', 'until-completed', 'once-completed']);
@@ -654,15 +658,26 @@ fastify.get('/widgets/:filename', async (request, reply) => {
 });
 
 // Serve the plugin SDK (issue #105). Cached after first read; versioned by
-// path so a future v2 can coexist with v1.
+// path so a future v2 can coexist with v1. The path stays the same across
+// HomeGlow upgrades while the file changes, so browsers must revalidate it:
+// with a max-age, a display kept the previous release's SDK for an hour after
+// an upgrade, and a hard reload of the dashboard does not refetch what plugin
+// frames load. no-cache plus an ETag costs a 304 when nothing changed.
 let pluginSdkV1Cache = null;
+let pluginSdkV1Etag = null;
 fastify.get('/plugin-sdk/v1.js', async (request, reply) => {
   try {
     if (!pluginSdkV1Cache) {
       pluginSdkV1Cache = await fs.readFile(path.join(__dirname, 'plugin-sdk', 'v1.js'), 'utf-8');
+      pluginSdkV1Etag = `"${crypto.createHash('sha1').update(pluginSdkV1Cache).digest('hex')}"`;
     }
     reply.header('Content-Type', 'application/javascript');
-    reply.header('Cache-Control', 'public, max-age=3600');
+    reply.header('Cache-Control', 'no-cache');
+    reply.header('ETag', pluginSdkV1Etag);
+    const ifNoneMatch = request.headers['if-none-match'];
+    if (ifNoneMatch && ifNoneMatch.split(',').some((tag) => tag.trim().replace(/^W\//, '') === pluginSdkV1Etag)) {
+      return reply.code(304).send();
+    }
     return pluginSdkV1Cache;
   } catch (error) {
     console.error('Error serving plugin SDK:', error);
@@ -2685,10 +2700,61 @@ function normalizeChoreIcon(icon) {
 fastify.get('/api/chores', async (request, reply) => {
   try {
     const rows = db.prepare('SELECT * FROM chores').all();
-    return rows;
+    // Each chore's follow-ups by title, for the chips in the Admin Panel (#241).
+    const followups = db.prepare(`
+      SELECT f.id, f.chore_id, f.followup_chore_id, c.title
+      FROM chore_followups f JOIN chores c ON c.id = f.followup_chore_id
+      ORDER BY f.sort_order, f.id
+    `).all();
+    return rows.map((row) => ({
+      ...row,
+      followups: followups
+        .filter((f) => f.chore_id === row.id)
+        .map((f) => ({ id: f.id, followup_chore_id: f.followup_chore_id, title: f.title })),
+    }));
   } catch (error) {
     console.error('Error fetching chores:', error);
     reply.status(500).send({ error: 'Failed to fetch chores' });
+  }
+});
+
+// A chore's follow-ups (issue #241): what to give to whom when it is done.
+fastify.get('/api/chores/:id/followups', async (request, reply) => {
+  const choreId = Number(request.params.id);
+  try {
+    if (!db.prepare('SELECT 1 FROM chores WHERE id = ?').get(choreId)) {
+      return reply.status(404).send({ error: 'Chore not found' });
+    }
+    return listChoreFollowups(choreId);
+  } catch (error) {
+    console.error('Error fetching chore follow-ups:', error);
+    reply.status(500).send({ error: 'Failed to fetch follow-ups' });
+  }
+});
+
+// Replaces the chore's follow-ups with the list sent: { followups: [{
+// followup_chore_id, user_ids: [..], delay_minutes }] }. An empty list removes
+// them all. Follow-ups already handed out are untouched.
+fastify.put('/api/chores/:id/followups', async (request, reply) => {
+  const choreId = Number(request.params.id);
+  try {
+    if (!db.prepare('SELECT 1 FROM chores WHERE id = ?').get(choreId)) {
+      return reply.status(404).send({ error: 'Chore not found' });
+    }
+    const checked = validateChoreFollowups(choreId, request.body?.followups);
+    if (checked.error) return reply.status(400).send({ error: checked.error });
+
+    const insert = db.prepare('INSERT INTO chore_followups (chore_id, followup_chore_id, user_ids, delay_minutes, sort_order) VALUES (?, ?, ?, ?, ?)');
+    db.transaction(() => {
+      db.prepare('DELETE FROM chore_followups WHERE chore_id = ?').run(choreId);
+      checked.rules.forEach((rule, index) => {
+        insert.run(choreId, rule.followupChoreId, JSON.stringify(rule.userIds), rule.delay, index);
+      });
+    })();
+    return listChoreFollowups(choreId);
+  } catch (error) {
+    console.error('Error saving chore follow-ups:', error);
+    reply.status(500).send({ error: 'Failed to save follow-ups' });
   }
 });
 
@@ -2742,7 +2808,11 @@ fastify.delete('/api/chores/:id', async (request, reply) => {
 fastify.get('/api/chore-schedules', async (request, reply) => {
   try {
     const { user_id, visible, usage, chore_id } = request.query;
-    let query = 'SELECT cs.*, c.title, c.description, c.clam_value, c.icon FROM chore_schedules cs JOIN chores c ON cs.chore_id = c.id';
+    // followup_of: the chore whose completion handed this one on, for the
+    // "after Run the dishwasher" caption in the widget (issue #241).
+    let query = 'SELECT cs.*, c.title, c.description, c.clam_value, c.icon, tc.title AS followup_of ' +
+      'FROM chore_schedules cs JOIN chores c ON cs.chore_id = c.id ' +
+      'LEFT JOIN chore_followups fr ON fr.id = cs.followup_rule_id LEFT JOIN chores tc ON tc.id = fr.chore_id';
     const conditions = [];
     const params = [];
 
@@ -3301,6 +3371,13 @@ function getTodaysRegularChoresForUser(userId, dateStr, referenceNow = new Date(
   // this works for past dates too.
   const todaysChores = [];
   for (const schedule of regularChores) {
+    // A follow-up doesn't count on the day it appeared: it can arrive at 9 pm,
+    // too late to be fair (issue #241). From the next day it counts like any
+    // one-time chore. This drives both the daily bonus and missed logging.
+    if (schedule.triggered_on && schedule.triggered_on === dateStr) {
+      continue;
+    }
+
     // schedules without crontab are one-time and always part of today's chores
     if (!schedule.crontab) {
       todaysChores.push(schedule);
@@ -3314,6 +3391,150 @@ function getTodaysRegularChoresForUser(userId, dateStr, referenceNow = new Date(
   }
 
   return todaysChores;
+}
+
+// --- Follow-up chores (issue #241) ---
+// "When Run the dishwasher is done, give Unload the dishwasher to Liam, after
+// 2 hours." A rule belongs to a chore. Completing that chore today gives each
+// named person an ordinary one-time schedule of the follow-up chore, so the
+// widget, clams, transfer, snooze, history and nightly cleanup all apply
+// unchanged. A delay is a snooze: hidden, and out of the bonus, until it ends.
+// No due date: a follow-up has none (issue #241), so it never reads as overdue.
+
+const FOLLOWUP_MAX_PER_CHORE = 3;
+const FOLLOWUP_MAX_DELAY_MINUTES = 7 * 24 * 60;
+
+function parseFollowupUserIds(raw) {
+  try {
+    const ids = JSON.parse(raw || '[]');
+    return Array.isArray(ids) ? ids.filter(Number.isInteger) : [];
+  } catch {
+    return [];
+  }
+}
+
+function listChoreFollowups(choreId) {
+  return db.prepare(`
+    SELECT f.id, f.followup_chore_id, f.user_ids, f.delay_minutes, c.title
+    FROM chore_followups f
+    JOIN chores c ON c.id = f.followup_chore_id
+    WHERE f.chore_id = ?
+    ORDER BY f.sort_order, f.id
+  `).all(choreId).map((row) => ({
+    id: row.id,
+    followup_chore_id: row.followup_chore_id,
+    title: row.title,
+    user_ids: parseFollowupUserIds(row.user_ids),
+    delay_minutes: row.delay_minutes,
+  }));
+}
+
+// Checks a replacement list of follow-ups for a chore. Returns { rules } ready
+// to store, or { error } saying which one is wrong and why.
+function validateChoreFollowups(choreId, input) {
+  if (!Array.isArray(input)) return { error: 'followups must be a list.' };
+  if (input.length > FOLLOWUP_MAX_PER_CHORE) {
+    return { error: `A chore can have at most ${FOLLOWUP_MAX_PER_CHORE} follow-ups.` };
+  }
+  const choreExists = db.prepare('SELECT 1 FROM chores WHERE id = ?');
+  const userExists = db.prepare('SELECT 1 FROM users WHERE id = ?');
+  const rules = [];
+  for (const [index, raw] of input.entries()) {
+    const n = index + 1;
+    const followupChoreId = Number(raw?.followup_chore_id);
+    if (!Number.isInteger(followupChoreId) || !choreExists.get(followupChoreId)) {
+      return { error: `Follow-up ${n}: choose a chore.` };
+    }
+    if (followupChoreId === choreId) {
+      return { error: `Follow-up ${n}: a chore can't follow itself.` };
+    }
+    if (rules.some((rule) => rule.followupChoreId === followupChoreId)) {
+      return { error: `Follow-up ${n}: that chore is already a follow-up.` };
+    }
+    const userIds = [];
+    for (const rawId of Array.isArray(raw.user_ids) ? raw.user_ids : []) {
+      const id = Number(rawId);
+      if (!Number.isInteger(id) || id <= 0 || !userExists.get(id)) {
+        return { error: `Follow-up ${n}: unknown person ${JSON.stringify(rawId)}.` };
+      }
+      if (!userIds.includes(id)) userIds.push(id);
+    }
+    if (!userIds.length) return { error: `Follow-up ${n}: choose at least one person.` };
+    const delay = raw.delay_minutes === undefined || raw.delay_minutes === null || raw.delay_minutes === ''
+      ? 0
+      : Number(raw.delay_minutes);
+    if (!Number.isInteger(delay) || delay < 0 || delay > FOLLOWUP_MAX_DELAY_MINUTES) {
+      return { error: `Follow-up ${n}: the delay must be between 0 minutes and 7 days.` };
+    }
+    rules.push({ followupChoreId, userIds, delay });
+  }
+
+  // No loops: with these rules in place of the chore's current ones, no chain
+  // of follow-ups may lead back to it. Chains (A, then B, then C) are fine.
+  const next = new Map();
+  for (const row of db.prepare('SELECT chore_id, followup_chore_id FROM chore_followups WHERE chore_id <> ?').all(choreId)) {
+    if (!next.has(row.chore_id)) next.set(row.chore_id, []);
+    next.get(row.chore_id).push(row.followup_chore_id);
+  }
+  const seen = new Set();
+  const stack = rules.map((rule) => rule.followupChoreId);
+  while (stack.length) {
+    const current = stack.pop();
+    if (current === choreId) return { error: 'These follow-ups would lead back to this chore.' };
+    if (seen.has(current)) continue;
+    seen.add(current);
+    (next.get(current) || []).forEach((id) => stack.push(id));
+  }
+  return { rules };
+}
+
+// Give each follow-up of a just-completed chore to its people. Only a
+// completion dated today hands work on: back-dated catch-ups in the Admin
+// Panel don't. A person who still has an open follow-up from the same rule
+// gets no second one. Runs inside the completion's transaction.
+function createFollowupsForCompletion(schedule, date) {
+  if (date !== getTodayLocalDateString()) return [];
+  const rules = db.prepare('SELECT id, followup_chore_id, user_ids, delay_minutes FROM chore_followups WHERE chore_id = ? ORDER BY sort_order, id').all(schedule.chore_id);
+  if (!rules.length) return [];
+
+  const userExists = db.prepare('SELECT 1 FROM users WHERE id = ?');
+  const openFollowup = db.prepare(`
+    SELECT 1 FROM chore_schedules cs
+    WHERE cs.followup_rule_id = ? AND cs.user_id = ? AND cs.visible = 1
+      AND NOT EXISTS (SELECT 1 FROM chore_history h WHERE h.chore_schedule_id = cs.id AND h.kind = 'completion')
+  `);
+  const insert = db.prepare(`
+    INSERT INTO chore_schedules
+      (chore_id, user_id, crontab, duration, visible, snoozed_until, followup_rule_id, triggered_by_schedule_id, triggered_on)
+    VALUES (?, ?, NULL, 'day-of', 1, ?, ?, ?, ?)
+  `);
+
+  const created = [];
+  for (const rule of rules) {
+    const snoozedUntil = rule.delay_minutes > 0
+      ? new Date(Date.now() + rule.delay_minutes * 60 * 1000).toISOString()
+      : null;
+    for (const userId of parseFollowupUserIds(rule.user_ids)) {
+      // A person removed since the rule was saved is skipped, not an error.
+      if (!userExists.get(userId) || openFollowup.get(rule.id, userId)) continue;
+      const info = insert.run(rule.followup_chore_id, userId, snoozedUntil, rule.id, schedule.id, date);
+      created.push({ schedule_id: info.lastInsertRowid, user_id: userId, chore_id: rule.followup_chore_id });
+    }
+  }
+  return created;
+}
+
+// Undoing a completion takes back the follow-ups it handed on that nobody has
+// done yet. Ones already done are kept: that work really happened.
+function removeOpenFollowupsFrom(scheduleId, date) {
+  return db.prepare(`
+    DELETE FROM chore_schedules
+    WHERE triggered_by_schedule_id = ? AND triggered_on = ?
+      AND NOT EXISTS (
+        SELECT 1 FROM chore_history h
+        WHERE h.chore_schedule_id = chore_schedules.id AND h.kind = 'completion'
+      )
+  `).run(scheduleId, date).changes;
 }
 
 // Awards the daily "all regular chores completed" bonus to a user if every regular
@@ -3404,38 +3625,45 @@ fastify.post('/api/chores/complete', async (request, reply) => {
       return reply.status(409).send({ error: 'Chore already completed for this date' });
     }
 
-    db.prepare("DELETE FROM chore_history WHERE chore_schedule_id = ? AND user_id = ? AND date = ? AND kind = 'missed'").run(chore_schedule_id, user_id, date);
-    db.prepare("INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind) VALUES (?, ?, ?, ?, ?, 'completion')").run(user_id, chore_schedule_id, date, schedule.clam_value, schedule.title);
+    // One transaction: the completion and the follow-ups it hands on are
+    // written together or not at all (issue #241).
+    const recordCompletion = db.transaction(() => {
+      db.prepare("DELETE FROM chore_history WHERE chore_schedule_id = ? AND user_id = ? AND date = ? AND kind = 'missed'").run(chore_schedule_id, user_id, date);
+      db.prepare("INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind) VALUES (?, ?, ?, ?, ?, 'completion')").run(user_id, chore_schedule_id, date, schedule.clam_value, schedule.title);
 
-    // Outbound sync to Google Tasks if linked
-    if (schedule.google_task_id) {
-      googleTasks.completeGoogleTask(db, user_id, schedule.google_task_id).catch((err) => {
-        console.warn(`[GoogleTasks] Failed to sync completion to Google Tasks:`, err.message);
-      });
-    }
+      // Outbound sync to Google Tasks if linked
+      if (schedule.google_task_id) {
+        googleTasks.completeGoogleTask(db, user_id, schedule.google_task_id).catch((err) => {
+          console.warn(`[GoogleTasks] Failed to sync completion to Google Tasks:`, err.message);
+        });
+      }
 
-    // Pay out a pending transfer bonus (attached by the parent when moving
-    // this chore to a kid whose day was already complete) and clear it so it
-    // pays only once.
-    if (schedule.transfer_bonus_clams > 0) {
-      db.prepare("INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind) VALUES (?, ?, ?, ?, ?, 'transfer_bonus')").run(user_id, chore_schedule_id, date, schedule.transfer_bonus_clams, 'Transfer bonus');
-      db.prepare('UPDATE chore_schedules SET transfer_bonus_clams = 0 WHERE id = ?').run(chore_schedule_id);
-    }
+      // Pay out a pending transfer bonus (attached by the parent when moving
+      // this chore to a kid whose day was already complete) and clear it so it
+      // pays only once.
+      if (schedule.transfer_bonus_clams > 0) {
+        db.prepare("INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind) VALUES (?, ?, ?, ?, ?, 'transfer_bonus')").run(user_id, chore_schedule_id, date, schedule.transfer_bonus_clams, 'Transfer bonus');
+        db.prepare('UPDATE chore_schedules SET transfer_bonus_clams = 0 WHERE id = ?').run(chore_schedule_id);
+      }
 
-    if (schedule.parent_schedule_id) {
-      const parentSchedule = db.prepare('SELECT id, duration, interval FROM chore_schedules WHERE id = ?').get(schedule.parent_schedule_id);
-      if (parentSchedule && parentSchedule.duration === 'once-completed') {
-        const completionDate = parseDateOnlyToLocalDate(date);
-        const nextDueDate = completionDate ? addIntervalToDate(completionDate, parentSchedule.interval) : null;
-        const nextCrontab = buildDateCrontab(nextDueDate);
+      if (schedule.parent_schedule_id) {
+        const parentSchedule = db.prepare('SELECT id, duration, interval FROM chore_schedules WHERE id = ?').get(schedule.parent_schedule_id);
+        if (parentSchedule && parentSchedule.duration === 'once-completed') {
+          const completionDate = parseDateOnlyToLocalDate(date);
+          const nextDueDate = completionDate ? addIntervalToDate(completionDate, parentSchedule.interval) : null;
+          const nextCrontab = buildDateCrontab(nextDueDate);
 
-        if (nextCrontab) {
-          db.prepare('UPDATE chore_schedules SET crontab = ?, visible = 1 WHERE id = ?').run(nextCrontab, parentSchedule.id);
-        } else {
-          console.warn(`Could not reschedule once-completed parent schedule ${parentSchedule.id}; invalid interval: ${parentSchedule.interval}`);
+          if (nextCrontab) {
+            db.prepare('UPDATE chore_schedules SET crontab = ?, visible = 1 WHERE id = ?').run(nextCrontab, parentSchedule.id);
+          } else {
+            console.warn(`Could not reschedule once-completed parent schedule ${parentSchedule.id}; invalid interval: ${parentSchedule.interval}`);
+          }
         }
       }
-    }
+
+      return createFollowupsForCompletion(schedule, date);
+    });
+    const followupsCreated = recordCompletion();
 
     // Announce this completion before awarding the daily bonus, because the
     // award emits chore.allCompleted. Emitting in the other order would tell a
@@ -3454,7 +3682,7 @@ fastify.post('/api/chores/complete', async (request, reply) => {
     // Read the total after the award so the response includes the bonus.
     const totalResult = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(user_id);
 
-    return { success: true, clam_total: totalResult.total };
+    return { success: true, clam_total: totalResult.total, followups_created: followupsCreated };
   } catch (error) {
     console.error('Error completing chore:', error);
     reply.status(500).send({ error: 'Failed to complete chore' });
@@ -3490,6 +3718,10 @@ fastify.post('/api/chores/uncomplete', async (request, reply) => {
       revokeDailyRegularBonus(user_id, date);
     }
 
+    // Take back the follow-ups this completion handed on that nobody has done
+    // yet: ticked by mistake, unticked, and Liam's "Unload" goes away (#241).
+    const followupsRemoved = removeOpenFollowupsFrom(chore_schedule_id, date);
+
     const totalResult = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(user_id);
 
     // Mirror of chore.completed so plugins (and declarative reactions with a
@@ -3504,7 +3736,7 @@ fastify.post('/api/chores/uncomplete', async (request, reply) => {
       date,
     });
 
-    return { success: true, clam_total: totalResult.total };
+    return { success: true, clam_total: totalResult.total, followups_removed: followupsRemoved };
   } catch (error) {
     console.error('Error uncompleting chore:', error);
     reply.status(500).send({ error: 'Failed to uncomplete chore' });
@@ -6203,6 +6435,113 @@ fastify.delete('/api/appearance/backgrounds/:file', async (request, reply) => {
   } catch (error) {
     console.error('Error deleting appearance background:', error);
     return reply.status(500).send({ error: 'Failed to delete background' });
+  }
+});
+
+// Themes: installed from the themes repository or uploaded as a folder, kept
+// under uploads/themes. See services/themeStore.js for what is checked here
+// and what every display checks before it uses one.
+const DEFAULT_THEMES_REPOSITORY = 'jherforth/HomeGlowThemes';
+const THEMES_REPOSITORY = isValidRepositorySlug((process.env.HOMEGLOW_THEMES_REPOSITORY || '').trim())
+  ? process.env.HOMEGLOW_THEMES_REPOSITORY.trim()
+  : DEFAULT_THEMES_REPOSITORY;
+
+const sendThemeError = (reply, result) => reply.status(result.status || 400).send({
+  error: result.error,
+  ...(result.problems ? { problems: result.problems } : {}),
+  // The page shows its own translated sentence for this one.
+  ...(result.needsNewer ? { needsNewer: true, name: result.name } : {}),
+});
+
+fastify.get('/api/themes', async (request, reply) => {
+  try {
+    reply.header('Cache-Control', 'no-cache');
+    return { themes: await themeStore.listThemes(UPLOADS_ROOT) };
+  } catch (error) {
+    console.error('Error listing themes:', error);
+    return reply.status(500).send({ error: 'Failed to list themes' });
+  }
+});
+
+// Upload: one multipart field per file, named by its path in the theme folder
+// (theme.json, assets/x.svg, fonts/y.woff2).
+fastify.post('/api/themes/upload', async (request, reply) => {
+  if (demoBlocked(reply)) return;
+  try {
+    const files = [];
+    for await (const part of request.parts({ limits: { fileSize: themeStore.MAX_FILE_BYTES + 1, files: themeStore.MAX_FILES + 1 } })) {
+      if (part.type !== 'file') continue;
+      const buffer = await part.toBuffer();
+      if (part.file.truncated) {
+        return reply.status(413).send({ error: `${part.fieldname} is larger than ${themeStore.MAX_FILE_BYTES / (1024 * 1024)} MB` });
+      }
+      files.push({ path: part.fieldname, buffer });
+    }
+    const installed = await themeStore.installTheme(UPLOADS_ROOT, files, { source: 'upload' });
+    if (installed.error) return sendThemeError(reply, installed);
+    return installed;
+  } catch (error) {
+    if (error.code === 'FST_REQ_FILE_TOO_LARGE' || error.code === 'FST_FILES_LIMIT') {
+      return reply.status(413).send({ error: 'That theme is too large.' });
+    }
+    console.error('Error uploading theme:', error);
+    return reply.status(500).send({ error: 'Failed to install theme' });
+  }
+});
+
+fastify.get('/api/themes/store', async (request, reply) => {
+  try {
+    const { themes, unsupported } = await themeStore.listRepositoryThemes(axios, THEMES_REPOSITORY);
+    return { repository: THEMES_REPOSITORY, themes, unsupported };
+  } catch (error) {
+    console.error(`Error listing themes from ${THEMES_REPOSITORY}:`, error.message);
+    const status = error.response?.status === 404 ? 404 : 502;
+    return reply.status(status).send({ error: `Could not read ${THEMES_REPOSITORY}` });
+  }
+});
+
+fastify.post('/api/themes/store/install', async (request, reply) => {
+  if (demoBlocked(reply)) return;
+  try {
+    const fetched = await themeStore.fetchRepositoryTheme(axios, THEMES_REPOSITORY, request.body?.id);
+    if (fetched.error) return sendThemeError(reply, fetched);
+    const installed = await themeStore.installTheme(UPLOADS_ROOT, fetched.files, { source: 'store', ref: fetched.ref });
+    if (installed.error) return sendThemeError(reply, installed);
+    return installed;
+  } catch (error) {
+    console.error('Error installing theme from the store:', error.message);
+    return reply.status(502).send({ error: `Could not download the theme from ${THEMES_REPOSITORY}` });
+  }
+});
+
+fastify.get('/api/themes/:id/:dir/:file', async (request, reply) => {
+  const { id, dir, file } = request.params;
+  const resolved = themeStore.resolveThemeFile(UPLOADS_ROOT, id, `${dir}/${file}`);
+  if (!resolved) return reply.status(404).send({ error: 'Theme file not found' });
+  try {
+    const buffer = await fs.readFile(resolved.path);
+    // URLs carry the install time (?v=), so a reinstall gets new ones.
+    reply.header('Content-Type', resolved.type);
+    reply.header('Cache-Control', 'public, max-age=31536000, immutable');
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('Content-Security-Policy', resolved.csp);
+    return reply.send(buffer);
+  } catch (error) {
+    if (error.code === 'ENOENT') return reply.status(404).send({ error: 'Theme file not found' });
+    console.error('Error serving theme file:', error);
+    return reply.status(500).send({ error: 'Failed to load theme file' });
+  }
+});
+
+fastify.delete('/api/themes/:id', async (request, reply) => {
+  if (demoBlocked(reply)) return;
+  try {
+    const removed = await themeStore.removeTheme(UPLOADS_ROOT, request.params.id);
+    if (!removed) return reply.status(404).send({ error: 'Theme not found' });
+    return { success: true };
+  } catch (error) {
+    console.error('Error removing theme:', error);
+    return reply.status(500).send({ error: 'Failed to remove theme' });
   }
 });
 

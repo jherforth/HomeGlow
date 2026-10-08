@@ -3,11 +3,7 @@ import { GRADIENT_PRESETS, normalizeCardOpacity, parseColor, personalizationToke
 
 describe('personalizationTokens', () => {
   it('sets nothing at the defaults, so the theme shows through', () => {
-    expect(personalizationTokens({ accent: 'theme', background: { kind: 'none' }, cardOpacity: 1 }, '#2a2a2a')).toEqual({});
-  });
-
-  it('sets the accent and its rgb triplet', () => {
-    expect(personalizationTokens({ accent: '#ff8800' }, '')).toEqual({ '--accent': '#ff8800', '--accent-rgb': '255, 136, 0' });
+    expect(personalizationTokens({ background: { kind: 'none' }, cardOpacity: 1 }, '#2a2a2a')).toEqual({});
   });
 
   it('turns each background kind into page tokens', () => {

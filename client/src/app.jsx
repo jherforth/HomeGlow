@@ -45,7 +45,10 @@ import {
   themeTokens,
 } from './utils/themes.js';
 import { personalizationTokens } from './utils/personalize.js';
+import { THEME_TOKENS_APPLIED_EVENT } from './utils/pluginThemeBridge.js';
+import { loadInstalledThemes, useThemeRegistry } from './utils/installedThemes.js';
 import { ThemeContext } from './themes/engine/ThemeContext.js';
+import ThemeAmbience from './themes/engine/ThemeAmbience.jsx';
 import { normalizeWidgetSettings, BASE_WIDGET_SETTINGS } from './utils/widgetSettings.js';
 import { buildMobileWidgetList } from './utils/mobileWidgets.js';
 import { CORE_CONTROLS, resolveHiddenControls } from './utils/displayControls.js';
@@ -262,19 +265,23 @@ const App = () => {
   const autoDarkModeSettings = appearance.autoDark;
 
   // The theme package. A theme that only supports some modes shows its own
-  // (Starship is dark only), and a theme with its own colors uses them in
+  // (a dark-only one, say), and a theme with its own colors uses them in
   // place of the household's interface colors, including for plugins.
-  const activeTheme = useMemo(() => resolveTheme(appearance.theme), [appearance.theme]);
+  const themeRegistry = useThemeRegistry();
+  useEffect(() => { loadInstalledThemes(); }, []);
+  // A theme installed since this display loaded its list: read it again.
+  const themeKnown = themeRegistry.themes.some((entry) => entry.id === appearance.theme);
+  useEffect(() => {
+    if (!themeKnown) loadInstalledThemes();
+  }, [themeKnown, appearance.theme]);
+  const activeTheme = useMemo(
+    () => resolveTheme(appearance.theme, themeRegistry.themes, themeRegistry.assets),
+    [appearance.theme, themeRegistry],
+  );
   const displayTheme = themeDisplayMode(activeTheme, theme);
   const themeColors = useMemo(
     () => (activeTheme.colors ? { ...interfaceColors, ...activeTheme.colors } : interfaceColors),
     [activeTheme, interfaceColors],
-  );
-  // What plugins are told: the theme's colors, with a personal accent on top.
-  const personalAccent = appearance.accent && appearance.accent !== 'theme' ? appearance.accent : null;
-  const effectiveColors = useMemo(
-    () => (personalAccent ? { ...themeColors, accent: personalAccent } : themeColors),
-    [themeColors, personalAccent],
   );
   // Always a provider, so switching between Classic and a themed look never
   // changes the tree's shape (which would remount everything, Admin included).
@@ -684,7 +691,9 @@ const App = () => {
       names = applyThemeTokens(root, { ...base, ...personal }, names);
     }
     themeTokenNamesRef.current = names;
-  }, [activeTheme, displayTheme, themeColors, interfaceColors.primary, appearance.accent, backgroundKey, appearance.cardOpacity]);
+    // Plugins are told the resolved role tokens, which only now hold.
+    window.dispatchEvent(new Event(THEME_TOKENS_APPLIED_EVENT));
+  }, [activeTheme, displayTheme, themeColors, interfaceColors.primary, backgroundKey, appearance.cardOpacity]);
 
   useEffect(() => {
     loadThemeFonts(activeTheme);
@@ -1245,7 +1254,7 @@ const App = () => {
           filename={plugin.filename}
           name={plugin.name}
           theme={displayTheme}
-          colors={effectiveColors}
+          colors={themeColors}
           transparentBackground={pSettings.transparent || false}
           events={plugin.manifest?.events || []}
           hiddenControls={unprefixedHiddenControlsFor(hiddenControls, plugin.manifest?.id)}
@@ -1254,7 +1263,7 @@ const App = () => {
     });
 
     return result;
-  }, [widgetSettings, pluginSettings, activeTab, widgetAssignments, installedPlugins, displayTheme, effectiveColors, demoStatus.demo, hiddenControls]);
+  }, [widgetSettings, pluginSettings, activeTab, widgetAssignments, installedPlugins, displayTheme, themeColors, demoStatus.demo, hiddenControls]);
 
   // Mobile stack (issue #118): same widget content nodes, fixed order, photos
   // excluded, grid metadata ignored.
@@ -1297,6 +1306,10 @@ const App = () => {
   const tree = (
     <>
       <Box sx={{ width: '100%', minHeight: '100vh', position: 'relative', pb: '80px' }}>
+        {/* The theme's scene. The widget grid and the phone layout each
+            draw it over their own page background; a tab with no widgets
+            mounts neither, so it is drawn here instead. */}
+        {(isMobile ? mobileWidgets.length === 0 : widgets.length === 0) && <ThemeAmbience />}
         {demoStatus.demo && (
           <Box
             sx={{

@@ -251,10 +251,7 @@ class CalendarSyncService {
     const timeMin = new Date(now - 13 * 30 * 24 * 60 * 60 * 1000);
     const timeMax = new Date(now + 13 * 30 * 24 * 60 * 60 * 1000);
     const items = await googleCalendar.listEvents(this.db, account.id, calendarId, { timeMin, timeMax });
-    const [eventColors, eventLabels] = await Promise.all([
-      googleCalendar.listEventColors(this.db, account.id),
-      googleCalendar.listEventLabels(this.db, account.id, calendarId),
-    ]);
+    const eventLabels = await googleCalendar.listEventLabels(this.db, account.id, calendarId);
 
     const out = [];
     for (const item of items) {
@@ -275,15 +272,16 @@ class CalendarSyncService {
         endDate = this.normalizeAllDayEnd(endDate);
       }
       // Custom-label events carry only eventLabelId; default-palette events
-      // carry both. Prefer the label because its backgroundColor matches what
-      // Google's own UI shows — the legacy /colors palette still returns
-      // pre-2016 hexes (e.g. colorId 8 -> #e1e1e1 near-white, while the label
-      // is #616161 dark grey). An unresolvable label falls through so a stale
-      // label cache never strips color from an event that also has a colorId.
+      // carry both. Prefer the label because a custom one has its own color.
+      // A colorId resolves through Google's current palette (EVENT_COLORS),
+      // not the API's /colors endpoint, whose pre-2016 hexes disagree with
+      // Google's UI (colorId 8 -> #e1e1e1 near-white, not #616161 dark grey).
+      // An unresolvable label falls through so a stale label cache never
+      // strips color from an event that also has a colorId.
       const colorId = item.colorId || null;
       const eventLabelId = item.eventLabelId || null;
       const labelColor = eventLabelId ? (eventLabels[eventLabelId] || null) : null;
-      const paletteColor = colorId ? (eventColors[colorId] || null) : null;
+      const paletteColor = colorId ? (googleCalendar.EVENT_COLORS[colorId] || null) : null;
       out.push({
         uid: item.id,
         title: item.summary || 'Untitled Event',
@@ -338,6 +336,22 @@ class CalendarSyncService {
     }
   }
 
+  // The Google colorId ('1'...'11') a cached row was synced with, so the event
+  // editor can show which color is picked (issue #244). Null for an event on
+  // its calendar's color, a custom-label-only event, and non-Google sources.
+  parseEventColorId(rawData) {
+    if (!rawData) return null;
+    try {
+      const parsed = JSON.parse(rawData);
+      const colorId = parsed && parsed.colorId;
+      return typeof colorId === 'string' && Object.prototype.hasOwnProperty.call(googleCalendar.EVENT_COLORS, colorId)
+        ? colorId
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
   getCachedEvents(startDate, endDate) {
     const sources = this.db.prepare(`
       SELECT id, name, color FROM calendar_sources WHERE enabled = 1
@@ -379,7 +393,8 @@ class CalendarSyncService {
         source_color: source?.color || '#6e44ff',
         // Set only for events individually recolored in Google; null otherwise
         // so the client falls back to source_color.
-        event_color: this.parseEventColor(row.raw_data)
+        event_color: this.parseEventColor(row.raw_data),
+        color_id: this.parseEventColorId(row.raw_data)
       };
     });
 

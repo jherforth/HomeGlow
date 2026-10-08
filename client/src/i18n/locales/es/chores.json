@@ -7,6 +7,7 @@
     "living": "Zonas comunes",
     "pets": "Mascotas",
     "outdoor": "Exterior",
+    "sports": "Deportes",
     "school": "Escuela y rutina"
   },
   "icons": {
@@ -64,7 +65,15 @@
     "music": "Práctica de música",
     "computer": "Tiempo de pantalla",
     "clock": "Puntualidad",
-    "star": "Estrella"
+    "star": "Estrella",
+    "soccer": "Balón de fútbol",
+    "basketball": "Balón de baloncesto",
+    "americanFootball": "Balón de fútbol americano",
+    "baseball": "Pelota de béisbol",
+    "softball": "Pelota de sóftbol",
+    "tennis": "Pelota de tenis",
+    "volleyball": "Balón de voleibol",
+    "rugby": "Balón de rugby"
   },
   "widget": {
     "title": "🥟 Tareas del día",
@@ -76,7 +85,8 @@
     "uncompleteAria": "Deshacer «{{title}}»",
     "dueOn": "Para el {{date}}",
     "overdue": "⚠️ Atrasada",
-    "redeemClamsFor": "Canjear almejas de {{name}}"
+    "redeemClamsFor": "Canjear almejas de {{name}}",
+    "followupOf": "↪ después de {{title}}"
   },
   "days": {
     "sunday": "Domingo",
@@ -266,5 +276,26 @@
     "thu": "jue",
     "fri": "vie",
     "sat": "sáb"
+  },
+  "followups": {
+    "heading": "Cuando esté hecha",
+    "optional": "(opcional)",
+    "help": "Las tareas siguientes aparecen en la lista de cada persona cuando se marca esta tarea. Cuentan para el bono diario a partir del día siguiente.",
+    "add": "Añadir una tarea siguiente",
+    "give": "Después, dar",
+    "to": "A",
+    "when": "Cuándo",
+    "rightAway": "Enseguida",
+    "after": "Después de…",
+    "amount": "Cuánto después",
+    "unit": "Minutos u horas",
+    "minutes": "minutos",
+    "hours": "horas",
+    "remove": "Quitar esta tarea siguiente",
+    "chip": "Tarea siguiente",
+    "errorChore": "Tarea siguiente {{n}}: elige una tarea.",
+    "errorPeople": "Tarea siguiente {{n}}: elige al menos una persona.",
+    "errorDelay": "Tarea siguiente {{n}}: la espera debe estar entre 1 minuto y 7 días.",
+    "errorSave": "La tarea se guardó, pero sus tareas siguientes no."
   }
 }

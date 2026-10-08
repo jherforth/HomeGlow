@@ -6,7 +6,6 @@ import {
   Button,
   FormControl,
   FormControlLabel,
-  InputLabel,
   MenuItem,
   Select,
   Switch,
@@ -31,11 +30,12 @@ import {
   pruneMatchingOverrides,
   resolveAppearance,
 } from '../utils/appearance.js';
-import { BUILT_IN_THEMES, resolveTheme } from '../utils/themes.js';
+import { resolveTheme } from '../utils/themes.js';
+import { useThemeRegistry } from '../utils/installedThemes.js';
 
 const INTERFACE_SETTINGS_UPDATED_EVENT = 'homeglow:interface-settings-updated';
-// The accent is set once, under Personalize, for every theme.
-const COLOR_KEYS = ['primary', 'secondary'];
+// Classic's colors. A theme with colors of its own replaces all three.
+const COLOR_KEYS = ['primary', 'secondary', 'accent'];
 
 const pickFields = (appearance) => Object.fromEntries(APPEARANCE_FIELDS.map((field) => [field, appearance[field]]));
 
@@ -45,6 +45,7 @@ const pickFields = (appearance) => Object.fromEntries(APPEARANCE_FIELDS.map((fie
 // display keeps following later household changes.
 const AppearanceSettings = () => {
   const { t } = useTranslation(['admin']);
+  const { themes, assets } = useThemeRegistry();
   const apiDeviceUrl = getDeviceApiBase(API_BASE_URL);
   const [household, setHousehold] = useState(null);
   const [device, setDevice] = useState({});
@@ -53,6 +54,9 @@ const AppearanceSettings = () => {
   const [inherit, setInherit] = useState(() => Object.fromEntries(APPEARANCE_FIELDS.map((field) => [field, true])));
   const [pickerAnchor, setPickerAnchor] = useState({ key: null, el: null });
   const [message, setMessage] = useState(null);
+  // A chosen theme that has since been removed still shows, as not installed.
+  const missingTheme = draft?.theme && !themes.some((theme) => theme.id === draft.theme) ? draft.theme : null;
+  const chosenTheme = themes.find((theme) => theme.id === draft?.theme);
   const [saving, setSaving] = useState(false);
 
   // Success fades; a problem stays until dismissed, so it cannot be missed.
@@ -248,6 +252,8 @@ const AppearanceSettings = () => {
     </Box>
   );
 
+  const resolvedTheme = resolveTheme(draft.theme, themes, assets);
+
   return (
     <AdminFormSection title={t('admin:appearance.heading')} subtitle={t('admin:appearance.subtitle')}>
       <ToggleButtonGroup
@@ -267,9 +273,13 @@ const AppearanceSettings = () => {
       <Typography variant="subtitle2" sx={{ mt: 1 }}>{t('admin:appearance.theme')}</Typography>
       {inheritSwitch('theme')}
       <FormControl fullWidth sx={{ mb: 1 }} disabled={locked('theme')}>
-        <InputLabel>{t('admin:appearance.theme')}</InputLabel>
-        <Select value={draft.theme} label={t('admin:appearance.theme')} onChange={(e) => updateDraft('theme', e.target.value)}>
-          {BUILT_IN_THEMES.map((theme) => (
+        <Select value={draft.theme} inputProps={{ 'aria-label': t('admin:appearance.theme') }} onChange={(e) => updateDraft('theme', e.target.value)}>
+          {missingTheme && (
+            <MenuItem value={missingTheme} disabled>
+              {t('admin:themes.notInstalled', { id: missingTheme })}
+            </MenuItem>
+          )}
+          {themes.map((theme) => (
             <MenuItem key={theme.id} value={theme.id}>
               {theme.name}
               {theme.author && (
@@ -282,14 +292,13 @@ const AppearanceSettings = () => {
         </Select>
       </FormControl>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 3 }}>
-        {t(`admin:appearance.themeDescriptions.${draft.theme}`)}
+        {t(`admin:appearance.themeDescriptions.${draft.theme}`, { defaultValue: chosenTheme?.description || '' })}
       </Typography>
 
       <Typography variant="subtitle2">{t('admin:appearance.mode')}</Typography>
       {inheritSwitch('mode')}
       <FormControl fullWidth sx={{ mb: 3 }} disabled={locked('mode')}>
-        <InputLabel>{t('admin:appearance.mode')}</InputLabel>
-        <Select value={draft.mode} label={t('admin:appearance.mode')} onChange={(e) => updateDraft('mode', e.target.value)}>
+        <Select value={draft.mode} inputProps={{ 'aria-label': t('admin:appearance.mode') }} onChange={(e) => updateDraft('mode', e.target.value)}>
           {MODES.map((mode) => (
             <MenuItem key={mode} value={mode}>{t(`admin:appearance.modes.${mode}`)}</MenuItem>
           ))}
@@ -304,7 +313,7 @@ const AppearanceSettings = () => {
             fullWidth
             required
             disabled={locked('autoDark')}
-            label={t('admin:autoDark.location')}
+            slotProps={{ htmlInput: { 'aria-label': t('admin:appearance.autoDark') } }}
             value={draft.autoDark.locationQuery}
             onChange={(e) => updateDraft('autoDark', { ...draft.autoDark, locationQuery: e.target.value })}
             helperText={draft.autoDark.resolvedName
@@ -315,16 +324,20 @@ const AppearanceSettings = () => {
       )}
 
 
-      <Typography variant="subtitle2">{t('admin:appearance.colors')}</Typography>
-      {inheritSwitch('colors')}
-      {resolveTheme(draft.theme).colors && (
-        <Alert severity="info" sx={{ mb: 2 }}>{t('admin:appearance.themeHasColors')}</Alert>
+      {/* A theme with colors of its own replaces these, so they show only for
+          one that uses them (Classic). The stored values are kept. */}
+      {!resolvedTheme.colors && (
+        <>
+          <Typography variant="subtitle2">{t('admin:appearance.colors')}</Typography>
+          {inheritSwitch('colors')}
+          <Box sx={{ maxWidth: 600, mb: 2 }}>
+            {COLOR_KEYS.map(colorPicker)}
+          </Box>
+        </>
       )}
-      <Box sx={{ maxWidth: 600, mb: 2 }}>{COLOR_KEYS.map(colorPicker)}</Box>
 
       <PersonalizeFields
         draft={draft}
-        classicAccent={draft.colors?.accent}
         updateDraft={updateDraft}
         locked={locked}
         inheritSwitch={inheritSwitch}

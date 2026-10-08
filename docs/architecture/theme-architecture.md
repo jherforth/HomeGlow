@@ -260,6 +260,18 @@ No theme packages exist outside this repository yet, so the `fonts` and
 `ambience` shapes can change under `manifestVersion` 1. Once community themes
 can be installed, any further change to these shapes needs a version bump.
 
+Version history:
+- **1:** tokens, fonts, ambience, confetti.
+- **2:** ornaments, the meter roles (`--hg-meter-*`) and clumped sprites
+  (`clumps`, `clumpWidth`). A theme that uses them declares
+  `manifestVersion: 2`. A core accepts versions up to its own
+  (`MANIFEST_VERSION` in `utils/themes.js` and `services/themeStore.js`), refuses
+  newer ones at install, and its store lists them apart as needing a newer
+  HomeGlow.
+- **3:** the button roles (`--hg-button-*`), which plugins draw their buttons
+  with, and curved flyby crossings (`path`, `count`, `begin` and the options
+  that go with them).
+
 ## 6. Implementation order
 
 1. **PR 1, no visual change:** theme folders and discovery (§3.1 to §3.2) and
@@ -343,6 +355,11 @@ Differences from §3, each for a reason found while building it:
   a drawn picture, side, height, climb, speed and tumble. Starship uses all of
   these: a sometimes-galaxy, up to three planets, ships, meteor storms and the
   odd drifting alien, at 60 fps with the CPU throttled 4x.
+
+- **Reef and Starship live in the themes repository**, not the app.
+  HomeGlow builds in only Classic, and installs other themes from
+  [jherforth/HomeGlowThemes](https://github.com/jherforth/HomeGlowThemes) or
+  a folder (Admin → Look → Themes). Offline, Classic is the normal mode.
 
 Also as built: theme files are imported with `?no-inline`, because Vite inlines
 small SVGs as data URLs, which put every theme's art in a chunk every display

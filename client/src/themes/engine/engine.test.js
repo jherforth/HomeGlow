@@ -116,3 +116,22 @@ describe('validateConfetti (through validateAmbience siblings)', () => {
     expect(validateConfetti([], { assets, isColor })).toEqual(['confetti must be an object']);
   });
 });
+
+describe('clumped placement', () => {
+  it('gathers items into patches with open ground between, inside the span', async () => {
+    const { clumped } = await import('./motion.js');
+    const random = seededRandom(11);
+    const xs = clumped(random, 40, 3, [6, 8], [0, 100]);
+    expect(xs.every((x) => x >= 0 && x <= 100)).toBe(true);
+    // Three patches at most 8% wide leave most of the span bare.
+    const occupied = new Set(xs.map((x) => Math.floor(x / 5)));
+    expect(occupied.size).toBeLessThanOrEqual(9);
+    // Even spreading of the same count fills nearly every 5% band.
+    expect(new Set(spread(seededRandom(11), 40, [0, 100]).map((x) => Math.floor(x / 5))).size).toBe(20);
+  });
+
+  it('accepts clumps and clumpWidth on sprites', () => {
+    expect(check([{ layer: 'sprites', src: 'assets/kelp.svg', count: [4, 16], height: [30, 80], clumps: [1, 4], clumpWidth: [4, 12] }])).toEqual([]);
+    expect(check([{ layer: 'sprites', src: 'assets/kelp.svg', count: 4, height: 30, clumps: 0 }])).toHaveLength(1);
+  });
+});

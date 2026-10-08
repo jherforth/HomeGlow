@@ -1,11 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useContext, useEffect, useRef } from 'react';
 import { Box } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceName } from '../utils/deviceName.js';
 import { subscribePluginEvents } from '../utils/pluginEventBridge.js';
 import { acceptPluginDataMessage, emitPluginDataChanged } from '../utils/pluginDataBridge.js';
-import { buildPluginThemeMessage } from '../utils/pluginThemeBridge.js';
+import { THEME_TOKENS_APPLIED_EVENT, buildPluginThemeMessage, readRoleTokens } from '../utils/pluginThemeBridge.js';
+import { ThemeContext } from '../themes/engine/ThemeContext.js';
 
 const PluginWidgetWrapper = ({
   filename,
@@ -77,17 +78,28 @@ const PluginWidgetWrapper = ({
   // reach it otherwise. Posted on every load of the frame (the src changes on
   // refresh and on a hidden-controls change) and again whenever the theme or
   // the colors change while it is up. Same target origin rule as the events.
-  const themeMessage = useMemo(() => buildPluginThemeMessage(theme, colors), [theme, colors]);
-  const themeMessageRef = useRef(themeMessage);
-  themeMessageRef.current = themeMessage;
+  // The role tokens are read from the page at send time, after the dashboard
+  // has applied them: it announces each new set (a theme, a mode, a personal
+  // background), and a change of theme or colors is also sent on the next
+  // frame.
+  const { theme: activeTheme } = useContext(ThemeContext);
+  const sendRef = useRef({ theme, colors, fonts: activeTheme?.fonts });
+  sendRef.current = { theme, colors, fonts: activeTheme?.fonts };
   const postTheme = useCallback(() => {
     const target = iframeRef.current?.contentWindow;
     if (!target) return;
-    target.postMessage(themeMessageRef.current, iframeOrigin);
+    const { theme: mode, colors: picked, fonts } = sendRef.current;
+    const message = buildPluginThemeMessage(mode, picked, { tokens: readRoleTokens(document.documentElement), fonts });
+    target.postMessage(message, iframeOrigin);
   }, [iframeOrigin]);
   useEffect(() => {
-    postTheme();
-  }, [postTheme, themeMessage]);
+    const frame = requestAnimationFrame(postTheme);
+    return () => cancelAnimationFrame(frame);
+  }, [postTheme, theme, colors, activeTheme?.id]);
+  useEffect(() => {
+    window.addEventListener(THEME_TOKENS_APPLIED_EVENT, postTheme);
+    return () => window.removeEventListener(THEME_TOKENS_APPLIED_EVENT, postTheme);
+  }, [postTheme]);
 
   // Omitted entirely when nothing is hidden: a plugin (and an older dashboard)
   // must read "no hide param" as "hide nothing". Flattened to a string so an

@@ -17,7 +17,7 @@
 //   muiModes: { light: {}, dark: {} }  // per-mode MUI options over `mui`
 // }
 
-import { validateAmbience, validateConfetti } from '../themes/engine/schemas.js';
+import { FLYBY_CURVE_OPTIONS, validateAmbience, validateConfetti, validateOrnaments } from '../themes/engine/schemas.js';
 
 // Each theme is a folder: themes/<id>/theme.json, with its own fonts/ and
 // assets/. Adding a theme means adding a folder; nothing here lists them.
@@ -60,6 +60,12 @@ const TYPES = {
   rgbTriplet: (v) => /^\d{1,3},\s*\d{1,3},\s*\d{1,3}$/.test(v),
   length: (v) => isLengths(v, 1),
   lengths4: (v) => isLengths(v, 4),
+  // Room for frame decoration and ornaments, taken from fixed-height widgets:
+  // 0 to 24px a side.
+  frameInset: (v) => {
+    const parts = v.split(/\s+/);
+    return parts.length >= 1 && parts.length <= 4 && parts.every((p) => /^(?:0|(?:[0-9]|1[0-9]|2[0-4])(?:\.\d+)?px)$/.test(p));
+  },
   shadow: isShadow,
   font: isFontFamily,
   image: (v) => v === 'none' || isGradient(v),
@@ -67,6 +73,12 @@ const TYPES = {
   textTransform: oneOf('none', 'uppercase', 'capitalize', 'lowercase'),
   gridGap: oneOf('0', '0px', '8px', '16px', '24px'),
   backdrop: (v) => v === 'none' || /^blur\((?:[0-9]|1[0-9]|2[0-4])px\)$/.test(v),
+  lineCap: oneOf('round', 'square', 'butt'),
+  // A meter's line: 1 to 12px, so it fits the controls that draw one.
+  meterThickness: (v) => /^(?:[1-9]|1[0-2])px$/.test(v),
+  // A fill: one color, or a gradient (Classic's buttons blend two).
+  paint: (v) => isColor(v) || isGradient(v),
+  fontWeight: (v) => /^[1-9]00$/.test(v),
 };
 
 const tokenTypes = (type, names) => Object.fromEntries(names.map((name) => [name, type]));
@@ -88,7 +100,8 @@ export const THEME_TOKENS = {
     '--hg-radius-xs', '--hg-radius-sm', '--hg-radius-md', '--hg-radius-lg', '--hg-radius-xl',
     '--hg-radius-2xl', '--hg-heading-letter-spacing',
   ]),
-  ...tokenTypes('lengths4', ['--hg-frame-radius', '--hg-frame-decoration-width', '--hg-frame-inset']),
+  ...tokenTypes('lengths4', ['--hg-frame-radius', '--hg-frame-decoration-width']),
+  '--hg-frame-inset': 'frameInset',
   ...tokenTypes('shadow', ['--shadow', '--hg-frame-shadow', '--hg-frame-shadow-hover']),
   ...tokenTypes('font', ['--hg-font-body', '--hg-font-heading', '--hg-font-mono']),
   '--hg-frame-decoration-style': 'borderStyle',
@@ -101,6 +114,15 @@ export const THEME_TOKENS = {
   '--hg-frame-backdrop': 'backdrop',
   '--hg-heading-transform': 'textTransform',
   '--hg-grid-gap': 'gridGap',
+  '--hg-meter-track': 'color',
+  '--hg-meter-fill': 'color',
+  '--hg-meter-thickness': 'meterThickness',
+  '--hg-meter-cap': 'lineCap',
+  '--hg-button-bg': 'paint',
+  '--hg-button-text': 'color',
+  '--hg-button-radius': 'length',
+  '--hg-button-weight': 'fontWeight',
+  '--hg-button-quiet-border': 'color',
 };
 
 const MUI_TYPES = {
@@ -169,7 +191,33 @@ export function validateThemePackage(pkg, { assets } = {}) {
   if (!isObject(pkg)) return ['package must be an object'];
   // The same rules as a plugin manifest (server/index.js), so one author
   // writes both the same way.
-  if (pkg.manifestVersion !== 1) errors.push('manifestVersion must be 1');
+  if (Number.isInteger(pkg.manifestVersion) && pkg.manifestVersion > MANIFEST_VERSION) {
+    // Shown to people as "needs a newer version of HomeGlow"; the numbers are
+    // for the console.
+    errors.push(NEEDS_NEWER_HOMEGLOW);
+  } else if (!Number.isInteger(pkg.manifestVersion) || pkg.manifestVersion < 1) {
+    errors.push(`manifestVersion must be 1 to ${MANIFEST_VERSION}`);
+  } else {
+    // Each version adds things a theme may use: 2, ornaments, the meter roles
+    // and clumped sprites; 3, the button roles and curved flyby crossings
+    // (path, count, begin and the rest). A theme that uses them says
+    // so, so a core too old to draw them refuses it plainly.
+    const tokenNames = ['all', ...MODES].flatMap((key) => Object.keys(pkg.tokens?.[key] || {}));
+    const needs = (version, uses) => {
+      const named = [...new Set(uses.filter(Boolean))];
+      if (pkg.manifestVersion < version && named.length) errors.push(`${named.join(', ')} need manifestVersion ${version}`);
+    };
+    needs(2, [
+      pkg.ornaments !== undefined && 'ornaments',
+      Array.isArray(pkg.ambience) && pkg.ambience.some((layer) => layer?.clumps !== undefined || layer?.clumpWidth !== undefined) && 'clumps',
+      ...tokenNames.filter((name) => name.startsWith('--hg-meter-')),
+    ]);
+    needs(3, [
+      ...tokenNames.filter((name) => name.startsWith('--hg-button-')),
+      Array.isArray(pkg.ambience) && pkg.ambience.some((layer) => layer?.layer === 'flyby'
+        && FLYBY_CURVE_OPTIONS.some((key) => layer[key] !== undefined)) && 'curved flybys',
+    ]);
+  }
   if (typeof pkg.id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(pkg.id)) errors.push('id must be a lowercase slug (a-z, 0-9, hyphens, max 64)');
   if (typeof pkg.name !== 'string' || !pkg.name.trim() || pkg.name.length > 60) errors.push('name is required');
   if (pkg.version !== undefined && (typeof pkg.version !== 'string' || !pkg.version.trim() || pkg.version.length > 32)) errors.push('version must be a short string');
@@ -177,6 +225,7 @@ export function validateThemePackage(pkg, { assets } = {}) {
   if (pkg.author !== undefined && (typeof pkg.author !== 'string' || pkg.author.trim().length > 80)) errors.push('author must be 80 characters or fewer');
   if (pkg.ambience !== undefined) errors.push(...validateAmbience(pkg.ambience, { assets, isColor }));
   if (pkg.confetti !== undefined) errors.push(...validateConfetti(pkg.confetti, { assets, isColor }));
+  if (pkg.ornaments !== undefined) errors.push(...validateOrnaments(pkg.ornaments, { assets, isColor }));
   if (pkg.variety !== undefined && !['load', 'day', 'fixed'].includes(pkg.variety)) errors.push('variety must be load, day or fixed');
   if (pkg.extends !== undefined && typeof pkg.extends !== 'string') errors.push('extends must be a theme id');
   if (pkg.modes !== undefined && (!Array.isArray(pkg.modes) || !pkg.modes.length || !pkg.modes.every((m) => MODES.includes(m)))) {
@@ -223,6 +272,19 @@ export function validateThemePackage(pkg, { assets } = {}) {
 export const DEFAULT_THEME_ID = 'classic';
 
 /**
+ * The newest theme manifest this core understands. A shape change to the
+ * manifest (a new section, new tokens) raises it, so an older core refuses a
+ * theme it cannot draw rather than half-applying it (theme-architecture.md
+ * §5). 2: ornaments and the meter roles. 3: the button roles and curved
+ * flybys. The server's MANIFEST_VERSION
+ * (services/themeStore.js) matches; a server test holds them equal.
+ */
+export const MANIFEST_VERSION = 3;
+
+/** The problem reported for a theme newer than this core; the admin page words it for people. */
+export const NEEDS_NEWER_HOMEGLOW = 'needs a newer version of HomeGlow';
+
+/**
  * Themes from their folders: each manifest, keyed by its folder, plus that
  * folder's files as a map from relative path (`fonts/x.woff2`) to URL.
  * Classic comes first, then the rest by name. A manifest whose id does not
@@ -236,11 +298,15 @@ export function discoverThemes(manifests, files) {
     const relative = path.slice(path.indexOf(`themes/${folder}/`) + `themes/${folder}/`.length);
     (assets[folder] = assets[folder] || {})[relative] = url;
   });
-  const themes = Object.entries(manifests)
+  const themes = sortThemes(Object.entries(manifests)
     .filter(([path, manifest]) => manifest && manifest.id === folderOf(path))
-    .map(([, manifest]) => manifest)
-    .sort((a, b) => (a.id === DEFAULT_THEME_ID ? -1 : b.id === DEFAULT_THEME_ID ? 1 : a.name.localeCompare(b.name)));
+    .map(([, manifest]) => manifest));
   return { themes, assets };
+}
+
+/** Classic first, then by name. */
+export function sortThemes(themes) {
+  return [...themes].sort((a, b) => (a.id === DEFAULT_THEME_ID ? -1 : b.id === DEFAULT_THEME_ID ? 1 : a.name.localeCompare(b.name)));
 }
 
 const DISCOVERED = discoverThemes(MANIFESTS, FILES);
@@ -274,6 +340,9 @@ export function resolveTheme(id, themes = BUILT_IN_THEMES, assets = THEME_ASSETS
     // So does confetti.
     confetti: theme.confetti || merged.confetti,
     confettiAssets: theme.confetti ? assets[theme.id] : merged.confettiAssets,
+    // And ornaments.
+    ornaments: theme.ornaments || merged.ornaments,
+    ornamentAssets: theme.ornaments ? assets[theme.id] : merged.ornamentAssets,
     tokens: Object.fromEntries(['all', ...MODES].map((key) => [key, { ...merged.tokens?.[key], ...theme.tokens?.[key] }])),
     mui: theme.mui ? { ...merged.mui, ...theme.mui } : merged.mui,
     muiModes: theme.muiModes

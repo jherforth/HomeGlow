@@ -4,7 +4,27 @@ vi.mock('./timezone.js', () => ({
     getServerTimezoneSync: () => 'UTC',
 }));
 
-import { shouldShowChoreToday, convertDaysToCrontab, getDueDateStatus, formatDueDate, hasOutstandingBonusChore, compareByKey } from './choreHelpers.js';
+import { shouldShowChoreToday, convertDaysToCrontab, getDueDateStatus, formatDueDate, hasOutstandingBonusChore, compareByKey, countsTowardDailyBonus } from './choreHelpers.js';
+
+// Issue #241: a follow-up counts toward the daily bonus from the day after it
+// was handed out, as the server's getTodaysRegularChoresForUser does.
+describe('countsTowardDailyBonus', () => {
+    const today = '2026-10-08';
+
+    it('counts a regular chore and not a bonus chore', () => {
+        expect(countsTowardDailyBonus({ clam_value: 0 }, today)).toBe(true);
+        expect(countsTowardDailyBonus({ clam_value: 5 }, today)).toBe(false);
+    });
+
+    it('does not count a follow-up on the day it appeared, then does', () => {
+        expect(countsTowardDailyBonus({ clam_value: 0, triggered_on: today }, today)).toBe(false);
+        expect(countsTowardDailyBonus({ clam_value: 0, triggered_on: '2026-10-07' }, today)).toBe(true);
+    });
+
+    it('never counts a bonus follow-up, whatever the day', () => {
+        expect(countsTowardDailyBonus({ clam_value: 3, triggered_on: '2026-10-07' }, today)).toBe(false);
+    });
+});
 
 describe('choreHelpers utilities', () => {
     let consoleErrorSpy;

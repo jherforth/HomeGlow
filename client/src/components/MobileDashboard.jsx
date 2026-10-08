@@ -2,6 +2,7 @@ import React from 'react';
 import { Box } from '@mui/material';
 import { needsFixedMobileHeight } from '../utils/mobileWidgets.js';
 import { frameDecoration } from '../utils/widgetFrame.js';
+import FrameOrnaments from './FrameOrnaments';
 import ThemeAmbience from '../themes/engine/ThemeAmbience.jsx';
 
 // Phone layout shell (issue #118): the active tab's widgets as one vertical,
@@ -48,6 +49,7 @@ const MobileDashboard = ({ widgets }) => {
             '&::after': frameDecoration,
           }}
         >
+          <FrameOrnaments />
           {widget.content}
         </Box>
       ))}
