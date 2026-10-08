@@ -6227,6 +6227,8 @@ fastify.get('/api/photo-sources/:sourceId/uploaded/:photoId/file', async (reques
 fastify.post('/api/photo-sources/:sourceId/uploaded', async (request, reply) => {
   if (demoBlocked(reply)) return;
   const { sourceId } = request.params;
+  const added = [];
+  const failed = [];
   try {
     const source = loadHomeGlowPhotoSourceOr404(sourceId, reply);
     if (!source) return;
@@ -6234,8 +6236,6 @@ fastify.post('/api/photo-sources/:sourceId/uploaded', async (request, reply) => 
     await fs.mkdir(uploadDir, { recursive: true });
 
     const parts = request.parts();
-    const added = [];
-    const failed = [];
     for await (const part of parts) {
       if (part.type !== 'file') continue;
       if (!part.mimetype || !part.mimetype.startsWith('image/')) {
@@ -6255,12 +6255,22 @@ fastify.post('/api/photo-sources/:sourceId/uploaded', async (request, reply) => 
         ).run(sourceId, filename, part.filename || null, part.mimetype, buffer.length);
         added.push({ id: info.lastInsertRowid, filename, original_name: part.filename });
       } catch (err) {
+        if (err.code === 'FST_REQ_FILE_TOO_LARGE') {
+          failed.push({ name: part.filename, reason: 'Larger than 25 MB' });
+          continue;
+        }
         console.error('Upload failure for part:', err);
         failed.push({ name: part.filename, reason: err.message });
       }
     }
     return { success: true, added: added.length, failed: failed.length, items: added, errors: failed };
   } catch (error) {
+    // The multipart reader raises a photo over the size limit again once the
+    // upload has been read. That photo is already counted as failed and the
+    // others are saved, so report them rather than failing the whole upload.
+    if (error.code === 'FST_REQ_FILE_TOO_LARGE' && failed.length > 0) {
+      return { success: true, added: added.length, failed: failed.length, items: added, errors: failed };
+    }
     console.error('Error uploading photos:', error);
     reply.status(500).send({ error: 'Failed to upload photos' });
   }
