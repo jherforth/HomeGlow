@@ -259,9 +259,9 @@ that failed contract validation).
 | GET/POST | `/api/calendar-sources` | List / create calendar sources. |
 | PATCH/DELETE | `/api/calendar-sources/:id` | Update / delete a source. |
 | POST | `/api/calendar-sources/:id/test` | Test connectivity to a source. |
-| POST | `/api/calendar-sources/:id/events` | Add an event to a (writable) source. |
-| PATCH/DELETE | `/api/calendar-sources/:id/events/:eventId` | Edit / delete an event. |
-| GET | `/api/calendar-events` | Read cached events for the widget. |
+| POST | `/api/calendar-sources/:id/events` | Add an event to a (writable) source. Optional `color_id`: a Google event color `'1'`–`'11'`. |
+| PATCH/DELETE | `/api/calendar-sources/:id/events/:eventId` | Edit / delete an event. `color_id` as above, or `null` for the calendar's color; left out, the color is unchanged. Any other value is a 400. |
+| GET | `/api/calendar-events` | Read cached events for the widget. Google events carry `event_color` (hex) and `color_id`. |
 | GET | `/api/calendar-sync/status` | Overall sync status. |
 | GET | `/api/calendar-sync/status/:sourceId` | Per-source status. |
 | POST | `/api/calendar-sync/:sourceId` | Force sync one source. |

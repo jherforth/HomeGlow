@@ -229,6 +229,19 @@ in `server/index.js`.
   calendar colors, so it keeps answering "which calendars is this on?"
 - **Per-event Google colors** (PR #133): an event individually recolored in
   Google keeps that color in HomeGlow instead of inheriting its calendar's.
+  Sync resolves the event's custom label color, else its `colorId` through
+  Google's current eleven-color palette (`EVENT_COLORS` in
+  `services/googleCalendar.js`; the API's `/colors` endpoint still returns
+  pre-2016 hexes, such as near-white for Graphite). It stores both in the
+  existing `raw_data` column, which `getCachedEvents` surfaces as
+  `event_color` and `color_id`. Every view prefers `event_color` and falls
+  back to `source_color`, so events left on a calendar's default color — and
+  all non-Google sources — look exactly as before. No schema migration.
+- **Event color in the editor** (issue #244): creating or editing a Google
+  event offers the calendar's own color plus Google's eleven swatches
+  (`EventColorPicker.jsx`), saved as the event's `colorId`. An edit sends the
+  color only when it changed, so editing an event never touches a custom
+  label it wears.
 - **Return to today**: the period label is a button — tap it to jump back.
   Desktop also gets a 📅 button; on a phone the header has no room for one. The
   control stays live even when already on today: whether "today" is still today
@@ -238,12 +251,6 @@ in `server/index.js`.
   default 20 minutes, 0 disables): returns to today after that long without
   interaction, so a wall display left on last month stops looking current. Resets
   the date only, not the view.
-  Sync resolves the event's `colorId` to a hex through Google's `/colors`
-  palette (cached 24h) and stores it in the existing `raw_data` column, which
-  `getCachedEvents` surfaces as `event_color`. Every view prefers
-  `event_color` and falls back to `source_color`, so events left on a
-  calendar's default color — and all non-Google sources — look exactly as
-  before. No schema migration.
 - Credentials are encrypted at rest.
 
 **Code:** `CalendarWidget.jsx`, `MonthDayCell.jsx`; backend

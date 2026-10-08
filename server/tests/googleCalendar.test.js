@@ -204,3 +204,52 @@ test('editing an event into all-day clears its time, and back again (#215)', asy
     assert.deepEqual(calls[0].body.end, { date: '2026-10-10', dateTime: null, timeZone: null });
     assert.deepEqual(calls[1].body.start, { dateTime: '2026-10-09T15:00:00.000Z', date: null });
 });
+
+// Issue #244: the event editor can pick one of Google's eleven event colors.
+test('a color picked in the editor is sent to Google as colorId (#244)', async () => {
+    const calls = captureGoogleBody();
+    await googleCalendar.createEvent({}, 1, 'primary', { ...editorAllDay('2026-10-09', '2026-10-09'), color_id: '11' });
+    // A number from a hand-written request is accepted too.
+    await googleCalendar.createEvent({}, 1, 'primary', { ...editorAllDay('2026-10-09', '2026-10-09'), color_id: 8 });
+    await googleCalendar.updateEvent({}, 1, 'primary', 'evt', { color_id: '2' });
+
+    assert.equal(calls[0].body.colorId, '11');
+    assert.equal(calls[1].body.colorId, '8');
+    assert.deepEqual(calls[2].body, { colorId: '2' });
+});
+
+test('no color_id leaves the color alone; null puts the calendar color back (#244)', async () => {
+    const calls = captureGoogleBody();
+    // Created on the calendar's color: nothing to send.
+    await googleCalendar.createEvent({}, 1, 'primary', editorAllDay('2026-10-09', '2026-10-09'));
+    await googleCalendar.createEvent({}, 1, 'primary', { ...editorAllDay('2026-10-09', '2026-10-09'), color_id: null });
+    // An edit that does not mention the color must not touch it.
+    await googleCalendar.updateEvent({}, 1, 'primary', 'evt', { title: 'Renamed' });
+    // Back to the calendar's color, from the editor ('') or the API (null).
+    await googleCalendar.updateEvent({}, 1, 'primary', 'evt', { color_id: '' });
+    await googleCalendar.updateEvent({}, 1, 'primary', 'evt', { color_id: null });
+
+    assert.equal('colorId' in calls[0].body, false);
+    assert.equal('colorId' in calls[1].body, false);
+    assert.equal('colorId' in calls[2].body, false);
+    assert.deepEqual(calls[3].body, { colorId: null });
+    assert.deepEqual(calls[4].body, { colorId: null });
+});
+
+test('a color Google does not have is a 400, and nothing is sent (#244)', async () => {
+    const calls = captureGoogleBody();
+    for (const color_id of ['0', '12', 'red', '#d50000', 3.5]) {
+        await assert.rejects(
+            googleCalendar.updateEvent({}, 1, 'primary', 'evt', { color_id }),
+            (error) => error.status === 400,
+        );
+    }
+    assert.equal(calls.length, 0);
+});
+
+test('EVENT_COLORS is Google\'s current eleven-color palette (#244)', () => {
+    assert.deepEqual(Object.keys(googleCalendar.EVENT_COLORS), ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11']);
+    for (const hex of Object.values(googleCalendar.EVENT_COLORS)) assert.match(hex, /^#[0-9a-f]{6}$/);
+    // The reason it is not read from /colors: graphite is dark grey, not near-white.
+    assert.equal(googleCalendar.EVENT_COLORS['8'], '#616161');
+});
