@@ -46,6 +46,17 @@ export function shouldShowChoreToday(schedule) {
  * a claim. Due-ness comes from shouldShowChoreToday, the same predicate the
  * widget renders with, so the gate and the list can never disagree.
  */
+/**
+ * Whether a chore counts toward the daily bonus today: a regular (zero-clam)
+ * chore, unless it is a follow-up handed out today. A follow-up can arrive at
+ * 9 pm, so it counts from the next day (issue #241). Mirrors the server's
+ * getTodaysRegularChoresForUser, so the widget and the bonus agree.
+ */
+export function countsTowardDailyBonus(schedule, today = getTodayDateString()) {
+  if ((schedule.clam_value || 0) !== 0) return false;
+  return !(schedule.triggered_on && schedule.triggered_on === today);
+}
+
 export function hasOutstandingBonusChore(schedules, history, userId, today) {
   return schedules
     .filter((schedule) => schedule.user_id === userId
