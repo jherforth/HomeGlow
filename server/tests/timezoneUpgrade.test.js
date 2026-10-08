@@ -10,13 +10,21 @@ const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const Database = require('better-sqlite3');
+const { freePort } = require('./freePort');
 
 const serverDir = path.resolve(__dirname, '..');
 const tmpDir = path.resolve(__dirname, '.tmp');
 const testDbPath = path.join(tmpDir, `tz-upgrade-${process.pid}-${Date.now()}.db`);
 const keepTestArtifacts = process.env.HOMEGLOW_TEST_KEEP_ARTIFACTS === '1';
-const port = 6800 + Math.floor(Math.random() * 300);
-const baseUrl = `http://127.0.0.1:${port}`;
+let port;
+let baseUrl;
+
+// Ask the OS for a free port: a port picked from a fixed range can be one
+// another program holds on 127.0.0.1, and then every request reaches it.
+async function usePort() {
+    port = await freePort();
+    baseUrl = `http://127.0.0.1:${port}`;
+}
 
 let serverProcess;
 let serverLogs = '';
@@ -39,7 +47,8 @@ async function waitForServerReady(timeoutMs = 30000) {
     throw new Error(`Server did not become ready within ${timeoutMs}ms. Logs:\n${serverLogs}`);
 }
 
-function startServer(tz) {
+async function startServer(tz) {
+    await usePort();
     const env = {
         ...process.env,
         PORT: String(port),

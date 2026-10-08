@@ -6,13 +6,21 @@ const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
+const { freePort } = require('./freePort');
 
 const serverDir = path.resolve(__dirname, '..');
 const tmpDir = path.resolve(__dirname, '.tmp');
 const testDbPath = path.join(tmpDir, `user-order-${process.pid}-${Date.now()}.db`);
 const keepTestArtifacts = process.env.HOMEGLOW_TEST_KEEP_ARTIFACTS === '1';
-const port = 7500 + Math.floor(Math.random() * 300);
-const baseUrl = `http://127.0.0.1:${port}`;
+let port;
+let baseUrl;
+
+// Ask the OS for a free port: a port picked from a fixed range can be one
+// another program holds on 127.0.0.1, and then every request reaches it.
+async function usePort() {
+    port = await freePort();
+    baseUrl = `http://127.0.0.1:${port}`;
+}
 
 let serverProcess;
 let serverLogs = '';
@@ -60,6 +68,7 @@ let bob;
 let carol;
 
 test.before(async () => {
+    await usePort();
     fs.mkdirSync(tmpDir, { recursive: true });
     serverProcess = spawn('node', ['index.js'], {
         cwd: serverDir,

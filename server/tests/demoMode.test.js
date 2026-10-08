@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
 const path = require('node:path');
+const { freePort } = require('./freePort');
 
 // Boots a real server with DEMO_MODE=true and verifies the demo behaviors:
 // PIN disabled, sample data seeded, abuse-prone routes blocked, normal
@@ -9,8 +10,15 @@ const path = require('node:path');
 // so no test DB artifacts are created.
 
 const serverDir = path.resolve(__dirname, '..');
-const port = 5600 + Math.floor(Math.random() * 300);
-const baseUrl = `http://127.0.0.1:${port}`;
+let port;
+let baseUrl;
+
+// Ask the OS for a free port: a port picked from a fixed range can be one
+// another program holds on 127.0.0.1, and then every request reaches it.
+async function usePort() {
+    port = await freePort();
+    baseUrl = `http://127.0.0.1:${port}`;
+}
 
 let serverProcess;
 let serverLogs = '';
@@ -62,6 +70,7 @@ async function api(pathname, options = {}) {
 }
 
 test.before(async () => {
+    await usePort();
     serverProcess = spawn('node', ['index.js'], {
         cwd: serverDir,
         env: {

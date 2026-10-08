@@ -3,14 +3,22 @@ const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
+const { freePort } = require('./freePort');
 
 const serverDir = path.resolve(__dirname, '..');
 const widgetsDir = path.join(serverDir, 'widgets');
 const tmpDir = path.resolve(__dirname, '.tmp');
 const testDbPath = path.join(tmpDir, `plugin-store-${process.pid}-${Date.now()}.db`);
 const keepTestArtifacts = process.env.HOMEGLOW_TEST_KEEP_ARTIFACTS === '1';
-const port = 5600 + Math.floor(Math.random() * 300);
-const baseUrl = `http://127.0.0.1:${port}`;
+let port;
+let baseUrl;
+
+// Ask the OS for a free port: a port picked from a fixed range can be one
+// another program holds on 127.0.0.1, and then every request reaches it.
+async function usePort() {
+    port = await freePort();
+    baseUrl = `http://127.0.0.1:${port}`;
+}
 
 // A widget dropped on disk before first boot, to exercise the one-time
 // migration import. Unique name so parallel/failed runs never collide.
@@ -45,7 +53,8 @@ async function waitForServerReady(timeoutMs = 30000) {
     throw new Error(`Server did not become ready within ${timeoutMs}ms. Logs:\n${serverLogs}`);
 }
 
-function startServer() {
+async function startServer() {
+    await usePort();
     serverProcess = spawn('node', ['index.js'], {
         cwd: serverDir,
         env: {
