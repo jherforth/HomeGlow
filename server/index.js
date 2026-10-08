@@ -4110,6 +4110,25 @@ fastify.get('/api/weather', async (request, reply) => {
   }
 });
 
+// The current condition only, for a theme's weather scenes (#247). Answered
+// from any fresh reading of the place, so a display polling it every few
+// minutes costs no upstream calls a weather widget has already made.
+fastify.get('/api/weather/condition', async (request, reply) => {
+  try {
+    const { lat, lon } = request.query || {};
+    const toNumber = (value) => (value === undefined || value === '' ? undefined : Number(value));
+    return await weatherService.getCondition(db, {
+      lat: toNumber(lat),
+      lon: toNumber(lon),
+      demoMode: DEMO_MODE,
+    });
+  } catch (error) {
+    const status = Number.isInteger(error.status) ? error.status : 500;
+    console.error('Error fetching weather condition:', error.message);
+    return reply.status(status).send({ error: error.message || 'Failed to fetch the weather condition.' });
+  }
+});
+
 // Resolve a free-text location to coordinates. Used by the weather widget's
 // settings dialog and by auto dark mode, both of which used to call
 // OpenWeatherMap's geocoder from the browser with the raw API key.

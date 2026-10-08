@@ -32,11 +32,14 @@ const CACHE_TTL_MS = 10 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 64;
 const cache = new Map();
 
+// A place to about 1km, so trivially different coordinates share a reading.
+const roundedPlace = (lat, lon) => `${lat.toFixed(2)},${lon.toFixed(2)}`;
+
 function cacheKey({ provider, lat, lon, locationQuery, units, lang }) {
     // Round coordinates to ~1km so trivially different requests for the same
     // place share an entry.
     const place = Number.isFinite(lat) && Number.isFinite(lon)
-        ? `${lat.toFixed(2)},${lon.toFixed(2)}`
+        ? roundedPlace(lat, lon)
         : String(locationQuery || '').trim().toLowerCase();
     return `${provider}::${place}::${units}::${lang}`;
 }
@@ -196,6 +199,55 @@ async function getWeather(db, {
     return payload;
 }
 
+/**
+ * Any fresh cached reading for a place, whatever units or language it was
+ * fetched in. A weather widget asks by place name and gets its own key, but
+ * every payload carries the coordinates it resolved to, so a widget and a
+ * caller asking by coordinates still meet. Home Assistant reports its own
+ * location, so any of its readings will do.
+ */
+function findFreshReading(provider, lat, lon) {
+    const wanted = Number.isFinite(lat) && Number.isFinite(lon) ? roundedPlace(lat, lon) : null;
+    for (const [key, entry] of cache) {
+        if (!key.startsWith(`${provider}::`) || Date.now() - entry.storedAt > CACHE_TTL_MS) continue;
+        const at = entry.payload?.coordinates;
+        if (provider === PROVIDERS.HOMEASSISTANT || provider === 'demo'
+            || (wanted && Number.isFinite(at?.lat) && Number.isFinite(at?.lon) && roundedPlace(at.lat, at.lon) === wanted)) {
+            return entry;
+        }
+    }
+    return null;
+}
+
+/**
+ * The current condition at a place, for a theme's weather scenes (#247):
+ * { condition, checkedAt, maxAgeMs }. Answered from any fresh reading of that
+ * place, so it never costs an upstream call another display or a weather
+ * widget has already made; otherwise one ordinary fetch, which is then cached
+ * for everyone. `maxAgeMs` tells the caller how long the answer holds.
+ */
+async function getCondition(db, { lat, lon, demoMode = false } = {}) {
+    const provider = demoMode ? 'demo' : getConfiguredProvider(db);
+    let entry = findFreshReading(provider, lat, lon);
+    if (!entry) {
+        if (provider === PROVIDERS.OPENWEATHERMAP && !(Number.isFinite(lat) && Number.isFinite(lon))) {
+            const err = new Error('Weather scenes need a location (Admin → Look → Appearance).');
+            err.status = 400;
+            throw err;
+        }
+        // Use the reading just fetched as is: the provider may report the
+        // place at coordinates a little off the ones asked for.
+        entry = { payload: await getWeather(db, { lat, lon, demoMode }), storedAt: Date.now() };
+    }
+    const condition = entry.payload?.current?.condition;
+    if (!condition) {
+        const err = new Error('The weather provider returned no current condition.');
+        err.status = 502;
+        throw err;
+    }
+    return { condition, checkedAt: entry.storedAt, maxAgeMs: CACHE_TTL_MS };
+}
+
 module.exports = {
     PROVIDERS,
     PROVIDER_SETTING_KEY,
@@ -204,5 +256,6 @@ module.exports = {
     getConfiguredProvider,
     getProviderStatus,
     getWeather,
+    getCondition,
     clearCache,
 };

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { ornamentBoxes } from './ornaments.js';
 import { validateOrnaments } from '../themes/engine/schemas.js';
-import { NEEDS_NEWER_HOMEGLOW, validateThemePackage } from './themes.js';
+import { MANIFEST_VERSION, NEEDS_NEWER_HOMEGLOW, validateThemePackage } from './themes.js';
 
 const isColor = (v) => /^#[0-9a-f]{3,8}$/i.test(v);
 const assets = { 'assets/ring.svg': '/r.svg', 'assets/bar.svg': '/b.svg', 'assets/day.svg': '/d.svg', 'assets/night.svg': '/n.svg' };
@@ -75,7 +75,7 @@ describe('manifest version', () => {
     expect(validateThemePackage({ ...base, manifestVersion: 1, ornaments }, { assets: files })).toEqual(['ornaments need manifestVersion 2']);
     expect(validateThemePackage({ ...base, manifestVersion: 1, tokens: { dark: { '--hg-meter-fill': '#ff9900' } } })).toEqual(['--hg-meter-fill need manifestVersion 2']);
     expect(validateThemePackage({ ...base, manifestVersion: 1, tokens: { all: { '--accent': '#ff9900' } } })).toEqual([]);
-    expect(validateThemePackage({ ...base, manifestVersion: 4 })).toEqual([NEEDS_NEWER_HOMEGLOW]);
+    expect(validateThemePackage({ ...base, manifestVersion: MANIFEST_VERSION + 1 })).toEqual([NEEDS_NEWER_HOMEGLOW]);
     const clumpy = { ambience: [{ layer: 'dots', count: 10 }, { layer: 'sprites', src: 'assets/ring.svg', count: 4, height: 10, clumps: 2 }] };
     expect(validateThemePackage({ ...base, manifestVersion: 1, ...clumpy }, { assets: files })).toEqual(['clumps need manifestVersion 2']);
     expect(validateThemePackage({ ...base, manifestVersion: 2, ...clumpy }, { assets: files })).toEqual([]);

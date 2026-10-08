@@ -15,9 +15,12 @@
 //   tokens: { all: {}, light: {}, dark: {} },
 //   mui: { ... }                       // see muiThemeOptions; absent = MUI's defaults
 //   muiModes: { light: {}, dark: {} }  // per-mode MUI options over `mui`
+//   weather: { default, scenes: { rainy: { colors, tokens, ambience, confetti }, ... } }
+//                                      // scenes that follow the weather (utils/weatherScenes.js)
 // }
 
 import { FLYBY_CURVE_OPTIONS, validateAmbience, validateConfetti, validateOrnaments } from '../themes/engine/schemas.js';
+import { WEATHER_SCENE_KEYS } from './weatherScenes.js';
 
 // Each theme is a folder: themes/<id>/theme.json, with its own fonts/ and
 // assets/. Adding a theme means adding a folder; nothing here lists them.
@@ -185,6 +188,75 @@ function checkTokens(tokens, where, errors) {
   });
 }
 
+function checkColors(colors, where, errors) {
+  if (!isObject(colors)) {
+    errors.push(`${where} must be an object`);
+    return;
+  }
+  ['primary', 'secondary', 'accent'].forEach((key) => {
+    if (colors[key] !== undefined && !HEX.test(colors[key])) errors.push(`${where}.${key} must be a hex color`);
+  });
+}
+
+// `tokens`: { all, light, dark }, each a set of token values.
+function checkTokenModes(tokens, where, errors) {
+  if (!isObject(tokens)) {
+    errors.push(`${where} must be an object`);
+    return;
+  }
+  Object.keys(tokens).forEach((key) => {
+    if (!['all', ...MODES].includes(key)) errors.push(`${where}.${key}: use all, light or dark`);
+  });
+  ['all', ...MODES].forEach((key) => checkTokens(tokens[key], `${where}.${key}`, errors));
+}
+
+const SCENE_FIELDS = ['colors', 'tokens', 'ambience', 'confetti'];
+
+// A theme's weather scenes (#247): { default, scenes: { <condition>: scene } },
+// each scene a set of colors, tokens, ambience and confetti over the theme's
+// own. Each is held to the same rules as the theme's top level.
+function checkWeather(weather, { assets }, errors) {
+  if (!isObject(weather)) {
+    errors.push('weather must be an object');
+    return;
+  }
+  Object.keys(weather).forEach((key) => {
+    if (key !== 'default' && key !== 'scenes') errors.push(`weather: unknown field ${key} (use default and scenes)`);
+  });
+  const checkScene = (scene, where) => {
+    if (!isObject(scene)) {
+      errors.push(`${where} must be an object`);
+      return;
+    }
+    Object.keys(scene).forEach((key) => {
+      if (!SCENE_FIELDS.includes(key)) errors.push(`${where}: unknown field ${key} (a scene sets ${SCENE_FIELDS.join(', ')})`);
+    });
+    if (scene.colors !== undefined) checkColors(scene.colors, `${where}.colors`, errors);
+    if (scene.tokens !== undefined) checkTokenModes(scene.tokens, `${where}.tokens`, errors);
+    if (scene.ambience !== undefined) {
+      errors.push(...validateAmbience(scene.ambience, { assets, isColor }).map((problem) => `${where}.${problem}`));
+    }
+    if (scene.confetti !== undefined) {
+      errors.push(...validateConfetti(scene.confetti, { assets, isColor }).map((problem) => `${where}.${problem}`));
+    }
+  };
+  if (weather.default !== undefined) checkScene(weather.default, 'weather.default');
+  if (weather.scenes !== undefined) {
+    if (!isObject(weather.scenes)) errors.push('weather.scenes must be an object');
+    else Object.entries(weather.scenes).forEach(([key, scene]) => {
+      if (!WEATHER_SCENE_KEYS.includes(key)) errors.push(`weather.scenes.${key}: not a weather condition (${WEATHER_SCENE_KEYS.join(', ')})`);
+      else checkScene(scene, `weather.scenes.${key}`);
+    });
+  }
+}
+
+// Every ambience list a theme has: its own and each weather scene's.
+const allAmbience = (pkg) => [
+  pkg.ambience,
+  pkg.weather?.default?.ambience,
+  ...Object.values(isObject(pkg.weather?.scenes) ? pkg.weather.scenes : {}).map((scene) => scene?.ambience),
+].filter(Array.isArray).flat();
+
 /** Problems with a package, as readable strings; empty when it is valid. */
 export function validateThemePackage(pkg, { assets } = {}) {
   const errors = [];
@@ -200,22 +272,28 @@ export function validateThemePackage(pkg, { assets } = {}) {
   } else {
     // Each version adds things a theme may use: 2, ornaments, the meter roles
     // and clumped sprites; 3, the button roles and curved flyby crossings
-    // (path, count, begin and the rest). A theme that uses them says
-    // so, so a core too old to draw them refuses it plainly.
+    // (path, count, begin and the rest); 4, weather scenes and lightning
+    // flashes. A theme that uses them says so, so a core too old to draw
+    // them refuses it plainly.
     const tokenNames = ['all', ...MODES].flatMap((key) => Object.keys(pkg.tokens?.[key] || {}));
+    const layers = allAmbience(pkg);
     const needs = (version, uses) => {
       const named = [...new Set(uses.filter(Boolean))];
       if (pkg.manifestVersion < version && named.length) errors.push(`${named.join(', ')} need manifestVersion ${version}`);
     };
     needs(2, [
       pkg.ornaments !== undefined && 'ornaments',
-      Array.isArray(pkg.ambience) && pkg.ambience.some((layer) => layer?.clumps !== undefined || layer?.clumpWidth !== undefined) && 'clumps',
+      layers.some((layer) => layer?.clumps !== undefined || layer?.clumpWidth !== undefined) && 'clumps',
       ...tokenNames.filter((name) => name.startsWith('--hg-meter-')),
     ]);
     needs(3, [
       ...tokenNames.filter((name) => name.startsWith('--hg-button-')),
-      Array.isArray(pkg.ambience) && pkg.ambience.some((layer) => layer?.layer === 'flyby'
+      layers.some((layer) => layer?.layer === 'flyby'
         && FLYBY_CURVE_OPTIONS.some((key) => layer[key] !== undefined)) && 'curved flybys',
+    ]);
+    needs(4, [
+      pkg.weather !== undefined && 'weather',
+      layers.some((layer) => layer?.layer === 'flash') && 'flash',
     ]);
   }
   if (typeof pkg.id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(pkg.id)) errors.push('id must be a lowercase slug (a-z, 0-9, hyphens, max 64)');
@@ -231,22 +309,10 @@ export function validateThemePackage(pkg, { assets } = {}) {
   if (pkg.modes !== undefined && (!Array.isArray(pkg.modes) || !pkg.modes.length || !pkg.modes.every((m) => MODES.includes(m)))) {
     errors.push('modes must list light and/or dark');
   }
-  if (pkg.colors !== undefined) {
-    if (!isObject(pkg.colors)) errors.push('colors must be an object');
-    else ['primary', 'secondary', 'accent'].forEach((key) => {
-      if (pkg.colors[key] !== undefined && !HEX.test(pkg.colors[key])) errors.push(`colors.${key} must be a hex color`);
-    });
-  }
+  if (pkg.colors !== undefined) checkColors(pkg.colors, 'colors', errors);
   if (pkg.fonts !== undefined) checkFonts(pkg.fonts, assets, errors);
-  if (pkg.tokens !== undefined) {
-    if (!isObject(pkg.tokens)) errors.push('tokens must be an object');
-    else {
-      Object.keys(pkg.tokens).forEach((key) => {
-        if (!['all', ...MODES].includes(key)) errors.push(`tokens.${key}: use all, light or dark`);
-      });
-      ['all', ...MODES].forEach((key) => checkTokens(pkg.tokens[key], `tokens.${key}`, errors));
-    }
-  }
+  if (pkg.tokens !== undefined) checkTokenModes(pkg.tokens, 'tokens', errors);
+  if (pkg.weather !== undefined) checkWeather(pkg.weather, { assets }, errors);
   const checkMui = (options, where) => {
     if (!isObject(options)) {
       errors.push(`${where} must be an object`);
@@ -276,10 +342,10 @@ export const DEFAULT_THEME_ID = 'classic';
  * manifest (a new section, new tokens) raises it, so an older core refuses a
  * theme it cannot draw rather than half-applying it (theme-architecture.md
  * §5). 2: ornaments and the meter roles. 3: the button roles and curved
- * flybys. The server's MANIFEST_VERSION
+ * flybys. 4: weather scenes and the flash layer. The server's MANIFEST_VERSION
  * (services/themeStore.js) matches; a server test holds them equal.
  */
-export const MANIFEST_VERSION = 3;
+export const MANIFEST_VERSION = 4;
 
 /** The problem reported for a theme newer than this core; the admin page words it for people. */
 export const NEEDS_NEWER_HOMEGLOW = 'needs a newer version of HomeGlow';
@@ -317,10 +383,34 @@ export const THEME_ASSETS = DISCOVERED.assets;
 const byId = (themes) => new Map(themes.map((theme) => [theme.id, theme]));
 
 /**
+ * A resolved theme in one of its weather scenes (#247): the scene's colors and
+ * tokens over the theme's, and its ambience and confetti in place of the
+ * theme's. `scene` is the key it shows ('default' without one), which the
+ * ambience is keyed on, so a change of weather draws a fresh scene.
+ */
+function withWeatherScene(theme, key) {
+  const sceneKey = key || 'default';
+  const scene = sceneKey === 'default' ? theme.weather.default : theme.weather.scenes?.[sceneKey];
+  if (!isObject(scene)) return { ...theme, scene: sceneKey };
+  return {
+    ...theme,
+    scene: sceneKey,
+    colors: scene.colors ? { ...theme.colors, ...scene.colors } : theme.colors,
+    tokens: Object.fromEntries(['all', ...MODES].map((mode) => [mode, { ...theme.tokens?.[mode], ...scene.tokens?.[mode] }])),
+    ambience: scene.ambience || theme.ambience,
+    ambienceAssets: scene.ambience ? theme.weatherAssets : theme.ambienceAssets,
+    confetti: scene.confetti || theme.confetti,
+    confettiAssets: scene.confetti ? theme.weatherAssets : theme.confettiAssets,
+  };
+}
+
+/**
  * A theme with its ancestors merged in: tokens, colors and MUI options from
  * the parent first, the theme's own on top. Unknown ids fall back to Classic.
+ * A theme with weather scenes shows `scene` (see utils/weatherScenes.js), or
+ * its default scene.
  */
-export function resolveTheme(id, themes = BUILT_IN_THEMES, assets = THEME_ASSETS) {
+export function resolveTheme(id, themes = BUILT_IN_THEMES, assets = THEME_ASSETS, { scene } = {}) {
   const registry = byId(themes);
   const chain = [];
   let current = registry.get(id) || registry.get(DEFAULT_THEME_ID);
@@ -328,9 +418,12 @@ export function resolveTheme(id, themes = BUILT_IN_THEMES, assets = THEME_ASSETS
     chain.unshift(current);
     current = current.extends ? registry.get(current.extends) : null;
   }
-  return chain.reduce((merged, theme) => ({
+  const resolved = chain.reduce((merged, theme) => ({
     ...merged,
     ...theme,
+    // Weather scenes, and the pictures they name, come from the theme that lists them.
+    weather: theme.weather || merged.weather,
+    weatherAssets: theme.weather ? assets[theme.id] : merged.weatherAssets,
     colors: theme.colors ? { ...merged.colors, ...theme.colors } : merged.colors,
     // Each font keeps the URL from the folder of the theme that named it.
     fonts: [...(merged.fonts || []), ...(theme.fonts || []).map((font) => ({ ...font, url: assets[theme.id]?.[font.src] }))],
@@ -349,6 +442,7 @@ export function resolveTheme(id, themes = BUILT_IN_THEMES, assets = THEME_ASSETS
       ? Object.fromEntries(MODES.map((m) => [m, { ...merged.muiModes?.[m], ...theme.muiModes[m] }]))
       : merged.muiModes,
   }), {});
+  return resolved.weather ? withWeatherScene(resolved, scene) : resolved;
 }
 
 /** The mode a theme can show: the requested one if it supports it. */

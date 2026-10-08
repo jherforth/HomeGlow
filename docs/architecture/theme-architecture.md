@@ -271,6 +271,11 @@ Version history:
 - **3:** the button roles (`--hg-button-*`), which plugins draw their buttons
   with, and curved flyby crossings (`path`, `count`, `begin` and the options
   that go with them).
+- **4:** weather scenes (`weather`: a `default` scene and `scenes` keyed by
+  condition, each with colors, tokens, ambience and confetti over the
+  theme's), and the `flash` layer for lightning (issue #247). `resolveTheme`
+  takes the scene to show; `app.jsx` picks it from the condition at the
+  appearance location (`utils/weatherScenes.js`, `utils/useWeatherCondition.js`).
 
 ## 6. Implementation order
 

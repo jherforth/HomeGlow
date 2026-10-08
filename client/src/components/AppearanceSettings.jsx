@@ -32,6 +32,10 @@ import {
 } from '../utils/appearance.js';
 import { resolveTheme } from '../utils/themes.js';
 import { useThemeRegistry } from '../utils/installedThemes.js';
+import { pickWeatherScene, weatherScenesOf } from '../utils/weatherScenes.js';
+import { PREVIEW_MS, setWeatherScenePreview, useWeatherScenePreview } from '../utils/useWeatherCondition.js';
+
+const capitalize = (text) => (text ? text.charAt(0).toLocaleUpperCase() + text.slice(1) : text);
 
 const INTERFACE_SETTINGS_UPDATED_EVENT = 'homeglow:interface-settings-updated';
 // Classic's colors. A theme with colors of its own replaces all three.
@@ -44,8 +48,10 @@ const pickFields = (appearance) => Object.fromEntries(APPEARANCE_FIELDS.map((fie
 // removes an override rather than copying the household's value, so the
 // display keeps following later household changes.
 const AppearanceSettings = () => {
-  const { t } = useTranslation(['admin']);
+  const { t } = useTranslation(['admin', 'weather']);
   const { themes, assets } = useThemeRegistry();
+  const previewScene = useWeatherScenePreview();
+  const [weatherStatus, setWeatherStatus] = useState(null);
   const apiDeviceUrl = getDeviceApiBase(API_BASE_URL);
   const [household, setHousehold] = useState(null);
   const [device, setDevice] = useState({});
@@ -110,12 +116,37 @@ const AppearanceSettings = () => {
 
   const updateDraft = (field, value) => setDraft((prev) => ({ ...prev, [field]: value }));
 
-  // The location only matters in Auto mode, so it is only looked up then.
-  // Geocoding runs on the server, which holds the provider credentials.
-  // `enabled` is still written for older builds, which read it.
-  const resolveLocation = async (autoDark, mode) => {
-    if (mode !== 'auto') return autoDark;
+  // A theme with weather scenes (#247) shows the weather at the same location
+  // Auto mode uses for sunrise and sunset.
+  const draftWeather = draft ? resolveTheme(draft.theme, themes, assets).weather : null;
+  const draftLat = draft?.autoDark?.lat;
+  const draftLon = draft?.autoDark?.lon;
+
+  // What the weather scenes would show now, or why they can't.
+  useEffect(() => {
+    if (!draftWeather) {
+      setWeatherStatus(null);
+      return undefined;
+    }
+    let cancelled = false;
+    const params = typeof draftLat === 'number' && typeof draftLon === 'number' ? { lat: draftLat, lon: draftLon } : {};
+    axios.get(`${API_BASE_URL}/api/weather/condition`, { params })
+      .then(({ data }) => { if (!cancelled) setWeatherStatus({ condition: data?.condition }); })
+      .catch((error) => { if (!cancelled) setWeatherStatus({ error: reasonFor(error) }); });
+    return () => { cancelled = true; };
+    // reasonFor only words the error; it does not change what is asked.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!draftWeather, draftLat, draftLon]);
+
+  // The location matters in Auto mode, and for a theme with weather scenes,
+  // so it is only looked up then. It is required only for Auto: Home
+  // Assistant reports its own location. Geocoding runs on the server, which
+  // holds the provider credentials. `enabled` is still written for older
+  // builds, which read it.
+  const resolveLocation = async (autoDark, mode, needsWeather) => {
+    if (mode !== 'auto' && !needsWeather) return autoDark;
     const query = autoDark.locationQuery.trim();
+    if (!query && mode !== 'auto') return autoDark;
     if (!query) throw new Error(t('admin:messages.autoDarkNeedsLocation'));
     const stored = scope === 'household' ? household.autoDark : resolveAppearance(household, device).autoDark;
     if (query === stored.locationQuery && typeof stored.lat === 'number') return { ...autoDark, enabled: true, locationQuery: query };
@@ -150,7 +181,7 @@ const AppearanceSettings = () => {
       let locationProblem = null;
       if (fields.includes('autoDark')) {
         try {
-          next.autoDark = await resolveLocation(draft.autoDark, draft.mode);
+          next.autoDark = await resolveLocation(draft.autoDark, draft.mode, !!draftWeather);
         } catch (error) {
           locationProblem = reasonFor(error);
           if (scope === 'household') next.autoDark = household.autoDark;
@@ -253,6 +284,9 @@ const AppearanceSettings = () => {
   );
 
   const resolvedTheme = resolveTheme(draft.theme, themes, assets);
+  const sceneLabel = (key) => (key === 'default'
+    ? t('admin:appearance.weather.defaultScene')
+    : capitalize(t(`weather:conditions.${key}`)));
 
   return (
     <AdminFormSection title={t('admin:appearance.heading')} subtitle={t('admin:appearance.subtitle')}>
@@ -305,21 +339,63 @@ const AppearanceSettings = () => {
         </Select>
       </FormControl>
 
-      {draft.mode === 'auto' && (
+      {(draft.mode === 'auto' || draftWeather) && (
         <Box sx={{ mb: 3 }}>
-          <Typography variant="subtitle2">{t('admin:appearance.autoDark')}</Typography>
+          <Typography variant="subtitle2">{t(draftWeather ? 'admin:appearance.weather.location' : 'admin:appearance.autoDark')}</Typography>
           {inheritSwitch('autoDark')}
           <TextField
             fullWidth
-            required
+            required={draft.mode === 'auto'}
             disabled={locked('autoDark')}
-            slotProps={{ htmlInput: { 'aria-label': t('admin:appearance.autoDark') } }}
+            slotProps={{ htmlInput: { 'aria-label': t(draftWeather ? 'admin:appearance.weather.location' : 'admin:appearance.autoDark') } }}
             value={draft.autoDark.locationQuery}
             onChange={(e) => updateDraft('autoDark', { ...draft.autoDark, locationQuery: e.target.value })}
             helperText={draft.autoDark.resolvedName
               ? t('admin:appearance.resolvedLocation', { name: draft.autoDark.resolvedName })
               : t('admin:autoDark.locationHelp')}
           />
+        </Box>
+      )}
+
+      {draftWeather && (
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="subtitle2">{t('admin:appearance.weather.heading')}</Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+            {t('admin:appearance.weather.help')}
+          </Typography>
+          {weatherStatus?.condition && (
+            <Typography variant="body2" sx={{ mb: 1 }}>
+              {t('admin:appearance.weather.now', {
+                condition: capitalize(t(`weather:conditions.${weatherStatus.condition}`)),
+                scene: sceneLabel(pickWeatherScene(draftWeather, weatherStatus.condition)),
+              })}
+            </Typography>
+          )}
+          {weatherStatus?.error && (
+            <Alert severity="warning" sx={{ mb: 1 }}>
+              {t('admin:appearance.weather.unavailable', { reason: weatherStatus.error })}
+            </Alert>
+          )}
+          {draft.mode !== 'auto' && (
+            <Alert severity="info" sx={{ mb: 1 }}>{t('admin:appearance.weather.nightHint')}</Alert>
+          )}
+          <Typography variant="body2" sx={{ mt: 2, mb: 0.5, fontWeight: 600 }}>{t('admin:appearance.weather.preview')}</Typography>
+          <FormControl fullWidth size="small">
+            <Select
+              value={previewScene || ''}
+              displayEmpty
+              inputProps={{ 'aria-label': t('admin:appearance.weather.preview') }}
+              onChange={(e) => setWeatherScenePreview(e.target.value || null)}
+            >
+              <MenuItem value="">{t('admin:appearance.weather.live')}</MenuItem>
+              {weatherScenesOf(draftWeather).map((key) => (
+                <MenuItem key={key} value={key}>{sceneLabel(key)}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            {t('admin:appearance.weather.previewHelp', { minutes: PREVIEW_MS / 60000 })}
+          </Typography>
         </Box>
       )}
 

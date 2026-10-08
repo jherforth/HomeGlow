@@ -481,7 +481,19 @@
     "madeHouseholdDefault": "This display's look is now the household default.",
     "saveFailed": "Could not save the appearance settings.",
     "loadFailed": "Could not load the appearance settings.",
-    "savedButLocation": "Saved, except the auto mode location, which is unchanged: {{reason}}"
+    "savedButLocation": "Saved, except the auto mode location, which is unchanged: {{reason}}",
+    "weather": {
+      "location": "Location (for the weather, and for sunrise and sunset in Auto mode)",
+      "heading": "Weather scenes",
+      "help": "This theme changes with the weather outside, checked every 10 minutes. At night it shows each scene's dark look.",
+      "now": "Outside now: {{condition}}. Showing the {{scene}} scene.",
+      "unavailable": "The weather can't be read, so the theme shows its default scene: {{reason}}",
+      "nightHint": "Night scenes are this theme's dark mode. Set Mode to Auto so they follow sunset.",
+      "preview": "Preview a scene",
+      "live": "The weather outside",
+      "previewHelp": "Shows the scene on this display for {{minutes}} minutes, if it is showing this theme. Nothing is saved. The dock's mode button shows its night look.",
+      "defaultScene": "Default"
+    }
   },
   "personalize": {
     "heading": "Personalize",

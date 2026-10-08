@@ -48,7 +48,7 @@ folder name must match the manifest's `id`.
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `manifestVersion` | yes | `1`; `2` for a theme that uses `ornaments`, the meter tokens or `clumps`; `3` for one that uses the button tokens or curved flybys. A HomeGlow older than the version refuses the theme. |
+| `manifestVersion` | yes | `1`; `2` for a theme that uses `ornaments`, the meter tokens or `clumps`; `3` for one that uses the button tokens or curved flybys; `4` for one with `weather` scenes or a `flash` layer. A HomeGlow older than the version refuses the theme. |
 | `id` | yes | Lowercase slug (a-z, 0-9, hyphens), the same as the folder name. |
 | `name` | yes | Shown in the theme picker. |
 | `version`, `author`, `description` | | As in a plugin manifest. The author shows as "by ...". |
@@ -61,6 +61,7 @@ folder name must match the manifest's `id`.
 | `mui`, `muiModes` | | Options for buttons, inputs, dialogs and sliders; `muiModes.light` and `.dark` override per mode. See `utils/themes.js`, `MUI_TYPES`. |
 | `ambience` | | Layers drawn behind the widgets. See §4. |
 | `ornaments` | | Pictures drawn on every widget frame. See §4a. |
+| `weather` | | Scenes that follow the weather outside. See §4b. |
 | `confetti` | | The theme's own celebration confetti: `colors` (a list, or per mode), `shapes` (some of `square`, `circle`, `streamer`), `pictures` (as in a `sprites` layer, `height` in px) and `mix` (the share of pieces that are pictures, 0 to 1). Without it, a theme gets Classic's confetti. |
 
 ## 3. Tokens
@@ -124,6 +125,7 @@ stars.
 | `streaks` | An occasional streak on a random path | `color`, `length`, `every` (pause, seconds), `seconds`, `burst` (streaks per pass: a meteor storm) |
 | `flyby` | Now and then, one picture crossing the screen | `pictures`, `height` (vh), `every` (pause, seconds), `seconds` (to cross), `span` (`[from, to]` % from the top), `tilt` (degrees of climb), `spin` (degrees of tumble per crossing), `opacity`. Draw pictures facing right. |
 | `blobs` | Soft color blobs drifting and swelling | `colors`, `count`, `size` (vmin), `seconds`, `opacity` |
+| `flash` | Now and then, lightning: a glow from the top of the sky that brightens and fades (manifest version 4) | `color`, `every` (seconds between strikes, at least 4), `strength` (0.05 to 0.5), `double` (a second, weaker flicker; on by default). Kept gentle for anyone sensitive to flashing light, and still under reduced motion. |
 
 `colors` and `tint` take a list, or `{ "color": "#...", "weight": 3 }` entries
 for a weighted pick.
@@ -186,6 +188,50 @@ ornament inside that room, or it will sit over the widget's content.
   { "src": "assets/bezel.svg", "anchor": "corners", "size": "26px", "tint": { "light": ["#0b6e8a"], "dark": ["#4fe3d6"] } }
 ]
 ```
+
+## 4b. Weather scenes
+
+A theme can change with the weather (manifest version 4). `weather` holds a
+`default` scene and a scene per condition; HomeGlow shows the one for the
+weather outside and checks again every 10 minutes. To the household it is
+still one theme in the picker.
+
+```json
+"weather": {
+  "default": { "ambience": [{ "layer": "blobs", "colors": ["#9fc5ff"] }] },
+  "scenes": {
+    "sunny": { "colors": { "accent": "#f2a900" }, "ambience": [ ... ] },
+    "rainy": {
+      "tokens": { "light": { "--background": "#dfe5ec" }, "dark": { "--background": "#0b1119" } },
+      "ambience": [{ "layer": "particles", "src": "assets/drop.svg", "motion": "fall", "count": 36, "seconds": [1.2, 2.2] }]
+    },
+    "lightning": { "ambience": [ ..., { "layer": "flash", "every": [8, 30] }] }
+  }
+}
+```
+
+- **A scene sets** `colors`, `tokens` (`all`, `light`, `dark`), `ambience` and
+  `confetti`. Its colors and tokens go over the theme's own; its ambience and
+  confetti replace the theme's. Anything it leaves out is the theme's.
+- **The scenes** are named for the weather: `sunny`, `partlycloudy`, `cloudy`,
+  `fog`, `windy`, `windy-variant`, `rainy`, `pouring`, `snowy`, `snowy-rainy`,
+  `hail`, `lightning` and `lightning-rainy`. `default` is shown when the
+  weather is something else, or can't be read.
+- **Night is the dark mode.** There are no night scenes: a scene's dark look
+  (`tokens.dark`, layers with `"modes": ["dark"]`) is its night. A clear night
+  shows `sunny` in dark mode. On Auto mode, dark follows sunset.
+- **Start small.** A missing scene falls back to a related one, then to
+  `default`: `pouring` shows `rainy`; `lightning-rainy` shows `lightning`, then
+  `rainy`; `hail` shows `snowy-rainy`, then `snowy`; `snowy-rainy` shows
+  `snowy`; `windy-variant` shows `windy`; `partlycloudy` shows `cloudy`. Four
+  scenes (sunny, cloudy, rainy, snowy) cover most days.
+- **Pictures** come from the theme's `assets/` folder, as everywhere else. A
+  scene's pictures download only while it is showing.
+- **Trying it:** Admin → Look → Appearance shows the weather outside and the
+  scene it picks, and can preview each scene on that display for 10 minutes.
+  The dock's mode button shows a scene's night look. The display needs the
+  location there (the one Auto mode uses), and a weather provider under
+  System → Connections; Home Assistant needs no location.
 
 ## 5. Performance rules
 
