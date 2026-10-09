@@ -2972,6 +2972,51 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
       snoozedUntilResult.value
     ).lastInsertRowid));
     const ids = insertAll(targets.userIds);
+
+    // For sticky schedules (once-completed/until-completed), create the visible
+    // one-time child immediately if the crontab fires today. The midnight
+    // daily job also does this, but waiting until midnight means a schedule
+    // created during the day wouldn't appear on the dashboard until tomorrow,
+    // contradicting the UI's "appears immediately" promise.
+    if (normalizedDuration === 'once-completed' || normalizedDuration === 'until-completed') {
+      const today = getTodayLocalDateString();
+      for (const parentId of ids) {
+        const parent = db.prepare(`
+          SELECT id, chore_id, user_id, crontab, duration, created_at, due_date,
+                 due_time, sound_enabled, sound, reminder_interval_minutes
+          FROM chore_schedules WHERE id = ?
+        `).get(parentId);
+        if (!parent || !parent.crontab) continue;
+        let firesToday;
+        try {
+          firesToday = cronFiresOnDate(parent.crontab, today);
+        } catch {
+          continue;
+        }
+        if (!firesToday) continue;
+        const dueDateOffset = calculateDateOffsetDays(parent.created_at, parent.due_date);
+        const childDueDate = dueDateOffset === null
+          ? (parent.due_date || null)
+          : addDaysToDateOnly(today, dueDateOffset);
+        db.prepare(`
+          INSERT INTO chore_schedules (
+            chore_id, user_id, crontab, duration, visible, parent_schedule_id,
+            due_date, due_time, sound_enabled, sound, reminder_interval_minutes
+          )
+          VALUES (?, ?, NULL, 'day-of', 1, ?, ?, ?, ?, ?, ?)
+        `).run(
+          parent.chore_id,
+          parent.user_id,
+          parent.id,
+          childDueDate,
+          parent.due_time || null,
+          parent.sound_enabled ? 1 : 0,
+          parent.sound || null,
+          parent.reminder_interval_minutes || null
+        );
+      }
+    }
+
     return targets.batch ? { id: ids[0], ids, success: true } : { id: ids[0], success: true };
   } catch (error) {
     console.error('Error adding schedule:', error);

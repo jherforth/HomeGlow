@@ -354,6 +354,14 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
     const err = scheduleForm.isOneTime ? null : validateCrontab(cron);
     if (err) { setCrontabError(err); return; }
 
+    // If "Custom Crontab" mode is selected but the field is empty, that's
+    // a mistake — show a clear error instead of letting it fail silently.
+    if (!scheduleForm.isOneTime && scheduleForm.scheduleMode === 'custom' && !scheduleForm.customCrontab?.trim()) {
+      setCrontabError('Please enter a crontab expression, or choose a Preset.');
+      return;
+    }
+    setCrontabError(null);
+
     setSavingSchedule(true);
     try {
       const isIntervalSchedule = !scheduleForm.isOneTime && scheduleForm.duration === 'once-completed';

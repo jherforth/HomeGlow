@@ -1058,3 +1058,37 @@ test('testing an Immich source without an API key says so', async () => {
     // the real problem.
     assert.doesNotMatch(body.error, /refused|timed out/i);
 });
+
+test('creating a once-completed schedule immediately creates the visible child', async () => {
+    // Regression test: sticky schedules (once-completed/until-completed) used
+    // to only get their visible one-time child at the midnight cron, so a
+    // schedule created during the day wouldn't appear until tomorrow.
+    const choreRes = await api('/api/chores', {
+        method: 'POST',
+        body: JSON.stringify({ title: `Sticky test ${Date.now()}`, description: '', clam_value: 0 }),
+    });
+    assert.equal(choreRes.status, 200);
+    const choreId = choreRes.body.id;
+
+    const createRes = await api('/api/chore-schedules', {
+        method: 'POST',
+        body: JSON.stringify({
+            chore_id: choreId,
+            crontab: '0 0 * * *',
+            duration: 'once-completed',
+            interval: '3d',
+            visible: 1,
+        }),
+    });
+    assert.equal(createRes.status, 200);
+    const parentId = createRes.body.id;
+
+    // The child should exist immediately, not just after the midnight job.
+    const schedulesRes = await api(`/api/chore-schedules?chore_id=${choreId}`);
+    assert.equal(schedulesRes.status, 200);
+    const child = schedulesRes.body.find(
+        (s) => s.parent_schedule_id === parentId && s.crontab === null && s.visible === 1
+    );
+    assert.ok(child, 'expected an immediate visible child schedule');
+    assert.equal(child.duration, 'day-of');
+});
