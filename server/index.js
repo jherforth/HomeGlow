@@ -43,7 +43,21 @@ const LOG_FORMAT_RESULT = resolveLogFormat(process.env.LOG_FORMAT);
 const LOG_FORMAT = LOG_FORMAT_RESULT.format;
 
 const fastify = require('fastify')({
-  logger: { level: LOG_LEVEL, transport: transportFor(LOG_FORMAT) },
+  logger: {
+    level: LOG_LEVEL,
+    transport: transportFor(LOG_FORMAT),
+    // Fastify's request lines without the query string, which can carry a
+    // credential: an OAuth callback's ?code=, or a proxy target's token.
+    serializers: {
+      req: (req) => ({
+        method: req.method,
+        url: String(req.url || '').split('?')[0],
+        host: req.host,
+        remoteAddress: req.ip,
+        remotePort: req.socket ? req.socket.remotePort : undefined,
+      }),
+    },
+  },
 });
 
 // From here on, every console.* call in this process -- this file, the
@@ -4256,9 +4270,9 @@ fastify.get('/api/settings', async (request, reply) => {
   try {
     console.log('=== FETCHING SETTINGS ===');
     const rows = selectSettings(parseSettingsKeysParam(request.query?.keys));
-    console.log('Raw settings from database:', rows);
+    // Never log the rows: they hold secrets (WEATHER_API_KEY and the rest of
+    // REDACTED_SETTING_KEYS) that the response itself leaves out.
     const settings = rowsToSettingsObject(rows);
-    console.log('Processed settings object:', settings);
     return settings;
   } catch (error) {
     console.error('Error fetching settings:', error);
@@ -4276,9 +4290,9 @@ fastify.post('/api/settings/search', async (request, reply) => {
     // so third-party plugins call it and it stays supported. GET /api/settings
     // with ?keys= is the preferred read for new callers.
     const rows = selectSettings(keys);
-    console.log('Raw settings from database:', rows);
+    // Never log the rows: they hold secrets (WEATHER_API_KEY and the rest of
+    // REDACTED_SETTING_KEYS) that the response itself leaves out.
     const settings = rowsToSettingsObject(rows);
-    console.log('Processed settings object:', settings);
     return settings;
   } catch (error) {
     console.error('Error fetching settings:', error);
@@ -4288,8 +4302,8 @@ fastify.post('/api/settings/search', async (request, reply) => {
 
 fastify.post('/api/settings', async (request, reply) => {
   const { key, value } = request.body;
-  // single log message showing the details of the save:
-  console.log(`=== SAVING SETTING === Key: ${key} - Value: ${value} Value type: ${typeof value} Value length: ${value ? value.length : 'null/undefined'}`);
+  // The key only, never the value: it may be a secret (REDACTED_SETTING_KEYS).
+  console.log(`=== SAVING SETTING === Key: ${key}`);
 
   if (!key || value === undefined) {
     console.log('ERROR: Missing key or value');
@@ -4317,7 +4331,7 @@ fastify.post('/api/settings', async (request, reply) => {
 
     // Verify the setting was saved
     const verification = db.prepare('SELECT key, value FROM settings WHERE key = ?').get(key);
-    console.log('Verification query result:', verification);
+    console.log('Verification query result: saved', !!verification);
 
     // Changing the provider or its credentials invalidates anything cached
     // under the old configuration.
@@ -4819,8 +4833,6 @@ fastify.patch('/api/devices/:deviceName/widget-assignments/layout/bulk', async (
 fastify.post('/api/test-api-key', async (request, reply) => {
   const { apiKey } = request.body;
   console.log('=== TESTING API KEY SAVE ===');
-  console.log('Received API key:', apiKey);
-  console.log('API key type:', typeof apiKey);
   console.log('API key length:', apiKey ? apiKey.length : 'null/undefined');
 
   try {
@@ -4831,7 +4843,7 @@ fastify.post('/api/test-api-key', async (request, reply) => {
 
     // Verify it was saved
     const verification = db.prepare('SELECT key, value FROM settings WHERE key = ?').get('WEATHER_API_KEY');
-    console.log('Verification result:', verification);
+    console.log('Verification result: saved', !!verification);
 
     return {
       success: true,
@@ -4847,9 +4859,9 @@ fastify.post('/api/test-api-key', async (request, reply) => {
 // NEW: Generic CORS Proxy Endpoint
 fastify.get('/api/proxy', async (request, reply) => {
   if (demoBlocked(reply)) return;
+  // Method, host and status only: request headers carry credentials, and a
+  // target's query string or response can carry tokens.
   console.log('=== PROXY REQUEST RECEIVED ===');
-  console.log('Query params:', request.query);
-  console.log('Headers:', request.headers);
 
   const { targetUrl } = request.query;
 
@@ -4857,8 +4869,6 @@ fastify.get('/api/proxy', async (request, reply) => {
     console.log('ERROR: No targetUrl provided');
     return reply.status(400).send({ error: 'targetUrl query parameter is required.' });
   }
-
-  console.log('Target URL requested:', targetUrl);
 
   let whitelist = [];
   try {
@@ -4890,7 +4900,7 @@ fastify.get('/api/proxy', async (request, reply) => {
       return reply.status(403).send({ error: 'Access to this domain is not allowed through the proxy.' });
     }
 
-    console.log(`Proxying request to whitelisted domain: ${targetUrl}`);
+    console.log(`Proxying GET to whitelisted host: ${targetHostname}`);
 
     const proxyHttpsAgent = httpsAgentFor(targetUrl);
 
@@ -4917,11 +4927,8 @@ fastify.get('/api/proxy', async (request, reply) => {
       console.log(`Proxy: ${targetHostname} is a private address; accepting a self-signed certificate.`);
     }
 
-    console.log('Making axios request with config:', axiosConfig);
     const response = await axios.get(targetUrl, axiosConfig);
-    console.log('Axios response received:', response.status, response.statusText);
-    console.log('Response data type:', typeof response.data);
-    console.log('Response data preview:', JSON.stringify(response.data).substring(0, 200) + '...');
+    console.log(`Proxy: ${targetHostname} answered ${response.status}`);
 
     // Forward the content type and the data from the external API
     if (response.headers['content-type']) {
@@ -4946,7 +4953,6 @@ fastify.get('/api/proxy', async (request, reply) => {
       address: error.address,
       port: error.port,
       config: error.config ? {
-        url: error.config.url,
         method: error.config.method,
         timeout: error.config.timeout
       } : 'No config',
