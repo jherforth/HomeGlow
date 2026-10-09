@@ -16,14 +16,23 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const Database = require('better-sqlite3');
+const { freePort } = require('./freePort');
 
 const serverDir = path.resolve(__dirname, '..');
 const tmpDir = path.resolve(__dirname, '.tmp');
 const testDbPath = path.join(tmpDir, `credential-encryption-${process.pid}-${Date.now()}.db`);
 const keyFilePath = path.join(tmpDir, `credential-encryption-${process.pid}-${Date.now()}.key`);
 const keepTestArtifacts = process.env.HOMEGLOW_TEST_KEEP_ARTIFACTS === '1';
-const port = 8900 + Math.floor(Math.random() * 300);
-const baseUrl = `http://127.0.0.1:${port}`;
+let port;
+let baseUrl;
+
+// Ask the OS for a free port: a port picked from a fixed range can be one
+// another program holds on 127.0.0.1, and then every request reaches it.
+async function usePort() {
+    port = await freePort();
+    baseUrl = `http://127.0.0.1:${port}`;
+    serverEnv.PORT = String(port);
+}
 
 // The exact scheme the old code used, reproduced here so the migration is
 // tested against real legacy ciphertext rather than a mock of it.
@@ -47,7 +56,6 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // No ENCRYPTION_KEY: exercises the auto-generated-key path, which is what a
 // real install uses.
 const serverEnv = {
-    PORT: String(port),
     DB_PATH: testDbPath,
     ENCRYPTION_KEY_FILE: keyFilePath,
     TZ: 'UTC',
@@ -69,7 +77,8 @@ async function waitForServerReady(timeoutMs = 30000) {
     throw new Error(`Server did not become ready within ${timeoutMs}ms. Logs:\n${serverLogs}`);
 }
 
-function startServer() {
+async function startServer() {
+    await usePort();
     const env = { ...process.env, ...serverEnv };
     delete env.ENCRYPTION_KEY;
     serverProcess = spawn('node', ['index.js'], { cwd: serverDir, env, stdio: ['ignore', 'pipe', 'pipe'] });

@@ -8,13 +8,21 @@ const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const Database = require('better-sqlite3');
+const { freePort } = require('./freePort');
 
 const serverDir = path.resolve(__dirname, '..');
 const tmpDir = path.resolve(__dirname, '.tmp');
 const testDbPath = path.join(tmpDir, `chore-followups-${process.pid}-${Date.now()}.db`);
 const keepTestArtifacts = process.env.HOMEGLOW_TEST_KEEP_ARTIFACTS === '1';
-const port = 8700 + Math.floor(Math.random() * 250);
-const baseUrl = `http://127.0.0.1:${port}`;
+let port;
+let baseUrl;
+
+// Ask the OS for a free port: a port picked from a fixed range can be one
+// another program holds on 127.0.0.1, and then every request reaches it.
+async function usePort() {
+    port = await freePort();
+    baseUrl = `http://127.0.0.1:${port}`;
+}
 
 // The server runs in UTC, so this is its "today".
 const today = new Date().toISOString().slice(0, 10);
@@ -85,6 +93,7 @@ function setTriggeredOn(scheduleId, date) {
 }
 
 test.before(async () => {
+    await usePort();
     fs.mkdirSync(tmpDir, { recursive: true });
     serverProcess = spawn('node', ['index.js'], {
         cwd: serverDir,

@@ -11,13 +11,21 @@ const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
+const { freePort } = require('./freePort');
 
 const serverDir = path.resolve(__dirname, '..');
 const tmpDir = path.resolve(__dirname, '.tmp');
 const testDbPath = path.join(tmpDir, `home-assistant-${process.pid}-${Date.now()}.db`);
 const keepTestArtifacts = process.env.HOMEGLOW_TEST_KEEP_ARTIFACTS === '1';
-const port = 7900 + Math.floor(Math.random() * 300);
-const baseUrl = `http://127.0.0.1:${port}`;
+let port;
+let baseUrl;
+
+// Ask the OS for a free port: a port picked from a fixed range can be one
+// another program holds on 127.0.0.1, and then every request reaches it.
+async function usePort() {
+    port = await freePort();
+    baseUrl = `http://127.0.0.1:${port}`;
+}
 
 const SECRET_TOKEN = 'eyJhbGciOi.super-secret-long-lived-token.signature';
 
@@ -66,6 +74,7 @@ const setSetting = (key, value) => api('/api/settings', {
 });
 
 test.before(async () => {
+    await usePort();
     fs.mkdirSync(tmpDir, { recursive: true });
 
     // Stand-in Home Assistant. Authenticates on the bearer token so we can
