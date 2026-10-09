@@ -166,6 +166,7 @@ const googleCalendar = require('./services/googleCalendar');
 const appleCalDAV = require('./services/appleCalDAV');
 const googlePhotos = require('./services/googlePhotos');
 const appearanceAssets = require('./services/appearanceAssets');
+const { inlineCssImports } = require('./utils/inlineCssImports');
 const themeStore = require('./services/themeStore');
 const googlePhotosPicker = require('./services/googlePhotosPicker');
 const homeAssistant = require('./services/homeAssistant');
@@ -763,6 +764,8 @@ fastify.get('/index.css', async (request, reply) => {
     }
 
     if (cssContent) {
+      // Classic's tokens come in by @import, a path a plugin frame can't fetch.
+      cssContent = await inlineCssImports(cssContent, successPath);
       reply.header('Content-Type', 'text/css');
       reply.header('Access-Control-Allow-Origin', '*');
       return cssContent;
