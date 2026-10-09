@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react';
+import { isPageVisible, watchPageVisibility } from '../utils/pageVisibility.js';
 
 // True while the browser tab is visible (Page Visibility API). This is the
 // closest a web app can get to "the screen is on" — it fires for tab/window
 // backgrounding and mobile app switching, but cannot see external power
-// mechanisms (HDMI-CEC, DPMS, smart relays).
+// mechanisms (HDMI-CEC, DPMS, smart relays). A page Chrome prerendered counts
+// as shown once it is (see utils/pageVisibility.js).
 export function usePageVisibility() {
-  const [visible, setVisible] = useState(() => document.visibilityState !== 'hidden');
+  const [visible, setVisible] = useState(() => isPageVisible(document));
 
   useEffect(() => {
-    const handleChange = () => setVisible(document.visibilityState !== 'hidden');
-    document.addEventListener('visibilitychange', handleChange);
-    return () => document.removeEventListener('visibilitychange', handleChange);
+    // Read again on subscribing: the page may have been shown in between.
+    setVisible(isPageVisible(document));
+    return watchPageVisibility(document, setVisible);
   }, []);
 
   return visible;
