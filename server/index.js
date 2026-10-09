@@ -2814,6 +2814,39 @@ fastify.patch('/api/chores/:id', async (request, reply) => {
   }
 });
 
+fastify.delete('/api/chores/bulk', async (request, reply) => {
+  const { ids } = request.body || {};
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return reply.status(400).send({ error: 'ids must be a non-empty array of chore IDs' });
+  }
+  const uniqueIds = [];
+  for (const raw of ids) {
+    const id = typeof raw === 'number' ? raw : parseInt(raw, 10);
+    if (!Number.isInteger(id) || id <= 0) {
+      return reply.status(400).send({ error: 'All IDs must be positive integers' });
+    }
+    if (!uniqueIds.includes(id)) uniqueIds.push(id);
+  }
+  try {
+    let deleted = 0;
+    db.transaction(() => {
+      const delSchedules = db.prepare('DELETE FROM chore_schedules WHERE chore_id = ?');
+      const delFollowups = db.prepare('DELETE FROM chore_followups WHERE chore_id = ? OR followup_chore_id = ?');
+      const delChore = db.prepare('DELETE FROM chores WHERE id = ?');
+      for (const id of uniqueIds) {
+        delSchedules.run(id);
+        try { delFollowups.run(id, id); } catch { /* table may not exist on older schemas */ }
+        const info = delChore.run(id);
+        if (info.changes > 0) deleted++;
+      }
+    })();
+    return { deleted };
+  } catch (error) {
+    console.error('Error bulk deleting chores:', error);
+    reply.status(500).send({ error: 'Failed to delete chores' });
+  }
+});
+
 fastify.delete('/api/chores/:id', async (request, reply) => {
   const { id } = request.params;
   try {
