@@ -83,8 +83,16 @@ test.before(async () => {
   assert.equal(saved.status, 200, JSON.stringify(saved.body));
 });
 
+// Wait for the server to exit: Windows won't delete a database it still has open.
+const stopServer = () => new Promise((resolve) => {
+  if (!serverProcess || serverProcess.exitCode !== null) return resolve();
+  serverProcess.once('close', resolve);
+  serverProcess.kill();
+  setTimeout(resolve, 5000);
+});
+
 test.after(async () => {
-  serverProcess?.kill();
+  await stopServer();
   await fake?.close();
   if (!keepTestArtifacts) {
     for (const suffix of ['', '-wal', '-shm']) fs.rmSync(`${testDbPath}${suffix}`, { force: true });

@@ -217,6 +217,7 @@
     "selectDays": "Select which days this chore should appear:",
     "selectAtLeastOneDay": "Select at least one day, or use the \"One-time task\" toggle above.",
     "crontabExpression": "Crontab Expression",
+    "crontabRequired": "Enter a crontab expression, or choose a preset.",
     "nextOccurrenceIs": "Next occurrence: {{when}}",
     "appearsOnce": "This chore will appear once and hide itself after completion.",
     "dueDateOptional": "Due date (optional)",
