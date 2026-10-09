@@ -231,6 +231,7 @@ const TabBar = ({
   onToggleLock,
   onOpenSettings,
   onRefresh,
+  hidden = false,
   theme,
   themeMode,
   screensaverCountdown,
@@ -238,6 +239,11 @@ const TabBar = ({
   const [menuOpen, setMenuOpen] = useState(false);
   const menuAnchorRef = useRef(null);
   const isMobile = useIsMobile();
+
+  // An idle dock takes its open menu with it (issue #77).
+  useEffect(() => {
+    if (hidden) setMenuOpen(false);
+  }, [hidden]);
 
   const defaultHomeTab = {
     id: 1,
@@ -276,8 +282,18 @@ const TabBar = ({
         position: 'fixed',
         bottom: 16,
         left: '50%',
-        transform: 'translateX(-50%)',
+        transform: hidden ? 'translate(-50%, 24px)' : 'translateX(-50%)',
         zIndex: 9999,
+        // Idle hide (issue #77): fade and sink slowly, return quickly. Hidden
+        // means invisible too, so nothing in it can be tapped or tabbed to.
+        opacity: hidden ? 0 : 1,
+        visibility: hidden ? 'hidden' : 'visible',
+        transition: hidden
+          ? 'opacity 600ms ease, transform 600ms ease, visibility 0s linear 600ms'
+          : 'opacity 200ms ease, transform 200ms ease',
+        '@media (prefers-reduced-motion: reduce)': {
+          transform: 'translateX(-50%)',
+        },
         display: 'flex',
         alignItems: 'center',
         gap: 0,

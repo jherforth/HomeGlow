@@ -1,3 +1,5 @@
+import { normalizeDockHideMinutes } from './dockIdleHide.js';
+
 // Single source of truth for the "interface" settings that live in localStorage:
 // interface colors, screensaver settings, and auto-dark-mode settings. Also
 // the reader for the household vacation setting, which every display follows.
@@ -36,6 +38,9 @@ export const DEFAULT_SCREENSAVER_SETTINGS = {
   // black (the original look), 'ambient' fills the bars with a blurred copy of
   // the photo, 'collage' tiles several photos across the screen.
   photoLayout: 'fit',
+  // Minutes without interaction before the dock fades out; 0 keeps it shown
+  // (issue #77). Off by default so no display changes on upgrade.
+  dockHideMinutes: 0,
 };
 
 export const PHOTO_LAYOUTS = ['fit', 'ambient', 'collage'];
@@ -113,6 +118,7 @@ export const normalizeScreensaverSettings = (raw) => {
     overlayWeather: merged.overlayWeather === true,
     overlayCalendarDays: Number.isFinite(days) ? Math.min(7, Math.max(1, days)) : 1,
     photoLayout: PHOTO_LAYOUTS.includes(merged.photoLayout) ? merged.photoLayout : 'fit',
+    dockHideMinutes: normalizeDockHideMinutes(merged.dockHideMinutes),
   };
 };
 

@@ -98,6 +98,7 @@ import { ADMIN_LAYOUT, ADMIN_TABS, normalizeAdminLocation, parseAdminHash, setAd
 import SoundPicker from './SoundPicker';
 import ControlsOnDisplay from './ControlsOnDisplay';
 import useFetchTabs from '../hooks/useFetchTabs.js';
+import { MAX_DOCK_HIDE_MINUTES, screensaverPreemptsDock } from '../utils/dockIdleHide.js';
 import useIsMobile from '../hooks/useIsMobile.js';
 import { syncWidgetAssignments } from '../utils/assignmentSync.js';
 import { normalizeWidgetSettings as normalizeSharedWidgetSettings } from '../utils/widgetSettings.js';
@@ -3135,6 +3136,33 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
                     {t('admin:screensaver.keepScreenAwakeHelp')}
                   </Typography>
+
+                  {/* Dock idle hide (issue #77). This display only, like the
+                      screensaver; saved with it. */}
+                  <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                    {t('admin:screensaver.dockHideHeading')}
+                  </Typography>
+                  <TextField
+                    type="number"
+                    size="small"
+                    label={t('admin:screensaver.dockHideLabel')}
+                    value={screensaverSettings.dockHideMinutes}
+                    onChange={(e) => setScreensaverSettings(prev => ({ ...prev, dockHideMinutes: e.target.value }))}
+                    slotProps={{ htmlInput: { min: 0, max: MAX_DOCK_HIDE_MINUTES, step: 1 } }}
+                    sx={{ mb: 1, width: 200 }}
+                  />
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    {t('admin:screensaver.dockHideHelp')}
+                  </Typography>
+                  {screensaverPreemptsDock({
+                    screensaverEnabled: screensaverSettings.enabled,
+                    screensaverMinutes: screensaverSettings.timeout,
+                    dockHideMinutes: screensaverSettings.dockHideMinutes,
+                  }) && (
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                      {t('admin:screensaver.dockHidePreempted', { count: screensaverSettings.timeout })}
+                    </Alert>
+                  )}
 
                   <Button
                     variant="contained"

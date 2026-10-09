@@ -18,6 +18,12 @@ import useFetchTabs from './hooks/useFetchTabs.js';
 import useIsMobile from './hooks/useIsMobile.js';
 import useScreenActivity from './hooks/useScreenActivity.js';
 import {
+  ACTIVITY_EVENTS,
+  createDockIdleTimer,
+  dockHideTimeoutMs,
+  wantsActivityListeners,
+} from './utils/dockIdleHide.js';
+import {
   hexToRgbTriplet,
   readLocalScreensaverSettings,
   parseVacationModeSetting,
@@ -941,6 +947,55 @@ const App = () => {
     }, settings.timeout * 60 * 1000);
   }, []);
 
+  // The dock fades out after this display's idle time (issue #77). Never on a
+  // phone, where the dock is the navigation, and never while Admin is open.
+  const dockHideMs = isMobile ? null : dockHideTimeoutMs(screensaverSettings.dockHideMinutes);
+  const [dockHidden, setDockHidden] = useState(false);
+  const dockIdleRef = useRef(null);
+
+  useEffect(() => {
+    const timer = createDockIdleTimer({ timeoutMs: dockHideMs, onChange: setDockHidden });
+    dockIdleRef.current = timer;
+    timer.setSuspended(showAdminPanelRef.current);
+    return () => {
+      timer.dispose();
+      dockIdleRef.current = null;
+      setDockHidden(false);
+    };
+  }, [dockHideMs]);
+
+  useEffect(() => {
+    dockIdleRef.current?.setSuspended(showAdminPanel);
+  }, [showAdminPanel]);
+
+  // One set of window listeners serves every idle feature: the screensaver
+  // and the dock. A kiosk should not carry two sets of mousemove handlers.
+  const listenForActivity = wantsActivityListeners({
+    isMobile,
+    screensaverEnabled: screensaverSettings.enabled,
+    dockHideMs,
+  });
+
+  useEffect(() => {
+    if (!listenForActivity) return undefined;
+
+    const handleActivity = () => {
+      dockIdleRef.current?.poke();
+      if (!screensaverSettingsRef.current.enabled || screensaverActiveRef.current) return;
+      lastActivityRef.current = Date.now();
+      startInactivityTimer();
+    };
+
+    ACTIVITY_EVENTS.forEach((event) => {
+      window.addEventListener(event, handleActivity, { passive: true });
+    });
+    return () => {
+      ACTIVITY_EVENTS.forEach((event) => {
+        window.removeEventListener(event, handleActivity);
+      });
+    };
+  }, [listenForActivity, startInactivityTimer]);
+
   useEffect(() => {
     // The screensaver is a kiosk ambient feature — phones lock themselves, so
     // on mobile the inactivity timers never start (issue #118).
@@ -948,27 +1003,12 @@ const App = () => {
       if (inactivityTimerRef.current) {
         clearTimeout(inactivityTimerRef.current);
       }
-      return;
+      return undefined;
     }
-
-    const handleActivity = () => {
-      if (screensaverActiveRef.current) return;
-      lastActivityRef.current = Date.now();
-      startInactivityTimer();
-    };
-
-    const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'];
-
-    events.forEach(event => {
-      window.addEventListener(event, handleActivity, { passive: true });
-    });
 
     startInactivityTimer();
 
     return () => {
-      events.forEach(event => {
-        window.removeEventListener(event, handleActivity);
-      });
       if (inactivityTimerRef.current) {
         clearTimeout(inactivityTimerRef.current);
       }
@@ -1498,6 +1538,7 @@ const App = () => {
         onToggleLock={toggleWidgetsLock}
         onOpenSettings={toggleAdminPanel}
         onRefresh={handlePageRefresh}
+        hidden={dockHidden}
         theme={displayTheme}
         themeMode={themeMode}
         screensaverCountdown={
