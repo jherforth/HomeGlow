@@ -19,6 +19,27 @@ const CLIENT_ID_KEY = 'GOOGLE_CLIENT_ID';
 const CLIENT_SECRET_KEY = 'GOOGLE_CLIENT_SECRET_ENC';
 const REDIRECT_URI_OVERRIDE_KEY = 'GOOGLE_REDIRECT_URI_OVERRIDE';
 
+// How long a call to Google may take. Every Google API call waits on a token
+// refresh when the token has expired, so one call that never answers would
+// otherwise hold every Google widget with it. A download of a picked photo or
+// video is bigger and gets longer. Tests shorten these.
+const timeouts = {
+    requestMs: 20 * 1000,
+    downloadMs: 2 * 60 * 1000,
+};
+
+// fetch, given up after `ms`. The limit covers reading the body too.
+async function googleRequest(url, init = {}, ms = module.exports.timeouts.requestMs) {
+    try {
+        return await fetch(url, { ...init, signal: AbortSignal.timeout(ms) });
+    } catch (err) {
+        if (err.name === 'TimeoutError') {
+            throw new Error(`Google did not answer within ${Math.round(ms / 1000)} seconds`);
+        }
+        throw err;
+    }
+}
+
 function getSetting(db, key) {
     const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
     return row ? row.value : null;
@@ -131,7 +152,7 @@ async function exchangeCodeForTokens(db, { code, redirectUri }) {
         grant_type: 'authorization_code',
     });
 
-    const res = await fetch(TOKEN_ENDPOINT, {
+    const res = await googleRequest(TOKEN_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: body.toString(),
@@ -145,7 +166,7 @@ async function exchangeCodeForTokens(db, { code, redirectUri }) {
 }
 
 async function fetchUserInfo(accessToken) {
-    const res = await fetch(USERINFO_ENDPOINT, {
+    const res = await googleRequest(USERINFO_ENDPOINT, {
         headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (!res.ok) {
@@ -207,7 +228,7 @@ async function refreshAccessToken(db, accountId) {
         grant_type: 'refresh_token',
     });
 
-    const res = await fetch(TOKEN_ENDPOINT, {
+    const res = await googleRequest(TOKEN_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: body.toString(),
@@ -247,7 +268,7 @@ async function revokeAndDisconnect(db, accountId) {
     }
     for (const token of tokens) {
         try {
-            await fetch(`${REVOKE_ENDPOINT}?token=${encodeURIComponent(token)}`, { method: 'POST' });
+            await googleRequest(`${REVOKE_ENDPOINT}?token=${encodeURIComponent(token)}`, { method: 'POST' });
         } catch (err) {
             console.warn('Failed to revoke Google token:', err.message);
         }
@@ -271,7 +292,7 @@ function createGoogleFetch(apiBase, serviceLabel) {
             init.headers['Content-Type'] = 'application/json';
             init.body = JSON.stringify(body);
         }
-        const res = await fetch(url, init);
+        const res = await googleRequest(url, init);
         if (res.status === 204) return null;
         const text = await res.text();
         let parsed = null;
@@ -291,6 +312,8 @@ function createGoogleFetch(apiBase, serviceLabel) {
 
 module.exports = {
     GOOGLE_SCOPES,
+    timeouts,
+    googleRequest,
     getOAuthStatus,
     saveOAuthConfig,
     clearOAuthSecret,
