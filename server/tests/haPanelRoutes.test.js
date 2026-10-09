@@ -9,6 +9,10 @@ const path = require('node:path');
 const { freePort } = require('./freePort');
 const { startFakeHomeAssistant } = require('./helpers/fakeHomeAssistant');
 
+// Areas and live changes come over Home Assistant's WebSocket, which needs
+// Node's built-in client (Node 22 and later; the Docker image runs 24).
+const needsWebSocket = typeof globalThis.WebSocket === 'function' ? {} : { skip: 'needs Node 22 or later (built-in WebSocket)' };
+
 const serverDir = path.resolve(__dirname, '..');
 const tmpDir = path.resolve(__dirname, '.tmp');
 const testDbPath = path.join(tmpDir, `ha-panels-${process.pid}-${Date.now()}.db`);
@@ -89,7 +93,7 @@ test.after(async () => {
 
 let panel;
 
-test('the builder lists what can go on a panel, with areas, leaving hidden entities out', async () => {
+test('the builder lists what can go on a panel, with areas, leaving hidden entities out', needsWebSocket, async () => {
   const { status, body } = await api('/api/ha-panels/entities');
   assert.equal(status, 200, JSON.stringify(body));
   const ids = body.entities.map((entity) => entity.entity_id);
@@ -281,7 +285,7 @@ test('a hand-written plugin gets the same access through its manifest', async ()
   assert.equal((await fetch(`${baseUrl}/api/widgets/upload`, { method: 'POST', body: bad })).status, 400);
 });
 
-test('a change in the home reaches the panel through the live link', async () => {
+test('a change in the home reaches the panel through the live link', needsWebSocket, async () => {
   const created = await post('/api/ha-panels', { recipe: { name: 'Live', tiles: [{ id: 'a', entities: ['switch.coffee'] }] } });
   assert.equal(created.status, 200);
   await api('/api/plugin/v1/ha/ha-live/state');

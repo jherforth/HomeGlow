@@ -5,6 +5,11 @@ const assert = require('node:assert/strict');
 const { HaLive, expandCompressed, websocketUrl } = require('../services/haLive');
 const { startFakeHomeAssistant } = require('./helpers/fakeHomeAssistant');
 
+// The live link uses Node's built-in WebSocket client (Node 22 and later; the
+// Docker image runs 24). Without one HomeGlow falls back to REST, which the
+// REST tests below cover on any version.
+const needsWebSocket = typeof globalThis.WebSocket === 'function' ? {} : { skip: 'needs Node 22 or later (built-in WebSocket)' };
+
 // A stand-in for services/homeAssistant pointed at the fake: the same calls
 // the real one makes, without the database or encryption.
 function haFor(fake, token = fake.token) {
@@ -36,7 +41,7 @@ const waitFor = async (check, ms = 3000) => {
   return false;
 };
 
-test('subscribes over the WebSocket and answers from its live copy', async () => {
+test('subscribes over the WebSocket and answers from its live copy', needsWebSocket, async () => {
   const fake = await startFakeHomeAssistant();
   const changes = [];
   const live = new HaLive({ db: {}, ha: haFor(fake), decryptToken: (t) => t, onChange: (ids) => changes.push(...ids) });
@@ -105,7 +110,7 @@ test('a service call updates the copy at once from Home Assistant\'s reply', asy
   }
 });
 
-test('a rejected token is reported, and states still come over REST when they can', async () => {
+test('a rejected token is reported, and states still come over REST when they can', needsWebSocket, async () => {
   const fake = await startFakeHomeAssistant();
   const live = new HaLive({ db: {}, ha: haFor(fake, 'wrong'), decryptToken: (t) => t });
   try {
@@ -119,7 +124,7 @@ test('a rejected token is reported, and states still come over REST when they ca
   }
 });
 
-test('reconnects after the link drops', async () => {
+test('reconnects after the link drops', needsWebSocket, async () => {
   const fake = await startFakeHomeAssistant();
   const live = new HaLive({ db: {}, ha: haFor(fake), decryptToken: (t) => t });
   try {
@@ -134,7 +139,7 @@ test('reconnects after the link drops', async () => {
   }
 });
 
-test('reads the registries on a short connection of its own', async () => {
+test('reads the registries on a short connection of its own', needsWebSocket, async () => {
   const fake = await startFakeHomeAssistant();
   const live = new HaLive({ db: {}, ha: haFor(fake), decryptToken: (t) => t });
   try {
