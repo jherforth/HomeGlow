@@ -2082,6 +2082,84 @@ async function applySchemaMigrations(currentSchemaId) {
   }
 }
 
+// Sticky schedules (until-completed, once-completed) are never shown on the
+// dashboard themselves: on a day one fires it gets a visible one-time child,
+// and that is what appears and is completed. This creates today's child for
+// each sticky parent that fires on `today` and has no open child yet, and
+// returns the children it created.
+//
+// The nightly job runs it for every schedule. Creating or editing a schedule
+// runs it for that one (`scheduleIds`), so a chore set up during the day
+// appears at once rather than at midnight, or, for one that fires only on
+// some days, not until the next of them (issue #256). The "no open child"
+// test is what keeps the two from making the same chore twice: a child stays
+// visible until the nightly cleanup, completed or not.
+function spawnStickyChildren(today, scheduleIds = null) {
+  if (Array.isArray(scheduleIds) && scheduleIds.length === 0) return [];
+  const onlyThese = Array.isArray(scheduleIds) ? `AND cs.id IN (${scheduleIds.map(() => '?').join(',')})` : '';
+  const stickyParentSchedules = db.prepare(`
+    SELECT cs.id, cs.chore_id, cs.user_id, cs.crontab, cs.duration, cs.interval,
+           cs.created_at, cs.due_date, cs.due_time, cs.sound_enabled, cs.sound, cs.reminder_interval_minutes
+    FROM chore_schedules cs
+    WHERE cs.crontab IS NOT NULL
+      AND cs.duration IN ('until-completed', 'once-completed')
+      AND cs.visible = 1
+      ${onlyThese}
+      AND NOT EXISTS (
+        SELECT 1 FROM chore_schedules child
+        WHERE child.crontab IS NULL
+          AND child.visible = 1
+          AND (
+            child.parent_schedule_id = cs.id
+            OR (
+              child.parent_schedule_id IS NULL
+              AND child.chore_id = cs.chore_id
+              AND (
+                (child.user_id = cs.user_id)
+                OR (child.user_id IS NULL AND cs.user_id IS NULL)
+              )
+            )
+          )
+      )
+  `).all(...(Array.isArray(scheduleIds) ? scheduleIds : []));
+
+  const created = [];
+  for (const schedule of stickyParentSchedules) {
+    let firesToday;
+    try {
+      firesToday = cronFiresOnDate(schedule.crontab, today);
+    } catch (parseError) {
+      console.warn(`Skipping sticky schedule ${schedule.id} due to invalid crontab: ${schedule.crontab}`);
+      continue;
+    }
+    if (!firesToday) continue;
+
+    const dueDateOffset = calculateDateOffsetDays(schedule.created_at, schedule.due_date);
+    const childDueDate = dueDateOffset === null
+      ? (schedule.due_date || null)
+      : addDaysToDateOnly(today, dueDateOffset);
+
+    created.push(db.prepare(`
+      INSERT INTO chore_schedules (
+        chore_id, user_id, crontab, duration, visible, parent_schedule_id,
+        due_date, due_time, sound_enabled, sound, reminder_interval_minutes
+      )
+      VALUES (?, ?, NULL, 'day-of', 1, ?, ?, ?, ?, ?, ?)
+      RETURNING *
+    `).get(
+      schedule.chore_id,
+      schedule.user_id,
+      schedule.id,
+      childDueDate,
+      schedule.due_time || null,
+      schedule.sound_enabled ? 1 : 0,
+      schedule.sound || null,
+      schedule.reminder_interval_minutes || null
+    ));
+  }
+  return created;
+}
+
 async function dailyBackgroundProcessing() {
   try {
     console.log('=== Starting daily background processing ===');
@@ -2211,72 +2289,11 @@ async function dailyBackgroundProcessing() {
     }
 
 
-    // Handle sticky schedules: create one-time children for until-completed and once-completed parents that trigger today.
-    const stickyParentSchedules = db.prepare(`
-      SELECT cs.id, cs.chore_id, cs.user_id, cs.crontab, cs.duration, cs.interval,
-             cs.created_at, cs.due_date, cs.due_time, cs.sound_enabled, cs.sound, cs.reminder_interval_minutes
-      FROM chore_schedules cs
-      WHERE cs.crontab IS NOT NULL
-        AND cs.duration IN ('until-completed', 'once-completed')
-        AND cs.visible = 1
-        AND NOT EXISTS (
-          SELECT 1 FROM chore_schedules child
-          WHERE child.crontab IS NULL
-            AND child.visible = 1
-            AND (
-              child.parent_schedule_id = cs.id
-              OR (
-                child.parent_schedule_id IS NULL
-                AND child.chore_id = cs.chore_id
-                AND (
-                  (child.user_id = cs.user_id)
-                  OR (child.user_id IS NULL AND cs.user_id IS NULL)
-                )
-              )
-            )
-        )
-    `).all();
-    console.log(`Found ${stickyParentSchedules.length} sticky schedules to check`);
-
-    let stickySchedulesCreated = 0;
-    const triggeredSchedules = [];
-    for (const schedule of stickyParentSchedules) {
-      let firesToday;
-      try {
-        firesToday = cronFiresOnDate(schedule.crontab, today);
-      } catch (parseError) {
-        console.warn(`Skipping sticky schedule ${schedule.id} due to invalid crontab: ${schedule.crontab}`);
-        continue;
-      }
-
-      if (firesToday) {
-        const dueDateOffset = calculateDateOffsetDays(schedule.created_at, schedule.due_date);
-        const childDueDate = dueDateOffset === null
-          ? (schedule.due_date || null)
-          : addDaysToDateOnly(today, dueDateOffset);
-
-        const scheduleResult = db.prepare(`
-          INSERT INTO chore_schedules (
-            chore_id, user_id, crontab, duration, visible, parent_schedule_id,
-            due_date, due_time, sound_enabled, sound, reminder_interval_minutes
-          )
-          VALUES (?, ?, NULL, 'day-of', 1, ?, ?, ?, ?, ?, ?)
-          RETURNING *
-        `).get(
-          schedule.chore_id,
-          schedule.user_id,
-          schedule.id,
-          childDueDate,
-          schedule.due_time || null,
-          schedule.sound_enabled ? 1 : 0,
-          schedule.sound || null,
-          schedule.reminder_interval_minutes || null
-        );
-
-        triggeredSchedules.push(scheduleResult);
-        stickySchedulesCreated++;
-      }
-    }
+    // Sticky schedules: today's one-time child for each until-completed and
+    // once-completed parent that fires today and has none open yet.
+    const triggeredSchedules = spawnStickyChildren(today);
+    console.log(`Created ${triggeredSchedules.length} sticky chore(s) for today`);
+    const stickySchedulesCreated = triggeredSchedules.length;
     results = {
       ...results,
       triggeredSchedulesCount: stickySchedulesCreated,
@@ -2980,6 +2997,8 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
       snoozedUntilResult.value
     ).lastInsertRowid));
     const ids = insertAll(targets.userIds);
+    // A sticky schedule that fires today shows today, not from midnight.
+    spawnStickyChildren(getTodayLocalDateString(), ids.map(Number));
     return targets.batch ? { id: ids[0], ids, success: true } : { id: ids[0], success: true };
   } catch (error) {
     console.error('Error adding schedule:', error);
@@ -3169,6 +3188,13 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
       if (assigneeId) {
         awardDailyRegularBonusIfDue(assigneeId, getTodayLocalDateString());
       }
+    }
+
+    // Made sticky, given a new timing, or shown again: if it now fires
+    // today, today's chore appears at once (issue #256). An open child
+    // already there is left as it is.
+    if (crontab !== undefined || duration !== undefined || visible !== undefined) {
+      spawnStickyChildren(getTodayLocalDateString(), [Number(id)]);
     }
 
     return { success: true };
@@ -6290,7 +6316,12 @@ fastify.post('/api/photo-sources/:sourceId/uploaded', async (request, reply) => 
     const uploadDir = path.join(__dirname, 'uploads', 'homeglow-photos', String(sourceId));
     await fs.mkdir(uploadDir, { recursive: true });
 
-    const parts = request.parts();
+    // A photo over the 25 MB limit arrives cut short (`truncated`) and is
+    // reported as failed, and the rest are read on. Left to throw, the reader
+    // raises the limit as soon as it parses that far, which can be while an
+    // earlier photo is still being saved: the error then comes out of the loop
+    // before the large photo is reached, and the whole upload failed (#253).
+    const parts = request.parts({ throwFileSizeLimit: false });
     for await (const part of parts) {
       if (part.type !== 'file') continue;
       if (!part.mimetype || !part.mimetype.startsWith('image/')) {
@@ -6304,28 +6335,22 @@ fastify.post('/api/photo-sources/:sourceId/uploaded', async (request, reply) => 
         const filename = `${safeBase}${ext.toLowerCase()}`;
         const filePath = path.join(uploadDir, filename);
         const buffer = await part.toBuffer();
+        if (part.file.truncated) {
+          failed.push({ name: part.filename, reason: 'Larger than 25 MB' });
+          continue;
+        }
         await fs.writeFile(filePath, buffer);
         const info = db.prepare(
           `INSERT INTO homeglow_photos (source_id, filename, original_name, mime_type, size) VALUES (?, ?, ?, ?, ?)`
         ).run(sourceId, filename, part.filename || null, part.mimetype, buffer.length);
         added.push({ id: info.lastInsertRowid, filename, original_name: part.filename });
       } catch (err) {
-        if (err.code === 'FST_REQ_FILE_TOO_LARGE') {
-          failed.push({ name: part.filename, reason: 'Larger than 25 MB' });
-          continue;
-        }
         console.error('Upload failure for part:', err);
         failed.push({ name: part.filename, reason: err.message });
       }
     }
     return { success: true, added: added.length, failed: failed.length, items: added, errors: failed };
   } catch (error) {
-    // The multipart reader raises a photo over the size limit again once the
-    // upload has been read. That photo is already counted as failed and the
-    // others are saved, so report them rather than failing the whole upload.
-    if (error.code === 'FST_REQ_FILE_TOO_LARGE' && failed.length > 0) {
-      return { success: true, added: added.length, failed: failed.length, items: added, errors: failed };
-    }
     console.error('Error uploading photos:', error);
     reply.status(500).send({ error: 'Failed to upload photos' });
   }

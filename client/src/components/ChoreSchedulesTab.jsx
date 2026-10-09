@@ -418,7 +418,9 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
 
   const handleSaveSchedule = async () => {
     const cron = computeCrontab(scheduleForm);
-    const err = scheduleForm.isOneTime ? null : validateCrontab(cron);
+    // A repeating chore needs a schedule: an empty one would be saved as a
+    // one-time chore, without a word (no days ticked, an empty custom field).
+    const err = scheduleForm.isOneTime ? null : (cron ? validateCrontab(cron) : t('chores:schedules.crontabRequired'));
     if (err) { setCrontabError(err); return; }
 
     setSavingSchedule(true);
@@ -670,6 +672,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
     || !scheduleForm.chore_id
     || (!scheduleForm.isOneTime && !!crontabError)
     || (!scheduleForm.isOneTime && scheduleForm.scheduleMode === 'custom' && !scheduleForm.customCrontab.trim())
+    || (!scheduleForm.isOneTime && scheduleForm.scheduleMode === 'days' && scheduleForm.selectedDays.length === 0)
     || isOnceCompletedMissingInterval
     || hasInvalidDueDays;
 
@@ -1389,7 +1392,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
                     onChange={(e) => updateScheduleForm({ customCrontab: e.target.value })}
                     placeholder="0 0 * * 1"
                     error={!!crontabError}
-                    helperText={crontabError || 'Format: minute hour day-of-month month day-of-week'}
+                    helperText={crontabError || (scheduleForm.customCrontab.trim() ? 'Format: minute hour day-of-month month day-of-week' : t('chores:schedules.crontabRequired'))}
                     InputProps={{ sx: { fontFamily: 'var(--hg-font-mono)' } }}
                   />
                 )}

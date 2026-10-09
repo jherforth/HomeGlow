@@ -217,6 +217,7 @@
     "selectDays": "Elige los días en los que debe aparecer esta tarea:",
     "selectAtLeastOneDay": "Elige al menos un día o usa el interruptor \"Tarea única\" de arriba.",
     "crontabExpression": "Expresión crontab",
+    "crontabRequired": "Escribe una expresión crontab o elige una predefinida.",
     "nextOccurrenceIs": "Próxima vez: {{when}}",
     "appearsOnce": "Esta tarea aparecerá una vez y se ocultará al completarse.",
     "dueDateOptional": "Fecha límite (opcional)",
