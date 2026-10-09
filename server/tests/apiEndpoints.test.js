@@ -69,8 +69,8 @@ async function api(pathname, options = {}) {
 }
 
 test.before(async () => {
-    await usePort();
     fs.mkdirSync(tmpDir, { recursive: true });
+    await usePort();
 
     serverProcess = spawn('node', ['index.js'], {
         cwd: serverDir,
@@ -1066,6 +1066,87 @@ test('testing an Immich source without an API key says so', async () => {
     // Reported without dialling the server, so an unreachable host cannot mask
     // the real problem.
     assert.doesNotMatch(body.error, /refused|timed out/i);
+});
+
+test('DELETE /api/chores/bulk deletes multiple chores and their schedules', async () => {
+    // Create two chores with schedules
+    const chore1 = await api('/api/chores', {
+        method: 'POST',
+        body: JSON.stringify({ title: `Bulk Delete Test 1 ${Date.now()}` }),
+    });
+    assert.equal(chore1.status, 200);
+    const chore2 = await api('/api/chores', {
+        method: 'POST',
+        body: JSON.stringify({ title: `Bulk Delete Test 2 ${Date.now()}` }),
+    });
+    assert.equal(chore2.status, 200);
+
+    const id1 = chore1.body.id;
+    const id2 = chore2.body.id;
+
+    // Add a schedule to each
+    await api('/api/chore-schedules', {
+        method: 'POST',
+        body: JSON.stringify({ chore_id: id1, crontab: '0 0 * * *' }),
+    });
+    await api('/api/chore-schedules', {
+        method: 'POST',
+        body: JSON.stringify({ chore_id: id2, crontab: '0 0 * * *' }),
+    });
+
+    // Bulk delete
+    const { status, body } = await api('/api/chores/bulk', {
+        method: 'DELETE',
+        body: JSON.stringify({ ids: [id1, id2] }),
+    });
+    assert.equal(status, 200);
+    assert.equal(body.deleted, 2);
+
+    // Verify chores are gone
+    const check1 = await api(`/api/chores/${id1}`);
+    assert.equal(check1.status, 404);
+    const check2 = await api(`/api/chores/${id2}`);
+    assert.equal(check2.status, 404);
+});
+
+test('DELETE /api/chores/bulk rejects empty or invalid input', async () => {
+    const empty = await api('/api/chores/bulk', {
+        method: 'DELETE',
+        body: JSON.stringify({ ids: [] }),
+    });
+    assert.equal(empty.status, 400);
+
+    const missing = await api('/api/chores/bulk', {
+        method: 'DELETE',
+        body: JSON.stringify({}),
+    });
+    assert.equal(missing.status, 400);
+
+    const invalid = await api('/api/chores/bulk', {
+        method: 'DELETE',
+        body: JSON.stringify({ ids: ['abc', -1] }),
+    });
+    assert.equal(invalid.status, 400);
+});
+
+test('DELETE /api/chores/bulk skips non-existent IDs and deduplicates', async () => {
+    const chore = await api('/api/chores', {
+        method: 'POST',
+        body: JSON.stringify({ title: `Bulk Delete Skip Test ${Date.now()}` }),
+    });
+    assert.equal(chore.status, 200);
+    const id = chore.body.id;
+
+    // Include a non-existent ID and a duplicate
+    const { status, body } = await api('/api/chores/bulk', {
+        method: 'DELETE',
+        body: JSON.stringify({ ids: [id, id, 999999] }),
+    });
+    assert.equal(status, 200);
+    assert.equal(body.deleted, 1);
+
+    const check = await api(`/api/chores/${id}`);
+    assert.equal(check.status, 404);
 });
 
 test('history rows carry the person and the chore, and keep the title once the schedule is gone', async () => {
