@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home Assistant panel</title>
+<!-- HA_PANEL_CONFIG -->
+<script src="/plugin-sdk/v1.js"></script>
+<style>
+/* Home Assistant panel (issue #252): one template draws every panel from its
+   recipe. Colors, radii, type and levels come from the theme's role tokens
+   (the SDK writes them onto :root), each with a fallback. */
+:root {
+  --acc: var(--accent, #3a7cc4);
+  --ink: var(--text, #1e2b3a);
+  --ink-2: var(--text-secondary, #5a6b7d);
+  --on-bg: var(--hg-button-bg, var(--acc));
+  --on-ink: var(--hg-button-text, #ffffff);
+  --level: var(--hg-meter-fill, var(--acc));
+  --level-track: var(--hg-meter-track, rgba(127, 127, 127, 0.18));
+  --tile-bg: color-mix(in srgb, var(--ink) 6%, transparent);
+  --tile-radius: var(--hg-radius-md, 14px);
+  --warn: var(--warning, #c9822b);
+  --err: var(--hg-error, #c43d3d);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: transparent !important; }
+body {
+  color: var(--ink);
+  font-family: var(--hg-font-body, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif);
+  -webkit-font-smoothing: antialiased;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  overflow: hidden;
+}
+#app { height: 100%; display: flex; flex-direction: column; gap: 8px; padding: clamp(6px, 2vmin, 12px); overflow: auto; }
+.banner { margin: 0; padding: 8px 10px; border-radius: 10px; font-size: 0.85rem; font-weight: 600; line-height: 1.35;
+  background: color-mix(in srgb, var(--warn) 16%, transparent); }
+.banner.error { background: color-mix(in srgb, var(--err) 14%, transparent); }
+.grid { display: grid; gap: clamp(6px, 1.8vmin, 10px); grid-auto-flow: dense;
+  grid-template-columns: repeat(var(--cols, auto-fill), minmax(var(--min, clamp(86px, 24vmin, 150px)), 1fr));
+  grid-auto-rows: minmax(clamp(78px, 22vmin, 140px), auto); }
+.grid.fixed { --min: 0px; }
+.offline .tile { opacity: 0.55; }
+
+.tile { position: relative; overflow: hidden; min-width: 0; min-height: 0; border: 0; margin: 0; font: inherit; color: inherit;
+  border-radius: var(--tile-radius); background: var(--tile-bg); padding: clamp(8px, 2.4vmin, 14px); text-align: left;
+  display: flex; flex-direction: column; justify-content: space-between; gap: 4px;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: background 0.2s, color 0.2s, transform 0.1s; }
+.tile.w2 { grid-column: span 2; }
+.tile.h2 { grid-row: span 2; }
+.tile.act { cursor: pointer; }
+.tile.act:active { transform: scale(0.98); }
+.tile:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; }
+.tile.on { background: var(--on-bg); color: var(--on-ink); }
+.tile.on .sub { color: inherit; opacity: 0.85; }
+.tile.missing { opacity: 0.5; }
+.tile.flash { background: var(--on-bg); color: var(--on-ink); }
+.tile.slide { touch-action: none; }
+.top { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; position: relative; z-index: 2; }
+.ico { width: clamp(22px, 7vmin, 34px); height: clamp(22px, 7vmin, 34px); flex: none; display: grid; place-items: center; font-size: clamp(18px, 6vmin, 28px); line-height: 1; }
+.ico svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.tile:not(.on) .ico svg { stroke: var(--acc); }
+.name { font-weight: 650; font-size: clamp(0.78rem, 3.4vmin, 1rem); line-height: 1.2; overflow: hidden; text-overflow: ellipsis;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; position: relative; z-index: 2; }
+.sub { font-size: clamp(0.7rem, 2.8vmin, 0.85rem); color: var(--ink-2); position: relative; z-index: 2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.big { font-size: clamp(1.1rem, 7vmin, 2rem); font-weight: 700; line-height: 1.05; position: relative; z-index: 2; }
+.badge { font-size: 0.68rem; font-weight: 700; padding: 0.2em 0.6em; border-radius: 999px; background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--ink); }
+
+/* Levels: brightness and fan speed fill from the bottom, a shade's closed
+   part from the top. Drawn in the theme's meter color. */
+.fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: var(--level); opacity: 0.85; transition: height 0.2s; z-index: 1; }
+.fill.down { top: 0; bottom: auto; }
+.tile.leveled { background: var(--tile-bg); color: var(--ink); }
+.tile.leveled.on .sub { color: var(--ink-2); }
+
+.row { display: flex; gap: 6px; flex-wrap: wrap; position: relative; z-index: 2; }
+.btn { appearance: none; border: 0; font: inherit; font-weight: 650; font-size: clamp(0.72rem, 2.8vmin, 0.9rem); cursor: pointer;
+  min-height: 36px; min-width: 36px; padding: 0 0.8em; border-radius: var(--hg-button-radius, 999px);
+  background: color-mix(in srgb, var(--acc) 14%, transparent); color: inherit; }
+.btn:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; }
+.btn.primary { background: var(--on-bg); color: var(--on-ink); }
+.btn[disabled] { opacity: 0.45; cursor: default; }
+.halves { position: absolute; inset: 0; display: grid; grid-template-rows: 1fr 1fr; z-index: 3; }
+.halves button { appearance: none; border: 0; background: transparent; cursor: pointer; color: transparent; }
+.halves button:focus-visible { outline: 3px solid var(--acc); outline-offset: -3px; border-radius: var(--tile-radius); }
+.chev { position: absolute; left: 50%; transform: translateX(-50%); width: 18px; height: 18px; opacity: 0.6; z-index: 2; }
+.chev.up { top: 6px; } .chev.down { bottom: 6px; }
+input[type=range] { width: 100%; accent-color: var(--level); position: relative; z-index: 2; }
+.cam { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; border-radius: var(--tile-radius); }
+.tile.camera { padding: 0; justify-content: flex-end; }
+.tile.camera .name { padding: 6px 10px; background: linear-gradient(transparent, rgba(0,0,0,0.55)); color: #fff; }
+
+/* Press and hold: a ring fills while held. */
+.ring { position: absolute; right: 8px; top: 8px; width: 26px; height: 26px; z-index: 4; opacity: 0; transition: opacity 0.1s; }
+.ring circle { fill: none; stroke: var(--acc); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 69.1; stroke-dashoffset: 69.1; }
+.tile.on .ring circle { stroke: var(--on-ink); }
+.holding .ring { opacity: 1; }
+.holding .ring circle { transition: stroke-dashoffset var(--hold-ms, 650ms) linear; stroke-dashoffset: 0; }
+.hint { position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 5; font-size: 0.72rem; font-weight: 650; text-align: center;
+  padding: 4px 6px; border-radius: 8px; background: color-mix(in srgb, var(--ink) 80%, transparent); color: var(--background, #fff); }
+
+/* Small widgets: a compact list. */
+.list { display: flex; flex-direction: column; gap: 6px; }
+.list .tile { flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px; min-height: 48px; padding: 6px 10px; }
+.list .tile > div:not(.top):not(.fill):not(.halves):not(.hint) { flex: 1; min-width: 0; }
+.list .tile .row { flex: none; }
+.list .tile .top { align-items: center; }
+.list .tile .big { font-size: 1rem; }
+.list .tile .fill { left: 0; top: 0; bottom: 0; height: auto !important; width: var(--lvl, 0%); right: auto; }
+.list .tile .fill.down { width: var(--lvl, 0%); }
+
+/* Overlays: the PIN pad and option lists. */
+.overlay { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 10px;
+  background: color-mix(in srgb, var(--background, #000) 72%, transparent); }
+.sheet { width: min(320px, 100%); max-height: 100%; overflow: auto; border-radius: var(--hg-radius-lg, 18px); padding: 14px;
+  background: var(--surface, #fff); color: var(--ink); box-shadow: 0 10px 30px rgba(0,0,0,0.3); display: flex; flex-direction: column; gap: 10px; }
+.sheet h2 { margin: 0; font-size: 1rem; }
+.dots { display: flex; gap: 8px; justify-content: center; min-height: 14px; }
+.dots span { width: 12px; height: 12px; border-radius: 50%; background: var(--acc); }
+.keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.keys .btn { min-height: 48px; font-size: 1.1rem; }
+.err { color: var(--err); font-size: 0.85rem; font-weight: 600; text-align: center; min-height: 1.2em; }
+.opts { display: flex; flex-direction: column; gap: 6px; }
+.opts .btn { min-height: 44px; text-align: left; border-radius: 10px; }
+.opts .btn.current { background: var(--on-bg); color: var(--on-ink); }
+.empty { margin: auto; text-align: center; color: var(--ink-2); font-size: 0.9rem; }
+/* A short widget: a tighter PIN pad, so it fits. */
+@media (max-height: 460px) {
+  .overlay { padding: 4px; }
+  .sheet { padding: 10px; gap: 6px; }
+  .keys { gap: 5px; }
+  .keys .btn { min-height: 34px; font-size: 1rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+</style>
+</head>
+<body>
+<div id="app" aria-live="polite"></div>
+<script>
+(function () {
+  'use strict';
+
+  var config = window.__HA_PANEL__ || {};
+  var preview = !!config.preview;
+  var recipe = config.recipe || null;
+  var pluginId = config.pluginId || null;
+  var params = new URLSearchParams(location.search);
+  var device = params.get('device') || null;
+  var hidden = (params.get('hide') || '').split(',').filter(Boolean);
+  var viewOnlyDisplay = hidden.indexOf('operate') !== -1;
+  var lang = (params.get('lang') || navigator.language || 'en').slice(0, 2) === 'es' ? 'es' : 'en';
+
+  var POLL_MS = 2000;
+  var HOLD_MS = 650;
+
+  var STRINGS = {
+    en: {
+      on: 'On', off: 'Off', open: 'Open', closed: 'Closed', opening: 'Opening', closing: 'Closing', stopped: 'Stopped',
+      locked: 'Locked', unlocked: 'Unlocked', locking: 'Locking', unlocking: 'Unlocking', jammed: 'Jammed',
+      disarmed: 'Disarmed', armed_home: 'Armed (home)', armed_away: 'Armed (away)', armed_night: 'Armed (night)', armed_vacation: 'Armed (vacation)',
+      arming: 'Arming', pending: 'Pending', triggered: 'Triggered!',
+      armHome: 'Home', armAway: 'Away', disarm: 'Disarm', lock: 'Lock', unlock: 'Unlock',
+      playing: 'Playing', paused: 'Paused', idle: 'Idle', standby: 'Standby',
+      cleaning: 'Cleaning', docked: 'Docked', returning: 'Going home', error: 'Error',
+      start: 'Start', pause: 'Pause', dock: 'Home',
+      home: 'Home', not_home: 'Away', above_horizon: 'Sun up', below_horizon: 'Sun down',
+      unavailable: 'Unavailable', unknown: 'Unknown', missing: 'Not in Home Assistant',
+      detected: 'Detected', clear: 'Clear', wet: 'Wet', dry: 'Dry', low: 'Low', normal: 'Normal',
+      run: 'Tap to run', ran: 'Done', hold: 'Hold to confirm', holdKey: 'Press again to confirm',
+      target: 'Set to', now: 'Now', mode: 'Mode',
+      viewOnly: 'View only on this display',
+      notConnected: 'Home Assistant isn\'t connected. Set it up in Admin → System → Connections.',
+      unreachable: 'Home Assistant can\'t be reached right now.',
+      tokenRejected: 'Home Assistant rejected HomeGlow\'s access token. Check it in Admin → System → Connections.',
+      previewNoActions: 'Save the panel to try its controls.',
+      pinTitle: 'Enter the household PIN', pinWrong: 'That PIN is not right.', cancel: 'Cancel', ok: 'OK', clearKey: 'Clear',
+      failed: 'That didn\'t work', choose: 'Choose', empty: 'This panel has no tiles yet.', loading: 'Loading…',
+      camera: 'Camera', heat: 'Heat', cool: 'Cool', heat_cool: 'Auto', auto: 'Auto', dry_mode: 'Dry', fan_only: 'Fan', off_mode: 'Off'
+    },
+    es: {
+      on: 'Encendido', off: 'Apagado', open: 'Abierto', closed: 'Cerrado', opening: 'Abriendo', closing: 'Cerrando', stopped: 'Detenido',
+      locked: 'Cerrado con llave', unlocked: 'Abierto', locking: 'Cerrando', unlocking: 'Abriendo', jammed: 'Atascado',
+      disarmed: 'Desactivada', armed_home: 'Activada (en casa)', armed_away: 'Activada (fuera)', armed_night: 'Activada (noche)', armed_vacation: 'Activada (vacaciones)',
+      arming: 'Activando', pending: 'Pendiente', triggered: '¡Disparada!',
+      armHome: 'En casa', armAway: 'Fuera', disarm: 'Desactivar', lock: 'Cerrar', unlock: 'Abrir',
+      playing: 'Reproduciendo', paused: 'En pausa', idle: 'Inactivo', standby: 'En espera',
+      cleaning: 'Limpiando', docked: 'En la base', returning: 'Volviendo', error: 'Error',
+      start: 'Empezar', pause: 'Pausa', dock: 'A la base',
+      home: 'En casa', not_home: 'Fuera', above_horizon: 'Sol arriba', below_horizon: 'Sol abajo',
+      unavailable: 'No disponible', unknown: 'Desconocido', missing: 'No está en Home Assistant',
+      detected: 'Detectado', clear: 'Despejado', wet: 'Mojado', dry: 'Seco', low: 'Bajo', normal: 'Normal',
+      run: 'Toca para ejecutar', ran: 'Hecho', hold: 'Mantén pulsado para confirmar', holdKey: 'Pulsa otra vez para confirmar',
+      target: 'Fijar en', now: 'Ahora', mode: 'Modo',
+      viewOnly: 'Solo lectura en esta pantalla',
+      notConnected: 'Home Assistant no está conectado. Configúralo en Administración → Sistema → Conexiones.',
+      unreachable: 'No se puede contactar con Home Assistant ahora.',
+      tokenRejected: 'Home Assistant rechazó el token de HomeGlow. Revísalo en Administración → Sistema → Conexiones.',
+      previewNoActions: 'Guarda el panel para probar sus controles.',
+      pinTitle: 'Escribe el PIN de la casa', pinWrong: 'Ese PIN no es correcto.', cancel: 'Cancelar', ok: 'Aceptar', clearKey: 'Borrar',
+      failed: 'No ha funcionado', choose: 'Elegir', empty: 'Este panel aún no tiene mosaicos.', loading: 'Cargando…',
+      camera: 'Cámara', heat: 'Calor', cool: 'Frío', heat_cool: 'Auto', auto: 'Auto', dry_mode: 'Seco', fan_only: 'Ventilador', off_mode: 'Apagado'
+    }
+  };
+  var T = STRINGS[lang];
+
+  // Icons, drawn as strokes in the theme's accent. Names match ICON_NAMES in
+  // server/services/haPanels.js.
+  var ICONS = {
+    bulb: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/>',
+    lamp: '<path d="M8 3h8l3 8H5zM12 11v8M8 21h8"/>',
+    ceiling: '<path d="M12 3v4M6 13a6 6 0 0 1 12 0zM10 16a2 2 0 0 0 4 0"/>',
+    strip: '<path d="M3 15c3-6 6 6 9 0s6 6 9 0"/><circle cx="6" cy="12" r=".6"/><circle cx="12" cy="15" r=".6"/><circle cx="18" cy="12" r=".6"/>',
+    plug: '<path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"/>',
+    power: '<path d="M12 3v8M7 6.5a7 7 0 1 0 10 0"/>',
+    fan: '<circle cx="12" cy="12" r="1.6"/><path d="M12 10.4C12 6 14 3.5 16 4.5s1 5-4 5.9M13.6 12c4.4 0 6.9 2 5.9 4s-5 1-5.9-4M12 13.6c0 4.4-2 6.9-4 5.9s-1-5 4-5.9M10.4 12C6 12 3.5 10 4.5 8s5-1 5.9 4"/>',
+    tv: '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/>',
+    speaker: '<rect x="6" y="3" width="12" height="18" rx="2"/><circle cx="12" cy="14" r="3"/><circle cx="12" cy="7" r=".8"/>',
+    music: '<path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
+    shade: '<path d="M4 3h16M5 3v11h14V3M12 14v4"/><circle cx="12" cy="19.5" r="1.5"/>',
+    blinds: '<path d="M4 3h16M5 3v14h14V3M5 7h14M5 11h14M5 15h14"/>',
+    curtain: '<path d="M3 3h18M5 3c0 6 1 12 3 18M19 3c0 6-1 12-3 18M8 3c0 6 1 10 2 14M16 3c0 6-1 10-2 14"/>',
+    garage: '<path d="M3 10l9-6 9 6v10H3zM6 20v-8h12v8M6 15h12M6 18h12"/>',
+    gate: '<path d="M3 21V9M21 21V9M3 12h18M3 17h18M7 12v5M11 12v5M15 12v5M19 12v5"/>',
+    door: '<path d="M6 21V3h12v18M4 21h16"/><circle cx="15" cy="12" r=".8"/>',
+    window: '<rect x="4" y="3" width="16" height="18" rx="1"/><path d="M12 3v18M4 12h16"/>',
+    lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+    shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>',
+    thermometer: '<path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0z"/>',
+    snowflake: '<path d="M12 2v20M4.2 7l15.6 10M4.2 17L19.8 7M9 4l3 2 3-2M9 20l3-2 3 2"/>',
+    fire: '<path d="M12 21c-4 0-7-3-7-7 0-4 3-6 4-10 2 2 3 4 3 6 1-1 2-2 2-4 3 3 5 5 5 8 0 4-3 7-7 7z"/>',
+    droplet: '<path d="M12 3s-6 7-6 11a6 6 0 0 0 12 0c0-4-6-11-6-11z"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+    moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
+    sparkles: '<path d="M12 3l1.8 4.7L18 9l-4.2 1.3L12 15l-1.8-4.7L6 9l4.2-1.3zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8zM5 15l.6 1.4L7 17l-1.4.6L5 19l-.6-1.4L3 17l1.4-.6z"/>',
+    home: '<path d="M3 11l9-8 9 8M5 9.5V21h14V9.5M10 21v-6h4v6"/>',
+    coffee: '<path d="M4 8h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5zM17 10h1.5a2.5 2.5 0 0 1 0 5H17M8 2v3M12 2v3"/>',
+    bed: '<path d="M3 18V6M3 13h18v5M21 18v-5a3 3 0 0 0-3-3h-7v3"/><circle cx="7" cy="10.5" r="1.5"/>',
+    sofa: '<path d="M5 11V8a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3M3 12a2 2 0 0 1 4 0v2h10v-2a2 2 0 0 1 4 0v5H3zM5 17v2M19 17v2"/>',
+    kitchen: '<path d="M6 3v8M4 3v4a2 2 0 0 0 4 0V3M6 11v10M17 3c-2 0-3 2-3 5s1 4 3 4v9"/>',
+    washer: '<rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="13" r="4.5"/><path d="M7 6h.01M10 6h.01"/>',
+    car: '<path d="M5 17h14M3 17v-4l2-5h14l2 5v4M7 17v2M17 17v2"/><circle cx="7.5" cy="13.5" r=".9"/><circle cx="16.5" cy="13.5" r=".9"/>',
+    tree: '<path d="M12 3l6 8h-3l4 6H5l4-6H6zM12 17v4"/>',
+    pool: '<path d="M3 17c2 1.3 4 1.3 6 0s4-1.3 6 0 4 1.3 6 0M3 21c2 1.3 4 1.3 6 0s4-1.3 6 0 4 1.3 6 0M8 14V5a2 2 0 0 1 4 0M16 14V5a2 2 0 0 0-4 0M8 9h8"/>',
+    camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
+    bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0"/>',
+    robot: '<circle cx="12" cy="13" r="8"/><circle cx="12" cy="13" r="3"/><path d="M12 5v2"/>',
+    gauge: '<path d="M4 17a8 8 0 1 1 16 0M12 13l4-4"/><circle cx="12" cy="13" r="1"/>',
+    battery: '<rect x="3" y="7" width="16" height="10" rx="2"/><path d="M21 11v2M6 10v4M9 10v4"/>'
+  };
+  var CHEVRON_UP = '<svg class="chev up" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var CHEVRON_DOWN = '<svg class="chev down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  // --- State ------------------------------------------------------------------
+
+  var states = {};          // entity_id -> { state, attributes, sensitive } | null
+  var controllable = null;  // entity ids this panel may operate (null: not known yet)
+  var unit = '°C';
+  var pinProtection = true;
+  var problem = null;       // { kind: 'notConnected' | 'unreachable' | 'token', message }
+  var loaded = false;
+  var pending = {};         // entity_id -> { until, patch } optimistic changes
+  var hints = {};           // tile id -> text shown briefly
+  var holdArmed = {};       // tile id -> time a keyboard confirm was armed
+
+  var esc = function (text) {
+    return String(text == null ? '' : text).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  };
+  var domainOf = function (id) { return String(id).split('.')[0]; };
+  var has = function (st, bit) { return ((Number(st && st.attributes && st.attributes.supported_features) || 0) & bit) === bit; };
+
+  function stateOf(id) {
+    var st = states[id];
+    var p = pending[id];
+    if (st && p && p.until > Date.now()) {
+      return { state: p.patch.state !== undefined ? p.patch.state : st.state, attributes: Object.assign({}, st.attributes, p.patch.attributes || {}), sensitive: st.sensitive };
+    }
+    return st;
+  }
+
+  function entitiesWanted() {
+    var ids = {};
+    (recipe && recipe.tiles || []).forEach(function (tile) {
+      (tile.entities || []).forEach(function (id) { ids[id] = true; });
+      if (tile.when && tile.when.entity) ids[tile.when.entity] = true;
+    });
+    return Object.keys(ids);
+  }
+
+  // --- Talking to HomeGlow --------------------------------------------------------
+
+  function getJson(url) {
+    return fetch(url, { cache: 'no-store' }).then(function (res) {
+      return res.text().then(function (text) {
+        var data = null;
+        try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
+        if (!res.ok) {
+          var error = new Error((data && data.error) || ('HTTP ' + res.status));
+          error.status = res.status;
+          error.data = data;
+          throw error;
+        }
+        return data;
+      });
+    });
+  }
+
+  function poll() {
+    if (document.hidden || !recipe) return Promise.resolve();
+    var url = preview
+      ? '/api/ha-panels/preview-state?entities=' + encodeURIComponent(entitiesWanted().join(','))
+      : '/api/plugin/v1/ha/' + encodeURIComponent(pluginId) + '/state';
+    return getJson(url).then(function (data) {
+      loaded = true;
+      var entities = (data && data.entities) || {};
+      Object.keys(entities).forEach(function (id) { states[id] = entities[id]; });
+      if (data && Array.isArray(data.control)) controllable = data.control;
+      if (data && data.unit) unit = data.unit;
+      if (data && typeof data.pinProtection === 'boolean') pinProtection = data.pinProtection;
+      problem = data && data.error
+        ? { kind: data.status === 401 ? 'token' : 'unreachable', message: data.error }
+        : null;
+      render();
+    }).catch(function (error) {
+      loaded = true;
+      problem = error.data && error.data.notConnected
+        ? { kind: 'notConnected' }
+        : { kind: error.status === 401 ? 'token' : 'unreachable', message: error.message };
+      render();
+    });
+  }
+
+  function act(tile, action, value, extra) {
+    if (preview) {
+      flashHint(tile, T.previewNoActions);
+      return;
+    }
+    var entities = tile.entities;
+    var body = { action: action, device: device };
+    if (entities.length > 1) body.entities = entities; else body.entity = entities[0];
+    if (value !== undefined) body.value = value;
+    if (extra && extra.pin) body.pin = extra.pin;
+    if (extra && extra.optimistic) {
+      entities.forEach(function (id) { pending[id] = { until: Date.now() + 4000, patch: extra.optimistic(id) }; });
+      render();
+    }
+    return fetch('/api/plugin/v1/ha/' + encodeURIComponent(pluginId) + '/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (data) {
+        if (res.status === 401 && data.needsPin) {
+          entities.forEach(function (id) { delete pending[id]; });
+          render();
+          askPin(extra && extra.pin ? T.pinWrong : null, function (pin) {
+            act(tile, action, value, Object.assign({}, extra, { pin: pin }));
+          });
+          return;
+        }
+        if (!res.ok) {
+          entities.forEach(function (id) { delete pending[id]; });
+          flashHint(tile, (data && data.error) || T.failed);
+          return;
+        }
+        Object.keys(data.entities || {}).forEach(function (id) { if (data.entities[id]) states[id] = data.entities[id]; });
+        render();
+      });
+    }).catch(function () {
+      entities.forEach(function (id) { delete pending[id]; });
+      flashHint(tile, T.unreachable);
+    });
+  }
+
+  function flashHint(tile, text) {
+    hints[tile.id] = text;
+    render();
+    setTimeout(function () {
+      if (hints[tile.id] === text) { delete hints[tile.id]; render(); }
+    }, 2600);
+  }
+
+  // --- What a tile shows ----------------------------------------------------------
+
+  var OPENABLE = ['door', 'garage_door', 'opening', 'window', 'lock'];
+  function binaryText(st) {
+    var dc = st.attributes.device_class;
+    var on = st.state === 'on';
+    if (OPENABLE.indexOf(dc) !== -1) return on ? T.open : T.closed;
+    if (['motion', 'occupancy', 'presence', 'smoke', 'gas', 'carbon_monoxide', 'sound', 'vibration', 'tamper', 'problem', 'safety'].indexOf(dc) !== -1) return on ? T.detected : T.clear;
+    if (dc === 'moisture') return on ? T.wet : T.dry;
+    if (dc === 'battery') return on ? T.low : T.normal;
+    return on ? T.on : T.off;
+  }
+
+  function stateText(id, st) {
+    if (!st) return T.missing;
+    if (st.state === 'unavailable' || st.state === 'unknown') return T[st.state];
+    var domain = domainOf(id);
+    var a = st.attributes || {};
+    if (domain === 'binary_sensor') return binaryText(st);
+    if (domain === 'sensor' || domain === 'input_number' || domain === 'number') {
+      var n = Number(st.state);
+      var shown = isFinite(n) && st.state !== '' ? String(Math.round(n * 10) / 10) : st.state;
+      return shown + (a.unit_of_measurement ? ' ' + a.unit_of_measurement : '');
+    }
+    if (domain === 'light' && st.state === 'on' && a.brightness != null) return Math.round(a.brightness / 2.55) + '%';
+    if (domain === 'fan' && st.state === 'on' && a.percentage != null) return a.percentage + '%';
+    if (domain === 'cover' && a.current_position != null && st.state !== 'opening' && st.state !== 'closing') {
+      return a.current_position === 0 ? T.closed : (a.current_position === 100 ? T.open : a.current_position + '%');
+    }
+    if (domain === 'media_player' && a.media_title) return a.media_title + (a.media_artist ? ' · ' + a.media_artist : '');
+    if (domain === 'climate') return (T[st.state === 'off' ? 'off_mode' : st.state === 'dry' ? 'dry_mode' : st.state] || st.state);
+    if (domain === 'weather') return (a.temperature != null ? a.temperature + (a.temperature_unit || '') + ' · ' : '') + st.state;
+    if (domain === 'vacuum' && a.battery_level != null) return (T[st.state] || st.state) + ' · ' + a.battery_level + '%';
+    if (domain === 'scene' || domain === 'script' || domain === 'button' || domain === 'input_button') return T.run;
+    return T[st.state] || st.state;
+  }
+
+  var COVER_ICONS = { garage: 'garage', gate: 'gate', door: 'door', window: 'window', blind: 'blinds', curtain: 'curtain', shutter: 'blinds', shade: 'shade' };
+  var SENSOR_ICONS = { temperature: 'thermometer', humidity: 'droplet', battery: 'battery', illuminance: 'sun', power: 'gauge', energy: 'gauge', moisture: 'droplet', door: 'door', window: 'window', garage_door: 'garage', motion: 'home', occupancy: 'home', smoke: 'fire', opening: 'door' };
+  function iconFor(tile, st) {
+    if (tile.icon) return ICONS[tile.icon] ? svg(ICONS[tile.icon]) : esc(tile.icon);
+    var id = tile.entities[0];
+    var domain = domainOf(id);
+    var dc = st && st.attributes && st.attributes.device_class;
+    var name = {
+      light: 'bulb', switch: dc === 'outlet' ? 'plug' : 'power', input_boolean: 'power', fan: 'fan',
+      cover: COVER_ICONS[dc] || 'shade', scene: 'sparkles', script: 'sparkles', button: 'power', input_button: 'power',
+      climate: 'thermometer', media_player: dc === 'tv' ? 'tv' : 'speaker', lock: 'lock', alarm_control_panel: 'shield',
+      vacuum: 'robot', input_select: 'gauge', select: 'gauge', input_number: 'gauge', number: 'gauge', camera: 'camera',
+      sensor: SENSOR_ICONS[dc] || 'gauge', binary_sensor: SENSOR_ICONS[dc] || 'bell', person: 'home', device_tracker: 'home', sun: 'sun', weather: 'sun'
+    }[domain] || 'gauge';
+    return svg(ICONS[name]);
+  }
+  function svg(paths) { return '<svg viewBox="0 0 24 24" aria-hidden="true">' + paths + '</svg>'; }
+
+  function isOn(id, st) {
+    if (!st) return false;
+    var domain = domainOf(id);
+    if (domain === 'cover') return st.state === 'open' || st.state === 'opening';
+    if (domain === 'lock') return st.state === 'unlocked';
+    if (domain === 'media_player') return st.state === 'playing';
+    if (domain === 'climate') return st.state !== 'off';
+    if (domain === 'vacuum') return st.state === 'cleaning';
+    if (domain === 'alarm_control_panel') return st.state !== 'disarmed';
+    return st.state === 'on' || st.state === 'home';
+  }
+
+  function tileName(tile, st) {
+    if (tile.label) return tile.label;
+    return (st && st.attributes && st.attributes.friendly_name) || tile.entities[0];
+  }
+
+  function canOperate(tile) {
+    if (tile.view || viewOnlyDisplay) return false;
+    if (controllable && tile.entities.some(function (id) { return controllable.indexOf(id) === -1; })) return false;
+    return true;
+  }
+
+  function needsHold(tile, st) {
+    return !!tile.hold || !!(st && st.sensitive);
+  }
+
+  function visible(tile) {
+    if (!tile.when) return true;
+    var st = states[tile.when.entity];
+    if (st === undefined) return true;
+    var match = !!st && tile.when.states.indexOf(st.state) !== -1;
+    return tile.when.not ? !match : match;
+  }
+
+  // Which kind of tile an entity becomes: the same rule as defaultControl in
+  // server/services/haPanels.js.
+  var COLOR_DIM = ['brightness', 'color_temp', 'hs', 'xy', 'rgb', 'rgbw', 'rgbww', 'white'];
+  function kindOf(id, st) {
+    var domain = domainOf(id);
+    var a = (st && st.attributes) || {};
+    switch (domain) {
+      case 'light': return (a.supported_color_modes || []).some(function (m) { return COLOR_DIM.indexOf(m) !== -1; }) ? 'dimmer' : 'toggle';
+      case 'switch': case 'input_boolean': return 'toggle';
+      case 'fan': return has(st, 1) ? 'dimmer' : 'toggle';
+      case 'cover': return st && st.sensitive ? 'garage' : (has(st, 4) ? 'cover-slider' : 'cover');
+      case 'scene': case 'script': case 'button': case 'input_button': return 'run';
+      case 'climate': return 'climate';
+      case 'media_player': return 'media';
+      case 'lock': return 'lock';
+      case 'alarm_control_panel': return 'alarm';
+      case 'vacuum': return 'vacuum';
+      case 'input_select': case 'select': return 'select';
+      case 'input_number': case 'number': return 'number';
+      case 'camera': return 'camera';
+      default: return 'sensor';
+    }
+  }
+
+  function level(id, st) {
+    if (!st) return 0;
+    var a = st.attributes || {};
+    var domain = domainOf(id);
+    if (domain === 'light') return st.state === 'on' ? Math.round((a.brightness || 255) / 2.55) : 0;
+    if (domain === 'fan') return st.state === 'on' ? (a.percentage != null ? a.percentage : 100) : 0;
+    if (domain === 'cover') return a.current_position != null ? a.current_position : (st.state === 'open' ? 100 : 0);
+    return 0;
+  }
+
+  // --- Drawing ------------------------------------------------------------------
+
+  var app = document.getElementById('app');
+
+  function render() {
+    // A slider being dragged is left alone until it is let go.
+    if (dragging) return;
+    var focusId = document.activeElement && document.activeElement.getAttribute('data-focus');
+    var html = '';
+    if (!recipe) {
+      app.innerHTML = '<p class="empty">' + esc(preview ? T.empty : T.loading) + '</p>';
+      return;
+    }
+    if (problem) {
+      var text = problem.kind === 'notConnected' ? T.notConnected : problem.kind === 'token' ? T.tokenRejected : T.unreachable;
+      html += '<p class="banner error" role="status">' + esc(text) + '</p>';
+    }
+    var tiles = recipe.tiles.filter(visible);
+    if (!tiles.length) {
+      app.innerHTML = html + '<p class="empty">' + esc(loaded ? T.empty : T.loading) + '</p>';
+      return;
+    }
+    var compact = recipe.layout === 'list' || window.innerWidth < 220 || window.innerHeight < 150;
+    var cols = recipe.columns && recipe.columns !== 'auto' ? Number(recipe.columns) : 0;
+    var narrow = cols === 1 || window.innerWidth < 260;
+    html += '<div class="' + (compact ? 'list' : 'grid' + (cols ? ' fixed' : '')) + (problem ? ' offline' : '') + '"'
+      + (cols && !compact ? ' style="--cols:' + cols + '"' : '') + '>';
+    tiles.forEach(function (tile) { html += tileHtml(tile, compact, narrow); });
+    html += '</div>';
+    app.innerHTML = html;
+    if (focusId) {
+      var again = app.querySelector('[data-focus="' + focusId + '"]');
+      if (again) again.focus();
+    }
+    loadCameras();
+  }
+
+  function tileHtml(tile, compact, narrow) {
+    var id = tile.entities[0];
+    var st = stateOf(id);
+    // undefined: not read yet; null: Home Assistant has no such entity.
+    var kind = st ? kindOf(id, st) : 'missing';
+    if (st === undefined) {
+      return '<div class="tile missing" data-tile="' + tile.id + '"><div class="top"><span class="ico">' + iconFor(tile, st) + '</span></div><div><div class="name">' + esc(tileName(tile, st)) + '</div><div class="sub">' + esc(problem ? T.unavailable : T.loading) + '</div></div></div>';
+    }
+    var name = tileName(tile, st);
+    var operable = st && canOperate(tile) && st.state !== 'unavailable';
+    var hold = needsHold(tile, st);
+    var size = !compact && !narrow && tile.size ? tile.size : '1x1';
+    var classes = ['tile'];
+    if (size.charAt(0) === '2') classes.push('w2');
+    if (size.charAt(2) === '2') classes.push('h2');
+    if (!st) classes.push('missing');
+    var on = tile.entities.some(function (e) { return isOn(e, stateOf(e)); });
+    var sub = tile.showState === false ? '' : stateText(id, st);
+    var hint = hints[tile.id] ? '<div class="hint" role="status">' + esc(hints[tile.id]) + '</div>' : '';
+    var ring = hold && operable ? '<svg class="ring" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11"/></svg>' : '';
+    var head = '<div class="top"><span class="ico">' + iconFor(tile, st) + '</span></div>';
+    var label = '<div><div class="name">' + esc(name) + '</div>' + (sub ? '<div class="sub">' + esc(sub) + '</div>' : '') + '</div>';
+    var focus = ' data-focus="' + tile.id + '"';
+    var data = ' data-tile="' + tile.id + '"';
+
+    if (kind === 'missing') {
+      return '<div class="' + classes.join(' ') + '"' + data + '>' + head + label + '</div>';
+    }
+
+    if (kind === 'toggle' || kind === 'run' || (kind === 'dimmer' && compact)) {
+      if (on && kind !== 'run') classes.push('on');
+      if (operable) classes.push('act');
+      var role = kind === 'run' ? 'role="button"' : 'role="switch" aria-checked="' + on + '"';
+      return '<div class="' + classes.join(' ') + '"' + data + focus + ' ' + role + (operable ? ' tabindex="0" data-action="' + (kind === 'run' ? 'run' : 'toggle') + '"' : ' aria-disabled="true"')
+        + ' aria-label="' + esc(name) + '">' + ring + head + label + hint + '</div>';
+    }
+
+    if (kind === 'dimmer' || kind === 'cover-slider') {
+      var lvl = level(id, st);
+      var isCover = kind === 'cover-slider';
+      classes.push('leveled', 'slide');
+      if (on) classes.push('on');
+      if (operable) classes.push('act');
+      var fill = isCover
+        ? '<div class="fill down" style="height:' + (100 - lvl) + '%;--lvl:' + (100 - lvl) + '%"></div>'
+        : '<div class="fill" style="height:' + lvl + '%;--lvl:' + lvl + '%"></div>';
+      return '<div class="' + classes.join(' ') + '"' + data + focus + ' role="slider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + lvl + '"'
+        + ' aria-label="' + esc(name) + '"' + (operable ? ' tabindex="0" data-slider="' + (isCover ? 'position' : (domainOf(id) === 'fan' ? 'percentage' : 'brightness')) + '"' : ' aria-disabled="true"')
+        + '>' + fill + ring + head + label + hint + '</div>';
+    }
+
+    if (kind === 'cover' || kind === 'garage') {
+      if (on) classes.push('on');
+      if (kind === 'garage') {
+        if (operable) classes.push('act');
+        return '<div class="' + classes.join(' ') + '"' + data + focus + ' role="button" aria-label="' + esc(name) + '"' + (operable ? ' tabindex="0" data-action="toggle"' : ' aria-disabled="true"') + '>' + ring + head + label + hint + '</div>';
+      }
+      var moving = st.state === 'opening' || st.state === 'closing';
+      var halves = operable
+        ? '<div class="halves">' + (moving && has(st, 8)
+          ? '<button type="button" style="grid-row:span 2" data-action="stop"' + focus + ' aria-label="' + esc(name) + ': ' + esc(T.stopped) + '"></button>'
+          : '<button type="button" data-action="open"' + focus + ' aria-label="' + esc(name) + ': ' + esc(T.open) + '"></button><button type="button" data-action="close" aria-label="' + esc(name) + ': ' + esc(T.closed) + '"></button>') + '</div>'
+        : '';
+      return '<div class="' + classes.join(' ') + '"' + data + '>' + (operable ? CHEVRON_UP + CHEVRON_DOWN : '') + head + label + halves + hint + '</div>';
+    }
+
+    if (kind === 'lock') {
+      var locked = st.state === 'locked';
+      if (!locked) classes.push('on');
+      if (operable) classes.push('act');
+      return '<div class="' + classes.join(' ') + '"' + data + focus + ' role="button" aria-label="' + esc(name) + ': ' + esc(locked ? T.unlock : T.lock) + '"'
+        + (operable ? ' tabindex="0" data-action="' + (locked ? 'unlock' : 'lock') + '"' : ' aria-disabled="true"') + '>' + ring + head + label + hint + '</div>';
+    }
+
+    if (kind === 'alarm') {
+      if (on) classes.push('on');
+      var buttons = '';
+      if (operable) {
+        if (st.state === 'disarmed') {
+          if (has(st, 1)) buttons += '<button type="button" class="btn" data-action="arm_home">' + esc(T.armHome) + '</button>';
+          if (has(st, 2)) buttons += '<button type="button" class="btn" data-action="arm_away">' + esc(T.armAway) + '</button>';
+        } else {
+          buttons += '<button type="button" class="btn primary" data-action="disarm">' + esc(T.disarm) + '</button>';
+        }
+      }
+      return '<div class="' + classes.join(' ') + '"' + data + '>' + ring + head + label + (buttons ? '<div class="row">' + buttons + '</div>' : '') + hint + '</div>';
+    }
+
+    if (kind === 'climate') {
+      var a = st.attributes;
+      var step = Number(a.target_temp_step) || (unit === '°F' ? 1 : 0.5);
+      var target = a.temperature;
+      var controls = '';
+      if (operable && has(st, 1) && target != null) {
+        controls += '<div class="row"><button type="button" class="btn" data-action="temperature" data-value="' + (Number(target) - step) + '" aria-label="−">−</button>'
+          + '<button type="button" class="btn" data-action="temperature" data-value="' + (Number(target) + step) + '" aria-label="+">+</button>'
+          + (Array.isArray(a.hvac_modes) && a.hvac_modes.length > 1 ? '<button type="button" class="btn" data-pick="hvac_mode">' + esc(T.mode) + '</button>' : '') + '</div>';
+      }
+      if (st.state !== 'off') classes.push('on');
+      return '<div class="' + classes.join(' ') + '"' + data + '>' + head
+        + '<div><div class="big">' + (a.current_temperature != null ? esc(a.current_temperature) + esc(unit) : '—') + '</div>'
+        + '<div class="name">' + esc(name) + '</div>'
+        + '<div class="sub">' + esc(stateText(id, st)) + (target != null ? ' · ' + esc(T.target) + ' ' + esc(target) + esc(unit) : '') + '</div></div>'
+        + controls + hint + '</div>';
+    }
+
+    if (kind === 'media') {
+      var ma = st.attributes;
+      var mediaButtons = '';
+      if (operable) {
+        if (has(st, 16)) mediaButtons += '<button type="button" class="btn" data-action="previous" aria-label="previous">⏮</button>';
+        if (has(st, 1) || has(st, 16384)) mediaButtons += '<button type="button" class="btn primary" data-action="play_pause" aria-label="' + esc(st.state === 'playing' ? T.paused : T.playing) + '">' + (st.state === 'playing' ? '⏸' : '▶') + '</button>';
+        if (has(st, 32)) mediaButtons += '<button type="button" class="btn" data-action="next" aria-label="next">⏭</button>';
+      }
+      var volume = operable && has(st, 4) && ma.volume_level != null
+        ? '<input type="range" min="0" max="100" step="5" value="' + Math.round(ma.volume_level * 100) + '" data-range="volume" aria-label="' + esc(name) + ' volume">'
+        : '';
+      return '<div class="' + classes.join(' ') + '"' + data + '>' + head + label + (mediaButtons ? '<div class="row">' + mediaButtons + '</div>' : '') + volume + hint + '</div>';
+    }
+
+    if (kind === 'vacuum') {
+      var vacuumButtons = '';
+      if (operable) {
+        if (st.state !== 'cleaning' && has(st, 8192)) vacuumButtons += '<button type="button" class="btn primary" data-action="start">' + esc(T.start) + '</button>';
+        if (st.state === 'cleaning' && has(st, 4)) vacuumButtons += '<button type="button" class="btn" data-action="pause">' + esc(T.pause) + '</button>';
+        if (st.state !== 'docked' && has(st, 16)) vacuumButtons += '<button type="button" class="btn" data-action="dock">' + esc(T.dock) + '</button>';
+      }
+      if (on) classes.push('on');
+      return '<div class="' + classes.join(' ') + '"' + data + '>' + head + label + (vacuumButtons ? '<div class="row">' + vacuumButtons + '</div>' : '') + hint + '</div>';
+    }
+
+    if (kind === 'select') {
+      if (operable) classes.push('act');
+      return '<div class="' + classes.join(' ') + '"' + data + focus + ' role="button" aria-haspopup="listbox"' + (operable ? ' tabindex="0" data-pick="select"' : '') + '>' + head
+        + '<div><div class="name">' + esc(name) + '</div><div class="big" style="font-size:clamp(.9rem,4.5vmin,1.3rem)">' + esc(st.state) + '</div></div>' + hint + '</div>';
+    }
+
+    if (kind === 'number') {
+      var na = st.attributes;
+      var numberControls = operable
+        ? '<input type="range" min="' + esc(na.min) + '" max="' + esc(na.max) + '" step="' + esc(na.step || 1) + '" value="' + esc(st.state) + '" data-range="set" aria-label="' + esc(name) + '">'
+        : '';
+      return '<div class="' + classes.join(' ') + '"' + data + '>' + head + '<div><div class="big">' + esc(stateText(id, st)) + '</div><div class="name">' + esc(name) + '</div></div>' + numberControls + hint + '</div>';
+    }
+
+    if (kind === 'camera') {
+      classes.push('camera');
+      var src = preview ? '' : '/api/plugin/v1/ha/' + encodeURIComponent(pluginId) + '/camera/' + encodeURIComponent(id);
+      return '<div class="' + classes.join(' ') + '"' + data + '>' + (src ? '<img class="cam" alt="" data-cam="' + esc(src) + '">' : '<div class="top"><span class="ico">' + svg(ICONS.camera) + '</span></div>')
+        + '<div class="name">' + esc(name) + '</div></div>';
+    }
+
+    // Sensors and other read-only things: the value, large.
+    if (domainOf(id) === 'binary_sensor' && st.state === 'on') classes.push('on');
+    return '<div class="' + classes.join(' ') + '"' + data + '>' + head
+      + '<div><div class="big">' + esc(stateText(id, st)) + '</div><div class="name">' + esc(name) + '</div></div></div>';
+  }
+
+  // Camera snapshots: a fresh one every 10 seconds while the panel is seen.
+  var cameraStamp = Date.now();
+  function loadCameras() {
+    app.querySelectorAll('img[data-cam]').forEach(function (img) {
+      img.src = img.getAttribute('data-cam') + '?t=' + cameraStamp;
+    });
+  }
+  setInterval(function () {
+    if (document.hidden || preview) return;
+    cameraStamp = Date.now();
+    loadCameras();
+  }, 10000);
+
+  // --- Touch, mouse and keyboard --------------------------------------------------
+
+  var tileById = function (tileId) {
+    for (var i = 0; i < recipe.tiles.length; i += 1) if (recipe.tiles[i].id === tileId) return recipe.tiles[i];
+    return null;
+  };
+
+  function optimisticFor(action) {
+    if (action === 'toggle') {
+      return function (id) {
+        var st = states[id];
+        if (!st) return {};
+        var domain = domainOf(id);
+        if (domain === 'cover') return { state: st.state === 'open' ? 'closing' : 'opening' };
+        return { state: st.state === 'on' ? 'off' : 'on' };
+      };
+    }
+    return null;
+  }
+
+  function perform(tile, action, value) {
+    var opt = optimisticFor(action);
+    return act(tile, action, value, opt ? { optimistic: opt } : null);
+  }
+
+  // Press and hold: a tile that needs it starts a ring on press and acts when
+  // it completes; letting go early cancels. From the keyboard, a second press
+  // within three seconds confirms.
+  var holdTimer = null;
+  var holdEl = null;
+  function startHold(el, tile, action, value) {
+    cancelHold();
+    holdEl = el;
+    el.style.setProperty('--hold-ms', HOLD_MS + 'ms');
+    el.classList.add('holding');
+    holdTimer = setTimeout(function () {
+      el.classList.remove('holding');
+      holdTimer = null;
+      holdEl = null;
+      perform(tile, action, value);
+    }, HOLD_MS);
+  }
+  function cancelHold() {
+    if (holdTimer) clearTimeout(holdTimer);
+    holdTimer = null;
+    if (holdEl) holdEl.classList.remove('holding');
+    holdEl = null;
+  }
+
+  function trigger(target, viaKeyboard, pointerEvent) {
+    var tileEl = target.closest('[data-tile]');
+    if (!tileEl) return;
+    var tile = tileById(tileEl.getAttribute('data-tile'));
+    if (!tile) return;
+    var st = stateOf(tile.entities[0]);
+    var pick = target.closest('[data-pick]');
+    if (pick) {
+      openPicker(tile, st, pick.getAttribute('data-pick'));
+      return;
+    }
+    var actionEl = target.closest('[data-action]');
+    if (!actionEl) return;
+    var action = actionEl.getAttribute('data-action');
+    var valueAttr = actionEl.getAttribute('data-value');
+    var value = valueAttr == null ? undefined : Number(valueAttr);
+    if (needsHold(tile, st)) {
+      if (viaKeyboard) {
+        if (holdArmed[tile.id] && Date.now() - holdArmed[tile.id] < 3000) {
+          delete holdArmed[tile.id];
+          perform(tile, action, value);
+        } else {
+          holdArmed[tile.id] = Date.now();
+          flashHint(tile, T.holdKey);
+        }
+        return;
+      }
+      if (pointerEvent) startHold(tileEl, tile, action, value);
+      return;
+    }
+    if (action === 'run') {
+      tileEl.classList.add('flash');
+      setTimeout(function () { tileEl.classList.remove('flash'); }, 450);
+    }
+    perform(tile, action, value);
+  }
+
+  // Sliders: a vertical drag on a dimmer or shade sets its level. A short tap
+  // without movement toggles instead (opens or closes, for a shade).
+  var dragging = null;
+  app.addEventListener('pointerdown', function (event) {
+    var slider = event.target.closest('[data-slider]');
+    if (slider && !event.target.closest('button')) {
+      var tile = tileById(slider.closest('[data-tile]').getAttribute('data-tile'));
+      dragging = { el: slider, tile: tile, kind: slider.getAttribute('data-slider'), startY: event.clientY, startX: event.clientX, moved: false, pointerId: event.pointerId, value: null };
+      try { slider.setPointerCapture(event.pointerId); } catch (e) { /* not capturable */ }
+      return;
+    }
+    var holdTarget = event.target.closest('[data-action]');
+    if (holdTarget) {
+      var tileEl = holdTarget.closest('[data-tile]');
+      var t = tileEl && tileById(tileEl.getAttribute('data-tile'));
+      if (t && needsHold(t, stateOf(t.entities[0]))) {
+        event.preventDefault();
+        trigger(event.target, false, true);
+      }
+    }
+  });
+  app.addEventListener('pointermove', function (event) {
+    if (!dragging || event.pointerId !== dragging.pointerId) return;
+    var dy = event.clientY - dragging.startY;
+    if (!dragging.moved && Math.abs(dy) < 8) return;
+    dragging.moved = true;
+    var rect = dragging.el.getBoundingClientRect();
+    var fromBottom = 1 - (event.clientY - rect.top) / rect.height;
+    var pct = Math.round(Math.max(0, Math.min(1, fromBottom)) * 100);
+    dragging.value = pct;
+    var fill = dragging.el.querySelector('.fill');
+    if (fill) {
+      var shown = dragging.kind === 'position' ? 100 - pct : pct;
+      fill.style.height = shown + '%';
+      fill.style.setProperty('--lvl', shown + '%');
+    }
+    dragging.el.setAttribute('aria-valuenow', String(pct));
+  });
+  function endDrag(event) {
+    if (!dragging || (event && event.pointerId !== dragging.pointerId)) return;
+    var d = dragging;
+    dragging = null;
+    if (d.moved && d.value !== null) {
+      var patch = d.kind === 'position'
+        ? { attributes: { current_position: d.value }, state: d.value > 0 ? 'open' : 'closed' }
+        : d.kind === 'percentage'
+          ? { attributes: { percentage: d.value }, state: d.value > 0 ? 'on' : 'off' }
+          : { attributes: { brightness: Math.round(d.value * 2.55) }, state: d.value > 0 ? 'on' : 'off' };
+      act(d.tile, d.kind, d.value, { optimistic: function () { return patch; } });
+    } else if (event && event.type === 'pointerup') {
+      var st = stateOf(d.tile.entities[0]);
+      if (d.kind === 'position') {
+        var rect = d.el.getBoundingClientRect();
+        perform(d.tile, event.clientY - rect.top < rect.height / 2 ? 'open' : 'close');
+      } else if (needsHold(d.tile, st)) {
+        flashHint(d.tile, T.hold);
+      } else {
+        perform(d.tile, 'toggle');
+      }
+    }
+    render();
+  }
+  app.addEventListener('pointerup', function (event) {
+    if (dragging) { endDrag(event); return; }
+    cancelHold();
+  });
+  app.addEventListener('pointercancel', function (event) {
+    if (dragging) { dragging = null; render(); return; }
+    cancelHold();
+  });
+  app.addEventListener('pointerleave', cancelHold);
+
+  app.addEventListener('click', function (event) {
+    if (event.target.closest('[data-slider]') || event.target.closest('input')) return;
+    var actionEl = event.target.closest('[data-action],[data-pick]');
+    if (!actionEl) return;
+    var tileEl = actionEl.closest('[data-tile]');
+    var tile = tileEl && tileById(tileEl.getAttribute('data-tile'));
+    // Held actions run from pointerdown; a click (from the keyboard) confirms.
+    if (tile && needsHold(tile, stateOf(tile.entities[0])) && actionEl.hasAttribute('data-action')) {
+      if (event.detail === 0) trigger(event.target, true, false);
+      return;
+    }
+    trigger(event.target, false, false);
+  });
+
+  app.addEventListener('keydown', function (event) {
+    var el = event.target;
+    if (el.hasAttribute && el.hasAttribute('data-slider') && (event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'ArrowRight' || event.key === 'ArrowLeft')) {
+      event.preventDefault();
+      var tile = tileById(el.closest('[data-tile]').getAttribute('data-tile'));
+      var now = Number(el.getAttribute('aria-valuenow')) || 0;
+      var kind = el.getAttribute('data-slider');
+      var up = event.key === 'ArrowUp' || event.key === 'ArrowRight';
+      var next = Math.max(0, Math.min(100, now + (up ? 10 : -10)));
+      act(tile, kind, next);
+      return;
+    }
+    if ((event.key === 'Enter' || event.key === ' ') && el.hasAttribute && (el.hasAttribute('data-action') || el.hasAttribute('data-pick') || el.hasAttribute('data-slider'))) {
+      if (el.tagName === 'BUTTON') return; // the click handler has it
+      event.preventDefault();
+      if (el.hasAttribute('data-slider')) {
+        var sliderTile = tileById(el.closest('[data-tile]').getAttribute('data-tile'));
+        perform(sliderTile, 'toggle');
+        return;
+      }
+      trigger(el, true, false);
+    }
+  });
+
+  app.addEventListener('change', function (event) {
+    var input = event.target.closest('[data-range]');
+    if (!input) return;
+    var tile = tileById(input.closest('[data-tile]').getAttribute('data-tile'));
+    act(tile, input.getAttribute('data-range'), Number(input.value));
+  });
+
+  // --- Overlays ------------------------------------------------------------------
+
+  function overlay(html, onMount) {
+    var el = document.createElement('div');
+    el.className = 'overlay';
+    el.innerHTML = '<div class="sheet" role="dialog" aria-modal="true">' + html + '</div>';
+    document.body.appendChild(el);
+    var close = function () { el.remove(); };
+    el.addEventListener('click', function (event) { if (event.target === el) close(); });
+    el.addEventListener('keydown', function (event) { if (event.key === 'Escape') close(); });
+    onMount(el, close);
+    return close;
+  }
+
+  function askPin(error, done) {
+    var pin = '';
+    overlay(
+      '<h2>' + esc(T.pinTitle) + '</h2><div class="dots" aria-hidden="true"></div>'
+      + '<input type="password" inputmode="numeric" autocomplete="off" aria-label="' + esc(T.pinTitle) + '" style="position:absolute;opacity:0;width:1px;height:1px">'
+      + '<div class="err" role="alert">' + esc(error || '') + '</div><div class="keys">'
+      + [1, 2, 3, 4, 5, 6, 7, 8, 9].map(function (n) { return '<button type="button" class="btn" data-key="' + n + '">' + n + '</button>'; }).join('')
+      + '<button type="button" class="btn" data-key="clear">' + esc(T.clearKey) + '</button><button type="button" class="btn" data-key="0">0</button>'
+      + '<button type="button" class="btn primary" data-key="ok">' + esc(T.ok) + '</button></div>'
+      + '<button type="button" class="btn" data-key="cancel">' + esc(T.cancel) + '</button>',
+      function (el, close) {
+        var dots = el.querySelector('.dots');
+        var input = el.querySelector('input');
+        var show = function () { dots.innerHTML = new Array(pin.length + 1).join('<span></span>'); };
+        var submit = function () {
+          if (!pin) return;
+          close();
+          done(pin);
+        };
+        input.addEventListener('input', function () { pin = input.value; show(); });
+        input.addEventListener('keydown', function (event) { if (event.key === 'Enter') submit(); });
+        el.addEventListener('click', function (event) {
+          var key = event.target.closest('[data-key]');
+          if (!key) return;
+          var k = key.getAttribute('data-key');
+          if (k === 'cancel') close();
+          else if (k === 'ok') submit();
+          else if (k === 'clear') { pin = ''; input.value = ''; show(); }
+          else if (pin.length < 12) { pin += k; input.value = pin; show(); }
+        });
+        input.focus();
+      }
+    );
+  }
+
+  function openPicker(tile, st, which) {
+    if (!st) return;
+    if (preview) { flashHint(tile, T.previewNoActions); return; }
+    var options = which === 'hvac_mode' ? (st.attributes.hvac_modes || []) : (st.attributes.options || []);
+    var current = which === 'hvac_mode' ? st.state : st.state;
+    var label = function (option) {
+      if (which !== 'hvac_mode') return option;
+      return T[option === 'off' ? 'off_mode' : option === 'dry' ? 'dry_mode' : option] || option;
+    };
+    overlay(
+      '<h2>' + esc(tileName(tile, st)) + '</h2><div class="opts" role="listbox">'
+      + options.map(function (option) {
+        return '<button type="button" role="option" class="btn' + (option === current ? ' current' : '') + '" aria-selected="' + (option === current) + '" data-option="' + esc(option) + '">' + esc(label(option)) + '</button>';
+      }).join('') + '</div><button type="button" class="btn" data-option-cancel>' + esc(T.cancel) + '</button>',
+      function (el, close) {
+        el.addEventListener('click', function (event) {
+          if (event.target.closest('[data-option-cancel]')) { close(); return; }
+          var opt = event.target.closest('[data-option]');
+          if (!opt) return;
+          close();
+          act(tile, which === 'hvac_mode' ? 'hvac_mode' : 'select', opt.getAttribute('data-option'));
+        });
+        var first = el.querySelector('.current') || el.querySelector('[data-option]');
+        if (first) first.focus();
+      }
+    );
+  }
+
+  // --- Running --------------------------------------------------------------------
+
+  // The builder's preview sends the recipe it is editing.
+  window.addEventListener('message', function (event) {
+    if (!preview || event.source !== window.parent) return;
+    var data = event.data;
+    if (!data || data.type !== 'homeglow:ha-preview' || !data.recipe) return;
+    recipe = data.recipe;
+    render();
+    poll();
+  });
+
+  // A nudge from HomeGlow that something changed: read again at once.
+  var nudge = null;
+  if (window.HomeGlow && !preview) {
+    window.HomeGlow.on('ha.state', function (payload) {
+      var ids = (payload && payload.entityIds) || [];
+      var mine = entitiesWanted();
+      if (!ids.some(function (id) { return mine.indexOf(id) !== -1; })) return;
+      clearTimeout(nudge);
+      nudge = setTimeout(poll, 150);
+    });
+  }
+
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) poll(); });
+  window.addEventListener('resize', function () { render(); });
+  setInterval(poll, POLL_MS);
+  render();
+  poll();
+})();
+</script>
+</body>
+</html>

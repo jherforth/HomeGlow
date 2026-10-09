@@ -14,7 +14,7 @@
 // its sections in display order. The first section of each list is the one a
 // tab opens on. Section names are unique across tabs.
 export const ADMIN_LAYOUT = [
-  { tab: 'dashboard', sections: ['widgets', 'plugins', 'tabs'] },
+  { tab: 'dashboard', sections: ['widgets', 'plugins', 'homeassistant', 'tabs'] },
   { tab: 'look', sections: [] },
   { tab: 'displays', sections: ['devices', 'screensaver'] },
   {

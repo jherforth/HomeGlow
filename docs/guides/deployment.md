@@ -121,7 +121,7 @@ and [`server/Dockerfile`](../../server/Dockerfile). See
 ## CI/CD (GitHub Actions)
 
 - [`.github/workflows/ci-tests.yml`](../../.github/workflows/ci-tests.yml) — runs
-  frontend and backend test suites (Node 20) on every push.
+  frontend and backend test suites (Node 24, as the Docker image) on every push.
 - [`.github/workflows/docker-image.yml`](../../.github/workflows/docker-image.yml) —
   on a `v*` tag (or manual dispatch), builds and pushes both images to GHCR, injecting
   version/commit/repo build args. Tags produced: the release tag and `latest-test`.

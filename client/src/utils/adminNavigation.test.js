@@ -52,6 +52,7 @@ describe('adminNavigation', () => {
 
     it('sends the names from before the regroup to their new homes (#230)', () => {
       expect(parseAdminHash('#/admin/widgets')).toEqual(at('dashboard', 'widgets'));
+      expect(parseAdminHash('#/admin/dashboard/homeassistant')).toEqual(at('dashboard', 'homeassistant'));
       expect(parseAdminHash('#/admin/interface')).toEqual(at('look'));
       expect(parseAdminHash('#/admin/users')).toEqual(at('family', 'users'));
       expect(parseAdminHash('#/admin/chores')).toEqual(at('family', 'chores', 'definitions'));

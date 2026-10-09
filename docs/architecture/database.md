@@ -187,6 +187,20 @@ id, plugin_id, key, value_json, updated_at
 UNIQUE(plugin_id, key)
 ```
 
+**`ha_panels`** — Home Assistant panels (issue #252, schema 28): a recipe the
+builder saved, drawn by `server/ha-panels/template.html`. Each belongs to a
+`plugins` row (`source = 'builder'`) and goes with it.
+```
+id, plugin_row_id (UNIQUE, → plugins.id ON DELETE CASCADE),
+recipe_json,           -- { name, layout, columns, tiles: [{ id, entities, label, icon, size, view, hold, showState, when }] }
+template_ver, created_at, updated_at
+```
+
+**`ha_actions`** — what panels did, for the builder's history; the newest 1000.
+```
+id, at, plugin_id, device_name, entity_id, action, ok, error
+```
+
 ### Calendar
 
 **`calendar_sources`** — configured calendars (ICS, CalDAV, Google).

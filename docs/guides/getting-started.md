@@ -6,7 +6,7 @@ iteration, or **Docker** for a production-like setup.
 
 ## Prerequisites
 
-- **Node.js 20+** (backend Dockerfile uses Node 24; CI uses Node 20).
+- **Node.js 22+** (the backend Dockerfile and CI use Node 24). Home Assistant panels need Node 22 or later for its built-in WebSocket client; on Node 20 they fall back to reading Home Assistant every few seconds, without areas in the builder.
 - **npm**.
 - A C toolchain for `better-sqlite3` native build (usually preinstalled; on Linux
   you may need `python3`, `make`, `g++`).

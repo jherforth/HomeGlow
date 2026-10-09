@@ -15,6 +15,7 @@ const PLUGIN_EVENT_CATALOG = Object.freeze([
     'chore.uncompleted', // { userId, choreId, scheduleId, clamValue, date } — mirror of chore.completed
     'chore.allCompleted',// { userId, username, date, reward } — every regular chore done for the day (issue #140)
     'prize.redeemed',    // { userId, prizeId, offerId, prizeName, cost, newTotal }
+    'ha.state',          // { entityIds } — Home Assistant entities changed (issue #252); a nudge to read state, never the state itself
 ]);
 
 const catalogSet = new Set(PLUGIN_EVENT_CATALOG);
