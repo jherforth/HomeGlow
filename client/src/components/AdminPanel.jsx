@@ -74,6 +74,7 @@ import {
   ExpandMore
 } from '@mui/icons-material';
 import AppearanceSettings from './AppearanceSettings';
+import HomeAssistantPanels from './HomeAssistantPanels';
 import ThemeLibrary from './ThemeLibrary';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
@@ -2629,6 +2630,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                   </Box>
                 )}
               </>
+            )}
+
+            {location.section === 'homeassistant' && (
+              <HomeAssistantPanels onNavigate={navigate} />
             )}
 
             {location.section === 'tabs' && (

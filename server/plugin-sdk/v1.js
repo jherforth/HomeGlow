@@ -265,6 +265,55 @@
       }
     },
 
+    /**
+     * Home Assistant (issue #252), for a plugin whose manifest declares
+     * "homeAssistant": { "entities": [...], "control": true }. HomeGlow keeps
+     * the token and checks every call against that list, with the same rules
+     * as a panel built in Admin → Dashboard → Home Assistant.
+     */
+    homeAssistant: {
+      /**
+       * -> Promise<{ entities: { id: { state, attributes, sensitive } | null },
+       * control: [ids it may operate], unit, pinProtection, error? }>.
+       * Answered from HomeGlow's live copy, so polling it every 2 seconds
+       * costs Home Assistant nothing. Declare "events": ["ha.state"] to be
+       * nudged when one of them changes.
+       */
+      state: function () {
+        return request('GET', '/ha/' + encodeURIComponent(requirePluginId()) + '/state');
+      },
+      /**
+       * Operate an entity: action(entityId, 'toggle'), action('light.desk',
+       * 'brightness', 40), action('lock.front', 'unlock', undefined, { pin }).
+       * Rejects with error.status 401 and error.needsPin when the household
+       * PIN is needed. -> Promise<{ ok, entities }>
+       */
+      action: function (entityId, action, value, options) {
+        var body = { entity: entityId, action: action, device: deviceName };
+        if (value !== undefined) body.value = value;
+        if (options && options.pin) body.pin = String(options.pin);
+        return fetch(API_BASE + '/ha/' + encodeURIComponent(requirePluginId()) + '/action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        }).then(function (response) {
+          return response.json().catch(function () { return {}; }).then(function (data) {
+            if (!response.ok) {
+              var error = new Error((data && data.error) || ('HomeGlow SDK: HTTP ' + response.status));
+              error.status = response.status;
+              error.needsPin = !!(data && data.needsPin);
+              throw error;
+            }
+            return data;
+          });
+        });
+      },
+      /** The address of a camera's latest snapshot, for an <img>. */
+      cameraUrl: function (entityId) {
+        return API_BASE + '/ha/' + encodeURIComponent(requirePluginId()) + '/camera/' + encodeURIComponent(entityId) + '?t=' + Date.now();
+      }
+    },
+
     settings: {
       /**
        * Effective values for every setting declared in the manifest
