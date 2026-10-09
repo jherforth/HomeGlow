@@ -42,10 +42,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      # The version the Docker image runs (server/Dockerfile): tests should
+      # see the runtime's Node, built-in WebSocket client included.
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Install dependencies (${{ matrix.name }})
         run: npm install

@@ -215,6 +215,9 @@ axios.interceptors.request.use((config) => {
 let calendarSyncService = null;
 
 const pluginEvents = require('./services/pluginEvents');
+const haPanelRules = require('./services/haPanels');
+const { HaLive } = require('./services/haLive');
+const { registerHaPanelRoutes, lazyDb } = require('./routes/haPanels');
 const initializeDatabase = require('./migrations/initializeDatabase');
 const migrateChoresDatabase = require('./migrations/migrateChoresDatabase');
 const migrateClamsToHistory = require('./migrations/migrateClamsToHistory');
@@ -246,6 +249,7 @@ const schemaMigrations = [
   { schemaId: 25, migrationPath: './migrations/schema25-unifyCredentialEncryption', },
   { schemaId: 26, migrationPath: './migrations/schema26-keepLegacyTimezone', },
   { schemaId: 27, migrationPath: './migrations/schema27-choreFollowups', },
+  { schemaId: 28, migrationPath: './migrations/schema28-haPanels', },
 ];
 
 const ALLOWED_SCHEDULE_DURATIONS = new Set(['day-of', 'until-completed', 'once-completed']);
@@ -626,9 +630,11 @@ fastify.get('/widgets/:filename', async (request, reply) => {
   try {
     let content;
     let pluginId = null;
-    const row = db.prepare('SELECT content, plugin_id FROM plugins WHERE filename = ?').get(filename);
+    const row = db.prepare('SELECT id, content, plugin_id, source FROM plugins WHERE filename = ?').get(filename);
     if (row) {
-      content = row.content;
+      // A Home Assistant panel is drawn by the built-in template from its
+      // recipe (issue #252), so every panel gets the current template.
+      content = row.source === 'builder' ? haPanels.renderPanel(row.id, row.plugin_id) : row.content;
       pluginId = row.plugin_id;
     } else {
       const filePath = path.join(__dirname, 'widgets', filename);
@@ -858,6 +864,11 @@ function extractPluginManifest(htmlContent) {
   if (manifest.storage !== undefined && typeof manifest.storage !== 'boolean') {
     errors.push('storage must be a boolean.');
   }
+  // Home Assistant entities the plugin may read and operate through
+  // /api/plugin/v1/ha (issue #252), under the same rules as a built panel.
+  if (manifest.homeAssistant !== undefined) {
+    errors.push(...haPanelRules.validateManifestAccess(manifest.homeAssistant));
+  }
   if (manifest.events !== undefined) {
     if (!Array.isArray(manifest.events) || manifest.events.some((event) => typeof event !== 'string')) {
       errors.push('events must be an array of strings.');
@@ -964,6 +975,13 @@ function installPluginRow({ filename, fallbackName, content, source, originalUrl
     return { error: `Invalid plugin manifest: ${errors.join(' ')}`, status: 400 };
   }
 
+  // A Home Assistant panel's file is the builder's: an upload or install of
+  // the same name would silently replace the panel (issue #252).
+  const existingSource = db.prepare('SELECT source FROM plugins WHERE filename = ?').get(filename)?.source;
+  if (existingSource === 'builder' && source !== 'builder') {
+    return { error: `${filename} is a Home Assistant panel. Edit it in Admin → Dashboard → Home Assistant, or upload under another name.`, status: 409 };
+  }
+
   const pluginId = manifest ? manifest.id : null;
   if (pluginId) {
     const conflict = db.prepare('SELECT filename FROM plugins WHERE plugin_id = ? AND filename != ?')
@@ -999,6 +1017,23 @@ function installPluginRow({ filename, fallbackName, content, source, originalUrl
 
   return { pluginId };
 }
+
+// Home Assistant panels (issue #252): one live link to Home Assistant for
+// every panel, and the builder's and panels' routes (routes/haPanels.js).
+// Changes are announced to plugins as `ha.state`, a nudge to read again; the
+// state itself only ever comes from the checked state route.
+const haDb = lazyDb(() => db);
+const haLive = new HaLive({
+  db: haDb,
+  onChange: (entityIds) => pluginEvents.emit('ha.state', { entityIds }),
+});
+const haPanels = registerHaPanelRoutes(fastify, {
+  db: haDb,
+  live: haLive,
+  ha: homeAssistant,
+  demoMode: DEMO_MODE,
+  installPluginRow,
+});
 
 // Helper: Load legacy on-disk widget registry (kept for the debug endpoint)
 async function loadWidgetRegistry() {
@@ -1055,6 +1090,9 @@ fastify.post('/api/widgets/upload', async (request, reply) => {
       return reply.status(result.status).send({ error: result.error });
     }
 
+    // A plugin that declares Home Assistant entities: watch them live.
+    haPanels.refreshWatched();
+
     return { success: true, message: 'Widget uploaded!', widget: widgetName, pluginId: result.pluginId || null };
   } catch (err) {
     console.error('Widget upload error:', err);
@@ -1085,6 +1123,9 @@ fastify.delete('/api/widgets/:filename', async (request, reply) => {
   try {
     const pluginRow = db.prepare('SELECT plugin_id FROM plugins WHERE filename = ?').get(filename);
     const result = db.prepare('DELETE FROM plugins WHERE filename = ?').run(filename);
+    // A Home Assistant panel's recipe went with it (ON DELETE CASCADE); stop
+    // watching what nothing shows any more.
+    haPanels.refreshWatched();
 
     if (purgeData && pluginRow?.plugin_id) {
       const pluginId = pluginRow.plugin_id;
@@ -1921,6 +1962,8 @@ fastify.post('/api/widgets/github/install', async (request, reply) => {
     if (result.error) {
       return reply.status(result.status).send({ error: result.error });
     }
+
+    haPanels.refreshWatched();
 
     console.log(`Successfully installed widget: ${sanitizedFilename}`);
     return {
@@ -3162,24 +3205,31 @@ function withIsoCreatedAt(row) {
 fastify.get('/api/chore-history', async (request, reply) => {
   try {
     const { user_id, date, date_from, date_to } = request.query;
-    let query = 'SELECT * FROM chore_history';
+    // The person's name and the chore a row belongs to come along, so a history
+    // view can show and group them without a lookup per row. chore_id is null
+    // when the schedule is gone; the row's title snapshot remains.
+    let query = `
+      SELECT ch.*, u.username, cs.chore_id
+      FROM chore_history ch
+      LEFT JOIN users u ON u.id = ch.user_id
+      LEFT JOIN chore_schedules cs ON cs.id = ch.chore_schedule_id`;
     const conditions = [];
     const params = [];
 
     if (user_id !== undefined) {
-      conditions.push('user_id = ?');
+      conditions.push('ch.user_id = ?');
       params.push(user_id);
     }
     if (date) {
-      conditions.push('date = ?');
+      conditions.push('ch.date = ?');
       params.push(date);
     }
     if (date_from) {
-      conditions.push('date >= ?');
+      conditions.push('ch.date >= ?');
       params.push(date_from);
     }
     if (date_to) {
-      conditions.push('date <= ?');
+      conditions.push('ch.date <= ?');
       params.push(date_to);
     }
 
@@ -3187,7 +3237,7 @@ fastify.get('/api/chore-history', async (request, reply) => {
       query += ' WHERE ' + conditions.join(' AND ');
     }
 
-    query += ' ORDER BY date DESC, created_at DESC';
+    query += ' ORDER BY ch.date DESC, ch.created_at DESC, ch.id DESC';
 
     const rows = db.prepare(query).all(...params);
     return rows.map(withIsoCreatedAt);
@@ -5533,6 +5583,9 @@ fastify.put('/api/connections/homeassistant', async (request, reply) => {
     homeAssistant.saveConfig(db, { url, token, weatherEntity: weather_entity });
     // Provider config changed, so anything cached under the old settings is stale.
     weatherService.clearCache();
+    // Panels' live link starts again with the new address or token.
+    haLive.reset();
+    haPanels.refreshWatched();
     return { success: true, status: homeAssistant.getHomeAssistantStatus(db) };
   } catch (error) {
     console.error('Error saving Home Assistant config:', error);
@@ -5569,6 +5622,8 @@ fastify.delete('/api/connections/homeassistant', async (request, reply) => {
   try {
     homeAssistant.clearConfig(db);
     weatherService.clearCache();
+    haLive.reset();
+    haPanels.refreshWatched();
     return { success: true };
   } catch (error) {
     console.error('Error clearing Home Assistant config:', error);
@@ -6227,6 +6282,8 @@ fastify.get('/api/photo-sources/:sourceId/uploaded/:photoId/file', async (reques
 fastify.post('/api/photo-sources/:sourceId/uploaded', async (request, reply) => {
   if (demoBlocked(reply)) return;
   const { sourceId } = request.params;
+  const added = [];
+  const failed = [];
   try {
     const source = loadHomeGlowPhotoSourceOr404(sourceId, reply);
     if (!source) return;
@@ -6234,8 +6291,6 @@ fastify.post('/api/photo-sources/:sourceId/uploaded', async (request, reply) => 
     await fs.mkdir(uploadDir, { recursive: true });
 
     const parts = request.parts();
-    const added = [];
-    const failed = [];
     for await (const part of parts) {
       if (part.type !== 'file') continue;
       if (!part.mimetype || !part.mimetype.startsWith('image/')) {
@@ -6255,12 +6310,22 @@ fastify.post('/api/photo-sources/:sourceId/uploaded', async (request, reply) => 
         ).run(sourceId, filename, part.filename || null, part.mimetype, buffer.length);
         added.push({ id: info.lastInsertRowid, filename, original_name: part.filename });
       } catch (err) {
+        if (err.code === 'FST_REQ_FILE_TOO_LARGE') {
+          failed.push({ name: part.filename, reason: 'Larger than 25 MB' });
+          continue;
+        }
         console.error('Upload failure for part:', err);
         failed.push({ name: part.filename, reason: err.message });
       }
     }
     return { success: true, added: added.length, failed: failed.length, items: added, errors: failed };
   } catch (error) {
+    // The multipart reader raises a photo over the size limit again once the
+    // upload has been read. That photo is already counted as failed and the
+    // others are saved, so report them rather than failing the whole upload.
+    if (error.code === 'FST_REQ_FILE_TOO_LARGE' && failed.length > 0) {
+      return { success: true, added: added.length, failed: failed.length, items: added, errors: failed };
+    }
     console.error('Error uploading photos:', error);
     reply.status(500).send({ error: 'Failed to upload photos' });
   }
@@ -6963,6 +7028,12 @@ const start = async () => {
 
     await fastify.listen({ port: process.env.PORT || 5000, host: '0.0.0.0' });
     console.log(`Server running on port ${process.env.PORT || 5000}`);
+    // Panels on the dashboard: open the live link to Home Assistant.
+    try {
+      haPanels.refreshWatched();
+    } catch (error) {
+      console.warn('Home Assistant panels: could not start the live link:', error.message);
+    }
   } catch (err) {
     console.error(err);
     process.exit(1);

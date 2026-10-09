@@ -215,6 +215,60 @@ async function testConnection(db) {
     }
 }
 
+// An image from Home Assistant (a camera snapshot), as bytes: the JSON path
+// above would mangle it. Same token, certificate and timeout rules.
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+async function homeAssistantFetchImage(db, apiPath) {
+    const { baseUrl, tokenEnc } = getConfig(db);
+    if (!baseUrl || !tokenEnc) {
+        const err = new Error('Home Assistant is not connected.');
+        err.status = 503;
+        throw err;
+    }
+    const url = `${baseUrl}${apiPath}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+        const res = await fetch(url, {
+            headers: { Authorization: `Bearer ${decrypt(tokenEnc)}` },
+            signal: controller.signal,
+            ...fetchTlsOptions(url),
+        });
+        if (!res.ok) {
+            const err = new Error(res.status === 401 ? 'Home Assistant rejected the access token.' : `Home Assistant error ${res.status}`);
+            err.status = res.status;
+            throw err;
+        }
+        const contentType = res.headers.get('content-type') || '';
+        if (!/^image\/(jpeg|png|gif|webp)\b/i.test(contentType)) {
+            const err = new Error('Home Assistant did not send an image.');
+            err.status = 502;
+            throw err;
+        }
+        const buffer = Buffer.from(await res.arrayBuffer());
+        if (buffer.length > MAX_IMAGE_BYTES) {
+            const err = new Error('The image is too large.');
+            err.status = 502;
+            throw err;
+        }
+        return { buffer, contentType: contentType.split(';')[0] };
+    } catch (err) {
+        if (err.name === 'AbortError') {
+            const timeoutError = new Error('Home Assistant did not respond in time.');
+            timeoutError.status = 504;
+            throw timeoutError;
+        }
+        if (!err.status) {
+            const unreachable = new Error(`Could not reach Home Assistant at ${baseUrl}.`);
+            unreachable.status = 503;
+            throw unreachable;
+        }
+        throw err;
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 async function getState(db, entityId) {
     return await module.exports.homeAssistantFetch(db, 'GET', `/api/states/${encodeURIComponent(entityId)}`);
 }
@@ -244,6 +298,7 @@ module.exports = {
     clearConfig,
     isConfigured,
     homeAssistantFetch,
+    homeAssistantFetchImage,
     testConnection,
     getState,
     listWeatherEntities,

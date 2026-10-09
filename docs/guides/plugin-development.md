@@ -200,6 +200,7 @@ serving your widget, and the SDK picks it up — you never pass your own id.
 | `events` | — | Core events to receive while mounted (see §5). |
 | `reactions` | — | Server-side increments run on events (see §6). Requires `storage: true`. |
 | `hideableControls` | — | Controls a display may be configured to hide (see §4). |
+| `homeAssistant` | — | `{ "entities": [...], "control": true }`: the Home Assistant entities the plugin may read and operate (see §5a). |
 
 Keys not listed here are **ignored**, not rejected — so a misspelled field fails
 silently rather than loudly.
@@ -367,6 +368,7 @@ const off = HomeGlow.on('clam.withdrawn', (payload, meta) => {
 | `chore.uncompleted` | a completion is undone | `{ userId, choreId, scheduleId, clamValue, date }` |
 | `chore.allCompleted` | a user's last **regular** chore for the day is done | `{ userId, username, date, reward }` |
 | `prize.redeemed` | a prize-store request is approved | `{ userId, prizeId, offerId, prizeName, cost, newTotal }` |
+| `ha.state` | Home Assistant entities changed | `{ entityIds }`: a nudge to read state again (§5a), never the state itself |
 
 Declaring an event not in the catalog rejects the install — typos fail loudly.
 Only declared events are ever delivered to your iframe.
@@ -418,6 +420,43 @@ Three things worth knowing:
   browser on every deployment.
 - **It is a hint, not a write.** The host only refetches. It grants no
   permission you did not already have by calling the API.
+
+## 5a. Home Assistant — read and operate devices
+
+Admin → Dashboard → Home Assistant builds panels without code. A plugin that
+needs more can read and operate Home Assistant entities itself, under the same
+rules. Declare them:
+
+```json
+"homeAssistant": { "entities": ["light.porch", "sensor.porch_temperature"], "control": true },
+"events": ["ha.state"]
+```
+
+```js
+const { entities, control, unit } = await HomeGlow.homeAssistant.state();
+await HomeGlow.homeAssistant.action('light.porch', 'brightness', 60);
+HomeGlow.on('ha.state', ({ entityIds }) => refresh());   // a nudge; read state again
+```
+
+- **HomeGlow keeps the token.** Your plugin never sees it, and nothing it does
+  reaches Home Assistant except through these calls.
+- **Only your entities, only fitting actions.** `state()` returns your declared
+  entities, with only the attributes a tile would use. `action()` accepts only
+  the actions that fit each kind of entity (`toggle`, `turn_on`, `turn_off`,
+  `brightness` 0–100, `color_temp`, `percentage`, `open`, `close`, `stop`,
+  `position`, `run`, `temperature`, `hvac_mode`, `play_pause`, `next`,
+  `previous`, `volume`, `lock`, `unlock`, `arm_home`, `arm_away`, `disarm`,
+  `start`, `pause`, `dock`, `select`, `set`), with values clamped to the
+  entity's own range. `"control": false` makes it read only. The kinds and
+  their actions are `DOMAINS` in `server/services/haPanels.js`.
+- **Unlocking, disarming and opening a garage door** may need the household PIN:
+  `action()` then rejects with `error.status === 401` and `error.needsPin`, and
+  you call it again with `{ pin }`. Displays that remember the admin PIN are
+  never asked, and the household can turn PIN protection off.
+- **Poll `state()` every couple of seconds while you're visible.** HomeGlow
+  answers from its own live copy, so it costs Home Assistant nothing.
+- **Cameras:** `HomeGlow.homeAssistant.cameraUrl('camera.porch')` is the address
+  of a declared camera's latest snapshot, for an `<img>`.
 
 ## 6. Reactions — server-side logic without server-side code
 
@@ -633,6 +672,9 @@ see §3–§5. The raw endpoints:
 | `GET` | `/api/plugin/v1/settings/:pluginId?device=<name>` | → `{ settingKey: value }` (manifest default ← stored value) |
 | `PUT` | `/api/plugin/v1/settings/:pluginId?device=<name>` | body: `{ settingKey: value }` → `{ success }` (validated; `?device=` required for device-scoped keys) |
 | `GET` | `/api/plugin/v1/events/stream` | SSE: `data: { event, payload, emittedAt }` per event |
+| `GET` | `/api/plugin/v1/ha/:pluginId/state` | → `{ entities, control, live, unit, pinProtection, error? }` (§5a) |
+| `POST` | `/api/plugin/v1/ha/:pluginId/action` | body: `{ entity` or `entities, action, value?, pin?, device? }` → `{ ok, entities }`; `401 { needsPin }`, `403` outside your list, `429` over 10 a second |
+| `GET` | `/api/plugin/v1/ha/:pluginId/camera/:entityId` | → a declared camera's snapshot image |
 
 `:pluginId` must match your manifest `id`, and storage/settings require
 `"storage": true` / declared `settings` respectively (else `403`).
