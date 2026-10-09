@@ -299,7 +299,59 @@
     "visible": "Visible",
     "clams": "Clams",
     "regular": "Regular",
-    "deleteChore": "Delete chore"
+    "deleteChore": "Delete chore",
+    "historyView": {
+      "title": "Chore history",
+      "refresh": "Refresh",
+      "help": "Filter, sort and group what has been done and missed. Date is the day an entry counts for; Logged is when it was recorded.",
+      "loadFailed": "Failed to load history",
+      "deleteFailed": "Failed to delete entry",
+      "deleteEntry": "Delete entry",
+      "unknown": "Unknown",
+      "range": "Range",
+      "ranges": {
+        "7": "Last 7 days",
+        "30": "Last 30 days",
+        "90": "Last 90 days",
+        "all": "All time"
+      },
+      "person": "Person",
+      "everyone": "Everyone",
+      "chore": "Chore",
+      "allChores": "All chores",
+      "groupBy": "Group by",
+      "groupings": {
+        "none": "No grouping",
+        "person": "Person",
+        "chore": "Chore",
+        "personChore": "Person and chore"
+      },
+      "categories": {
+        "done": "Done",
+        "bonus": "Bonuses",
+        "adjustment": "Adjustments"
+      },
+      "showMissed": "Show missed",
+      "entries_one": "{{count}} entry",
+      "entries_other": "{{count}} entries",
+      "empty": "No history matches these filters.",
+      "kind": "Kind",
+      "kinds": {
+        "completion": "Done",
+        "missed": "Missed",
+        "daily_bonus": "Daily bonus",
+        "transfer_bonus": "Transfer bonus",
+        "adjustment": "Adjustment",
+        "spent": "Spent"
+      },
+      "date": "Date",
+      "logged": "Logged",
+      "actions": "Actions",
+      "groupSummary": "{{done}} done · {{missed}} missed · {{clams}} 🥟 · last {{last}}",
+      "showAll_one": "Show all {{count}}",
+      "showAll_other": "Show all {{count}}",
+      "showFewer": "Show fewer"
+    }
   },
   "prizes": {
     "management": "Prize Management",

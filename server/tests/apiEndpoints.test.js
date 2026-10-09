@@ -1067,3 +1067,32 @@ test('testing an Immich source without an API key says so', async () => {
     // the real problem.
     assert.doesNotMatch(body.error, /refused|timed out/i);
 });
+
+test('history rows carry the person and the chore, and keep the title once the schedule is gone', async () => {
+    const userId = await newUser('History Hana');
+    const choreId = await newChore('Water the plants');
+    const created = await api('/api/chore-schedules', {
+        method: 'POST',
+        body: JSON.stringify({ chore_id: choreId, user_id: userId, crontab: '0 0 * * *', duration: 'day-of' }),
+    });
+    assert.equal(created.status, 200, JSON.stringify(created.body));
+    const scheduleId = created.body.id ?? created.body.ids?.[0];
+    const done = await api('/api/chores/complete', {
+        method: 'POST',
+        body: JSON.stringify({ chore_schedule_id: scheduleId, user_id: userId, date: '2026-01-05' }),
+    });
+    assert.equal(done.status, 200, JSON.stringify(done.body));
+
+    const completionOf = async () => (await api(`/api/chore-history?user_id=${userId}&date_from=2026-01-01`)).body
+        .find((row) => row.kind === 'completion');
+    const row = await completionOf();
+    assert.equal(row.username, 'History Hana');
+    assert.equal(row.chore_id, choreId);
+    assert.equal(row.title, 'Water the plants');
+
+    assert.equal((await api(`/api/chore-schedules/${scheduleId}`, { method: 'DELETE' })).status, 200);
+    const orphan = await completionOf();
+    assert.equal(orphan.chore_id, null);
+    assert.equal(orphan.title, 'Water the plants');
+    assert.equal(orphan.username, 'History Hana');
+});

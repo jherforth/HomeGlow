@@ -3162,24 +3162,31 @@ function withIsoCreatedAt(row) {
 fastify.get('/api/chore-history', async (request, reply) => {
   try {
     const { user_id, date, date_from, date_to } = request.query;
-    let query = 'SELECT * FROM chore_history';
+    // The person's name and the chore a row belongs to come along, so a history
+    // view can show and group them without a lookup per row. chore_id is null
+    // when the schedule is gone; the row's title snapshot remains.
+    let query = `
+      SELECT ch.*, u.username, cs.chore_id
+      FROM chore_history ch
+      LEFT JOIN users u ON u.id = ch.user_id
+      LEFT JOIN chore_schedules cs ON cs.id = ch.chore_schedule_id`;
     const conditions = [];
     const params = [];
 
     if (user_id !== undefined) {
-      conditions.push('user_id = ?');
+      conditions.push('ch.user_id = ?');
       params.push(user_id);
     }
     if (date) {
-      conditions.push('date = ?');
+      conditions.push('ch.date = ?');
       params.push(date);
     }
     if (date_from) {
-      conditions.push('date >= ?');
+      conditions.push('ch.date >= ?');
       params.push(date_from);
     }
     if (date_to) {
-      conditions.push('date <= ?');
+      conditions.push('ch.date <= ?');
       params.push(date_to);
     }
 
@@ -3187,7 +3194,7 @@ fastify.get('/api/chore-history', async (request, reply) => {
       query += ' WHERE ' + conditions.join(' AND ');
     }
 
-    query += ' ORDER BY date DESC, created_at DESC';
+    query += ' ORDER BY ch.date DESC, ch.created_at DESC, ch.id DESC';
 
     const rows = db.prepare(query).all(...params);
     return rows.map(withIsoCreatedAt);

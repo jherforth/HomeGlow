@@ -299,7 +299,59 @@
     "visible": "Visible",
     "clams": "Almejas",
     "regular": "Normal",
-    "deleteChore": "Eliminar tarea"
+    "deleteChore": "Eliminar tarea",
+    "historyView": {
+      "title": "Historial de tareas",
+      "refresh": "Actualizar",
+      "help": "Filtra, ordena y agrupa lo que se ha hecho y lo que se ha omitido. Fecha es el día al que cuenta una entrada; Registrado es cuándo se anotó.",
+      "loadFailed": "No se pudo cargar el historial",
+      "deleteFailed": "No se pudo eliminar la entrada",
+      "deleteEntry": "Eliminar entrada",
+      "unknown": "Desconocido",
+      "range": "Periodo",
+      "ranges": {
+        "7": "Últimos 7 días",
+        "30": "Últimos 30 días",
+        "90": "Últimos 90 días",
+        "all": "Todo"
+      },
+      "person": "Persona",
+      "everyone": "Todos",
+      "chore": "Tarea",
+      "allChores": "Todas las tareas",
+      "groupBy": "Agrupar por",
+      "groupings": {
+        "none": "Sin agrupar",
+        "person": "Persona",
+        "chore": "Tarea",
+        "personChore": "Persona y tarea"
+      },
+      "categories": {
+        "done": "Hechas",
+        "bonus": "Bonos",
+        "adjustment": "Ajustes"
+      },
+      "showMissed": "Mostrar omitidas",
+      "entries_one": "{{count}} entrada",
+      "entries_other": "{{count}} entradas",
+      "empty": "Ningún registro coincide con estos filtros.",
+      "kind": "Tipo",
+      "kinds": {
+        "completion": "Hecha",
+        "missed": "Omitida",
+        "daily_bonus": "Bono diario",
+        "transfer_bonus": "Bono de traspaso",
+        "adjustment": "Ajuste",
+        "spent": "Gastado"
+      },
+      "date": "Fecha",
+      "logged": "Registrado",
+      "actions": "Acciones",
+      "groupSummary": "{{done}} hechas · {{missed}} omitidas · {{clams}} 🥟 · última {{last}}",
+      "showAll_one": "Mostrar {{count}}",
+      "showAll_other": "Mostrar las {{count}}",
+      "showFewer": "Mostrar menos"
+    }
   },
   "prizes": {
     "management": "Gestión de premios",
