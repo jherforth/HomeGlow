@@ -99,6 +99,59 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
 .hint { position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 5; font-size: 0.72rem; font-weight: 650; text-align: center;
   padding: 4px 6px; border-radius: 8px; background: color-mix(in srgb, var(--ink) 80%, transparent); color: var(--background, #fff); }
 
+/* Music: a media player tile shows what's playing, with its picture, and
+   opens the player's library (browse, search, recent searches). */
+.np { display: flex; align-items: center; gap: clamp(8px, 2.4vmin, 14px); min-width: 0; position: relative; z-index: 2; }
+.np .art { width: clamp(52px, 17vmin, 112px); aspect-ratio: 1; flex: none; border-radius: var(--hg-radius-sm, 10px); object-fit: cover;
+  background: color-mix(in srgb, var(--acc) 12%, transparent); display: grid; place-items: center; }
+.tile.h2 .np .art { width: clamp(72px, 26vmin, 168px); }
+.np .art svg { width: 46%; height: 46%; fill: none; stroke: var(--acc); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.np .art.gone { visibility: hidden; }
+.np .meta { min-width: 0; flex: 1; }
+.np .title { font-weight: 700; font-size: clamp(0.9rem, 4vmin, 1.25rem); line-height: 1.2; overflow: hidden; text-overflow: ellipsis;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.np .sub + .sub { opacity: 0.8; }
+.ctl { justify-content: center; align-items: center; gap: clamp(4px, 1.6vmin, 10px); flex-wrap: nowrap; }
+.btn.icon { padding: 0; width: clamp(36px, 10vmin, 52px); height: clamp(36px, 10vmin, 52px); display: grid; place-items: center; flex: none; }
+.btn.icon.lg { width: clamp(44px, 13vmin, 64px); height: clamp(44px, 13vmin, 64px); }
+.btn.icon svg { width: 52%; height: 52%; fill: currentColor; }
+.btn.icon.toggled { background: var(--on-bg); color: var(--on-ink); }
+.btn.icon.quiet { background: transparent; }
+.ctl.tight { flex-wrap: wrap; gap: 2px; }
+.ctl.tight .btn.icon { width: clamp(32px, 9vmin, 44px); height: clamp(32px, 9vmin, 44px); }
+.list .tile .np .art { width: 36px; }
+
+.sheet.library { width: min(640px, 100%); height: min(100%, 780px); padding: 12px; gap: 8px; }
+.lib-head { display: flex; align-items: center; gap: 6px; }
+.lib-head h2 { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tabs { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--tile-bg); }
+.tabs .btn { flex: 1; background: transparent; }
+.tabs .btn.current { background: var(--on-bg); color: var(--on-ink); }
+.lib-body { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 4px; }
+.item { appearance: none; border: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; width: 100%;
+  display: flex; align-items: center; gap: 10px; padding: 6px; min-height: 56px; border-radius: 10px; background: transparent; }
+.item:hover, .item:focus-visible { background: var(--tile-bg); }
+.item:focus-visible { outline: 3px solid var(--acc); outline-offset: -3px; }
+.item .thumb { width: 44px; height: 44px; flex: none; border-radius: 6px; object-fit: cover; background: var(--tile-bg); display: grid; place-items: center; }
+.item .thumb svg { width: 55%; height: 55%; fill: none; stroke: var(--acc); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.item .t { flex: 1; min-width: 0; }
+.item .t b { display: block; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item .t span { display: block; font-size: 0.78rem; color: var(--ink-2); }
+.item .go { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 999px; }
+.item .go svg { width: 50%; height: 50%; fill: currentColor; }
+.item .go.play { background: var(--on-bg); color: var(--on-ink); }
+.lib-search { display: flex; gap: 6px; }
+.lib-search input { flex: 1; min-width: 0; min-height: 44px; padding: 0 12px; border-radius: 10px; font: inherit; font-size: 1rem;
+  border: 1px solid color-mix(in srgb, var(--ink) 22%, transparent); background: var(--background, #fff); color: var(--ink);
+  -webkit-user-select: text; user-select: text; }
+.lib-search input:focus-visible { outline: 3px solid var(--acc); outline-offset: 1px; }
+.lib-label { display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; font-weight: 650; color: var(--ink-2); margin: 6px 2px 2px; }
+.lib-label .btn { min-height: 30px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips .btn { min-height: 40px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-status { padding: 14px 6px; text-align: center; color: var(--ink-2); font-size: 0.9rem; }
+.lib-status.err { color: var(--err); }
+
 /* Small widgets: a compact list. */
 .list { display: flex; flex-direction: column; gap: 6px; }
 .list .tile { flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px; min-height: 48px; padding: 6px 10px; }
@@ -177,7 +230,13 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
       previewNoActions: 'Save the panel to try its controls.',
       pinTitle: 'Enter the household PIN', pinWrong: 'That PIN is not right.', cancel: 'Cancel', ok: 'OK', clearKey: 'Clear',
       failed: 'That didn\'t work', choose: 'Choose', empty: 'This panel has no tiles yet.', loading: 'Loading…',
-      camera: 'Camera', heat: 'Heat', cool: 'Cool', heat_cool: 'Auto', auto: 'Auto', dry_mode: 'Dry', fan_only: 'Fan', off_mode: 'Off'
+      camera: 'Camera', heat: 'Heat', cool: 'Cool', heat_cool: 'Auto', auto: 'Auto', dry_mode: 'Dry', fan_only: 'Fan', off_mode: 'Off',
+      library: 'Music library', browse: 'Library', search: 'Search', searchPlaceholder: 'Song, artist, album…', go: 'Go',
+      recent: 'Recent searches', clearRecent: 'Clear', back: 'Back', close: 'Close', playAll: 'Play all', play: 'Play', openItem: 'Open',
+      nothingHere: 'Nothing here.', noResults: 'Nothing found for', searching: 'Searching…', nowPlaying: 'Playing', starting: 'Starting',
+      shuffle: 'Shuffle', previous: 'Previous', next: 'Next', nothingPlaying: 'Nothing playing', staleList: 'That list changed. Here it is again.',
+      kind_playlist: 'Playlist', kind_album: 'Album', kind_artist: 'Artist', kind_track: 'Song', kind_music: 'Music', kind_directory: 'Folder',
+      kind_podcast: 'Podcast', kind_episode: 'Episode', kind_channel: 'Station', kind_genre: 'Genre', kind_composer: 'Composer'
     },
     es: {
       on: 'Encendido', off: 'Apagado', open: 'Abierto', closed: 'Cerrado', opening: 'Abriendo', closing: 'Cerrando', stopped: 'Detenido',
@@ -200,7 +259,13 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
       previewNoActions: 'Guarda el panel para probar sus controles.',
       pinTitle: 'Escribe el PIN de la casa', pinWrong: 'Ese PIN no es correcto.', cancel: 'Cancelar', ok: 'Aceptar', clearKey: 'Borrar',
       failed: 'No ha funcionado', choose: 'Elegir', empty: 'Este panel aún no tiene mosaicos.', loading: 'Cargando…',
-      camera: 'Cámara', heat: 'Calor', cool: 'Frío', heat_cool: 'Auto', auto: 'Auto', dry_mode: 'Seco', fan_only: 'Ventilador', off_mode: 'Apagado'
+      camera: 'Cámara', heat: 'Calor', cool: 'Frío', heat_cool: 'Auto', auto: 'Auto', dry_mode: 'Seco', fan_only: 'Ventilador', off_mode: 'Apagado',
+      library: 'Biblioteca de música', browse: 'Biblioteca', search: 'Buscar', searchPlaceholder: 'Canción, artista, álbum…', go: 'Ir',
+      recent: 'Búsquedas recientes', clearRecent: 'Borrar', back: 'Atrás', close: 'Cerrar', playAll: 'Reproducir todo', play: 'Reproducir', openItem: 'Abrir',
+      nothingHere: 'No hay nada aquí.', noResults: 'No se encontró nada para', searching: 'Buscando…', nowPlaying: 'Reproduciendo', starting: 'Iniciando',
+      shuffle: 'Aleatorio', previous: 'Anterior', next: 'Siguiente', nothingPlaying: 'No se está reproduciendo nada', staleList: 'Esa lista cambió. Aquí está de nuevo.',
+      kind_playlist: 'Lista', kind_album: 'Álbum', kind_artist: 'Artista', kind_track: 'Canción', kind_music: 'Música', kind_directory: 'Carpeta',
+      kind_podcast: 'Pódcast', kind_episode: 'Episodio', kind_channel: 'Emisora', kind_genre: 'Género', kind_composer: 'Compositor'
     }
   };
   var T = STRINGS[lang];
@@ -249,6 +314,29 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
     gauge: '<path d="M4 17a8 8 0 1 1 16 0M12 13l4-4"/><circle cx="12" cy="13" r="1"/>',
     battery: '<rect x="3" y="7" width="16" height="10" rx="2"/><path d="M21 11v2M6 10v4M9 10v4"/>'
   };
+  // Filled glyphs for the music controls (not stroked like the tile icons).
+  var MEDIA_ICONS = {
+    play: '<path d="M8 5.5v13l11-6.5z"/>',
+    pause: '<path d="M6.5 5h4v14h-4zM13.5 5h4v14h-4z"/>',
+    previous: '<path d="M6 5h2.2v14H6zM9.5 12L19 5.5v13z"/>',
+    next: '<path d="M15.8 5H18v14h-2.2zM14.5 12L5 18.5v-13z"/>',
+    shuffle: '<path d="M16 3h5v5l-1.8-1.8-3.7 3.7-1.4-1.4 3.7-3.7zM3 5.4L4.4 4l15.3 15.3V16H21.7v5h-5v-2h2.6zM8.6 13.9l1.4 1.4-4.6 4.7L4 18.6z"/>',
+    library: '<path d="M3 5h12v2H3zM3 10h12v2H3zM3 15h8v2H3zM17 5h4.5v2.2H19v9.3a3 3 0 1 1-2-2.83z"/>',
+    open: '<path d="M9 5.5L15.5 12 9 18.5 7.6 17.1l5.1-5.1-5.1-5.1z"/>',
+    back: '<path d="M15 5.5L8.5 12l6.5 6.5 1.4-1.4L11.3 12l5.1-5.1z"/>',
+    close: '<path d="M6.4 5L12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6 10.6 12 5 6.4z"/>'
+  };
+  var MEDIA_FEATURE = { PLAY_MEDIA: 512, SHUFFLE_SET: 32768, BROWSE_MEDIA: 131072, SEARCH_MEDIA: 4194304 };
+  function glyph(name) { return '<svg viewBox="0 0 24 24" aria-hidden="true">' + MEDIA_ICONS[name] + '</svg>'; }
+  function mediaBase(entityId) {
+    return '/api/plugin/v1/ha/' + encodeURIComponent(pluginId) + '/media/' + encodeURIComponent(entityId);
+  }
+  // A picture address from HomeGlow is either on the web or one of HomeGlow's
+  // own; anything else is not shown.
+  function safeThumb(url) {
+    return typeof url === 'string' && (/^https?:\/\//i.test(url) || url.indexOf('/api/plugin/v1/ha/') === 0) ? url : '';
+  }
+
   var CHEVRON_UP = '<svg class="chev up" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   var CHEVRON_DOWN = '<svg class="chev down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
@@ -651,17 +739,7 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
     }
 
     if (kind === 'media') {
-      var ma = st.attributes;
-      var mediaButtons = '';
-      if (operable) {
-        if (has(st, 16)) mediaButtons += '<button type="button" class="btn" data-action="previous" aria-label="previous">⏮</button>';
-        if (has(st, 1) || has(st, 16384)) mediaButtons += '<button type="button" class="btn primary" data-action="play_pause" aria-label="' + esc(st.state === 'playing' ? T.paused : T.playing) + '">' + (st.state === 'playing' ? '⏸' : '▶') + '</button>';
-        if (has(st, 32)) mediaButtons += '<button type="button" class="btn" data-action="next" aria-label="next">⏭</button>';
-      }
-      var volume = operable && has(st, 4) && ma.volume_level != null
-        ? '<input type="range" min="0" max="100" step="5" value="' + Math.round(ma.volume_level * 100) + '" data-range="volume" aria-label="' + esc(name) + ' volume">'
-        : '';
-      return '<div class="' + classes.join(' ') + '"' + data + '>' + head + label + (mediaButtons ? '<div class="row">' + mediaButtons + '</div>' : '') + volume + hint + '</div>';
+      return mediaTileHtml(tile, st, { classes: classes, data: data, name: name, operable: operable, hint: hint, compact: compact, big: size !== '1x1' });
     }
 
     if (kind === 'vacuum') {
@@ -700,6 +778,56 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
     if (domainOf(id) === 'binary_sensor' && st.state === 'on') classes.push('on');
     return '<div class="' + classes.join(' ') + '"' + data + '>' + head
       + '<div><div class="big">' + esc(stateText(id, st)) + '</div><div class="name">' + esc(name) + '</div></div></div>';
+  }
+
+  // A media player: what's playing (with its picture, on a larger tile), the
+  // controls it supports, its volume, and its library when it has one.
+  function mediaTileHtml(tile, st, o) {
+    var id = tile.entities[0];
+    var a = st.attributes || {};
+    var playing = st.state === 'playing';
+    var idle = ['off', 'idle', 'standby', 'unavailable', 'unknown'].indexOf(st.state) !== -1 && !a.media_title;
+    var buttons = '';
+    if (o.operable) {
+      if (has(st, MEDIA_FEATURE.SHUFFLE_SET) && o.big) {
+        buttons += '<button type="button" class="btn icon' + (a.shuffle ? ' toggled' : ' quiet') + '" data-shuffle aria-pressed="' + !!a.shuffle + '" aria-label="' + esc(T.shuffle) + '">' + glyph('shuffle') + '</button>';
+      }
+      if (has(st, 16)) buttons += '<button type="button" class="btn icon quiet" data-action="previous" aria-label="' + esc(T.previous) + '">' + glyph('previous') + '</button>';
+      if (has(st, 1) || has(st, 16384)) {
+        buttons += '<button type="button" class="btn icon lg primary" data-action="play_pause" aria-label="' + esc(playing ? T.pause : T.play) + '">' + glyph(playing ? 'pause' : 'play') + '</button>';
+      }
+      if (has(st, 32)) buttons += '<button type="button" class="btn icon quiet" data-action="next" aria-label="' + esc(T.next) + '">' + glyph('next') + '</button>';
+      if (!preview && has(st, MEDIA_FEATURE.PLAY_MEDIA) && (has(st, MEDIA_FEATURE.BROWSE_MEDIA) || has(st, MEDIA_FEATURE.SEARCH_MEDIA))) {
+        buttons += '<button type="button" class="btn icon quiet" data-library aria-haspopup="dialog" aria-label="' + esc(T.library) + '">' + glyph('library') + '</button>';
+      }
+    }
+    var volume = o.operable && has(st, 4) && a.volume_level != null
+      ? '<input type="range" min="0" max="100" step="5" value="' + Math.round(a.volume_level * 100) + '" data-range="volume" aria-label="' + esc(o.name) + ' volume">'
+      : '';
+    var small = !o.big || o.compact;
+    // A small tile has no room for the large play button.
+    if (small) buttons = buttons.replace(/ icon lg /g, ' icon ');
+    var controls = (buttons ? '<div class="row ctl' + (small ? ' tight' : '') + '">' + buttons + '</div>' : '') + volume;
+
+    if (small) {
+      if (playing) o.classes.push('on');
+      var line = tile.showState === false ? '' : (a.media_title ? a.media_title + (a.media_artist ? ' · ' + a.media_artist : '') : stateText(id, st));
+      return '<div class="' + o.classes.join(' ') + '"' + o.data + '><div class="top"><span class="ico">' + iconFor(tile, st) + '</span></div>'
+        + '<div><div class="name">' + esc(o.name) + '</div>' + (line ? '<div class="sub">' + esc(line) + '</div>' : '') + '</div>'
+        + controls + o.hint + '</div>';
+    }
+
+    var art = !preview && a.media_art
+      ? '<img class="art" alt="" src="' + esc(mediaBase(id) + '/art?v=' + encodeURIComponent(a.media_art)) + '">'
+      : '<span class="art">' + svg(ICONS.music) + '</span>';
+    var title = idle ? T.nothingPlaying : (a.media_title || stateText(id, st));
+    var detail = [a.media_artist, a.media_album_name].filter(Boolean).join(' · ');
+    o.classes.push('media');
+    return '<div class="' + o.classes.join(' ') + '"' + o.data + '>'
+      + '<div class="np">' + art + '<div class="meta"><div class="title">' + esc(title) + '</div>'
+      + (detail ? '<div class="sub">' + esc(detail) + '</div>' : '')
+      + (tile.showState === false ? '' : '<div class="sub">' + esc(o.name) + '</div>') + '</div></div>'
+      + controls + o.hint + '</div>';
   }
 
   // Camera snapshots: a fresh one every 10 seconds while the panel is seen.
@@ -872,8 +1000,22 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
     cancelHold();
   });
   app.addEventListener('pointerleave', cancelHold);
+  app.addEventListener('error', function (event) {
+    if (event.target && event.target.classList && event.target.classList.contains('art')) event.target.classList.add('gone');
+  }, true);
 
   app.addEventListener('click', function (event) {
+    var musicEl = event.target.closest('[data-library],[data-shuffle]');
+    if (musicEl) {
+      var musicTile = tileById(musicEl.closest('[data-tile]').getAttribute('data-tile'));
+      if (!musicTile) return;
+      if (preview) { flashHint(musicTile, T.previewNoActions); return; }
+      if (musicEl.hasAttribute('data-library')) { openLibrary(musicTile); return; }
+      var current = stateOf(musicTile.entities[0]);
+      var next = !(current && current.attributes && current.attributes.shuffle);
+      act(musicTile, 'shuffle', next, { optimistic: function () { return { attributes: { shuffle: next } }; } });
+      return;
+    }
     if (event.target.closest('[data-slider]') || event.target.closest('input')) return;
     var actionEl = event.target.closest('[data-action],[data-pick]');
     if (!actionEl) return;
@@ -920,10 +1062,10 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
 
   // --- Overlays ------------------------------------------------------------------
 
-  function overlay(html, onMount) {
+  function overlay(html, onMount, sheetClass) {
     var el = document.createElement('div');
     el.className = 'overlay';
-    el.innerHTML = '<div class="sheet" role="dialog" aria-modal="true">' + html + '</div>';
+    el.innerHTML = '<div class="sheet' + (sheetClass ? ' ' + sheetClass : '') + '" role="dialog" aria-modal="true">' + html + '</div>';
     document.body.appendChild(el);
     var close = function () { el.remove(); };
     el.addEventListener('click', function (event) { if (event.target === el) close(); });
@@ -993,6 +1135,224 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
         if (first) first.focus();
       }
     );
+  }
+
+  // --- Music library ----------------------------------------------------------------
+
+  // The player's library, a level at a time, and search with recent searches.
+  // Everything comes from HomeGlow (routes/haPanels.js), which asks Home
+  // Assistant; playing sends the item's key, never what it points at.
+  function openLibrary(tile) {
+    var entityId = tile.entities[0];
+    var st = stateOf(entityId);
+    var canBrowse = has(st, MEDIA_FEATURE.BROWSE_MEDIA);
+    var canSearch = has(st, MEDIA_FEATURE.SEARCH_MEDIA);
+    var base = mediaBase(entityId);
+    var view = {
+      tab: canBrowse ? 'browse' : 'search',
+      stack: [],          // [{ key, title }] opened levels, root first
+      level: null,        // the browse level shown
+      query: '',
+      found: null,        // { query, items }
+      recent: null,
+      busy: false,
+      error: ''
+    };
+    var sheet;
+    var closeSheet;
+
+    var kindLabel = function (kind) { return T['kind_' + kind] || ''; };
+    var thumbHtml = function (item) {
+      var src = safeThumb(item.thumb);
+      return src ? '<img class="thumb" alt="" loading="lazy" src="' + esc(src) + '">' : '<span class="thumb">' + svg(ICONS.music) + '</span>';
+    };
+    var itemHtml = function (item) {
+      var go = item.canOpen
+        ? '<span class="go" aria-hidden="true">' + glyph('open') + '</span>'
+        : '<span class="go play" aria-hidden="true">' + glyph('play') + '</span>';
+      var playButton = item.canOpen && item.canPlay
+        ? '<button type="button" class="btn icon primary" data-play="' + esc(item.key) + '" data-title="' + esc(item.title) + '" aria-label="' + esc(T.play + ': ' + item.title) + '">' + glyph('play') + '</button>'
+        : '';
+      return '<div style="display:flex;align-items:center;gap:6px">'
+        + '<button type="button" class="item" data-' + (item.canOpen ? 'open' : 'play') + '="' + esc(item.key) + '" data-title="' + esc(item.title) + '"'
+        + ' aria-label="' + esc((item.canOpen ? T.openItem : T.play) + ': ' + item.title) + '">'
+        + thumbHtml(item) + '<span class="t"><b>' + esc(item.title) + '</b><span>' + esc(kindLabel(item.kind)) + '</span></span>' + go + '</button>'
+        + playButton + '</div>';
+    };
+    var list = function (items, empty) {
+      if (!items || !items.length) return '<p class="lib-status">' + esc(empty) + '</p>';
+      return items.map(itemHtml).join('');
+    };
+
+    function draw() {
+      if (!sheet) return;
+      var top = view.stack.length ? view.stack[view.stack.length - 1] : null;
+      var inSearchResults = view.tab === 'search' && view.found;
+      var showBack = (view.tab === 'browse' && view.stack.length > 0) || inSearchResults;
+      var title = view.tab === 'browse' ? (top ? top.title : (view.level && view.level.title) || T.library) : T.search;
+      var html = '<div class="lib-head">'
+        + (showBack ? '<button type="button" class="btn icon quiet" data-back aria-label="' + esc(T.back) + '">' + glyph('back') + '</button>' : '')
+        + '<h2>' + esc(title) + '</h2>'
+        + (view.tab === 'browse' && view.level && view.level.canPlay && view.level.key && view.stack.length
+          ? '<button type="button" class="btn primary" data-play="' + esc(view.level.key) + '" data-title="' + esc(title) + '">' + esc(T.playAll) + '</button>' : '')
+        + '<button type="button" class="btn icon quiet" data-close aria-label="' + esc(T.close) + '">' + glyph('close') + '</button></div>';
+      if (canBrowse && canSearch) {
+        html += '<div class="tabs" role="tablist">'
+          + '<button type="button" role="tab" class="btn' + (view.tab === 'browse' ? ' current' : '') + '" aria-selected="' + (view.tab === 'browse') + '" data-tab="browse">' + esc(T.browse) + '</button>'
+          + '<button type="button" role="tab" class="btn' + (view.tab === 'search' ? ' current' : '') + '" aria-selected="' + (view.tab === 'search') + '" data-tab="search">' + esc(T.search) + '</button></div>';
+      }
+      if (view.tab === 'search') {
+        html += '<form class="lib-search" data-search><input type="search" enterkeyhint="search" maxlength="100" autocomplete="off" placeholder="'
+          + esc(T.searchPlaceholder) + '" aria-label="' + esc(T.search) + '" value="' + esc(view.query) + '">'
+          + '<button type="submit" class="btn primary">' + esc(T.go) + '</button></form>';
+      }
+      html += '<div class="lib-body" aria-live="polite">';
+      if (view.error) html += '<p class="lib-status err" role="alert">' + esc(view.error) + '</p>';
+      if (view.busy) {
+        html += '<p class="lib-status">' + esc(view.tab === 'search' ? T.searching : T.loading) + '</p>';
+      } else if (view.tab === 'browse') {
+        if (view.level) html += list(view.level.items, T.nothingHere);
+      } else if (view.found) {
+        html += list(view.found.items, T.noResults + ' "' + view.found.query + '"');
+      } else if (view.recent && view.recent.length) {
+        html += '<div class="lib-label"><span>' + esc(T.recent) + '</span><button type="button" class="btn" data-clear-recent>' + esc(T.clearRecent) + '</button></div>'
+          + '<div class="chips">' + view.recent.map(function (q) {
+            return '<button type="button" class="btn" data-recent="' + esc(q) + '">' + esc(q) + '</button>';
+          }).join('') + '</div>';
+      }
+      html += '</div>';
+      var hadFocusInSearch = document.activeElement && document.activeElement.closest && document.activeElement.closest('[data-search]');
+      sheet.innerHTML = html;
+      var input = sheet.querySelector('[data-search] input');
+      if (input && (hadFocusInSearch || (!view.found && !view.busy && view.tab === 'search' && !(view.recent && view.recent.length)))) {
+        input.focus();
+        try { input.setSelectionRange(input.value.length, input.value.length); } catch (e) { /* not a text field */ }
+      }
+    }
+
+    function fail(error) {
+      view.busy = false;
+      view.error = (error && error.message) || T.failed;
+      draw();
+    }
+
+    function browse(key, title) {
+      view.busy = true;
+      view.error = '';
+      draw();
+      return getJson(base + '/browse' + (key ? '?item=' + encodeURIComponent(key) : '')).then(function (level) {
+        view.busy = false;
+        view.level = level;
+        if (key) view.stack.push({ key: key, title: title || level.title });
+        draw();
+      }).catch(function (error) {
+        if (error.status === 410) {
+          // HomeGlow restarted, or the list was long ago: start again from the top.
+          view.stack = [];
+          return browse(null).then(function () { view.error = T.staleList; draw(); });
+        }
+        fail(error);
+      });
+    }
+
+    function back() {
+      if (view.tab === 'search') {
+        view.found = null;
+        view.query = '';
+        view.error = '';
+        draw();
+        return;
+      }
+      view.stack.pop();
+      var parent = view.stack.pop();
+      browse(parent ? parent.key : null, parent ? parent.title : null);
+    }
+
+    function loadRecent() {
+      getJson(base + '/recent').then(function (data) {
+        view.recent = (data && data.recent) || [];
+        draw();
+      }).catch(function () { view.recent = []; draw(); });
+    }
+
+    function search(query) {
+      var q = String(query || '').trim();
+      if (!q) return;
+      view.query = q;
+      view.busy = true;
+      view.error = '';
+      draw();
+      getJson(base + '/search?q=' + encodeURIComponent(q)).then(function (data) {
+        view.busy = false;
+        view.found = { query: data.query, items: data.items };
+        view.recent = data.recent || view.recent;
+        draw();
+      }).catch(fail);
+    }
+
+    function play(key, title) {
+      view.error = '';
+      fetch('/api/plugin/v1/ha/' + encodeURIComponent(pluginId) + '/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entity: entityId, action: 'play_media', value: key, device: device })
+      }).then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (data) {
+          if (!res.ok) {
+            if (res.status === 410 && view.tab === 'browse') { view.stack = []; browse(null).then(function () { view.error = T.staleList; draw(); }); return; }
+            fail(new Error((data && data.error) || T.failed));
+            return;
+          }
+          Object.keys(data.entities || {}).forEach(function (id) { if (data.entities[id]) states[id] = data.entities[id]; });
+          closeSheet();
+          flashHint(tile, T.starting + ': ' + title);
+        });
+      }).catch(function () { fail(new Error(T.unreachable)); });
+    }
+
+    closeSheet = overlay('', function (el, close) {
+      sheet = el.querySelector('.sheet');
+      el.addEventListener('click', function (event) {
+        var t = event.target;
+        if (t.closest('[data-close]')) { close(); return; }
+        if (t.closest('[data-back]')) { back(); return; }
+        var tab = t.closest('[data-tab]');
+        if (tab) {
+          view.tab = tab.getAttribute('data-tab');
+          view.error = '';
+          if (view.tab === 'browse' && !view.level) browse(null); else draw();
+          if (view.tab === 'search' && view.recent === null) loadRecent();
+          return;
+        }
+        var playEl = t.closest('[data-play]');
+        if (playEl) { play(playEl.getAttribute('data-play'), playEl.getAttribute('data-title') || ''); return; }
+        var openEl = t.closest('[data-open]');
+        if (openEl) { browse(openEl.getAttribute('data-open'), openEl.getAttribute('data-title')); return; }
+        var recentEl = t.closest('[data-recent]');
+        if (recentEl) { search(recentEl.getAttribute('data-recent')); return; }
+        if (t.closest('[data-clear-recent]')) {
+          view.recent = [];
+          draw();
+          fetch(base + '/recent', { method: 'DELETE' }).catch(function () { /* cleared here anyway */ });
+        }
+      });
+      el.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var input = event.target.querySelector('input');
+        if (input) { input.blur(); search(input.value); }
+      });
+      el.addEventListener('input', function (event) {
+        if (!event.target.closest('[data-search]')) return;
+        view.query = event.target.value;
+        // Clearing the box goes back to the recent searches.
+        if (!view.query.trim() && view.found) { view.found = null; draw(); }
+      });
+      el.addEventListener('error', function (event) {
+        if (event.target && event.target.classList && event.target.classList.contains('thumb')) event.target.style.visibility = 'hidden';
+      }, true);
+    }, 'library');
+
+    if (view.tab === 'browse') browse(null); else { loadRecent(); draw(); }
   }
 
   // --- Running --------------------------------------------------------------------

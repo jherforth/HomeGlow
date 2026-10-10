@@ -400,12 +400,27 @@ gates in `app.jsx` (sound scheduler + screensaver render), UI in `AdminPanel.jsx
   Wall display hides it too, unless that display is excepted.
 - Panels can be duplicated, copied as text and imported into another HomeGlow
   (with a step to swap entity ids), and the builder lists what panels did.
+- **Music.** A media player tile at 2×1 or 2×2 shows what's playing with its
+  album art, artist and album, and has shuffle, previous, play/pause, next and
+  volume. A player with a library opens it from the tile: browse it a level at
+  a time (playlists, artists, albums ...), play a whole playlist or one song,
+  or search it, with the panel's recent searches kept for next time. It uses
+  Home Assistant's own `media_player/browse_media` and `search_media`, so it
+  works with whatever the player offers: Music Assistant (and every source
+  connected to it: Spotify, YouTube Music, local files, radio ...), Sonos,
+  Plex, the Spotify integration and others.
+- **A panel plays only what HomeGlow showed it.** Every item it is shown gets
+  a short key, and `play_media` takes a key, never a content id, so a panel
+  can't make a speaker play an address of its own. The playing item's picture
+  comes through HomeGlow (Home Assistant's proxy address carries a token, so
+  only a tag that changes with it reaches the panel); pictures already on the
+  web are left to the browser.
 - Hand-written plugins get the same access by declaring `homeAssistant`
   entities in their manifest (Plugin Development guide, §5a).
 
 **Code:** `HomeAssistantPanels.jsx`, `utils/haPanelBuilder.js`; backend
-`routes/haPanels.js`, `services/haPanels.js` (rules), `services/haLive.js`
-(live link), `ha-panels/template.html`.
+`routes/haPanels.js`, `services/haPanels.js` (rules), `services/haMedia.js`
+(music), `services/haLive.js` (live link), `ha-panels/template.html`.
 
 ## Admin Panel & PIN
 

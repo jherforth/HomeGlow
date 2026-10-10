@@ -445,7 +445,8 @@ HomeGlow.on('ha.state', ({ entityIds }) => refresh());   // a nudge; read state 
   the actions that fit each kind of entity (`toggle`, `turn_on`, `turn_off`,
   `brightness` 0–100, `color_temp`, `percentage`, `open`, `close`, `stop`,
   `position`, `run`, `temperature`, `hvac_mode`, `play_pause`, `next`,
-  `previous`, `volume`, `lock`, `unlock`, `arm_home`, `arm_away`, `disarm`,
+  `previous`, `volume`, `shuffle` (true/false), `play_media` (see Music below),
+  `lock`, `unlock`, `arm_home`, `arm_away`, `disarm`,
   `start`, `pause`, `dock`, `select`, `set`), with values clamped to the
   entity's own range. `"control": false` makes it read only. The kinds and
   their actions are `DOMAINS` in `server/services/haPanels.js`.
@@ -457,6 +458,21 @@ HomeGlow.on('ha.state', ({ entityIds }) => refresh());   // a nudge; read state 
   answers from its own live copy, so it costs Home Assistant nothing.
 - **Cameras:** `HomeGlow.homeAssistant.cameraUrl('camera.porch')` is the address
   of a declared camera's latest snapshot, for an `<img>`.
+- **Music:** a declared media player's library, through Home Assistant, for
+  whatever the player offers (Music Assistant, Sonos, Spotify ...). Items carry
+  a `key`; you play one by its key, never by what it points at:
+
+  ```js
+  const top = await HomeGlow.homeAssistant.media.browse('media_player.kitchen');
+  const playlists = await HomeGlow.homeAssistant.media.browse('media_player.kitchen', top.items[0].key);
+  await HomeGlow.homeAssistant.action('media_player.kitchen', 'play_media', playlists.items[0].key);
+  const { items, recent } = await HomeGlow.homeAssistant.media.search('media_player.kitchen', 'neil young');
+  img.src = HomeGlow.homeAssistant.media.artUrl('media_player.kitchen', state.attributes.media_art);
+  ```
+
+  `recent(entityId)` and `clearRecent(entityId)` read and forget the recent
+  searches. Browsing and searching need the player in `control`; an item's
+  `thumb` is a picture address for an `<img>`, or null.
 
 ## 6. Reactions — server-side logic without server-side code
 

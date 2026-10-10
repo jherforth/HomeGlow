@@ -10,6 +10,8 @@
 // Hand-written plugins get the same access by declaring their entities in
 // their manifest (`homeAssistant.entities`); the same rules apply.
 
+const media = require('./haMedia');
+
 const ENTITY_ID = /^[a-z_]+\.[a-z0-9_]+$/;
 const TILE_ID = /^[a-z0-9]{1,16}$/;
 const MAX_TILES = 48;
@@ -35,7 +37,7 @@ const EMOJI_ICON = /^[^\s<>&"'`=;{}\\a-zA-Z0-9]{1,8}$/u;
 const COVER = { OPEN: 1, CLOSE: 2, SET_POSITION: 4, STOP: 8 };
 const FAN = { SET_SPEED: 1 };
 const CLIMATE = { TARGET_TEMPERATURE: 1 };
-const MEDIA = { PAUSE: 1, VOLUME_SET: 4, PREVIOUS_TRACK: 16, NEXT_TRACK: 32, PLAY: 16384 };
+const MEDIA = { PAUSE: 1, VOLUME_SET: 4, PREVIOUS_TRACK: 16, NEXT_TRACK: 32, PLAY_MEDIA: 512, PLAY: 16384, SHUFFLE_SET: 32768, MEDIA_ENQUEUE: 2097152 };
 const VACUUM = { PAUSE: 4, RETURN_HOME: 16, START: 8192 };
 const ALARM = { ARM_HOME: 1, ARM_AWAY: 2 };
 
@@ -185,8 +187,37 @@ const DOMAINS = {
         if (pct === null) throw new ActionError('volume needs a number from 0 to 100');
         return { domain: 'media_player', service: 'volume_set', data: { volume_level: Math.round(pct) / 100 } };
       },
+      shuffle: (state, value) => {
+        if (!has(state, MEDIA.SHUFFLE_SET)) throw new ActionError('This player cannot shuffle');
+        if (typeof value !== 'boolean') throw new ActionError('shuffle needs true or false');
+        return { domain: 'media_player', service: 'shuffle_set', data: { shuffle: value } };
+      },
+      // Something from the player's own library (services/haMedia.js). The
+      // route turns the key a panel sends into the item HomeGlow showed it
+      // and marks it `fromLibrary`; nothing else is accepted, so a panel can
+      // never name a content id (a stream address) itself.
+      play_media: (state, value) => {
+        if (!has(state, MEDIA.PLAY_MEDIA)) throw new ActionError('This player cannot play from its library');
+        if (!isObject(value) || value.fromLibrary !== true
+          || typeof value.media_content_id !== 'string' || typeof value.media_content_type !== 'string') {
+          throw new ActionError('play_media needs something from the player\'s library');
+        }
+        return {
+          domain: 'media_player',
+          service: 'play_media',
+          data: {
+            media_content_id: value.media_content_id,
+            media_content_type: value.media_content_type,
+            // Play it now, rather than adding it to the end of the queue.
+            ...(has(state, MEDIA.MEDIA_ENQUEUE) ? { enqueue: 'replace' } : {}),
+          },
+        };
+      },
     },
-    attributes: ['media_title', 'media_artist', 'volume_level', 'is_volume_muted'],
+    attributes: ['media_title', 'media_artist', 'media_album_name', 'volume_level', 'is_volume_muted', 'shuffle'],
+    // The picture's address is never sent (Home Assistant's carries a token):
+    // a tag that changes with it, and the panel asks HomeGlow for the picture.
+    derived: (state) => ({ media_art: media.artVersion(state) }),
   },
   lock: {
     actions: {
@@ -321,6 +352,8 @@ function filterState(state) {
   for (const key of allowed) {
     if (state.attributes && state.attributes[key] !== undefined) attributes[key] = state.attributes[key];
   }
+  const derived = DOMAINS[domain]?.derived;
+  if (derived) Object.assign(attributes, derived(state));
   return {
     state: state.state,
     attributes,

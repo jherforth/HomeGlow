@@ -312,22 +312,45 @@ class HaLive {
    * command Home Assistant refused, so the builder can do without areas.
    */
   async commands(list) {
+    const outcomes = await this.run(list);
+    return outcomes.map((outcome) => (outcome.ok ? outcome.result : null));
+  }
+
+  /**
+   * One WebSocket command whose answer matters (a player's library): its
+   * result, or an Error carrying Home Assistant's own message and a status.
+   */
+  async command(message) {
+    const [outcome] = await this.run([message]);
+    if (outcome.ok) return outcome.result;
+    const error = new Error(outcome.error || 'Home Assistant did not answer.');
+    error.status = outcome.status;
+    error.code = outcome.code;
+    throw error;
+  }
+
+  /** [{ type, ... }] -> [{ ok, result } | { ok: false, error, status, code }]. */
+  async run(list) {
+    const fail = (error, status, code) => list.map(() => ({ ok: false, error, status, code }));
     const { baseUrl, tokenEnc } = this.ha.getConfig(this.db);
-    if (!baseUrl || !tokenEnc || !this.WebSocketImpl) return list.map(() => null);
+    if (!baseUrl || !tokenEnc) return fail('Home Assistant is not connected.', 503);
+    if (!this.WebSocketImpl) return fail('This server cannot open a WebSocket to Home Assistant.', 503);
     return await new Promise((resolve) => {
       let ws;
-      const results = new Array(list.length).fill(null);
+      const results = list.map(() => null);
       let remaining = list.length;
+      let failure = { error: 'Home Assistant did not answer in time.', status: 504 };
       const finish = () => {
         clearTimeout(timer);
         try { ws?.close(); } catch { /* closing */ }
-        resolve(results);
+        resolve(results.map((outcome) => outcome || { ok: false, ...failure }));
       };
       const timer = setTimeout(finish, COMMAND_TIMEOUT_MS);
       timer.unref?.();
       try {
         ws = new this.WebSocketImpl(websocketUrl(baseUrl));
       } catch {
+        failure = { error: `Could not reach Home Assistant at ${baseUrl}.`, status: 503 };
         finish();
         return;
       }
@@ -343,18 +366,29 @@ class HaLive {
         } else if (message.type === 'auth_ok') {
           list.forEach((command, index) => ws.send(JSON.stringify({ ...command, id: index + 1 })));
         } else if (message.type === 'auth_invalid') {
+          failure = { error: 'Home Assistant rejected the access token.', status: 401 };
           finish();
         } else if (message.type === 'result') {
           const index = message.id - 1;
-          if (index >= 0 && index < list.length) {
-            results[index] = message.success ? message.result : null;
+          if (index >= 0 && index < list.length && !results[index]) {
+            results[index] = message.success
+              ? { ok: true, result: message.result }
+              : {
+                ok: false,
+                error: (message.error && message.error.message) || 'Home Assistant refused that.',
+                code: message.error && message.error.code,
+                status: message.error && message.error.code === 'not_found' ? 404 : 400,
+              };
             remaining -= 1;
             if (remaining === 0) finish();
           }
         }
       };
       ws.onerror = () => {};
-      ws.onclose = finish;
+      ws.onclose = () => {
+        if (remaining > 0 && failure.status === 504) failure = { error: 'Home Assistant closed the connection.', status: 502 };
+        finish();
+      };
     });
   }
 

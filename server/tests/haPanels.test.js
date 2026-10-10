@@ -105,7 +105,9 @@ test('a panel reads only the attributes its tiles use', () => {
   const filtered = rules.filterState(st('media_player.tv', 'playing', {
     friendly_name: 'TV', media_title: 'News', entity_picture: '/api/media_player_proxy/tv?token=abc', access_token: 'abc', supported_features: 1,
   }));
-  assert.deepEqual(Object.keys(filtered.attributes).sort(), ['friendly_name', 'media_title', 'supported_features']);
+  // The picture's address carries a token: only a tag that changes with it.
+  assert.deepEqual(Object.keys(filtered.attributes).sort(), ['friendly_name', 'media_art', 'media_title', 'supported_features']);
+  assert.ok(!JSON.stringify(filtered).includes('abc'), 'no token, no proxy address');
   assert.equal(filtered.sensitive, false);
   assert.equal(rules.filterState(null), null);
 });
@@ -135,4 +137,43 @@ test('panel plugin ids are slugs, unique against those taken', () => {
   const manifest = rules.panelManifest('ha-kitchen', { name: 'Kitchen' });
   assert.deepEqual(manifest.events, ['ha.state']);
   assert.equal(manifest.hideableControls[0].id, 'operate');
+});
+
+const music = st('media_player.kitchen', 'paused', { supported_features: 16384 | 1 | 512 | 32768 | 2097152 });
+const plainSpeaker = st('media_player.radio', 'paused', { supported_features: 16384 | 1 });
+const musicAccess = { read: new Set(['media_player.kitchen', 'media_player.radio']), control: new Set(['media_player.kitchen', 'media_player.radio']) };
+const playAction = (entityId, value, state) => rules.resolveAction({ access: musicAccess, entityId, action: 'play_media', value, state });
+
+test('shuffle is on or off, for a player that can shuffle', () => {
+  const call = rules.resolveAction({ access: musicAccess, entityId: 'media_player.kitchen', action: 'shuffle', value: true, state: music });
+  assert.deepEqual([call.service, call.data], ['shuffle_set', { shuffle: true, entity_id: 'media_player.kitchen' }]);
+  assert.throws(() => rules.resolveAction({ access: musicAccess, entityId: 'media_player.kitchen', action: 'shuffle', value: 'yes', state: music }), /true or false/);
+  assert.throws(() => rules.resolveAction({ access: musicAccess, entityId: 'media_player.radio', action: 'shuffle', value: true, state: plainSpeaker }), /cannot shuffle/);
+});
+
+test('play_media plays only what came from the library, now rather than queued', () => {
+  const item = { media_content_id: 'library://playlist/1', media_content_type: 'playlist', fromLibrary: true };
+  const call = playAction('media_player.kitchen', item, music);
+  assert.equal(call.service, 'play_media');
+  assert.deepEqual(call.data, { media_content_id: 'library://playlist/1', media_content_type: 'playlist', enqueue: 'replace', entity_id: 'media_player.kitchen' });
+  // A panel never names a content id itself: a stream address, or the same
+  // object without the route's mark, is refused.
+  assert.throws(() => playAction('media_player.kitchen', 'http://evil.example/stream.mp3', music), /library/);
+  assert.throws(() => playAction('media_player.kitchen', { media_content_id: 'http://evil.example/a.mp3', media_content_type: 'music' }, music), /library/);
+  assert.throws(() => playAction('media_player.kitchen', { ...item, fromLibrary: 'true' }, music), /library/);
+  assert.throws(() => playAction('media_player.radio', item, plainSpeaker), /cannot play from its library/);
+  const noEnqueue = st('media_player.kitchen', 'paused', { supported_features: 512 });
+  assert.equal(playAction('media_player.kitchen', item, noEnqueue).data.enqueue, undefined, 'enqueue only where the player supports it');
+});
+
+test('a music player shows its album and shuffle, and a picture tag', () => {
+  const filtered = rules.filterState(st('media_player.kitchen', 'playing', {
+    media_title: 'Harvest Moon', media_artist: 'Neil Young', media_album_name: 'Harvest Moon', shuffle: true,
+    entity_picture: '/api/media_player_proxy/media_player.kitchen?token=t&cache=1', media_content_id: 'library://track/9',
+  }));
+  assert.equal(filtered.attributes.media_album_name, 'Harvest Moon');
+  assert.equal(filtered.attributes.shuffle, true);
+  assert.match(filtered.attributes.media_art, /^[\w-]{12}$/);
+  assert.equal(filtered.attributes.media_content_id, undefined);
+  assert.equal(rules.filterState(st('media_player.kitchen', 'idle', {})).attributes.media_art, null);
 });

@@ -19,6 +19,15 @@
 //   POST /api/plugin/v1/ha/:pluginId/action   { entity | entities, action, value, pin, device }
 //   GET  /api/plugin/v1/ha/:pluginId/camera/:entityId
 //
+// Music, for a media player on the panel (services/haMedia.js):
+//   GET    /api/plugin/v1/ha/:pluginId/media/:entityId/browse?item=   its library, a level at a time
+//   GET    /api/plugin/v1/ha/:pluginId/media/:entityId/search?q=      search it (and remember the search)
+//   GET    /api/plugin/v1/ha/:pluginId/media/:entityId/recent         the panel's recent searches
+//   DELETE /api/plugin/v1/ha/:pluginId/media/:entityId/recent         forget them
+//   GET    /api/plugin/v1/ha/:pluginId/media/:entityId/art            the playing item's picture
+//   GET    /api/plugin/v1/ha/:pluginId/media/:entityId/image/:key     a picture in the library
+// and the action play_media takes an item's key from browse or search.
+//
 // Every one of these is checked against the panel's own recipe (or the
 // plugin's manifest): a panel reads and operates only its own entities, with
 // only the actions that fit each one. The Home Assistant token never leaves
@@ -28,6 +37,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const rules = require('../services/haPanels');
+const media = require('../services/haMedia');
 
 const TEMPLATE_PATH = path.join(__dirname, '..', 'ha-panels', 'template.html');
 const TEMPLATE_VERSION = 1;
@@ -35,6 +45,7 @@ const PIN_PROTECTION_KEY = 'HA_PANEL_PIN_PROTECTION';
 const HISTORY_KEEP = 1000;
 const RATE_WINDOW_MS = 1000;
 const RATE_LIMIT = 10;
+const RECENT_KEY_PREFIX = 'HA_MEDIA_RECENT:';
 
 const isObject = (value) => !!value && typeof value === 'object' && !Array.isArray(value);
 const parseJson = (text, fallback) => {
@@ -352,7 +363,12 @@ function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginR
     if (demoBlocked(reply)) return;
     const row = db.prepare('SELECT plugin_row_id FROM ha_panels WHERE id = ?').get(Number(request.params.id));
     if (!row) return reply.status(404).send({ error: 'No such panel.' });
+    const plugin = db.prepare('SELECT plugin_id FROM plugins WHERE id = ?').get(row.plugin_row_id);
     db.prepare('DELETE FROM plugins WHERE id = ?').run(row.plugin_row_id);
+    if (plugin?.plugin_id) {
+      db.prepare('DELETE FROM settings WHERE key = ?').run(RECENT_KEY_PREFIX + plugin.plugin_id);
+      catalog.forget(plugin.plugin_id);
+    }
     refreshWatched();
     return { success: true };
   });
@@ -366,6 +382,7 @@ function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginR
 
   // --- What panels call ----------------------------------------------------------
 
+  const catalog = new media.MediaCatalog();
   const rate = new Map();
   const overLimit = (pluginId) => {
     const now = Date.now();
@@ -428,12 +445,24 @@ function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginR
     if (typeof action !== 'string') return reply.status(400).send({ error: 'Name the action.' });
     if (overLimit(pluginId)) return reply.status(429).send({ error: 'Too many presses at once; try again.' });
 
+    // play_media takes the key of something HomeGlow showed this panel from
+    // the player's library; the content id itself never comes from a panel.
+    let actionValue = value;
+    if (action === 'play_media') {
+      const item = catalog.item(pluginId, value);
+      if (!item) {
+        logAction({ pluginId, device, entity: targets.join(','), action, ok: false, error: 'not from the library' });
+        return reply.status(410).send({ error: 'That list is out of date. Open it again.', stale: true });
+      }
+      actionValue = { media_content_id: item.id, media_content_type: item.type, fromLibrary: true };
+    }
+
     const { states } = await live.getStates(targets);
     let calls;
     try {
       calls = targets.map((entityId) => ({
         entityId,
-        ...rules.resolveAction({ access, entityId, action, value, state: states[entityId] }),
+        ...rules.resolveAction({ access, entityId, action, value: actionValue, state: states[entityId] }),
       }));
     } catch (error) {
       logAction({ pluginId, device, entity: targets.join(','), action, ok: false, error: error.message });
@@ -479,6 +508,140 @@ function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginR
       return reply.send(buffer);
     } catch (error) {
       return reply.status(error.status && error.status < 600 ? error.status : 502).send({ error: error.message });
+    }
+  });
+
+  // --- Music: a media player's library ------------------------------------------
+
+  const sendError = (reply, error) => reply.status(error.status && error.status >= 400 && error.status < 600 ? error.status : 502)
+    .send({ error: error.message || 'Home Assistant did not answer.' });
+
+  /**
+   * The media player a music request is about, checked against the panel:
+   * { pluginId, entityId, state } or null once a refusal is sent. Browsing
+   * and searching lead to playing, so they need a player the panel may
+   * operate; pictures only one it may read.
+   */
+  async function mediaTarget(request, reply, { operate }) {
+    const { pluginId, entityId } = request.params;
+    const access = accessFor(pluginId);
+    if (!access) {
+      reply.status(404).send({ error: 'This plugin has no Home Assistant access.' });
+      return null;
+    }
+    if (rules.domainOf(entityId) !== 'media_player' || !access.read.has(entityId)) {
+      reply.status(404).send({ error: 'No such player on this panel.' });
+      return null;
+    }
+    if (operate && !access.control.has(entityId)) {
+      reply.status(403).send({ error: `${entityId} is view only on this panel.` });
+      return null;
+    }
+    if (demoMode || !ha.isConfigured(db)) {
+      unavailable(reply);
+      return null;
+    }
+    const { states } = await live.getStates([entityId]);
+    const state = states[entityId];
+    if (!state) {
+      reply.status(404).send({ error: `Home Assistant has no ${entityId}.` });
+      return null;
+    }
+    return { pluginId, entityId, state };
+  }
+
+  const imageUrlFor = (pluginId, entityId) => (key) => `/api/plugin/v1/ha/${encodeURIComponent(pluginId)}/media/${encodeURIComponent(entityId)}/image/${key}`;
+  const mediaContext = (target) => ({ catalog, pluginId: target.pluginId, imageUrl: imageUrlFor(target.pluginId, target.entityId) });
+
+  const readRecent = (pluginId) => {
+    const raw = db.prepare('SELECT value FROM settings WHERE key = ?').get(RECENT_KEY_PREFIX + pluginId)?.value;
+    const list = parseJson(raw || '[]', []);
+    return Array.isArray(list) ? media.addRecent(list, null) : [];
+  };
+  const writeRecent = (pluginId, list) => {
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(RECENT_KEY_PREFIX + pluginId, JSON.stringify(list));
+  };
+
+  fastify.get('/api/plugin/v1/ha/:pluginId/media/:entityId/browse', async (request, reply) => {
+    const target = await mediaTarget(request, reply, { operate: true });
+    if (!target) return undefined;
+    if (!media.canBrowse(target.state)) return reply.status(400).send({ error: 'This player has no library to browse.' });
+    if (overLimit(target.pluginId)) return reply.status(429).send({ error: 'Too many requests at once; try again.' });
+    const key = request.query?.item;
+    const message = { type: 'media_player/browse_media', entity_id: target.entityId };
+    if (key) {
+      const item = catalog.item(target.pluginId, key);
+      if (!item) return reply.status(410).send({ error: 'That list is out of date. Open it again.', stale: true });
+      message.media_content_id = item.id;
+      message.media_content_type = item.type;
+    }
+    try {
+      return media.browseResult(await live.command(message), mediaContext(target));
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  fastify.get('/api/plugin/v1/ha/:pluginId/media/:entityId/search', async (request, reply) => {
+    const target = await mediaTarget(request, reply, { operate: true });
+    if (!target) return undefined;
+    if (!media.canSearch(target.state)) return reply.status(400).send({ error: 'This player cannot search.' });
+    const query = media.normalizeQuery(request.query?.q);
+    if (!query) return reply.status(400).send({ error: 'Type something to search for.' });
+    if (overLimit(target.pluginId)) return reply.status(429).send({ error: 'Too many requests at once; try again.' });
+    try {
+      const result = await live.command({ type: 'media_player/search_media', entity_id: target.entityId, search_query: query });
+      const recent = media.addRecent(readRecent(target.pluginId), query);
+      writeRecent(target.pluginId, recent);
+      return { query, ...media.searchResult(result, mediaContext(target)), recent };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  fastify.get('/api/plugin/v1/ha/:pluginId/media/:entityId/recent', async (request, reply) => {
+    const target = await mediaTarget(request, reply, { operate: true });
+    if (!target) return undefined;
+    return { recent: readRecent(target.pluginId) };
+  });
+
+  fastify.delete('/api/plugin/v1/ha/:pluginId/media/:entityId/recent', async (request, reply) => {
+    const target = await mediaTarget(request, reply, { operate: true });
+    if (!target) return undefined;
+    writeRecent(target.pluginId, []);
+    return { recent: [] };
+  });
+
+  // The playing item's picture. One on the web is a redirect (the browser
+  // fetches it, not HomeGlow); one Home Assistant signs for is fetched here.
+  fastify.get('/api/plugin/v1/ha/:pluginId/media/:entityId/art', async (request, reply) => {
+    const target = await mediaTarget(request, reply, { operate: false });
+    if (!target) return undefined;
+    const source = media.artSource(target.state);
+    if (!source) return reply.status(404).send({ error: 'Nothing is showing a picture.' });
+    if (source.web) return reply.redirect(source.web, 302);
+    try {
+      const { buffer, contentType } = await ha.homeAssistantFetchImage(db, source.path);
+      reply.header('Content-Type', contentType);
+      reply.header('Cache-Control', 'private, max-age=3600');
+      return reply.send(buffer);
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  fastify.get('/api/plugin/v1/ha/:pluginId/media/:entityId/image/:key', async (request, reply) => {
+    const target = await mediaTarget(request, reply, { operate: false });
+    if (!target) return undefined;
+    const path = catalog.image(target.pluginId, request.params.key);
+    if (!path) return reply.status(404).send({ error: 'No such picture.' });
+    try {
+      const { buffer, contentType } = await ha.homeAssistantFetchImage(db, path);
+      reply.header('Content-Type', contentType);
+      reply.header('Cache-Control', 'private, max-age=86400');
+      return reply.send(buffer);
+    } catch (error) {
+      return sendError(reply, error);
     }
   });
 
