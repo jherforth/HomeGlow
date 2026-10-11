@@ -149,7 +149,7 @@ for the developer-facing detail and the `HomeGlow.*` SDK wrappers.
 | GET | `/api/plugin/v1/ha/:pluginId/media/:entityId/browse?item=` | A media player's library, a level at a time (`media_player/browse_media`). Items carry keys, never content ids. Needs control of the player. |
 | GET | `/api/plugin/v1/ha/:pluginId/media/:entityId/search?q=` | Search the player's library (`media_player/search_media`) and remember the query. |
 | GET/DELETE | `/api/plugin/v1/ha/:pluginId/media/:entityId/recent` | The plugin's last eight searches; DELETE forgets them. |
-| GET | `/api/plugin/v1/ha/:pluginId/media/:entityId/art` | The playing item's picture: a redirect for one on the web, fetched through HomeGlow for one Home Assistant signs. |
+| GET | `/api/plugin/v1/ha/:pluginId/media/:entityId/art` | The playing item's picture, fetched through HomeGlow: from Home Assistant's media player proxy for one on the web (Music Assistant's server, which a display may not reach), with a redirect to the address only if that fails; directly for one Home Assistant signs. |
 | GET | `/api/plugin/v1/ha/:pluginId/media/:entityId/image/:key` | A picture from the library, by the key browse or search gave. |
 
 ### Chore notification sounds

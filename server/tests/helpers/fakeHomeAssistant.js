@@ -165,6 +165,8 @@ async function startFakeHomeAssistant({ token = 'secret-token', port = 0, wsEnab
   const sockets = new Set();
   const subscriptions = []; // { connection, id, entityIds }
   let serviceDelayMs = 0;    // a slow speaker: service calls answer (and act) this late
+  let proxyBroken = false;  // the media player proxy can't fetch a picture
+  const proxyFetches = [];
 
   const compress = (state) => ({ s: state.state, a: state.attributes, lc: Date.parse(state.last_changed) / 1000 });
 
@@ -285,7 +287,10 @@ async function startFakeHomeAssistant({ token = 'secret-token', port = 0, wsEnab
         }
         return send(200, runService(serviceMatch[1], serviceMatch[2], data));
       }
-      if (req.method === 'GET' && url.pathname.startsWith('/api/media_player_proxy/')) return send(200, PIXEL_PNG, 'image/png');
+      if (req.method === 'GET' && url.pathname.startsWith('/api/media_player_proxy/')) {
+        proxyFetches.push(url.pathname);
+        return proxyBroken ? send(500, { message: 'Error fetching image' }) : send(200, PIXEL_PNG, 'image/png');
+      }
       const cameraMatch = url.pathname.match(/^\/api\/camera_proxy\/(.+)$/);
       if (req.method === 'GET' && cameraMatch) {
         return states.has(decodeURIComponent(cameraMatch[1])) ? send(200, PIXEL_PNG, 'image/png') : send(404, { message: 'Not found' });
@@ -366,6 +371,10 @@ async function startFakeHomeAssistant({ token = 'secret-token', port = 0, wsEnab
     setState,
     /** Make service calls take this long, like a speaker finding a song online. */
     setServiceDelay: (ms) => { serviceDelayMs = ms; },
+    /** Make the media player proxy fail, as when a picture's server is down. */
+    setProxyBroken: (broken) => { proxyBroken = broken; },
+    /** The pictures asked of the media player proxy, by path. */
+    proxyFetches,
     /** How many live subscriptions are open (one per HomeGlow link). */
     subscriptionCount: () => subscriptions.filter((sub) => sub.connection.open).length,
     dropConnections: () => { for (const c of sockets) c.close(); },
