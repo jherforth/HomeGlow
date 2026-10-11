@@ -2817,32 +2817,29 @@ fastify.patch('/api/chores/:id', async (request, reply) => {
   }
 });
 
+// Delete several chores at once, as DELETE /api/chores/:id deletes one: its
+// schedules first, then the chore. Follow-up rules naming it go with it
+// (ON DELETE CASCADE), and history keeps its rows (the schedule reference is
+// set to null; the title snapshot stays). All or nothing; ids that name no
+// chore are skipped, and `deleted` says how many went.
+const MAX_BULK_CHORE_IDS = 500;
 fastify.delete('/api/chores/bulk', async (request, reply) => {
   const { ids } = request.body || {};
-  if (!Array.isArray(ids) || ids.length === 0) {
-    return reply.status(400).send({ error: 'ids must be a non-empty array of chore IDs' });
+  if (!Array.isArray(ids) || ids.length === 0 || ids.length > MAX_BULK_CHORE_IDS) {
+    return reply.status(400).send({ error: `ids must list 1 to ${MAX_BULK_CHORE_IDS} chore ids` });
   }
-  const uniqueIds = [];
-  for (const raw of ids) {
-    const id = typeof raw === 'number' ? raw : parseInt(raw, 10);
-    if (!Number.isInteger(id) || id <= 0) {
-      return reply.status(400).send({ error: 'All IDs must be positive integers' });
-    }
-    if (!uniqueIds.includes(id)) uniqueIds.push(id);
+  // Whole numbers only: parseInt would read "12abc" as 12.
+  const uniqueIds = [...new Set(ids.map((raw) => (typeof raw === 'string' && /^\d+$/.test(raw) ? Number(raw) : raw)))];
+  if (!uniqueIds.every((id) => Number.isInteger(id) && id > 0)) {
+    return reply.status(400).send({ error: 'Every id must be a positive whole number' });
   }
   try {
-    let deleted = 0;
-    db.transaction(() => {
-      const delSchedules = db.prepare('DELETE FROM chore_schedules WHERE chore_id = ?');
-      const delFollowups = db.prepare('DELETE FROM chore_followups WHERE chore_id = ? OR followup_chore_id = ?');
-      const delChore = db.prepare('DELETE FROM chores WHERE id = ?');
-      for (const id of uniqueIds) {
-        delSchedules.run(id);
-        try { delFollowups.run(id, id); } catch { /* table may not exist on older schemas */ }
-        const info = delChore.run(id);
-        if (info.changes > 0) deleted++;
-      }
-    })();
+    const deleteSchedules = db.prepare('DELETE FROM chore_schedules WHERE chore_id = ?');
+    const deleteChore = db.prepare('DELETE FROM chores WHERE id = ?');
+    const deleted = db.transaction(() => uniqueIds.reduce((count, id) => {
+      deleteSchedules.run(id);
+      return count + deleteChore.run(id).changes;
+    }, 0))();
     return { deleted };
   } catch (error) {
     console.error('Error bulk deleting chores:', error);

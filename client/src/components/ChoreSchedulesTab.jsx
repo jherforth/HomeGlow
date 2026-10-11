@@ -299,8 +299,10 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
   const [editingChore, setEditingChore] = useState(null);
   const [choreForm, setChoreForm] = useState(defaultChoreForm);
   const [deleteChoreDialog, setDeleteChoreDialog] = useState({ open: false, chore: null });
+  // Chores ticked for deleting together.
   const [selectedChoreIds, setSelectedChoreIds] = useState(new Set());
   const [bulkDeleteDialog, setBulkDeleteDialog] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [savingChore, setSavingChore] = useState(false);
 
   const [filterUser, setFilterUser] = useState('');
@@ -604,7 +606,10 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
   };
 
   const handleBulkDeleteChores = async () => {
+    // One request at a time: a second tap would only delete nothing, and say so.
+    if (bulkDeleting) return;
     const ids = [...selectedChoreIds];
+    setBulkDeleting(true);
     try {
       const res = await axios.delete(`${API_BASE_URL}/api/chores/bulk`, { data: { ids } });
       const deleted = res.data?.deleted ?? ids.length;
@@ -614,8 +619,21 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
       showMessage('success', t('chores:schedules.bulkDeleteSuccess', { count: deleted }));
     } catch {
       showMessage('error', t('chores:schedules.bulkDeleteError'));
+    } finally {
+      setBulkDeleting(false);
     }
   };
+
+  // A chore deleted since it was ticked (here or from another display) leaves
+  // the selection, so the count and "select all" stay true.
+  useEffect(() => {
+    setSelectedChoreIds((prev) => {
+      if (prev.size === 0) return prev;
+      const present = new Set(chores.map((c) => c.id));
+      const kept = [...prev].filter((id) => present.has(id));
+      return kept.length === prev.size ? prev : new Set(kept);
+    });
+  }, [chores]);
 
   const toggleChoreSelection = (id) => {
     setSelectedChoreIds(prev => {
@@ -767,7 +785,9 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
                   size="small"
                   checked={sortedChores.length > 0 && selectedChoreIds.size === sortedChores.length}
                   indeterminate={selectedChoreIds.size > 0 && selectedChoreIds.size < sortedChores.length}
+                  disabled={sortedChores.length === 0}
                   onChange={toggleSelectAllChores}
+                  slotProps={{ input: { 'aria-label': t('chores:schedules.selectAllChores') } }}
                 />
               </TableCell>
               <SortableHeader column="title" sort={choreSort} onSort={sortChores}>
@@ -793,10 +813,12 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
             ) : (
               sortedChores.map(c => (
                 <TableRow key={c.id} selected={selectedChoreIds.has(c.id)}>
-                  <TableCell padding="checkbox">
+                  {/* `stack-select`: on a phone it sits before the title, which stays the card's heading. */}
+                  <TableCell padding="checkbox" className="stack-select">
                     <Checkbox
                       size="small"
                       checked={selectedChoreIds.has(c.id)}
+                      slotProps={{ input: { 'aria-label': t('chores:schedules.selectChore', { title: c.title }) } }}
                       onChange={() => toggleChoreSelection(c.id)}
                     />
                   </TableCell>
@@ -1233,7 +1255,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setBulkDeleteDialog(false)}>{t('common:actions.cancel')}</Button>
-          <Button onClick={handleBulkDeleteChores} variant="contained" color="error" startIcon={<Delete />}>
+          <Button onClick={handleBulkDeleteChores} variant="contained" color="error" startIcon={<Delete />} disabled={bulkDeleting}>
             {t('common:actions.delete')}
           </Button>
         </DialogActions>
