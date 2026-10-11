@@ -191,6 +191,13 @@ test('a music player shows its album and shuffle, and a picture tag', () => {
   assert.equal(rules.filterState(st('media_player.kitchen', 'idle', {})).attributes.media_art, null);
 });
 
+test('a stream address given as the title loses its sign-in', () => {
+  const title = (media_title) => rules.filterState(st('media_player.kitchen', 'playing', { media_title })).attributes.media_title;
+  assert.equal(title('http://jelly.local:8096/Audio/t1/stream.mp3?audioCodec=mp3&api_key=secret#x'), 'http://jelly.local:8096/Audio/t1/stream.mp3');
+  assert.equal(title('https://user:pw@radio.example/live'), 'https://radio.example/live');
+  assert.equal(title('Harvest Moon? (Live)'), 'Harvest Moon? (Live)');
+});
+
 test('whole-domain grants: safe domains only, read and operated alike', () => {
   const manifest = { settings: [{ key: 'server', type: 'string' }, { key: 'local', type: 'string', scope: 'device' }] };
   assert.deepEqual(rules.validateManifestAccess({ domains: ['media_player'] }), []);

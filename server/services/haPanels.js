@@ -397,6 +397,21 @@ function defaultControl(entityId, state) {
   }
 }
 
+/** A web address without its query, fragment or user name; other text as it is. */
+function withoutSecrets(text) {
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(text)) return text;
+  try {
+    const url = new URL(text);
+    url.username = '';
+    url.password = '';
+    url.search = '';
+    url.hash = '';
+    return url.toString();
+  } catch {
+    return text.split(/[?#]/)[0].replace(/\/\/[^/@]*@/, '//');
+  }
+}
+
 /** Only the attributes a panel needs, for one entity's state. */
 function filterState(state) {
   if (!state || typeof state !== 'object') return null;
@@ -408,6 +423,9 @@ function filterState(state) {
   }
   const derived = DOMAINS[domain]?.derived;
   if (derived) Object.assign(attributes, derived(state));
+  // A speaker playing a stream may give its address as the title, and the
+  // address may carry a sign-in (Jellyfin's ?api_key=): only the place goes.
+  if (typeof attributes.media_title === 'string') attributes.media_title = withoutSecrets(attributes.media_title);
   return {
     state: state.state,
     attributes,

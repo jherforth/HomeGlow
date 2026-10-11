@@ -522,6 +522,9 @@ under its path. `enqueue` is `replace` (the default), `add`, `next` or `play`,
 for a player that can queue.
 `title`, `artist`, `album` and `image` (a cover, on the same server) tell a speaker
 that shows it what is playing; otherwise all it knows is the address.
+A speaker that gives such an address as `media_title` has it passed on without
+its query, so a sign-in in the address (Jellyfin's `api_key`) stays out of
+every panel and plugin.
 
 ## 6. Reactions — server-side logic without server-side code
 
