@@ -870,7 +870,7 @@ function extractPluginManifest(htmlContent) {
   // Home Assistant entities the plugin may read and operate through
   // /api/plugin/v1/ha (issue #252), under the same rules as a built panel.
   if (manifest.homeAssistant !== undefined) {
-    errors.push(...haPanelRules.validateManifestAccess(manifest.homeAssistant));
+    errors.push(...haPanelRules.validateManifestAccess(manifest.homeAssistant, manifest));
   }
   if (manifest.events !== undefined) {
     if (!Array.isArray(manifest.events) || manifest.events.some((event) => typeof event !== 'string')) {
@@ -1036,6 +1036,12 @@ const haPanels = registerHaPanelRoutes(fastify, {
   ha: homeAssistant,
   demoMode: DEMO_MODE,
   installPluginRow,
+  // A plugin's household setting: play_url checks addresses against the
+  // media server one of them names (manifest homeAssistant.playUrlsFrom).
+  readPluginSetting: (pluginId, key) => {
+    const value = readHouseholdPluginSettings(pluginId)[key];
+    return typeof value === 'string' ? value : null;
+  },
 });
 
 // Helper: Load legacy on-disk widget registry (kept for the debug endpoint)
@@ -1126,6 +1132,8 @@ fastify.delete('/api/widgets/:filename', async (request, reply) => {
   try {
     const pluginRow = db.prepare('SELECT plugin_id FROM plugins WHERE filename = ?').get(filename);
     const result = db.prepare('DELETE FROM plugins WHERE filename = ?').run(filename);
+    // Its recent music searches go with it (#264).
+    if (pluginRow?.plugin_id) db.prepare('DELETE FROM settings WHERE key = ?').run(`HA_MEDIA_RECENT:${pluginRow.plugin_id}`);
     // A Home Assistant panel's recipe went with it (ON DELETE CASCADE); stop
     // watching what nothing shows any more.
     haPanels.refreshWatched();

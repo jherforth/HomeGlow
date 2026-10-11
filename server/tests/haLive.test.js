@@ -157,6 +157,30 @@ test('reads the registries on a short connection of its own', needsWebSocket, as
   }
 });
 
+test('one command answers with its result, or Home Assistant\'s own error', needsWebSocket, async () => {
+  const fake = await startFakeHomeAssistant();
+  const live = new HaLive({ db: {}, ha: haFor(fake), decryptToken: (t) => t });
+  try {
+    const root = await live.command({ type: 'media_player/browse_media', entity_id: 'media_player.kitchen_music' });
+    assert.equal(root.title, 'Music Assistant');
+    await assert.rejects(
+      live.command({ type: 'media_player/browse_media', entity_id: 'media_player.living' }),
+      (error) => /does not support browsing/.test(error.message) && error.status === 400,
+    );
+    await assert.rejects(
+      live.command({ type: 'media_player/browse_media', entity_id: 'media_player.kitchen_music', media_content_id: 'library://nowhere', media_content_type: 'x' }),
+      (error) => error.status === 404,
+    );
+    const refused = new HaLive({ db: {}, ha: haFor(fake, 'wrong-token'), decryptToken: (t) => t });
+    await assert.rejects(refused.command({ type: 'media_player/browse_media', entity_id: 'media_player.kitchen_music' }), (error) => error.status === 401);
+    const unconfigured = new HaLive({ db: {}, ha: { getConfig: () => ({}) }, decryptToken: (t) => t });
+    await assert.rejects(unconfigured.command({ type: 'x' }), (error) => error.status === 503);
+  } finally {
+    live.close();
+    await fake.close();
+  }
+});
+
 test('the compressed state format and the WebSocket address', () => {
   const state = expandCompressed('light.a', { s: 'on', a: { brightness: 10 }, lc: 1760000000 });
   assert.equal(state.state, 'on');

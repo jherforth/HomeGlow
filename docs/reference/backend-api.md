@@ -144,8 +144,13 @@ for the developer-facing detail and the `HomeGlow.*` SDK wrappers.
 | PUT | `/api/plugin/v1/settings/:pluginId` | Write declared settings (validated against the manifest). |
 | GET | `/api/plugin/v1/events/stream` | SSE stream of core events (`clam.*`, `chore.*`, `ha.state`). |
 | GET | `/api/plugin/v1/ha/:pluginId/state` | A Home Assistant panel's (or a plugin's declared) entities, filtered attributes, which it may operate, and whether the live link is up. Answered from memory. |
-| POST | `/api/plugin/v1/ha/:pluginId/action` | `{ entity` or `entities, action, value, pin, device }`, checked against the panel's recipe or the plugin's manifest and turned into one service call each. 401 `needsPin` for unlocking, disarming or opening a garage door under PIN protection (not from a display that remembers the PIN); 429 over 10 a second. |
+| POST | `/api/plugin/v1/ha/:pluginId/action` | `{ entity` or `entities, action, value, pin, device }`, checked against the panel's recipe or the plugin's manifest and turned into one service call each. Media actions: `play_media` (a key from browse or search), `play_url` (an address on the media server the plugin's `playUrlsFrom` setting names), `seek`, `shuffle`; slow ones answer `pending: true` after 1.5 seconds. 401 `needsPin` for unlocking, disarming or opening a garage door under PIN protection (not from a display that remembers the PIN); 429 over 10 a second. |
 | GET | `/api/plugin/v1/ha/:pluginId/camera/:entityId` | A camera snapshot, only for a camera on the panel. |
+| GET | `/api/plugin/v1/ha/:pluginId/media/:entityId/browse?item=` | A media player's library, a level at a time (`media_player/browse_media`). Items carry keys, never content ids. Needs control of the player. |
+| GET | `/api/plugin/v1/ha/:pluginId/media/:entityId/search?q=` | Search the player's library (`media_player/search_media`) and remember the query. |
+| GET/DELETE | `/api/plugin/v1/ha/:pluginId/media/:entityId/recent` | The plugin's last eight searches; DELETE forgets them. |
+| GET | `/api/plugin/v1/ha/:pluginId/media/:entityId/art` | The playing item's picture: a redirect for one on the web, fetched through HomeGlow for one Home Assistant signs. |
+| GET | `/api/plugin/v1/ha/:pluginId/media/:entityId/image/:key` | A picture from the library, by the key browse or search gave. |
 
 ### Chore notification sounds
 | Method | Path | Purpose |
