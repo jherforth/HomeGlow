@@ -418,16 +418,29 @@ test('shuffle, album and the playing picture, without its address', needsWebSock
   assert.equal(art.status, 200);
   assert.equal(art.headers.get('content-type'), 'image/png');
 
-  // A picture already on the web is the browser's to fetch, not HomeGlow's.
-  fake.setState('media_player.kitchen_music', 'playing', { entity_picture: 'https://images.example/now.jpg' });
+  // A picture on the web (Music Assistant's own server, say, which a
+  // display may not reach) comes through Home Assistant's proxy.
+  fake.setState('media_player.kitchen_music', 'playing', { entity_picture: 'http://192.168.1.5:8095/imageproxy?path=cover.jpg' });
   for (let i = 0; i < 60; i += 1) {
     const now = (await api(`/api/plugin/v1/ha/${musicPanel}/state`)).body.entities['media_player.kitchen_music'];
     if (now.attributes.media_art !== state.attributes.media_art) break;
     await delay(50);
   }
-  const redirect = await paced(() => fetch(`${baseUrl}${music(musicPanel, 'media_player.kitchen_music', '/art')}`, { redirect: 'manual' }));
-  assert.equal(redirect.status, 302);
-  assert.equal(redirect.headers.get('location'), 'https://images.example/now.jpg');
+  const fetchesBefore = fake.proxyFetches.length;
+  const proxied = await paced(() => fetch(`${baseUrl}${music(musicPanel, 'media_player.kitchen_music', '/art')}`, { redirect: 'manual' }));
+  assert.equal(proxied.status, 200);
+  assert.equal(proxied.headers.get('content-type'), 'image/png');
+  assert.equal(fake.proxyFetches.at(-1), '/api/media_player_proxy/media_player.kitchen_music');
+  assert.equal(fake.proxyFetches.length, fetchesBefore + 1);
+  // If Home Assistant can't fetch it either, the browser is sent to it.
+  fake.setProxyBroken(true);
+  try {
+    const redirect = await paced(() => fetch(`${baseUrl}${music(musicPanel, 'media_player.kitchen_music', '/art')}`, { redirect: 'manual' }));
+    assert.equal(redirect.status, 302);
+    assert.equal(redirect.headers.get('location'), 'http://192.168.1.5:8095/imageproxy?path=cover.jpg');
+  } finally {
+    fake.setProxyBroken(false);
+  }
 });
 
 test('a slow speaker: the panel hears "still working" at once, and sees the change when it comes', needsWebSocket, async () => {
@@ -465,7 +478,7 @@ test('a player that can\'t browse, a view-only tile and a player not on the pane
   assert.equal((await paced(() => api(music(lookId, 'media_player.kitchen_music', '/browse')))).status, 403);
   assert.equal((await paced(() => api(music(lookId, 'media_player.kitchen_music', '/search?q=x')))).status, 403);
   const art = await paced(() => fetch(`${baseUrl}${music(lookId, 'media_player.kitchen_music', '/art')}`, { redirect: 'manual' }));
-  assert.equal(art.status, 302, 'a view-only tile still shows the picture');
+  assert.equal(art.status, 200, 'a view-only tile still shows the picture');
   await del(`/api/ha-panels/${look.body.panel.id}`);
   await del(`/api/ha-panels/${(await api('/api/ha-panels')).body.panels.find((p) => p.pluginId === musicPanel).id}`);
 });

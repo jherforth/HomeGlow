@@ -727,7 +727,21 @@ function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginR
     if (!target) return undefined;
     const source = media.artSource(target.state);
     if (!source) return reply.status(404).send({ error: 'Nothing is showing a picture.' });
-    if (source.web) return reply.redirect(source.web, 302);
+    // A picture on the web comes through Home Assistant's media player
+    // proxy, which can reach it when a display can't: Music Assistant gives
+    // its own server's address, often inside the home network or plain
+    // http on an https dashboard. Only if Home Assistant can't fetch it is
+    // the browser sent to the address itself.
+    if (source.web) {
+      try {
+        const { buffer, contentType } = await ha.homeAssistantFetchImage(db, `/api/media_player_proxy/${encodeURIComponent(target.entityId)}`);
+        reply.header('Content-Type', contentType);
+        reply.header('Cache-Control', 'private, max-age=3600');
+        return reply.send(buffer);
+      } catch {
+        return reply.redirect(source.web, 302);
+      }
+    }
     try {
       const { buffer, contentType } = await ha.homeAssistantFetchImage(db, source.path);
       reply.header('Content-Type', contentType);
