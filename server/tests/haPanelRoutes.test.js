@@ -544,6 +544,37 @@ test('a plugin groups speakers it may operate, and nothing else', async () => {
   await del('/api/widgets/music-grp.html');
 });
 
+test('a plugin sees which integration and device each speaker comes from, and not those hidden in Home Assistant', needsWebSocket, async () => {
+  await delay(1100);
+  const up = await uploadPlugin('music-src.html', { ...musicManifest, id: 'music-src' });
+  assert.equal(up.status, 200, JSON.stringify(up.body));
+  // One speaker twice (Music Assistant's entity and its Cast one, one
+  // device), and a TV hidden in Home Assistant.
+  fake.setState('media_player.uxb_ma', 'playing', { friendly_name: 'Uxbridge', supported_features: 16384 | 1 });
+  fake.setState('media_player.uxb_cast', 'playing', { friendly_name: 'Uxbridge', supported_features: 16384 | 1 });
+  fake.setState('media_player.old_tv', 'off', { friendly_name: 'Old TV', supported_features: 16384 });
+  fake.setRegistryEntry('media_player.uxb_ma', { platform: 'music_assistant', device_id: 'dev-uxbridge' });
+  fake.setRegistryEntry('media_player.uxb_cast', { platform: 'cast', device_id: 'dev-uxbridge' });
+  fake.setRegistryEntry('media_player.old_tv', { platform: 'cast', device_id: 'dev-tv', hidden_by: 'user' });
+  // Start the link again, so the entity list and registry are read afresh.
+  assert.equal((await put('/api/connections/homeassistant', { url: fake.url, token: 'ha-secret' })).status, 200);
+  let body;
+  for (let i = 0; i < 40; i += 1) {
+    body = (await api('/api/plugin/v1/ha/music-src/state')).body;
+    if (body.sources?.['media_player.uxb_ma']) break;
+    await delay(100);
+  }
+  const { sources } = body;
+  assert.equal(sources['media_player.uxb_ma'].integration, 'music_assistant');
+  assert.equal(sources['media_player.uxb_cast'].integration, 'cast');
+  assert.match(sources['media_player.uxb_ma'].device, /^[\w-]{12}$/);
+  assert.equal(sources['media_player.uxb_ma'].device, sources['media_player.uxb_cast'].device, 'one device, one tag');
+  assert.notEqual(sources['media_player.uxb_ma'].device, 'dev-uxbridge', 'the device id itself is not given out');
+  assert.ok(!('media_player.old_tv' in body.entities), 'hidden in Home Assistant, so not offered');
+  assert.equal(sources['media_player.kitchen_music'], null, 'no registry entry, no source');
+  await del('/api/widgets/music-src.html');
+});
+
 test('play and pause go on their own, for a speaker that reports only one of them', async () => {
   await delay(1100);
   const up = await uploadPlugin('music-pp.html', { ...musicManifest, id: 'music-pp' });

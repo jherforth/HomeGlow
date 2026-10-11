@@ -166,6 +166,7 @@ async function startFakeHomeAssistant({ token = 'secret-token', port = 0, wsEnab
   const subscriptions = []; // { connection, id, entityIds }
   let serviceDelayMs = 0;    // a slow speaker: service calls answer (and act) this late
   let proxyBroken = false;  // the media player proxy can't fetch a picture
+  const registry = ENTITY_REGISTRY.map((entry) => ({ ...entry }));
   const proxyFetches = [];
 
   const compress = (state) => ({ s: state.state, a: state.attributes, lc: Date.parse(state.last_changed) / 1000 });
@@ -337,7 +338,7 @@ async function startFakeHomeAssistant({ token = 'secret-token', port = 0, wsEnab
           return;
         }
         case 'config/area_registry/list': reply(AREAS); return;
-        case 'config/entity_registry/list': reply(ENTITY_REGISTRY); return;
+        case 'config/entity_registry/list': reply(registry); return;
         case 'config/device_registry/list': reply(DEVICES); return;
         case 'media_player/browse_media': {
           const player = states.get(message.entity_id);
@@ -371,6 +372,12 @@ async function startFakeHomeAssistant({ token = 'secret-token', port = 0, wsEnab
     setState,
     /** Make service calls take this long, like a speaker finding a song online. */
     setServiceDelay: (ms) => { serviceDelayMs = ms; },
+    /** Add or change an entity's registry entry ({ platform, device_id, hidden_by, ... }). */
+    setRegistryEntry: (entityId, fields) => {
+      const entry = registry.find((e) => e.entity_id === entityId);
+      if (entry) Object.assign(entry, fields);
+      else registry.push({ entity_id: entityId, ...fields });
+    },
     /** Make the media player proxy fail, as when a picture's server is down. */
     setProxyBroken: (broken) => { proxyBroken = broken; },
     /** The pictures asked of the media player proxy, by path. */
