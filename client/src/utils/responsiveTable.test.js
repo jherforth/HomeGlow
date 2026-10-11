@@ -16,6 +16,12 @@ describe('responsive table styles', () => {
   it('puts the title and the actions on one heading line, chips after them', () => {
     const rules = compactStackedTableSx[MOBILE];
     expect(rules['& td:first-of-type'].order).toBeLessThan(rules['& td:last-of-type'].order);
+    // A selection checkbox first: it stays small, and the title after it is still the heading.
+    expect(rules['& td.stack-select'].flex).toBe('0 0 auto');
+    expect(rules['& td.stack-select + td'].order).toBe(rules['& td:first-of-type'].order);
+    expect(rules['& td.stack-select + td']['&::before']).toEqual({ content: 'none' });
+    const keys = Object.keys(rules);
+    expect(keys.indexOf('& td.stack-select')).toBeGreaterThan(keys.indexOf('& td:first-of-type'));
     expect(rules['& td:last-of-type'].order).toBeLessThan(rules['& td'].order);
   });
 

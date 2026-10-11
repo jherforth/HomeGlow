@@ -1068,6 +1068,121 @@ test('testing an Immich source without an API key says so', async () => {
     assert.doesNotMatch(body.error, /refused|timed out/i);
 });
 
+test('DELETE /api/chores/bulk deletes multiple chores and their schedules', async () => {
+    // Create two chores with schedules
+    const chore1 = await api('/api/chores', {
+        method: 'POST',
+        body: JSON.stringify({ title: `Bulk Delete Test 1 ${Date.now()}` }),
+    });
+    assert.equal(chore1.status, 200);
+    const chore2 = await api('/api/chores', {
+        method: 'POST',
+        body: JSON.stringify({ title: `Bulk Delete Test 2 ${Date.now()}` }),
+    });
+    assert.equal(chore2.status, 200);
+
+    const id1 = chore1.body.id;
+    const id2 = chore2.body.id;
+
+    // Add a schedule to each
+    await api('/api/chore-schedules', {
+        method: 'POST',
+        body: JSON.stringify({ chore_id: id1, crontab: '0 0 * * *' }),
+    });
+    await api('/api/chore-schedules', {
+        method: 'POST',
+        body: JSON.stringify({ chore_id: id2, crontab: '0 0 * * *' }),
+    });
+
+    // Bulk delete
+    const { status, body } = await api('/api/chores/bulk', {
+        method: 'DELETE',
+        body: JSON.stringify({ ids: [id1, id2] }),
+    });
+    assert.equal(status, 200);
+    assert.equal(body.deleted, 2);
+
+    // Verify chores are gone
+    const check1 = await api(`/api/chores/${id1}`);
+    assert.equal(check1.status, 404);
+    const check2 = await api(`/api/chores/${id2}`);
+    assert.equal(check2.status, 404);
+    // ...and their schedules with them.
+    for (const id of [id1, id2]) {
+        assert.deepEqual((await api(`/api/chore-schedules?chore_id=${id}`)).body, []);
+    }
+});
+
+test('DELETE /api/chores/bulk keeps history and drops follow-up rules naming the chores', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const user = await api('/api/users', { method: 'POST', body: JSON.stringify({ username: `bulk-history-${Date.now()}` }) });
+    const userId = user.body.id;
+    const make = async (title) => (await api('/api/chores', { method: 'POST', body: JSON.stringify({ title, clam_value: 0 }) })).body.id;
+    const kept = await make(`Bulk keep ${Date.now()}`);
+    const gone = await make(`Bulk gone ${Date.now()}`);
+    const schedule = await api('/api/chore-schedules', { method: 'POST', body: JSON.stringify({ chore_id: gone, user_id: userId, crontab: '0 0 * * *' }) });
+    const done = await api('/api/chores/complete', { method: 'POST', body: JSON.stringify({ chore_schedule_id: schedule.body.id, user_id: userId, date: today }) });
+    assert.equal(done.status, 200, JSON.stringify(done.body));
+    // The kept chore hands on to the deleted one.
+    const rule = await api(`/api/chores/${kept}/followups`, { method: 'PUT', body: JSON.stringify({ followups: [{ followup_chore_id: gone, user_ids: [userId] }] }) });
+    assert.equal(rule.status, 200, JSON.stringify(rule.body));
+
+    const { status, body } = await api('/api/chores/bulk', { method: 'DELETE', body: JSON.stringify({ ids: [gone] }) });
+    assert.equal(status, 200);
+    assert.equal(body.deleted, 1);
+
+    const history = (await api(`/api/chore-history?user_id=${userId}`)).body;
+    assert.ok(history.some((row) => row.kind === 'completion' && /Bulk gone/.test(row.title)), 'the completion is still in history');
+    assert.deepEqual((await api(`/api/chores/${kept}/followups`)).body, [], 'the rule went with the chore');
+});
+
+test('DELETE /api/chores/bulk rejects empty or invalid input', async () => {
+    const empty = await api('/api/chores/bulk', {
+        method: 'DELETE',
+        body: JSON.stringify({ ids: [] }),
+    });
+    assert.equal(empty.status, 400);
+
+    const missing = await api('/api/chores/bulk', {
+        method: 'DELETE',
+        body: JSON.stringify({}),
+    });
+    assert.equal(missing.status, 400);
+
+    const invalid = await api('/api/chores/bulk', {
+        method: 'DELETE',
+        body: JSON.stringify({ ids: ['abc', -1] }),
+    });
+    assert.equal(invalid.status, 400);
+
+    // Not a whole number: refused, never read as 12 or 1.
+    for (const bad of [['12abc'], [1.5], [null], [{}]]) {
+        assert.equal((await api('/api/chores/bulk', { method: 'DELETE', body: JSON.stringify({ ids: bad }) })).status, 400, JSON.stringify(bad));
+    }
+    const tooMany = await api('/api/chores/bulk', { method: 'DELETE', body: JSON.stringify({ ids: Array.from({ length: 501 }, (_, i) => i + 1) }) });
+    assert.equal(tooMany.status, 400);
+});
+
+test('DELETE /api/chores/bulk skips non-existent IDs and deduplicates', async () => {
+    const chore = await api('/api/chores', {
+        method: 'POST',
+        body: JSON.stringify({ title: `Bulk Delete Skip Test ${Date.now()}` }),
+    });
+    assert.equal(chore.status, 200);
+    const id = chore.body.id;
+
+    // Include a non-existent ID, a duplicate, and the same id as a string
+    const { status, body } = await api('/api/chores/bulk', {
+        method: 'DELETE',
+        body: JSON.stringify({ ids: [id, id, String(id), 999999] }),
+    });
+    assert.equal(status, 200);
+    assert.equal(body.deleted, 1);
+
+    const check = await api(`/api/chores/${id}`);
+    assert.equal(check.status, 404);
+});
+
 test('history rows carry the person and the chore, and keep the title once the schedule is gone', async () => {
     const userId = await newUser('History Hana');
     const choreId = await newChore('Water the plants');

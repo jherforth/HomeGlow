@@ -37,7 +37,10 @@ export const stackableTableSx = {
 //   - every other cell becomes a small labelled chip, several to a line;
 //   - a cell with the `stack-full` class takes a line of its own under the
 //     heading (a description), and one with `stack-empty` is dropped, so an
-//     empty value does not cost a line.
+//     empty value does not cost a line;
+//   - a selection checkbox cell, first and with the `stack-select` class,
+//     sits at the start of the heading line, and the cell after it is the
+//     heading.
 // Mobile only, like stackableTableSx: nothing changes at 600px and up.
 export const compactStackedTableSx = {
   '@media (max-width:599.95px)': {
@@ -87,6 +90,19 @@ export const compactStackedTableSx = {
       '&::before': { content: 'none' },
     },
     '& td.stack-empty': { display: 'none' },
+    // A selection checkbox ahead of the title: it, not the title, is the
+    // first cell, so these come after the first-of-type rule and win over it.
+    '& td.stack-select': {
+      order: 0,
+      flex: '0 0 auto',
+      '&::before': { content: 'none' },
+    },
+    '& td.stack-select + td': {
+      order: 0,
+      flex: '1 0 50%',
+      minWidth: 0,
+      '&::before': { content: 'none' },
+    },
     // The empty-state row is a single cell spanning every column: keep it a
     // plain centred line rather than a heading.
     '& td[colspan]': {
