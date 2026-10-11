@@ -1,7 +1,8 @@
-import React, { useContext, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Box } from '@mui/material';
 import { ThemeContext } from '../themes/engine/ThemeContext.js';
+import { FlybyOnce } from '../themes/engine/layers/flyby.jsx';
 import { confettiPiece, confettiPieceSx } from '../utils/confetti.js';
 
 // Confetti for finishing every regular chore for the day (issue #140).
@@ -24,7 +25,13 @@ import { confettiPiece, confettiPieceSx } from '../utils/confetti.js';
 // react-grid-layout item whose transform would otherwise trap position: fixed.
 //
 // The pieces are the theme's (utils/confetti.js): Classic's are the colored
-// squares, circles and streamers this always had.
+// squares, circles and streamers this always had. A theme with a `cast`
+// (manifest version 6) also sends a few of its own pictures across the
+// screen, once each, with the same motion as its ambience flybys; the
+// celebration ends when both are done.
+//
+// Played by CelebrationHost for the chore widget and for plugins that ask
+// (utils/celebrations.js).
 
 const PIECE_COUNT = 70;
 const GRAVITY_PX_S2 = 1400;
@@ -42,12 +49,40 @@ const prefersReducedMotion = () =>
   && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 
+// The cast can outlast the confetti; this is its hard stop.
+const MAX_CAST_MS = 20000;
+
 const ChoreCelebration = ({ onDismiss }) => {
   const { theme, mode } = useContext(ThemeContext);
   const [pieces, setPieces] = useState([]);
   const pieceStateRef = useRef(new Map());
   const nodesRef = useRef(new Map());
   const doneRef = useRef(false);
+  // Fixed for the life of the burst, so a theme change mid-flight cannot
+  // pull the cast out from under it.
+  const [cast] = useState(() => (theme?.confetti?.cast && !prefersReducedMotion()
+    ? { options: theme.confetti.cast, assets: theme.confettiAssets || {} }
+    : null));
+  const pendingRef = useRef(cast ? 2 : 1);
+  const partDone = useCallback(() => {
+    pendingRef.current -= 1;
+    if (pendingRef.current === 0 && !doneRef.current) {
+      doneRef.current = true;
+      onDismiss();
+    }
+  }, [onDismiss]);
+
+  useEffect(() => {
+    if (!cast) return undefined;
+    const timer = setTimeout(() => {
+      if (!doneRef.current) {
+        doneRef.current = true;
+        onDismiss();
+      }
+    }, MAX_CAST_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Launch + physics. One effect owns the whole lifecycle so there is no window
   // where a piece exists in state but has no simulation entry.
@@ -94,10 +129,11 @@ const ChoreCelebration = ({ onDismiss }) => {
     let lastTime = performance.now();
     const startedAt = lastTime;
 
+    let confettiDone = false;
     const finish = () => {
-      if (doneRef.current) return;
-      doneRef.current = true;
-      onDismiss();
+      if (confettiDone) return;
+      confettiDone = true;
+      partDone();
     };
 
     const step = (now) => {
@@ -168,6 +204,9 @@ const ChoreCelebration = ({ onDismiss }) => {
         pointerEvents: 'none',
       }}
     >
+      {cast && (
+        <FlybyOnce options={cast.options} assets={cast.assets} mode={mode} onDone={partDone} />
+      )}
       {pieces.map((piece) => (
         <Box
           key={piece.id}

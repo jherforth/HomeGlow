@@ -221,6 +221,20 @@
       };
     },
 
+    /**
+     * Ask the board for its celebration: the theme's confetti, and its cast if
+     * it has one, across the whole screen. For a moment worth marking (a list
+     * finished, a vote closed). HomeGlow plays at most one per plugin every 15
+     * seconds, none while one is playing, and none when the household has
+     * turned celebrations off, so this may do nothing. Older HomeGlows have no
+     * celebrate(); check for it first.
+     */
+    celebrate: function () {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'homeglow:celebrate' }, '*');
+      }
+    },
+
     /** Remove a handler added with on(). */
     off: function (event, handler) {
       var handlers = eventHandlers[event];

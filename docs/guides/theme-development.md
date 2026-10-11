@@ -48,7 +48,7 @@ folder name must match the manifest's `id`.
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `manifestVersion` | yes | `1`; `2` for a theme that uses `ornaments`, the meter tokens or `clumps`; `3` for one that uses the button tokens or curved flybys; `4` for one with `weather` scenes or a `flash` layer; `5` for one that uses orbits. A HomeGlow older than the version refuses the theme. |
+| `manifestVersion` | yes | `1`; `2` for a theme that uses `ornaments`, the meter tokens or `clumps`; `3` for one that uses the button tokens or curved flybys; `4` for one with `weather` scenes or a `flash` layer; `5` for one that uses orbits; `6` for one with a confetti `cast`. A HomeGlow older than the version refuses the theme. |
 | `id` | yes | Lowercase slug (a-z, 0-9, hyphens), the same as the folder name. |
 | `name` | yes | Shown in the theme picker. |
 | `version`, `author`, `description` | | As in a plugin manifest. The author shows as "by ...". |
@@ -62,7 +62,7 @@ folder name must match the manifest's `id`.
 | `ambience` | | Layers drawn behind the widgets. See §4. |
 | `ornaments` | | Pictures drawn on every widget frame. See §4a. |
 | `weather` | | Scenes that follow the weather outside. See §4b. |
-| `confetti` | | The theme's own celebration confetti: `colors` (a list, or per mode), `shapes` (some of `square`, `circle`, `streamer`), `pictures` (as in a `sprites` layer, `height` in px) and `mix` (the share of pieces that are pictures, 0 to 1). Without it, a theme gets Classic's confetti. |
+| `confetti` | | The theme's own celebration confetti: `colors` (a list, or per mode), `shapes` (some of `square`, `circle`, `streamer`), `pictures` (as in a `sprites` layer, `height` in px) and `mix` (the share of pieces that are pictures, 0 to 1). `cast` sends a few of the theme's pictures across the screen once with the confetti (see [Celebration cast](#celebration-cast)). Without `confetti`, a theme gets Classic's confetti. |
 
 ## 3. Tokens
 
@@ -243,6 +243,32 @@ still one theme in the picker.
   The dock's mode button shows a scene's night look. The display needs the
   location there (the one Auto mode uses), and a weather provider under
   System → Connections; Home Assistant needs no location.
+
+## 4c. Celebration cast
+
+The chore widget celebrates when someone finishes their day, and plugins can ask
+for the same moment. A theme's `confetti` sets what flies. With `cast`
+(manifest version 6) the theme also sends a few of its own pictures across the
+screen once, alongside the confetti: Starship's ships, an aquarium's fish.
+
+```json
+"confetti": {
+  "colors": ["#ff9900", "#99ccff"],
+  "cast": {
+    "pictures": [{ "src": "assets/ship-cruiser.svg", "aspect": 2.2 }],
+    "count": [3, 5],
+    "path": "arc",
+    "seconds": [5, 8]
+  }
+}
+```
+
+`cast` takes a `flyby` layer's options, except `every` and `begin` (it is one
+pass, all starting within about a second) and orbits (`path` is `line`, `arc`
+or `wander`). `seconds` is 2 to 30; the defaults are 3 to 5 pictures, 8 to 14vh
+tall, crossing in 5 to 8 seconds. The same pictures as an ambience layer work
+well: people know them from the scene. A weather scene's `confetti` can have
+its own cast. Nothing crosses for people who ask for reduced motion.
 
 ## 5. Performance rules
 

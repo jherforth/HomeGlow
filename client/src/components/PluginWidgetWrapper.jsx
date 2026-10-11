@@ -5,6 +5,7 @@ import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceName } from '../utils/deviceName.js';
 import { subscribePluginEvents } from '../utils/pluginEventBridge.js';
 import { acceptPluginDataMessage, emitPluginDataChanged } from '../utils/pluginDataBridge.js';
+import { acceptPluginCelebrateMessage, requestCelebration } from '../utils/celebrations.js';
 import { THEME_TOKENS_APPLIED_EVENT, buildPluginThemeMessage, readRoleTokens } from '../utils/pluginThemeBridge.js';
 import { ThemeContext } from '../themes/engine/ThemeContext.js';
 
@@ -64,7 +65,14 @@ const PluginWidgetWrapper = ({
   // from. Any other frame on the page — or an unknown scope — is ignored.
   useEffect(() => {
     const onMessage = (event) => {
-      const scope = acceptPluginDataMessage(event, iframeRef.current?.contentWindow, iframeOrigin);
+      const frame = iframeRef.current?.contentWindow;
+      // HomeGlow.celebrate(): the board's celebration, which CelebrationHost
+      // rate-limits per plugin.
+      if (acceptPluginCelebrateMessage(event, frame, iframeOrigin)) {
+        requestCelebration(`plugin:${filename}`);
+        return;
+      }
+      const scope = acceptPluginDataMessage(event, frame, iframeOrigin);
       if (!scope) return;
       emitPluginDataChanged(scope, { filename });
     };

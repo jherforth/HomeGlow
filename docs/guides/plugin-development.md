@@ -421,6 +421,27 @@ Three things worth knowing:
 - **It is a hint, not a write.** The host only refetches. It grants no
   permission you did not already have by calling the API.
 
+### Asking for a celebration
+
+When something in your plugin is worth marking (a child finished a routine, a
+poll closed), ask the board for its celebration, the same one the chore widget
+plays when someone finishes their day:
+
+```js
+if (typeof HomeGlow.celebrate === 'function') HomeGlow.celebrate();
+```
+
+The board throws the active theme's confetti across the whole screen, and the
+theme's cast if it has one (a few of its own pictures crossing once). It is
+the household's to control, not yours:
+
+- **It may do nothing.** HomeGlow plays at most one per plugin every 15
+  seconds, none while one is already playing, and none when the household has
+  turned celebrations off in Admin. Nothing plays for people who ask their
+  system for reduced motion.
+- **Check for it first.** A HomeGlow older than the call has no `celebrate`.
+- **Keep it for real moments.** Every tick of a checkbox is not one.
+
 ## 5a. Home Assistant — read and operate devices
 
 Admin → Dashboard → Home Assistant builds panels without code. A plugin that

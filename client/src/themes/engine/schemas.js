@@ -149,6 +149,17 @@ export const CONFETTI_SCHEMA = {
   shapes: { type: 'shapes' },
   pictures: { type: 'pictures' },
   mix: num(0, 1),
+  cast: { type: 'cast' },
+};
+
+// `confetti.cast` (manifest version 6): the theme's own pictures crossing the
+// screen once with the confetti, a few at a time. A flyby's options, without
+// the ones about waiting (`every`, `begin`) or orbits: it is one pass.
+const NOT_IN_CAST = ['every', 'begin', 'focusX', 'focusY', 'eccentricity', 'direction'];
+export const CAST_SCHEMA = {
+  ...Object.fromEntries(Object.entries(LAYER_SCHEMAS.flyby).filter(([key]) => !NOT_IN_CAST.includes(key))),
+  path: { type: 'enum', values: ['line', 'arc', 'wander'] },
+  seconds: range(2, 30),
 };
 
 const ASSET_PATH = /^assets\/[A-Za-z0-9._-]+\.(svg|png|webp|jpg)$/;
@@ -218,6 +229,16 @@ function checkOption(spec, value, { assets, isColor }) {
     case 'shapes':
       return (Array.isArray(value) && value.length > 0 && value.every((v) => CONFETTI_SHAPES.includes(v)))
         || `must list some of ${CONFETTI_SHAPES.join(', ')}`;
+    case 'cast': {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return 'must be an object';
+      if (value.pictures === undefined) return 'needs pictures';
+      for (const [key, part] of Object.entries(value)) {
+        if (!CAST_SCHEMA[key]) return `has no option ${key}`;
+        const result = checkOption(CAST_SCHEMA[key], part, { assets, isColor });
+        if (result !== true) return `.${key} ${result}`;
+      }
+      return true;
+    }
     case 'pictures': {
       if (!Array.isArray(value) || value.length === 0 || value.length > 16) return 'must list 1 to 16 pictures';
       const parts = { src: { type: 'picture' }, aspect: num(0.05, 4), height: range(1, 80), tint: { type: 'tints' }, weight: num(0.01, 100) };
