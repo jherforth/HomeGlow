@@ -503,6 +503,34 @@ test('a plugin granted media_player sees every speaker, and nothing else', async
   assert.equal((await post('/api/plugin/v1/ha/music-test/action', { entity: 'media_player.living', action: 'play_pause' })).status, 200);
 });
 
+test('a plugin groups speakers it may operate, and nothing else', async () => {
+  await delay(1100);
+  const up = await uploadPlugin('music-grp.html', { ...musicManifest, id: 'music-grp' });
+  assert.equal(up.status, 200, JSON.stringify(up.body));
+  const GROUPABLE = 524288 | 16384 | 1 | 4;
+  fake.setState('media_player.ma_kitchen', 'playing', { friendly_name: 'Kitchen', supported_features: GROUPABLE, group_members: ['media_player.ma_kitchen'] });
+  fake.setState('media_player.ma_den', 'idle', { friendly_name: 'Den', supported_features: GROUPABLE, group_members: ['media_player.ma_den'] });
+  const act = (entity, action, value) => post('/api/plugin/v1/ha/music-grp/action', { entity, action, ...(value === undefined ? {} : { value }) });
+
+  const joined = await act('media_player.ma_kitchen', 'join', ['media_player.ma_den']);
+  assert.equal(joined.status, 200, JSON.stringify(joined.body));
+  assert.deepEqual(fake.calls.at(-1), { domain: 'media_player', service: 'join', data: { group_members: ['media_player.ma_den'], entity_id: 'media_player.ma_kitchen' } });
+  assert.deepEqual(joined.body.entities['media_player.ma_kitchen'].attributes.group_members, ['media_player.ma_kitchen', 'media_player.ma_den']);
+
+  // Not a speaker, the speaker itself, nothing, or too many: refused before Home Assistant.
+  const before = fake.calls.length;
+  for (const value of [['light.kitchen'], ['media_player.ma_kitchen'], [], 'media_player.ma_den', [7], Array.from({ length: 9 }, (_, i) => `media_player.s${i}`)]) {
+    assert.equal((await act('media_player.ma_kitchen', 'join', value)).status, 400, JSON.stringify(value));
+  }
+  assert.equal(fake.calls.length, before);
+
+  const left = await act('media_player.ma_den', 'unjoin');
+  assert.equal(left.status, 200, JSON.stringify(left.body));
+  assert.equal(fake.calls.at(-1).service, 'unjoin');
+  assert.deepEqual(left.body.entities['media_player.ma_den'].attributes.group_members, ['media_player.ma_den']);
+  await del('/api/widgets/music-grp.html');
+});
+
 test('play and pause go on their own, for a speaker that reports only one of them', async () => {
   await delay(1100);
   const up = await uploadPlugin('music-pp.html', { ...musicManifest, id: 'music-pp' });

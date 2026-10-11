@@ -192,6 +192,7 @@ async function startFakeHomeAssistant({ token = 'secret-token', port = 0, wsEnab
   const MEDIA_SERVICE_NEEDS = {
     media_play_pause: 16384 | 1, media_play: 16384, media_pause: 1, media_stop: 4096,
     media_next_track: 32, media_previous_track: 16, media_seek: 2, volume_set: 4, shuffle_set: 32768, play_media: 512,
+    join: 524288, unjoin: 524288,
   };
   const refusedMedia = (domain, service, data) => {
     const needs = domain === 'media_player' ? MEDIA_SERVICE_NEEDS[service] : undefined;
@@ -231,6 +232,16 @@ async function startFakeHomeAssistant({ token = 'secret-token', port = 0, wsEnab
       case 'media_player.media_play': return [setState(id, 'playing', { media_position_updated_at: new Date().toISOString() })];
       case 'media_player.media_pause': return [setState(id, 'paused', { media_position_updated_at: new Date().toISOString() })];
       case 'media_player.media_stop': return [setState(id, 'idle')];
+      // A group: every member lists the leader first, then the others.
+      case 'media_player.join': {
+        const group = [id, ...new Set([...(a.group_members || []).filter((m) => m !== id), ...data.group_members])];
+        return group.map((member) => setState(member, states.get(member)?.state || 'idle', { group_members: group }));
+      }
+      case 'media_player.unjoin': {
+        const rest = (a.group_members || []).filter((m) => m !== id);
+        return [setState(id, state.state, { group_members: [id] }),
+          ...rest.map((member) => setState(member, states.get(member).state, { group_members: rest.length > 1 ? rest : [member] }))];
+      }
       case 'media_player.media_seek': return [setState(id, state.state, { media_position: data.seek_position, media_position_updated_at: new Date().toISOString() })];
       case 'media_player.media_next_track': return [setState(id, state.state, { media_title: 'Heart of Gold', media_album_name: 'Harvest', media_position: 0, media_position_updated_at: new Date().toISOString() })];
       case 'media_player.media_previous_track': return [setState(id, state.state, { media_position: 0, media_position_updated_at: new Date().toISOString() })];

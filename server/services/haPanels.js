@@ -37,7 +37,7 @@ const EMOJI_ICON = /^[^\s<>&"'`=;{}\\a-zA-Z0-9]{1,8}$/u;
 const COVER = { OPEN: 1, CLOSE: 2, SET_POSITION: 4, STOP: 8 };
 const FAN = { SET_SPEED: 1 };
 const CLIMATE = { TARGET_TEMPERATURE: 1 };
-const MEDIA = { PAUSE: 1, SEEK: 2, VOLUME_SET: 4, PREVIOUS_TRACK: 16, NEXT_TRACK: 32, PLAY_MEDIA: 512, STOP: 4096, PLAY: 16384, SHUFFLE_SET: 32768, MEDIA_ENQUEUE: 2097152 };
+const MEDIA = { PAUSE: 1, SEEK: 2, VOLUME_SET: 4, PREVIOUS_TRACK: 16, NEXT_TRACK: 32, PLAY_MEDIA: 512, STOP: 4096, PLAY: 16384, SHUFFLE_SET: 32768, GROUPING: 524288, MEDIA_ENQUEUE: 2097152 };
 const VACUUM = { PAUSE: 4, RETURN_HOME: 16, START: 8192 };
 const ALARM = { ARM_HOME: 1, ARM_AWAY: 2 };
 
@@ -256,6 +256,21 @@ const DOMAINS = {
           },
         };
       },
+      // Other speakers play in step with this one (Home Assistant's
+      // grouping: Music Assistant, Sonos ...). The route checks that each
+      // is a speaker the panel may operate and marks the list `checked`.
+      join: (state, value) => {
+        if (!has(state, MEDIA.GROUPING)) throw new ActionError('This player cannot be grouped');
+        if (!isObject(value) || value.checked !== true || !Array.isArray(value.members) || value.members.length === 0) {
+          throw new ActionError('join needs the speakers to group with it');
+        }
+        return { domain: 'media_player', service: 'join', data: { group_members: value.members } };
+      },
+      // This speaker leaves its group.
+      unjoin: (state) => {
+        if (!has(state, MEDIA.GROUPING)) throw new ActionError('This player cannot be grouped');
+        return { domain: 'media_player', service: 'unjoin' };
+      },
       play_media: (state, value) => {
         if (!has(state, MEDIA.PLAY_MEDIA)) throw new ActionError('This player cannot play from its library');
         if (!isObject(value) || value.fromLibrary !== true
@@ -276,7 +291,9 @@ const DOMAINS = {
     },
     attributes: ['media_title', 'media_artist', 'media_album_name', 'volume_level', 'is_volume_muted', 'shuffle',
       // Where the song is: the panel draws its progress from these.
-      'media_duration', 'media_position', 'media_position_updated_at'],
+      'media_duration', 'media_position', 'media_position_updated_at',
+      // The speakers playing together, the group's leader first.
+      'group_members'],
     // The picture's address is never sent (Home Assistant's carries a token):
     // a tag that changes with it, and the panel asks HomeGlow for the picture.
     derived: (state) => ({ media_art: media.artVersion(state) }),
