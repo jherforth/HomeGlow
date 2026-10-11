@@ -166,11 +166,24 @@ test('play_media plays only what came from the library, now rather than queued',
   assert.equal(playAction('media_player.kitchen', item, noEnqueue).data.enqueue, undefined, 'enqueue only where the player supports it');
 });
 
+test('seek jumps within the playing song, never past its end', () => {
+  const seekable = st('media_player.kitchen', 'playing', { supported_features: 2 | 1, media_duration: 240 });
+  const seek = (value, state = seekable) => rules.resolveAction({ access: musicAccess, entityId: 'media_player.kitchen', action: 'seek', value, state });
+  assert.deepEqual([seek(61.26).service, seek(61.26).data], ['media_seek', { seek_position: 61.3, entity_id: 'media_player.kitchen' }]);
+  assert.equal(seek(999).data.seek_position, 240);
+  assert.equal(seek(-5).data.seek_position, 0);
+  assert.throws(() => seek('soon'), /seconds/);
+  assert.throws(() => seek(10, music), /cannot jump/);
+});
+
 test('a music player shows its album and shuffle, and a picture tag', () => {
   const filtered = rules.filterState(st('media_player.kitchen', 'playing', {
     media_title: 'Harvest Moon', media_artist: 'Neil Young', media_album_name: 'Harvest Moon', shuffle: true,
     entity_picture: '/api/media_player_proxy/media_player.kitchen?token=t&cache=1', media_content_id: 'library://track/9',
+    media_duration: 312, media_position: 41.5, media_position_updated_at: '2026-10-11T12:00:00+00:00',
   }));
+  assert.deepEqual([filtered.attributes.media_duration, filtered.attributes.media_position, filtered.attributes.media_position_updated_at],
+    [312, 41.5, '2026-10-11T12:00:00+00:00']);
   assert.equal(filtered.attributes.media_album_name, 'Harvest Moon');
   assert.equal(filtered.attributes.shuffle, true);
   assert.match(filtered.attributes.media_art, /^[\w-]{12}$/);

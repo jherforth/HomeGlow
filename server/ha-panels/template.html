@@ -75,8 +75,14 @@ body {
 
 .row { display: flex; gap: 6px; flex-wrap: wrap; position: relative; z-index: 2; }
 .btn { appearance: none; border: 0; font: inherit; font-weight: 650; font-size: clamp(0.72rem, 2.8vmin, 0.9rem); cursor: pointer;
-  min-height: 36px; min-width: 36px; padding: 0 0.8em; border-radius: var(--hg-button-radius, 999px);
-  background: color-mix(in srgb, var(--acc) 14%, transparent); color: inherit; }
+  min-height: 36px; min-width: 36px; padding: 0 0.8em; border-radius: var(--hg-button-radius, 999px); position: relative;
+  background: color-mix(in srgb, var(--acc) 14%, transparent); color: inherit;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: transform 0.12s ease, background-color 0.2s, color 0.2s; }
+.btn:active:not([disabled]) { transform: scale(0.88); }
+/* Sent, waiting for the player: a ring turns around the button. */
+.btn.busy::after { content: ''; position: absolute; inset: -5px; border-radius: inherit; border: 3px solid transparent;
+  border-top-color: var(--acc); border-right-color: var(--acc); animation: hg-spin 0.9s linear infinite; pointer-events: none; }
+@keyframes hg-spin { to { transform: rotate(360deg); } }
 .btn:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; }
 .btn.primary { background: var(--on-bg); color: var(--on-ink); }
 .btn[disabled] { opacity: 0.45; cursor: default; }
@@ -106,7 +112,7 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
   background: color-mix(in srgb, var(--acc) 12%, transparent); display: grid; place-items: center; }
 .tile.h2 .np .art { width: clamp(72px, 26vmin, 168px); }
 .np .art svg { width: 46%; height: 46%; fill: none; stroke: var(--acc); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.np .art.gone { visibility: hidden; }
+.art.gone { visibility: hidden; }
 .np .meta { min-width: 0; flex: 1; }
 .np .title { font-weight: 700; font-size: clamp(0.9rem, 4vmin, 1.25rem); line-height: 1.2; overflow: hidden; text-overflow: ellipsis;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
@@ -117,9 +123,91 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
 .btn.icon svg { width: 52%; height: 52%; fill: currentColor; }
 .btn.icon.toggled { background: var(--on-bg); color: var(--on-ink); }
 .btn.icon.quiet { background: transparent; }
+.btn.icon.quiet:active:not([disabled]) { background: color-mix(in srgb, var(--acc) 20%, transparent); }
 .ctl.tight { flex-wrap: wrap; gap: 2px; }
 .ctl.tight .btn.icon { width: clamp(32px, 9vmin, 44px); height: clamp(32px, 9vmin, 44px); }
 .list .tile .np .art { width: 36px; }
+.skipping .title, .skipping .artist, .skipping .album, .skipping .np .sub { opacity: 0.4; transition: opacity 0.2s; }
+
+/* Where the song is. A tap on the bar jumps there, when the player can. */
+.prog { width: 100%; position: relative; z-index: 2; }
+.prog .bar { position: relative; height: 22px; display: flex; align-items: center; }
+.prog .bar[data-seek] { cursor: pointer; touch-action: none; }
+.prog .bar::before { content: ''; position: absolute; left: 0; right: 0; height: 5px; border-radius: 999px; background: var(--level-track); }
+.prog .done { position: absolute; left: 0; width: 0; height: 5px; border-radius: 999px; background: var(--acc); }
+.prog .bar[data-seek] .done::after { content: ''; position: absolute; right: -7px; top: 50%; width: 14px; height: 14px; margin-top: -7px;
+  border-radius: 50%; background: var(--acc); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3); }
+.prog .bar:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; border-radius: 6px; }
+.prog .times { display: flex; justify-content: space-between; margin-top: -2px; font-size: clamp(0.68rem, 2.4vmin, 0.85rem);
+  color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+/* Volume: the theme's level colors, a round thumb big enough for a finger. */
+.vol { display: flex; align-items: center; gap: 10px; width: 100%; position: relative; z-index: 2; }
+.vol svg { width: 22px; height: 22px; flex: none; fill: none; stroke: var(--ink-2); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+input[type=range].level { -webkit-appearance: none; appearance: none; flex: 1; min-width: 0; width: auto; height: 30px; margin: 0;
+  background: transparent; cursor: pointer; --pct: 50%; }
+input.level::-webkit-slider-runnable-track { height: 6px; border-radius: 999px;
+  background: linear-gradient(to right, var(--level) 0 var(--pct), var(--level-track) var(--pct) 100%); }
+input.level::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 22px; height: 22px; margin-top: -8px; border-radius: 50%;
+  background: var(--surface, #fff); border: 3px solid var(--level); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); }
+input.level::-moz-range-track { height: 6px; border-radius: 999px; background: var(--level-track); }
+input.level::-moz-range-progress { height: 6px; border-radius: 999px; background: var(--level); }
+input.level::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--surface, #fff); border: 3px solid var(--level); }
+input.level:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; border-radius: 8px; }
+
+/* A panel that is just one music player: the whole panel is the player.
+   The record sleeve is the big thing; the rest stays quiet. Its picture,
+   blurred, tints the background; a veil in the theme's surface color keeps
+   the words readable in light and dark themes. */
+.grid.solo { flex: 1 1 auto; min-height: 0; grid-template-columns: minmax(0, 1fr); grid-auto-rows: minmax(0, 1fr); }
+.grid.solo > .tile { grid-column: auto; grid-row: auto; }
+.tile.stage { display: block; padding: 0; container-type: size; isolation: isolate; }
+.stage .backdrop { position: absolute; inset: -15%; width: 130%; height: 130%; object-fit: cover; z-index: 0; pointer-events: none;
+  filter: blur(46px) saturate(1.3); opacity: 0.55; }
+.tile.stage::after { content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: linear-gradient(100deg, color-mix(in srgb, var(--surface, #fff) 18%, transparent), color-mix(in srgb, var(--surface, #fff) 74%, transparent) 58%); }
+.stage-in { --pad: clamp(14px, 5cqmin, 44px); position: relative; z-index: 1; height: 100%; padding: var(--pad);
+  display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: clamp(14px, 5cqmin, 52px); }
+.sleeve { height: min(calc(100cqh - 2 * var(--pad)), 46cqw); aspect-ratio: 1; border-radius: var(--hg-radius-md, 14px); overflow: hidden;
+  display: grid; place-items: center; background: color-mix(in srgb, var(--acc) 14%, var(--surface, #fff));
+  box-shadow: 0 22px 48px -18px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.12); }
+.sleeve img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sleeve > svg { width: 36%; height: 36%; fill: none; stroke: var(--acc); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.stage .info { min-width: 0; display: flex; flex-direction: column; gap: clamp(4px, 1.4cqmin, 12px); }
+.stage .who { display: flex; align-items: center; gap: 0.45em; min-width: 0; color: var(--ink-2); font-weight: 600;
+  font-size: clamp(0.74rem, 2.3cqmin, 1rem); }
+.stage .who svg { width: 1.25em; height: 1.25em; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.stage .who span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stage .title { font-size: clamp(1.2rem, 6.4cqmin, 3.4rem); font-weight: 760; line-height: 1.06; letter-spacing: -0.015em; text-wrap: balance;
+  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.stage .artist { font-size: clamp(0.95rem, 3.4cqmin, 1.65rem); font-weight: 620; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stage .album { font-size: clamp(0.8rem, 2.6cqmin, 1.2rem); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stage .prog { margin-top: clamp(4px, 2cqmin, 18px); }
+.stage .prog .times { font-size: clamp(0.72rem, 2.2cqmin, 1rem); }
+.stage .ctl { justify-content: flex-start; gap: clamp(6px, 2.6cqmin, 24px); margin-top: clamp(0px, 1cqmin, 8px); }
+.stage .btn.icon { width: clamp(40px, 9.5cqmin, 76px); height: clamp(40px, 9.5cqmin, 76px); }
+.stage .btn.icon.lg { width: clamp(54px, 15cqmin, 112px); height: clamp(54px, 15cqmin, 112px); }
+.stage .btn.icon.lg svg { width: 44%; height: 44%; }
+.stage .vol { max-width: 440px; margin-top: clamp(2px, 1.4cqmin, 12px); }
+.stage .btn.choose { align-self: flex-start; min-height: 48px; padding: 0 1.2em; display: inline-flex; align-items: center; gap: 0.5em;
+  font-size: clamp(0.9rem, 3cqmin, 1.2rem); margin-top: clamp(6px, 2cqmin, 16px); }
+.stage .btn.choose svg { width: 1.2em; height: 1.2em; fill: currentColor; }
+/* Taller than wide: the sleeve on top, everything centered under it. */
+@container (max-aspect-ratio: 6/5) {
+  .stage-in { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; justify-items: center; text-align: center; }
+  .sleeve { height: auto; max-height: 100%; width: min(76cqw, 46cqh); }
+  .stage .info { align-items: center; width: 100%; max-width: 560px; }
+  .stage .ctl { justify-content: center; }
+  .stage .btn.choose { align-self: center; }
+  .tile.stage::after { background: linear-gradient(180deg, color-mix(in srgb, var(--surface, #fff) 18%, transparent), color-mix(in srgb, var(--surface, #fff) 76%, transparent) 52%); }
+}
+/* A short panel: fewer lines. */
+@container (max-height: 340px) {
+  .stage .album, .stage .who { display: none; }
+}
+@container (max-height: 230px) {
+  .stage .vol, .stage .prog .times { display: none; }
+}
 
 .sheet.library { width: min(640px, 100%); height: min(100%, 780px); padding: 12px; gap: 8px; }
 .lib-head { display: flex; align-items: center; gap: 6px; }
@@ -236,7 +324,8 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
       nothingHere: 'Nothing here.', noResults: 'Nothing found for', searching: 'Searching…', nowPlaying: 'Playing', starting: 'Starting',
       shuffle: 'Shuffle', previous: 'Previous', next: 'Next', nothingPlaying: 'Nothing playing', staleList: 'That list changed. Here it is again.',
       kind_playlist: 'Playlist', kind_album: 'Album', kind_artist: 'Artist', kind_track: 'Song', kind_music: 'Music', kind_directory: 'Folder',
-      kind_podcast: 'Podcast', kind_episode: 'Episode', kind_channel: 'Station', kind_genre: 'Genre', kind_composer: 'Composer'
+      kind_podcast: 'Podcast', kind_episode: 'Episode', kind_channel: 'Station', kind_genre: 'Genre', kind_composer: 'Composer',
+      position: 'Place in the song', volume: 'Volume', chooseMusic: 'Choose music'
     },
     es: {
       on: 'Encendido', off: 'Apagado', open: 'Abierto', closed: 'Cerrado', opening: 'Abriendo', closing: 'Cerrando', stopped: 'Detenido',
@@ -265,7 +354,8 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
       nothingHere: 'No hay nada aquí.', noResults: 'No se encontró nada para', searching: 'Buscando…', nowPlaying: 'Reproduciendo', starting: 'Iniciando',
       shuffle: 'Aleatorio', previous: 'Anterior', next: 'Siguiente', nothingPlaying: 'No se está reproduciendo nada', staleList: 'Esa lista cambió. Aquí está de nuevo.',
       kind_playlist: 'Lista', kind_album: 'Álbum', kind_artist: 'Artista', kind_track: 'Canción', kind_music: 'Música', kind_directory: 'Carpeta',
-      kind_podcast: 'Pódcast', kind_episode: 'Episodio', kind_channel: 'Emisora', kind_genre: 'Género', kind_composer: 'Compositor'
+      kind_podcast: 'Pódcast', kind_episode: 'Episodio', kind_channel: 'Emisora', kind_genre: 'Género', kind_composer: 'Compositor',
+      position: 'Punto de la canción', volume: 'Volumen', chooseMusic: 'Elegir música'
     }
   };
   var T = STRINGS[lang];
@@ -326,7 +416,11 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
     back: '<path d="M15 5.5L8.5 12l6.5 6.5 1.4-1.4L11.3 12l5.1-5.1z"/>',
     close: '<path d="M6.4 5L12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6 10.6 12 5 6.4z"/>'
   };
-  var MEDIA_FEATURE = { PLAY_MEDIA: 512, SHUFFLE_SET: 32768, BROWSE_MEDIA: 131072, SEARCH_MEDIA: 4194304 };
+  var MEDIA_FEATURE = { SEEK: 2, VOLUME_SET: 4, PLAY_MEDIA: 512, SHUFFLE_SET: 32768, BROWSE_MEDIA: 131072, SEARCH_MEDIA: 4194304 };
+  var VOLUME_ICONS = {
+    low: '<path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M15.5 10a3 3 0 0 1 0 4"/>',
+    high: '<path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M15.5 10a3 3 0 0 1 0 4M18 7.5a6.5 6.5 0 0 1 0 9"/>'
+  };
   function glyph(name) { return '<svg viewBox="0 0 24 24" aria-hidden="true">' + MEDIA_ICONS[name] + '</svg>'; }
   function mediaBase(entityId) {
     return '/api/plugin/v1/ha/' + encodeURIComponent(pluginId) + '/media/' + encodeURIComponent(entityId);
@@ -351,6 +445,9 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
   var pending = {};         // entity_id -> { until, patch } optimistic changes
   var hints = {};           // tile id -> text shown briefly
   var holdArmed = {};       // tile id -> time a keyboard confirm was armed
+  var busy = {};            // 'tile id:action' -> until; sent, not answered yet
+  var skipping = {};        // tile id -> { title, until }: next song asked for
+  var stageMode = false;    // the panel is one music player, drawn full size
 
   var esc = function (text) {
     return String(text == null ? '' : text).replace(/[&<>"']/g, function (c) {
@@ -363,6 +460,10 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
   function stateOf(id) {
     var st = states[id];
     var p = pending[id];
+    if (st && p && p.patch.state !== undefined && p.patch.state === st.state && p.seen !== st) {
+      delete pending[id];
+      return st;
+    }
     if (st && p && p.until > Date.now()) {
       return { state: p.patch.state !== undefined ? p.patch.state : st.state, attributes: Object.assign({}, st.attributes, p.patch.attributes || {}), sensitive: st.sensitive };
     }
@@ -426,31 +527,43 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
       flashHint(tile, T.previewNoActions);
       return;
     }
+    extra = extra || {};
     var entities = tile.entities;
     var body = { action: action, device: device };
     if (entities.length > 1) body.entities = entities; else body.entity = entities[0];
     if (value !== undefined) body.value = value;
-    if (extra && extra.pin) body.pin = extra.pin;
-    if (extra && extra.optimistic) {
-      entities.forEach(function (id) { pending[id] = { until: Date.now() + 4000, patch: extra.optimistic(id) }; });
-      render();
+    if (extra.pin) body.pin = extra.pin;
+    if (extra.optimistic) {
+      entities.forEach(function (id) {
+        // `seen`: the state the change was made over, so a patch is not
+        // dropped for matching a state Home Assistant had all along.
+        pending[id] = { until: Date.now() + (extra.holdMs || 4000), patch: extra.optimistic(id), seen: states[id] };
+      });
     }
+    if (extra.busy) busy[extra.busy] = Date.now() + 15000;
+    if (extra.optimistic || extra.busy) render();
+    var settle = function () { if (extra.busy) delete busy[extra.busy]; };
+    var undo = function () {
+      entities.forEach(function (id) { delete pending[id]; });
+      delete skipping[tile.id];
+    };
     return fetch('/api/plugin/v1/ha/' + encodeURIComponent(pluginId) + '/action', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     }).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (data) {
+        settle();
         if (res.status === 401 && data.needsPin) {
           entities.forEach(function (id) { delete pending[id]; });
           render();
-          askPin(extra && extra.pin ? T.pinWrong : null, function (pin) {
+          askPin(extra.pin ? T.pinWrong : null, function (pin) {
             act(tile, action, value, Object.assign({}, extra, { pin: pin }));
           });
           return;
         }
         if (!res.ok) {
-          entities.forEach(function (id) { delete pending[id]; });
+          undo();
           flashHint(tile, (data && data.error) || T.failed);
           return;
         }
@@ -458,7 +571,8 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
         render();
       });
     }).catch(function () {
-      entities.forEach(function (id) { delete pending[id]; });
+      settle();
+      undo();
       flashHint(tile, T.unreachable);
     });
   }
@@ -598,14 +712,18 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
   // --- Drawing ------------------------------------------------------------------
 
   var app = document.getElementById('app');
+  var drawn = null;          // the markup on screen, so an unchanged panel is left alone
+  var pressing = 0;          // when a finger went down on the panel (0: none)
+  var redrawLater = false;
 
   function render() {
-    // A slider being dragged is left alone until it is let go.
+    // A slider being dragged is left alone until it is let go; so is
+    // anything under a finger, or the tap would land on a replaced button.
     if (dragging) return;
-    var focusId = document.activeElement && document.activeElement.getAttribute('data-focus');
+    if (pressing && Date.now() - pressing < 5000) { redrawLater = true; return; }
     var html = '';
     if (!recipe) {
-      app.innerHTML = '<p class="empty">' + esc(preview ? T.empty : T.loading) + '</p>';
+      paint('<p class="empty">' + esc(preview ? T.empty : T.loading) + '</p>');
       return;
     }
     if (problem) {
@@ -614,22 +732,33 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
     }
     var tiles = recipe.tiles.filter(visible);
     if (!tiles.length) {
-      app.innerHTML = html + '<p class="empty">' + esc(loaded ? T.empty : T.loading) + '</p>';
+      paint(html + '<p class="empty">' + esc(loaded ? T.empty : T.loading) + '</p>');
       return;
     }
     var compact = recipe.layout === 'list' || window.innerWidth < 220 || window.innerHeight < 150;
     var cols = recipe.columns && recipe.columns !== 'auto' ? Number(recipe.columns) : 0;
     var narrow = cols === 1 || window.innerWidth < 260;
-    html += '<div class="' + (compact ? 'list' : 'grid' + (cols ? ' fixed' : '')) + (problem ? ' offline' : '') + '"'
+    var only = tiles.length === 1 ? stateOf(tiles[0].entities[0]) : null;
+    stageMode = !compact && !!only && kindOf(tiles[0].entities[0], only) === 'media';
+    html += '<div class="' + (compact ? 'list' : 'grid' + (cols ? ' fixed' : '') + (stageMode ? ' solo' : '')) + (problem ? ' offline' : '') + '"'
       + (cols && !compact ? ' style="--cols:' + cols + '"' : '') + '>';
     tiles.forEach(function (tile) { html += tileHtml(tile, compact, narrow); });
     html += '</div>';
-    app.innerHTML = html;
-    if (focusId) {
-      var again = app.querySelector('[data-focus="' + focusId + '"]');
-      if (again) again.focus();
+    paint(html);
+  }
+
+  function paint(html) {
+    if (html !== drawn) {
+      var focusId = document.activeElement && document.activeElement.getAttribute('data-focus');
+      app.innerHTML = html;
+      drawn = html;
+      if (focusId) {
+        var again = app.querySelector('[data-focus="' + focusId + '"]');
+        if (again) again.focus();
+      }
+      loadCameras();
     }
-    loadCameras();
+    tickProgress();
   }
 
   function tileHtml(tile, compact, narrow) {
@@ -739,7 +868,7 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
     }
 
     if (kind === 'media') {
-      return mediaTileHtml(tile, st, { classes: classes, data: data, name: name, operable: operable, hint: hint, compact: compact, big: size !== '1x1' });
+      return mediaTileHtml(tile, st, { classes: classes, data: data, name: name, operable: operable, hint: hint, compact: compact, big: size !== '1x1', stage: stageMode });
     }
 
     if (kind === 'vacuum') {
@@ -780,55 +909,150 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
       + '<div><div class="big">' + esc(stateText(id, st)) + '</div><div class="name">' + esc(name) + '</div></div></div>';
   }
 
-  // A media player: what's playing (with its picture, on a larger tile), the
-  // controls it supports, its volume, and its library when it has one.
+  // A media player: what's playing (with its picture, on a larger tile), where
+  // the song is, the controls it supports, its volume, and its library when it
+  // has one. A panel that is only this player draws it full size (stage).
   function mediaTileHtml(tile, st, o) {
     var id = tile.entities[0];
     var a = st.attributes || {};
     var playing = st.state === 'playing';
     var idle = ['off', 'idle', 'standby', 'unavailable', 'unknown'].indexOf(st.state) !== -1 && !a.media_title;
+    var stage = !!o.stage;
+    var big = o.big || stage;
+    var small = !big || o.compact;
+    var now = Date.now();
+    var ring = function (action) { return busy[tile.id + ':' + action] > now ? ' busy' : ''; };
+    var sk = skipping[tile.id];
+    if (sk && (now > sk.until || a.media_title !== sk.title)) { delete skipping[tile.id]; sk = null; }
     var buttons = '';
-    if (o.operable) {
-      if (has(st, MEDIA_FEATURE.SHUFFLE_SET) && o.big) {
+    if (o.operable && !(stage && idle)) {
+      if (has(st, MEDIA_FEATURE.SHUFFLE_SET) && big) {
         buttons += '<button type="button" class="btn icon' + (a.shuffle ? ' toggled' : ' quiet') + '" data-shuffle aria-pressed="' + !!a.shuffle + '" aria-label="' + esc(T.shuffle) + '">' + glyph('shuffle') + '</button>';
       }
-      if (has(st, 16)) buttons += '<button type="button" class="btn icon quiet" data-action="previous" aria-label="' + esc(T.previous) + '">' + glyph('previous') + '</button>';
+      if (has(st, 16)) buttons += '<button type="button" class="btn icon quiet' + ring('previous') + '" data-action="previous" aria-label="' + esc(T.previous) + '">' + glyph('previous') + '</button>';
       if (has(st, 1) || has(st, 16384)) {
-        buttons += '<button type="button" class="btn icon lg primary" data-action="play_pause" aria-label="' + esc(playing ? T.pause : T.play) + '">' + glyph(playing ? 'pause' : 'play') + '</button>';
+        buttons += '<button type="button" class="btn icon ' + (small ? '' : 'lg ') + 'primary' + ring('play_pause') + '" data-action="play_pause" aria-label="' + esc(playing ? T.pause : T.play) + '">' + glyph(playing ? 'pause' : 'play') + '</button>';
       }
-      if (has(st, 32)) buttons += '<button type="button" class="btn icon quiet" data-action="next" aria-label="' + esc(T.next) + '">' + glyph('next') + '</button>';
-      if (!preview && has(st, MEDIA_FEATURE.PLAY_MEDIA) && (has(st, MEDIA_FEATURE.BROWSE_MEDIA) || has(st, MEDIA_FEATURE.SEARCH_MEDIA))) {
+      if (has(st, 32)) buttons += '<button type="button" class="btn icon quiet' + ring('next') + '" data-action="next" aria-label="' + esc(T.next) + '">' + glyph('next') + '</button>';
+      if (canBrowse(st)) {
         buttons += '<button type="button" class="btn icon quiet" data-library aria-haspopup="dialog" aria-label="' + esc(T.library) + '">' + glyph('library') + '</button>';
       }
     }
-    var volume = o.operable && has(st, 4) && a.volume_level != null
-      ? '<input type="range" min="0" max="100" step="5" value="' + Math.round(a.volume_level * 100) + '" data-range="volume" aria-label="' + esc(o.name) + ' volume">'
-      : '';
-    var small = !o.big || o.compact;
-    // A small tile has no room for the large play button.
-    if (small) buttons = buttons.replace(/ icon lg /g, ' icon ');
-    var controls = (buttons ? '<div class="row ctl' + (small ? ' tight' : '') + '">' + buttons + '</div>' : '') + volume;
+    var volume = o.operable && has(st, MEDIA_FEATURE.VOLUME_SET) && a.volume_level != null ? volumeHtml(tile, st, o.name, small) : '';
+    var controls = buttons ? '<div class="row ctl' + (small ? ' tight' : '') + '">' + buttons + '</div>' : '';
+    var classes = o.classes.slice();
+    if (sk) classes.push('skipping');
 
     if (small) {
-      if (playing) o.classes.push('on');
+      if (playing) classes.push('on');
       var line = tile.showState === false ? '' : (a.media_title ? a.media_title + (a.media_artist ? ' · ' + a.media_artist : '') : stateText(id, st));
-      return '<div class="' + o.classes.join(' ') + '"' + o.data + '><div class="top"><span class="ico">' + iconFor(tile, st) + '</span></div>'
+      return '<div class="' + classes.join(' ') + '"' + o.data + '><div class="top"><span class="ico">' + iconFor(tile, st) + '</span></div>'
         + '<div><div class="name">' + esc(o.name) + '</div>' + (line ? '<div class="sub">' + esc(line) + '</div>' : '') + '</div>'
-        + controls + o.hint + '</div>';
+        + controls + volume + o.hint + '</div>';
     }
 
-    var art = !preview && a.media_art
-      ? '<img class="art" alt="" src="' + esc(mediaBase(id) + '/art?v=' + encodeURIComponent(a.media_art)) + '">'
-      : '<span class="art">' + svg(ICONS.music) + '</span>';
+    var artSrc = !preview && a.media_art ? mediaBase(id) + '/art?v=' + encodeURIComponent(a.media_art) : '';
     var title = idle ? T.nothingPlaying : (a.media_title || stateText(id, st));
+    var progress = idle ? '' : progressHtml(tile, st, o.operable);
+    classes.push('media');
+
+    if (stage) {
+      classes.push('stage');
+      var choose = idle && o.operable && canBrowse(st)
+        ? '<button type="button" class="btn primary choose" data-library aria-haspopup="dialog">' + glyph('library') + '<span>' + esc(T.chooseMusic) + '</span></button>'
+        : '';
+      return '<div class="' + classes.join(' ') + '"' + o.data + '>'
+        + (artSrc ? '<img class="art backdrop" alt="" src="' + esc(artSrc) + '">' : '')
+        + '<div class="stage-in"><div class="sleeve">' + (artSrc ? '<img class="art" alt="" src="' + esc(artSrc) + '">' : svg(ICONS.music)) + '</div>'
+        + '<div class="info">'
+        + (tile.showState === false ? '' : '<div class="who">' + iconFor(tile, st) + '<span>' + esc(o.name) + '</span></div>')
+        + '<div class="title">' + esc(title) + '</div>'
+        + (!idle && a.media_artist ? '<div class="artist">' + esc(a.media_artist) + '</div>' : '')
+        + (!idle && a.media_album_name ? '<div class="album">' + esc(a.media_album_name) + '</div>' : '')
+        + (idle && st.state === 'unavailable' ? '<div class="album">' + esc(T.unavailable) + '</div>' : '')
+        + progress + controls + choose + (idle ? '' : volume)
+        + '</div></div>' + o.hint + '</div>';
+    }
+
+    var art = artSrc ? '<img class="art" alt="" src="' + esc(artSrc) + '">' : '<span class="art">' + svg(ICONS.music) + '</span>';
     var detail = [a.media_artist, a.media_album_name].filter(Boolean).join(' · ');
-    o.classes.push('media');
-    return '<div class="' + o.classes.join(' ') + '"' + o.data + '>'
+    return '<div class="' + classes.join(' ') + '"' + o.data + '>'
       + '<div class="np">' + art + '<div class="meta"><div class="title">' + esc(title) + '</div>'
       + (detail ? '<div class="sub">' + esc(detail) + '</div>' : '')
       + (tile.showState === false ? '' : '<div class="sub">' + esc(o.name) + '</div>') + '</div></div>'
-      + controls + o.hint + '</div>';
+      + progress + controls + volume + o.hint + '</div>';
   }
+
+  function canBrowse(st) {
+    return !preview && has(st, MEDIA_FEATURE.PLAY_MEDIA) && (has(st, MEDIA_FEATURE.BROWSE_MEDIA) || has(st, MEDIA_FEATURE.SEARCH_MEDIA));
+  }
+
+  // On a small tile the slider goes alone: the speaker icons would squeeze it.
+  function volumeHtml(tile, st, name, bare) {
+    var pct = Math.round((Number(st.attributes.volume_level) || 0) * 100);
+    return '<div class="vol">' + (bare ? '' : svg(VOLUME_ICONS.low))
+      + '<input type="range" class="level" min="0" max="100" step="2" value="' + pct + '" style="--pct:' + pct + '%" data-range="volume"'
+      + ' data-focus="' + esc(tile.id) + ':volume" aria-label="' + esc(name) + ': ' + esc(T.volume) + '">'
+      + (bare ? '' : svg(VOLUME_ICONS.high)) + '</div>';
+  }
+
+  // Where the song is, in seconds, now: Home Assistant reports a position and
+  // when it was taken; while playing, the time since is added. Null when the
+  // player doesn't say (a radio station, say).
+  function positionNow(a, playing) {
+    var pos = Number(a.media_position);
+    var dur = Number(a.media_duration);
+    if (a.media_position == null || !isFinite(pos) || !isFinite(dur) || dur <= 0) return null;
+    if (playing && a.media_position_updated_at) {
+      var at = Date.parse(a.media_position_updated_at);
+      if (isFinite(at)) pos += Math.max(0, (Date.now() - at) / 1000);
+    }
+    return Math.max(0, Math.min(dur, pos));
+  }
+
+  function clock(seconds) {
+    var t = Math.max(0, Math.floor(seconds));
+    var h = Math.floor(t / 3600);
+    var m = Math.floor((t % 3600) / 60);
+    var sec = t % 60;
+    return (h ? h + ':' + (m < 10 ? '0' : '') : '') + m + ':' + (sec < 10 ? '0' : '') + sec;
+  }
+
+  // The bar and the times; tickProgress() moves them every second, so the
+  // markup itself stays the same while a song plays.
+  function progressHtml(tile, st, operable) {
+    var a = st.attributes || {};
+    var dur = Number(a.media_duration);
+    if (positionNow(a, false) === null) return '';
+    var seek = operable && has(st, MEDIA_FEATURE.SEEK);
+    return '<div class="prog" data-prog="' + esc(tile.id) + '">'
+      + '<div class="bar"' + (seek
+        ? ' data-seek role="slider" tabindex="0" data-focus="' + esc(tile.id) + ':seek" aria-label="' + esc(T.position) + '" aria-valuemin="0" aria-valuemax="' + Math.round(dur) + '"'
+        : ' aria-hidden="true"')
+      + '><span class="done"></span></div>'
+      + '<div class="times"><span class="t-pos"></span><span>' + clock(dur) + '</span></div></div>';
+  }
+
+  function tickProgress() {
+    app.querySelectorAll('[data-prog]').forEach(function (el) {
+      var tile = tileById(el.getAttribute('data-prog'));
+      var st = tile && stateOf(tile.entities[0]);
+      if (!st) return;
+      var a = st.attributes || {};
+      var pos = positionNow(a, st.state === 'playing');
+      if (pos === null) return;
+      var done = el.querySelector('.done');
+      if (done) done.style.width = (pos / Number(a.media_duration) * 100).toFixed(2) + '%';
+      var shown = el.querySelector('.t-pos');
+      if (shown) shown.textContent = clock(pos);
+      var bar = el.querySelector('[data-seek]');
+      if (bar) {
+        bar.setAttribute('aria-valuenow', String(Math.round(pos)));
+        bar.setAttribute('aria-valuetext', clock(pos) + ' / ' + clock(Number(a.media_duration)));
+      }
+    });
+  }
+  setInterval(function () { if (!document.hidden) tickProgress(); }, 1000);
 
   // Camera snapshots: a fresh one every 10 seconds while the panel is seen.
   var cameraStamp = Date.now();
@@ -860,12 +1084,37 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
         return { state: st.state === 'on' ? 'off' : 'on' };
       };
     }
+    if (action === 'play_pause') {
+      // The button turns over at once; the song's clock stops or goes on
+      // from where it is now.
+      return function (id) {
+        var st = states[id];
+        if (!st) return {};
+        var playing = st.state === 'playing';
+        var pos = positionNow(st.attributes || {}, playing);
+        var attributes = { media_position_updated_at: new Date().toISOString() };
+        if (pos !== null) attributes.media_position = pos;
+        return { state: playing ? 'paused' : 'playing', attributes: attributes };
+      };
+    }
     return null;
   }
 
+  var MEDIA_ACTIONS = { play_pause: true, next: true, previous: true };
   function perform(tile, action, value) {
     var opt = optimisticFor(action);
-    return act(tile, action, value, opt ? { optimistic: opt } : null);
+    var extra = opt ? { optimistic: opt } : {};
+    if (MEDIA_ACTIONS[action]) {
+      // A speaker can take a few seconds to answer: the button shows it was
+      // heard, and a skipped song's details fade until the next one arrives.
+      extra.busy = tile.id + ':' + action;
+      extra.holdMs = 10000;
+      if (action === 'next') {
+        var st = stateOf(tile.entities[0]);
+        skipping[tile.id] = { title: st && st.attributes ? st.attributes.media_title : null, until: Date.now() + 10000 };
+      }
+    }
+    return act(tile, action, value, extra);
   }
 
   // Press and hold: a tile that needs it starts a ring on press and acts when
@@ -933,6 +1182,10 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
   // without movement toggles instead (opens or closes, for a shade).
   var dragging = null;
   app.addEventListener('pointerdown', function (event) {
+    pressing = Date.now();
+    if (event.target.closest('button') && navigator.vibrate) {
+      try { navigator.vibrate(8); } catch (e) { /* not allowed here */ }
+    }
     var slider = event.target.closest('[data-slider]');
     if (slider && !event.target.closest('button')) {
       var tile = tileById(slider.closest('[data-tile]').getAttribute('data-tile'));
@@ -1000,11 +1253,41 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
     cancelHold();
   });
   app.addEventListener('pointerleave', cancelHold);
+  // The finger is up: redraw what came in meanwhile, after the tap is handled.
+  function released() {
+    if (!pressing) return;
+    pressing = 0;
+    if (redrawLater) {
+      redrawLater = false;
+      setTimeout(render, 0);
+    }
+  }
+  window.addEventListener('pointerup', released, true);
+  window.addEventListener('pointercancel', released, true);
   app.addEventListener('error', function (event) {
     if (event.target && event.target.classList && event.target.classList.contains('art')) event.target.classList.add('gone');
   }, true);
 
+  function seekTo(tile, seconds) {
+    var s = Math.max(0, Math.round(seconds));
+    act(tile, 'seek', s, {
+      optimistic: function () { return { attributes: { media_position: s, media_position_updated_at: new Date().toISOString() } }; },
+      holdMs: 6000
+    });
+    tickProgress();
+  }
+
   app.addEventListener('click', function (event) {
+    var seekEl = event.target.closest('[data-seek]');
+    if (seekEl) {
+      var seekTile = tileById(seekEl.closest('[data-tile]').getAttribute('data-tile'));
+      var seekSt = seekTile && stateOf(seekTile.entities[0]);
+      var duration = seekSt && Number(seekSt.attributes.media_duration);
+      if (!duration) return;
+      var box = seekEl.getBoundingClientRect();
+      seekTo(seekTile, Math.max(0, Math.min(1, (event.clientX - box.left) / box.width)) * duration);
+      return;
+    }
     var musicEl = event.target.closest('[data-library],[data-shuffle]');
     if (musicEl) {
       var musicTile = tileById(musicEl.closest('[data-tile]').getAttribute('data-tile'));
@@ -1031,6 +1314,14 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
 
   app.addEventListener('keydown', function (event) {
     var el = event.target;
+    if (el.hasAttribute && el.hasAttribute('data-seek') && (event.key === 'ArrowRight' || event.key === 'ArrowLeft')) {
+      event.preventDefault();
+      var seekTile = tileById(el.closest('[data-tile]').getAttribute('data-tile'));
+      var seekSt = seekTile && stateOf(seekTile.entities[0]);
+      var at = seekSt && positionNow(seekSt.attributes || {}, seekSt.state === 'playing');
+      if (at !== null && at !== undefined) seekTo(seekTile, at + (event.key === 'ArrowRight' ? 10 : -10));
+      return;
+    }
     if (el.hasAttribute && el.hasAttribute('data-slider') && (event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'ArrowRight' || event.key === 'ArrowLeft')) {
       event.preventDefault();
       var tile = tileById(el.closest('[data-tile]').getAttribute('data-tile'));
@@ -1053,11 +1344,21 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
     }
   });
 
+  // A volume slider fills as it moves, before the player is told.
+  app.addEventListener('input', function (event) {
+    var input = event.target.closest('input.level');
+    if (input) input.style.setProperty('--pct', input.value + '%');
+  });
+
   app.addEventListener('change', function (event) {
     var input = event.target.closest('[data-range]');
     if (!input) return;
     var tile = tileById(input.closest('[data-tile]').getAttribute('data-tile'));
-    act(tile, input.getAttribute('data-range'), Number(input.value));
+    var range = input.getAttribute('data-range');
+    var value = Number(input.value);
+    act(tile, range, value, range === 'volume'
+      ? { optimistic: function () { return { attributes: { volume_level: value / 100 } }; }, holdMs: 6000 }
+      : null);
   });
 
   // --- Overlays ------------------------------------------------------------------

@@ -401,8 +401,12 @@ gates in `app.jsx` (sound scheduler + screensaver render), UI in `AdminPanel.jsx
 - Panels can be duplicated, copied as text and imported into another HomeGlow
   (with a step to swap entity ids), and the builder lists what panels did.
 - **Music.** A media player tile at 2×1 or 2×2 shows what's playing with its
-  album art, artist and album, and has shuffle, previous, play/pause, next and
-  volume. A player with a library opens it from the tile: browse it a level at
+  album art, artist and album, where the song is (tap the bar to jump, when the
+  player can), and has shuffle, previous, play/pause, next and volume. A panel
+  that is just one player fills the whole panel with it: the album cover large,
+  its colors behind, laid out for a wide or a tall widget. Buttons answer at
+  once: play/pause turns over before the speaker does, and a ring turns while
+  a slow speaker (AirPlay, say) is still answering. A player with a library opens it from the tile: browse it a level at
   a time (playlists, artists, albums ...), play a whole playlist or one song,
   or search it, with the panel's recent searches kept for next time. It uses
   Home Assistant's own `media_player/browse_media` and `search_media`, so it

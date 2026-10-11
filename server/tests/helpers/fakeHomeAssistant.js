@@ -34,7 +34,8 @@ function defaultStates() {
     s('media_player.kitchen_music', 'paused', {
       friendly_name: 'Kitchen music', media_title: 'Harvest Moon', media_artist: 'Neil Young', media_album_name: 'Harvest Moon',
       entity_picture: '/api/media_player_proxy/media_player.kitchen_music?token=proxy-token&cache=abc',
-      supported_features: 16384 | 1 | 4 | 32 | 16 | 512 | 32768 | 131072 | 2097152 | 4194304, volume_level: 0.4, shuffle: false,
+      supported_features: 16384 | 1 | 2 | 4 | 32 | 16 | 512 | 32768 | 131072 | 2097152 | 4194304, volume_level: 0.4, shuffle: false,
+      media_duration: 305, media_position: 84, media_position_updated_at: new Date().toISOString(),
     }),
     s('sensor.outside_temp', '54.3', { friendly_name: 'Outside', unit_of_measurement: '°F', device_class: 'temperature' }),
     s('binary_sensor.back_door', 'off', { friendly_name: 'Back door', device_class: 'door' }),
@@ -202,7 +203,10 @@ async function startFakeHomeAssistant({ token = 'secret-token', port = 0, wsEnab
       case 'alarm_control_panel.alarm_disarm': return [setState(id, 'disarmed')];
       case 'climate.set_temperature': return [setState(id, state.state, { temperature: data.temperature })];
       case 'climate.set_hvac_mode': return [setState(id, data.hvac_mode)];
-      case 'media_player.media_play_pause': return [setState(id, state.state === 'playing' ? 'paused' : 'playing')];
+      case 'media_player.media_play_pause': return [setState(id, state.state === 'playing' ? 'paused' : 'playing', { media_position_updated_at: new Date().toISOString() })];
+      case 'media_player.media_seek': return [setState(id, state.state, { media_position: data.seek_position, media_position_updated_at: new Date().toISOString() })];
+      case 'media_player.media_next_track': return [setState(id, state.state, { media_title: 'Heart of Gold', media_album_name: 'Harvest', media_position: 0, media_position_updated_at: new Date().toISOString() })];
+      case 'media_player.media_previous_track': return [setState(id, state.state, { media_position: 0, media_position_updated_at: new Date().toISOString() })];
       case 'media_player.volume_set': return [setState(id, state.state, { volume_level: data.volume_level })];
       case 'media_player.shuffle_set': return [setState(id, state.state, { shuffle: data.shuffle })];
       case 'media_player.play_media': return [setState(id, 'playing', { media_title: data.media_content_id, entity_picture: `/api/media_player_proxy/${id}?token=proxy-token&cache=${Date.now()}` })];

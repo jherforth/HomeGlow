@@ -37,7 +37,7 @@ const EMOJI_ICON = /^[^\s<>&"'`=;{}\\a-zA-Z0-9]{1,8}$/u;
 const COVER = { OPEN: 1, CLOSE: 2, SET_POSITION: 4, STOP: 8 };
 const FAN = { SET_SPEED: 1 };
 const CLIMATE = { TARGET_TEMPERATURE: 1 };
-const MEDIA = { PAUSE: 1, VOLUME_SET: 4, PREVIOUS_TRACK: 16, NEXT_TRACK: 32, PLAY_MEDIA: 512, PLAY: 16384, SHUFFLE_SET: 32768, MEDIA_ENQUEUE: 2097152 };
+const MEDIA = { PAUSE: 1, SEEK: 2, VOLUME_SET: 4, PREVIOUS_TRACK: 16, NEXT_TRACK: 32, PLAY_MEDIA: 512, PLAY: 16384, SHUFFLE_SET: 32768, MEDIA_ENQUEUE: 2097152 };
 const VACUUM = { PAUSE: 4, RETURN_HOME: 16, START: 8192 };
 const ALARM = { ARM_HOME: 1, ARM_AWAY: 2 };
 
@@ -187,6 +187,14 @@ const DOMAINS = {
         if (pct === null) throw new ActionError('volume needs a number from 0 to 100');
         return { domain: 'media_player', service: 'volume_set', data: { volume_level: Math.round(pct) / 100 } };
       },
+      // A place in the playing song, in seconds (no further than its end).
+      seek: (state, value) => {
+        if (!has(state, MEDIA.SEEK)) throw new ActionError('This player cannot jump within a song');
+        const duration = Number(state?.attributes?.media_duration);
+        const seconds = numberIn(value, 0, Number.isFinite(duration) && duration > 0 ? duration : 24 * 3600);
+        if (seconds === null) throw new ActionError('seek needs a number of seconds');
+        return { domain: 'media_player', service: 'media_seek', data: { seek_position: Math.round(seconds * 10) / 10 } };
+      },
       shuffle: (state, value) => {
         if (!has(state, MEDIA.SHUFFLE_SET)) throw new ActionError('This player cannot shuffle');
         if (typeof value !== 'boolean') throw new ActionError('shuffle needs true or false');
@@ -214,7 +222,9 @@ const DOMAINS = {
         };
       },
     },
-    attributes: ['media_title', 'media_artist', 'media_album_name', 'volume_level', 'is_volume_muted', 'shuffle'],
+    attributes: ['media_title', 'media_artist', 'media_album_name', 'volume_level', 'is_volume_muted', 'shuffle',
+      // Where the song is: the panel draws its progress from these.
+      'media_duration', 'media_position', 'media_position_updated_at'],
     // The picture's address is never sent (Home Assistant's carries a token):
     // a tag that changes with it, and the panel asks HomeGlow for the picture.
     derived: (state) => ({ media_art: media.artVersion(state) }),
