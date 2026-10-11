@@ -176,6 +176,10 @@
     });
   }
 
+  function mediaPath(entityId, rest) {
+    return '/ha/' + encodeURIComponent(requirePluginId()) + '/media/' + encodeURIComponent(entityId) + rest;
+  }
+
   window.HomeGlow = {
     apiVersion: 'v1',
     get pluginId() {
@@ -311,6 +315,32 @@
       /** The address of a camera's latest snapshot, for an <img>. */
       cameraUrl: function (entityId) {
         return API_BASE + '/ha/' + encodeURIComponent(requirePluginId()) + '/camera/' + encodeURIComponent(entityId) + '?t=' + Date.now();
+      },
+      /**
+       * A declared media player's library, through Home Assistant (whatever
+       * the player offers: Music Assistant, Sonos, Spotify ...). Items carry
+       * a `key`; play one with action(entityId, 'play_media', item.key).
+       */
+      media: {
+        /** -> Promise<{ title, key, canPlay, items: [{ key, title, kind, canPlay, canOpen, thumb }], more }>. */
+        browse: function (entityId, itemKey) {
+          return request('GET', mediaPath(entityId, '/browse') + (itemKey ? '?item=' + encodeURIComponent(itemKey) : ''));
+        },
+        /** Search, and remember the search. -> Promise<{ query, items, more, recent }>. */
+        search: function (entityId, query) {
+          return request('GET', mediaPath(entityId, '/search') + '?q=' + encodeURIComponent(query));
+        },
+        /** -> Promise<{ recent: [query, ...] }>, newest first. */
+        recent: function (entityId) {
+          return request('GET', mediaPath(entityId, '/recent'));
+        },
+        clearRecent: function (entityId) {
+          return request('DELETE', mediaPath(entityId, '/recent'));
+        },
+        /** The playing item's picture, for an <img>; pass attributes.media_art as `version`. */
+        artUrl: function (entityId, version) {
+          return API_BASE + mediaPath(entityId, '/art') + '?v=' + encodeURIComponent(version || '');
+        }
       }
     },
 

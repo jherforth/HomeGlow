@@ -316,3 +316,248 @@ test('recipes the server cannot accept are refused with reasons', async () => {
   assert.equal(res.status, 400);
   assert.ok(res.body.errors.length >= 2);
 });
+
+// --- Music: a media player's library ------------------------------------------
+// Browsing, searching and playing go through Home Assistant's own
+// media_player/browse_media and search_media, and a panel plays only what
+// HomeGlow showed it. Calls are spaced out to stay under the press limit.
+
+const music = (pluginId, entityId, rest) => `/api/plugin/v1/ha/${pluginId}/media/${entityId}${rest}`;
+const paced = async (request) => { await delay(120); return request(); };
+let musicPanel;
+
+test('a player\'s library opens a level at a time, by key, never showing a content id', needsWebSocket, async () => {
+  const created = await post('/api/ha-panels', { recipe: { name: 'Music', tiles: [
+    { id: 'music', entities: ['media_player.kitchen_music'], size: '2x2' },
+    { id: 'radio', entities: ['media_player.living'] },
+  ] } });
+  assert.equal(created.status, 200, JSON.stringify(created.body));
+  musicPanel = created.body.panel.pluginId;
+
+  const root = await paced(() => api(music(musicPanel, 'media_player.kitchen_music', '/browse')));
+  assert.equal(root.status, 200, JSON.stringify(root.body));
+  assert.equal(root.body.title, 'Music Assistant');
+  assert.deepEqual(root.body.items.map((item) => item.title), ['Playlists', 'Artists']);
+  assert.doesNotMatch(JSON.stringify(root.body), /library:\/\//);
+
+  const playlists = await paced(() => api(music(musicPanel, 'media_player.kitchen_music', `/browse?item=${root.body.items[0].key}`)));
+  assert.equal(playlists.status, 200, JSON.stringify(playlists.body));
+  const byTitle = Object.fromEntries(playlists.body.items.map((item) => [item.title, item]));
+  assert.deepEqual(Object.keys(byTitle), ['Kitchen Mix', 'Dinner Jazz', 'Sneaky'], 'a dead end is left out');
+  assert.equal(byTitle['Kitchen Mix'].thumb, 'https://images.example/kitchen-mix.jpg');
+  assert.equal(byTitle.Sneaky.thumb, null, 'a script address is no picture');
+  assert.match(byTitle['Dinner Jazz'].thumb, new RegExp(`^/api/plugin/v1/ha/${musicPanel}/media/media_player.kitchen_music/image/[\\w-]{22}$`));
+
+  const picture = await paced(() => fetch(`${baseUrl}${byTitle['Dinner Jazz'].thumb}`));
+  assert.equal(picture.status, 200);
+  assert.equal(picture.headers.get('content-type'), 'image/png');
+  assert.equal((await paced(() => api(music(musicPanel, 'media_player.kitchen_music', '/image/not-a-key')))).status, 404);
+
+  const stale = await paced(() => api(music(musicPanel, 'media_player.kitchen_music', '/browse?item=not-a-key')));
+  assert.equal(stale.status, 410);
+  assert.equal(stale.body.stale, true);
+});
+
+test('playing takes a key from the library, never a content id', needsWebSocket, async () => {
+  const root = await paced(() => api(music(musicPanel, 'media_player.kitchen_music', '/browse')));
+  const playlists = await paced(() => api(music(musicPanel, 'media_player.kitchen_music', `/browse?item=${root.body.items[0].key}`)));
+  const mix = playlists.body.items.find((item) => item.title === 'Kitchen Mix');
+
+  const played = await paced(() => post(`/api/plugin/v1/ha/${musicPanel}/action`, { entity: 'media_player.kitchen_music', action: 'play_media', value: mix.key }));
+  assert.equal(played.status, 200, JSON.stringify(played.body));
+  assert.deepEqual(fake.calls.at(-1), {
+    domain: 'media_player', service: 'play_media',
+    data: { media_content_id: 'library://playlist/1', media_content_type: 'playlist', enqueue: 'replace', entity_id: 'media_player.kitchen_music' },
+  });
+  assert.equal(played.body.entities['media_player.kitchen_music'].state, 'playing');
+
+  const before = fake.calls.length;
+  for (const value of ['library://playlist/1', 'http://evil.example/stream.mp3', { media_content_id: 'library://playlist/1', media_content_type: 'playlist', fromLibrary: true }]) {
+    const refused = await paced(() => post(`/api/plugin/v1/ha/${musicPanel}/action`, { entity: 'media_player.kitchen_music', action: 'play_media', value }));
+    assert.equal(refused.status, 410, JSON.stringify(value));
+  }
+  // A key another panel was shown is no use here.
+  const other = await post('/api/ha-panels', { recipe: { name: 'Other music', tiles: [{ id: 'm', entities: ['media_player.kitchen_music'] }] } });
+  const borrowed = await paced(() => post(`/api/plugin/v1/ha/${other.body.panel.pluginId}/action`, { entity: 'media_player.kitchen_music', action: 'play_media', value: mix.key }));
+  assert.equal(borrowed.status, 410);
+  assert.equal(fake.calls.length, before, 'nothing refused reached Home Assistant');
+  await del(`/api/ha-panels/${other.body.panel.id}`);
+});
+
+test('search finds music and remembers the panel\'s recent searches', needsWebSocket, async () => {
+  const found = await paced(() => api(music(musicPanel, 'media_player.kitchen_music', '/search?q=heart')));
+  assert.equal(found.status, 200, JSON.stringify(found.body));
+  assert.deepEqual(found.body.items.map((item) => item.title), ['Heart of Gold']);
+  assert.deepEqual(found.body.recent, ['heart']);
+  assert.equal(fake.calls.at(-1).ws, 'search_media');
+
+  await paced(() => api(music(musicPanel, 'media_player.kitchen_music', '/search?q=neil')));
+  await paced(() => api(music(musicPanel, 'media_player.kitchen_music', '/search?q=Heart')));
+  assert.deepEqual((await paced(() => api(music(musicPanel, 'media_player.kitchen_music', '/recent')))).body.recent, ['Heart', 'neil']);
+
+  // What was found can be played.
+  const played = await paced(() => post(`/api/plugin/v1/ha/${musicPanel}/action`, { entity: 'media_player.kitchen_music', action: 'play_media', value: found.body.items[0].key }));
+  assert.equal(played.status, 200, JSON.stringify(played.body));
+  assert.equal(fake.calls.at(-1).data.media_content_id, 'ytmusic://track/hog');
+
+  assert.equal((await paced(() => api(music(musicPanel, 'media_player.kitchen_music', '/search?q=%20%20')))).status, 400);
+  assert.deepEqual((await paced(() => del(music(musicPanel, 'media_player.kitchen_music', '/recent')))).body.recent, []);
+  assert.deepEqual((await paced(() => api(music(musicPanel, 'media_player.kitchen_music', '/recent')))).body.recent, []);
+});
+
+test('shuffle, album and the playing picture, without its address', needsWebSocket, async () => {
+  const shuffled = await paced(() => post(`/api/plugin/v1/ha/${musicPanel}/action`, { entity: 'media_player.kitchen_music', action: 'shuffle', value: true }));
+  assert.equal(shuffled.status, 200, JSON.stringify(shuffled.body));
+  const state = (await paced(() => api(`/api/plugin/v1/ha/${musicPanel}/state`))).body.entities['media_player.kitchen_music'];
+  assert.equal(state.attributes.shuffle, true);
+  assert.equal(typeof state.attributes.media_album_name, 'string');
+  assert.match(state.attributes.media_art, /^[\w-]{12}$/);
+  assert.doesNotMatch(JSON.stringify(state), /proxy-token|media_player_proxy/);
+
+  const art = await paced(() => fetch(`${baseUrl}${music(musicPanel, 'media_player.kitchen_music', '/art')}?v=${state.attributes.media_art}`));
+  assert.equal(art.status, 200);
+  assert.equal(art.headers.get('content-type'), 'image/png');
+
+  // A picture already on the web is the browser's to fetch, not HomeGlow's.
+  fake.setState('media_player.kitchen_music', 'playing', { entity_picture: 'https://images.example/now.jpg' });
+  for (let i = 0; i < 60; i += 1) {
+    const now = (await api(`/api/plugin/v1/ha/${musicPanel}/state`)).body.entities['media_player.kitchen_music'];
+    if (now.attributes.media_art !== state.attributes.media_art) break;
+    await delay(50);
+  }
+  const redirect = await paced(() => fetch(`${baseUrl}${music(musicPanel, 'media_player.kitchen_music', '/art')}`, { redirect: 'manual' }));
+  assert.equal(redirect.status, 302);
+  assert.equal(redirect.headers.get('location'), 'https://images.example/now.jpg');
+});
+
+test('a slow speaker: the panel hears "still working" at once, and sees the change when it comes', needsWebSocket, async () => {
+  fake.setState('media_player.kitchen_music', 'playing', { media_title: 'Harvest Moon' });
+  fake.setServiceDelay(3000);
+  try {
+    const started = Date.now();
+    const skipped = await post(`/api/plugin/v1/ha/${musicPanel}/action`, { entity: 'media_player.kitchen_music', action: 'next' });
+    const took = Date.now() - started;
+    assert.equal(skipped.status, 200, JSON.stringify(skipped.body));
+    assert.equal(skipped.body.pending, true);
+    assert.ok(took < 2800, `answered after ${took} ms, not when the speaker finished`);
+    assert.equal(skipped.body.entities['media_player.kitchen_music'].attributes.media_title, 'Harvest Moon');
+    let title;
+    for (let i = 0; i < 80; i += 1) {
+      title = (await api(`/api/plugin/v1/ha/${musicPanel}/state`)).body.entities['media_player.kitchen_music'].attributes.media_title;
+      if (title === 'Heart of Gold') break;
+      await delay(100);
+    }
+    assert.equal(title, 'Heart of Gold', 'the new song shows once the speaker reports it');
+  } finally {
+    fake.setServiceDelay(0);
+  }
+});
+
+test('a player that can\'t browse, a view-only tile and a player not on the panel are refused', needsWebSocket, async () => {
+  const plain = await paced(() => api(music(musicPanel, 'media_player.living', '/browse')));
+  assert.equal(plain.status, 400);
+  assert.equal((await paced(() => api(music(musicPanel, 'media_player.living', '/search?q=jazz')))).status, 400);
+  assert.equal((await paced(() => api(music(musicPanel, 'media_player.not_here', '/browse')))).status, 404);
+  assert.equal((await paced(() => api(music('ha-kitchen', 'camera.porch', '/art')))).status, 404);
+
+  const look = await post('/api/ha-panels', { recipe: { name: 'Look only', tiles: [{ id: 'm', entities: ['media_player.kitchen_music'], view: true }] } });
+  const lookId = look.body.panel.pluginId;
+  assert.equal((await paced(() => api(music(lookId, 'media_player.kitchen_music', '/browse')))).status, 403);
+  assert.equal((await paced(() => api(music(lookId, 'media_player.kitchen_music', '/search?q=x')))).status, 403);
+  const art = await paced(() => fetch(`${baseUrl}${music(lookId, 'media_player.kitchen_music', '/art')}`, { redirect: 'manual' }));
+  assert.equal(art.status, 302, 'a view-only tile still shows the picture');
+  await del(`/api/ha-panels/${look.body.panel.id}`);
+  await del(`/api/ha-panels/${(await api('/api/ha-panels')).body.panels.find((p) => p.pluginId === musicPanel).id}`);
+});
+
+// --- A published plugin: a whole domain, and its own media server -----------
+// A music plugin can't know a household's speakers, so its manifest grants
+// media_player whole; and it may play addresses on the media server the
+// household named in its settings (a Jellyfin server), and nowhere else.
+
+async function uploadPlugin(filename, manifest) {
+  const html = `<!DOCTYPE html><html><head><script type="application/json" id="homeglow-manifest">${JSON.stringify(manifest)}</script></head><body></body></html>`;
+  const form = new FormData();
+  form.append('file', new Blob([html], { type: 'text/html' }), filename);
+  const res = await fetch(`${baseUrl}/api/widgets/upload`, { method: 'POST', body: form });
+  return { status: res.status, body: await res.json().catch(() => null) };
+}
+
+const musicManifest = {
+  manifestVersion: 1, id: 'music-test', name: 'Music test', apiVersion: 'v1',
+  settings: [{ key: 'jellyfinUrl', label: 'Jellyfin address', type: 'string', default: '' }],
+  homeAssistant: { domains: ['media_player'], playUrlsFrom: 'jellyfinUrl' },
+};
+
+test('a plugin granted media_player sees every speaker, and nothing else', async () => {
+  await delay(1100);
+  const up = await uploadPlugin('music-test.html', musicManifest);
+  assert.equal(up.status, 200, JSON.stringify(up.body));
+  const { status, body } = await api('/api/plugin/v1/ha/music-test/state');
+  assert.equal(status, 200, JSON.stringify(body));
+  const ids = Object.keys(body.entities).sort();
+  assert.ok(ids.includes('media_player.living') && ids.includes('media_player.kitchen_music'), ids.join(','));
+  assert.ok(ids.every((id) => id.startsWith('media_player.')), 'only media players');
+  assert.deepEqual([...body.control].sort(), ids);
+  assert.equal((await post('/api/plugin/v1/ha/music-test/action', { entity: 'light.kitchen', action: 'toggle' })).status, 403);
+  assert.equal((await post('/api/plugin/v1/ha/music-test/action', { entity: 'media_player.living', action: 'play_pause' })).status, 200);
+});
+
+test('a plugin may not be granted locks, alarms, covers or cameras whole', async () => {
+  for (const domain of ['lock', 'alarm_control_panel', 'cover', 'camera']) {
+    const up = await uploadPlugin(`grab-${domain}.html`, { manifestVersion: 1, id: `grab-${domain.replace(/_/g, '-')}`, homeAssistant: { domains: [domain] } });
+    assert.equal(up.status, 400, `${domain}: ${JSON.stringify(up.body)}`);
+  }
+  // playUrlsFrom must name a household string setting the manifest declares.
+  const noSetting = await uploadPlugin('no-setting.html', { manifestVersion: 1, id: 'no-setting', homeAssistant: { domains: ['media_player'], playUrlsFrom: 'server' } });
+  assert.equal(noSetting.status, 400);
+});
+
+test('play_url plays only on the media server the household named', async () => {
+  await delay(1100);
+  const play = (url, extra = {}) => post('/api/plugin/v1/ha/music-test/action', { entity: 'media_player.kitchen_music', action: 'play_url', value: { url, ...extra } });
+  // No server set yet.
+  assert.equal((await play('http://jelly.local:8096/Audio/1/stream.mp3')).status, 400);
+
+  assert.equal((await put('/api/plugin/v1/settings/music-test', { jellyfinUrl: 'http://jelly.local:8096/jf' })).status, 200);
+  const ok = await play('http://jelly.local:8096/jf/Audio/abc/stream.mp3?api_key=t');
+  assert.equal(ok.status, 200, JSON.stringify(ok.body));
+  assert.deepEqual(fake.calls.at(-1), {
+    domain: 'media_player', service: 'play_media',
+    data: { media_content_id: 'http://jelly.local:8096/jf/Audio/abc/stream.mp3?api_key=t', media_content_type: 'music', enqueue: 'replace', entity_id: 'media_player.kitchen_music' },
+  });
+  assert.equal((await play('http://jelly.local:8096/jf/Audio/def/stream.mp3', { enqueue: 'add' })).status, 200);
+  assert.equal(fake.calls.at(-1).data.enqueue, 'add');
+
+  await delay(1100);
+  const before = fake.calls.length;
+  for (const url of [
+    'http://evil.example/song.mp3',               // another host
+    'http://jelly.local:9999/jf/Audio/1',         // another port
+    'https://jelly.local:8096/jf/Audio/1',        // another scheme
+    'http://jelly.local:8096/other/Audio/1',      // outside its path
+    'http://user:pass@jelly.local:8096/jf/a',     // credentials in the address
+    'not an address',
+  ]) {
+    const res = await play(url);
+    assert.ok(res.status === 403 || res.status === 400, `${url}: ${res.status}`);
+  }
+  // A player that can't play from an address.
+  assert.equal((await post('/api/plugin/v1/ha/music-test/action', { entity: 'media_player.living', action: 'play_url', value: { url: 'http://jelly.local:8096/jf/a' } })).status, 400);
+  assert.equal(fake.calls.length, before, 'nothing refused reached Home Assistant');
+});
+
+test('a plugin granted media_player browses a speaker\'s library like a panel', needsWebSocket, async () => {
+  await delay(1100);
+  const top = await api('/api/plugin/v1/ha/music-test/media/media_player.kitchen_music/browse');
+  assert.equal(top.status, 200, JSON.stringify(top.body));
+  assert.deepEqual(top.body.items.map((item) => item.title), ['Playlists', 'Artists']);
+  const playlists = await api(`/api/plugin/v1/ha/music-test/media/media_player.kitchen_music/browse?item=${top.body.items[0].key}`);
+  const mix = playlists.body.items.find((item) => item.title === 'Kitchen Mix');
+  assert.equal((await post('/api/plugin/v1/ha/music-test/action', { entity: 'media_player.kitchen_music', action: 'play_media', value: mix.key })).status, 200);
+  assert.equal(fake.calls.at(-1).data.media_content_id, 'library://playlist/1');
+  // Deleting the plugin forgets its recent searches.
+  await api('/api/plugin/v1/ha/music-test/media/media_player.kitchen_music/search?q=neil');
+  assert.equal((await del('/api/widgets/music-test.html')).status, 200);
+  assert.equal((await api('/api/plugin/v1/ha/music-test/state')).status, 404);
+});
