@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { inlineCssImports } from './src/utils/inlineCssImports.js';
 
 const INDEX_CSS = fileURLToPath(new URL('./src/index.css', import.meta.url));
 
@@ -11,7 +13,8 @@ const INDEX_CSS = fileURLToPath(new URL('./src/index.css', import.meta.url));
 // root for nginx to serve.
 //
 // Emitted from src/index.css rather than kept as a second file in public/, so
-// there is one source and the copy cannot drift from it.
+// there is one source and the copy cannot drift from it. Its local @imports
+// (Classic's tokens) are inlined: nothing serves those paths to a plugin.
 //
 // Build only, deliberately. A plugin iframe is loaded from API_BASE_URL, so its
 // `/index.css` resolves against the *backend* origin whenever that differs from
@@ -25,7 +28,11 @@ const emitPluginThemeStylesheet = () => ({
     this.emitFile({
       type: 'asset',
       fileName: 'index.css',
-      source: readFileSync(INDEX_CSS, 'utf8'),
+      source: inlineCssImports(readFileSync(INDEX_CSS, 'utf8'), INDEX_CSS, {
+        readFile: (file) => readFileSync(file, 'utf8'),
+        join: path.join,
+        dirname: path.dirname,
+      }),
     });
   },
 });
