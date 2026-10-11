@@ -54,7 +54,8 @@ const LIBRARY_TIMEOUT_MS = 30000;
 // at most and watches the player for the change.
 const SLOW_CALL_TIMEOUT_MS = 45000;
 const QUICK_ANSWER_MS = 1500;
-const SLOW_ACTIONS = new Set(['play_pause', 'next', 'previous', 'play_media', 'play_url', 'seek']);
+const SLOW_ACTIONS = new Set(['play_pause', 'next', 'previous', 'play_media', 'play_url', 'seek', 'join', 'unjoin']);
+const MAX_GROUP = 8;
 
 const isObject = (value) => !!value && typeof value === 'object' && !Array.isArray(value);
 const parseJson = (text, fallback) => {
@@ -511,6 +512,18 @@ function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginR
     // play_url plays an address on the plugin's own media server: the one the
     // household named in the setting its manifest points to (a Jellyfin
     // server, say), and no other.
+    // join groups other speakers with this one: each must be a speaker this
+    // panel may operate, and not the one being joined to.
+    if (action === 'join') {
+      const members = Array.isArray(value) ? [...new Set(value)] : [];
+      const bad = members.length === 0 || members.length > MAX_GROUP || members.some((id) => typeof id !== 'string'
+        || rules.domainOf(id) !== 'media_player' || targets.includes(id) || !rules.canControl(access, id));
+      if (bad) {
+        logAction({ pluginId, device, entity: targets.join(','), action, ok: false, error: 'not speakers it may group' });
+        return reply.status(400).send({ error: `join needs 1 to ${MAX_GROUP} other speakers this panel may operate.` });
+      }
+      actionValue = { members, checked: true };
+    }
     if (action === 'play_url') {
       const checked = mediaServerUrl(pluginId, access, value);
       if (checked.error) {

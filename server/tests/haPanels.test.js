@@ -187,6 +187,19 @@ test('play_pause pauses a playing player and plays any other, by what it reports
   assert.throws(() => press('paused', 1), /cannot play/);
 });
 
+test('join and unjoin group speakers that can be grouped, with a checked list', () => {
+  const access = rules.accessFromRecipe({ tiles: [{ id: 't', entities: ['media_player.k'] }] });
+  const act = (action, value, features = 524288) => rules.resolveAction({ access, entityId: 'media_player.k', action, value, state: st('media_player.k', 'playing', { supported_features: features }) });
+  assert.deepEqual(act('join', { members: ['media_player.den'], checked: true }).data, { group_members: ['media_player.den'], entity_id: 'media_player.k' });
+  assert.equal(act('unjoin').service, 'unjoin');
+  assert.throws(() => act('join', ['media_player.den']), /speakers to group/);
+  assert.throws(() => act('join', { members: [], checked: true }), /speakers to group/);
+  assert.throws(() => act('join', { members: ['media_player.den'], checked: true }, 1), /cannot be grouped/);
+  assert.throws(() => act('unjoin', undefined, 1), /cannot be grouped/);
+  assert.deepEqual(rules.filterState(st('media_player.k', 'playing', { group_members: ['media_player.k', 'media_player.den'] })).attributes.group_members,
+    ['media_player.k', 'media_player.den']);
+});
+
 test('a music player shows its album and shuffle, and a picture tag', () => {
   const filtered = rules.filterState(st('media_player.kitchen', 'playing', {
     media_title: 'Harvest Moon', media_artist: 'Neil Young', media_album_name: 'Harvest Moon', shuffle: true,

@@ -497,6 +497,11 @@ img.src = HomeGlow.homeAssistant.media.artUrl('media_player.kitchen', state.attr
   also carries `media_album_name`, `media_duration`, `media_position`,
   `media_position_updated_at` and `media_art`, a tag that changes with the
   picture (the picture's own address carries a token and is never sent).
+- Speakers that play in step (Home Assistant's grouping: Music Assistant,
+  Sonos ...): `action(leader, 'join', [otherIds])` adds speakers to the leader's
+  group, `action(member, 'unjoin')` takes one out. Each must be a speaker the
+  plugin may operate, up to 8. The state carries `group_members`, the leader
+  first; a speaker that can be grouped reports feature 524288.
 - A slow speaker (finding a song online, then buffering) answers
   `{ ok: true, pending: true }` after 1.5 seconds; watch `state()` for the change.
 
