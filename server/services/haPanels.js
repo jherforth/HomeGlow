@@ -37,7 +37,7 @@ const EMOJI_ICON = /^[^\s<>&"'`=;{}\\a-zA-Z0-9]{1,8}$/u;
 const COVER = { OPEN: 1, CLOSE: 2, SET_POSITION: 4, STOP: 8 };
 const FAN = { SET_SPEED: 1 };
 const CLIMATE = { TARGET_TEMPERATURE: 1 };
-const MEDIA = { PAUSE: 1, SEEK: 2, VOLUME_SET: 4, PREVIOUS_TRACK: 16, NEXT_TRACK: 32, PLAY_MEDIA: 512, PLAY: 16384, SHUFFLE_SET: 32768, MEDIA_ENQUEUE: 2097152 };
+const MEDIA = { PAUSE: 1, SEEK: 2, VOLUME_SET: 4, PREVIOUS_TRACK: 16, NEXT_TRACK: 32, PLAY_MEDIA: 512, STOP: 4096, PLAY: 16384, SHUFFLE_SET: 32768, MEDIA_ENQUEUE: 2097152 };
 const VACUUM = { PAUSE: 4, RETURN_HOME: 16, START: 8192 };
 const ALARM = { ARM_HOME: 1, ARM_AWAY: 2 };
 
@@ -169,9 +169,17 @@ const DOMAINS = {
   },
   media_player: {
     actions: {
+      // Pause when playing, play otherwise. Not media_play_pause: Home
+      // Assistant refuses that unless a player reports both play and pause,
+      // and many (Cast speakers, some Music Assistant players) report one.
       play_pause: (state) => {
-        if (!has(state, MEDIA.PAUSE) && !has(state, MEDIA.PLAY)) throw new ActionError('This player cannot play or pause');
-        return { domain: 'media_player', service: 'media_play_pause' };
+        if (state?.state === 'playing' || state?.state === 'buffering') {
+          if (has(state, MEDIA.PAUSE)) return { domain: 'media_player', service: 'media_pause' };
+          if (has(state, MEDIA.STOP)) return { domain: 'media_player', service: 'media_stop' };
+          throw new ActionError('This player cannot pause');
+        }
+        if (!has(state, MEDIA.PLAY)) throw new ActionError('This player cannot play');
+        return { domain: 'media_player', service: 'media_play' };
       },
       next: (state) => {
         if (!has(state, MEDIA.NEXT_TRACK)) throw new ActionError('This player cannot skip');

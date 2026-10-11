@@ -176,6 +176,17 @@ test('seek jumps within the playing song, never past its end', () => {
   assert.throws(() => seek(10, music), /cannot jump/);
 });
 
+test('play_pause pauses a playing player and plays any other, by what it reports', () => {
+  const access = rules.accessFromRecipe({ tiles: [{ id: 't', entities: ['media_player.k'] }] });
+  const press = (state, features) => rules.resolveAction({ access, entityId: 'media_player.k', action: 'play_pause', state: st('media_player.k', state, { supported_features: features }) }).service;
+  assert.equal(press('playing', 1 | 16384), 'media_pause');
+  assert.equal(press('paused', 1 | 16384), 'media_play');
+  assert.equal(press('idle', 16384), 'media_play');
+  assert.equal(press('playing', 4096 | 16384), 'media_stop');
+  assert.throws(() => press('playing', 16384), /cannot pause/);
+  assert.throws(() => press('paused', 1), /cannot play/);
+});
+
 test('a music player shows its album and shuffle, and a picture tag', () => {
   const filtered = rules.filterState(st('media_player.kitchen', 'playing', {
     media_title: 'Harvest Moon', media_artist: 'Neil Young', media_album_name: 'Harvest Moon', shuffle: true,

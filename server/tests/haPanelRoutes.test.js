@@ -503,6 +503,25 @@ test('a plugin granted media_player sees every speaker, and nothing else', async
   assert.equal((await post('/api/plugin/v1/ha/music-test/action', { entity: 'media_player.living', action: 'play_pause' })).status, 200);
 });
 
+test('play and pause go on their own, for a speaker that reports only one of them', async () => {
+  await delay(1100);
+  const up = await uploadPlugin('music-pp.html', { ...musicManifest, id: 'music-pp' });
+  assert.equal(up.status, 200, JSON.stringify(up.body));
+  const press = (entity) => post('/api/plugin/v1/ha/music-pp/action', { entity, action: 'play_pause' });
+  // A Cast speaker, paused, that reports play but not pause: Home Assistant
+  // refuses it media_play_pause ("does not support action").
+  fake.setState('media_player.uxbridge', 'paused', { friendly_name: 'Marshall Uxbridge', supported_features: 16384 | 4 | 512 });
+  const play = await press('media_player.uxbridge');
+  assert.equal(play.status, 200, JSON.stringify(play.body));
+  assert.equal(fake.calls.at(-1).service, 'media_play');
+  // Playing, one that reports pause but not play is paused.
+  fake.setState('media_player.uxbridge_2', 'playing', { friendly_name: 'Uxbridge 2', supported_features: 1 | 4 | 512 });
+  const pause = await press('media_player.uxbridge_2');
+  assert.equal(pause.status, 200, JSON.stringify(pause.body));
+  assert.equal(fake.calls.at(-1).service, 'media_pause');
+  await del('/api/widgets/music-pp.html');
+});
+
 test('a plugin may not be granted locks, alarms, covers or cameras whole', async () => {
   for (const domain of ['lock', 'alarm_control_panel', 'cover', 'camera']) {
     const up = await uploadPlugin(`grab-${domain}.html`, { manifestVersion: 1, id: `grab-${domain.replace(/_/g, '-')}`, homeAssistant: { domains: [domain] } });

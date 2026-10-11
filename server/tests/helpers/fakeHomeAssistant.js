@@ -187,6 +187,21 @@ async function startFakeHomeAssistant({ token = 'secret-token', port = 0, wsEnab
     return next;
   }
 
+  // Media services and the features a player must report for each, as
+  // Home Assistant checks them (media_play_pause needs both play and pause).
+  const MEDIA_SERVICE_NEEDS = {
+    media_play_pause: 16384 | 1, media_play: 16384, media_pause: 1, media_stop: 4096,
+    media_next_track: 32, media_previous_track: 16, media_seek: 2, volume_set: 4, shuffle_set: 32768, play_media: 512,
+  };
+  const refusedMedia = (domain, service, data) => {
+    const needs = domain === 'media_player' ? MEDIA_SERVICE_NEEDS[service] : undefined;
+    const state = states.get(data.entity_id);
+    if (!needs || !state) return null;
+    return (Number(state.attributes.supported_features) & needs) === needs
+      ? null
+      : `Entity ${data.entity_id} does not support action media_player.${service}`;
+  };
+
   // Service calls, as a home would carry them out.
   function runService(domain, service, data) {
     const id = data.entity_id;
@@ -213,6 +228,9 @@ async function startFakeHomeAssistant({ token = 'secret-token', port = 0, wsEnab
       case 'climate.set_temperature': return [setState(id, state.state, { temperature: data.temperature })];
       case 'climate.set_hvac_mode': return [setState(id, data.hvac_mode)];
       case 'media_player.media_play_pause': return [setState(id, state.state === 'playing' ? 'paused' : 'playing', { media_position_updated_at: new Date().toISOString() })];
+      case 'media_player.media_play': return [setState(id, 'playing', { media_position_updated_at: new Date().toISOString() })];
+      case 'media_player.media_pause': return [setState(id, 'paused', { media_position_updated_at: new Date().toISOString() })];
+      case 'media_player.media_stop': return [setState(id, 'idle')];
       case 'media_player.media_seek': return [setState(id, state.state, { media_position: data.seek_position, media_position_updated_at: new Date().toISOString() })];
       case 'media_player.media_next_track': return [setState(id, state.state, { media_title: 'Heart of Gold', media_album_name: 'Harvest', media_position: 0, media_position_updated_at: new Date().toISOString() })];
       case 'media_player.media_previous_track': return [setState(id, state.state, { media_position: 0, media_position_updated_at: new Date().toISOString() })];
@@ -248,6 +266,8 @@ async function startFakeHomeAssistant({ token = 'secret-token', port = 0, wsEnab
       if (req.method === 'POST' && serviceMatch) {
         const data = body ? JSON.parse(body) : {};
         calls.push({ domain: serviceMatch[1], service: serviceMatch[2], data });
+        const refused = refusedMedia(serviceMatch[1], serviceMatch[2], data);
+        if (refused) return send(400, { message: refused });
         if (serviceDelayMs) {
           setTimeout(() => send(200, runService(serviceMatch[1], serviceMatch[2], data)), serviceDelayMs);
           return undefined;
