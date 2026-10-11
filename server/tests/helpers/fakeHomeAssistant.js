@@ -69,6 +69,14 @@ const LIBRARY = {
       node('Sneaky', 'playlist', 'playlist', 'library://playlist/3', { can_play: true, thumbnail: 'javascript:alert(1)' }),
     ],
   }),
+  'ytmusic://artist/ny': node('Neil Young', 'artist', 'artist', 'ytmusic://artist/ny', {
+    can_play: true,
+    can_expand: true,
+    children: [
+      node('Harvest', 'album', 'album', 'ytmusic://album/harvest', { can_play: true, can_expand: true }),
+      node('Heart of Gold', 'track', 'track', 'ytmusic://track/hog', { can_play: true }),
+    ],
+  }),
   'library://playlist/1': node('Kitchen Mix', 'playlist', 'playlist', 'library://playlist/1', {
     can_play: true,
     can_expand: true,
@@ -156,6 +164,7 @@ async function startFakeHomeAssistant({ token = 'secret-token', port = 0, wsEnab
   const calls = [];
   const sockets = new Set();
   const subscriptions = []; // { connection, id, entityIds }
+  let serviceDelayMs = 0;    // a slow speaker: service calls answer (and act) this late
 
   const compress = (state) => ({ s: state.state, a: state.attributes, lc: Date.parse(state.last_changed) / 1000 });
 
@@ -239,6 +248,10 @@ async function startFakeHomeAssistant({ token = 'secret-token', port = 0, wsEnab
       if (req.method === 'POST' && serviceMatch) {
         const data = body ? JSON.parse(body) : {};
         calls.push({ domain: serviceMatch[1], service: serviceMatch[2], data });
+        if (serviceDelayMs) {
+          setTimeout(() => send(200, runService(serviceMatch[1], serviceMatch[2], data)), serviceDelayMs);
+          return undefined;
+        }
         return send(200, runService(serviceMatch[1], serviceMatch[2], data));
       }
       if (req.method === 'GET' && url.pathname.startsWith('/api/media_player_proxy/')) return send(200, PIXEL_PNG, 'image/png');
@@ -320,6 +333,8 @@ async function startFakeHomeAssistant({ token = 'secret-token', port = 0, wsEnab
     calls,
     states,
     setState,
+    /** Make service calls take this long, like a speaker finding a song online. */
+    setServiceDelay: (ms) => { serviceDelayMs = ms; },
     /** How many live subscriptions are open (one per HomeGlow link). */
     subscriptionCount: () => subscriptions.filter((sub) => sub.connection.open).length,
     dropConnections: () => { for (const c of sockets) c.close(); },

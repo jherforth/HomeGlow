@@ -239,6 +239,7 @@ input.level:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; 
 .chips .btn { min-height: 40px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lib-status { padding: 14px 6px; text-align: center; color: var(--ink-2); font-size: 0.9rem; }
 .lib-status.err { color: var(--err); }
+.lib-body .btn.icon { width: 44px; height: 44px; }
 
 /* Small widgets: a compact list. */
 .list { display: flex; flex-direction: column; gap: 6px; }
@@ -446,6 +447,7 @@ input.level:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; 
   var hints = {};           // tile id -> text shown briefly
   var holdArmed = {};       // tile id -> time a keyboard confirm was armed
   var busy = {};            // 'tile id:action' -> until; sent, not answered yet
+  var watching = {};        // 'tile id:action' -> { id, kind, sig }: answered "still working", waiting for the change
   var skipping = {};        // tile id -> { title, until }: next song asked for
   var stageMode = false;    // the panel is one music player, drawn full size
 
@@ -506,6 +508,7 @@ input.level:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; 
       loaded = true;
       var entities = (data && data.entities) || {};
       Object.keys(entities).forEach(function (id) { states[id] = entities[id]; });
+      settleWatches();
       if (data && Array.isArray(data.control)) controllable = data.control;
       if (data && data.unit) unit = data.unit;
       if (data && typeof data.pinProtection === 'boolean') pinProtection = data.pinProtection;
@@ -540,9 +543,22 @@ input.level:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; 
         pending[id] = { until: Date.now() + (extra.holdMs || 4000), patch: extra.optimistic(id), seen: states[id] };
       });
     }
-    if (extra.busy) busy[extra.busy] = Date.now() + 15000;
+    if (extra.busy) busy[extra.busy] = Date.now() + 45000;
     if (extra.optimistic || extra.busy) render();
-    var settle = function () { if (extra.busy) delete busy[extra.busy]; };
+    var before = states[entities[0]];
+    var settle = function (data) {
+      if (!extra.busy) return;
+      if (data && data.pending) {
+        // The speaker is still working on it: keep turning until it reports
+        // the change (or 45 seconds pass), and keep the new look meanwhile.
+        watching[extra.busy] = { id: entities[0], kind: action, sig: changeSign(action, before) };
+        entities.forEach(function (id) { if (pending[id]) pending[id].until = Date.now() + 45000; });
+        if (skipping[tile.id]) skipping[tile.id].until = Date.now() + 45000;
+      } else {
+        delete busy[extra.busy];
+        delete watching[extra.busy];
+      }
+    };
     var undo = function () {
       entities.forEach(function (id) { delete pending[id]; });
       delete skipping[tile.id];
@@ -553,7 +569,7 @@ input.level:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; 
       body: JSON.stringify(body)
     }).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (data) {
-        settle();
+        settle(res.ok ? data : null);
         if (res.status === 401 && data.needsPin) {
           entities.forEach(function (id) { delete pending[id]; });
           render();
@@ -568,10 +584,11 @@ input.level:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; 
           return;
         }
         Object.keys(data.entities || {}).forEach(function (id) { if (data.entities[id]) states[id] = data.entities[id]; });
+        if (!data.pending) settleWatches();
         render();
       });
     }).catch(function () {
-      settle();
+      settle(null);
       undo();
       flashHint(tile, T.unreachable);
     });
@@ -1100,7 +1117,25 @@ input.level:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; 
     return null;
   }
 
-  var MEDIA_ACTIONS = { play_pause: true, next: true, previous: true };
+  var MEDIA_ACTIONS = { play_pause: true, next: true, previous: true, seek: true };
+  function changeSign(kind, st) {
+    if (!st) return '';
+    var a = st.attributes || {};
+    if (kind === 'play_pause') return st.state;
+    if (kind === 'previous' || kind === 'seek') return [a.media_title, a.media_position_updated_at].join('|');
+    return [a.media_title, a.media_artist, a.media_album_name].join('|');
+  }
+  // After each read: a press whose player has now changed stops turning.
+  function settleWatches() {
+    var now = Date.now();
+    Object.keys(watching).forEach(function (key) {
+      var w = watching[key];
+      if (!(busy[key] > now) || changeSign(w.kind, states[w.id]) !== w.sig) {
+        delete watching[key];
+        delete busy[key];
+      }
+    });
+  }
   function perform(tile, action, value) {
     var opt = optimisticFor(action);
     var extra = opt ? { optimistic: opt } : {};
@@ -1272,7 +1307,8 @@ input.level:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; 
     var s = Math.max(0, Math.round(seconds));
     act(tile, 'seek', s, {
       optimistic: function () { return { attributes: { media_position: s, media_position_updated_at: new Date().toISOString() } }; },
-      holdMs: 6000
+      holdMs: 6000,
+      busy: tile.id + ':seek'
     });
     tickProgress();
   }
@@ -1451,6 +1487,7 @@ input.level:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; 
     var base = mediaBase(entityId);
     var view = {
       tab: canBrowse ? 'browse' : 'search',
+      fromSearch: false,  // browsing something opened from the search results
       stack: [],          // [{ key, title }] opened levels, root first
       level: null,        // the browse level shown
       query: '',
@@ -1489,7 +1526,7 @@ input.level:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; 
       if (!sheet) return;
       var top = view.stack.length ? view.stack[view.stack.length - 1] : null;
       var inSearchResults = view.tab === 'search' && view.found;
-      var showBack = (view.tab === 'browse' && view.stack.length > 0) || inSearchResults;
+      var showBack = (view.tab === 'browse' && (view.stack.length > 0 || view.fromSearch)) || inSearchResults;
       var title = view.tab === 'browse' ? (top ? top.title : (view.level && view.level.title) || T.library) : T.search;
       var html = '<div class="lib-head">'
         + (showBack ? '<button type="button" class="btn icon quiet" data-back aria-label="' + esc(T.back) + '">' + glyph('back') + '</button>' : '')
@@ -1557,6 +1594,17 @@ input.level:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; 
     }
 
     function back() {
+      // Back from something opened from the search results: the results again.
+      if (view.tab === 'browse' && view.fromSearch && view.stack.length <= 1) {
+        view.tab = 'search';
+        view.fromSearch = false;
+        view.stack = [];
+        view.level = null;
+        view.busy = false;
+        view.error = '';
+        draw();
+        return;
+      }
       if (view.tab === 'search') {
         view.found = null;
         view.query = '';
@@ -1593,6 +1641,8 @@ input.level:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; 
 
     function play(key, title) {
       view.error = '';
+      var current = stateOf(entityId);
+      skipping[tile.id] = { title: current && current.attributes ? current.attributes.media_title : null, until: Date.now() + 45000 };
       fetch('/api/plugin/v1/ha/' + encodeURIComponent(pluginId) + '/action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1600,6 +1650,7 @@ input.level:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; 
       }).then(function (res) {
         return res.json().catch(function () { return {}; }).then(function (data) {
           if (!res.ok) {
+            delete skipping[tile.id];
             if (res.status === 410 && view.tab === 'browse') { view.stack = []; browse(null).then(function () { view.error = T.staleList; draw(); }); return; }
             fail(new Error((data && data.error) || T.failed));
             return;
@@ -1608,7 +1659,7 @@ input.level:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; 
           closeSheet();
           flashHint(tile, T.starting + ': ' + title);
         });
-      }).catch(function () { fail(new Error(T.unreachable)); });
+      }).catch(function () { delete skipping[tile.id]; fail(new Error(T.unreachable)); });
     }
 
     closeSheet = overlay('', function (el, close) {
@@ -1621,6 +1672,12 @@ input.level:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; 
         if (tab) {
           view.tab = tab.getAttribute('data-tab');
           view.error = '';
+          if (view.fromSearch) {
+            // The Library tab starts from the top again.
+            view.fromSearch = false;
+            view.stack = [];
+            view.level = null;
+          }
           if (view.tab === 'browse' && !view.level) browse(null); else draw();
           if (view.tab === 'search' && view.recent === null) loadRecent();
           return;
@@ -1628,7 +1685,15 @@ input.level:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; 
         var playEl = t.closest('[data-play]');
         if (playEl) { play(playEl.getAttribute('data-play'), playEl.getAttribute('data-title') || ''); return; }
         var openEl = t.closest('[data-open]');
-        if (openEl) { browse(openEl.getAttribute('data-open'), openEl.getAttribute('data-title')); return; }
+        if (openEl) {
+          if (view.tab === 'search') {
+            view.tab = 'browse';
+            view.fromSearch = true;
+            view.stack = [];
+          }
+          browse(openEl.getAttribute('data-open'), openEl.getAttribute('data-title'));
+          return;
+        }
         var recentEl = t.closest('[data-recent]');
         if (recentEl) { search(recentEl.getAttribute('data-recent')); return; }
         if (t.closest('[data-clear-recent]')) {

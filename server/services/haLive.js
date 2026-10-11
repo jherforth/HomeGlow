@@ -276,8 +276,8 @@ class HaLive {
   }
 
   /** Call a service; the states it changed go straight into the cache. */
-  async callService(domain, service, data) {
-    const changed = await this.ha.homeAssistantFetch(this.db, 'POST', `/api/services/${domain}/${service}`, data);
+  async callService(domain, service, data, options) {
+    const changed = await this.ha.homeAssistantFetch(this.db, 'POST', `/api/services/${domain}/${service}`, data, options);
     if (Array.isArray(changed)) {
       const at = this.now();
       const ids = [];
@@ -320,8 +320,8 @@ class HaLive {
    * One WebSocket command whose answer matters (a player's library): its
    * result, or an Error carrying Home Assistant's own message and a status.
    */
-  async command(message) {
-    const [outcome] = await this.run([message]);
+  async command(message, options) {
+    const [outcome] = await this.run([message], options);
     if (outcome.ok) return outcome.result;
     const error = new Error(outcome.error || 'Home Assistant did not answer.');
     error.status = outcome.status;
@@ -330,7 +330,7 @@ class HaLive {
   }
 
   /** [{ type, ... }] -> [{ ok, result } | { ok: false, error, status, code }]. */
-  async run(list) {
+  async run(list, { timeoutMs = COMMAND_TIMEOUT_MS } = {}) {
     const fail = (error, status, code) => list.map(() => ({ ok: false, error, status, code }));
     const { baseUrl, tokenEnc } = this.ha.getConfig(this.db);
     if (!baseUrl || !tokenEnc) return fail('Home Assistant is not connected.', 503);
@@ -345,7 +345,7 @@ class HaLive {
         try { ws?.close(); } catch { /* closing */ }
         resolve(results.map((outcome) => outcome || { ok: false, ...failure }));
       };
-      const timer = setTimeout(finish, COMMAND_TIMEOUT_MS);
+      const timer = setTimeout(finish, timeoutMs);
       timer.unref?.();
       try {
         ws = new this.WebSocketImpl(websocketUrl(baseUrl));

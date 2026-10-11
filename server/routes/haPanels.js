@@ -46,6 +46,15 @@ const HISTORY_KEEP = 1000;
 const RATE_WINDOW_MS = 1000;
 const RATE_LIMIT = 10;
 const RECENT_KEY_PREFIX = 'HA_MEDIA_RECENT:';
+// A music service can take a while to list an artist or find a song.
+const LIBRARY_TIMEOUT_MS = 30000;
+// A speaker can take seconds to start a song it first has to find online
+// (Music Assistant resolving a YouTube Music track, then AirPlay buffering).
+// Such calls may run this long; the panel hears back after QUICK_ANSWER_MS
+// at most and watches the player for the change.
+const SLOW_CALL_TIMEOUT_MS = 45000;
+const QUICK_ANSWER_MS = 1500;
+const SLOW_ACTIONS = new Set(['play_pause', 'next', 'previous', 'play_media', 'seek']);
 
 const isObject = (value) => !!value && typeof value === 'object' && !Array.isArray(value);
 const parseJson = (text, fallback) => {
@@ -480,13 +489,36 @@ function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginR
     }
 
     const results = {};
-    for (const call of calls) {
-      try {
-        await live.callService(call.domain, call.service, call.data);
+    const slow = SLOW_ACTIONS.has(action) && calls.every((call) => call.domain === 'media_player');
+    const run = (call) => live.callService(call.domain, call.service, call.data, slow ? { timeoutMs: SLOW_CALL_TIMEOUT_MS } : undefined)
+      .then(() => {
         logAction({ pluginId, device, entity: call.entityId, action, ok: true });
-      } catch (error) {
+        return { ok: true };
+      }, (error) => {
         logAction({ pluginId, device, entity: call.entityId, action, ok: false, error: error.message });
-        return reply.status(error.status && error.status < 600 ? error.status : 502).send({ error: error.message });
+        return { ok: false, error };
+      });
+    const failed = (outcome) => {
+      const { error } = outcome;
+      return reply.status(error.status && error.status < 600 ? error.status : 502).send({ error: error.message });
+    };
+    if (slow) {
+      // Speakers can take seconds to answer (finding a song online, then
+      // buffering). Every call starts now; if they are still going after a
+      // moment, the panel hears so and watches the player for the change.
+      const all = Promise.all(calls.map(run));
+      const outcomes = await Promise.race([all, new Promise((resolve) => { setTimeout(() => resolve(null), QUICK_ANSWER_MS).unref?.(); })]);
+      if (outcomes === null) {
+        const now = await live.getStates(targets);
+        for (const id of targets) results[id] = rules.filterState(now.states[id]);
+        return { ok: true, pending: true, entities: results };
+      }
+      const bad = outcomes.find((outcome) => !outcome.ok);
+      if (bad) return failed(bad);
+    } else {
+      for (const call of calls) {
+        const outcome = await run(call);
+        if (!outcome.ok) return failed(outcome);
       }
     }
     const after = await live.getStates(targets);
@@ -576,7 +608,7 @@ function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginR
       message.media_content_type = item.type;
     }
     try {
-      return media.browseResult(await live.command(message), mediaContext(target));
+      return media.browseResult(await live.command(message, { timeoutMs: LIBRARY_TIMEOUT_MS }), mediaContext(target));
     } catch (error) {
       return sendError(reply, error);
     }
@@ -590,7 +622,7 @@ function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginR
     if (!query) return reply.status(400).send({ error: 'Type something to search for.' });
     if (overLimit(target.pluginId)) return reply.status(429).send({ error: 'Too many requests at once; try again.' });
     try {
-      const result = await live.command({ type: 'media_player/search_media', entity_id: target.entityId, search_query: query });
+      const result = await live.command({ type: 'media_player/search_media', entity_id: target.entityId, search_query: query }, { timeoutMs: LIBRARY_TIMEOUT_MS });
       const recent = media.addRecent(readRecent(target.pluginId), query);
       writeRecent(target.pluginId, recent);
       return { query, ...media.searchResult(result, mediaContext(target)), recent };

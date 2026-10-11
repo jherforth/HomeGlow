@@ -430,6 +430,29 @@ test('shuffle, album and the playing picture, without its address', needsWebSock
   assert.equal(redirect.headers.get('location'), 'https://images.example/now.jpg');
 });
 
+test('a slow speaker: the panel hears "still working" at once, and sees the change when it comes', needsWebSocket, async () => {
+  fake.setState('media_player.kitchen_music', 'playing', { media_title: 'Harvest Moon' });
+  fake.setServiceDelay(3000);
+  try {
+    const started = Date.now();
+    const skipped = await post(`/api/plugin/v1/ha/${musicPanel}/action`, { entity: 'media_player.kitchen_music', action: 'next' });
+    const took = Date.now() - started;
+    assert.equal(skipped.status, 200, JSON.stringify(skipped.body));
+    assert.equal(skipped.body.pending, true);
+    assert.ok(took < 2800, `answered after ${took} ms, not when the speaker finished`);
+    assert.equal(skipped.body.entities['media_player.kitchen_music'].attributes.media_title, 'Harvest Moon');
+    let title;
+    for (let i = 0; i < 80; i += 1) {
+      title = (await api(`/api/plugin/v1/ha/${musicPanel}/state`)).body.entities['media_player.kitchen_music'].attributes.media_title;
+      if (title === 'Heart of Gold') break;
+      await delay(100);
+    }
+    assert.equal(title, 'Heart of Gold', 'the new song shows once the speaker reports it');
+  } finally {
+    fake.setServiceDelay(0);
+  }
+});
+
 test('a player that can\'t browse, a view-only tile and a player not on the panel are refused', needsWebSocket, async () => {
   const plain = await paced(() => api(music(musicPanel, 'media_player.living', '/browse')));
   assert.equal(plain.status, 400);
