@@ -520,6 +520,8 @@ await HomeGlow.homeAssistant.action('media_player.kitchen', 'play_url', { url: n
 The address must have the same scheme, host and port as the setting, and sit
 under its path. `enqueue` is `replace` (the default), `add`, `next` or `play`,
 for a player that can queue.
+`title`, `artist`, `album` and `image` (a cover, on the same server) tell a speaker
+that shows it what is playing; otherwise all it knows is the address.
 
 ## 6. Reactions — server-side logic without server-side code
 

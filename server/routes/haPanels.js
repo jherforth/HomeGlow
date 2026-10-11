@@ -517,7 +517,16 @@ function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginR
         logAction({ pluginId, device, entity: targets.join(','), action, ok: false, error: checked.error });
         return reply.status(checked.status).send({ error: checked.error });
       }
-      actionValue = { url: checked.url, enqueue: value?.enqueue, fromPluginServer: true };
+      // A cover, if one is sent, must be on the same server.
+      let image;
+      if (value?.image !== undefined) {
+        const cover = mediaServerUrl(pluginId, access, { url: value.image });
+        if (cover.error) return reply.status(cover.status).send({ error: `The cover: ${cover.error}` });
+        image = cover.url;
+      }
+      actionValue = {
+        url: checked.url, enqueue: value?.enqueue, title: value?.title, artist: value?.artist, album: value?.album, image, fromPluginServer: true,
+      };
     }
 
     const { states } = await live.getStates(targets);

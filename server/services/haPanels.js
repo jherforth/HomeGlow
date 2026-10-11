@@ -215,6 +215,28 @@ const DOMAINS = {
         const enqueue = value.enqueue === undefined ? 'replace' : value.enqueue;
         if (!['replace', 'add', 'next', 'play'].includes(enqueue)) throw new ActionError('enqueue must be replace, add, next or play');
         if (enqueue !== 'replace' && !has(state, MEDIA.MEDIA_ENQUEUE)) throw new ActionError('This player cannot queue');
+        // What it is, for a speaker that shows it (Chromecast reads `extra`):
+        // otherwise a stream address is all it knows.
+        const text = (v) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, 200) : '');
+        const title = text(value.title);
+        const artist = text(value.artist);
+        const album = text(value.album);
+        const image = typeof value.image === 'string' ? value.image : null;
+        const extra = title || artist || album || image
+          ? {
+            extra: {
+              ...(title ? { title } : {}),
+              ...(image ? { thumb: image } : {}),
+              metadata: {
+                metadataType: 3,
+                ...(title ? { title } : {}),
+                ...(artist ? { artist } : {}),
+                ...(album ? { albumName: album } : {}),
+                ...(image ? { images: [{ url: image }] } : {}),
+              },
+            },
+          }
+          : {};
         return {
           domain: 'media_player',
           service: 'play_media',
@@ -222,6 +244,7 @@ const DOMAINS = {
             media_content_id: value.url,
             media_content_type: 'music',
             ...(has(state, MEDIA.MEDIA_ENQUEUE) ? { enqueue } : {}),
+            ...extra,
           },
         };
       },

@@ -561,3 +561,23 @@ test('a plugin granted media_player browses a speaker\'s library like a panel', 
   assert.equal((await del('/api/widgets/music-test.html')).status, 200);
   assert.equal((await api('/api/plugin/v1/ha/music-test/state')).status, 404);
 });
+
+test('play_url carries what is playing, with a cover from the same server only', async () => {
+  await delay(1100);
+  const up = await uploadPlugin('music-meta.html', { ...musicManifest, id: 'music-meta' });
+  assert.equal(up.status, 200, JSON.stringify(up.body));
+  await put('/api/plugin/v1/settings/music-meta', { jellyfinUrl: 'http://jelly.local:8096' });
+  const play = (value) => post('/api/plugin/v1/ha/music-meta/action', { entity: 'media_player.kitchen_music', action: 'play_url', value });
+  const ok = await play({ url: 'http://jelly.local:8096/Audio/1/stream.mp3', title: 'Harvest Moon', artist: 'Neil Young', album: 'Harvest Moon', image: 'http://jelly.local:8096/Items/1/Images/Primary' });
+  assert.equal(ok.status, 200, JSON.stringify(ok.body));
+  assert.deepEqual(fake.calls.at(-1).data.extra, {
+    title: 'Harvest Moon',
+    thumb: 'http://jelly.local:8096/Items/1/Images/Primary',
+    metadata: { metadataType: 3, title: 'Harvest Moon', artist: 'Neil Young', albumName: 'Harvest Moon', images: [{ url: 'http://jelly.local:8096/Items/1/Images/Primary' }] },
+  });
+  const before = fake.calls.length;
+  const elsewhere = await play({ url: 'http://jelly.local:8096/Audio/1/stream.mp3', image: 'http://tracker.example/pixel.gif' });
+  assert.equal(elsewhere.status, 403);
+  assert.equal(fake.calls.length, before);
+  await del('/api/widgets/music-meta.html');
+});
