@@ -136,12 +136,31 @@ function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginR
     return null;
   }
 
-  /** Every entity a plugin may read: its own ids and, for a domain grant, each one there. */
-  async function readableIds(access) {
+  /**
+   * Every entity a plugin may read: its own ids and, for a domain grant,
+   * each one there that the household hasn't hidden or disabled in Home
+   * Assistant.
+   */
+  async function readableIds(access, registry) {
     const ids = new Set(access.read);
-    if (access.domains?.size) (await live.entityIdsIn([...access.domains])).forEach((id) => ids.add(id));
+    if (access.domains?.size) {
+      for (const id of await live.entityIdsIn([...access.domains])) {
+        const entry = registry?.get(id);
+        if (!entry || (!entry.hidden_by && !entry.disabled_by)) ids.add(id);
+      }
+    }
     return [...ids];
   }
+
+  // Where an entity comes from: its integration, and a tag for its device
+  // (the same for every entity of one device), so a plugin can tell one
+  // speaker's several entities apart (Music Assistant's, Cast's, DLNA's).
+  const sourceOf = (entry) => (entry ? {
+    integration: typeof entry.platform === 'string' ? entry.platform.slice(0, 60) : null,
+    device: typeof entry.device_id === 'string' && entry.device_id
+      ? crypto.createHash('sha256').update(entry.device_id).digest('base64url').slice(0, 12)
+      : null,
+  } : null);
 
   /** Every entity any panel or plugin reads, so the live link watches them. */
   function watchedEntities() {
@@ -468,8 +487,9 @@ function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginR
     if (!access) return reply.status(404).send({ error: 'This plugin has no Home Assistant access.' });
     if (demoMode || !ha.isConfigured(db)) return unavailable(reply);
     let ids;
+    const registry = await live.entityRegistry().catch(() => null);
     try {
-      ids = await readableIds(access);
+      ids = await readableIds(access, registry);
     } catch (error) {
       return reply.status(error.status && error.status < 600 ? error.status : 503).send({ error: error.message });
     }
@@ -479,6 +499,7 @@ function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginR
     return {
       entities: Object.fromEntries(ids.map((id) => [id, states[id] === undefined ? undefined : rules.filterState(states[id])])),
       control: ids.filter((id) => rules.canControl(access, id)),
+      sources: Object.fromEntries(ids.map((id) => [id, sourceOf(registry?.get(id))])),
       live: isLive,
       unit: await live.temperatureUnit(),
       pinProtection: pinProtection(),

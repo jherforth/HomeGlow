@@ -89,6 +89,7 @@ class HaLive {
     this.cache.clear();
     this.units = null;
     this.allIds = null;
+    this.registry = null;
     this.authError = null;
     this.retry = 0;
     if (this.watched.size) this.connect();
@@ -346,6 +347,23 @@ class HaLive {
    * registries, for the builder): [{ type }] -> [result | null]. Null for a
    * command Home Assistant refused, so the builder can do without areas.
    */
+  /**
+   * Home Assistant's entity registry, by entity id ({ platform, device_id,
+   * hidden_by, disabled_by, ... }), read at most every 30 seconds; null
+   * when it can't be read (no WebSocket).
+   */
+  async entityRegistry() {
+    if (!this.registry || this.now() - this.registry.at > ENTITY_LIST_TTL_MS) {
+      try {
+        const [list] = await this.commands([{ type: 'config/entity_registry/list' }]);
+        if (Array.isArray(list)) this.registry = { byId: new Map(list.map((entry) => [entry.entity_id, entry])), at: this.now() };
+      } catch {
+        // Keep the last copy, if there is one.
+      }
+    }
+    return this.registry ? this.registry.byId : null;
+  }
+
   async commands(list) {
     const outcomes = await this.run(list);
     return outcomes.map((outcome) => (outcome.ok ? outcome.result : null));

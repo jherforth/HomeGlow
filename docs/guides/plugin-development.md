@@ -472,6 +472,15 @@ watch the home: `lock`, `alarm_control_panel`, `cover` (garage doors) and
 `camera` must be listed entity by entity. `entities` and `domains` can be used
 together, and `"control": false` makes both read only.
 
+Entities the household has hidden or disabled in Home Assistant aren't listed
+from a domain. `state()` also says where each entity comes from, in
+`sources`: `{ integration, device }`, where `integration` is Home Assistant's
+name for it (`music_assistant`, `cast`, `sonos`, `dlna_dmr` ...) and `device`
+is a tag that is the same for every entity of one device. One speaker often
+appears several times (Music Assistant's entity beside its Cast and DLNA ones);
+these tell them apart. A source is `null` when Home Assistant has no registry
+entry for the entity, or its registry can't be read.
+
 ### Music: a speaker's library
 
 For a media player the plugin may operate, HomeGlow opens the player's own
