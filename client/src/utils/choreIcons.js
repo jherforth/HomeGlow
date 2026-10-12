@@ -138,3 +138,37 @@ export const choreIconLabelKey = (emoji) => {
   const entry = findChoreIcon(emoji);
   return entry ? `chores:icons.${entry.key}` : null;
 };
+
+// A chore icon of the household's own (PR #270): one emoji out of whatever
+// was typed or pasted. The server keeps up to 16 UTF-16 units (an emoji can be
+// several code points: skin tones, ZWJ families, flags), so a longer one is
+// refused here rather than cut, which would break the sequence.
+export const CHORE_ICON_MAX_LENGTH = 16;
+
+const PICTOGRAPH = /\p{Extended_Pictographic}/u;
+const FLAG = /^\p{Regional_Indicator}{2}$/u;
+const KEYCAP = /^[0-9#*]\uFE0F?\u20E3$/u;
+const TEXT = /[\p{L}\p{N}\s]/u;
+
+// What a reader sees as one character each. Intl.Segmenter everywhere but
+// Firefox before 125; there, emoji sequences are matched roughly, one by one.
+const graphemes = (text) => {
+  if (typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function') {
+    return Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text), (part) => part.segment);
+  }
+  return text.match(/\p{Regional_Indicator}{2}|[0-9#*]\uFE0F?\u20E3|\p{Extended_Pictographic}(?:[\uFE0E\uFE0F\u{1F3FB}-\u{1F3FF}]|\u200D\p{Extended_Pictographic})*|./gsu) || [];
+};
+
+const isEmoji = (part) => part.length <= CHORE_ICON_MAX_LENGTH
+  && (KEYCAP.test(part) || FLAG.test(part) || (PICTOGRAPH.test(part) && !TEXT.test(part)));
+
+/**
+ * The emoji in what was typed or pasted: the last one, so typing a second
+ * replaces the first; letters, digits and spaces around it are dropped. ''
+ * when there is none.
+ */
+export function extractCustomEmoji(input) {
+  if (typeof input !== 'string' || !input) return '';
+  const found = graphemes(input).filter(isEmoji);
+  return found.length ? found[found.length - 1] : '';
+}

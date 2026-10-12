@@ -14,6 +14,8 @@
     "pickerLabel": "Icono",
     "none": "Sin icono",
     "noneShort": "Ninguno",
+    "customPlaceholder": "Emoji",
+    "customLabel": "Tu propio emoji (escribe o pega uno)",
     "bed": "Cama",
     "clothes": "Ropa",
     "laundry": "Colada",

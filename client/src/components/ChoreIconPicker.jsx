@@ -1,8 +1,8 @@
-import React, { useId, useState } from 'react';
-import { Box, ButtonBase, Collapse, Typography, Tooltip } from '@mui/material';
+import React, { useId, useRef, useState } from 'react';
+import { Box, ButtonBase, Collapse, Typography, Tooltip, InputBase } from '@mui/material';
 import { ExpandMore } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
-import { CHORE_ICON_GROUPS, findChoreIcon } from '../utils/choreIcons.js';
+import { CHORE_ICON_GROUPS, extractCustomEmoji, findChoreIcon } from '../utils/choreIcons.js';
 
 // Emoji picker for a chore's icon (issue #141).
 //
@@ -15,10 +15,16 @@ import { CHORE_ICON_GROUPS, findChoreIcon } from '../utils/choreIcons.js';
 //
 // "None" is a first-class choice and comes first — most chores will not have an
 // icon, and a chore without one keeps its checkmark on the dashboard.
+//
+// A field next to "None" takes any emoji typed or pasted in (PR #270), so the
+// bank stays curated without blocking one-off choices. It is a text field, not
+// a radio: it shows the household's own emoji while one is chosen, and the
+// grid stays open while typing.
 const ChoreIconPicker = ({ value, onChange }) => {
   const { t } = useTranslation(['chores', 'common']);
   const [open, setOpen] = useState(false);
   const gridId = useId();
+  const customInputRef = useRef(null);
 
   const choose = (emoji) => {
     onChange(emoji);
@@ -69,6 +75,21 @@ const ChoreIconPicker = ({ value, onChange }) => {
     ? (selectedEntry ? t(`chores:icons.${selectedEntry.key}`) : value)
     : t('chores:icons.none');
 
+  // An emoji outside the bank, typed here or kept from an older version.
+  const isCustom = Boolean(value && !selectedEntry);
+
+  // Emptied: no icon. Anything without an emoji in it (letters) is ignored,
+  // and the field goes back to what was chosen.
+  const handleCustomInputChange = (event) => {
+    const raw = event.target.value;
+    if (!raw.trim()) {
+      onChange('');
+      return;
+    }
+    const emoji = extractCustomEmoji(raw);
+    if (emoji) onChange(emoji);
+  };
+
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -109,7 +130,7 @@ const ChoreIconPicker = ({ value, onChange }) => {
 
       <Collapse in={open} id={gridId} unmountOnExit>
         <Box role="radiogroup" aria-label={t('chores:icons.pickerLabel')} sx={{ pt: 1.5 }}>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mb: 1.5 }}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mb: 1.5, alignItems: 'center' }}>
             <Tooltip title={t('chores:icons.none')}>
               <Box
                 sx={{
@@ -121,6 +142,55 @@ const ChoreIconPicker = ({ value, onChange }) => {
                 {...cellProps(!value, t('chores:icons.none'), () => choose(''))}
               >
                 {t('chores:icons.noneShort')}
+              </Box>
+            </Tooltip>
+
+            <Tooltip title={t('chores:icons.customLabel')}>
+              <Box
+                sx={{
+                  ...cellSx(isCustom),
+                  width: 72,
+                  cursor: 'text',
+                  overflow: 'hidden',
+                  px: 0.5,
+                  '&:hover': {
+                    backgroundColor: isCustom
+                      ? 'rgba(var(--accent-rgb), 0.24)'
+                      : 'rgba(var(--accent-rgb), 0.08)',
+                    transform: 'none',
+                  },
+                  '&:focus-within': {
+                    borderColor: 'var(--accent)',
+                  },
+                }}
+                onClick={() => customInputRef.current?.focus()}
+              >
+                <InputBase
+                  inputRef={customInputRef}
+                  value={isCustom ? value : ''}
+                  onChange={handleCustomInputChange}
+                  placeholder={t('chores:icons.customPlaceholder')}
+                  // No length cap on the field: a pasted family or flag cut
+                  // short would break; extractCustomEmoji refuses one too long.
+                  inputProps={{ 'aria-label': t('chores:icons.customLabel') }}
+                  sx={{
+                    width: '100%',
+                    height: '100%',
+                    color: 'var(--text)',
+                    '& input': {
+                      textAlign: 'center',
+                      fontSize: isCustom ? '1.5rem' : '0.75rem',
+                      lineHeight: 1,
+                      padding: 0,
+                      cursor: 'text',
+                      outline: 'none',
+                    },
+                    '& input::placeholder': {
+                      opacity: 0.7,
+                      color: 'inherit',
+                    },
+                  }}
+                />
               </Box>
             </Tooltip>
           </Box>
