@@ -2,12 +2,7 @@ import React, { useId, useRef, useState } from 'react';
 import { Box, ButtonBase, Collapse, Typography, Tooltip, InputBase } from '@mui/material';
 import { ExpandMore } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
-import {
-  CHORE_ICON_GROUPS,
-  findChoreIcon,
-  CHORE_ICON_MAX_LENGTH,
-  extractCustomEmoji,
-} from '../utils/choreIcons.js';
+import { CHORE_ICON_GROUPS, extractCustomEmoji, findChoreIcon } from '../utils/choreIcons.js';
 
 // Emoji picker for a chore's icon (issue #141).
 //
@@ -21,8 +16,10 @@ import {
 // "None" is a first-class choice and comes first — most chores will not have an
 // icon, and a chore without one keeps its checkmark on the dashboard.
 //
-// A custom cell next to "None" accepts any emoji typed or pasted in, so the
-// bank stays curated without blocking one-off choices.
+// A field next to "None" takes any emoji typed or pasted in (PR #270), so the
+// bank stays curated without blocking one-off choices. It is a text field, not
+// a radio: it shows the household's own emoji while one is chosen, and the
+// grid stays open while typing.
 const ChoreIconPicker = ({ value, onChange }) => {
   const { t } = useTranslation(['chores', 'common']);
   const [open, setOpen] = useState(false);
@@ -78,18 +75,19 @@ const ChoreIconPicker = ({ value, onChange }) => {
     ? (selectedEntry ? t(`chores:icons.${selectedEntry.key}`) : value)
     : t('chores:icons.none');
 
+  // An emoji outside the bank, typed here or kept from an older version.
   const isCustom = Boolean(value && !selectedEntry);
 
+  // Emptied: no icon. Anything without an emoji in it (letters) is ignored,
+  // and the field goes back to what was chosen.
   const handleCustomInputChange = (event) => {
     const raw = event.target.value;
-    if (!raw) {
+    if (!raw.trim()) {
       onChange('');
       return;
     }
     const emoji = extractCustomEmoji(raw);
-    if (emoji) {
-      onChange(emoji);
-    }
+    if (emoji) onChange(emoji);
   };
 
   return (
@@ -147,7 +145,7 @@ const ChoreIconPicker = ({ value, onChange }) => {
               </Box>
             </Tooltip>
 
-            <Tooltip title={t('chores:icons.custom')}>
+            <Tooltip title={t('chores:icons.customLabel')}>
               <Box
                 sx={{
                   ...cellSx(isCustom),
@@ -162,13 +160,9 @@ const ChoreIconPicker = ({ value, onChange }) => {
                     transform: 'none',
                   },
                   '&:focus-within': {
-                    border: '2px solid var(--accent)',
+                    borderColor: 'var(--accent)',
                   },
                 }}
-                role="radio"
-                aria-checked={isCustom}
-                aria-label={t('chores:icons.custom')}
-                tabIndex={-1}
                 onClick={() => customInputRef.current?.focus()}
               >
                 <InputBase
@@ -176,10 +170,9 @@ const ChoreIconPicker = ({ value, onChange }) => {
                   value={isCustom ? value : ''}
                   onChange={handleCustomInputChange}
                   placeholder={t('chores:icons.customPlaceholder')}
-                  inputProps={{
-                    'aria-label': t('chores:icons.custom'),
-                    maxLength: CHORE_ICON_MAX_LENGTH,
-                  }}
+                  // No length cap on the field: a pasted family or flag cut
+                  // short would break; extractCustomEmoji refuses one too long.
+                  inputProps={{ 'aria-label': t('chores:icons.customLabel') }}
                   sx={{
                     width: '100%',
                     height: '100%',

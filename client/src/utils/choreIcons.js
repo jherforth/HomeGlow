@@ -139,35 +139,36 @@ export const choreIconLabelKey = (emoji) => {
   return entry ? `chores:icons.${entry.key}` : null;
 };
 
+// A chore icon of the household's own (PR #270): one emoji out of whatever
+// was typed or pasted. The server keeps up to 16 UTF-16 units (an emoji can be
+// several code points: skin tones, ZWJ families, flags), so a longer one is
+// refused here rather than cut, which would break the sequence.
 export const CHORE_ICON_MAX_LENGTH = 16;
 
-const EMOJI_REGEX = /^(?:\p{Extended_Pictographic}|\p{Regional_Indicator}{2})/u;
+const PICTOGRAPH = /\p{Extended_Pictographic}/u;
+const FLAG = /^\p{Regional_Indicator}{2}$/u;
+const KEYCAP = /^[0-9#*]\uFE0F?\u20E3$/u;
+const TEXT = /[\p{L}\p{N}\s]/u;
+
+// What a reader sees as one character each. Intl.Segmenter everywhere but
+// Firefox before 125; there, emoji sequences are matched roughly, one by one.
+const graphemes = (text) => {
+  if (typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function') {
+    return Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text), (part) => part.segment);
+  }
+  return text.match(/\p{Regional_Indicator}{2}|[0-9#*]\uFE0F?\u20E3|\p{Extended_Pictographic}(?:[\uFE0E\uFE0F\u{1F3FB}-\u{1F3FF}]|\u200D\p{Extended_Pictographic})*|./gsu) || [];
+};
+
+const isEmoji = (part) => part.length <= CHORE_ICON_MAX_LENGTH
+  && (KEYCAP.test(part) || FLAG.test(part) || (PICTOGRAPH.test(part) && !TEXT.test(part)));
 
 /**
- * Validate and extract a single emoji from user input.
- * Strips alphanumeric characters and rejects non-emoji input.
- * Supports multi-codepoint / ZWJ sequences up to CHORE_ICON_MAX_LENGTH characters.
+ * The emoji in what was typed or pasted: the last one, so typing a second
+ * replaces the first; letters, digits and spaces around it are dropped. ''
+ * when there is none.
  */
 export function extractCustomEmoji(input) {
-  if (!input || typeof input !== 'string') return '';
-  const trimmed = input.trim();
-  if (!trimmed) return '';
-
-  let segments = [];
-  if (typeof Intl !== 'undefined' && Intl.Segmenter) {
-    const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
-    segments = Array.from(segmenter.segment(trimmed), (s) => s.segment);
-  } else {
-    const emojiClusterRegex = /(?:\p{Regional_Indicator}{2}|\p{Extended_Pictographic}(?:\uFE0F|\uFE0E|[\u{1F3FB}-\u{1F3FF}]|\u200D|\p{Extended_Pictographic})*)/gu;
-    segments = trimmed.match(emojiClusterRegex) || [];
-  }
-
-  const valid = segments.filter((seg) => {
-    if (!seg || seg.length > CHORE_ICON_MAX_LENGTH) return false;
-    if (/[a-zA-Z0-9]/.test(seg)) return false;
-    return EMOJI_REGEX.test(seg);
-  });
-
-  if (valid.length === 0) return '';
-  return valid[valid.length - 1];
+  if (typeof input !== 'string' || !input) return '';
+  const found = graphemes(input).filter(isEmoji);
+  return found.length ? found[found.length - 1] : '';
 }
