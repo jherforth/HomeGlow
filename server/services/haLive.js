@@ -17,6 +17,7 @@ const homeAssistant = require('./homeAssistant');
 const { decrypt } = require('../utils/encryption');
 
 const REST_TTL_MS = 2000;
+const ENTITY_LIST_TTL_MS = 30000;
 const COMMAND_TIMEOUT_MS = 10000;
 const RETRY_SECONDS = [1, 2, 5, 10, 30, 60];
 
@@ -65,6 +66,7 @@ class HaLive {
     this.retry = 0;
     this.retryTimer = null;
     this.units = null;
+    this.allIds = null;
   }
 
   /** Watch these entities (every panel's, together). */
@@ -86,6 +88,8 @@ class HaLive {
     this.close();
     this.cache.clear();
     this.units = null;
+    this.allIds = null;
+    this.registry = null;
     this.authError = null;
     this.retry = 0;
     if (this.watched.size) this.connect();
@@ -276,8 +280,8 @@ class HaLive {
   }
 
   /** Call a service; the states it changed go straight into the cache. */
-  async callService(domain, service, data) {
-    const changed = await this.ha.homeAssistantFetch(this.db, 'POST', `/api/services/${domain}/${service}`, data);
+  async callService(domain, service, data, options) {
+    const changed = await this.ha.homeAssistantFetch(this.db, 'POST', `/api/services/${domain}/${service}`, data, options);
     if (Array.isArray(changed)) {
       const at = this.now();
       const ids = [];
@@ -292,6 +296,38 @@ class HaLive {
       }
     }
     return changed;
+  }
+
+  /**
+   * Every entity id in these domains, for a plugin granted a domain whole
+   * (all the house's media players, say). Read from /api/states at most
+   * every 30 seconds; the last list stands if Home Assistant can't be asked.
+   */
+  async entityIdsIn(domains) {
+    const wanted = new Set(domains);
+    if (wanted.size === 0) return [];
+    if (!this.allIds || this.now() - this.allIds.at > ENTITY_LIST_TTL_MS) {
+      try {
+        const states = await this.ha.homeAssistantFetch(this.db, 'GET', '/api/states');
+        if (Array.isArray(states)) {
+          const at = this.now();
+          this.allIds = { ids: states.map((state) => state?.entity_id).filter((id) => typeof id === 'string'), at };
+          // The list came with every state: keep them, as a REST read would.
+          for (const state of states) {
+            if (state?.entity_id && !this.isLive(state.entity_id)) this.cache.set(state.entity_id, { state, at });
+          }
+        }
+      } catch (error) {
+        if (!this.allIds) throw error;
+      }
+    }
+    return this.allIds.ids.filter((id) => wanted.has(id.split('.')[0]));
+  }
+
+  /** The ids last listed in these domains, without asking (for the watch list). */
+  knownIdsIn(domains) {
+    const wanted = new Set(domains);
+    return (this.allIds?.ids || []).filter((id) => wanted.has(id.split('.')[0]));
   }
 
   /** Home Assistant's temperature unit (°C or °F), asked once. */
@@ -311,23 +347,63 @@ class HaLive {
    * registries, for the builder): [{ type }] -> [result | null]. Null for a
    * command Home Assistant refused, so the builder can do without areas.
    */
+  /**
+   * Home Assistant's entity registry, by entity id ({ platform, device_id,
+   * hidden_by, disabled_by, ... }), read at most every 30 seconds; null
+   * when it can't be read (no WebSocket).
+   */
+  async entityRegistry() {
+    if (!this.registry || this.now() - this.registry.at > ENTITY_LIST_TTL_MS) {
+      try {
+        const [list] = await this.commands([{ type: 'config/entity_registry/list' }]);
+        if (Array.isArray(list)) this.registry = { byId: new Map(list.map((entry) => [entry.entity_id, entry])), at: this.now() };
+      } catch {
+        // Keep the last copy, if there is one.
+      }
+    }
+    return this.registry ? this.registry.byId : null;
+  }
+
   async commands(list) {
+    const outcomes = await this.run(list);
+    return outcomes.map((outcome) => (outcome.ok ? outcome.result : null));
+  }
+
+  /**
+   * One WebSocket command whose answer matters (a player's library): its
+   * result, or an Error carrying Home Assistant's own message and a status.
+   */
+  async command(message, options) {
+    const [outcome] = await this.run([message], options);
+    if (outcome.ok) return outcome.result;
+    const error = new Error(outcome.error || 'Home Assistant did not answer.');
+    error.status = outcome.status;
+    error.code = outcome.code;
+    throw error;
+  }
+
+  /** [{ type, ... }] -> [{ ok, result } | { ok: false, error, status, code }]. */
+  async run(list, { timeoutMs = COMMAND_TIMEOUT_MS } = {}) {
+    const fail = (error, status, code) => list.map(() => ({ ok: false, error, status, code }));
     const { baseUrl, tokenEnc } = this.ha.getConfig(this.db);
-    if (!baseUrl || !tokenEnc || !this.WebSocketImpl) return list.map(() => null);
+    if (!baseUrl || !tokenEnc) return fail('Home Assistant is not connected.', 503);
+    if (!this.WebSocketImpl) return fail('This server cannot open a WebSocket to Home Assistant.', 503);
     return await new Promise((resolve) => {
       let ws;
-      const results = new Array(list.length).fill(null);
+      const results = list.map(() => null);
       let remaining = list.length;
+      let failure = { error: 'Home Assistant did not answer in time.', status: 504 };
       const finish = () => {
         clearTimeout(timer);
         try { ws?.close(); } catch { /* closing */ }
-        resolve(results);
+        resolve(results.map((outcome) => outcome || { ok: false, ...failure }));
       };
-      const timer = setTimeout(finish, COMMAND_TIMEOUT_MS);
+      const timer = setTimeout(finish, timeoutMs);
       timer.unref?.();
       try {
         ws = new this.WebSocketImpl(websocketUrl(baseUrl));
       } catch {
+        failure = { error: `Could not reach Home Assistant at ${baseUrl}.`, status: 503 };
         finish();
         return;
       }
@@ -343,18 +419,29 @@ class HaLive {
         } else if (message.type === 'auth_ok') {
           list.forEach((command, index) => ws.send(JSON.stringify({ ...command, id: index + 1 })));
         } else if (message.type === 'auth_invalid') {
+          failure = { error: 'Home Assistant rejected the access token.', status: 401 };
           finish();
         } else if (message.type === 'result') {
           const index = message.id - 1;
-          if (index >= 0 && index < list.length) {
-            results[index] = message.success ? message.result : null;
+          if (index >= 0 && index < list.length && !results[index]) {
+            results[index] = message.success
+              ? { ok: true, result: message.result }
+              : {
+                ok: false,
+                error: (message.error && message.error.message) || 'Home Assistant refused that.',
+                code: message.error && message.error.code,
+                status: message.error && message.error.code === 'not_found' ? 404 : 400,
+              };
             remaining -= 1;
             if (remaining === 0) finish();
           }
         }
       };
       ws.onerror = () => {};
-      ws.onclose = finish;
+      ws.onclose = () => {
+        if (remaining > 0 && failure.status === 504) failure = { error: 'Home Assistant closed the connection.', status: 502 };
+        finish();
+      };
     });
   }
 

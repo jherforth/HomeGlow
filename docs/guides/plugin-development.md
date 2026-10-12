@@ -458,6 +458,88 @@ HomeGlow.on('ha.state', ({ entityIds }) => refresh());   // a nudge; read state 
 - **Cameras:** `HomeGlow.homeAssistant.cameraUrl('camera.porch')` is the address
   of a declared camera's latest snapshot, for an `<img>`.
 
+### Whole domains
+
+A plugin published for every household can't list their entity ids. It can
+be granted a domain whole instead, and `state()` then lists every entity there:
+
+```json
+"homeAssistant": { "domains": ["media_player"] }
+```
+
+Any domain a panel can show may be granted, except the ones that open up or
+watch the home: `lock`, `alarm_control_panel`, `cover` (garage doors) and
+`camera` must be listed entity by entity. `entities` and `domains` can be used
+together, and `"control": false` makes both read only.
+
+Entities the household has hidden or disabled in Home Assistant aren't listed
+from a domain. `state()` also says where each entity comes from, in
+`sources`: `{ integration, device }`, where `integration` is Home Assistant's
+name for it (`music_assistant`, `cast`, `sonos`, `dlna_dmr` ...) and `device`
+is a tag that is the same for every entity of one device. One speaker often
+appears several times (Music Assistant's entity beside its Cast and DLNA ones);
+these tell them apart. A source is `null` when Home Assistant has no registry
+entry for the entity, or its registry can't be read.
+
+### Music: a speaker's library
+
+For a media player the plugin may operate, HomeGlow opens the player's own
+library through Home Assistant: whatever it offers, from Music Assistant
+(Spotify, YouTube Music, Jellyfin, local files…) to Sonos, Plex or Home
+Assistant's media sources.
+
+```js
+const top = await HomeGlow.homeAssistant.media.browse('media_player.kitchen');
+const level = await HomeGlow.homeAssistant.media.browse('media_player.kitchen', top.items[0].key);
+const found = await HomeGlow.homeAssistant.media.search('media_player.kitchen', 'neil young');
+await HomeGlow.homeAssistant.action('media_player.kitchen', 'play_media', found.items[0].key);
+img.src = HomeGlow.homeAssistant.media.artUrl('media_player.kitchen', state.attributes.media_art);
+```
+
+- Items are `{ key, title, kind, canPlay, canOpen, thumb }`. **`play_media` takes a
+  key**, never a content id: a plugin plays only what HomeGlow showed it. A key
+  can go stale (after a restart): the call answers `410` with `stale: true`; open
+  the list again.
+- `search` remembers the query: `media.recent(entity)` lists the last eight,
+  `media.clearRecent(entity)` forgets them.
+- Other media actions: `seek` (seconds), `shuffle` (true or false). The state
+  also carries `media_album_name`, `media_duration`, `media_position`,
+  `media_position_updated_at` and `media_art`, a tag that changes with the
+  picture (the picture's own address carries a token and is never sent).
+- Speakers that play in step (Home Assistant's grouping: Music Assistant,
+  Sonos ...): `action(leader, 'join', [otherIds])` adds speakers to the leader's
+  group, `action(member, 'unjoin')` takes one out. Each must be a speaker the
+  plugin may operate, up to 8. The state carries `group_members`, the leader
+  first; a speaker that can be grouped reports feature 524288.
+- A slow speaker (finding a song online, then buffering) answers
+  `{ ok: true, pending: true }` after 1.5 seconds; watch `state()` for the change.
+
+### Your own media server
+
+A plugin that brings music from a server of its own (a Jellyfin server, say)
+can play it on a Home Assistant speaker with `play_url`. The address must be on
+the server the household named in one of the plugin's household settings, which
+the manifest points to; anything else is refused.
+
+```json
+"settings": [{ "key": "jellyfinUrl", "label": "Jellyfin address", "type": "string", "default": "" }],
+"homeAssistant": { "domains": ["media_player"], "playUrlsFrom": "jellyfinUrl" }
+```
+
+```js
+await HomeGlow.homeAssistant.action('media_player.kitchen', 'play_url', { url: streamUrl });
+await HomeGlow.homeAssistant.action('media_player.kitchen', 'play_url', { url: nextUrl, enqueue: 'add' });
+```
+
+The address must have the same scheme, host and port as the setting, and sit
+under its path. `enqueue` is `replace` (the default), `add`, `next` or `play`,
+for a player that can queue.
+`title`, `artist`, `album` and `image` (a cover, on the same server) tell a speaker
+that shows it what is playing; otherwise all it knows is the address.
+A speaker that gives such an address as `media_title` has it passed on without
+its query, so a sign-in in the address (Jellyfin's `api_key`) stays out of
+every panel and plugin.
+
 ## 6. Reactions — server-side logic without server-side code
 
 A reaction is a bounded storage increment HomeGlow itself executes whenever an

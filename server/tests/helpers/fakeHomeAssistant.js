@@ -1,7 +1,8 @@
 // A stand-in Home Assistant for the panel tests (issue #252): the REST API
 // HomeGlow calls, and the WebSocket API's auth, subscribe_entities (with its
-// compressed diffs) and the three registries. Service calls change the fake's
-// states the way a real home would, and every call is recorded.
+// compressed diffs), the three registries, and a music player's library
+// (media_player/browse_media and search_media). Service calls change the
+// fake's states the way a real home would, and every call is recorded.
 //
 //   const ha = await startFakeHomeAssistant({ token: 'secret' });
 //   ha.url, ha.calls, ha.setState(id, state, attributes), ha.close()
@@ -29,6 +30,13 @@ function defaultStates() {
     s('scene.movie_night', 'scening', { friendly_name: 'Movie night' }),
     s('climate.hall', 'heat', { friendly_name: 'Hall thermostat', current_temperature: 68, temperature: 70, min_temp: 45, max_temp: 90, target_temp_step: 1, hvac_modes: ['off', 'heat', 'cool', 'heat_cool'], supported_features: 1 }),
     s('media_player.living', 'paused', { friendly_name: 'Living room speaker', media_title: 'Morning jazz', supported_features: 16384 | 1 | 4 | 32 | 16, volume_level: 0.3 }),
+    // A Music Assistant player: browse, search, play from the library, shuffle.
+    s('media_player.kitchen_music', 'paused', {
+      friendly_name: 'Kitchen music', media_title: 'Harvest Moon', media_artist: 'Neil Young', media_album_name: 'Harvest Moon',
+      entity_picture: '/api/media_player_proxy/media_player.kitchen_music?token=proxy-token&cache=abc',
+      supported_features: 16384 | 1 | 2 | 4 | 32 | 16 | 512 | 32768 | 131072 | 2097152 | 4194304, volume_level: 0.4, shuffle: false,
+      media_duration: 305, media_position: 84, media_position_updated_at: new Date().toISOString(),
+    }),
     s('sensor.outside_temp', '54.3', { friendly_name: 'Outside', unit_of_measurement: '°F', device_class: 'temperature' }),
     s('binary_sensor.back_door', 'off', { friendly_name: 'Back door', device_class: 'door' }),
     s('person.sam', 'home', { friendly_name: 'Sam' }),
@@ -39,6 +47,46 @@ function defaultStates() {
     s('automation.morning', 'on', { friendly_name: 'Morning routine' }),
   ];
 }
+
+// The music player's library, as Home Assistant's browse tree.
+const node = (title, media_class, media_content_type, media_content_id, extra = {}) => ({
+  title, media_class, media_content_type, media_content_id, can_play: false, can_expand: false, thumbnail: null, children_media_class: null, ...extra,
+});
+const LIBRARY = {
+  '': node('Music Assistant', 'directory', 'music', '', {
+    can_expand: true,
+    children: [
+      node('Playlists', 'directory', 'playlists', 'library://playlists', { can_expand: true }),
+      node('Artists', 'directory', 'artists', 'library://artists', { can_expand: true }),
+    ],
+  }),
+  'library://playlists': node('Playlists', 'directory', 'playlists', 'library://playlists', {
+    can_expand: true,
+    children: [
+      node('Kitchen Mix', 'playlist', 'playlist', 'library://playlist/1', { can_play: true, can_expand: true, thumbnail: 'https://images.example/kitchen-mix.jpg' }),
+      node('Dinner Jazz', 'playlist', 'playlist', 'library://playlist/2', { can_play: true, can_expand: true, thumbnail: '/api/media_player_proxy/media_player.kitchen_music/browse_media/playlist/2' }),
+      node('Nothing to do', 'directory', 'folder', 'library://dead-end'),
+      node('Sneaky', 'playlist', 'playlist', 'library://playlist/3', { can_play: true, thumbnail: 'javascript:alert(1)' }),
+    ],
+  }),
+  'ytmusic://artist/ny': node('Neil Young', 'artist', 'artist', 'ytmusic://artist/ny', {
+    can_play: true,
+    can_expand: true,
+    children: [
+      node('Harvest', 'album', 'album', 'ytmusic://album/harvest', { can_play: true, can_expand: true }),
+      node('Heart of Gold', 'track', 'track', 'ytmusic://track/hog', { can_play: true }),
+    ],
+  }),
+  'library://playlist/1': node('Kitchen Mix', 'playlist', 'playlist', 'library://playlist/1', {
+    can_play: true,
+    can_expand: true,
+    children: [node('Harvest Moon', 'track', 'track', 'ytmusic://track/hm', { can_play: true })],
+  }),
+};
+const SEARCH = [
+  node('Heart of Gold', 'track', 'track', 'ytmusic://track/hog', { can_play: true, thumbnail: 'https://images.example/hog.jpg' }),
+  node('Neil Young', 'artist', 'artist', 'ytmusic://artist/ny', { can_play: true, can_expand: true }),
+];
 
 const AREAS = [{ area_id: 'kitchen', name: 'Kitchen' }, { area_id: 'living_room', name: 'Living room' }, { area_id: 'outside', name: 'Outside' }];
 const DEVICES = [{ id: 'dev-shade', area_id: 'living_room' }, { id: 'dev-speaker', area_id: 'living_room' }];
@@ -116,6 +164,10 @@ async function startFakeHomeAssistant({ token = 'secret-token', port = 0, wsEnab
   const calls = [];
   const sockets = new Set();
   const subscriptions = []; // { connection, id, entityIds }
+  let serviceDelayMs = 0;    // a slow speaker: service calls answer (and act) this late
+  let proxyBroken = false;  // the media player proxy can't fetch a picture
+  const registry = ENTITY_REGISTRY.map((entry) => ({ ...entry }));
+  const proxyFetches = [];
 
   const compress = (state) => ({ s: state.state, a: state.attributes, lc: Date.parse(state.last_changed) / 1000 });
 
@@ -137,6 +189,22 @@ async function startFakeHomeAssistant({ token = 'secret-token', port = 0, wsEnab
     }
     return next;
   }
+
+  // Media services and the features a player must report for each, as
+  // Home Assistant checks them (media_play_pause needs both play and pause).
+  const MEDIA_SERVICE_NEEDS = {
+    media_play_pause: 16384 | 1, media_play: 16384, media_pause: 1, media_stop: 4096,
+    media_next_track: 32, media_previous_track: 16, media_seek: 2, volume_set: 4, shuffle_set: 32768, play_media: 512,
+    join: 524288, unjoin: 524288,
+  };
+  const refusedMedia = (domain, service, data) => {
+    const needs = domain === 'media_player' ? MEDIA_SERVICE_NEEDS[service] : undefined;
+    const state = states.get(data.entity_id);
+    if (!needs || !state) return null;
+    return (Number(state.attributes.supported_features) & needs) === needs
+      ? null
+      : `Entity ${data.entity_id} does not support action media_player.${service}`;
+  };
 
   // Service calls, as a home would carry them out.
   function runService(domain, service, data) {
@@ -163,8 +231,26 @@ async function startFakeHomeAssistant({ token = 'secret-token', port = 0, wsEnab
       case 'alarm_control_panel.alarm_disarm': return [setState(id, 'disarmed')];
       case 'climate.set_temperature': return [setState(id, state.state, { temperature: data.temperature })];
       case 'climate.set_hvac_mode': return [setState(id, data.hvac_mode)];
-      case 'media_player.media_play_pause': return [setState(id, state.state === 'playing' ? 'paused' : 'playing')];
+      case 'media_player.media_play_pause': return [setState(id, state.state === 'playing' ? 'paused' : 'playing', { media_position_updated_at: new Date().toISOString() })];
+      case 'media_player.media_play': return [setState(id, 'playing', { media_position_updated_at: new Date().toISOString() })];
+      case 'media_player.media_pause': return [setState(id, 'paused', { media_position_updated_at: new Date().toISOString() })];
+      case 'media_player.media_stop': return [setState(id, 'idle')];
+      // A group: every member lists the leader first, then the others.
+      case 'media_player.join': {
+        const group = [id, ...new Set([...(a.group_members || []).filter((m) => m !== id), ...data.group_members])];
+        return group.map((member) => setState(member, states.get(member)?.state || 'idle', { group_members: group }));
+      }
+      case 'media_player.unjoin': {
+        const rest = (a.group_members || []).filter((m) => m !== id);
+        return [setState(id, state.state, { group_members: [id] }),
+          ...rest.map((member) => setState(member, states.get(member).state, { group_members: rest.length > 1 ? rest : [member] }))];
+      }
+      case 'media_player.media_seek': return [setState(id, state.state, { media_position: data.seek_position, media_position_updated_at: new Date().toISOString() })];
+      case 'media_player.media_next_track': return [setState(id, state.state, { media_title: 'Heart of Gold', media_album_name: 'Harvest', media_position: 0, media_position_updated_at: new Date().toISOString() })];
+      case 'media_player.media_previous_track': return [setState(id, state.state, { media_position: 0, media_position_updated_at: new Date().toISOString() })];
       case 'media_player.volume_set': return [setState(id, state.state, { volume_level: data.volume_level })];
+      case 'media_player.shuffle_set': return [setState(id, state.state, { shuffle: data.shuffle })];
+      case 'media_player.play_media': return [setState(id, 'playing', { media_title: data.media_content_id, entity_picture: `/api/media_player_proxy/${id}?token=proxy-token&cache=${Date.now()}` })];
       case 'input_select.select_option': return [setState(id, data.option)];
       case 'vacuum.start': return [setState(id, 'cleaning')];
       case 'vacuum.return_to_base': return [setState(id, 'returning')];
@@ -194,7 +280,17 @@ async function startFakeHomeAssistant({ token = 'secret-token', port = 0, wsEnab
       if (req.method === 'POST' && serviceMatch) {
         const data = body ? JSON.parse(body) : {};
         calls.push({ domain: serviceMatch[1], service: serviceMatch[2], data });
+        const refused = refusedMedia(serviceMatch[1], serviceMatch[2], data);
+        if (refused) return send(400, { message: refused });
+        if (serviceDelayMs) {
+          setTimeout(() => send(200, runService(serviceMatch[1], serviceMatch[2], data)), serviceDelayMs);
+          return undefined;
+        }
         return send(200, runService(serviceMatch[1], serviceMatch[2], data));
+      }
+      if (req.method === 'GET' && url.pathname.startsWith('/api/media_player_proxy/')) {
+        proxyFetches.push(url.pathname);
+        return proxyBroken ? send(500, { message: 'Error fetching image' }) : send(200, PIXEL_PNG, 'image/png');
       }
       const cameraMatch = url.pathname.match(/^\/api\/camera_proxy\/(.+)$/);
       if (req.method === 'GET' && cameraMatch) {
@@ -242,8 +338,23 @@ async function startFakeHomeAssistant({ token = 'secret-token', port = 0, wsEnab
           return;
         }
         case 'config/area_registry/list': reply(AREAS); return;
-        case 'config/entity_registry/list': reply(ENTITY_REGISTRY); return;
+        case 'config/entity_registry/list': reply(registry); return;
         case 'config/device_registry/list': reply(DEVICES); return;
+        case 'media_player/browse_media': {
+          const player = states.get(message.entity_id);
+          if (!player) { connection.send(JSON.stringify({ id: message.id, type: 'result', success: false, error: { code: 'entity_not_found', message: 'Entity not found' } })); return; }
+          if (!(player.attributes.supported_features & 131072)) { connection.send(JSON.stringify({ id: message.id, type: 'result', success: false, error: { code: 'not_supported', message: 'Player does not support browsing media' } })); return; }
+          calls.push({ ws: 'browse_media', data: message });
+          const found = LIBRARY[message.media_content_id || ''];
+          if (!found) { connection.send(JSON.stringify({ id: message.id, type: 'result', success: false, error: { code: 'not_found', message: 'Media not found' } })); return; }
+          reply(found);
+          return;
+        }
+        case 'media_player/search_media': {
+          calls.push({ ws: 'search_media', data: message });
+          reply({ result: SEARCH.filter((item) => item.title.toLowerCase().includes(String(message.search_query).toLowerCase().split(' ')[0])) });
+          return;
+        }
         default: reply(null, false);
       }
     });
@@ -259,6 +370,18 @@ async function startFakeHomeAssistant({ token = 'secret-token', port = 0, wsEnab
     calls,
     states,
     setState,
+    /** Make service calls take this long, like a speaker finding a song online. */
+    setServiceDelay: (ms) => { serviceDelayMs = ms; },
+    /** Add or change an entity's registry entry ({ platform, device_id, hidden_by, ... }). */
+    setRegistryEntry: (entityId, fields) => {
+      const entry = registry.find((e) => e.entity_id === entityId);
+      if (entry) Object.assign(entry, fields);
+      else registry.push({ entity_id: entityId, ...fields });
+    },
+    /** Make the media player proxy fail, as when a picture's server is down. */
+    setProxyBroken: (broken) => { proxyBroken = broken; },
+    /** The pictures asked of the media player proxy, by path. */
+    proxyFetches,
     /** How many live subscriptions are open (one per HomeGlow link). */
     subscriptionCount: () => subscriptions.filter((sub) => sub.connection.open).length,
     dropConnections: () => { for (const c of sockets) c.close(); },

@@ -113,7 +113,9 @@ function isConfigured(db) {
 }
 
 // Calls through module.exports so tests can stub the transport.
-async function homeAssistantFetch(db, method, apiPath, body) {
+// `options.timeoutMs`: longer for a service call that waits on a slow device
+// (a speaker starting a song it first has to find online).
+async function homeAssistantFetch(db, method, apiPath, body, options = {}) {
     const { baseUrl, tokenEnc } = getConfig(db);
     if (!baseUrl) throw new Error('Home Assistant URL is not configured.');
     if (!tokenEnc) throw new Error('Home Assistant token is not configured.');
@@ -140,7 +142,7 @@ async function homeAssistantFetch(db, method, apiPath, body) {
     // HA usually lives on the LAN, so a hung socket should fail fast rather than
     // holding a weather request open until the client gives up.
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), options.timeoutMs || REQUEST_TIMEOUT_MS);
     init.signal = controller.signal;
 
     let res;

@@ -10,6 +10,8 @@
 // Hand-written plugins get the same access by declaring their entities in
 // their manifest (`homeAssistant.entities`); the same rules apply.
 
+const media = require('./haMedia');
+
 const ENTITY_ID = /^[a-z_]+\.[a-z0-9_]+$/;
 const TILE_ID = /^[a-z0-9]{1,16}$/;
 const MAX_TILES = 48;
@@ -35,7 +37,7 @@ const EMOJI_ICON = /^[^\s<>&"'`=;{}\\a-zA-Z0-9]{1,8}$/u;
 const COVER = { OPEN: 1, CLOSE: 2, SET_POSITION: 4, STOP: 8 };
 const FAN = { SET_SPEED: 1 };
 const CLIMATE = { TARGET_TEMPERATURE: 1 };
-const MEDIA = { PAUSE: 1, VOLUME_SET: 4, PREVIOUS_TRACK: 16, NEXT_TRACK: 32, PLAY: 16384 };
+const MEDIA = { PAUSE: 1, SEEK: 2, VOLUME_SET: 4, PREVIOUS_TRACK: 16, NEXT_TRACK: 32, PLAY_MEDIA: 512, STOP: 4096, PLAY: 16384, SHUFFLE_SET: 32768, GROUPING: 524288, MEDIA_ENQUEUE: 2097152 };
 const VACUUM = { PAUSE: 4, RETURN_HOME: 16, START: 8192 };
 const ALARM = { ARM_HOME: 1, ARM_AWAY: 2 };
 
@@ -167,9 +169,17 @@ const DOMAINS = {
   },
   media_player: {
     actions: {
+      // Pause when playing, play otherwise. Not media_play_pause: Home
+      // Assistant refuses that unless a player reports both play and pause,
+      // and many (Cast speakers, some Music Assistant players) report one.
       play_pause: (state) => {
-        if (!has(state, MEDIA.PAUSE) && !has(state, MEDIA.PLAY)) throw new ActionError('This player cannot play or pause');
-        return { domain: 'media_player', service: 'media_play_pause' };
+        if (state?.state === 'playing' || state?.state === 'buffering') {
+          if (has(state, MEDIA.PAUSE)) return { domain: 'media_player', service: 'media_pause' };
+          if (has(state, MEDIA.STOP)) return { domain: 'media_player', service: 'media_stop' };
+          throw new ActionError('This player cannot pause');
+        }
+        if (!has(state, MEDIA.PLAY)) throw new ActionError('This player cannot play');
+        return { domain: 'media_player', service: 'media_play' };
       },
       next: (state) => {
         if (!has(state, MEDIA.NEXT_TRACK)) throw new ActionError('This player cannot skip');
@@ -185,8 +195,108 @@ const DOMAINS = {
         if (pct === null) throw new ActionError('volume needs a number from 0 to 100');
         return { domain: 'media_player', service: 'volume_set', data: { volume_level: Math.round(pct) / 100 } };
       },
+      // A place in the playing song, in seconds (no further than its end).
+      seek: (state, value) => {
+        if (!has(state, MEDIA.SEEK)) throw new ActionError('This player cannot jump within a song');
+        const duration = Number(state?.attributes?.media_duration);
+        const seconds = numberIn(value, 0, Number.isFinite(duration) && duration > 0 ? duration : 24 * 3600);
+        if (seconds === null) throw new ActionError('seek needs a number of seconds');
+        return { domain: 'media_player', service: 'media_seek', data: { seek_position: Math.round(seconds * 10) / 10 } };
+      },
+      shuffle: (state, value) => {
+        if (!has(state, MEDIA.SHUFFLE_SET)) throw new ActionError('This player cannot shuffle');
+        if (typeof value !== 'boolean') throw new ActionError('shuffle needs true or false');
+        return { domain: 'media_player', service: 'shuffle_set', data: { shuffle: value } };
+      },
+      // Something from the player's own library (services/haMedia.js). The
+      // route turns the key a panel sends into the item HomeGlow showed it
+      // and marks it `fromLibrary`; nothing else is accepted, so a panel can
+      // never name a content id (a stream address) itself.
+      // An address on the plugin's own media server (a Jellyfin stream, say).
+      // The route checks it against the server named in the plugin's settings
+      // and marks it `fromPluginServer`; nothing else is accepted.
+      play_url: (state, value) => {
+        if (!has(state, MEDIA.PLAY_MEDIA)) throw new ActionError('This player cannot play from an address');
+        if (!isObject(value) || value.fromPluginServer !== true || typeof value.url !== 'string') {
+          throw new ActionError('play_url needs an address on the plugin\'s media server');
+        }
+        const enqueue = value.enqueue === undefined ? 'replace' : value.enqueue;
+        if (!['replace', 'add', 'next', 'play'].includes(enqueue)) throw new ActionError('enqueue must be replace, add, next or play');
+        if (enqueue !== 'replace' && !has(state, MEDIA.MEDIA_ENQUEUE)) throw new ActionError('This player cannot queue');
+        // What it is, for a speaker that shows it (Chromecast reads `extra`):
+        // otherwise a stream address is all it knows.
+        const text = (v) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, 200) : '');
+        const title = text(value.title);
+        const artist = text(value.artist);
+        const album = text(value.album);
+        const image = typeof value.image === 'string' ? value.image : null;
+        const extra = title || artist || album || image
+          ? {
+            extra: {
+              ...(title ? { title } : {}),
+              ...(image ? { thumb: image } : {}),
+              metadata: {
+                metadataType: 3,
+                ...(title ? { title } : {}),
+                ...(artist ? { artist } : {}),
+                ...(album ? { albumName: album } : {}),
+                ...(image ? { images: [{ url: image }] } : {}),
+              },
+            },
+          }
+          : {};
+        return {
+          domain: 'media_player',
+          service: 'play_media',
+          data: {
+            media_content_id: value.url,
+            media_content_type: 'music',
+            ...(has(state, MEDIA.MEDIA_ENQUEUE) ? { enqueue } : {}),
+            ...extra,
+          },
+        };
+      },
+      // Other speakers play in step with this one (Home Assistant's
+      // grouping: Music Assistant, Sonos ...). The route checks that each
+      // is a speaker the panel may operate and marks the list `checked`.
+      join: (state, value) => {
+        if (!has(state, MEDIA.GROUPING)) throw new ActionError('This player cannot be grouped');
+        if (!isObject(value) || value.checked !== true || !Array.isArray(value.members) || value.members.length === 0) {
+          throw new ActionError('join needs the speakers to group with it');
+        }
+        return { domain: 'media_player', service: 'join', data: { group_members: value.members } };
+      },
+      // This speaker leaves its group.
+      unjoin: (state) => {
+        if (!has(state, MEDIA.GROUPING)) throw new ActionError('This player cannot be grouped');
+        return { domain: 'media_player', service: 'unjoin' };
+      },
+      play_media: (state, value) => {
+        if (!has(state, MEDIA.PLAY_MEDIA)) throw new ActionError('This player cannot play from its library');
+        if (!isObject(value) || value.fromLibrary !== true
+          || typeof value.media_content_id !== 'string' || typeof value.media_content_type !== 'string') {
+          throw new ActionError('play_media needs something from the player\'s library');
+        }
+        return {
+          domain: 'media_player',
+          service: 'play_media',
+          data: {
+            media_content_id: value.media_content_id,
+            media_content_type: value.media_content_type,
+            // Play it now, rather than adding it to the end of the queue.
+            ...(has(state, MEDIA.MEDIA_ENQUEUE) ? { enqueue: 'replace' } : {}),
+          },
+        };
+      },
     },
-    attributes: ['media_title', 'media_artist', 'volume_level', 'is_volume_muted'],
+    attributes: ['media_title', 'media_artist', 'media_album_name', 'volume_level', 'is_volume_muted', 'shuffle',
+      // Where the song is: the panel draws its progress from these.
+      'media_duration', 'media_position', 'media_position_updated_at',
+      // The speakers playing together, the group's leader first.
+      'group_members'],
+    // The picture's address is never sent (Home Assistant's carries a token):
+    // a tag that changes with it, and the panel asks HomeGlow for the picture.
+    derived: (state) => ({ media_art: media.artVersion(state) }),
   },
   lock: {
     actions: {
@@ -312,6 +422,21 @@ function defaultControl(entityId, state) {
   }
 }
 
+/** A web address without its query, fragment or user name; other text as it is. */
+function withoutSecrets(text) {
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(text)) return text;
+  try {
+    const url = new URL(text);
+    url.username = '';
+    url.password = '';
+    url.search = '';
+    url.hash = '';
+    return url.toString();
+  } catch {
+    return text.split(/[?#]/)[0].replace(/\/\/[^/@]*@/, '//');
+  }
+}
+
 /** Only the attributes a panel needs, for one entity's state. */
 function filterState(state) {
   if (!state || typeof state !== 'object') return null;
@@ -321,6 +446,11 @@ function filterState(state) {
   for (const key of allowed) {
     if (state.attributes && state.attributes[key] !== undefined) attributes[key] = state.attributes[key];
   }
+  const derived = DOMAINS[domain]?.derived;
+  if (derived) Object.assign(attributes, derived(state));
+  // A speaker playing a stream may give its address as the title, and the
+  // address may carry a sign-in (Jellyfin's ?api_key=): only the place goes.
+  if (typeof attributes.media_title === 'string') attributes.media_title = withoutSecrets(attributes.media_title);
   return {
     state: state.state,
     attributes,
@@ -432,25 +562,72 @@ function accessFromRecipe(recipe) {
 }
 
 /** Problems with a hand-written plugin's `homeAssistant` manifest block. */
-function validateManifestAccess(block) {
+// Domains a plugin may be granted whole: a published plugin (a music
+// player, say) can't know a household's entity ids. Never the ones that open
+// up or watch the home: locks, alarms, covers (garage doors) and cameras.
+const GRANTABLE_DOMAINS = Object.keys(DOMAINS).filter((domain) => !['lock', 'alarm_control_panel', 'cover', 'camera'].includes(domain));
+
+/**
+ * Problems with a hand-written plugin's `homeAssistant` manifest block:
+ *   entities      ids it may use (up to 64)
+ *   domains       whole domains it may use (see GRANTABLE_DOMAINS)
+ *   control       false for read only
+ *   playUrlsFrom  the key of a household string setting naming the plugin's
+ *                 media server; play_url plays addresses on that server only
+ * `manifest`, when given, is checked for that setting.
+ */
+function validateManifestAccess(block, manifest) {
   if (!isObject(block)) return ['homeAssistant must be an object.'];
   const errors = [];
-  if (!Array.isArray(block.entities) || block.entities.length === 0 || block.entities.length > MAX_MANIFEST_ENTITIES) {
-    errors.push(`homeAssistant.entities must list 1 to ${MAX_MANIFEST_ENTITIES} entities.`);
-  } else {
-    block.entities.forEach((entityId) => {
-      if (!isSupportedEntity(entityId)) errors.push(`homeAssistant.entities: ${JSON.stringify(entityId)} is not a supported entity.`);
+  const hasEntities = block.entities !== undefined;
+  const hasDomains = block.domains !== undefined;
+  if (!hasEntities && !hasDomains) errors.push('homeAssistant needs entities or domains.');
+  if (hasEntities) {
+    if (!Array.isArray(block.entities) || block.entities.length === 0 || block.entities.length > MAX_MANIFEST_ENTITIES) {
+      errors.push(`homeAssistant.entities must list 1 to ${MAX_MANIFEST_ENTITIES} entities.`);
+    } else {
+      block.entities.forEach((entityId) => {
+        if (!isSupportedEntity(entityId)) errors.push(`homeAssistant.entities: ${JSON.stringify(entityId)} is not a supported entity.`);
+      });
+    }
+  }
+  if (hasDomains) {
+    if (!Array.isArray(block.domains) || block.domains.length === 0) errors.push('homeAssistant.domains must list at least one domain.');
+    else block.domains.forEach((domain) => {
+      if (!GRANTABLE_DOMAINS.includes(domain)) errors.push(`homeAssistant.domains: ${JSON.stringify(domain)} can't be granted whole (one of: ${GRANTABLE_DOMAINS.join(', ')}).`);
     });
   }
   if (block.control !== undefined && typeof block.control !== 'boolean') errors.push('homeAssistant.control must be true or false.');
+  if (block.playUrlsFrom !== undefined) {
+    if (typeof block.playUrlsFrom !== 'string') errors.push('homeAssistant.playUrlsFrom must name a setting.');
+    else if (manifest) {
+      const setting = Array.isArray(manifest.settings) ? manifest.settings.find((entry) => entry && entry.key === block.playUrlsFrom) : null;
+      if (!setting || setting.type !== 'string' || setting.scope === 'device') {
+        errors.push('homeAssistant.playUrlsFrom must name a household string setting the manifest declares.');
+      }
+    }
+  }
   return errors;
 }
 
 /** What a hand-written plugin's manifest lets it touch. */
 function accessFromManifest(block) {
   const read = new Set(Array.isArray(block?.entities) ? block.entities : []);
-  return { read, control: block?.control === false ? new Set() : new Set(read) };
+  const domains = new Set(Array.isArray(block?.domains) ? block.domains.filter((d) => GRANTABLE_DOMAINS.includes(d)) : []);
+  const readOnly = block?.control === false;
+  return {
+    read,
+    control: readOnly ? new Set() : new Set(read),
+    domains,
+    controlDomains: readOnly ? new Set() : new Set(domains),
+    playUrlsFrom: typeof block?.playUrlsFrom === 'string' ? block.playUrlsFrom : null,
+  };
 }
+
+/** May this access read the entity? Its own ids, or a domain granted whole. */
+const canRead = (access, entityId) => !!access && (access.read.has(entityId) || !!access.domains?.has(domainOf(entityId)));
+/** May it operate the entity? */
+const canControl = (access, entityId) => !!access && (access.control.has(entityId) || !!access.controlDomains?.has(domainOf(entityId)));
 
 /**
  * Check one action against the access a panel has, and turn it into the
@@ -459,8 +636,8 @@ function accessFromManifest(block) {
  * longer has). Returns { domain, service, data, opens }.
  */
 function resolveAction({ access, entityId, action, value, state }) {
-  if (!access.read.has(entityId)) throw new ActionError(`${entityId} is not on this panel.`, 403);
-  if (!access.control.has(entityId)) throw new ActionError(`${entityId} is view only on this panel.`, 403);
+  if (!canRead(access, entityId)) throw new ActionError(`${entityId} is not on this panel.`, 403);
+  if (!canControl(access, entityId)) throw new ActionError(`${entityId} is view only on this panel.`, 403);
   if (!state) throw new ActionError(`Home Assistant has no ${entityId}.`, 404);
   const domain = domainOf(entityId);
   const rules = DOMAINS[domain];
@@ -502,8 +679,11 @@ function panelManifest(pluginId, recipe) {
 
 module.exports = {
   ICON_NAMES,
+  GRANTABLE_DOMAINS,
   accessFromManifest,
   accessFromRecipe,
+  canControl,
+  canRead,
   defaultControl,
   domainOf,
   filterState,

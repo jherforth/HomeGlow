@@ -105,7 +105,9 @@ test('a panel reads only the attributes its tiles use', () => {
   const filtered = rules.filterState(st('media_player.tv', 'playing', {
     friendly_name: 'TV', media_title: 'News', entity_picture: '/api/media_player_proxy/tv?token=abc', access_token: 'abc', supported_features: 1,
   }));
-  assert.deepEqual(Object.keys(filtered.attributes).sort(), ['friendly_name', 'media_title', 'supported_features']);
+  // The picture's address carries a token: only a tag that changes with it.
+  assert.deepEqual(Object.keys(filtered.attributes).sort(), ['friendly_name', 'media_art', 'media_title', 'supported_features']);
+  assert.ok(!JSON.stringify(filtered).includes('abc'), 'no token, no proxy address');
   assert.equal(filtered.sensitive, false);
   assert.equal(rules.filterState(null), null);
 });
@@ -135,4 +137,121 @@ test('panel plugin ids are slugs, unique against those taken', () => {
   const manifest = rules.panelManifest('ha-kitchen', { name: 'Kitchen' });
   assert.deepEqual(manifest.events, ['ha.state']);
   assert.equal(manifest.hideableControls[0].id, 'operate');
+});
+
+const music = st('media_player.kitchen', 'paused', { supported_features: 16384 | 1 | 512 | 32768 | 2097152 });
+const plainSpeaker = st('media_player.radio', 'paused', { supported_features: 16384 | 1 });
+const musicAccess = { read: new Set(['media_player.kitchen', 'media_player.radio']), control: new Set(['media_player.kitchen', 'media_player.radio']) };
+const playAction = (entityId, value, state) => rules.resolveAction({ access: musicAccess, entityId, action: 'play_media', value, state });
+
+test('shuffle is on or off, for a player that can shuffle', () => {
+  const call = rules.resolveAction({ access: musicAccess, entityId: 'media_player.kitchen', action: 'shuffle', value: true, state: music });
+  assert.deepEqual([call.service, call.data], ['shuffle_set', { shuffle: true, entity_id: 'media_player.kitchen' }]);
+  assert.throws(() => rules.resolveAction({ access: musicAccess, entityId: 'media_player.kitchen', action: 'shuffle', value: 'yes', state: music }), /true or false/);
+  assert.throws(() => rules.resolveAction({ access: musicAccess, entityId: 'media_player.radio', action: 'shuffle', value: true, state: plainSpeaker }), /cannot shuffle/);
+});
+
+test('play_media plays only what came from the library, now rather than queued', () => {
+  const item = { media_content_id: 'library://playlist/1', media_content_type: 'playlist', fromLibrary: true };
+  const call = playAction('media_player.kitchen', item, music);
+  assert.equal(call.service, 'play_media');
+  assert.deepEqual(call.data, { media_content_id: 'library://playlist/1', media_content_type: 'playlist', enqueue: 'replace', entity_id: 'media_player.kitchen' });
+  // A panel never names a content id itself: a stream address, or the same
+  // object without the route's mark, is refused.
+  assert.throws(() => playAction('media_player.kitchen', 'http://evil.example/stream.mp3', music), /library/);
+  assert.throws(() => playAction('media_player.kitchen', { media_content_id: 'http://evil.example/a.mp3', media_content_type: 'music' }, music), /library/);
+  assert.throws(() => playAction('media_player.kitchen', { ...item, fromLibrary: 'true' }, music), /library/);
+  assert.throws(() => playAction('media_player.radio', item, plainSpeaker), /cannot play from its library/);
+  const noEnqueue = st('media_player.kitchen', 'paused', { supported_features: 512 });
+  assert.equal(playAction('media_player.kitchen', item, noEnqueue).data.enqueue, undefined, 'enqueue only where the player supports it');
+});
+
+test('seek jumps within the playing song, never past its end', () => {
+  const seekable = st('media_player.kitchen', 'playing', { supported_features: 2 | 1, media_duration: 240 });
+  const seek = (value, state = seekable) => rules.resolveAction({ access: musicAccess, entityId: 'media_player.kitchen', action: 'seek', value, state });
+  assert.deepEqual([seek(61.26).service, seek(61.26).data], ['media_seek', { seek_position: 61.3, entity_id: 'media_player.kitchen' }]);
+  assert.equal(seek(999).data.seek_position, 240);
+  assert.equal(seek(-5).data.seek_position, 0);
+  assert.throws(() => seek('soon'), /seconds/);
+  assert.throws(() => seek(10, music), /cannot jump/);
+});
+
+test('play_pause pauses a playing player and plays any other, by what it reports', () => {
+  const access = rules.accessFromRecipe({ tiles: [{ id: 't', entities: ['media_player.k'] }] });
+  const press = (state, features) => rules.resolveAction({ access, entityId: 'media_player.k', action: 'play_pause', state: st('media_player.k', state, { supported_features: features }) }).service;
+  assert.equal(press('playing', 1 | 16384), 'media_pause');
+  assert.equal(press('paused', 1 | 16384), 'media_play');
+  assert.equal(press('idle', 16384), 'media_play');
+  assert.equal(press('playing', 4096 | 16384), 'media_stop');
+  assert.throws(() => press('playing', 16384), /cannot pause/);
+  assert.throws(() => press('paused', 1), /cannot play/);
+});
+
+test('join and unjoin group speakers that can be grouped, with a checked list', () => {
+  const access = rules.accessFromRecipe({ tiles: [{ id: 't', entities: ['media_player.k'] }] });
+  const act = (action, value, features = 524288) => rules.resolveAction({ access, entityId: 'media_player.k', action, value, state: st('media_player.k', 'playing', { supported_features: features }) });
+  assert.deepEqual(act('join', { members: ['media_player.den'], checked: true }).data, { group_members: ['media_player.den'], entity_id: 'media_player.k' });
+  assert.equal(act('unjoin').service, 'unjoin');
+  assert.throws(() => act('join', ['media_player.den']), /speakers to group/);
+  assert.throws(() => act('join', { members: [], checked: true }), /speakers to group/);
+  assert.throws(() => act('join', { members: ['media_player.den'], checked: true }, 1), /cannot be grouped/);
+  assert.throws(() => act('unjoin', undefined, 1), /cannot be grouped/);
+  assert.deepEqual(rules.filterState(st('media_player.k', 'playing', { group_members: ['media_player.k', 'media_player.den'] })).attributes.group_members,
+    ['media_player.k', 'media_player.den']);
+});
+
+test('a music player shows its album and shuffle, and a picture tag', () => {
+  const filtered = rules.filterState(st('media_player.kitchen', 'playing', {
+    media_title: 'Harvest Moon', media_artist: 'Neil Young', media_album_name: 'Harvest Moon', shuffle: true,
+    entity_picture: '/api/media_player_proxy/media_player.kitchen?token=t&cache=1', media_content_id: 'library://track/9',
+    media_duration: 312, media_position: 41.5, media_position_updated_at: '2026-10-11T12:00:00+00:00',
+  }));
+  assert.deepEqual([filtered.attributes.media_duration, filtered.attributes.media_position, filtered.attributes.media_position_updated_at],
+    [312, 41.5, '2026-10-11T12:00:00+00:00']);
+  assert.equal(filtered.attributes.media_album_name, 'Harvest Moon');
+  assert.equal(filtered.attributes.shuffle, true);
+  assert.match(filtered.attributes.media_art, /^[\w-]{12}$/);
+  assert.equal(filtered.attributes.media_content_id, undefined);
+  assert.equal(rules.filterState(st('media_player.kitchen', 'idle', {})).attributes.media_art, null);
+});
+
+test('a stream address given as the title loses its sign-in', () => {
+  const title = (media_title) => rules.filterState(st('media_player.kitchen', 'playing', { media_title })).attributes.media_title;
+  assert.equal(title('http://jelly.local:8096/Audio/t1/stream.mp3?audioCodec=mp3&api_key=secret#x'), 'http://jelly.local:8096/Audio/t1/stream.mp3');
+  assert.equal(title('https://user:pw@radio.example/live'), 'https://radio.example/live');
+  assert.equal(title('Harvest Moon? (Live)'), 'Harvest Moon? (Live)');
+});
+
+test('whole-domain grants: safe domains only, read and operated alike', () => {
+  const manifest = { settings: [{ key: 'server', type: 'string' }, { key: 'local', type: 'string', scope: 'device' }] };
+  assert.deepEqual(rules.validateManifestAccess({ domains: ['media_player'] }), []);
+  assert.deepEqual(rules.validateManifestAccess({ domains: ['media_player'], playUrlsFrom: 'server' }, manifest), []);
+  assert.ok(rules.validateManifestAccess({}).length, 'needs entities or domains');
+  for (const domain of ['lock', 'alarm_control_panel', 'cover', 'camera', 'shell_command']) {
+    assert.ok(rules.validateManifestAccess({ domains: [domain] }).length, domain);
+  }
+  assert.ok(rules.validateManifestAccess({ domains: ['media_player'], playUrlsFrom: 'missing' }, manifest).length);
+  assert.ok(rules.validateManifestAccess({ domains: ['media_player'], playUrlsFrom: 'local' }, manifest).length, 'a device setting');
+
+  const access = rules.accessFromManifest({ entities: ['light.desk'], domains: ['media_player'] });
+  assert.equal(rules.canRead(access, 'media_player.anything'), true);
+  assert.equal(rules.canControl(access, 'media_player.anything'), true);
+  assert.equal(rules.canRead(access, 'light.desk'), true);
+  assert.equal(rules.canRead(access, 'light.other'), false);
+  const readOnly = rules.accessFromManifest({ domains: ['media_player'], control: false });
+  assert.equal(rules.canControl(readOnly, 'media_player.anything'), false);
+  // A panel's recipe grants no domains.
+  assert.equal(rules.canRead(rules.accessFromRecipe({ tiles: [{ id: 'a', entities: ['light.a'] }] }), 'media_player.x'), false);
+});
+
+test('play_url takes only an address the route checked', () => {
+  const speaker = st('media_player.speaker', 'idle', { supported_features: 512 | 2097152 });
+  const access = rules.accessFromManifest({ domains: ['media_player'] });
+  const call = (value) => rules.resolveAction({ access, entityId: 'media_player.speaker', action: 'play_url', value, state: speaker });
+  assert.throws(() => call({ url: 'http://x/a.mp3' }), /media server/, 'not marked as checked');
+  assert.deepEqual(call({ url: 'http://x/a.mp3', fromPluginServer: true }).data, { media_content_id: 'http://x/a.mp3', media_content_type: 'music', enqueue: 'replace', entity_id: 'media_player.speaker' });
+  assert.equal(call({ url: 'http://x/a.mp3', fromPluginServer: true, enqueue: 'add' }).data.enqueue, 'add');
+  assert.throws(() => call({ url: 'http://x/a.mp3', fromPluginServer: true, enqueue: 'shuffle' }), /enqueue/);
+  const noQueue = st('media_player.speaker', 'idle', { supported_features: 512 });
+  assert.throws(() => rules.resolveAction({ access, entityId: 'media_player.speaker', action: 'play_url', value: { url: 'http://x', fromPluginServer: true, enqueue: 'add' }, state: noQueue }), /cannot queue/);
 });

@@ -401,7 +401,13 @@ gates in `app.jsx` (sound scheduler + screensaver render), UI in `AdminPanel.jsx
 - Panels can be duplicated, copied as text and imported into another HomeGlow
   (with a step to swap entity ids), and the builder lists what panels did.
 - Hand-written plugins get the same access by declaring `homeAssistant`
-  entities in their manifest (Plugin Development guide, §5a).
+  entities in their manifest (Plugin Development guide, §5a), or a whole
+  domain (not locks, alarms, covers or cameras). Media players add their
+  library: browse and search through Home Assistant, play by key (never a
+  content id), seek, shuffle, album art (issue #264) and grouping speakers to
+  play in step; and a plugin with a
+  media server of its own (Jellyfin) may play addresses on that server only.
+  The Music plugin in HomeGlowPlugins is built on these.
 
 **Code:** `HomeAssistantPanels.jsx`, `utils/haPanelBuilder.js`; backend
 `routes/haPanels.js`, `services/haPanels.js` (rules), `services/haLive.js`

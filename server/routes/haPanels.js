@@ -19,6 +19,15 @@
 //   POST /api/plugin/v1/ha/:pluginId/action   { entity | entities, action, value, pin, device }
 //   GET  /api/plugin/v1/ha/:pluginId/camera/:entityId
 //
+// Music, for a media player on the panel (services/haMedia.js):
+//   GET    /api/plugin/v1/ha/:pluginId/media/:entityId/browse?item=   its library, a level at a time
+//   GET    /api/plugin/v1/ha/:pluginId/media/:entityId/search?q=      search it (and remember the search)
+//   GET    /api/plugin/v1/ha/:pluginId/media/:entityId/recent         the panel's recent searches
+//   DELETE /api/plugin/v1/ha/:pluginId/media/:entityId/recent         forget them
+//   GET    /api/plugin/v1/ha/:pluginId/media/:entityId/art            the playing item's picture
+//   GET    /api/plugin/v1/ha/:pluginId/media/:entityId/image/:key     a picture in the library
+// and the action play_media takes an item's key from browse or search.
+//
 // Every one of these is checked against the panel's own recipe (or the
 // plugin's manifest): a panel reads and operates only its own entities, with
 // only the actions that fit each one. The Home Assistant token never leaves
@@ -28,6 +37,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const rules = require('../services/haPanels');
+const media = require('../services/haMedia');
 
 const TEMPLATE_PATH = path.join(__dirname, '..', 'ha-panels', 'template.html');
 const TEMPLATE_VERSION = 1;
@@ -35,6 +45,17 @@ const PIN_PROTECTION_KEY = 'HA_PANEL_PIN_PROTECTION';
 const HISTORY_KEEP = 1000;
 const RATE_WINDOW_MS = 1000;
 const RATE_LIMIT = 10;
+const RECENT_KEY_PREFIX = 'HA_MEDIA_RECENT:';
+// A music service can take a while to list an artist or find a song.
+const LIBRARY_TIMEOUT_MS = 30000;
+// A speaker can take seconds to start a song it first has to find online
+// (Music Assistant resolving a YouTube Music track, then AirPlay buffering).
+// Such calls may run this long; the panel hears back after QUICK_ANSWER_MS
+// at most and watches the player for the change.
+const SLOW_CALL_TIMEOUT_MS = 45000;
+const QUICK_ANSWER_MS = 1500;
+const SLOW_ACTIONS = new Set(['play_pause', 'next', 'previous', 'play_media', 'play_url', 'seek', 'join', 'unjoin']);
+const MAX_GROUP = 8;
 
 const isObject = (value) => !!value && typeof value === 'object' && !Array.isArray(value);
 const parseJson = (text, fallback) => {
@@ -67,7 +88,7 @@ function lazyDb(getDb) {
   });
 }
 
-function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginRow }) {
+function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginRow, readPluginSetting = () => null }) {
   let templateCache = null;
   const template = () => {
     if (!templateCache || process.env.NODE_ENV === 'development') templateCache = fs.readFileSync(TEMPLATE_PATH, 'utf8');
@@ -109,11 +130,37 @@ function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginR
       return panel ? rules.accessFromRecipe(parseJson(panel.recipe_json, {})) : null;
     }
     const manifest = parseJson(row.manifest_json || 'null', null);
-    if (manifest?.homeAssistant && rules.validateManifestAccess(manifest.homeAssistant).length === 0) {
+    if (manifest?.homeAssistant && rules.validateManifestAccess(manifest.homeAssistant, manifest).length === 0) {
       return rules.accessFromManifest(manifest.homeAssistant);
     }
     return null;
   }
+
+  /**
+   * Every entity a plugin may read: its own ids and, for a domain grant,
+   * each one there that the household hasn't hidden or disabled in Home
+   * Assistant.
+   */
+  async function readableIds(access, registry) {
+    const ids = new Set(access.read);
+    if (access.domains?.size) {
+      for (const id of await live.entityIdsIn([...access.domains])) {
+        const entry = registry?.get(id);
+        if (!entry || (!entry.hidden_by && !entry.disabled_by)) ids.add(id);
+      }
+    }
+    return [...ids];
+  }
+
+  // Where an entity comes from: its integration, and a tag for its device
+  // (the same for every entity of one device), so a plugin can tell one
+  // speaker's several entities apart (Music Assistant's, Cast's, DLNA's).
+  const sourceOf = (entry) => (entry ? {
+    integration: typeof entry.platform === 'string' ? entry.platform.slice(0, 60) : null,
+    device: typeof entry.device_id === 'string' && entry.device_id
+      ? crypto.createHash('sha256').update(entry.device_id).digest('base64url').slice(0, 12)
+      : null,
+  } : null);
 
   /** Every entity any panel or plugin reads, so the live link watches them. */
   function watchedEntities() {
@@ -123,8 +170,11 @@ function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginR
     }
     for (const row of db.prepare("SELECT manifest_json FROM plugins WHERE source != 'builder' AND manifest_json LIKE '%homeAssistant%'").all()) {
       const manifest = parseJson(row.manifest_json, null);
-      if (manifest?.homeAssistant && rules.validateManifestAccess(manifest.homeAssistant).length === 0) {
-        rules.accessFromManifest(manifest.homeAssistant).read.forEach((id) => ids.add(id));
+      if (manifest?.homeAssistant && rules.validateManifestAccess(manifest.homeAssistant, manifest).length === 0) {
+        const access = rules.accessFromManifest(manifest.homeAssistant);
+        access.read.forEach((id) => ids.add(id));
+        // Domain grants: the entities last listed there (the state route lists them).
+        live.knownIdsIn([...access.domains]).forEach((id) => ids.add(id));
       }
     }
     return ids;
@@ -352,7 +402,12 @@ function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginR
     if (demoBlocked(reply)) return;
     const row = db.prepare('SELECT plugin_row_id FROM ha_panels WHERE id = ?').get(Number(request.params.id));
     if (!row) return reply.status(404).send({ error: 'No such panel.' });
+    const plugin = db.prepare('SELECT plugin_id FROM plugins WHERE id = ?').get(row.plugin_row_id);
     db.prepare('DELETE FROM plugins WHERE id = ?').run(row.plugin_row_id);
+    if (plugin?.plugin_id) {
+      db.prepare('DELETE FROM settings WHERE key = ?').run(RECENT_KEY_PREFIX + plugin.plugin_id);
+      catalog.forget(plugin.plugin_id);
+    }
     refreshWatched();
     return { success: true };
   });
@@ -366,6 +421,35 @@ function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginR
 
   // --- What panels call ----------------------------------------------------------
 
+  /**
+   * An address a plugin asks to play_url, checked against its media server:
+   * the setting named by its manifest's `homeAssistant.playUrlsFrom`. Same
+   * scheme, host and port, and under the same path. -> { url } or { error, status }.
+   */
+  function mediaServerUrl(pluginId, access, value) {
+    if (!access.playUrlsFrom) return { error: 'This plugin may not play addresses.', status: 403 };
+    const base = readPluginSetting(pluginId, access.playUrlsFrom);
+    let server;
+    let wanted;
+    try {
+      server = new URL(String(base || ''));
+    } catch {
+      return { error: 'Set the media server address in this plugin\'s settings first.', status: 400 };
+    }
+    try {
+      wanted = new URL(String(value?.url || ''));
+    } catch {
+      return { error: 'That is not an address.', status: 400 };
+    }
+    const serverPath = server.pathname.endsWith('/') ? server.pathname : `${server.pathname}/`;
+    if (!/^https?:$/.test(server.protocol) || wanted.protocol !== server.protocol || wanted.host !== server.host
+      || !(`${wanted.pathname}`).startsWith(serverPath) || String(value.url).length > 2048 || wanted.username || wanted.password) {
+      return { error: 'That address is not on this plugin\'s media server.', status: 403 };
+    }
+    return { url: wanted.toString() };
+  }
+
+  const catalog = new media.MediaCatalog();
   const rate = new Map();
   const overLimit = (pluginId) => {
     const now = Date.now();
@@ -402,13 +486,20 @@ function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginR
     const access = accessFor(request.params.pluginId);
     if (!access) return reply.status(404).send({ error: 'This plugin has no Home Assistant access.' });
     if (demoMode || !ha.isConfigured(db)) return unavailable(reply);
-    const ids = [...access.read];
-    // A panel or plugin added since: start watching its entities.
+    let ids;
+    const registry = await live.entityRegistry().catch(() => null);
+    try {
+      ids = await readableIds(access, registry);
+    } catch (error) {
+      return reply.status(error.status && error.status < 600 ? error.status : 503).send({ error: error.message });
+    }
+    // A panel or plugin added since, or a new entity in a granted domain: watch it.
     if (ids.some((id) => !live.watched.has(id))) refreshWatched();
     const { states, live: isLive, error } = await live.getStates(ids);
     return {
       entities: Object.fromEntries(ids.map((id) => [id, states[id] === undefined ? undefined : rules.filterState(states[id])])),
-      control: [...access.control],
+      control: ids.filter((id) => rules.canControl(access, id)),
+      sources: Object.fromEntries(ids.map((id) => [id, sourceOf(registry?.get(id))])),
       live: isLive,
       unit: await live.temperatureUnit(),
       pinProtection: pinProtection(),
@@ -428,12 +519,56 @@ function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginR
     if (typeof action !== 'string') return reply.status(400).send({ error: 'Name the action.' });
     if (overLimit(pluginId)) return reply.status(429).send({ error: 'Too many presses at once; try again.' });
 
+    // play_media takes the key of something HomeGlow showed this panel from
+    // the player's library; the content id itself never comes from a panel.
+    let actionValue = value;
+    if (action === 'play_media') {
+      const item = catalog.item(pluginId, value);
+      if (!item) {
+        logAction({ pluginId, device, entity: targets.join(','), action, ok: false, error: 'not from the library' });
+        return reply.status(410).send({ error: 'That list is out of date. Open it again.', stale: true });
+      }
+      actionValue = { media_content_id: item.id, media_content_type: item.type, fromLibrary: true };
+    }
+    // play_url plays an address on the plugin's own media server: the one the
+    // household named in the setting its manifest points to (a Jellyfin
+    // server, say), and no other.
+    // join groups other speakers with this one: each must be a speaker this
+    // panel may operate, and not the one being joined to.
+    if (action === 'join') {
+      const members = Array.isArray(value) ? [...new Set(value)] : [];
+      const bad = members.length === 0 || members.length > MAX_GROUP || members.some((id) => typeof id !== 'string'
+        || rules.domainOf(id) !== 'media_player' || targets.includes(id) || !rules.canControl(access, id));
+      if (bad) {
+        logAction({ pluginId, device, entity: targets.join(','), action, ok: false, error: 'not speakers it may group' });
+        return reply.status(400).send({ error: `join needs 1 to ${MAX_GROUP} other speakers this panel may operate.` });
+      }
+      actionValue = { members, checked: true };
+    }
+    if (action === 'play_url') {
+      const checked = mediaServerUrl(pluginId, access, value);
+      if (checked.error) {
+        logAction({ pluginId, device, entity: targets.join(','), action, ok: false, error: checked.error });
+        return reply.status(checked.status).send({ error: checked.error });
+      }
+      // A cover, if one is sent, must be on the same server.
+      let image;
+      if (value?.image !== undefined) {
+        const cover = mediaServerUrl(pluginId, access, { url: value.image });
+        if (cover.error) return reply.status(cover.status).send({ error: `The cover: ${cover.error}` });
+        image = cover.url;
+      }
+      actionValue = {
+        url: checked.url, enqueue: value?.enqueue, title: value?.title, artist: value?.artist, album: value?.album, image, fromPluginServer: true,
+      };
+    }
+
     const { states } = await live.getStates(targets);
     let calls;
     try {
       calls = targets.map((entityId) => ({
         entityId,
-        ...rules.resolveAction({ access, entityId, action, value, state: states[entityId] }),
+        ...rules.resolveAction({ access, entityId, action, value: actionValue, state: states[entityId] }),
       }));
     } catch (error) {
       logAction({ pluginId, device, entity: targets.join(','), action, ok: false, error: error.message });
@@ -451,13 +586,36 @@ function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginR
     }
 
     const results = {};
-    for (const call of calls) {
-      try {
-        await live.callService(call.domain, call.service, call.data);
+    const slow = SLOW_ACTIONS.has(action) && calls.every((call) => call.domain === 'media_player');
+    const run = (call) => live.callService(call.domain, call.service, call.data, slow ? { timeoutMs: SLOW_CALL_TIMEOUT_MS } : undefined)
+      .then(() => {
         logAction({ pluginId, device, entity: call.entityId, action, ok: true });
-      } catch (error) {
+        return { ok: true };
+      }, (error) => {
         logAction({ pluginId, device, entity: call.entityId, action, ok: false, error: error.message });
-        return reply.status(error.status && error.status < 600 ? error.status : 502).send({ error: error.message });
+        return { ok: false, error };
+      });
+    const failed = (outcome) => {
+      const { error } = outcome;
+      return reply.status(error.status && error.status < 600 ? error.status : 502).send({ error: error.message });
+    };
+    if (slow) {
+      // Speakers can take seconds to answer (finding a song online, then
+      // buffering). Every call starts now; if they are still going after a
+      // moment, the panel hears so and watches the player for the change.
+      const all = Promise.all(calls.map(run));
+      const outcomes = await Promise.race([all, new Promise((resolve) => { setTimeout(() => resolve(null), QUICK_ANSWER_MS).unref?.(); })]);
+      if (outcomes === null) {
+        const now = await live.getStates(targets);
+        for (const id of targets) results[id] = rules.filterState(now.states[id]);
+        return { ok: true, pending: true, entities: results };
+      }
+      const bad = outcomes.find((outcome) => !outcome.ok);
+      if (bad) return failed(bad);
+    } else {
+      for (const call of calls) {
+        const outcome = await run(call);
+        if (!outcome.ok) return failed(outcome);
       }
     }
     const after = await live.getStates(targets);
@@ -468,7 +626,7 @@ function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginR
   fastify.get('/api/plugin/v1/ha/:pluginId/camera/:entityId', async (request, reply) => {
     const { pluginId, entityId } = request.params;
     const access = accessFor(pluginId);
-    if (!access || !access.read.has(entityId) || rules.domainOf(entityId) !== 'camera') {
+    if (!access || !rules.canRead(access, entityId) || rules.domainOf(entityId) !== 'camera') {
       return reply.status(404).send({ error: 'No such camera on this panel.' });
     }
     if (demoMode || !ha.isConfigured(db)) return unavailable(reply);
@@ -479,6 +637,154 @@ function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginR
       return reply.send(buffer);
     } catch (error) {
       return reply.status(error.status && error.status < 600 ? error.status : 502).send({ error: error.message });
+    }
+  });
+
+  // --- Music: a media player's library ------------------------------------------
+
+  const sendError = (reply, error) => reply.status(error.status && error.status >= 400 && error.status < 600 ? error.status : 502)
+    .send({ error: error.message || 'Home Assistant did not answer.' });
+
+  /**
+   * The media player a music request is about, checked against the panel:
+   * { pluginId, entityId, state } or null once a refusal is sent. Browsing
+   * and searching lead to playing, so they need a player the panel may
+   * operate; pictures only one it may read.
+   */
+  async function mediaTarget(request, reply, { operate }) {
+    const { pluginId, entityId } = request.params;
+    const access = accessFor(pluginId);
+    if (!access) {
+      reply.status(404).send({ error: 'This plugin has no Home Assistant access.' });
+      return null;
+    }
+    if (rules.domainOf(entityId) !== 'media_player' || !rules.canRead(access, entityId)) {
+      reply.status(404).send({ error: 'No such player on this panel.' });
+      return null;
+    }
+    if (operate && !rules.canControl(access, entityId)) {
+      reply.status(403).send({ error: `${entityId} is view only on this panel.` });
+      return null;
+    }
+    if (demoMode || !ha.isConfigured(db)) {
+      unavailable(reply);
+      return null;
+    }
+    const { states } = await live.getStates([entityId]);
+    const state = states[entityId];
+    if (!state) {
+      reply.status(404).send({ error: `Home Assistant has no ${entityId}.` });
+      return null;
+    }
+    return { pluginId, entityId, state };
+  }
+
+  const imageUrlFor = (pluginId, entityId) => (key) => `/api/plugin/v1/ha/${encodeURIComponent(pluginId)}/media/${encodeURIComponent(entityId)}/image/${key}`;
+  const mediaContext = (target) => ({ catalog, pluginId: target.pluginId, imageUrl: imageUrlFor(target.pluginId, target.entityId) });
+
+  const readRecent = (pluginId) => {
+    const raw = db.prepare('SELECT value FROM settings WHERE key = ?').get(RECENT_KEY_PREFIX + pluginId)?.value;
+    const list = parseJson(raw || '[]', []);
+    return Array.isArray(list) ? media.addRecent(list, null) : [];
+  };
+  const writeRecent = (pluginId, list) => {
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(RECENT_KEY_PREFIX + pluginId, JSON.stringify(list));
+  };
+
+  fastify.get('/api/plugin/v1/ha/:pluginId/media/:entityId/browse', async (request, reply) => {
+    const target = await mediaTarget(request, reply, { operate: true });
+    if (!target) return undefined;
+    if (!media.canBrowse(target.state)) return reply.status(400).send({ error: 'This player has no library to browse.' });
+    if (overLimit(target.pluginId)) return reply.status(429).send({ error: 'Too many requests at once; try again.' });
+    const key = request.query?.item;
+    const message = { type: 'media_player/browse_media', entity_id: target.entityId };
+    if (key) {
+      const item = catalog.item(target.pluginId, key);
+      if (!item) return reply.status(410).send({ error: 'That list is out of date. Open it again.', stale: true });
+      message.media_content_id = item.id;
+      message.media_content_type = item.type;
+    }
+    try {
+      return media.browseResult(await live.command(message, { timeoutMs: LIBRARY_TIMEOUT_MS }), mediaContext(target));
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  fastify.get('/api/plugin/v1/ha/:pluginId/media/:entityId/search', async (request, reply) => {
+    const target = await mediaTarget(request, reply, { operate: true });
+    if (!target) return undefined;
+    if (!media.canSearch(target.state)) return reply.status(400).send({ error: 'This player cannot search.' });
+    const query = media.normalizeQuery(request.query?.q);
+    if (!query) return reply.status(400).send({ error: 'Type something to search for.' });
+    if (overLimit(target.pluginId)) return reply.status(429).send({ error: 'Too many requests at once; try again.' });
+    try {
+      const result = await live.command({ type: 'media_player/search_media', entity_id: target.entityId, search_query: query }, { timeoutMs: LIBRARY_TIMEOUT_MS });
+      const recent = media.addRecent(readRecent(target.pluginId), query);
+      writeRecent(target.pluginId, recent);
+      return { query, ...media.searchResult(result, mediaContext(target)), recent };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  fastify.get('/api/plugin/v1/ha/:pluginId/media/:entityId/recent', async (request, reply) => {
+    const target = await mediaTarget(request, reply, { operate: true });
+    if (!target) return undefined;
+    return { recent: readRecent(target.pluginId) };
+  });
+
+  fastify.delete('/api/plugin/v1/ha/:pluginId/media/:entityId/recent', async (request, reply) => {
+    const target = await mediaTarget(request, reply, { operate: true });
+    if (!target) return undefined;
+    writeRecent(target.pluginId, []);
+    return { recent: [] };
+  });
+
+  // The playing item's picture. One on the web is a redirect (the browser
+  // fetches it, not HomeGlow); one Home Assistant signs for is fetched here.
+  fastify.get('/api/plugin/v1/ha/:pluginId/media/:entityId/art', async (request, reply) => {
+    const target = await mediaTarget(request, reply, { operate: false });
+    if (!target) return undefined;
+    const source = media.artSource(target.state);
+    if (!source) return reply.status(404).send({ error: 'Nothing is showing a picture.' });
+    // A picture on the web comes through Home Assistant's media player
+    // proxy, which can reach it when a display can't: Music Assistant gives
+    // its own server's address, often inside the home network or plain
+    // http on an https dashboard. Only if Home Assistant can't fetch it is
+    // the browser sent to the address itself.
+    if (source.web) {
+      try {
+        const { buffer, contentType } = await ha.homeAssistantFetchImage(db, `/api/media_player_proxy/${encodeURIComponent(target.entityId)}`);
+        reply.header('Content-Type', contentType);
+        reply.header('Cache-Control', 'private, max-age=3600');
+        return reply.send(buffer);
+      } catch {
+        return reply.redirect(source.web, 302);
+      }
+    }
+    try {
+      const { buffer, contentType } = await ha.homeAssistantFetchImage(db, source.path);
+      reply.header('Content-Type', contentType);
+      reply.header('Cache-Control', 'private, max-age=3600');
+      return reply.send(buffer);
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  fastify.get('/api/plugin/v1/ha/:pluginId/media/:entityId/image/:key', async (request, reply) => {
+    const target = await mediaTarget(request, reply, { operate: false });
+    if (!target) return undefined;
+    const path = catalog.image(target.pluginId, request.params.key);
+    if (!path) return reply.status(404).send({ error: 'No such picture.' });
+    try {
+      const { buffer, contentType } = await ha.homeAssistantFetchImage(db, path);
+      reply.header('Content-Type', contentType);
+      reply.header('Cache-Control', 'private, max-age=86400');
+      return reply.send(buffer);
+    } catch (error) {
+      return sendError(reply, error);
     }
   });
 
