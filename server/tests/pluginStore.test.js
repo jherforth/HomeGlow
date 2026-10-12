@@ -158,6 +158,8 @@ test('POST /api/widgets/upload stores a widget in the DB and serves it', async (
     assert.ok(served.body.includes('uploaded widget'));
     // The overflow fix is injected into every served widget.
     assert.ok(served.body.includes('overflow-x:hidden'));
+    // The dashboard's frame draws the background, not the page.
+    assert.ok(served.body.includes('background-color:transparent!important'));
 });
 
 test('upload rejects non-HTML files', async () => {
