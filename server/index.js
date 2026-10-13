@@ -219,6 +219,7 @@ const pluginEvents = require('./services/pluginEvents');
 const haPanelRules = require('./services/haPanels');
 const { HaLive } = require('./services/haLive');
 const { registerHaPanelRoutes, lazyDb } = require('./routes/haPanels');
+const { registerRoutineRoutes } = require('./routes/routines');
 const initializeDatabase = require('./migrations/initializeDatabase');
 const migrateChoresDatabase = require('./migrations/migrateChoresDatabase');
 const migrateClamsToHistory = require('./migrations/migrateClamsToHistory');
@@ -251,6 +252,8 @@ const schemaMigrations = [
   { schemaId: 26, migrationPath: './migrations/schema26-keepLegacyTimezone', },
   { schemaId: 27, migrationPath: './migrations/schema27-choreFollowups', },
   { schemaId: 28, migrationPath: './migrations/schema28-haPanels', },
+  { schemaId: 29, migrationPath: './migrations/schema29-routines', },
+  { schemaId: 30, migrationPath: './migrations/schema30-importRoutinesPlugin', },
 ];
 
 const ALLOWED_SCHEDULE_DURATIONS = new Set(['day-of', 'until-completed', 'once-completed']);
@@ -1061,6 +1064,21 @@ const haPanels = registerHaPanelRoutes(fastify, {
     const value = readHouseholdPluginSettings(pluginId)[key];
     return typeof value === 'string' ? value : null;
   },
+});
+
+// Routines: steps a child ticks off, each routine one ordinary chore
+// (routes/routines.js). Chore completion is shared with the chore routes.
+const routines = registerRoutineRoutes(fastify, {
+  db: haDb,
+  pluginEvents,
+  completeChoreSchedule: (input) => completeChoreSchedule(input),
+  uncompleteChoreSchedule: (input) => uncompleteChoreSchedule(input),
+  timezone: () => APP_TIMEZONE,
+  today: () => getTodayLocalDateString(),
+  // The cached events, read even where calendar sync jobs are turned off (a
+  // reader without jobs: the constructor starts nothing).
+  calendarEvents: (from, to) => (calendarSyncService || new CalendarSyncService(db, decryptPassword)).getCachedEvents(from, to),
+  demoBlocked,
 });
 
 // Helper: Load legacy on-disk widget registry (kept for the debug endpoint)
@@ -2368,6 +2386,11 @@ async function dailyBackgroundProcessing() {
     console.log(`  - Orphaned chores deleted: ${prunedChoreCount}`);
     console.log(`  - Bonus chores reset: ${resetScheduleCount}`);
     console.log(`  - Sticky chores triggered: ${stickySchedulesCreated}`);
+    try {
+      routines.nightly();
+    } catch (error) {
+      console.error('Routines nightly tidy failed:', error);
+    }
     console.log(`Total: ${prunedScheduleCount + prunedChoreCount + resetScheduleCount} operations performed`);
     return results;
   } catch (error) {
@@ -2787,7 +2810,8 @@ function normalizeChoreIcon(icon) {
 // Chore routes (updated for new schema)
 fastify.get('/api/chores', async (request, reply) => {
   try {
-    const rows = db.prepare('SELECT * FROM chores').all();
+    // routine_id: a chore a routine owns, which Family → Routines manages.
+    const rows = db.prepare('SELECT c.*, r.id AS routine_id FROM chores c LEFT JOIN routines r ON r.chore_id = c.id').all();
     // Each chore's follow-ups by title, for the chips in the Admin Panel (#241).
     const followups = db.prepare(`
       SELECT f.id, f.chore_id, f.followup_chore_id, c.title
@@ -2928,9 +2952,11 @@ fastify.get('/api/chore-schedules', async (request, reply) => {
     const { user_id, visible, usage, chore_id } = request.query;
     // followup_of: the chore whose completion handed this one on, for the
     // "after Run the dishwasher" caption in the widget (issue #241).
-    let query = 'SELECT cs.*, c.title, c.description, c.clam_value, c.icon, tc.title AS followup_of ' +
+    // routine_id: a schedule of a routine's chore (see /api/routines/today).
+    let query = 'SELECT cs.*, c.title, c.description, c.clam_value, c.icon, tc.title AS followup_of, rt.id AS routine_id ' +
       'FROM chore_schedules cs JOIN chores c ON cs.chore_id = c.id ' +
-      'LEFT JOIN chore_followups fr ON fr.id = cs.followup_rule_id LEFT JOIN chores tc ON tc.id = fr.chore_id';
+      'LEFT JOIN chore_followups fr ON fr.id = cs.followup_rule_id LEFT JOIN chores tc ON tc.id = fr.chore_id ' +
+      'LEFT JOIN routines rt ON rt.chore_id = cs.chore_id';
     const conditions = [];
     const params = [];
 
@@ -3735,134 +3761,149 @@ function revokeDailyRegularBonus(userId, date) {
 }
 
 // Chore completion endpoints
-fastify.post('/api/chores/complete', async (request, reply) => {
-  const { chore_schedule_id, user_id, date } = request.body;
-  try {
-    if (!chore_schedule_id || !user_id || !date) {
-      return reply.status(400).send({ error: 'chore_schedule_id, user_id, and date are required' });
+// A chore done (or undone) for a day, shared by the chore routes and by
+// Routines, which completes a routine's chore when its last step is ticked.
+// { status, error } when it can't be, otherwise the result.
+function completeChoreSchedule(input) {
+  const { chore_schedule_id, user_id, date } = input || {};
+  if (!chore_schedule_id || !user_id || !date) {
+    return { status: 400, error: 'chore_schedule_id, user_id, and date are required' };
+  }
+
+  const schedule = db.prepare('SELECT cs.*, c.clam_value, c.title FROM chore_schedules cs JOIN chores c ON cs.chore_id = c.id WHERE cs.id = ?').get(chore_schedule_id);
+  if (!schedule) {
+    return { status: 404, error: 'Schedule not found' };
+  }
+
+  if (!schedule.visible) {
+    return { status: 400, error: 'Schedule is not visible' };
+  }
+
+  // A 'missed' row must not block completion (retroactive catch-up is
+  // legitimate); it is replaced by the completion below (issue #72).
+  const existing = db.prepare("SELECT id FROM chore_history WHERE chore_schedule_id = ? AND user_id = ? AND date = ? AND kind <> 'missed'").get(chore_schedule_id, user_id, date);
+  if (existing) {
+    return { status: 409, error: 'Chore already completed for this date' };
+  }
+
+  // One transaction: the completion and the follow-ups it hands on are
+  // written together or not at all (issue #241).
+  const recordCompletion = db.transaction(() => {
+    db.prepare("DELETE FROM chore_history WHERE chore_schedule_id = ? AND user_id = ? AND date = ? AND kind = 'missed'").run(chore_schedule_id, user_id, date);
+    db.prepare("INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind) VALUES (?, ?, ?, ?, ?, 'completion')").run(user_id, chore_schedule_id, date, schedule.clam_value, schedule.title);
+
+    // Pay out a pending transfer bonus (attached by the parent when moving
+    // this chore to a kid whose day was already complete) and clear it so it
+    // pays only once.
+    if (schedule.transfer_bonus_clams > 0) {
+      db.prepare("INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind) VALUES (?, ?, ?, ?, ?, 'transfer_bonus')").run(user_id, chore_schedule_id, date, schedule.transfer_bonus_clams, 'Transfer bonus');
+      db.prepare('UPDATE chore_schedules SET transfer_bonus_clams = 0 WHERE id = ?').run(chore_schedule_id);
     }
 
-    const schedule = db.prepare('SELECT cs.*, c.clam_value, c.title FROM chore_schedules cs JOIN chores c ON cs.chore_id = c.id WHERE cs.id = ?').get(chore_schedule_id);
-    if (!schedule) {
-      return reply.status(404).send({ error: 'Schedule not found' });
-    }
+    if (schedule.parent_schedule_id) {
+      const parentSchedule = db.prepare('SELECT id, duration, interval FROM chore_schedules WHERE id = ?').get(schedule.parent_schedule_id);
+      if (parentSchedule && parentSchedule.duration === 'once-completed') {
+        const completionDate = parseDateOnlyToLocalDate(date);
+        const nextDueDate = completionDate ? addIntervalToDate(completionDate, parentSchedule.interval) : null;
+        const nextCrontab = buildDateCrontab(nextDueDate);
 
-    if (!schedule.visible) {
-      return reply.status(400).send({ error: 'Schedule is not visible' });
-    }
-
-    // A 'missed' row must not block completion (retroactive catch-up is
-    // legitimate); it is replaced by the completion below (issue #72).
-    const existing = db.prepare("SELECT id FROM chore_history WHERE chore_schedule_id = ? AND user_id = ? AND date = ? AND kind <> 'missed'").get(chore_schedule_id, user_id, date);
-    if (existing) {
-      return reply.status(409).send({ error: 'Chore already completed for this date' });
-    }
-
-    // One transaction: the completion and the follow-ups it hands on are
-    // written together or not at all (issue #241).
-    const recordCompletion = db.transaction(() => {
-      db.prepare("DELETE FROM chore_history WHERE chore_schedule_id = ? AND user_id = ? AND date = ? AND kind = 'missed'").run(chore_schedule_id, user_id, date);
-      db.prepare("INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind) VALUES (?, ?, ?, ?, ?, 'completion')").run(user_id, chore_schedule_id, date, schedule.clam_value, schedule.title);
-
-      // Pay out a pending transfer bonus (attached by the parent when moving
-      // this chore to a kid whose day was already complete) and clear it so it
-      // pays only once.
-      if (schedule.transfer_bonus_clams > 0) {
-        db.prepare("INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind) VALUES (?, ?, ?, ?, ?, 'transfer_bonus')").run(user_id, chore_schedule_id, date, schedule.transfer_bonus_clams, 'Transfer bonus');
-        db.prepare('UPDATE chore_schedules SET transfer_bonus_clams = 0 WHERE id = ?').run(chore_schedule_id);
-      }
-
-      if (schedule.parent_schedule_id) {
-        const parentSchedule = db.prepare('SELECT id, duration, interval FROM chore_schedules WHERE id = ?').get(schedule.parent_schedule_id);
-        if (parentSchedule && parentSchedule.duration === 'once-completed') {
-          const completionDate = parseDateOnlyToLocalDate(date);
-          const nextDueDate = completionDate ? addIntervalToDate(completionDate, parentSchedule.interval) : null;
-          const nextCrontab = buildDateCrontab(nextDueDate);
-
-          if (nextCrontab) {
-            db.prepare('UPDATE chore_schedules SET crontab = ?, visible = 1 WHERE id = ?').run(nextCrontab, parentSchedule.id);
-          } else {
-            console.warn(`Could not reschedule once-completed parent schedule ${parentSchedule.id}; invalid interval: ${parentSchedule.interval}`);
-          }
+        if (nextCrontab) {
+          db.prepare('UPDATE chore_schedules SET crontab = ?, visible = 1 WHERE id = ?').run(nextCrontab, parentSchedule.id);
+        } else {
+          console.warn(`Could not reschedule once-completed parent schedule ${parentSchedule.id}; invalid interval: ${parentSchedule.interval}`);
         }
       }
+    }
 
-      return createFollowupsForCompletion(schedule, date);
-    });
-    const followupsCreated = recordCompletion();
+    return createFollowupsForCompletion(schedule, date);
+  });
+  const followupsCreated = recordCompletion();
 
-    // Announce this completion before awarding the daily bonus, because the
-    // award emits chore.allCompleted. Emitting in the other order would tell a
-    // subscriber the day was finished while the chore that finished it had not
-    // been announced yet — a plugin counting completions would be one short.
-    pluginEvents.emit('chore.completed', {
-      userId: user_id,
-      choreId: schedule.chore_id,
-      scheduleId: chore_schedule_id,
-      clamValue: schedule.clam_value,
-      date,
-    });
+  // Announce this completion before awarding the daily bonus, because the
+  // award emits chore.allCompleted. Emitting in the other order would tell a
+  // subscriber the day was finished while the chore that finished it had not
+  // been announced yet — a plugin counting completions would be one short.
+  pluginEvents.emit('chore.completed', {
+    userId: user_id,
+    choreId: schedule.chore_id,
+    scheduleId: chore_schedule_id,
+    clamValue: schedule.clam_value,
+    date,
+  });
 
-    awardDailyRegularBonusIfDue(user_id, date);
+  awardDailyRegularBonusIfDue(user_id, date);
 
-    // Read the total after the award so the response includes the bonus.
-    const totalResult = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(user_id);
+  // Read the total after the award so the response includes the bonus.
+  const totalResult = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(user_id);
 
-    return { success: true, clam_total: totalResult.total, followups_created: followupsCreated };
+  return { success: true, clam_total: totalResult.total, followups_created: followupsCreated };
+}
+
+fastify.post('/api/chores/complete', async (request, reply) => {
+  try {
+    const result = completeChoreSchedule(request.body);
+    if (result.error) return reply.status(result.status).send({ error: result.error });
+    return result;
   } catch (error) {
     console.error('Error completing chore:', error);
     reply.status(500).send({ error: 'Failed to complete chore' });
   }
 });
 
+function uncompleteChoreSchedule(input) {
+  const { chore_schedule_id, user_id, date } = input || {};
+  if (!chore_schedule_id || !user_id || !date) {
+    return { status: 400, error: 'chore_schedule_id, user_id, and date are required' };
+  }
+
+  // kind-based lookup finds the actual completion record, never a transfer
+  // payout or a stale missed row (issue #72).
+  const history = db.prepare("SELECT id, clam_value FROM chore_history WHERE chore_schedule_id = ? AND user_id = ? AND date = ? AND kind = 'completion'").get(chore_schedule_id, user_id, date);
+  if (!history) {
+    return { status: 404, error: 'Completion record not found' };
+  }
+
+  db.prepare('DELETE FROM chore_history WHERE id = ?').run(history.id);
+
+  // If completing this chore paid out a transfer bonus, take the payout back
+  // and re-arm it on the schedule so re-completing pays again.
+  const transferBonusRow = db.prepare("SELECT id, clam_value FROM chore_history WHERE chore_schedule_id = ? AND user_id = ? AND date = ? AND kind = 'transfer_bonus'").get(chore_schedule_id, user_id, date);
+  if (transferBonusRow) {
+    db.prepare('DELETE FROM chore_history WHERE id = ?').run(transferBonusRow.id);
+    db.prepare('UPDATE chore_schedules SET transfer_bonus_clams = ? WHERE id = ?').run(transferBonusRow.clam_value, chore_schedule_id);
+  }
+
+  // if the uncompleted chore was a bonus chore (has clam value), don't remove the daily bonus when uncompleting
+  if (!history.clam_value) {
+    revokeDailyRegularBonus(user_id, date);
+  }
+
+  // Take back the follow-ups this completion handed on that nobody has done
+  // yet: ticked by mistake, unticked, and Liam's "Unload" goes away (#241).
+  const followupsRemoved = removeOpenFollowupsFrom(chore_schedule_id, date);
+
+  const totalResult = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(user_id);
+
+  // Mirror of chore.completed so plugins (and declarative reactions with a
+  // negative factor) can compensate — without this, complete → uncomplete →
+  // re-complete double-counts durable reaction effects.
+  const uncompletedSchedule = db.prepare('SELECT chore_id FROM chore_schedules WHERE id = ?').get(chore_schedule_id);
+  pluginEvents.emit('chore.uncompleted', {
+    userId: user_id,
+    choreId: uncompletedSchedule?.chore_id ?? null,
+    scheduleId: chore_schedule_id,
+    clamValue: history.clam_value,
+    date,
+  });
+
+  return { success: true, clam_total: totalResult.total, followups_removed: followupsRemoved };
+}
+
 fastify.post('/api/chores/uncomplete', async (request, reply) => {
-  const { chore_schedule_id, user_id, date } = request.body;
   try {
-    if (!chore_schedule_id || !user_id || !date) {
-      return reply.status(400).send({ error: 'chore_schedule_id, user_id, and date are required' });
-    }
-
-    // kind-based lookup finds the actual completion record, never a transfer
-    // payout or a stale missed row (issue #72).
-    const history = db.prepare("SELECT id, clam_value FROM chore_history WHERE chore_schedule_id = ? AND user_id = ? AND date = ? AND kind = 'completion'").get(chore_schedule_id, user_id, date);
-    if (!history) {
-      return reply.status(404).send({ error: 'Completion record not found' });
-    }
-
-    db.prepare('DELETE FROM chore_history WHERE id = ?').run(history.id);
-
-    // If completing this chore paid out a transfer bonus, take the payout back
-    // and re-arm it on the schedule so re-completing pays again.
-    const transferBonusRow = db.prepare("SELECT id, clam_value FROM chore_history WHERE chore_schedule_id = ? AND user_id = ? AND date = ? AND kind = 'transfer_bonus'").get(chore_schedule_id, user_id, date);
-    if (transferBonusRow) {
-      db.prepare('DELETE FROM chore_history WHERE id = ?').run(transferBonusRow.id);
-      db.prepare('UPDATE chore_schedules SET transfer_bonus_clams = ? WHERE id = ?').run(transferBonusRow.clam_value, chore_schedule_id);
-    }
-
-    // if the uncompleted chore was a bonus chore (has clam value), don't remove the daily bonus when uncompleting
-    if (!history.clam_value) {
-      revokeDailyRegularBonus(user_id, date);
-    }
-
-    // Take back the follow-ups this completion handed on that nobody has done
-    // yet: ticked by mistake, unticked, and Liam's "Unload" goes away (#241).
-    const followupsRemoved = removeOpenFollowupsFrom(chore_schedule_id, date);
-
-    const totalResult = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(user_id);
-
-    // Mirror of chore.completed so plugins (and declarative reactions with a
-    // negative factor) can compensate — without this, complete → uncomplete →
-    // re-complete double-counts durable reaction effects.
-    const uncompletedSchedule = db.prepare('SELECT chore_id FROM chore_schedules WHERE id = ?').get(chore_schedule_id);
-    pluginEvents.emit('chore.uncompleted', {
-      userId: user_id,
-      choreId: uncompletedSchedule?.chore_id ?? null,
-      scheduleId: chore_schedule_id,
-      clamValue: history.clam_value,
-      date,
-    });
-
-    return { success: true, clam_total: totalResult.total, followups_removed: followupsRemoved };
+    const result = uncompleteChoreSchedule(request.body);
+    if (result.error) return reply.status(result.status).send({ error: result.error });
+    return result;
   } catch (error) {
     console.error('Error uncompleting chore:', error);
     reply.status(500).send({ error: 'Failed to uncomplete chore' });
@@ -6019,6 +6060,7 @@ fastify.post('/api/calendar-sync/all', async (request, reply) => {
       return reply.status(503).send({ error: 'Calendar sync service not initialized' });
     }
     const results = await calendarSyncService.syncAllSources();
+    routines.syncCalendarRoutines();
     return results;
   } catch (error) {
     console.error('Error syncing all calendar sources:', error);
@@ -7097,6 +7139,7 @@ const start = async () => {
 
     if (process.env.HOMEGLOW_DISABLE_BACKGROUND_JOBS !== '1') {
       startNightlyCronJob(); // Start the nightly chore pruning job
+      routines.start(); // Calendar routines follow the calendar
     } else {
       console.log('Nightly background processing disabled by HOMEGLOW_DISABLE_BACKGROUND_JOBS=1');
     }
