@@ -145,7 +145,10 @@ body { color: var(--text); font-family: var(--hg-font-body, system-ui); }
   A font downloads only if your text uses it.
 - **Frames are the dashboard's.** Your widget sits inside the theme's frame,
   and the dashboard keeps your content clear of any frame decoration. Don't
-  draw a frame of your own.
+  draw a frame of your own. The frame also draws the background, rounded and at
+  the household's card opacity, or none when the widget is set transparent, so
+  the page's own `body` background is cleared. A widget with a palette of its
+  own, such as a team's colors, paints it on a full-size wrapper element instead.
 - **Keep fallbacks** (`var(--text, #e8e8e8)`), for a direct load of the file and
   for dashboards older than version 2. `HomeGlow.theme.tokens` has the values in
   JavaScript.
@@ -706,7 +709,8 @@ How the pieces cooperate:
 1. Write the HTML file; test standalone in a browser with `?theme=dark`.
 2. Upload via **Admin Panel → Dashboard → Plugins**. Re-uploading the same
    filename replaces the content in place (manifest re-validated each time).
-3. Enable it, assign it to a tab, check both themes + transparency.
+3. Enable it, assign it to a tab, check both themes + transparency, with the
+   computer in light mode and in dark mode (see `color-scheme` below).
 4. Debugging:
    - The browser console *inside the iframe* shows your JS errors.
    - `GET /api/widgets/debug` lists installed plugins (id, manifest present,
@@ -723,6 +727,13 @@ How the pieces cooperate:
 
 - **Stay single-file** — no external CDNs; inline your CSS/JS. The app
   stylesheet (`/index.css`) gives you the theme variables.
+- **Know what `color-scheme` does before declaring it.** It doesn't choose your
+  colors; it picks the browser's built-in ones (form controls, scrollbars, the
+  backdrop behind your page). The dashboard declares none, and when your scheme
+  differs, the browser paints that backdrop opaque. With `color-scheme: light
+  dark`, a computer in dark mode shows your widget as a black tile under a light
+  theme, with the theme's dark text on it. If you follow the theme, leave it
+  out. If you paint your own full background anyway, it does no harm.
 - **Durable state → storage; UI state → the iframe.** Never keep balances in
   `localStorage` — that's per-device and wiped with browser data.
 - **Must-not-miss logic → reactions.** `HomeGlow.on` handlers only run while
