@@ -38,8 +38,9 @@ Create a single HTML file:
   <title>My Widget</title>
   <link rel="stylesheet" href="/index.css">
   <style>
+    /* No body background: the dashboard's frame draws it, rounded and at
+       the household's card opacity, and clears the page's own. */
     body {
-      background: var(--card-bg);
       color: var(--text-color);
       font-family: sans-serif;
       margin: 0;
@@ -52,14 +53,11 @@ Create a single HTML file:
   <div id="content">Loading…</div>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      // Theme + transparency come in on the URL.
+      // Theme comes in on the URL.
       const params = new URLSearchParams(window.location.search);
       const theme = params.get('theme');
       if (theme === 'dark' || theme === 'light') {
         document.documentElement.setAttribute('data-theme', theme);
-      }
-      if (params.get('transparent') === 'true') {
-        document.body.style.background = 'transparent';
       }
 
       // Widgets are same-origin: call any HomeGlow API directly.
@@ -646,7 +644,7 @@ into a shared *give* pool — even when no dashboard is showing the widget.
   </script>
 
   <style>
-    body { background: var(--card-bg); color: var(--text-color);
+    body { color: var(--text-color);
            font-family: sans-serif; margin: 0; padding: 16px; }
     .pool { font-size: 2em; font-weight: bold; color: var(--accent); }
     .goal-hit { animation: pulse 1s infinite alternate; }
@@ -680,9 +678,6 @@ into a shared *give* pool — even when no dashboard is showing the widget.
       const theme = params.get('theme');
       if (theme === 'dark' || theme === 'light') {
         document.documentElement.setAttribute('data-theme', theme);
-      }
-      if (params.get('transparent') === 'true') {
-        document.body.style.background = 'transparent';
       }
 
       refresh();

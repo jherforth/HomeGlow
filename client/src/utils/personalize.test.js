@@ -31,7 +31,7 @@ describe('helpers', () => {
   });
 
   it('clamps card opacity to the allowed range', () => {
-    expect(normalizeCardOpacity(0.1)).toBe(0.4);
+    expect(normalizeCardOpacity(0.1)).toBe(0.7);
     expect(normalizeCardOpacity(2)).toBe(1);
     expect(normalizeCardOpacity('x')).toBeUndefined();
   });

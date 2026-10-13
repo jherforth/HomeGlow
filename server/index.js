@@ -646,7 +646,11 @@ fastify.get('/widgets/:filename', async (request, reply) => {
     content = content.replace(/\$\{window\.location\.protocol\}\/\/\$\{window\.location\.hostname\}:\d+/g, '${window.location.origin}');
     content = content.replace(/window\.location\.protocol\s*\+\s*'\/\/'\s*\+\s*window\.location\.hostname\s*\+\s*':\d+'/g, 'window.location.origin');
 
-    let injection = `<style>html,body{max-width:100%!important;overflow-x:hidden!important;box-sizing:border-box;}*{box-sizing:border-box;}</style>`;
+    // The dashboard's frame draws a plugin's background, rounded and at the
+    // household's card opacity, or nothing when the widget is set transparent.
+    // A page painting its own on top made plugins more opaque than the widgets
+    // beside them, in a square-cornered box inside the rounded frame.
+    let injection = `<style>html,body{max-width:100%!important;overflow-x:hidden!important;box-sizing:border-box;background-color:transparent!important;}*{box-sizing:border-box;}</style>`;
     // Manifest plugins get their identity injected so /plugin-sdk/v1.js knows
     // which storage/settings namespace to talk to. plugin_id is validated to
     // [a-z0-9-] at install time, so it is safe to embed verbatim.

@@ -5,7 +5,10 @@
 
 import { API_BASE_URL } from './apiConfig.js';
 
-export const OPACITY_MIN = 0.4;
+// The slider scales the theme's own frame opacity, mostly about 0.6. At 0.4 a
+// frame came out a quarter opaque, and a widget with its transparent setting
+// off read no better than one with it on.
+export const OPACITY_MIN = 0.7;
 export const OPACITY_MAX = 1;
 
 /** Gradient backgrounds to pick from, by id. */

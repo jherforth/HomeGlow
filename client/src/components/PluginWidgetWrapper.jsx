@@ -137,7 +137,11 @@ const PluginWidgetWrapper = ({
           height: '100%',
           border: 'none',
           display: 'block',
-          background: transparentBackground ? 'transparent' : 'var(--hg-frame-bg)',
+          // The frame around this wrapper already paints the card color;
+          // painting it here too doubled its opacity. Rounded to sit inside
+          // the frame's 3px border and inset.
+          background: 'transparent',
+          borderRadius: 'max(0px, calc(var(--hg-frame-radius) - var(--hg-frame-inset) - 3px))',
           overflow: 'hidden',
         }}
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
