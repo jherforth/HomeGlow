@@ -250,6 +250,13 @@ function checkWeather(weather, { assets }, errors) {
   }
 }
 
+// Every confetti a theme has: its own and each weather scene's.
+const allConfetti = (pkg) => [
+  pkg.confetti,
+  pkg.weather?.default?.confetti,
+  ...Object.values(isObject(pkg.weather?.scenes) ? pkg.weather.scenes : {}).map((scene) => scene?.confetti),
+].filter(isObject);
+
 // Every ambience list a theme has: its own and each weather scene's.
 const allAmbience = (pkg) => [
   pkg.ambience,
@@ -273,7 +280,7 @@ export function validateThemePackage(pkg, { assets } = {}) {
     // Each version adds things a theme may use: 2, ornaments, the meter roles
     // and clumped sprites; 3, the button roles and curved flyby crossings
     // (path, count, begin and the rest); 4, weather scenes and lightning
-    // flashes; 5, orbits. A theme that uses them says so, so a core too old
+    // flashes; 5, orbits; 6, a confetti cast. A theme that uses them says so, so a core too old
     // to draw them refuses it plainly.
     const tokenNames = ['all', ...MODES].flatMap((key) => Object.keys(pkg.tokens?.[key] || {}));
     const layers = allAmbience(pkg);
@@ -299,6 +306,7 @@ export function validateThemePackage(pkg, { assets } = {}) {
       layers.some((layer) => layer?.layer === 'flyby'
         && (layer.path === 'orbit' || FLYBY_ORBIT_OPTIONS.some((key) => layer[key] !== undefined))) && 'orbits',
     ]);
+    needs(6, [allConfetti(pkg).some((confetti) => confetti?.cast !== undefined) && 'confetti cast']);
   }
   if (typeof pkg.id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(pkg.id)) errors.push('id must be a lowercase slug (a-z, 0-9, hyphens, max 64)');
   if (typeof pkg.name !== 'string' || !pkg.name.trim() || pkg.name.length > 60) errors.push('name is required');
@@ -346,10 +354,11 @@ export const DEFAULT_THEME_ID = 'classic';
  * manifest (a new section, new tokens) raises it, so an older core refuses a
  * theme it cannot draw rather than half-applying it (theme-architecture.md
  * §5). 2: ornaments and the meter roles. 3: the button roles and curved
- * flybys. 4: weather scenes and the flash layer. 5: orbits. The server's MANIFEST_VERSION
- * (services/themeStore.js) matches; a server test holds them equal.
+ * flybys. 4: weather scenes and the flash layer. 5: orbits. 6: a confetti
+ * cast. The server's MANIFEST_VERSION (services/themeStore.js) matches; a
+ * server test holds them equal.
  */
-export const MANIFEST_VERSION = 5;
+export const MANIFEST_VERSION = 6;
 
 /** The problem reported for a theme newer than this core; the admin page words it for people. */
 export const NEEDS_NEWER_HOMEGLOW = 'needs a newer version of HomeGlow';

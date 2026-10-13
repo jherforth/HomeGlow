@@ -47,7 +47,7 @@ import { subscribePluginDataChanged } from '../utils/pluginDataBridge.js';
 import { playSound, soundUrl } from '../utils/choreSound.js';
 import { formatTime } from '../utils/dateUtils.js';
 import PrizeCelebration from './PrizeCelebration.jsx';
-import ChoreCelebration from './ChoreCelebration.jsx';
+import { requestCelebration } from '../utils/celebrations.js';
 import ChoreIconPicker from './ChoreIconPicker.jsx';
 import { shouldPersistSettings } from '../utils/widgetSettingsPersist';
 
@@ -117,7 +117,6 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
   const [prizeOffers, setPrizeOffers] = useState([]);
   const [quickSpend, setQuickSpend] = useState({ open: false, user: null, amount: '', note: '' });
   const [celebration, setCelebration] = useState(null); // { username, prizeName }
-  const [choreCelebration, setChoreCelebration] = useState(null); // { id } — wordless confetti
   // `${userId}:${date}` keys already celebrated, so the local and SSE triggers
   // cannot both fire for the same day. Cleared for a user when their day stops
   // being complete, so an undo/redo celebrates again.
@@ -313,7 +312,8 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
     if (celebratedDaysRef.current.has(key)) return;
     celebratedDaysRef.current.add(key);
 
-    setChoreCelebration({ id: key });
+    // The confetti itself is the board's (CelebrationHost), shared with plugins.
+    requestCelebration('chores');
     if (soundEnabled) {
       try {
         playSound(soundUrl('chime.wav'), 0.8);
@@ -1656,13 +1656,6 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
             username={celebration.username}
             prizeName={celebration.prizeName}
             onDismiss={() => setCelebration(null)}
-          />
-        )}
-
-        {choreCelebration && (
-          <ChoreCelebration
-            key={choreCelebration.id}
-            onDismiss={() => setChoreCelebration(null)}
           />
         )}
 

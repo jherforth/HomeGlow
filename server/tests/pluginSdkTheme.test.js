@@ -148,3 +148,30 @@ test('a version 1 message still works: no tokens, no fonts', () => {
   assert.equal(Object.keys(HomeGlow.theme.tokens).length, 0);
   assert.equal(fonts.length, 0);
 });
+
+test('celebrate() asks the embedding parent, and only the parent', () => {
+  const { HomeGlow, parent } = loadSdkWithParent();
+  HomeGlow.celebrate();
+  // JSON: the message object comes from the SDK's own realm.
+  assert.equal(JSON.stringify(parent.sent), JSON.stringify([{ message: { type: 'homeglow:celebrate' }, target: '*' }]));
+});
+
+test('celebrate() outside a frame does nothing', () => {
+  const { HomeGlow, window } = loadSdkWithParent({ framed: false });
+  assert.doesNotThrow(() => HomeGlow.celebrate());
+  assert.equal(window.sent.length, 0);
+});
+
+function loadSdkWithParent({ framed = true } = {}) {
+  const parent = { sent: [], postMessage(message, target) { this.sent.push({ message, target }); } };
+  const window = {
+    sent: [],
+    postMessage(message, target) { this.sent.push({ message, target }); },
+    location: { search: '', href: 'https://hg.example/widgets/x.html', origin: 'https://hg.example' },
+    addEventListener: () => {},
+  };
+  window.parent = framed ? parent : window;
+  const document = { documentElement: { style: { setProperty: () => {} }, setAttribute: () => {} }, fonts: { add: () => {} } };
+  vm.runInNewContext(sdkSource, { window, document, URLSearchParams, URL, console, fetch: () => Promise.reject(new Error('no network')) });
+  return { HomeGlow: window.HomeGlow, parent, window };
+}

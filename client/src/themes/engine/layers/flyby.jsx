@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box } from '@mui/material';
 import { keyframes } from '@emotion/react';
 import { cross, draw, forMode, pick, pickWeighted } from '../motion.js';
@@ -79,10 +79,15 @@ function nextPass(random, options, mode, first = false, system = null) {
 const prefersReducedMotion = () => typeof window !== 'undefined'
   && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-function Traveler({ options, assets, random, mode, system }) {
-  const [pass, setPass] = useState(() => nextPass(random, options, mode, true, system));
+// `onDone`, when given, makes this a single pass (a celebration's cast):
+// called once the crossing ends, or at once if its picture is missing.
+function Traveler({ options, assets, random, mode, system, onDone }) {
+  const [pass, setPass] = useState(() => nextPass(random, options, mode, !onDone, system));
   const travel = useMemo(() => (pass.frames ? keyframes`${pass.frames}` : null), [pass.frames]);
   const url = assets[pass.src];
+  useEffect(() => {
+    if (!url && onDone) onDone();
+  }, [url, onDone]);
   if (!url) return null;
   const picture = pass.tint
     ? {
@@ -98,7 +103,7 @@ function Traveler({ options, assets, random, mode, system }) {
   return (
     <Box
       key={pass.id}
-      onAnimationEnd={() => setPass(nextPass(random, options, mode, false, system))}
+      onAnimationEnd={() => (onDone ? onDone() : setPass(nextPass(random, options, mode, false, system)))}
       sx={{
         position: 'absolute',
         left: 0,
@@ -144,6 +149,27 @@ function Flyby({ options, assets, random, mode }) {
   if (still) return null;
   return Array.from({ length: count }, (_, i) => (
     <Traveler key={i} options={options} assets={assets} random={random} mode={mode} system={system} />
+  ));
+}
+
+// A celebration's cast (a theme's `confetti.cast`): the same crossings, each
+// once, starting together within a second or so. `onDone` is called when the
+// last has crossed. Not drawn with reduced motion; the celebration as a whole
+// bows out then.
+const CAST_DEFAULTS = { count: [3, 5], seconds: [5, 8], height: [8, 14] };
+
+export function FlybyOnce({ options, assets, random = Math.random, mode, onDone }) {
+  const [once] = useState(() => ({ ...CAST_DEFAULTS, ...options, every: [0, 1.2] }));
+  const [count] = useState(() => Math.max(1, draw(random, once.count, { integer: true })));
+  const left = useRef(count);
+  const doneRef = useRef(onDone);
+  doneRef.current = onDone;
+  const [landed] = useState(() => () => {
+    left.current -= 1;
+    if (left.current === 0) doneRef.current?.();
+  });
+  return Array.from({ length: count }, (_, i) => (
+    <Traveler key={i} options={once} assets={assets} random={random} mode={mode} system={null} onDone={landed} />
   ));
 }
 

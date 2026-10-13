@@ -57,6 +57,7 @@ import { useWeatherCondition, useWeatherScenePreview } from './utils/useWeatherC
 import { pickWeatherScene } from './utils/weatherScenes.js';
 import { ThemeContext } from './themes/engine/ThemeContext.js';
 import ThemeAmbience from './themes/engine/ThemeAmbience.jsx';
+import CelebrationHost from './components/CelebrationHost.jsx';
 import { normalizeWidgetSettings, BASE_WIDGET_SETTINGS } from './utils/widgetSettings.js';
 import { buildMobileWidgetList } from './utils/mobileWidgets.js';
 import { CORE_CONTROLS, resolveHiddenControls } from './utils/displayControls.js';
@@ -1562,6 +1563,10 @@ const App = () => {
           onSave={handleSaveTab}
         />
       </Suspense>
+
+      <CelebrationHost
+        enabled={householdSettings.CHORE_CELEBRATION_ENABLED !== 'false' && householdSettings.CHORE_CELEBRATION_ENABLED !== false}
+      />
 
       {!isMobile && screensaverActive && screensaverSettings.enabled && (
         <Suspense fallback={null}>
