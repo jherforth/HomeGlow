@@ -18,7 +18,7 @@ const MAX_BULK = 100;
 function registerRoutineRoutes(fastify, deps) {
   const {
     db, pluginEvents, completeChoreSchedule, uncompleteChoreSchedule,
-    timezone, today, calendarEvents = () => [], demoBlocked = () => false,
+    timezone, today, calendarEvents = () => [],
   } = deps;
 
   // (scheduleId|date) pairs this module is itself uncompleting, so the chore
@@ -285,7 +285,6 @@ function registerRoutineRoutes(fastify, deps) {
   fastify.get('/api/routine-steps', async () => ({ steps: steps() }));
 
   fastify.post('/api/routine-steps', async (request, reply) => {
-    if (demoBlocked(reply)) return undefined;
     const step = cleanStep(request.body);
     if (step.error) return reply.status(400).send({ error: step.error });
     const order = db.prepare('SELECT COALESCE(MAX(sort_order), 0) + 1 AS next FROM routine_steps').get().next;
@@ -294,7 +293,6 @@ function registerRoutineRoutes(fastify, deps) {
   });
 
   fastify.patch('/api/routine-steps/:id', async (request, reply) => {
-    if (demoBlocked(reply)) return undefined;
     const step = cleanStep(request.body);
     if (step.error) return reply.status(400).send({ error: step.error });
     const result = db.prepare('UPDATE routine_steps SET label = ?, icon = ? WHERE id = ?').run(step.label, step.icon, request.params.id);
@@ -304,7 +302,6 @@ function registerRoutineRoutes(fastify, deps) {
 
   // A step in use is kept: deleting it would quietly change those routines.
   fastify.delete('/api/routine-steps/:id', async (request, reply) => {
-    if (demoBlocked(reply)) return undefined;
     const usedBy = db.prepare(`
       SELECT DISTINCT r.name FROM routine_step_links l JOIN routines r ON r.id = l.routine_id WHERE l.step_id = ? ORDER BY r.name
     `).all(request.params.id).map((row) => row.name);
@@ -333,7 +330,6 @@ function registerRoutineRoutes(fastify, deps) {
   // one each, as each needs their own ticks and streak (a routine owns one
   // chore for one person). All are made or none.
   fastify.post('/api/routines', async (request, reply) => {
-    if (demoBlocked(reply)) return undefined;
     const body = request.body || {};
     const many = Array.isArray(body.user_ids);
     const userIds = many ? [...new Set(body.user_ids.map(Number))] : [body.user_id];
@@ -356,7 +352,6 @@ function registerRoutineRoutes(fastify, deps) {
 
   // Several routines at once, each with its chore, as one delete does.
   fastify.delete('/api/routines/bulk', async (request, reply) => {
-    if (demoBlocked(reply)) return undefined;
     const { ids } = request.body || {};
     if (!Array.isArray(ids) || ids.length === 0 || ids.length > MAX_BULK) {
       return reply.status(400).send({ error: `ids must list 1 to ${MAX_BULK} routine ids` });
@@ -375,7 +370,6 @@ function registerRoutineRoutes(fastify, deps) {
   });
 
   fastify.patch('/api/routines/:id', async (request, reply) => {
-    if (demoBlocked(reply)) return undefined;
     const r = routine(request.params.id);
     if (!r) return reply.status(404).send({ error: 'No such routine.' });
     const checked = rules.validateRoutine(request.body, context());
@@ -390,7 +384,6 @@ function registerRoutineRoutes(fastify, deps) {
   // routine's own rows. Completions stay in the ledger and clams earned stay
   // earned, as when a chore is deleted.
   fastify.delete('/api/routines/:id', async (request, reply) => {
-    if (demoBlocked(reply)) return undefined;
     const r = routine(request.params.id);
     if (!r) return reply.status(404).send({ error: 'No such routine.' });
     db.prepare('DELETE FROM chores WHERE id = ?').run(r.chore_id);

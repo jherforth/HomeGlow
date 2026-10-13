@@ -1078,7 +1078,6 @@ const routines = registerRoutineRoutes(fastify, {
   // The cached events, read even where calendar sync jobs are turned off (a
   // reader without jobs: the constructor starts nothing).
   calendarEvents: (from, to) => (calendarSyncService || new CalendarSyncService(db, decryptPassword)).getCachedEvents(from, to),
-  demoBlocked,
 });
 
 // Helper: Load legacy on-disk widget registry (kept for the debug endpoint)

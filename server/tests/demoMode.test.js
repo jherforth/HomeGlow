@@ -270,3 +270,37 @@ test('normal interactive routes still work (chore completion round-trip)', async
     });
     assert.equal(uncomplete.status, 200);
 });
+
+test('routines can be set up, ticked, and removed, as chores can', async () => {
+    const users = await api('/api/users');
+    const emma = users.body.find((u) => u.username === 'Emma');
+
+    const step = await api('/api/routine-steps', {
+        method: 'POST',
+        body: JSON.stringify({ label: 'Brush teeth', icon: '🪥' }),
+    });
+    assert.equal(step.status, 200);
+
+    const created = await api('/api/routines', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'Bedtime', user_id: emma.id, trigger: 'days', days: [], steps: [step.body.id] }),
+    });
+    assert.equal(created.status, 200, JSON.stringify(created.body));
+
+    const today = new Date().toISOString().slice(0, 10);
+    const ticked = await api(`/api/routines/${created.body.id}/steps/${step.body.id}`, {
+        method: 'POST',
+        body: JSON.stringify({ date: today, done: true }),
+    });
+    assert.equal(ticked.status, 200);
+    assert.equal(ticked.body.completed, true);
+
+    const edited = await api(`/api/routines/${created.body.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ ...created.body, name: 'Lights out' }),
+    });
+    assert.equal(edited.status, 200);
+
+    assert.equal((await api(`/api/routines/${created.body.id}`, { method: 'DELETE' })).status, 200);
+    assert.equal((await api(`/api/routine-steps/${step.body.id}`, { method: 'DELETE' })).status, 200);
+});
