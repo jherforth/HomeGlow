@@ -6,6 +6,7 @@ import {
   Button,
   Card,
   CardContent,
+  Checkbox,
   Chip,
   CircularProgress,
   Dialog,
@@ -54,6 +55,9 @@ export default function RoutinesTab({ subsection, subsections, onSubsection, set
   const [imported, setImported] = useState(null);
   const [editor, setEditor] = useState({ open: false, routine: null });
   const [deleting, setDeleting] = useState(null);
+  const [selected, setSelected] = useState(new Set());
+  const [bulkDialog, setBulkDialog] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [stepForm, setStepForm] = useState({ id: null, label: '', icon: '' });
   const [stepDialog, setStepDialog] = useState(false);
   const [stepError, setStepError] = useState(null);
@@ -87,6 +91,44 @@ export default function RoutinesTab({ subsection, subsections, onSubsection, set
   }, [flash, t]);
 
   useEffect(() => { load(); }, [load]);
+
+  // A routine gone since it was ticked (here or elsewhere) leaves the
+  // selection, so the count and "select all" stay true.
+  useEffect(() => {
+    setSelected((prev) => {
+      if (prev.size === 0) return prev;
+      const present = new Set(routines.map((routine) => routine.id));
+      const kept = [...prev].filter((id) => present.has(id));
+      return kept.length === prev.size ? prev : new Set(kept);
+    });
+  }, [routines]);
+
+  const toggleSelected = (id) => setSelected((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  });
+  const toggleAll = () => setSelected(selected.size === routines.length ? new Set() : new Set(routines.map((routine) => routine.id)));
+
+  const removeSelected = async () => {
+    // One request at a time: a second tap would only delete nothing.
+    if (bulkDeleting) return;
+    const ids = [...selected];
+    setBulkDeleting(true);
+    try {
+      const res = await axios.delete(`${API_BASE_URL}/api/routines/bulk`, { data: { ids } });
+      const count = res.data?.deleted ?? ids.length;
+      setSelected(new Set());
+      setBulkDialog(false);
+      await load();
+      flash('success', t('chores:routines.bulkDeleteSuccess', { count }));
+    } catch {
+      flash('error', t('chores:routines.bulkDeleteError'));
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
 
   const userName = (id) => users.find((user) => user.id === id)?.username || '?';
   const weekdays = getWeekdayLabels(0);
@@ -248,9 +290,30 @@ export default function RoutinesTab({ subsection, subsections, onSubsection, set
             )}
             <Alert severity="info" sx={{ mb: 2 }}>{t('chores:routines.intro')}</Alert>
             <TableContainer component={Paper}>
+              {selected.size > 0 && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1, bgcolor: 'action.hover' }}>
+                  <Typography variant="body2" sx={{ ml: 1 }}>
+                    {t('chores:schedules.selectedCount', { count: selected.size })}
+                  </Typography>
+                  <Button size="small" variant="contained" color="error" startIcon={<Delete />} onClick={() => setBulkDialog(true)}>
+                    {t('chores:schedules.deleteSelected')}
+                  </Button>
+                  <Button size="small" onClick={() => setSelected(new Set())}>{t('common:actions.clear')}</Button>
+                </Box>
+              )}
               <Table size="small" sx={compactStackedTableSx}>
                 <TableHead>
                   <TableRow>
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        size="small"
+                        checked={routines.length > 0 && selected.size === routines.length}
+                        indeterminate={selected.size > 0 && selected.size < routines.length}
+                        disabled={routines.length === 0}
+                        onChange={toggleAll}
+                        slotProps={{ input: { 'aria-label': t('chores:routines.selectAll') } }}
+                      />
+                    </TableCell>
                     <TableCell>{t('chores:routines.name')}</TableCell>
                     <TableCell>{t('chores:routines.person')}</TableCell>
                     <TableCell>{t('chores:routines.when')}</TableCell>
@@ -262,12 +325,21 @@ export default function RoutinesTab({ subsection, subsections, onSubsection, set
                 <TableBody>
                   {routines.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
+                      <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
                         <Typography color="text.secondary">{t('chores:routines.noRoutines')}</Typography>
                       </TableCell>
                     </TableRow>
                   ) : routines.map((routine) => (
-                    <TableRow key={routine.id}>
+                    <TableRow key={routine.id} selected={selected.has(routine.id)}>
+                      {/* `stack-select`: on a phone it sits before the name, as in Chores. */}
+                      <TableCell padding="checkbox" className="stack-select">
+                        <Checkbox
+                          size="small"
+                          checked={selected.has(routine.id)}
+                          onChange={() => toggleSelected(routine.id)}
+                          slotProps={{ input: { 'aria-label': t('chores:routines.selectRoutine', { name: routine.name, person: userName(routine.user_id) }) } }}
+                        />
+                      </TableCell>
                       <TableCell data-label={t('chores:routines.name')}>
                         <Typography variant="body2" fontWeight="bold">
                           {routine.icon && <Box component="span" sx={{ mr: 0.75 }}>{routine.icon}</Box>}
@@ -322,7 +394,9 @@ export default function RoutinesTab({ subsection, subsections, onSubsection, set
           onClose={() => setEditor({ open: false, routine: null })}
           onSaved={(saved) => {
             setEditor({ open: false, routine: null });
-            flash('success', t('chores:routines.saved', { name: saved.name }));
+            flash('success', Array.isArray(saved.routines)
+              ? t('chores:routines.savedMany', { name: saved.routines[0]?.name || '', count: saved.routines.length })
+              : t('chores:routines.saved', { name: saved.name }));
             load();
           }}
         />
@@ -343,6 +417,25 @@ export default function RoutinesTab({ subsection, subsections, onSubsection, set
           <DialogActions>
             <Button onClick={() => setDeleting(null)}>{t('common:actions.cancel')}</Button>
             <Button onClick={removeRoutine} variant="contained" color="error" startIcon={<Delete />}>{t('common:actions.delete')}</Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog open={bulkDialog} onClose={() => setBulkDialog(false)} maxWidth="xs" fullWidth fullScreen={isMobile}>
+          <DialogTitle>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Warning color="error" />
+              {t('chores:routines.bulkDeleteTitle', { count: selected.size })}
+            </Box>
+          </DialogTitle>
+          <DialogContent>
+            <Alert severity="warning" sx={{ mb: 2 }}>{t('chores:routines.bulkDeleteWarning')}</Alert>
+            <Typography variant="body2">{t('chores:routines.bulkDeletePrompt', { count: selected.size })}</Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setBulkDialog(false)}>{t('common:actions.cancel')}</Button>
+            <Button onClick={removeSelected} variant="contained" color="error" startIcon={<Delete />} disabled={bulkDeleting}>
+              {t('common:actions.delete')}
+            </Button>
           </DialogActions>
         </Dialog>
 

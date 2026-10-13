@@ -373,6 +373,19 @@
     "late": "tarde",
     "tickStep": "Marcar {{step}} como hecho",
     "untickStep": "Marcar {{step}} como no hecho",
-    "stepsOf": "Pasos de {{name}}"
+    "stepsOf": "Pasos de {{name}}",
+    "forEach": "Se crea una rutina para cada una de las {{count}} personas, cada una con sus propias marcas y su racha.",
+    "savedMany_one": "Se guardó {{name}} para {{count}} persona.",
+    "savedMany_other": "Se guardó {{name}} para {{count}} personas.",
+    "selectAll": "Seleccionar todas las rutinas",
+    "selectRoutine": "Seleccionar {{name}} de {{person}}",
+    "bulkDeleteTitle_one": "Eliminar {{count}} rutina",
+    "bulkDeleteTitle_other": "Eliminar {{count}} rutinas",
+    "bulkDeleteWarning": "Esto elimina las rutinas seleccionadas y sus tareas. Las almejas ganadas y el historial se conservan. No se puede deshacer.",
+    "bulkDeletePrompt_one": "¿Eliminar la rutina seleccionada?",
+    "bulkDeletePrompt_other": "¿Eliminar las {{count}} rutinas seleccionadas?",
+    "bulkDeleteSuccess_one": "Se eliminó {{count}} rutina.",
+    "bulkDeleteSuccess_other": "Se eliminaron {{count}} rutinas.",
+    "bulkDeleteError": "No se pudieron eliminar las rutinas seleccionadas."
   }
 }

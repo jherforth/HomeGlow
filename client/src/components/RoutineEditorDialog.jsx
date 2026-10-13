@@ -15,6 +15,7 @@ import {
   FormControlLabel,
   IconButton,
   InputLabel,
+  ListItemText,
   MenuItem,
   Select,
   TextField,
@@ -34,6 +35,8 @@ const blank = (users) => ({
   name: '',
   icon: '',
   user_id: users[0]?.id ?? '',
+  // Made for each person picked, one routine each.
+  user_ids: users[0] ? [users[0].id] : [],
   trigger: 'days',
   days: [],
   match_text: '',
@@ -51,6 +54,7 @@ const fromRoutine = (routine) => ({
   name: routine.name || '',
   icon: routine.icon || '',
   user_id: routine.user_id,
+  user_ids: [routine.user_id],
   trigger: routine.trigger === 'calendar' ? 'calendar' : 'days',
   days: routine.days || [],
   match_text: routine.match_text || '',
@@ -96,11 +100,14 @@ export default function RoutineEditorDialog({ open, routine, steps, users, sourc
     setSaving(true);
     setError(null);
     try {
+      const { user_ids: userIds, ...rest } = form;
       const body = {
-        ...form,
-        user_id: Number(form.user_id),
+        ...rest,
         start_time: form.start_time || null,
         end_time: form.end_time || null,
+        // Editing changes one routine, for its one person; making one makes
+        // it for each person picked.
+        ...(routine ? { user_id: Number(form.user_id) } : { user_ids: userIds.map(Number) }),
       };
       const response = routine
         ? await axios.patch(`${API_BASE_URL}/api/routines/${routine.id}`, body)
@@ -142,17 +149,43 @@ export default function RoutineEditorDialog({ open, routine, steps, users, sourc
           />
           <ChoreIconPicker value={form.icon} onChange={(icon) => set({ icon })} />
 
-          <FormControl fullWidth size="small">
-            <InputLabel id="routine-person">{t('chores:routines.person')}</InputLabel>
-            <Select
-              labelId="routine-person"
-              label={t('chores:routines.person')}
-              value={form.user_id}
-              onChange={(event) => set({ user_id: event.target.value })}
-            >
-              {users.map((user) => <MenuItem key={user.id} value={user.id}>{user.username}</MenuItem>)}
-            </Select>
-          </FormControl>
+          {routine ? (
+            <FormControl fullWidth size="small">
+              <InputLabel id="routine-person">{t('chores:routines.person')}</InputLabel>
+              <Select
+                labelId="routine-person"
+                label={t('chores:routines.person')}
+                value={form.user_id}
+                onChange={(event) => set({ user_id: event.target.value })}
+              >
+                {users.map((user) => <MenuItem key={user.id} value={user.id}>{user.username}</MenuItem>)}
+              </Select>
+            </FormControl>
+          ) : (
+            <FormControl fullWidth size="small">
+              <InputLabel id="routine-people">{t('chores:routines.person')}</InputLabel>
+              <Select
+                labelId="routine-people"
+                label={t('chores:routines.person')}
+                multiple
+                value={form.user_ids}
+                onChange={(event) => set({ user_ids: typeof event.target.value === 'string' ? event.target.value.split(',') : event.target.value })}
+                renderValue={(ids) => users.filter((user) => ids.includes(user.id)).map((user) => user.username).join(', ')}
+              >
+                {users.map((user) => (
+                  <MenuItem key={user.id} value={user.id}>
+                    <Checkbox size="small" checked={form.user_ids.includes(user.id)} />
+                    <ListItemText primary={user.username} />
+                  </MenuItem>
+                ))}
+              </Select>
+              {form.user_ids.length > 1 && (
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                  {t('chores:routines.forEach', { count: form.user_ids.length })}
+                </Typography>
+              )}
+            </FormControl>
+          )}
 
           <Box>
             <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>{t('chores:routines.when')}</Typography>
@@ -338,7 +371,7 @@ export default function RoutineEditorDialog({ open, routine, steps, users, sourc
           type="submit"
           variant="contained"
           startIcon={saving ? <CircularProgress size={16} /> : <Save />}
-          disabled={saving || !form.name.trim() || form.user_id === '' || (calendar && !form.match_text.trim())}
+          disabled={saving || !form.name.trim() || (routine ? form.user_id === '' : form.user_ids.length === 0) || (calendar && !form.match_text.trim())}
         >
           {routine ? t('common:actions.save') : t('chores:routines.create')}
         </Button>

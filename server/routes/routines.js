@@ -13,6 +13,7 @@
 const rules = require('../services/routines');
 
 const CALENDAR_SYNC_MS = 10 * 60 * 1000;
+const MAX_BULK = 100;
 
 function registerRoutineRoutes(fastify, deps) {
   const {
@@ -328,15 +329,49 @@ function registerRoutineRoutes(fastify, deps) {
 
   fastify.get('/api/routines', async () => ({ routines: allRoutines(), steps: steps(), imported: imported() }));
 
+  // One routine, or with `user_ids` the same routine for several people:
+  // one each, as each needs their own ticks and streak (a routine owns one
+  // chore for one person). All are made or none.
   fastify.post('/api/routines', async (request, reply) => {
     if (demoBlocked(reply)) return undefined;
-    const checked = rules.validateRoutine(request.body, context());
-    if (checked.errors) return reply.status(400).send({ error: checked.errors.join(' '), errors: checked.errors });
-    const id = createRoutine(checked.value);
-    const r = routine(id);
-    // Straight away, so today's board shows it if today has an event.
-    if (r.trigger === 'calendar') syncRoutine(r, upcomingEvents() || []);
-    return routine(id);
+    const body = request.body || {};
+    const many = Array.isArray(body.user_ids);
+    const userIds = many ? [...new Set(body.user_ids.map(Number))] : [body.user_id];
+    if (many && (userIds.length === 0 || userIds.length > MAX_BULK)) {
+      return reply.status(400).send({ error: `Choose 1 to ${MAX_BULK} people.` });
+    }
+    const ctx = context();
+    const values = [];
+    for (const userId of userIds) {
+      const checked = rules.validateRoutine({ ...body, user_id: userId }, ctx);
+      if (checked.errors) return reply.status(400).send({ error: checked.errors.join(' '), errors: checked.errors });
+      values.push(checked.value);
+    }
+    const ids = db.transaction(() => values.map((value) => createRoutine(value)))();
+    // Straight away, so today's list shows them if today has an event.
+    const events = values[0].trigger === 'calendar' ? upcomingEvents() || [] : null;
+    if (events) for (const id of ids) syncRoutine(routine(id), events);
+    return many ? { routines: ids.map(routine) } : routine(ids[0]);
+  });
+
+  // Several routines at once, each with its chore, as one delete does.
+  fastify.delete('/api/routines/bulk', async (request, reply) => {
+    if (demoBlocked(reply)) return undefined;
+    const { ids } = request.body || {};
+    if (!Array.isArray(ids) || ids.length === 0 || ids.length > MAX_BULK) {
+      return reply.status(400).send({ error: `ids must list 1 to ${MAX_BULK} routine ids` });
+    }
+    const unique = [...new Set(ids.map(Number))];
+    if (!unique.every((id) => Number.isInteger(id) && id > 0)) {
+      return reply.status(400).send({ error: 'Every id must be a positive whole number' });
+    }
+    const deleted = db.transaction(() => unique.reduce((count, id) => {
+      const r = db.prepare('SELECT chore_id FROM routines WHERE id = ?').get(id);
+      if (!r) return count;
+      db.prepare('DELETE FROM chores WHERE id = ?').run(r.chore_id);
+      return count + 1;
+    }, 0))();
+    return { deleted };
   });
 
   fastify.patch('/api/routines/:id', async (request, reply) => {

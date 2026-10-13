@@ -229,3 +229,31 @@ test('deleting a routine keeps its completions in the ledger', async () => {
   assert.ok(history.some((row) => row.title === 'Morning' || row.title === 'Morning routine'), 'the completion is still there');
   assert.equal((await del(`/api/routine-steps/${stepIds[0]}`)).status, 200, 'no longer in use');
 });
+
+test('one routine for several people, one each; and several deleted at once', async () => {
+  const leo = (await post('/api/users', { username: 'Leo', email: 'leo@example.com' })).body.id;
+  const step = (await post('/api/routine-steps', { label: 'Pack bag', icon: '🎒' })).body.id;
+  const body = { name: 'School', user_ids: [kid, leo], trigger: 'days', days: [1, 2, 3, 4, 5], steps: [step] };
+
+  // Every person must exist, or none is made.
+  const refused = await post('/api/routines', { ...body, user_ids: [kid, 99999] });
+  assert.equal(refused.status, 400);
+  assert.ok(!(await api('/api/routines')).body.routines.some((r) => r.name === 'School'));
+
+  const made = await post('/api/routines', body);
+  assert.equal(made.status, 200, JSON.stringify(made.body));
+  assert.equal(made.body.routines.length, 2);
+  assert.deepEqual(made.body.routines.map((r) => r.user_id).sort(), [kid, leo].sort());
+  const [a, b] = made.body.routines;
+  assert.notEqual(a.chore_id, b.chore_id, 'each has its own chore, so its own ticks and streak');
+  assert.notEqual(a.schedule_id, b.schedule_id);
+
+  assert.equal((await api('/api/routines/bulk', { method: 'DELETE', body: JSON.stringify({ ids: [] }) })).status, 400);
+  const gone = await api('/api/routines/bulk', { method: 'DELETE', body: JSON.stringify({ ids: [a.id, b.id, 99999] }) });
+  assert.equal(gone.status, 200, JSON.stringify(gone.body));
+  assert.equal(gone.body.deleted, 2);
+  const left = (await api('/api/routines')).body.routines;
+  assert.ok(!left.some((r) => r.name === 'School'));
+  const chores = (await api('/api/chores')).body;
+  assert.ok(!chores.some((c) => c.id === a.chore_id || c.id === b.chore_id), 'their chores went with them');
+});

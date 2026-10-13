@@ -373,6 +373,19 @@
     "late": "late",
     "tickStep": "Mark {{step}} done",
     "untickStep": "Mark {{step}} not done",
-    "stepsOf": "Steps for {{name}}"
+    "stepsOf": "Steps for {{name}}",
+    "forEach": "One routine is made for each of the {{count}} people, each with its own ticks and streak.",
+    "savedMany_one": "Saved {{name}} for {{count}} person.",
+    "savedMany_other": "Saved {{name}} for {{count}} people.",
+    "selectAll": "Select all routines",
+    "selectRoutine": "Select {{name}} for {{person}}",
+    "bulkDeleteTitle_one": "Delete {{count}} routine",
+    "bulkDeleteTitle_other": "Delete {{count}} routines",
+    "bulkDeleteWarning": "This deletes the selected routines and their chores. Clams already earned and the completion history stay. This cannot be undone.",
+    "bulkDeletePrompt_one": "Delete the selected routine?",
+    "bulkDeletePrompt_other": "Delete the {{count}} selected routines?",
+    "bulkDeleteSuccess_one": "Deleted {{count}} routine.",
+    "bulkDeleteSuccess_other": "Deleted {{count}} routines.",
+    "bulkDeleteError": "Could not delete the selected routines."
   }
 }

@@ -213,6 +213,9 @@ and set up in **Admin → Family → Routines**, beside Chores.
   vacation and appears in the chore history like any chore. The routine owns the chore:
   it's left out of Family → Chores, and deleting the routine deletes it (the history
   stays).
+- **For several people at once:** a new routine can be for several people; each gets
+  their own copy, with their own ticks and streak. Routines can be selected and deleted
+  together, as chores can.
 - **Steps** are built once in the Steps tab, with a name and an icon, and used in any
   routine, in the order chosen there. A step in use can't be deleted.
 - **Ticked in the Chores widget.** A routine's card shows its steps, an *n/m* chip and a
