@@ -351,6 +351,7 @@
         "missed": "Omitida",
         "daily_bonus": "Bono diario",
         "transfer_bonus": "Bono de traspaso",
+        "streak": "Premio por racha",
         "adjustment": "Ajuste",
         "spent": "Gastado"
       },
@@ -605,6 +606,7 @@
     "screensaver": "Salvapantallas",
     "users": "Usuarios",
     "chores": "Tareas",
+    "routines": "Rutinas",
     "prizes": "Premios",
     "vacation": "Vacaciones",
     "region": "Idioma y hora",

@@ -326,8 +326,11 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
         axios.get(`${API_BASE_URL}/api/chores`),
         axios.get(`${API_BASE_URL}/api/users`)
       ]);
-      setSchedules(Array.isArray(schedulesRes.data) ? schedulesRes.data : []);
-      setChores(Array.isArray(choresRes.data) ? choresRes.data : []);
+      // A routine's chore and its schedules are managed in Family → Routines,
+      // so they're left out here (routine_id is set on those rows).
+      const notRoutine = (row) => !row.routine_id;
+      setSchedules(Array.isArray(schedulesRes.data) ? schedulesRes.data.filter(notRoutine) : []);
+      setChores(Array.isArray(choresRes.data) ? choresRes.data.filter(notRoutine) : []);
       setUsers(Array.isArray(usersRes.data) ? usersRes.data.filter(u => u.id !== 0) : []);
     } catch (err) {
       console.error('Error loading chore data:', err);

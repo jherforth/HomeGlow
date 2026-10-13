@@ -24,8 +24,8 @@ describe('chore history view', () => {
   });
 
   it('files each kind under the category the view shows', () => {
-    expect(['completion', 'missed', 'daily_bonus', 'transfer_bonus', 'adjustment', 'spent']
-      .map((kind) => categoryOf({ kind }))).toEqual(['done', 'missed', 'bonus', 'bonus', 'adjustment', 'adjustment']);
+    expect(['completion', 'missed', 'daily_bonus', 'transfer_bonus', 'streak', 'adjustment', 'spent']
+      .map((kind) => categoryOf({ kind }))).toEqual(['done', 'missed', 'bonus', 'bonus', 'bonus', 'adjustment', 'adjustment']);
   });
 
   it('knows a chore by its id, and by its title once the schedule is gone', () => {

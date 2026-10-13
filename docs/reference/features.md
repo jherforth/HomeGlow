@@ -174,7 +174,7 @@ under **When it's done**: *"Then give **Unload the dishwasher** to **Liam**, **a
 hours**."*
 
 - **Trigger:** completing the chore **today**, from any schedule, by anyone, including
-  plugins such as Routines. Each person named gets an ordinary one-time schedule of the
+  a routine's last step. Each person named gets an ordinary one-time schedule of the
   follow-up chore. Back-dated completions in the Admin Panel don't hand work on.
 - **Delay:** right away, or after N minutes or hours (up to 7 days). A delay is a snooze,
   so the follow-up stays hidden, and out of the bonus, until it ends. Follow-ups have no
@@ -201,10 +201,62 @@ hours**."*
 `ChoreSchedulesTab.jsx`, and `countsTowardDailyBonus` (`utils/choreHelpers.js`) keeps the
 widget in step with the server.
 
+### Routines
+
+A routine is a checklist of steps a child ticks off: brush teeth, make bed, get dressed.
+It runs on chosen weekdays, or on the days of matching calendar events ("Get ready for
+soccer" on practice and game days). Routines used to be a plugin; they're built in now,
+and set up in **Admin → Family → Routines**, beside Chores.
+
+- **Each routine is one ordinary chore** (worth 0 clams), with its schedules. It counts
+  toward the day once, takes part in the daily bonus, is logged as missed, pauses for
+  vacation and appears in the chore history like any chore. The routine owns the chore:
+  it's left out of Family → Chores, and deleting the routine deletes it (the history
+  stays).
+- **For several people at once:** a new routine can be for several people; each gets
+  their own copy, with their own ticks and streak. Routines can be selected and deleted
+  together, as chores can.
+- **Steps** are built once in the Steps tab, with a name and an icon, and used in any
+  routine, in the order chosen there. A step in use can't be deleted.
+- **Ticked in the Chores widget.** A routine's card shows its steps, an *n/m* chip and a
+  progress bar. Ticking the last step completes the chore. Unticking one undoes it and keeps
+  the others. The card's own button still completes the whole routine at once (every step
+  ticked), and undoing it clears the steps. Finishing a routine, either way, celebrates
+  (when celebrations are on). Once done, the card shows only the streak
+  (*5 🔥*) and, with an end time, *on time* or *late*.
+- **Calendar routines:** the event title contains the routine's words (whole words by
+  default, so "France" doesn't match "Francesca"), in the chosen calendars, in the next 14
+  days. Each matching day gets a schedule pinned to it, due the chosen minutes before the
+  event (an all-day event uses the routine's start time). The server keeps them in step
+  with the calendar every 10 minutes, after a manual sync and after an edit: a moved or
+  cancelled event's day goes (today's stays if it was done), and past days are hidden after
+  2 days and deleted after 120. No display needs to be open.
+- **Rewards:** steps never pay. *Every N days in a row, M clams* is paid once each time the
+  streak reaches a multiple of N, however the routine was finished, as a history row of kind
+  `streak` titled "*Morning: 5 in a row*"; a new run earns them again. A streak counts
+  scheduled days only, and vacation days are neutral: done, one counts; not done, it
+  neither extends nor breaks the run. Changing when a routine runs (its days, or days to
+  calendar events) keeps the run it had up to yesterday, and the new days count on from
+  today; a routine handed to someone else starts a run of theirs.
+- **Upgrading from the plugin** happens once, by itself (migration
+  `schema30-importRoutinesPlugin`):
+  - The plugin's steps, routines, recent ticks, calendar days and paid rewards move over,
+    on the **same** chores and schedules, so history and streaks carry on.
+  - Routine chores the plugin had lost come back too, without steps.
+  - On each display, the plugin's spot becomes the Chores widget (unless that tab already
+    had one), with the plugin's person as its people filter.
+  - The plugin is removed. Its storage is kept for one release.
+
+**Code:** `server/routes/routines.js` (routes, the calendar sync, the link to chores through
+the chore events and `completeChoreSchedule`), `server/services/routines.js` (the rules,
+pure and tested), migrations `schema29-routines` and `schema30-importRoutinesPlugin`;
+`RoutinesTab.jsx`, `RoutineEditorDialog.jsx`, and in the Chores widget `RoutineSteps.jsx`
+and `utils/useRoutinesToday.js`.
+
 ### Metrics-ready history (issue #72)
 
 Every `chore_history` row carries a **`kind`** (`completion`, `daily_bonus`,
-`transfer_bonus`, `adjustment`, `missed`, `spent`), which makes reporting
+`transfer_bonus`, `streak` (a routine's reward), `adjustment`, `missed`, `spent`), which makes reporting
 computable:
 
 - The nightly job **logs missed chores** (due-but-uncompleted regular chores get

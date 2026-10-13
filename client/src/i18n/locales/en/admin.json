@@ -351,6 +351,7 @@
         "missed": "Missed",
         "daily_bonus": "Daily bonus",
         "transfer_bonus": "Transfer bonus",
+        "streak": "Streak reward",
         "adjustment": "Adjustment",
         "spent": "Spent"
       },
@@ -605,6 +606,7 @@
     "screensaver": "Screensaver",
     "users": "Users",
     "chores": "Chores",
+    "routines": "Routines",
     "prizes": "Prizes",
     "vacation": "Vacation",
     "region": "Language & time",

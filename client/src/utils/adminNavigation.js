@@ -19,8 +19,8 @@ export const ADMIN_LAYOUT = [
   { tab: 'displays', sections: ['devices', 'screensaver'] },
   {
     tab: 'family',
-    sections: ['users', 'chores', 'prizes', 'vacation'],
-    subsections: { chores: ['definitions', 'history', 'settings'] },
+    sections: ['users', 'chores', 'routines', 'prizes', 'vacation'],
+    subsections: { chores: ['definitions', 'history', 'settings'], routines: ['routines', 'steps'] },
   },
   { tab: 'security', sections: [] },
   { tab: 'system', sections: ['region', 'connections', 'about'] },
