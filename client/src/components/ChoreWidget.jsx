@@ -580,6 +580,8 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
           user_id: schedule.user_id,
           date: today
         });
+        // Ticked from its card, a routine is finished all at once.
+        if (routineDays[schedule.id]) requestCelebration('chores');
       }
 
       await fetchData();
@@ -1002,9 +1004,13 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
   };
 
   // A step ticked in a routine's card; the last one completes its chore, so
-  // the widget reads everything again (and celebrates as for any chore).
+  // the widget reads everything again. Finishing a routine celebrates, as the
+  // Routines plugin did; the board's CelebrationHost applies the household
+  // setting and plays one at a time, so finishing the day as well still
+  // celebrates once.
   const tickRoutineStep = async (day, stepId, done) => {
-    await toggleRoutineStep(day, stepId, done);
+    const after = await toggleRoutineStep(day, stepId, done);
+    if (after?.completed && !day.completed) requestCelebration('chores');
     await fetchData();
   };
 

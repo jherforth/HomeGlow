@@ -18,7 +18,7 @@ const MAX_BULK = 100;
 function registerRoutineRoutes(fastify, deps) {
   const {
     db, pluginEvents, completeChoreSchedule, uncompleteChoreSchedule,
-    timezone, today, calendarEvents = () => [],
+    timezone, today, calendarEvents = () => [], isVacation = () => false,
   } = deps;
 
   // (scheduleId|date) pairs this module is itself uncompleting, so the chore
@@ -101,7 +101,7 @@ function registerRoutineRoutes(fastify, deps) {
       steps: list.map((s) => ({ id: s.id, label: s.label, icon: s.icon || '' })),
       done: list.filter((s) => ticked.has(s.id)).map((s) => s.id),
       completed: Boolean(completion),
-      streak: rules.streak(r, completionsOf(r, pinned), pinned, date),
+      streak: rules.streak(r, completionsOf(r, pinned), pinned, date, { isVacation }),
       startTime: r.trigger === 'calendar' ? (pinned[date]?.dueTime || r.start_time || null) : r.start_time,
       endTime: r.end_time || null,
       onTime: completion ? rules.onTime(r, completion.created_at, timezone()) : null,
@@ -111,11 +111,18 @@ function registerRoutineRoutes(fastify, deps) {
   // --- the link to chores ----------------------------------------------------
 
   // Every Nth day in a row pays the routine's clams, once per run length.
+  // Written as kind 'streak', so History and Chore Metrics can tell it from a
+  // parent's correction.
   function payMilestone(r, date) {
     const pinned = pinnedOf(r.id);
-    const run = rules.streak(r, completionsOf(r, pinned), pinned, date);
+    const run = rules.streak(r, completionsOf(r, pinned), pinned, date, { isVacation });
+    if (run < r.last_award_streak) {
+      // A new run: its milestones are earned again.
+      db.prepare('UPDATE routines SET last_award_streak = 0 WHERE id = ?').run(r.id);
+      r = { ...r, last_award_streak: 0 };
+    }
     if (!rules.milestoneDue(r, run)) return;
-    db.prepare("INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind) VALUES (?, NULL, ?, ?, ?, 'adjustment')")
+    db.prepare("INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind) VALUES (?, NULL, ?, ?, ?, 'streak')")
       .run(r.user_id, date, r.milestone_clams, `${r.name}: ${run} in a row`);
     db.prepare('UPDATE routines SET last_award_streak = ? WHERE id = ?').run(run, r.id);
     const total = db.prepare('SELECT COALESCE(SUM(clam_value), 0) AS total FROM chore_history WHERE user_id = ?').get(r.user_id).total;
@@ -180,6 +187,7 @@ function registerRoutineRoutes(fastify, deps) {
   // calendar events retires one kind of schedule and starts the other.
   function updateRoutine(r, v) {
     db.transaction(() => {
+      keepRun(r, v);
       db.prepare('UPDATE chores SET title = ?, icon = ? WHERE id = ?').run(v.name, v.icon, r.chore_id);
       const wasCalendar = r.trigger === 'calendar';
       const toCalendar = v.trigger === 'calendar';
@@ -208,6 +216,23 @@ function registerRoutineRoutes(fastify, deps) {
       }
       writeRoutine(r.id, v);
     })();
+  }
+
+  // The streak is counted against when the routine runs, so changing that
+  // would recount days already behind the child: Mon–Fri made daily would
+  // break a run with weekends nobody asked for. The run up to yesterday is
+  // kept as it stood, and the new days count on from today. A routine handed
+  // to someone else starts a run of their own.
+  function keepRun(r, v) {
+    const when = (x) => JSON.stringify([x.trigger, [...x.days].map(Number).sort(), x.match_text || '', Boolean(x.whole_word),
+      [...(x.calendar_source_ids || [])].map(Number).sort()]);
+    const newPerson = Number(v.user_id) !== Number(r.user_id);
+    if (!newPerson && when(r) === when(v)) return;
+    const day = today();
+    const pinned = pinnedOf(r.id);
+    const base = newPerson ? 0 : rules.streakBefore(r, completionsOf(r, pinned), pinned, day, { isVacation });
+    db.prepare('UPDATE routines SET streak_base = ?, streak_base_date = ? WHERE id = ?').run(base, day, r.id);
+    if (newPerson) db.prepare('UPDATE routines SET last_award_streak = 0 WHERE id = ?').run(r.id);
   }
 
   // --- the calendar ----------------------------------------------------------

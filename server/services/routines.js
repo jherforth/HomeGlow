@@ -182,27 +182,50 @@ function planCalendarSync({ routine, pinned, schedules, wanted, today, completed
  *
  * completions: Set of 'scheduleId|date' completion keys
  * pinned:      { date: { scheduleId } } for a calendar routine
+ * isVacation:  date => true on the household's vacation days. They're
+ *              neutral, as for missed chores and Chore Metrics: done, one
+ *              counts; not done, it neither extends nor breaks the run.
  */
-function streak(routine, completions, pinned, today) {
+function streak(routine, completions, pinned, today, { isVacation = () => false } = {}) {
+    const scheduleId = routine.trigger === 'calendar' ? pinned?.[today]?.scheduleId : routine.schedule_id;
+    const doneToday = Boolean(scheduleId) && completions.has(`${scheduleId}|${today}`);
+    return runThrough(routine, completions, pinned, doneToday ? today : shiftDate(today, -1), isVacation);
+}
+
+/**
+ * The run that ended the day before `date`, every day of it over: what an
+ * edit to when the routine runs keeps (`streak_base`), so a child's run
+ * isn't rewritten by days they couldn't have known about.
+ */
+function streakBefore(routine, completions, pinned, date, { isVacation = () => false } = {}) {
+    return runThrough(routine, completions, pinned, shiftDate(date, -1), isVacation);
+}
+
+// Days in a row up to and including `last`. Before `streak_base_date` (the
+// day when the routine runs last changed) the run kept then, `streak_base`,
+// takes over.
+function runThrough(routine, completions, pinned, last, isVacation) {
     const done = (scheduleId, date) => completions.has(`${scheduleId}|${date}`);
+    const baseDate = routine.streak_base_date || null;
+    const base = Number(routine.streak_base) || 0;
+    let run = 0;
     if (routine.trigger === 'calendar') {
-        const eventDays = Object.keys(pinned || {}).filter((d) => d <= today).sort().reverse();
-        if (eventDays[0] === today && !done(pinned[today].scheduleId, today)) eventDays.shift();
-        let run = 0;
+        const eventDays = Object.keys(pinned || {}).filter((d) => d <= last).sort().reverse();
         for (const date of eventDays) {
-            if (!done(pinned[date].scheduleId, date)) break;
-            run += 1;
+            if (baseDate && date < baseDate) return run + base;
+            if (done(pinned[date].scheduleId, date)) run += 1;
+            else if (!isVacation(date)) return run;
         }
-        return run;
+        return baseDate ? run + base : run;
     }
     const days = parseDays(routine.days);
     const scheduled = days.length ? days : [0, 1, 2, 3, 4, 5, 6];
-    let cursor = done(routine.schedule_id, today) ? today : shiftDate(today, -1);
-    let run = 0;
+    let cursor = last;
     for (let guard = 0; guard < 400; guard += 1) {
+        if (baseDate && cursor < baseDate) return run + base;
         if (scheduled.includes(weekdayOf(cursor))) {
-            if (!done(routine.schedule_id, cursor)) break;
-            run += 1;
+            if (done(routine.schedule_id, cursor)) run += 1;
+            else if (!isVacation(cursor)) return run;
         }
         cursor = shiftDate(cursor, -1);
     }
@@ -214,7 +237,9 @@ function milestoneDue(routine, run) {
     const every = Number(routine.milestone_every) || 0;
     const clams = Number(routine.milestone_clams) || 0;
     if (!every || !clams || !run || run % every !== 0) return false;
-    return Number(routine.last_award_streak) !== run;
+    // `last_award_streak` is the run length last paid; a shorter run now is a
+    // new run, which earns the same milestones again.
+    return run > (Number(routine.last_award_streak) || 0);
 }
 
 /** Finished by its end time? null when it has none or isn't finished. */
@@ -301,6 +326,7 @@ module.exports = {
     matchingDays,
     planCalendarSync,
     streak,
+    streakBefore,
     milestoneDue,
     onTime,
     validateRoutine,

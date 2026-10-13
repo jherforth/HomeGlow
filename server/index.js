@@ -254,6 +254,7 @@ const schemaMigrations = [
   { schemaId: 28, migrationPath: './migrations/schema28-haPanels', },
   { schemaId: 29, migrationPath: './migrations/schema29-routines', },
   { schemaId: 30, migrationPath: './migrations/schema30-importRoutinesPlugin', },
+  { schemaId: 31, migrationPath: './migrations/schema31-routineStreakBase', },
 ];
 
 const ALLOWED_SCHEDULE_DURATIONS = new Set(['day-of', 'until-completed', 'once-completed']);
@@ -1078,6 +1079,7 @@ const routines = registerRoutineRoutes(fastify, {
   // The cached events, read even where calendar sync jobs are turned off (a
   // reader without jobs: the constructor starts nothing).
   calendarEvents: (from, to) => (calendarSyncService || new CalendarSyncService(db, decryptPassword)).getCachedEvents(from, to),
+  isVacation: isVacationActiveOn,
 });
 
 // Helper: Load legacy on-disk widget registry (kept for the debug endpoint)

@@ -79,7 +79,7 @@ let morning;
 const day = async (date = today) => (await api(`/api/routines/today?date=${date}`)).body.routines;
 // The routine's milestone payments ("Morning: 1 in a row").
 const milestones = async () => (await api(`/api/chore-history?date=${today}`)).body
-  .filter((row) => row.kind === 'adjustment' && / in a row$/.test(row.title));
+  .filter((row) => row.kind === 'streak' && / in a row$/.test(row.title));
 const tick = (r, stepId, done, date = today) => post(`/api/routines/${r.id}/steps/${stepId}`, { date, done });
 
 test('a step library, and a routine that owns an ordinary chore', async () => {
@@ -220,6 +220,53 @@ test('a calendar routine gets a schedule pinned to each matching event day, and 
   assert.ok(!(await api('/api/chores')).body.some((c) => c.id === soccer.chore_id));
   assert.equal((await api(`/api/chore-schedules?chore_id=${soccer.chore_id}`)).body.length, 0);
   assert.ok(!(await api('/api/routines')).body.routines.some((r) => r.id === soccer.id));
+});
+
+test('a run is kept across vacation days and an edit to the days; another person starts afresh', async (t) => {
+  const db = new Database(testDbPath);
+  db.pragma('busy_timeout = 5000');
+  t.after(() => db.close());
+  const weekday = (date) => new Date(`${date}T12:00:00Z`).getUTCDay();
+  const doneOn = (r, date) => db.prepare(
+    "INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind) VALUES (?, ?, ?, 0, ?, 'completion')",
+  ).run(kid, r.schedule_id, date, r.name);
+  const streakOf = async (r) => (await day())[r.schedule_id].streak;
+  const step = (await post('/api/routine-steps', { label: 'Feed the cat', icon: '🐈' })).body.id;
+
+  // Vacation: a day off not done neither breaks nor extends the run.
+  const dog = (await post('/api/routines', { name: 'Walk the dog', user_id: kid, trigger: 'days', days: [], steps: [step] })).body;
+  doneOn(dog, shift(-1));
+  doneOn(dog, shift(-3));
+  assert.equal(await streakOf(dog), 1);
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('vacation_mode', ?)")
+    .run(JSON.stringify({ enabled: true, startDate: shift(-2), endDate: shift(-2) }));
+  assert.equal(await streakOf(dog), 2);
+  db.prepare("DELETE FROM settings WHERE key = 'vacation_mode'").run();
+
+  // On today and four days back (not the 3rd or 6th), done on those four;
+  // made daily, the run stays four.
+  const runDays = [shift(-1), shift(-2), shift(-4), shift(-5)];
+  const cat = (await post('/api/routines', {
+    name: 'Cat', user_id: kid, trigger: 'days', days: [...new Set([today, ...runDays].map(weekday))], steps: [step],
+  })).body;
+  runDays.forEach((date) => doneOn(cat, date));
+  assert.equal(await streakOf(cat), 4);
+  const daily = await patch(`/api/routines/${cat.id}`, { ...cat, days: [] });
+  assert.equal(daily.status, 200, JSON.stringify(daily.body));
+  assert.equal(daily.body.streak_base, 4);
+  assert.equal(await streakOf(cat), 4, 'not rewritten by a day that was not on before');
+  // A rename keeps the run as it is.
+  await patch(`/api/routines/${cat.id}`, { ...daily.body, name: 'Feed Cat' });
+  assert.equal(await streakOf(cat), 4);
+
+  // Handed to someone else, it is their run from today.
+  const mia = (await post('/api/users', { username: 'Mia', email: 'mia@example.com' })).body.id;
+  await patch(`/api/routines/${cat.id}`, { ...daily.body, user_id: mia });
+  assert.equal(await streakOf(cat), 0);
+
+  await del(`/api/routines/${dog.id}`);
+  await del(`/api/routines/${cat.id}`);
+  await del(`/api/routine-steps/${step}`);
 });
 
 test('deleting a routine keeps its completions in the ledger', async () => {

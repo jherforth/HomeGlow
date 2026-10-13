@@ -22,7 +22,8 @@ export default function useRoutinesToday() {
   useEffect(() => { reload(); }, [reload]);
 
   // Tick or untick one step. Shown at once; the server's answer (which may
-  // have completed or uncompleted the routine's chore) replaces it.
+  // have completed or uncompleted the routine's chore) replaces it, and is
+  // returned (null if the tick failed).
   const toggleStep = useCallback(async (day, stepId, done) => {
     setRoutines((current) => ({
       ...current,
@@ -37,9 +38,11 @@ export default function useRoutinesToday() {
         done,
       });
       if (data) setRoutines((current) => ({ ...current, [day.scheduleId]: data }));
+      return data || null;
     } catch (error) {
       console.error('Error ticking a routine step:', error);
       reload();
+      return null;
     }
   }, [reload]);
 

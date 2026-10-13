@@ -12,6 +12,7 @@ const CATEGORY_OF_KIND = {
   missed: 'missed',
   daily_bonus: 'bonus',
   transfer_bonus: 'bonus',
+  streak: 'bonus',
   adjustment: 'adjustment',
   spent: 'adjustment',
 };

@@ -93,12 +93,56 @@ test('streaks count scheduled days in a row; today counts once done and does not
   assert.equal(rules.streak(calendar, done, pinned, '2026-10-13'), 3);
 });
 
+test('vacation days neither extend nor break a run', () => {
+  const routine = { trigger: 'days', days: '', schedule_id: 9 }; // every day
+  const keys = (dates) => new Set(dates.map((d) => `9|${d}`));
+  const done = keys(['2026-10-12', '2026-10-09', '2026-10-08']); // 10 and 11 not done
+  assert.equal(rules.streak(routine, done, {}, '2026-10-13'), 1);
+  const isVacation = (d) => d === '2026-10-10' || d === '2026-10-11';
+  assert.equal(rules.streak(routine, done, {}, '2026-10-13', { isVacation }), 3);
+  // Done on a vacation day, it counts.
+  done.add('9|2026-10-11');
+  assert.equal(rules.streak(routine, done, {}, '2026-10-13', { isVacation }), 4);
+
+  const calendar = { trigger: 'calendar' };
+  const pinned = { '2026-10-02': { scheduleId: 1 }, '2026-10-06': { scheduleId: 2 }, '2026-10-09': { scheduleId: 3 } };
+  const events = new Set(['1|2026-10-02', '3|2026-10-09']);
+  assert.equal(rules.streak(calendar, events, pinned, '2026-10-13'), 1);
+  assert.equal(rules.streak(calendar, events, pinned, '2026-10-13', { isVacation: (d) => d === '2026-10-06' }), 2);
+});
+
+test('an edit to when a routine runs keeps the run it had', () => {
+  // Mon, Wed, Fri, done every one of them from Mon 5 to Mon 12.
+  const before = { trigger: 'days', days: '1,3,5', schedule_id: 9 };
+  const keys = (dates) => new Set(dates.map((d) => `9|${d}`));
+  const done = keys(['2026-10-05', '2026-10-07', '2026-10-09', '2026-10-12']);
+  assert.equal(rules.streak(before, done, {}, '2026-10-13'), 4);
+  // Made daily on Tue 13: replayed against every day, the run would be 1.
+  const daily = { ...before, days: '' };
+  assert.equal(rules.streak(daily, done, {}, '2026-10-13'), 1);
+  // Kept: the run up to Mon 12 stands, and the new days count on from Tue 13.
+  const base = rules.streakBefore(before, done, {}, '2026-10-13');
+  assert.equal(base, 4);
+  const edited = { ...daily, streak_base: base, streak_base_date: '2026-10-13' };
+  assert.equal(rules.streak(edited, done, {}, '2026-10-13'), 4, 'today still open');
+  done.add('9|2026-10-13');
+  assert.equal(rules.streak(edited, done, {}, '2026-10-13'), 5);
+  assert.equal(rules.streak(edited, done, {}, '2026-10-15'), 0, 'Wed 14 missed under the new days');
+  // Edited again the same day: the run kept is the same.
+  assert.equal(rules.streakBefore(edited, done, {}, '2026-10-13'), 4);
+  // Weekdays to calendar events: the run carries over to the event days.
+  const toCalendar = { trigger: 'calendar', streak_base: 4, streak_base_date: '2026-10-13' };
+  const pinned = { '2026-10-15': { scheduleId: 20 } };
+  assert.equal(rules.streak(toCalendar, new Set(['20|2026-10-15']), pinned, '2026-10-15'), 5);
+});
+
 test('milestones: every Nth day in a row, paid once per run length', () => {
   const routine = { milestone_every: 5, milestone_clams: 3, last_award_streak: 0 };
   assert.equal(rules.milestoneDue(routine, 4), false);
   assert.equal(rules.milestoneDue(routine, 5), true);
   assert.equal(rules.milestoneDue({ ...routine, last_award_streak: 5 }, 5), false);
   assert.equal(rules.milestoneDue({ ...routine, last_award_streak: 5 }, 10), true);
+  assert.equal(rules.milestoneDue({ ...routine, last_award_streak: 10 }, 5), false, 'reset first when a new run starts');
   assert.equal(rules.milestoneDue({ ...routine, milestone_clams: 0 }, 5), false);
 });
 

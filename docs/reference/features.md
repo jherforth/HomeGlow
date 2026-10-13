@@ -221,7 +221,8 @@ and set up in **Admin → Family → Routines**, beside Chores.
 - **Ticked in the Chores widget.** A routine's card shows its steps, an *n/m* chip and a
   progress bar. Ticking the last step completes the chore. Unticking one undoes it and keeps
   the others. The card's own button still completes the whole routine at once (every step
-  ticked), and undoing it clears the steps. Once done, the card shows only the streak
+  ticked), and undoing it clears the steps. Finishing a routine, either way, celebrates
+  (when celebrations are on). Once done, the card shows only the streak
   (*5 🔥*) and, with an end time, *on time* or *late*.
 - **Calendar routines:** the event title contains the routine's words (whole words by
   default, so "France" doesn't match "Francesca"), in the chosen calendars, in the next 14
@@ -231,8 +232,12 @@ and set up in **Admin → Family → Routines**, beside Chores.
   cancelled event's day goes (today's stays if it was done), and past days are hidden after
   2 days and deleted after 120. No display needs to be open.
 - **Rewards:** steps never pay. *Every N days in a row, M clams* is paid once each time the
-  streak reaches a multiple of N, however the routine was finished, as a clam adjustment
-  titled "*Morning: 5 in a row*". A streak counts scheduled days only.
+  streak reaches a multiple of N, however the routine was finished, as a history row of kind
+  `streak` titled "*Morning: 5 in a row*"; a new run earns them again. A streak counts
+  scheduled days only, and vacation days are neutral: done, one counts; not done, it
+  neither extends nor breaks the run. Changing when a routine runs (its days, or days to
+  calendar events) keeps the run it had up to yesterday, and the new days count on from
+  today; a routine handed to someone else starts a run of theirs.
 - **Upgrading from the plugin** happens once, by itself (migration
   `schema30-importRoutinesPlugin`):
   - The plugin's steps, routines, recent ticks, calendar days and paid rewards move over,
@@ -251,7 +256,7 @@ and `utils/useRoutinesToday.js`.
 ### Metrics-ready history (issue #72)
 
 Every `chore_history` row carries a **`kind`** (`completion`, `daily_bonus`,
-`transfer_bonus`, `adjustment`, `missed`, `spent`), which makes reporting
+`transfer_bonus`, `streak` (a routine's reward), `adjustment`, `missed`, `spent`), which makes reporting
 computable:
 
 - The nightly job **logs missed chores** (due-but-uncompleted regular chores get
