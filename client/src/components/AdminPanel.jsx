@@ -84,6 +84,7 @@ import { fetchPinRemembered, setPinRemembered, forgetPinOnAllDevices, shouldProm
 import PinModal from './PinModal';
 import ChoreSchedulesTab from './ChoreSchedulesTab';
 import ChoreHistoryTab from './ChoreHistoryTab';
+import RoutinesTab from './RoutinesTab';
 import TabIconModal from './TabIconModal';
 import DeleteConfirmationDialog from './DeleteConfirmationDialog';
 import AdminFormSection from './AdminFormSection';
@@ -191,6 +192,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   const [location, setLocation] = useState(() => parseAdminHash() || normalizeAdminLocation());
   const sections = ADMIN_LAYOUT.find((entry) => entry.tab === location.tab)?.sections || [];
   const choresSubsections = ADMIN_LAYOUT.find((entry) => entry.tab === 'family').subsections.chores;
+  const routinesSubsections = ADMIN_LAYOUT.find((entry) => entry.tab === 'family').subsections.routines;
 
   // Every move goes through here, so the hash always names where the panel is.
   const navigate = useCallback((next) => {
@@ -3608,6 +3610,17 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
             )}
           </CardContent>
         </Card>
+      )}
+
+      {/* Routines: steps a child ticks off, each routine one chore (its own
+          module; its cards are ticked in the Chores widget). */}
+      {location.section === 'routines' && (
+        <RoutinesTab
+          subsection={location.subsection}
+          subsections={routinesSubsections}
+          onSubsection={(subsection) => navigate({ tab: 'family', section: 'routines', subsection })}
+          setSaveMessage={setSaveMessage}
+        />
       )}
 
       {location.section === 'prizes' && (

@@ -49,6 +49,8 @@ import { formatTime } from '../utils/dateUtils.js';
 import PrizeCelebration from './PrizeCelebration.jsx';
 import { requestCelebration } from '../utils/celebrations.js';
 import ChoreIconPicker from './ChoreIconPicker.jsx';
+import RoutineSteps from './RoutineSteps.jsx';
+import useRoutinesToday from '../utils/useRoutinesToday.js';
 import { shouldPersistSettings } from '../utils/widgetSettingsPersist';
 
 // Shared by the initial state and by the snapshot taken when a load returns no
@@ -93,6 +95,8 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
   const [showPrizesModal, setShowPrizesModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showBonusChores, setShowBonusChores] = useState(DEFAULT_SHOW_BONUS_CHORES);
+  // A routine's card (Family → Routines) shows its steps; keyed by schedule id.
+  const { routines: routineDays, reload: reloadRoutines, toggleStep: toggleRoutineStep } = useRoutinesToday();
   const [soundEnabled, setSoundEnabled] = useState(DEFAULT_SOUND_ENABLED);
   // Per-device: which real users this display hides. Bonus pseudo-user (id 0)
   // is not a real user and is not offered in the selector — the "Bonus Chores"
@@ -369,7 +373,8 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
         fetchHistory(),
         fetchPrizes(),
         fetchPrizeOffers(),
-        fetchSettings()
+        fetchSettings(),
+        reloadRoutines()
       ]);
       setLoading(false);
     } catch (error) {
@@ -996,7 +1001,15 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
     );
   };
 
+  // A step ticked in a routine's card; the last one completes its chore, so
+  // the widget reads everything again (and celebrates as for any chore).
+  const tickRoutineStep = async (day, stepId, done) => {
+    await toggleRoutineStep(day, stepId, done);
+    await fetchData();
+  };
+
   const renderChoreItem = (schedule) => {
+    const routineDay = routineDays[schedule.id];
     const dueStatus = getDueDateStatus(schedule.due_date, getTodayDateString(), schedule.completed);
     const rowBgColor = schedule.completed
       ? 'rgba(0, 255, 0, 0.1)'
@@ -1069,11 +1082,12 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
               {t('chores:widget.followupOf', { title: schedule.followup_of })}
             </Typography>
           )}
-          {schedule.description && (
+          {schedule.description && !routineDay && (
             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
               {schedule.description}
             </Typography>
           )}
+          {routineDay && <RoutineSteps day={routineDay} onToggle={tickRoutineStep} />}
         </Box>
         <Box sx={{ display: 'flex', gap: 0.5 }}>
           {/* The chore's icon takes the place of the checkmark while the chore
