@@ -171,6 +171,36 @@ test('upload rejects non-HTML files', async () => {
     assert.match(body.error, /Only HTML/);
 });
 
+test('an installed plugin carries its version and its content as git names it (issue #273)', async () => {
+    const crypto = require('node:crypto');
+    const manifest = (version) => `<!DOCTYPE html><html><head><script type="application/json" id="homeglow-manifest">${JSON.stringify({ manifestVersion: 1, id: 'versioned-test', name: 'Versioned', version })}</script></head><body>v</body></html>`;
+    const upload = (html) => {
+        const form = new FormData();
+        form.append('file', new Blob([html], { type: 'text/html' }), 'versioned-test.html');
+        return api('/api/widgets/upload', { method: 'POST', body: form });
+    };
+    const html = manifest('1.2.0');
+    assert.equal((await upload(html)).status, 200);
+    const entry = (await api('/api/widgets')).body.find((widget) => widget.filename === 'versioned-test.html');
+    assert.equal(entry.version, '1.2.0');
+    // The sha GitHub lists for the same file, so the store can say "Up to date".
+    const body = Buffer.from(html, 'utf8');
+    const gitSha = crypto.createHash('sha1').update(`blob ${body.length}\0`).update(body).digest('hex');
+    assert.equal(entry.contentSha, gitSha);
+    // A plugin without a manifest has no version, but still a sha.
+    const legacy = (await api('/api/widgets')).body.find((widget) => widget.filename === uploadedFilename);
+    assert.equal(legacy.version, null);
+    assert.match(legacy.contentSha, /^[0-9a-f]{40}$/);
+
+    // A version must be a short string.
+    for (const bad of [1.2, '', 'x'.repeat(33)]) {
+        const refused = await upload(manifest(bad));
+        assert.equal(refused.status, 400, JSON.stringify(bad));
+        assert.match(refused.body.error, /version must be a short string/);
+    }
+    await api('/api/widgets/versioned-test.html', { method: 'DELETE' });
+});
+
 test('plugins survive a restart with the widgets directory wiped (upgrade simulation)', async () => {
     await stopServer();
 

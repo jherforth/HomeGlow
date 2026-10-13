@@ -155,8 +155,6 @@
     "uploadHtml": "Upload HTML Widget",
     "githubRepo": "GitHub Plugin Repository",
     "refreshAvailable": "REFRESH AVAILABLE PLUGINS",
-    "clickThe": "Click the",
-    "buttonAboveToLoad": "button above to load the list of plugins available for installation.",
     "install": "Install"
   },
   "plugins": {
@@ -187,7 +185,14 @@
       "health": "Health",
       "games": "Games",
       "other": "Other"
-    }
+    },
+    "storeLoading": "Loading the plugins in the repository…",
+    "storeFailed": "Couldn’t load the plugins from GitHub. Try Refresh in a few minutes.",
+    "update": "Update",
+    "updateTo": "Update to {{version}}",
+    "upToDate": "Up to date",
+    "updateAvailable": "Update available: {{version}}",
+    "updateAvailableNoVersion": "Update available"
   },
   "devices": {
     "manageHelp": "Manage devices and copy tabs/widget settings between them. Copying will overwrite the current device tabs and widget assignments.",

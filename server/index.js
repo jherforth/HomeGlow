@@ -804,6 +804,15 @@ const PLUGIN_ID_REGEX = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const PLUGIN_SETTING_KEY_REGEX = /^[a-zA-Z][a-zA-Z0-9]{0,63}$/;
 const PLUGIN_DESCRIPTION_MAX_LENGTH = 300;
 const PLUGIN_CATEGORY_MAX_LENGTH = 40;
+const PLUGIN_VERSION_MAX_LENGTH = 32;
+
+// A plugin's content as git names it: the blob sha GitHub's listing gives
+// each file. An installed copy with the same sha as the store's is that very
+// file, so "Up to date" needs no version to have been raised (issue #273).
+function pluginContentSha(content) {
+  const body = Buffer.from(String(content), 'utf8');
+  return crypto.createHash('sha1').update(`blob ${body.length}\0`).update(body).digest('hex');
+}
 const PLUGIN_SETTING_TYPES = new Set(['number', 'string', 'boolean', 'select']);
 const PLUGIN_SETTING_SCOPES = new Set(['household', 'device']);
 
@@ -854,6 +863,12 @@ function extractPluginManifest(htmlContent) {
     } else if (manifest.author.trim().length > PLUGIN_AUTHOR_MAX_LENGTH) {
       errors.push(`author must be ${PLUGIN_AUTHOR_MAX_LENGTH} characters or fewer.`);
     }
+  }
+  // Its version, shown beside its name (issue #273): any short string, as a
+  // theme's, so "1.0.0" and "2024.3" alike install.
+  if (manifest.version !== undefined
+    && (typeof manifest.version !== 'string' || !manifest.version.trim() || manifest.version.length > PLUGIN_VERSION_MAX_LENGTH)) {
+    errors.push(`version must be a short string (at most ${PLUGIN_VERSION_MAX_LENGTH} characters), e.g. "1.0.0".`);
   }
   // Which heading the store lists it under. Only the type is checked: the
   // client owns the category list and shows a slug it doesn't know under
@@ -1061,12 +1076,15 @@ async function loadWidgetRegistry() {
 // Helper: List installed plugins in the legacy registry response shape
 function listInstalledPlugins() {
   return db.prepare(
-    'SELECT filename, name, source, original_url, plugin_id, manifest_json, installed_at FROM plugins ORDER BY installed_at, filename'
+    'SELECT filename, name, content, source, original_url, plugin_id, manifest_json, installed_at FROM plugins ORDER BY installed_at, filename'
   ).all().map((row) => {
     const manifest = row.manifest_json ? parseJsonObject(row.manifest_json, null) : null;
     return {
       name: row.name,
       filename: row.filename,
+      // What the store compares against (issue #273).
+      version: typeof manifest?.version === 'string' ? manifest.version.trim() : null,
+      contentSha: pluginContentSha(row.content),
       uploadedAt: row.installed_at,
       source: row.source,
       author: resolvePluginAuthor({ manifest, filename: row.filename }),
@@ -1779,6 +1797,7 @@ async function fetchRemotePluginMetadata(downloadUrl, sha, filename) {
     pluginId: null,
     title: null,
     category: null,
+    version: null,
     author: resolvePluginAuthor({ manifest: null, filename }),
   };
   try {
@@ -1800,6 +1819,7 @@ async function fetchRemotePluginMetadata(downloadUrl, sha, filename) {
         // file's ("Countdown"), so search matches either.
         title: title || null,
         category: category || null,
+        version: typeof manifest.version === 'string' && manifest.version.trim() ? manifest.version.trim() : null,
         author: resolvePluginAuthor({ manifest, filename }),
       };
     }
@@ -1834,13 +1854,36 @@ function findPreviewUrl(entries, htmlFilename) {
   return match ? match.download_url : null;
 }
 
+// The list is read for anyone opening Admin → Plugins (issue #273), and
+// GitHub allows an unsigned server 60 calls an hour, a few per listing: kept
+// ten minutes. Refresh (?refresh=1) reads it afresh.
+const PLUGIN_STORE_TTL_MS = 10 * 60 * 1000;
+let pluginStoreListing = null; // { at, widgets }
+
 // Endpoint: List available widgets from GitHub repository
 fastify.get('/api/widgets/github', async (request, reply) => {
+  const fresh = request.query?.refresh === '1' || request.query?.refresh === 'true';
+  if (!fresh && pluginStoreListing && Date.now() - pluginStoreListing.at < PLUGIN_STORE_TTL_MS) {
+    return pluginStoreListing.widgets;
+  }
   try {
     console.log('Fetching widgets from GitHub repository...');
 
+    // Every file is read at one commit, never at HEAD, as themes are:
+    // raw.githubusercontent.com caches HEAD for five minutes, so right after a
+    // merge it serves the old file under the new sha, and the old file would
+    // be listed (its version cached under the new sha) and installed as the
+    // new one, never "Up to date" (issue #273).
+    const { data: head } = await axios.get(`${GITHUB_API_BASE}/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/commits/HEAD`, {
+      headers: { 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'HomeGlow-Server/1.0' },
+      timeout: 10000
+    });
+    const ref = head?.sha;
+    if (typeof ref !== 'string' || !/^[0-9a-f]{40}$/.test(ref)) throw new Error('GitHub gave no commit for HEAD');
+    const pinned = (filePath) => `https://raw.githubusercontent.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/${ref}/${filePath.split('/').map(encodeURIComponent).join('/')}`;
+
     // Get repository contents
-    const repoUrl = `${GITHUB_API_BASE}/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/contents`;
+    const repoUrl = `${GITHUB_API_BASE}/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/contents?ref=${ref}`;
     const response = await axios.get(repoUrl, {
       headers: {
         'Accept': 'application/vnd.github.v3+json',
@@ -1868,7 +1911,7 @@ fastify.get('/api/widgets/github', async (request, reply) => {
           // and saying so is more useful than inventing one.
           description: null,
           previewUrl: findPreviewUrl(response.data, item.name),
-          download_url: item.download_url,
+          download_url: pinned(item.path),
           sha: item.sha,
           path: item.path,
           size: item.size,
@@ -1877,7 +1920,7 @@ fastify.get('/api/widgets/github', async (request, reply) => {
       } else if (item.type === 'dir') {
         // Check if directory contains HTML files
         try {
-          const dirUrl = `${GITHUB_API_BASE}/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/contents/${item.path}`;
+          const dirUrl = `${GITHUB_API_BASE}/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/contents/${item.path}?ref=${ref}`;
           const dirResponse = await axios.get(dirUrl, {
             headers: {
               'Accept': 'application/vnd.github.v3+json',
@@ -1896,7 +1939,7 @@ fastify.get('/api/widgets/github', async (request, reply) => {
               filename: htmlFile.name,
               description: null,
               previewUrl: findPreviewUrl(dirResponse.data, htmlFile.name),
-              download_url: htmlFile.download_url,
+              download_url: pinned(htmlFile.path),
               sha: htmlFile.sha,
               path: htmlFile.path,
               size: htmlFile.size,
@@ -1919,14 +1962,18 @@ fastify.get('/api/widgets/github', async (request, reply) => {
       widget.author = meta.author;
       widget.title = meta.title;
       widget.category = meta.category;
+      widget.version = meta.version;
       if (meta.pluginId) widget.pluginId = meta.pluginId;
     }));
 
     console.log(`Found ${widgets.length} widgets in GitHub repository`);
+    pluginStoreListing = { at: Date.now(), widgets };
     return widgets;
 
   } catch (error) {
     console.error('Error fetching GitHub widgets:', error);
+    // GitHub unreachable or out of calls: the last list is better than none.
+    if (pluginStoreListing) return pluginStoreListing.widgets;
     if (error.response) {
       return reply.status(error.response.status).send({
         error: `GitHub API error: ${error.response.status} ${error.response.statusText}`,

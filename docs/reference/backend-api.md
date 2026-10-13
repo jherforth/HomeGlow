@@ -102,10 +102,10 @@ segment (the browser's `localStorage` UUID).
 | Method | Path | Purpose |
 | --- | --- | --- |
 | POST | `/api/widgets/upload` | Upload an HTML widget. |
-| GET | `/api/widgets` | List installed widgets (registry). |
+| GET | `/api/widgets` | List installed widgets (registry), each with its manifest `version` (or null) and `contentSha`, the git blob sha of its content, to compare with the repository's. |
 | DELETE | `/api/widgets/:filename` | Delete a widget. |
 | GET | `/api/widgets/debug` | Inspect the widgets directory + registry. |
-| GET | `/api/widgets/github` | List widgets available in the `HomeGlowPlugins` GitHub repo. |
+| GET | `/api/widgets/github` | List widgets available in the `HomeGlowPlugins` GitHub repo, each with its `sha` (git blob sha) and manifest `version`. Kept for 10 minutes (GitHub allows an unsigned server 60 calls an hour); `?refresh=1` reads it afresh. When GitHub can't be read, the last list is returned. |
 | POST | `/api/widgets/github/install` | Install a widget from GitHub. |
 | GET | `/widgets/:filename` | Serve a widget's HTML (theme-aware, sandboxed). |
 | GET | `/plugin-sdk/v1.js` | Serve the plugin SDK (`window.HomeGlow`) loaded by manifest plugins. |

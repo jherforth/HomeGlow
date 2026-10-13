@@ -55,6 +55,7 @@ import {
   Cancel,
   Add,
   Upload,
+  CheckCircle,
   CloudDownload,
   Refresh,
   Warning,
@@ -88,7 +89,7 @@ import DeleteConfirmationDialog from './DeleteConfirmationDialog';
 import AdminFormSection from './AdminFormSection';
 import TimezoneSettings from './TimezoneSettings';
 import VersionInfoCard from './VersionInfoCard';
-import { groupPluginsByCategory } from '../utils/pluginCatalog.js';
+import { groupPluginsByCategory, pluginStoreStatus, storeEntryOf } from '../utils/pluginCatalog.js';
 import LoadingBackdrop from './LoadingBackdrop';
 import RefreshIntervalSelect from './RefreshIntervalSelect';
 import ScreensaverIntervalSlider from './ScreensaverIntervalSlider';
@@ -271,6 +272,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   // Which installed plugin is currently showing a live preview, if any.
   const [previewPlugin, setPreviewPlugin] = useState(null);
   const [loadingGithub, setLoadingGithub] = useState(false);
+  // The store list loads itself on opening Plugins (issue #273): whether it
+  // has, and why not when it couldn't.
+  const [githubLoaded, setGithubLoaded] = useState(false);
+  const [githubError, setGithubError] = useState(false);
   const [deleteUserDialog, setDeleteUserDialog] = useState({ open: false, user: null });
   const [choreModal, setChoreModal] = useState({ open: false, user: null, userChores: [] });
   const [isLoading, setIsLoading] = useState(false);
@@ -618,18 +623,27 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     }
   };
 
-  const fetchGithubWidgets = async () => {
+  // fresh: past the server's ten-minute copy (the Refresh button).
+  const fetchGithubWidgets = async (fresh = false) => {
     setLoadingGithub(true);
+    setGithubError(false);
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/widgets/github`);
+      const response = await axios.get(`${API_BASE_URL}/api/widgets/github`, fresh ? { params: { refresh: 1 } } : undefined);
       setGithubWidgets(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching GitHub widgets:', error);
-      setGithubWidgets([]);
+      setGithubError(true);
     } finally {
       setLoadingGithub(false);
+      setGithubLoaded(true);
     }
   };
+
+  // Opening Plugins lists what the repository has, as themes do.
+  useEffect(() => {
+    if (isAuthenticated && location.section === 'plugins' && !githubLoaded && !loadingGithub) fetchGithubWidgets();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, location.section, githubLoaded]);
 
   const fetchTagsForCommit = async (repository, commitSha) => {
     const repoParts = splitRepositorySlug(repository);
@@ -2163,7 +2177,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                       <Typography variant="subtitle1">{t('admin:widgets.githubRepo')}</Typography>
                       <Button
-                        onClick={fetchGithubWidgets}
+                        onClick={() => fetchGithubWidgets(true)}
                         startIcon={loadingGithub ? <CircularProgress size={16} /> : <Refresh />}
                         disabled={loadingGithub}
                         variant="contained"
@@ -2186,9 +2200,14 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                       </a>
                     </Alert>
 
-                    {githubWidgets.length === 0 && !loadingGithub && (
-                      <Alert severity="info" sx={{ mb: 2 }} icon={<Refresh />}>
-                        {t('admin:widgets.clickThe')} <strong>{t('admin:widgets.refreshAvailable')}</strong> {t('admin:widgets.buttonAboveToLoad')}
+                    {githubWidgets.length === 0 && loadingGithub && (
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        {t('admin:plugins.storeLoading')}
+                      </Typography>
+                    )}
+                    {githubError && !loadingGithub && (
+                      <Alert severity="warning" sx={{ mb: 2 }}>
+                        {t('admin:plugins.storeFailed')}
                       </Alert>
                     )}
 
@@ -2286,7 +2305,9 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                             </ListSubheader>
                             <Collapse component="li" in={isOpen} timeout="auto" unmountOnExit id={groupId}>
                               <List disablePadding>
-                                {plugins.map((widget) => (
+                                {plugins.map((widget) => {
+                                  const status = pluginStoreStatus(widget, uploadedWidgets);
+                                  return (
                                   <ListItem key={widget.path} sx={{ border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)', mb: 1 }}>
                                     {/* Sibling image in the plugins repo (chore-metrics.png next to
                                         chore-metrics.html). Deliberately not carried in the manifest:
@@ -2325,6 +2346,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                                       primary={(
                                         <>
                                           {widget.name}
+                                          {widget.version && (
+                                            <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                                              {widget.version}
+                                            </Typography>
+                                          )}
                                           {/* Who wrote it (issue #210), worked out by the server. */}
                                           {widget.author && (
                                             <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
@@ -2340,17 +2366,28 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                                         positioned and reserves only an icon-sized gap, so a wrapped
                                         description runs underneath the button (#147 follow-up). */}
                                     <Box sx={{ flexShrink: 0, ml: 2, alignSelf: 'center' }}>
+                                      {/* As themes: Install, Update (to the store's
+                                          version), or Up to date when the installed
+                                          copy is the very same file (issue #273). */}
                                       <Button
                                         onClick={() => installGithubWidget(widget)}
-                                        startIcon={<CloudDownload />}
+                                        startIcon={status === 'current' ? <CheckCircle /> : <CloudDownload />}
                                         size="small"
-                                        variant="outlined"
+                                        variant={status === 'install' ? 'outlined' : 'text'}
+                                        disabled={status === 'current'}
                                       >
-                                        {t('admin:widgets.install')}
+                                        {status === 'install'
+                                          ? t('admin:widgets.install')
+                                          : status === 'current'
+                                            ? t('admin:plugins.upToDate')
+                                            : widget.version
+                                              ? t('admin:plugins.updateTo', { version: widget.version })
+                                              : t('admin:plugins.update')}
                                       </Button>
                                     </Box>
                                   </ListItem>
-                                ))}
+                                  );
+                                })}
                               </List>
                             </Collapse>
                           </React.Fragment>
@@ -2404,6 +2441,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
 
                     {uploadedWidgets.map((plugin) => {
                       const pSettings = pluginSettings[plugin.filename] || {};
+                      const storeEntry = plugin.source === 'builder' ? null : storeEntryOf(plugin, githubWidgets);
+                      const updatable = storeEntry && pluginStoreStatus(storeEntry, [plugin]) === 'update';
                       const pluginWidgetName = `plugin:${plugin.filename}`;
                       const hasRequiredTabsError = Boolean(pSettings.enabled) && (!Array.isArray(pluginAssignments[pluginWidgetName]) || pluginAssignments[pluginWidgetName].length === 0);
                       return (
@@ -2414,10 +2453,16 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                                 {plugin.name}
                               </Typography>
                               <Typography variant="caption" color="text.secondary">
-                                {plugin.author
-                                  ? `${plugin.filename} · ${t('admin:plugins.byAuthor', { author: plugin.author })}`
-                                  : plugin.filename}
+                                {[plugin.filename, plugin.version, plugin.author && t('admin:plugins.byAuthor', { author: plugin.author })]
+                                  .filter(Boolean).join(' · ')}
                               </Typography>
+                              {updatable && (
+                                <Typography variant="caption" sx={{ display: 'block', color: 'var(--accent)', fontWeight: 600 }}>
+                                  {storeEntry.version
+                                    ? t('admin:plugins.updateAvailable', { version: storeEntry.version })
+                                    : t('admin:plugins.updateAvailableNoVersion')}
+                                </Typography>
+                              )}
                               {/* Straight from the plugin's own manifest (issue #147). A
                                   legacy widget has none, and says so rather than showing
                                   a made-up line. */}
@@ -2434,6 +2479,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                                   so it can preview itself. On demand rather than always:
                                   these are real plugins that make real API calls, and a
                                   list of live iframes would run all of them at once. */}
+                              {updatable && (
+                                <Button size="small" variant="outlined" startIcon={<CloudDownload />} onClick={() => installGithubWidget(storeEntry)}>
+                                  {t('admin:plugins.update')}
+                                </Button>
+                              )}
                               <Button
                                 size="small"
                                 onClick={() => setPreviewPlugin((current) => current === plugin.filename ? null : plugin.filename)}
