@@ -44,3 +44,33 @@ export function groupPluginsByCategory(plugins, search = '') {
     .filter((category) => groups.has(category))
     .map((category) => ({ category, plugins: groups.get(category) }));
 }
+
+// The installed copy of a store plugin: the same manifest id, or failing that
+// (a plugin without one) the same file name. null when it isn't installed.
+export function installedCopyOf(storePlugin, installed) {
+  const list = Array.isArray(installed) ? installed : [];
+  return (storePlugin.pluginId && list.find((plugin) => plugin.pluginId === storePlugin.pluginId))
+    || list.find((plugin) => plugin.filename === storePlugin.filename)
+    || null;
+}
+
+// The store's entry for an installed plugin, the other way round.
+export function storeEntryOf(installedPlugin, store) {
+  const list = Array.isArray(store) ? store : [];
+  return (installedPlugin.pluginId && list.find((plugin) => plugin.pluginId === installedPlugin.pluginId))
+    || list.find((plugin) => plugin.filename === installedPlugin.filename)
+    || null;
+}
+
+// Where a store plugin stands on this HomeGlow (issue #273):
+//   'install'  not installed;
+//   'current'  installed, and the very same file (the git sha GitHub lists
+//              equals the installed copy's), whatever its version says;
+//   'update'   installed, and any other copy, which the store's replaces.
+// Comparing the file rather than the version means an update shows even when
+// its author forgot to raise the version.
+export function pluginStoreStatus(storePlugin, installed) {
+  const copy = installedCopyOf(storePlugin, installed);
+  if (!copy) return 'install';
+  return copy.contentSha && storePlugin.sha && copy.contentSha === storePlugin.sha ? 'current' : 'update';
+}

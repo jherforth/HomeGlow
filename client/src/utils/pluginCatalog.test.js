@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { OTHER_CATEGORY, PLUGIN_CATEGORIES, groupPluginsByCategory } from './pluginCatalog.js';
+import {
+  OTHER_CATEGORY, PLUGIN_CATEGORIES, groupPluginsByCategory, installedCopyOf, pluginStoreStatus, storeEntryOf,
+} from './pluginCatalog.js';
 
 const plugin = (name, category, title) => ({ name, category, title, path: `${name}.html` });
 
@@ -50,5 +52,38 @@ describe('groupPluginsByCategory', () => {
 
   it('treats blank search as no search', () => {
     expect(shape(groupPluginsByCategory(store, '   '))).toEqual(shape(groupPluginsByCategory(store)));
+  });
+});
+
+describe('pluginStoreStatus (issue #273)', () => {
+  const storeMusic = { filename: 'Music.html', pluginId: 'music', sha: 'aaa', version: '1.1.0' };
+  const storeLegacy = { filename: 'Old.html', sha: 'ccc' };
+
+  it('is install when nothing here matches', () => {
+    expect(pluginStoreStatus(storeMusic, [])).toBe('install');
+    expect(pluginStoreStatus(storeMusic, [{ filename: 'Other.html', pluginId: 'other', contentSha: 'aaa' }])).toBe('install');
+  });
+
+  it('is current when the installed copy is the very same file, whatever its version', () => {
+    expect(pluginStoreStatus(storeMusic, [{ filename: 'Music.html', pluginId: 'music', contentSha: 'aaa', version: '1.0.0' }])).toBe('current');
+  });
+
+  it('is update for any other copy, even one whose version was not raised', () => {
+    expect(pluginStoreStatus(storeMusic, [{ filename: 'Music.html', pluginId: 'music', contentSha: 'bbb', version: '1.1.0' }])).toBe('update');
+    expect(pluginStoreStatus(storeMusic, [{ filename: 'Music.html', pluginId: 'music' }])).toBe('update');
+  });
+
+  it('matches by manifest id first, then by file name', () => {
+    const renamed = { filename: 'MyMusic.html', pluginId: 'music', contentSha: 'aaa' };
+    expect(installedCopyOf(storeMusic, [renamed])).toBe(renamed);
+    expect(pluginStoreStatus(storeMusic, [renamed])).toBe('current');
+    const legacy = { filename: 'Old.html', contentSha: 'ccc' };
+    expect(pluginStoreStatus(storeLegacy, [legacy])).toBe('current');
+  });
+
+  it('finds the store entry for an installed plugin', () => {
+    expect(storeEntryOf({ filename: 'MyMusic.html', pluginId: 'music' }, [storeLegacy, storeMusic])).toBe(storeMusic);
+    expect(storeEntryOf({ filename: 'Old.html' }, [storeLegacy, storeMusic])).toBe(storeLegacy);
+    expect(storeEntryOf({ filename: 'Mine.html', pluginId: 'mine' }, [storeLegacy, storeMusic])).toBe(null);
   });
 });

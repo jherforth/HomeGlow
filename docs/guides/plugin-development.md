@@ -161,6 +161,7 @@ Embed a manifest as a JSON script block anywhere in your HTML (conventionally in
   "manifestVersion": 1,
   "id": "my-plugin",
   "name": "My Plugin",
+  "version": "1.0.0",
   "description": "One sentence on what this does, shown in the plugin list.",
   "author": "Your name or GitHub handle",
   "category": "family-hub",
@@ -191,6 +192,7 @@ serving your widget, and the SDK picks it up — you never pass your own id.
 | `name` | — | Display name shown in the Admin Panel (falls back to the filename). |
 | `description` | — | One sentence on what the plugin does, shown under its name in the Admin Panel and in the browse list. Max 300 characters — it is a card subtitle, not a README. Worth writing: without it the list shows only a filename. |
 | `author` | — | Who wrote the plugin, shown as "by …" beside its name in the Admin Panel and the browse list. Max 80 characters. Without it no author is shown, except on the plugins that shipped before v1.6, which are credited to HomeGlow. |
+| `version` | — | The plugin's version, shown beside its name in the Admin Panel and the plugin list: `major.minor.patch` by convention, any string up to 32 characters accepted. Raise it with every change (`1.0.1` for a fix, `1.1.0` for something new, `2.0.0` for a change that drops a setting or needs a newer HomeGlow). The list says **Up to date** or **Update to …** by comparing the installed file with the repository's itself (its git sha), so an update shows even when the version wasn't raised; the version tells people what they are getting. The plugins in HomeGlowPlugins all started at `1.0.0` (issue #273). |
 | `category` | — | The heading the plugin store lists it under: `clock-calendar`, `news-weather`, `chores-rewards`, `family-hub`, `meals`, `household`, `health` or `games`. Without one, or with a value not on that list, it is listed under **Other**. |
 | `apiVersion` | — | `"v1"` — the API contract you target. |
 | `storage` | — | `true` to use the storage API. Without it, storage calls are 403. |

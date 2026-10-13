@@ -155,8 +155,6 @@
     "uploadHtml": "Subir un widget HTML",
     "githubRepo": "Repositorio de complementos de GitHub",
     "refreshAvailable": "ACTUALIZAR LOS PLUGINS DISPONIBLES",
-    "clickThe": "Pulsa el botón",
-    "buttonAboveToLoad": "de arriba para cargar la lista de plugins disponibles.",
     "install": "Instalar"
   },
   "plugins": {
@@ -187,7 +185,14 @@
       "health": "Salud",
       "games": "Juegos",
       "other": "Otros"
-    }
+    },
+    "storeLoading": "Cargando los plugins del repositorio…",
+    "storeFailed": "No se pudieron cargar los plugins de GitHub. Prueba Actualizar dentro de unos minutos.",
+    "update": "Actualizar",
+    "updateTo": "Actualizar a {{version}}",
+    "upToDate": "Al día",
+    "updateAvailable": "Actualización disponible: {{version}}",
+    "updateAvailableNoVersion": "Actualización disponible"
   },
   "devices": {
     "manageHelp": "Gestiona los dispositivos y copia pestañas y ajustes de widgets entre ellos. Al copiar se sobrescriben las pestañas y widgets del dispositivo actual.",

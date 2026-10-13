@@ -361,6 +361,12 @@ gates in `app.jsx` (sound scheduler + screensaver render), UI in `AdminPanel.jsx
 - Upload self-contained HTML widgets through the Admin Panel, or install from the
   `HomeGlowPlugins` GitHub repo. They render in sandboxed iframes, receive the
   theme via URL params, and can share the app stylesheet.
+- Admin → Plugins lists the repository's plugins by itself on opening (Refresh
+  reads it again), in their categories, each with its version. Beside each one,
+  as for themes: **Install**, **Update to …** or **Up to date**, decided by
+  comparing the installed file with the repository's (its git sha). An installed
+  plugin with a newer copy in the repository says so in Plugin Settings, with an
+  **Update** button (issue #273).
 - See the dedicated [Custom Widget Development](../guides/custom-widgets.md) guide.
 
 **Code:** `PluginWidgetWrapper.jsx`, backend `/api/widgets*` routes, and
