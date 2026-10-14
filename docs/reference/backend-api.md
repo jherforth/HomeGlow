@@ -187,7 +187,7 @@ static route.
 | GET/POST | `/api/chores` | List / create chore definitions. Each listed chore carries `followups: [{ id, followup_chore_id, title }]`. |
 | PATCH/DELETE | `/api/chores/:id` | Update / delete a chore. Deleting removes its follow-up rules and any rule that names it. |
 | GET/PUT | `/api/chores/:id/followups` | A chore's follow-ups (issue #241). PUT replaces them with `{ followups: [{ followup_chore_id, user_ids, delay_minutes }] }`: at most 3, not the chore itself, no loops, at least one person, delay 0–10080 minutes. |
-| GET/POST | `/api/chore-schedules` | List (filter by `user_id`, `visible`, `usage`, `chore_id`) / create. Accepts `due_time` (`HH:MM`), `sound`, `sound_enabled`, `reminder_interval_minutes` for due-time sounds, and `due_date` (`YYYY-MM-DD`) for calendar deadlines. PATCH `user_id` reassigns a chore and re-checks the daily bonus for both owners. |
+| GET/POST | `/api/chore-schedules` | List (filter by `user_id`, `visible`, `usage`, `chore_id`) / create. Accepts `due_time` (`HH:MM`), `sound`, `sound_enabled`, `reminder_interval_minutes` for due-time sounds, and `due_date` (`YYYY-MM-DD`) for calendar deadlines. `expire_minutes` (one of 0, 15, 30, 60, 120, 180, 240, 360, 480, 720, or null) makes it expire that long after its due time; it needs a `due_time` (400 otherwise), and clearing the due time clears it. PATCH `user_id` reassigns a chore and re-checks the daily bonus for both owners. |
 | GET/PATCH/DELETE | `/api/chore-schedules/:id` | Single schedule CRUD. |
 | POST | `/api/chore-schedules/bulk` | Bulk create schedules. |
 | GET/POST | `/api/chore-history` | Query / add history entries. |
@@ -195,14 +195,14 @@ static route.
 | GET | `/api/chore-history/summary/:userId` | Summary/aggregate for a user. |
 | GET | `/api/chore-history/recent` | Recent (last 7 days) completions. |
 | DELETE | `/api/chore-history/:id` | Delete a history entry. |
-| POST | `/api/chores/complete` | Mark a chore complete (awards clams / daily bonus). A completion dated today hands out the chore's follow-ups; the response lists them in `followups_created`. |
+| POST | `/api/chores/complete` | Mark a chore complete (awards clams / daily bonus). A completion dated today hands out the chore's follow-ups; the response lists them in `followups_created`. Past its expiry it answers **403** `{ code: 'CHORE_EXPIRED' }` unless the body has `parent_approved: true`; that completion is marked `approved_late` in the history. |
 | POST | `/api/chores/uncomplete` | Undo a completion, and remove the follow-ups it handed out that nobody has done (`followups_removed`). |
 | GET | `/api/routines` | Routines (`{ routines, steps, imported }`): each with its `steps` (step ids, in order), `days`, `trigger` ('days' or 'calendar') and its `chore_id` / `schedule_id`. `imported` is the one-time import from the Routines plugin, if any. The chores and schedules lists carry `routine_id` on a routine's own. |
 | POST/PATCH/DELETE | `/api/routines`, `/api/routines/:id` | Create (makes the routine's chore and schedule), edit in place (the chore and schedules are updated, not replaced), delete (deletes its chore; history stays). Body: `name, icon, user_id, trigger, days, match_text, whole_word, calendar_source_ids, lead_minutes, steps, start_time, end_time, milestone_every, milestone_clams`. Creating with `user_ids: [...]` instead of `user_id` makes the routine for each person, one each (all or none), and answers `{ routines }`. |
 | DELETE | `/api/routines/bulk` | `{ ids }` (1–100): delete several routines and their chores at once; answers `{ deleted }`. |
 | GET/POST/PATCH/DELETE | `/api/routine-steps`, `/api/routine-steps/:id` | The step library (`label`, `icon`). Deleting a step in use answers 409 with `usedBy`. |
 | GET | `/api/routines/today?date=` | The routines on a date, keyed by the schedule each is done against: `{ routineId, scheduleId, name, steps, done, completed, streak, startTime, endTime, onTime }`. The chore widget draws them in those cards. |
-| POST | `/api/routines/:id/steps/:stepId` | Tick or untick one step: `{ date, done }`. The last tick completes the routine's chore; an untick on a completed day uncompletes it. Answers the day as `/today` does. |
+| POST | `/api/routines/:id/steps/:stepId` | Tick or untick one step: `{ date, done }`. The last tick completes the routine's chore; an untick on a completed day uncompletes it. Answers the day as `/today` does. On an expired day a tick answers 403 `CHORE_EXPIRED` unless `parent_approved: true`, which completes the whole routine. Routines also take `expire_minutes` (after the end time). |
 
 ### Users & clams
 | Method | Path | Purpose |

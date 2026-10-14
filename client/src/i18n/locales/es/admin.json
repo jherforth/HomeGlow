@@ -361,7 +361,8 @@
       "groupSummary": "{{done}} hechas · {{missed}} omitidas · {{clams}} 🥟 · última {{last}}",
       "showAll_one": "Mostrar {{count}}",
       "showAll_other": "Mostrar las {{count}}",
-      "showFewer": "Mostrar menos"
+      "showFewer": "Mostrar menos",
+      "approvedLate": "Aprobada tarde"
     }
   },
   "prizes": {

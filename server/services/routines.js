@@ -5,6 +5,8 @@
 // schedules; ticking the last step completes that chore. Ported from the
 // Routines plugin, whose behaviour this keeps.
 
+const choreExpiry = require('../utils/choreExpiry');
+
 const LOOKAHEAD_DAYS = 14;       // calendar routines are scheduled this far ahead
 const HIDE_AFTER_DAYS = 2;       // past event days are hidden (the nightly missed-chore job reads yesterday)
 const DELETE_AFTER_DAYS = 120;   // and deleted once older than this
@@ -282,6 +284,13 @@ function validateRoutine(body, { stepIds, userIds }) {
         return n;
     };
     const lead = whole('lead_minutes', 0, 720);
+    // Expires (issue #279): from the end time, so it needs one; and a weekday
+    // routine's chore is due at its start time, so that too.
+    const expire = choreExpiry.normalizeExpireMinutes(input.expire_minutes);
+    if (!expire.valid) errors.push(`expire_minutes must be one of: ${choreExpiry.EXPIRE_OPTIONS.join(', ')}.`);
+    else if (expire.value !== null && (!input.end_time || (trigger === 'days' && !input.start_time))) {
+        errors.push(trigger === 'days' ? 'Set a start and an end time for the routine to expire.' : 'Set an end time for the routine to expire.');
+    }
     const every = whole('milestone_every', 0, 365);
     const clams = whole('milestone_clams', 0, 999);
     const sources = Array.isArray(input.calendar_source_ids)
@@ -302,8 +311,21 @@ function validateRoutine(body, { stepIds, userIds }) {
             steps,
             milestone_every: every,
             milestone_clams: clams,
+            expire_minutes: expire.value,
         },
     };
+}
+
+/**
+ * The expire_minutes a routine's schedule gets: due at `dueTime` (its start,
+ * or a calendar day's), expiring the buffer after the routine's end time.
+ * null when the routine doesn't expire.
+ */
+function scheduleExpireMinutes(routine, dueTime) {
+    const buffer = routine.expire_minutes;
+    if (buffer === null || buffer === undefined || !routine.end_time || !dueTime) return null;
+    const minutes = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+    return Math.max(0, minutes(routine.end_time) - minutes(dueTime)) + Number(buffer);
 }
 
 module.exports = {
@@ -330,4 +352,5 @@ module.exports = {
     milestoneDue,
     onTime,
     validateRoutine,
+    scheduleExpireMinutes,
 };

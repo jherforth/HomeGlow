@@ -31,7 +31,7 @@ import {
   Popover,
   Switch
 } from '@mui/material';
-import { Edit, Save, Cancel, Add, Delete, Check, Undo, SwapHoriz, Snooze, Backspace, Settings as SettingsIcon } from '@mui/icons-material';
+import { Edit, Save, Cancel, Add, Delete, Check, Close, Undo, SwapHoriz, Snooze, Backspace, Settings as SettingsIcon } from '@mui/icons-material';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import LoadingBackdrop from './LoadingBackdrop';
@@ -50,6 +50,8 @@ import PrizeCelebration from './PrizeCelebration.jsx';
 import { requestCelebration } from '../utils/celebrations.js';
 import ChoreIconPicker from './ChoreIconPicker.jsx';
 import RoutineSteps from './RoutineSteps.jsx';
+import LateApprovalDialog from './LateApprovalDialog.jsx';
+import { householdNow, isExpired } from '../utils/choreExpiry.js';
 import useRoutinesToday from '../utils/useRoutinesToday.js';
 import { shouldPersistSettings } from '../utils/widgetSettingsPersist';
 
@@ -116,6 +118,11 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
   const [transferDialog, setTransferDialog] = useState({ open: false, schedule: null, targetUserId: null, mode: 'keep', bonus: 1 });
   const [snoozeDialog, setSnoozeDialog] = useState({ open: false, schedule: null, until: '' });
   const [pinGate, setPinGate] = useState({ open: false, onSuccess: null });
+  // A chore past its expiry was tapped (issue #279): { name, approve } while
+  // the child is asked to fetch a parent.
+  const [lateApproval, setLateApproval] = useState(null);
+  // The household's clock, so cards expire while the board is on screen.
+  const [now, setNow] = useState(() => householdNow());
   // Prize store (spending mechanism): one-time offers, request queue, and the
   // avatar quick-spend dialog for off-store purchases.
   const [prizeOffers, setPrizeOffers] = useState([]);
@@ -293,6 +300,23 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
       void fetchPrizeOffers();
     });
   }, [users, soundEnabled]);
+
+  const anyExpiring = schedules.some((s) => s.due_time && s.expire_minutes !== null && s.expire_minutes !== undefined);
+  useEffect(() => {
+    if (!anyExpiring) return undefined;
+    const tick = () => {
+      if (document.hidden) return;
+      const next = householdNow();
+      setNow((prev) => (prev.date === next.date && prev.minutes === next.minutes ? prev : next));
+    };
+    tick();
+    const timer = setInterval(tick, 20 * 1000);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, [anyExpiring]);
 
   // Finishing every regular chore for the day sets off confetti (issue #140).
   //
@@ -563,7 +587,37 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [quickSpend.open]);
 
+  // Past its expiry a chore is done only with a parent's yes (and PIN, when
+  // one is set); the server refuses it otherwise (issue #279).
+  const askParent = (name, approve) => setLateApproval({ name, approve });
+  const approveLate = () => {
+    const { approve } = lateApproval;
+    setLateApproval(null);
+    requirePin(async () => {
+      try {
+        setIsLoading(true);
+        await approve();
+      } catch (error) {
+        console.error('Error completing an expired chore:', error);
+        alert(t('chores:expiry.approveFailed'));
+      } finally {
+        setIsLoading(false);
+      }
+      await fetchData();
+    });
+  };
+  const askParentForChore = (schedule) => askParent(schedule.title, () => axios.post(`${API_BASE_URL}/api/chores/complete`, {
+    chore_schedule_id: schedule.id,
+    user_id: schedule.user_id,
+    date: getTodayDateString(),
+    parent_approved: true,
+  }));
+
   const toggleChoreCompletion = async (schedule, isCompleted) => {
+    if (!isCompleted && isExpired(schedule, getTodayDateString(), householdNow())) {
+      askParentForChore(schedule);
+      return;
+    }
     try {
       setIsLoading(true);
       const today = getTodayDateString();
@@ -586,7 +640,9 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
 
       await fetchData();
     } catch (error) {
-      console.error('Error toggling chore completion:', error);
+      // Expired since this screen last looked: ask for a parent after all.
+      if (error?.response?.data?.code === 'CHORE_EXPIRED') askParentForChore(schedule);
+      else console.error('Error toggling chore completion:', error);
     } finally {
       setIsLoading(false);
     }
@@ -1008,8 +1064,22 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
   // Routines plugin did; the board's CelebrationHost applies the household
   // setting and plays one at a time, so finishing the day as well still
   // celebrates once.
+  // Past its expiry, a step goes to a parent, whose yes completes the routine.
   const tickRoutineStep = async (day, stepId, done) => {
+    const askForRoutine = () => askParent(day.name, async () => {
+      const after = await toggleRoutineStep(day, stepId, true, { parentApproved: true });
+      if (!after || after.expired) throw new Error('Not approved');
+    });
+    const schedule = schedules.find((s) => s.id === day.scheduleId);
+    if (done && !day.completed && schedule && isExpired(schedule, getTodayDateString(), householdNow())) {
+      askForRoutine();
+      return;
+    }
     const after = await toggleRoutineStep(day, stepId, done);
+    if (after?.expired) {
+      askForRoutine();
+      return;
+    }
     if (after?.completed && !day.completed) requestCelebration('chores');
     await fetchData();
   };
@@ -1017,9 +1087,11 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
   const renderChoreItem = (schedule) => {
     const routineDay = routineDays[schedule.id];
     const dueStatus = getDueDateStatus(schedule.due_date, getTodayDateString(), schedule.completed);
+    // Too late (issue #279): red, with a ✕ where the tick was.
+    const expired = !schedule.completed && isExpired(schedule, getTodayDateString(), now);
     const rowBgColor = schedule.completed
       ? 'rgba(0, 255, 0, 0.1)'
-      : dueStatus === 'overdue'
+      : expired || dueStatus === 'overdue'
         ? 'var(--hg-error-surface)'
         : dueStatus === 'due'
           ? 'rgba(255, 193, 7, 0.20)'
@@ -1039,7 +1111,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
         onClickCapture={handleCardClickCapture}
         sx={{
           p: 1.5,
-          border: '1px solid var(--card-border)',
+          border: expired ? '1px solid var(--hg-error)' : '1px solid var(--card-border)',
           borderRadius: 'var(--hg-radius-md)',
           mb: 1,
           bgcolor: rowBgColor,
@@ -1062,14 +1134,16 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                 sx={{ ml: 1, bgcolor: 'var(--accent)', color: 'white' }}
               />
             )}
-            {schedule.due_time && (
+            {schedule.due_time && (expired ? (
+              <Chip label={t('chores:expiry.expired')} size="small" color="error" sx={{ ml: 1, fontSize: '0.7rem' }} />
+            ) : (
               <Chip
                 label={`${schedule.sound_enabled ? '🔔 ' : '🕑 '}${formatDueTime(schedule.due_time)}`}
                 size="small"
                 variant="outlined"
                 sx={{ ml: 1, fontSize: '0.7rem' }}
               />
-            )}
+            ))}
             {schedule.due_date && (
               <Chip
                 label={dueStatus === 'overdue'
@@ -1093,7 +1167,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
               {schedule.description}
             </Typography>
           )}
-          {routineDay && <RoutineSteps day={routineDay} onToggle={tickRoutineStep} />}
+          {routineDay && <RoutineSteps day={routineDay} onToggle={tickRoutineStep} expired={expired} />}
         </Box>
         <Box sx={{ display: 'flex', gap: 0.5 }}>
           {/* The chore's icon takes the place of the checkmark while the chore
@@ -1109,22 +1183,24 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
             size="small"
             aria-label={schedule.completed
               ? t('chores:widget.uncompleteAria', { title: schedule.title })
-              : t('chores:widget.completeAria', { title: schedule.title })}
+              : expired
+                ? t('chores:expiry.markExpired', { name: schedule.title })
+                : t('chores:widget.completeAria', { title: schedule.title })}
             sx={{
               minWidth: 'auto',
               width: 32,
               height: 32,
-              bgcolor: schedule.completed ? 'transparent' : 'var(--accent)',
+              bgcolor: schedule.completed ? 'transparent' : expired ? 'var(--hg-error)' : 'var(--accent)',
               color: schedule.completed ? 'var(--accent)' : 'white',
               '&:hover': {
-                bgcolor: schedule.completed ? 'rgba(var(--accent-rgb), 0.1)' : 'var(--accent)',
+                bgcolor: schedule.completed ? 'rgba(var(--accent-rgb), 0.1)' : expired ? 'var(--hg-error)' : 'var(--accent)',
                 filter: 'brightness(1.1)'
               }
             }}
           >
             {schedule.completed
               ? <Undo fontSize="small" />
-              : (schedule.icon
+              : expired ? <Close fontSize="small" /> : (schedule.icon
                 ? (
                   <Box
                     component="span"
@@ -1956,6 +2032,13 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
             )}
           </Box>
         </Popover>
+
+        <LateApprovalDialog
+          open={Boolean(lateApproval)}
+          name={lateApproval?.name || ''}
+          onNo={() => setLateApproval(null)}
+          onYes={approveLate}
+        />
 
         {/* Admin PIN confirmation for transfer/snooze */}
         <PinModal

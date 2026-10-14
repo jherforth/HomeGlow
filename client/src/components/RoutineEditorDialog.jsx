@@ -30,6 +30,7 @@ import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getWeekdayLabels } from '../utils/dateUtils.js';
 import useIsMobile from '../hooks/useIsMobile.js';
 import ChoreIconPicker from './ChoreIconPicker.jsx';
+import ExpiresSelect from './ExpiresSelect.jsx';
 
 const blank = (users) => ({
   name: '',
@@ -46,6 +47,8 @@ const blank = (users) => ({
   steps: [],
   start_time: '',
   end_time: '',
+  // Minutes after the end time it expires (issue #279); '' = never.
+  expire_minutes: '',
   milestone_every: 0,
   milestone_clams: 0,
 });
@@ -64,6 +67,7 @@ const fromRoutine = (routine) => ({
   steps: routine.steps || [],
   start_time: routine.start_time || '',
   end_time: routine.end_time || '',
+  expire_minutes: routine.expire_minutes ?? '',
   milestone_every: routine.milestone_every || 0,
   milestone_clams: routine.milestone_clams || 0,
 });
@@ -105,6 +109,7 @@ export default function RoutineEditorDialog({ open, routine, steps, users, sourc
         ...rest,
         start_time: form.start_time || null,
         end_time: form.end_time || null,
+        expire_minutes: canExpire && form.expire_minutes !== '' ? form.expire_minutes : null,
         // Editing changes one routine, for its one person; making one makes
         // it for each person picked.
         ...(routine ? { user_id: Number(form.user_id) } : { user_ids: userIds.map(Number) }),
@@ -121,6 +126,12 @@ export default function RoutineEditorDialog({ open, routine, steps, users, sourc
   };
 
   const calendar = form.trigger === 'calendar';
+
+  // It expires after its end time; a weekday routine's chore is due at its
+
+  // start time, so it needs that too.
+
+  const canExpire = Boolean(form.end_time) && (calendar || Boolean(form.start_time));
 
   return (
     <Dialog
@@ -336,6 +347,16 @@ export default function RoutineEditorDialog({ open, routine, steps, users, sourc
               />
             </Box>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>{t('chores:routines.timeHelp')}</Typography>
+            <ExpiresSelect
+              id="routine-expires"
+              value={form.expire_minutes}
+              onChange={(expire_minutes) => set({ expire_minutes })}
+              disabled={!canExpire}
+              helperText={canExpire
+                ? t('chores:expiry.routineHelp')
+                : t(calendar ? 'chores:expiry.needsEndTime' : 'chores:expiry.needsStartAndEnd')}
+              sx={{ mt: 2 }}
+            />
           </Box>
 
           <Box>

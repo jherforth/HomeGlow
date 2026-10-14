@@ -11,6 +11,7 @@
 // steps are ticked.
 
 const rules = require('../services/routines');
+const choreExpiry = require('../utils/choreExpiry');
 
 const CALENDAR_SYNC_MS = 10 * 60 * 1000;
 const MAX_BULK = 100;
@@ -164,11 +165,27 @@ function registerRoutineRoutes(fastify, deps) {
     db.prepare(`
       UPDATE routines SET name = ?, icon = ?, user_id = ?, trigger = ?, days = ?, match_text = ?, whole_word = ?,
         calendar_source_ids = ?, lead_minutes = ?, start_time = ?, end_time = ?, milestone_every = ?, milestone_clams = ?,
-        updated_at = CURRENT_TIMESTAMP
+        expire_minutes = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(v.name, v.icon, v.user_id, v.trigger, v.days.join(','), v.match_text, v.whole_word,
-      JSON.stringify(v.calendar_source_ids), v.lead_minutes, v.start_time, v.end_time, v.milestone_every, v.milestone_clams, id);
+      JSON.stringify(v.calendar_source_ids), v.lead_minutes, v.start_time, v.end_time, v.milestone_every, v.milestone_clams,
+      v.expire_minutes ?? null, id);
     writeSteps(id, v.steps);
+    applyExpiry(id);
+  }
+
+  // The routine expires the buffer after its end time (issue #279). Its
+  // chore schedules carry that as their own expire_minutes, counted from each
+  // one's due time, so the chore rule (utils/choreExpiry) covers them as is.
+  function applyExpiry(routineId) {
+    const r = db.prepare('SELECT id, schedule_id, end_time, expire_minutes FROM routines WHERE id = ?').get(routineId);
+    if (!r) return;
+    const update = db.prepare('UPDATE chore_schedules SET expire_minutes = ? WHERE id = ?');
+    if (r.schedule_id) {
+      const schedule = db.prepare('SELECT due_time FROM chore_schedules WHERE id = ?').get(r.schedule_id);
+      if (schedule) update.run(rules.scheduleExpireMinutes(r, schedule.due_time), r.schedule_id);
+    }
+    for (const p of Object.values(pinnedOf(r.id))) update.run(rules.scheduleExpireMinutes(r, p.dueTime), p.scheduleId);
   }
 
   function createRoutine(v) {
@@ -271,6 +288,7 @@ function registerRoutineRoutes(fastify, deps) {
       // Deleting the schedule takes its routine_dates row with it.
       for (const { scheduleId } of plan.remove) db.prepare('DELETE FROM chore_schedules WHERE id = ?').run(scheduleId);
       for (const { scheduleId } of plan.hide) db.prepare('UPDATE chore_schedules SET visible = 0 WHERE id = ?').run(scheduleId);
+      applyExpiry(r.id);
     })();
   }
 
@@ -441,6 +459,19 @@ function registerRoutineRoutes(fastify, deps) {
     if (!validDate(date)) return reply.status(400).send({ error: 'date must be YYYY-MM-DD' });
     const scheduleId = scheduleOn(r, date);
     if (!scheduleId) return reply.status(400).send({ error: 'This routine is not on that day.' });
+
+    if (done && !completionOf(scheduleId, date)) {
+      const schedule = db.prepare('SELECT * FROM chore_schedules WHERE id = ?').get(scheduleId);
+      if (choreExpiry.isExpired(schedule, date)) {
+        if (request.body.parent_approved !== true) {
+          return reply.status(403).send({ code: 'CHORE_EXPIRED', error: 'This routine has expired. A parent must approve completing it.' });
+        }
+        // The chore event ticks every step and checks the milestone.
+        const result = completeChoreSchedule({ chore_schedule_id: scheduleId, user_id: r.user_id, date, parent_approved: true });
+        if (result.error && result.status !== 409) return reply.status(result.status).send({ error: result.error });
+        return dayOf(routine(r.id), date);
+      }
+    }
 
     if (done) db.prepare('INSERT OR IGNORE INTO routine_progress (routine_id, date, step_id) VALUES (?, ?, ?)').run(r.id, date, stepId);
     else db.prepare('DELETE FROM routine_progress WHERE routine_id = ? AND date = ? AND step_id = ?').run(r.id, date, stepId);

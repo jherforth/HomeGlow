@@ -158,6 +158,16 @@ export default function ChoreHistoryTab() {
             color={KIND_COLOR[category]}
             variant={category === 'missed' ? 'outlined' : 'filled'}
           />
+          {/* Done after it expired, with a parent's yes (issue #279). */}
+          {entry.approved_late === 1 && (
+            <Chip
+              label={t('admin:chores.historyView.approvedLate')}
+              size="small"
+              color="error"
+              variant="outlined"
+              sx={{ ml: 0.5 }}
+            />
+          )}
         </TableCell>
         <TableCell data-label={t('admin:chores.historyView.date')}>
           <Typography variant="body2">{formatDate(entry.date)}</Typography>

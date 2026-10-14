@@ -361,7 +361,8 @@
       "groupSummary": "{{done}} done · {{missed}} missed · {{clams}} 🥟 · last {{last}}",
       "showAll_one": "Show all {{count}}",
       "showAll_other": "Show all {{count}}",
-      "showFewer": "Show fewer"
+      "showFewer": "Show fewer",
+      "approvedLate": "Approved late"
     }
   },
   "prizes": {

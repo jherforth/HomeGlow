@@ -387,5 +387,27 @@
     "bulkDeleteSuccess_one": "Se eliminó {{count}} rutina.",
     "bulkDeleteSuccess_other": "Se eliminaron {{count}} rutinas.",
     "bulkDeleteError": "No se pudieron eliminar las rutinas seleccionadas."
+  },
+  "expiry": {
+    "label": "Vence",
+    "never": "Nunca",
+    "atDue": "A la hora límite",
+    "minutesAfter_one": "{{count}} min después",
+    "minutesAfter_other": "{{count}} min después",
+    "hoursAfter_one": "{{count}} hora después",
+    "hoursAfter_other": "{{count}} horas después",
+    "help": "Después, la tarea se pone roja y solo un adulto puede marcarla como hecha.",
+    "needsDueTime": "Primero pon una hora límite: la tarea vence después de esa hora.",
+    "routineHelp": "Se cuenta desde la hora de fin. Después, la rutina se pone roja y solo un adulto puede marcarla como hecha.",
+    "needsEndTime": "Primero pon una hora de fin: la rutina vence después de esa hora.",
+    "needsStartAndEnd": "Primero pon una hora de inicio y una de fin: la rutina vence después de la hora de fin.",
+    "expired": "Vencida",
+    "markExpired": "Vencida: pide a un adulto que marque {{name}} como hecha",
+    "dialogTitle": "Demasiado tarde",
+    "dialogBody": "Ya es tarde para {{name}}. Busca a un adulto para que lo apruebe.",
+    "dialogQuestion": "Adulto: ¿marcarla como hecha de todos modos?",
+    "no": "No",
+    "yes": "Sí",
+    "approveFailed": "No se pudo marcar como hecha."
   }
 }

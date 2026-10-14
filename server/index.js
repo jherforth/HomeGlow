@@ -95,6 +95,7 @@ const axios = require('axios');
 const ICAL = require('ical.js');
 const { CronExpressionParser } = require('cron-parser');
 const { cronFiresOnDate } = require('./utils/cronDay');
+const choreExpiry = require('./utils/choreExpiry');
 const cron = require('node-cron');
 // For widget upload and registry
 const widgetRegistryPath = path.join(__dirname, 'widgets_registry.json');
@@ -255,6 +256,7 @@ const schemaMigrations = [
   { schemaId: 29, migrationPath: './migrations/schema29-routines', },
   { schemaId: 30, migrationPath: './migrations/schema30-importRoutinesPlugin', },
   { schemaId: 31, migrationPath: './migrations/schema31-routineStreakBase', },
+  { schemaId: 32, migrationPath: './migrations/schema32-choreExpiry', },
 ];
 
 const ALLOWED_SCHEDULE_DURATIONS = new Set(['day-of', 'until-completed', 'once-completed']);
@@ -458,11 +460,12 @@ function normalizeSnoozedUntil(snoozedUntil) {
   return { valid: true, value: parsed.toISOString() };
 }
 
-// Validates the shared schedule due_time / due_date / reminder fields. On the
-// first failure it sends a 400 and returns null; otherwise it returns the three
-// normalized results. Used by the create + bulk-create schedule handlers. The
-// PATCH handler keeps its own guards because it only validates provided fields.
-const validateScheduleDateFields = ({ due_time, due_date, reminder_interval_minutes }, reply) => {
+// Validates the shared schedule due_time / due_date / reminder / expiry
+// fields. On the first failure it sends a 400 and returns null; otherwise it
+// returns the normalized results. Used by the create + bulk-create schedule
+// handlers. The PATCH handler keeps its own guards because it only validates
+// provided fields.
+const validateScheduleDateFields = ({ due_time, due_date, reminder_interval_minutes, expire_minutes }, reply) => {
   const dueTimeResult = normalizeDueTime(due_time);
   if (!dueTimeResult.valid) {
     reply.status(400).send({ error: 'due_time must be in HH:MM 24-hour format' });
@@ -478,7 +481,24 @@ const validateScheduleDateFields = ({ due_time, due_date, reminder_interval_minu
     reply.status(400).send({ error: 'reminder_interval_minutes must be a non-negative integer' });
     return null;
   }
-  return { dueTimeResult, dueDateResult, reminderResult };
+  const expireResult = validateExpireMinutes(expire_minutes, dueTimeResult.value, reply);
+  if (!expireResult) return null;
+  return { dueTimeResult, dueDateResult, reminderResult, expireResult };
+};
+
+// A chore can expire only after a due time (issue #279): it can't be too late
+// for something that was never due at a time.
+const validateExpireMinutes = (expireMinutes, dueTime, reply) => {
+  const result = choreExpiry.normalizeExpireMinutes(expireMinutes);
+  if (!result.valid) {
+    reply.status(400).send({ error: `expire_minutes must be one of: ${choreExpiry.EXPIRE_OPTIONS.join(', ')}` });
+    return null;
+  }
+  if (result.value !== null && !dueTime) {
+    reply.status(400).send({ error: 'Set a due time first: a chore expires after its due time.' });
+    return null;
+  }
+  return result;
 };
 
 function addMonthsCalendarAware(baseDate, monthCount) {
@@ -2180,7 +2200,8 @@ function spawnStickyChildren(today, scheduleIds = null) {
   const onlyThese = Array.isArray(scheduleIds) ? `AND cs.id IN (${scheduleIds.map(() => '?').join(',')})` : '';
   const stickyParentSchedules = db.prepare(`
     SELECT cs.id, cs.chore_id, cs.user_id, cs.crontab, cs.duration, cs.interval,
-           cs.created_at, cs.due_date, cs.due_time, cs.sound_enabled, cs.sound, cs.reminder_interval_minutes
+           cs.created_at, cs.due_date, cs.due_time, cs.sound_enabled, cs.sound, cs.reminder_interval_minutes,
+           cs.expire_minutes
     FROM chore_schedules cs
     WHERE cs.crontab IS NOT NULL
       AND cs.duration IN ('until-completed', 'once-completed')
@@ -2223,9 +2244,9 @@ function spawnStickyChildren(today, scheduleIds = null) {
     created.push(db.prepare(`
       INSERT INTO chore_schedules (
         chore_id, user_id, crontab, duration, visible, parent_schedule_id,
-        due_date, due_time, sound_enabled, sound, reminder_interval_minutes
+        due_date, due_time, sound_enabled, sound, reminder_interval_minutes, expire_minutes
       )
-      VALUES (?, ?, NULL, 'day-of', 1, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, NULL, 'day-of', 1, ?, ?, ?, ?, ?, ?, ?)
       RETURNING *
     `).get(
       schedule.chore_id,
@@ -2235,7 +2256,8 @@ function spawnStickyChildren(today, scheduleIds = null) {
       schedule.due_time || null,
       schedule.sound_enabled ? 1 : 0,
       schedule.sound || null,
-      schedule.reminder_interval_minutes || null
+      schedule.reminder_interval_minutes || null,
+      schedule.due_time ? schedule.expire_minutes ?? null : null
     ));
   }
   return created;
@@ -3045,7 +3067,7 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
 
     const dateFields = validateScheduleDateFields(request.body, reply);
     if (!dateFields) return;
-    const { dueTimeResult, dueDateResult, reminderResult } = dateFields;
+    const { dueTimeResult, dueDateResult, reminderResult, expireResult } = dateFields;
 
     const snoozedUntilResult = normalizeSnoozedUntil(snoozed_until);
     if (snoozed_until !== undefined && !snoozedUntilResult.valid) {
@@ -3095,7 +3117,7 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
       return reply.status(400).send({ error: targets.error });
     }
 
-    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until, expire_minutes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     // One row per person, all or none: a batch never leaves half the
     // family scheduled.
     const insertAll = db.transaction((userIds) => userIds.map((userId) => stmt.run(
@@ -3113,7 +3135,8 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
       dueDateResult.value,
       transferable !== undefined ? (transferable ? 1 : 0) : 1,
       can_snooze !== undefined ? (can_snooze ? 1 : 0) : 1,
-      snoozedUntilResult.value
+      snoozedUntilResult.value,
+      expireResult.value
     ).lastInsertRowid));
     const ids = insertAll(targets.userIds);
     // A sticky schedule that fires today shows today, not from midnight.
@@ -3134,7 +3157,7 @@ fastify.post('/api/chore-schedules/bulk', async (request, reply) => {
 
     const dateFields = validateScheduleDateFields(request.body, reply);
     if (!dateFields) return;
-    const { dueTimeResult, dueDateResult, reminderResult } = dateFields;
+    const { dueTimeResult, dueDateResult, reminderResult, expireResult } = dateFields;
 
     if (crontab) {
       try {
@@ -3144,11 +3167,11 @@ fastify.post('/api/chore-schedules/bulk', async (request, reply) => {
       }
     }
 
-    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, visible, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, visible, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, expire_minutes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     const ids = [];
 
     for (const user_id of user_ids) {
-      const info = stmt.run(chore_id, user_id, crontab || null, visible !== undefined ? visible : 1, dueTimeResult.value, sound || null, sound_enabled ? 1 : 0, reminderResult.value, dueDateResult.value, transferable !== undefined ? (transferable ? 1 : 0) : 1, can_snooze !== undefined ? (can_snooze ? 1 : 0) : 1);
+      const info = stmt.run(chore_id, user_id, crontab || null, visible !== undefined ? visible : 1, dueTimeResult.value, sound || null, sound_enabled ? 1 : 0, reminderResult.value, dueDateResult.value, transferable !== undefined ? (transferable ? 1 : 0) : 1, can_snooze !== undefined ? (can_snooze ? 1 : 0) : 1, expireResult.value);
       ids.push(info.lastInsertRowid);
     }
 
@@ -3161,7 +3184,7 @@ fastify.post('/api/chore-schedules/bulk', async (request, reply) => {
 
 fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
   const { id } = request.params;
-  const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until, revoke_daily_bonus, transfer_bonus_clams } = request.body;
+  const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until, revoke_daily_bonus, transfer_bonus_clams, expire_minutes } = request.body;
   try {
     const dueTimeResult = normalizeDueTime(due_time);
     if (due_time !== undefined && !dueTimeResult.valid) {
@@ -3195,9 +3218,20 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
       }
     }
 
-    const existingSchedule = db.prepare('SELECT id, user_id, crontab, duration, interval, snoozed_until FROM chore_schedules WHERE id = ?').get(id);
+    const existingSchedule = db.prepare('SELECT id, user_id, crontab, duration, interval, snoozed_until, due_time, expire_minutes FROM chore_schedules WHERE id = ?').get(id);
     if (!existingSchedule) {
       return reply.status(404).send({ error: 'Schedule not found' });
+    }
+
+    // The expiry needs a due time; clearing the due time clears the expiry.
+    const nextDueTime = due_time !== undefined ? dueTimeResult.value : existingSchedule.due_time;
+    let nextExpire;
+    if (expire_minutes !== undefined) {
+      const expireResult = validateExpireMinutes(expire_minutes, nextDueTime, reply);
+      if (!expireResult) return;
+      nextExpire = expireResult.value;
+    } else if (!nextDueTime && existingSchedule.expire_minutes !== null) {
+      nextExpire = null;
     }
 
     const nextDuration = normalizeScheduleDuration(duration !== undefined ? duration : existingSchedule.duration);
@@ -3258,6 +3292,7 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
     if (can_snooze !== undefined) { updates.push('can_snooze = ?'); params.push(can_snooze ? 1 : 0); }
     if (snoozed_until !== undefined) { updates.push('snoozed_until = ?'); params.push(snoozedUntilResult.value); }
     if (transfer_bonus_clams !== undefined) { updates.push('transfer_bonus_clams = ?'); params.push(normalizedTransferBonus); }
+    if (nextExpire !== undefined) { updates.push('expire_minutes = ?'); params.push(nextExpire); }
 
     if (updates.length === 0) {
       return reply.status(400).send({ error: 'No fields to update' });
@@ -3787,11 +3822,19 @@ function completeChoreSchedule(input) {
     return { status: 409, error: 'Chore already completed for this date' };
   }
 
+  // Past its expiry, a chore is done only with a parent's approval (issue
+  // #279). The widget asks for one (and the PIN); any other caller must say so.
+  const late = choreExpiry.isExpired(schedule, date);
+  if (late && input.parent_approved !== true) {
+    return { status: 403, code: 'CHORE_EXPIRED', error: 'This chore has expired. A parent must approve completing it.' };
+  }
+
   // One transaction: the completion and the follow-ups it hands on are
   // written together or not at all (issue #241).
   const recordCompletion = db.transaction(() => {
     db.prepare("DELETE FROM chore_history WHERE chore_schedule_id = ? AND user_id = ? AND date = ? AND kind = 'missed'").run(chore_schedule_id, user_id, date);
-    db.prepare("INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind) VALUES (?, ?, ?, ?, ?, 'completion')").run(user_id, chore_schedule_id, date, schedule.clam_value, schedule.title);
+    db.prepare("INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind, approved_late) VALUES (?, ?, ?, ?, ?, 'completion', ?)")
+      .run(user_id, chore_schedule_id, date, schedule.clam_value, schedule.title, late ? 1 : 0);
 
     // Pay out a pending transfer bonus (attached by the parent when moving
     // this chore to a kid whose day was already complete) and clear it so it
@@ -3843,7 +3886,7 @@ function completeChoreSchedule(input) {
 fastify.post('/api/chores/complete', async (request, reply) => {
   try {
     const result = completeChoreSchedule(request.body);
-    if (result.error) return reply.status(result.status).send({ error: result.error });
+    if (result.error) return reply.status(result.status).send({ error: result.error, ...(result.code ? { code: result.code } : {}) });
     return result;
   } catch (error) {
     console.error('Error completing chore:', error);
