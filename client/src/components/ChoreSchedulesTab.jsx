@@ -56,6 +56,7 @@ import { getWeekdayLabels } from '../utils/dateUtils.js';
 import useIsMobile from '../hooks/useIsMobile.js';
 import { compactStackedTableSx } from '../utils/responsiveTable.js';
 import { compareByKey } from '../utils/choreHelpers.js';
+import ExpiresSelect from './ExpiresSelect.jsx';
 
 // Day labels come from the locale (index 0 = Sunday, matching crontab).
 const getDayOptions = () => getWeekdayLabels(0).map((label, value) => ({ label, value }));
@@ -221,6 +222,8 @@ const defaultScheduleForm = {
   due_date: '',
   due_days: '',
   due_time: '',
+  // Minutes after the due time it expires (issue #279); '' = never.
+  expire_minutes: '',
   sound_enabled: false,
   sound: '',
   reminder_interval_minutes: '',
@@ -407,6 +410,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
       due_date: schedule.due_date || '',
       due_days: !isOneTime ? getDueDaysOffset(schedule.created_at, schedule.due_date) : '',
       due_time: schedule.due_time || '',
+      expire_minutes: schedule.expire_minutes ?? '',
       sound_enabled: !!schedule.sound_enabled,
       sound: schedule.sound || '',
       reminder_interval_minutes: schedule.reminder_interval_minutes ? String(schedule.reminder_interval_minutes) : '',
@@ -465,6 +469,8 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
         visible: scheduleForm.visible ? 1 : 0,
         due_date: normalizedDueDate,
         due_time: scheduleForm.due_time || null,
+        // An expiry needs a due time; without one it's cleared.
+        expire_minutes: scheduleForm.due_time && scheduleForm.expire_minutes !== '' ? scheduleForm.expire_minutes : null,
         sound_enabled: scheduleForm.sound_enabled ? 1 : 0,
         sound: scheduleForm.sound_enabled ? (scheduleForm.sound || null) : null,
         reminder_interval_minutes: scheduleForm.sound_enabled && scheduleForm.reminder_interval_minutes
@@ -1590,6 +1596,14 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
                   color: 'transparent'
                 }
               }}
+            />
+
+            <ExpiresSelect
+              id="schedule-expires"
+              value={scheduleForm.expire_minutes}
+              onChange={(expire_minutes) => updateScheduleForm({ expire_minutes })}
+              disabled={!scheduleForm.due_time}
+              helperText={scheduleForm.due_time ? t('chores:expiry.help') : t('chores:expiry.needsDueTime')}
             />
 
             <FormControlLabel

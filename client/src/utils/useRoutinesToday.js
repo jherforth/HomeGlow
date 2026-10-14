@@ -23,8 +23,9 @@ export default function useRoutinesToday() {
 
   // Tick or untick one step. Shown at once; the server's answer (which may
   // have completed or uncompleted the routine's chore) replaces it, and is
-  // returned (null if the tick failed).
-  const toggleStep = useCallback(async (day, stepId, done) => {
+  // returned (null if the tick failed). A routine past its expiry answers
+  // { expired: true } unless a parent approved (issue #279).
+  const toggleStep = useCallback(async (day, stepId, done, { parentApproved = false } = {}) => {
     setRoutines((current) => ({
       ...current,
       [day.scheduleId]: {
@@ -36,12 +37,14 @@ export default function useRoutinesToday() {
       const { data } = await axios.post(`${API_BASE_URL}/api/routines/${day.routineId}/steps/${stepId}`, {
         date: getTodayDateString(),
         done,
+        ...(parentApproved ? { parent_approved: true } : {}),
       });
       if (data) setRoutines((current) => ({ ...current, [day.scheduleId]: data }));
       return data || null;
     } catch (error) {
-      console.error('Error ticking a routine step:', error);
       reload();
+      if (error?.response?.data?.code === 'CHORE_EXPIRED') return { expired: true };
+      console.error('Error ticking a routine step:', error);
       return null;
     }
   }, [reload]);

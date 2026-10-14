@@ -824,7 +824,7 @@ earned = sum of positive values; spent = −sum of `spent` rows.
 | --- | --- | --- |
 | `GET` | `/api/chores` | → `[{ id, title, description, clam_value }]` |
 | `GET` | `/api/chore-schedules?user_id=&visible=&chore_id=` | → schedule rows joined with `title, description, clam_value` |
-| `POST` | `/api/chores/complete` | body: `{ chore_schedule_id, user_id, date }` → `{ success, clam_total }` (`409` if already done) — emits `chore.completed` |
+| `POST` | `/api/chores/complete` | body: `{ chore_schedule_id, user_id, date }` → `{ success, clam_total }` (`409` if already done; `403` `{ code: 'CHORE_EXPIRED' }` once the chore has expired, which only a parent can approve) — emits `chore.completed` |
 | `POST` | `/api/chores/uncomplete` | body: `{ chore_schedule_id, user_id, date }` → `{ success, clam_total }` — emits `chore.uncompleted` |
 
 **Prizes, settings, calendar, photos**

@@ -387,5 +387,27 @@
     "bulkDeleteSuccess_one": "Deleted {{count}} routine.",
     "bulkDeleteSuccess_other": "Deleted {{count}} routines.",
     "bulkDeleteError": "Could not delete the selected routines."
+  },
+  "expiry": {
+    "label": "Expires",
+    "never": "Never",
+    "atDue": "At the due time",
+    "minutesAfter_one": "{{count}} min after",
+    "minutesAfter_other": "{{count}} min after",
+    "hoursAfter_one": "{{count}} hour after",
+    "hoursAfter_other": "{{count}} hours after",
+    "help": "After this, the chore turns red and only a parent can mark it done.",
+    "needsDueTime": "Set a due time first: a chore expires after its due time.",
+    "routineHelp": "Counted from the end time. After it, the routine turns red and only a parent can mark it done.",
+    "needsEndTime": "Set an end time first: a routine expires after its end time.",
+    "needsStartAndEnd": "Set a start and an end time first: a routine expires after its end time.",
+    "expired": "Expired",
+    "markExpired": "Expired: ask a parent to mark {{name}} done",
+    "dialogTitle": "Too late",
+    "dialogBody": "Too late for {{name}}. Go get a parent to approve it.",
+    "dialogQuestion": "Parent: mark it done anyway?",
+    "no": "No",
+    "yes": "Yes",
+    "approveFailed": "Could not mark it done."
   }
 }
