@@ -9,6 +9,7 @@ import {
   playSound,
   soundUrl,
 } from '../utils/choreSound.js';
+import { isExpired } from '../utils/choreExpiry.js';
 
 const FIRED_STORAGE_KEY = 'choreSoundFired';
 const TICK_MS = 20 * 1000;          // check for due chores every 20s
@@ -82,6 +83,9 @@ export default function useChoreSoundScheduler({ enabled, defaultSound, volume =
         if (!schedule.sound_enabled) continue;
         if (!shouldShowChoreToday(schedule)) continue;
         if (isCompletedToday(schedule, today)) continue;
+        // Expired, only a parent can mark it done (issue #279): reminding the
+        // child is just noise, so the chime stops with the expiry.
+        if (isExpired(schedule, today, { date: today, minutes: nowMinutes })) continue;
 
         const slots = getElapsedDueSlots(schedule, nowMinutes);
         for (const slot of slots) {
