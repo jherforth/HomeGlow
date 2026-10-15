@@ -2448,9 +2448,37 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                       const pluginWidgetName = `plugin:${plugin.filename}`;
                       const hasRequiredTabsError = Boolean(pSettings.enabled) && (!Array.isArray(pluginAssignments[pluginWidgetName]) || pluginAssignments[pluginWidgetName].length === 0);
                       return (
-                        <Box key={plugin.filename} sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)' }}>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                            <Box sx={{ pr: 1 }}>
+                        <Box
+                          key={plugin.filename}
+                          sx={{
+                            mb: 3,
+                            p: 2,
+                            border: '1px solid rgba(var(--accent-rgb), 0.35)',
+                            borderRadius: 'var(--hg-radius-sm)',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {/* The heading is a full-width band in the accent's tint, so one
+                              plugin's settings don't run into the next. */}
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              flexWrap: 'wrap',
+                              gap: 1,
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              mx: -2,
+                              mt: -2,
+                              mb: 2,
+                              px: 2,
+                              py: 1.5,
+                              bgcolor: 'rgba(var(--accent-rgb), 0.10)',
+                              borderBottom: '1px solid rgba(var(--accent-rgb), 0.35)',
+                            }}
+                          >
+                            {/* Wide enough for the name and description; on a phone the
+                                buttons wrap below rather than squeezing them. */}
+                            <Box sx={{ pr: 1, flex: '1 1 240px', minWidth: 0 }}>
                               <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
                                 {plugin.name}
                               </Typography>
@@ -2470,7 +2498,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                                   a made-up line. */}
                               <Typography
                                 variant="body2"
-                                sx={{ mt: 0.5, color: plugin.manifest?.description ? 'var(--text)' : 'text.secondary',
+                                sx={{ mt: 0.5, color: plugin.manifest?.description ? 'text.primary' : 'text.secondary',
                                       fontStyle: plugin.manifest?.description ? 'normal' : 'italic' }}
                               >
                                 {plugin.manifest?.description || t('admin:plugins.noDescription')}
