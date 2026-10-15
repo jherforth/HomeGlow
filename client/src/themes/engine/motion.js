@@ -112,6 +112,20 @@ export const sway = keyframes`
   to { transform: rotate(var(--angle-to)); }
 `;
 
+// A bending picture's slices (flex.jsx): each narrows toward its joint.
+export const beatX = keyframes`
+  from { transform: scaleX(1); }
+  to { transform: scaleX(var(--squeeze)); }
+`;
+
+// A swaying slice leans (shears) about its joint rather than turning: the
+// joint line stays put across the whole width, so slices never part, however
+// wide the picture.
+export const leanX = keyframes`
+  from { transform: skewX(var(--angle-from)); }
+  to { transform: skewX(var(--angle-to)); }
+`;
+
 export const bob = keyframes`
   from { transform: translate3d(0, 0, 0); }
   to { transform: translate3d(0, var(--distance), 0); }

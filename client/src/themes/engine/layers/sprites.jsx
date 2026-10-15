@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Box } from '@mui/material';
 import { bob, clumped, draw, forMode, pick, pickWeighted, pulse, reducedMotion, spread, sway } from '../motion.js';
+import { Flexed, planFlex } from '../flex.jsx';
 
 // Copies of pictures spread across the screen, or gathered into `clumps`
 // (patches `clumpWidth` percent wide, open ground between). One picture (`src`), or a
@@ -13,7 +14,8 @@ import { bob, clumped, draw, forMode, pick, pickWeighted, pulse, reducedMotion, 
 // drawn behind shorter ones. `lift` raises each copy a drawn percent of the
 // screen above `base`, so copies can sit anywhere (planets in a sky), and
 // `hue` turns each copy's colors by a drawn amount (a still filter, painted
-// once).
+// once). A picture with `flex` bends as well (flex.jsx): a stem curving in
+// the current rather than tipping stiffly.
 function motionFor(kind, amount) {
   if (kind === 'bob') return { keyframes: bob, vars: { '--distance': `${-amount}px` } };
   if (kind === 'pulse') return { keyframes: pulse, vars: { '--scale-from': 1, '--scale-to': 1 + amount / 100 } };
@@ -45,6 +47,8 @@ function Sprites({ options, assets, random, mode }) {
         first: { seconds, amount, delay: -random() * seconds },
         // A second, uneven period: together they make the motion wander.
         second: { seconds: seconds * (1.37 + random() * 0.34), amount: amount * (0.35 + random() * 0.3), delay: -random() * seconds * 2 },
+        // Drawn last, and only when asked for, so a scene without flex is the same as before.
+        flex: planFlex(random, picture.flex),
       };
     }).sort((a, b) => b.height - a.height);
     return { items: list, currentSeconds: 40 + random() * 50 };
@@ -85,16 +89,13 @@ function Sprites({ options, assets, random, mode }) {
         WebkitMaskPosition: 'center bottom',
       }
       : { backgroundImage: `url("${item.url}")`, backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center bottom' };
-    const still = (
-      <Box sx={{
-        position: 'absolute',
-        inset: 0,
-        ...picture,
-        ...(item.flip ? { transform: 'scaleX(-1)' } : {}),
-        ...(item.hue ? { filter: `hue-rotate(${Math.round(item.hue)}deg)` } : {}),
-      }}
-      />
-    );
+    const turned = {
+      ...(item.flip ? { transform: 'scaleX(-1)' } : {}),
+      ...(item.hue ? { filter: `hue-rotate(${Math.round(item.hue)}deg)` } : {}),
+    };
+    const still = item.flex
+      ? <Box sx={{ position: 'absolute', inset: 0, ...turned }}><Flexed plan={item.flex} picture={picture} /></Box>
+      : <Box sx={{ position: 'absolute', inset: 0, ...picture, ...turned }} />;
     const body = layer(item.first, layer(item.second, still));
     // The current: a slow sway whose phase follows position, so it travels.
     const current = options.current && kind !== 'none'

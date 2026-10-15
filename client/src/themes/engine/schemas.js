@@ -16,8 +16,9 @@
 //   picture   an asset, or { light, dark } assets, one per mode
 //   choice    a picture, or a list of pictures the engine picks one from
 //   tints     colors, or { light, dark } color lists, one per mode
-//   pictures  a list of { src (picture), aspect, height, tint (tints), weight };
-//             each sprite picks one, weighted, so a layer can mix kinds
+//   pictures  a list of { src (picture), aspect, height, tint (tints), weight,
+//             flex }; each sprite picks one, weighted, so a layer can mix kinds
+//   flex      how a picture bends (manifest version 7; flex.jsx), FLEX_SCHEMA
 //
 // Every layer also takes `modes` (light and/or dark) and `chance` (0 to 1,
 // default 1): how likely the layer is to be in a scene at all, so some scenes
@@ -37,6 +38,7 @@ export const LAYER_SCHEMAS = {
     angle: range(-180, 180),
     flip: { type: 'bool' },
     opacity: num(0, 1),
+    flex: { type: 'flex' },
   },
   sprites: {
     src: { type: 'picture' },
@@ -162,6 +164,20 @@ export const CAST_SCHEMA = {
   seconds: range(2, 30),
 };
 
+// A bending picture (manifest version 7): a chain of slices from a fixed
+// edge, leaning (`sway`, from the bottom or top, `amount` in degrees at the
+// tip) or narrowing and opening (`beat`, from the right, `amount` the tip's
+// narrowing, at most 0.8). On a sprite or flyby picture, or an image layer.
+export const FLEX_SCHEMA = {
+  kind: { type: 'enum', values: ['sway', 'beat'], required: true },
+  from: { type: 'enum', values: ['bottom', 'top', 'right'] },
+  start: num(0, 0.95),
+  segments: range(2, 12, { integer: true }),
+  amount: range(0, 45),
+  seconds: range(0.3, 120),
+  wave: num(0, 2),
+};
+
 const ASSET_PATH = /^assets\/[A-Za-z0-9._-]+\.(svg|png|webp|jpg)$/;
 const LENGTH = /^\d+(\.\d+)?(vh|vmin|%|px)$/;
 const isNumber = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -239,9 +255,24 @@ function checkOption(spec, value, { assets, isColor }) {
       }
       return true;
     }
+    case 'flex': {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return 'must be an object';
+      for (const [key, part] of Object.entries(value)) {
+        if (!FLEX_SCHEMA[key]) return `has no option ${key}`;
+        const result = checkOption(FLEX_SCHEMA[key], part, { assets, isColor });
+        if (result !== true) return `.${key} ${result}`;
+      }
+      if (value.kind === undefined) return '.kind is required';
+      if (value.kind === 'beat' && value.amount !== undefined && [value.amount].flat().some((n) => n > 0.8)) {
+        return '.amount for a beat must be at most 0.8';
+      }
+      if (value.kind === 'beat' && value.from !== undefined && value.from !== 'right') return '.from for a beat can only be right';
+      if (value.kind !== 'beat' && value.from === 'right') return '.from for a sway can be bottom or top';
+      return true;
+    }
     case 'pictures': {
       if (!Array.isArray(value) || value.length === 0 || value.length > 16) return 'must list 1 to 16 pictures';
-      const parts = { src: { type: 'picture' }, aspect: num(0.05, 4), height: range(1, 80), tint: { type: 'tints' }, weight: num(0.01, 100) };
+      const parts = { src: { type: 'picture' }, aspect: num(0.05, 4), height: range(1, 80), tint: { type: 'tints' }, weight: num(0.01, 100), flex: { type: 'flex' } };
       for (let i = 0; i < value.length; i += 1) {
         const picture = value[i];
         if (!picture || typeof picture !== 'object' || picture.src === undefined) return `[${i}] needs src`;
@@ -314,6 +345,9 @@ export function validateConfetti(confetti, { assets, isColor }) {
     }
     const result = checkOption(spec, value, { assets, isColor });
     if (result !== true) errors.push(`confetti.${key} ${result}`);
+    else if (key === 'pictures' && value.some((picture) => picture.flex !== undefined)) {
+      errors.push('confetti.pictures do not bend; flex belongs on confetti.cast pictures');
+    }
   });
   return errors;
 }

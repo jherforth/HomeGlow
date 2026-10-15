@@ -1,12 +1,16 @@
 import React, { useMemo } from 'react';
 import { Box } from '@mui/material';
 import { draw, forMode } from '../motion.js';
+import { Flexed, planFlex } from '../flex.jsx';
 
 // A still picture from the theme's folder, anchored to an edge or filling the
 // screen; covers the width without stretching. Given a list, it shows one of
 // them, a different one per scene. With `angle`, it is turned by a drawn
 // amount (a galaxy's band crossing the sky a new way each time) and grown so
-// the turn never shows a corner; `flip` mirrors it half the time.
+// the turn never shows a corner; `flip` mirrors it half the time. With
+// `flex`, it bends (flex.jsx): a picture as big as the backdrop holding only a
+// few leaves, laid exactly over the backdrop, sways those leaves in place on
+// any shape of screen.
 const PLACE = {
   bottom: (height) => ({ left: 0, right: 0, bottom: 0, height, backgroundPosition: 'center bottom' }),
   top: (height) => ({ left: 0, right: 0, top: 0, height, backgroundPosition: 'center top' }),
@@ -21,6 +25,8 @@ function ImageLayer({ options, assets, random, mode }) {
       src: forMode(list[Math.floor(random() * list.length)], mode),
       angle: options.angle === undefined ? null : draw(random, options.angle),
       flip: options.flip ? random() < 0.5 : false,
+      // Drawn last, and only when asked for, so a scene without flex is the same as before.
+      flex: planFlex(random, options.flex),
     };
   }, [options, random, mode]);
   const url = assets[scene.src];
@@ -31,18 +37,24 @@ function ImageLayer({ options, assets, random, mode }) {
     ? { left: '50%', top: '50%', width: '150vmax', height: '150vmax', marginLeft: '-75vmax', marginTop: '-75vmax', backgroundPosition: 'center' }
     : PLACE[options.anchor || 'bottom'](options.height || '40vh');
   const transforms = [place.transform, turned && `rotate(${scene.angle.toFixed(1)}deg)`, scene.flip && 'scaleX(-1)'].filter(Boolean);
+  const picture = {
+    backgroundImage: `url("${url}")`,
+    backgroundSize: turned ? 'contain' : 'cover',
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: place.backgroundPosition,
+  };
   return (
     <Box
       sx={{
         position: 'absolute',
         ...place,
         transform: transforms.length ? transforms.join(' ') : undefined,
-        backgroundImage: `url("${url}")`,
-        backgroundSize: turned ? 'contain' : 'cover',
-        backgroundRepeat: 'no-repeat',
+        ...(scene.flex ? {} : picture),
         opacity: options.opacity ?? 1,
       }}
-    />
+    >
+      {scene.flex ? <Flexed plan={scene.flex} picture={picture} /> : null}
+    </Box>
   );
 }
 

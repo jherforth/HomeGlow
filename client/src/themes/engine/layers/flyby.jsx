@@ -3,6 +3,7 @@ import { Box } from '@mui/material';
 import { keyframes } from '@emotion/react';
 import { cross, draw, forMode, pick, pickWeighted } from '../motion.js';
 import { pathKeyframes, planOrbitSystem, planPath } from '../paths.js';
+import { Flexed, planFlex } from '../flex.jsx';
 
 // Now and then, one picture crosses the screen: a ship, a passing whale, a
 // drifting astronaut. Each pass picks a picture (weighted), a side to enter
@@ -16,7 +17,8 @@ import { pathKeyframes, planOrbitSystem, planPath } from '../paths.js';
 // its own loop, and `begin: underway` puts the first of each partway along
 // its path when the page loads, so the scene does not start empty. With
 // `path: orbit`, every picture in the layer circles one focus, the same way
-// round, each on its own ellipse.
+// round, each on its own ellipse. A picture with `flex` bends as it goes
+// (flex.jsx): a fish's tail beating.
 const screenAspect = () => (typeof window !== 'undefined' && window.innerHeight
   ? window.innerWidth / window.innerHeight
   : 16 / 9);
@@ -56,6 +58,7 @@ function nextPass(random, options, mode, first = false, system = null) {
       angle,
       frames: pathKeyframes(frames),
       ...timing,
+      flex: planFlex(random, picture.flex),
     };
   }
   return {
@@ -73,6 +76,7 @@ function nextPass(random, options, mode, first = false, system = null) {
     hue,
     angle,
     ...timing,
+    flex: planFlex(random, picture.flex),
   };
 }
 
@@ -128,7 +132,7 @@ function Traveler({ options, assets, random, mode, system, onDone }) {
         sx={{
           position: 'absolute',
           inset: 0,
-          ...picture,
+          ...(pass.flex ? {} : picture),
           // A path's keyframes carry their own mirroring.
           ...(() => {
             const turns = [pass.angle ? `rotate(${pass.angle.toFixed(1)}deg)` : '', travel || pass.rightward ? '' : 'scaleX(-1)'].filter(Boolean);
@@ -136,7 +140,9 @@ function Traveler({ options, assets, random, mode, system, onDone }) {
           })(),
           ...(pass.hue ? { filter: `hue-rotate(${Math.round(pass.hue)}deg)` } : {}),
         }}
-      />
+      >
+        {pass.flex ? <Flexed plan={pass.flex} picture={picture} /> : null}
+      </Box>
     </Box>
   );
 }
