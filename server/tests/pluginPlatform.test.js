@@ -159,6 +159,8 @@ test('served manifest plugin HTML gets its identity injected at the start of hea
         served.body.indexOf('__HOMEGLOW_PLUGIN__') < served.body.indexOf('homeglow-manifest'),
         'identity injection must precede in-head plugin content'
     );
+    // The touch script for the two-finger swipe and the pinch block.
+    assert.ok(served.body.includes('homeglow:touch-settings'));
 });
 
 test('widget serving rejects traversal-shaped filenames', async () => {
@@ -173,6 +175,8 @@ test('legacy widgets (no manifest) are served without identity injection', async
     const served = await api('/widgets/plain-widget.html');
     assert.equal(served.status, 200);
     assert.equal(served.body.includes('__HOMEGLOW_PLUGIN__'), false);
+    // Every plugin gets the touch script, manifest or not.
+    assert.ok(served.body.includes('homeglow:touch-settings'));
 });
 
 test('invalid manifests reject the upload with a clear error', async () => {

@@ -1,4 +1,4 @@
-import React, { useCallback, useContext, useEffect, useRef } from 'react';
+import React, { useCallback, useContext, useEffect, useId, useRef } from 'react';
 import { Box } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../utils/apiConfig.js';
@@ -8,6 +8,7 @@ import { acceptPluginDataMessage, emitPluginDataChanged } from '../utils/pluginD
 import { acceptPluginCelebrateMessage, requestCelebration } from '../utils/celebrations.js';
 import { THEME_TOKENS_APPLIED_EVENT, buildPluginThemeMessage, readRoleTokens } from '../utils/pluginThemeBridge.js';
 import { ThemeContext } from '../themes/engine/ThemeContext.js';
+import { acceptFrameTouchMessage, buildFrameTouchSettingsMessage, emitFrameTouch } from '../utils/twoFingerSwipe.js';
 
 const PluginWidgetWrapper = ({
   filename,
@@ -23,12 +24,19 @@ const PluginWidgetWrapper = ({
   // the dashboard. HomeGlow cannot reach into the iframe, so the plugin is told
   // and does its own hiding — see docs/guides/plugin-development.md.
   hiddenControls = [],
+  // This display's touch settings, passed on to the plugin page's touch script
+  // so a two-finger swipe between tabs works over the plugin and a blocked
+  // pinch stays blocked on it (utils/twoFingerSwipe.js).
+  touch = null,
 }) => {
   const { i18n } = useTranslation();
   // Manifest plugins need the display's device name so device-scoped settings
   // resolve via the plugin SDK (issue #105 Phase 2).
   const deviceName = getDeviceName();
   const iframeRef = useRef(null);
+  // Tells this frame's touches apart from the page's and other frames', so
+  // each gets its own swipe detector. The same plugin can be on the board twice.
+  const touchSourceKey = useId();
 
   // The iframe's document comes from API_BASE_URL, which is NOT this page's
   // origin in dev mode / split-origin deployments — postMessage must target
@@ -72,6 +80,11 @@ const PluginWidgetWrapper = ({
         requestCelebration(`plugin:${filename}`);
         return;
       }
+      const touchReport = acceptFrameTouchMessage(event, frame, iframeOrigin);
+      if (touchReport) {
+        emitFrameTouch(touchSourceKey, touchReport);
+        return;
+      }
       const scope = acceptPluginDataMessage(event, frame, iframeOrigin);
       if (!scope) return;
       emitPluginDataChanged(scope, { filename });
@@ -79,7 +92,7 @@ const PluginWidgetWrapper = ({
 
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [iframeOrigin, filename]);
+  }, [iframeOrigin, filename, touchSourceKey]);
 
   // Theme and colors travel by postMessage (issue #179). The iframe's document
   // only ever receives the static stylesheet, so the picked accent would never
@@ -109,6 +122,23 @@ const PluginWidgetWrapper = ({
     return () => window.removeEventListener(THEME_TOKENS_APPLIED_EVENT, postTheme);
   }, [postTheme]);
 
+  // The touch settings go the same way as the theme: on every load of the
+  // frame, and again whenever they change while it is up.
+  const swipeOn = touch?.swipe === true;
+  const pinchBlocked = touch?.blockPinchZoom === true;
+  const postTouch = useCallback(() => {
+    const target = iframeRef.current?.contentWindow;
+    if (!target) return;
+    target.postMessage(buildFrameTouchSettingsMessage({ swipe: swipeOn, blockPinchZoom: pinchBlocked }), iframeOrigin);
+  }, [iframeOrigin, swipeOn, pinchBlocked]);
+  useEffect(() => {
+    postTouch();
+  }, [postTouch]);
+  const handleFrameLoad = useCallback(() => {
+    postTheme();
+    postTouch();
+  }, [postTheme, postTouch]);
+
   // Omitted entirely when nothing is hidden: a plugin (and an older dashboard)
   // must read "no hide param" as "hide nothing". Flattened to a string so an
   // unchanged hidden set produces a byte-identical src — changing src navigates
@@ -126,7 +156,7 @@ const PluginWidgetWrapper = ({
       <iframe
         ref={iframeRef}
         key={refreshNonce}
-        onLoad={postTheme}
+        onLoad={handleFrameLoad}
         // lang rides the same channel as theme (issue #137) so a plugin that
         // ships translations can follow the display's language; plugins that
         // ignore it are unaffected.

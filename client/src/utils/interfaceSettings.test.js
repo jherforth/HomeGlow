@@ -201,3 +201,21 @@ describe('normalizeScreensaverSettings — photo layout', () => {
         }
     });
 });
+
+describe('normalizeScreensaverSettings — touch gestures', () => {
+    it('leaves both off on a display that never set them', () => {
+        const settings = normalizeScreensaverSettings({ enabled: true, timeout: 5 });
+        expect(settings.twoFingerSwipe).toBe(false);
+        expect(settings.blockPinchZoom).toBe(false);
+    });
+
+    it('turns each on only for a real true', () => {
+        expect(normalizeScreensaverSettings({ twoFingerSwipe: true }).twoFingerSwipe).toBe(true);
+        expect(normalizeScreensaverSettings({ blockPinchZoom: true }).blockPinchZoom).toBe(true);
+        for (const value of ['true', 1, 'yes', null]) {
+            const settings = normalizeScreensaverSettings({ twoFingerSwipe: value, blockPinchZoom: value });
+            expect(settings.twoFingerSwipe).toBe(false);
+            expect(settings.blockPinchZoom).toBe(false);
+        }
+    });
+});
