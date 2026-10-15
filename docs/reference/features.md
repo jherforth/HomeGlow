@@ -135,7 +135,7 @@ optional follow-up **reminder interval** that repeats until the chore is complet
   3. **Per-schedule** `sound_enabled` + `due_time`.
 - **The ringer** runs app-level (`useChoreSoundScheduler`), so it fires regardless of
   which tab is showing. It rings once at the due time if the chore is still incomplete
-  (repeating at the reminder interval until done), primes already-past due times on
+  (repeating at the reminder interval until done, or until it expires), primes already-past due times on
   load so it doesn't blast missed alerts, and de-dupes via `localStorage`. Browser
   autoplay is unlocked on the first user interaction.
 
@@ -153,7 +153,7 @@ midnight.
 
 - **Once expired and not done,** the card turns red, the due-time chip reads *Expired*
   and the tick button becomes a red ✕. The day can't be finished, so its daily bonus is
-  out of reach.
+  out of reach. Its chime stops too: reminders end with the expiry.
 - **Tapping it** asks the child to go get a parent. *No* closes it and changes nothing.
   *Yes* asks for the admin PIN (unless none is set or the device remembers it), then
   completes the chore for its full clams. It counts toward the day, and the history row
