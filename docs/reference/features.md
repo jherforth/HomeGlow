@@ -413,7 +413,9 @@ calculation); `server/services/homeAssistant.js` for the connection.
 - **Swipe with two fingers to change tabs** (Admin Panel → Displays →
   Screensaver, under Touch). Two fingers travelling sideways together go to the
   next tab (fingers moving left) or the previous one (moving right), in the
-  dock's order, wrapping around at the ends. One finger still scrolls and taps,
+  dock's order, wrapping around at the ends. The fingers needn't land together:
+  a second finger landing within 0.6 s of the first joins it, and each finger's
+  travel counts from where it landed. One finger still scrolls and taps,
   and a pinch, a vertical drag or a slow drag is left alone. Ignored while
   Admin, the screensaver or a dialog is open.
 - **Block pinch zoom**: gives the page `touch-action: pan-x pan-y`, so pinching

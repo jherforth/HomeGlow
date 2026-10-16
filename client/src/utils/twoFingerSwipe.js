@@ -13,10 +13,16 @@
 // dashboard turns it on, reports two-finger touches as postMessages; the same
 // detector below decides whether they made a swipe.
 
-// How far the midpoint of the two fingers must travel sideways, in CSS pixels.
-export const SWIPE_MIN_DISTANCE = 80;
-// A swipe finishes within this long; a slow drag is something else.
-export const SWIPE_MAX_MS = 900;
+// How far the two fingers must travel sideways on average, in CSS pixels, each
+// measured from where it landed.
+export const SWIPE_MIN_DISTANCE = 70;
+// A swipe finishes within this long of its first finger landing; a slow drag
+// is something else.
+export const SWIPE_MAX_MS = 1100;
+// Fingers rarely land together. A second finger landing within this long of
+// the first joins it in one gesture, and the first finger's travel before then
+// counts; a second finger landing later starts the gesture afresh.
+export const SWIPE_JOIN_MS = 600;
 // The gesture must be this much more sideways than vertical.
 export const SWIPE_MIN_SLOPE = 1.5;
 // The fingers' spread changing by more than this share of the starting spread
@@ -34,26 +40,32 @@ export const BLOCK_PINCH_TOUCH_ACTION = 'pan-x pan-y';
 export const FRAME_TOUCH_SETTINGS_MESSAGE_TYPE = 'homeglow:touch-settings';
 export const FRAME_TOUCH_MESSAGE_TYPE = 'homeglow:touch';
 
-const midpoint = (points) => ({
-  x: (points[0].x + points[1].x) / 2,
-  y: (points[0].y + points[1].y) / 2,
-});
-
 const spreadOf = (points) => Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
 
 const isPoint = (p) => !!p && Number.isFinite(p.x) && Number.isFinite(p.y);
 
-// The [{x, y}] of a TouchList, in the coordinates of its own document. Only
-// distances between points are ever used, so a frame's coordinates and the
-// page's never need to be reconciled.
-export const touchPoints = (touches) => {
+// The [{id, x, y}] of a TouchList, in the coordinates of its own document.
+// Only distances are ever used, so a frame's coordinates and the page's never
+// need to be reconciled. With `landings` (id -> {x, y, at}, kept by the
+// caller), each point also says where and when its finger landed: x0, y0 and
+// downAt.
+export const touchPoints = (touches, landings = null) => {
   const points = [];
   if (!touches) return points;
   for (let i = 0; i < touches.length; i += 1) {
-    points.push({ x: touches[i].clientX, y: touches[i].clientY });
+    const touch = touches[i];
+    const id = Number.isFinite(touch.identifier) ? touch.identifier : i;
+    const point = { id, x: touch.clientX, y: touch.clientY };
+    const landed = landings && landings.get(id);
+    if (landed) Object.assign(point, { x0: landed.x, y0: landed.y, downAt: landed.at });
+    points.push(point);
   }
   return points;
 };
+
+// Where a point's finger is measured from. Fingers matched by id; a point
+// without one is matched by its place in the list.
+const keyOf = (point, index) => (Number.isFinite(point.id) ? `id:${point.id}` : `at:${index}`);
 
 /**
  * One gesture detector per touch source (the page, or one plugin frame).
@@ -76,8 +88,14 @@ export function createSwipeDetector({
     start(points, now) {
       if (!Array.isArray(points)) return;
       if (points.length === 2 && points.every(isPoint)) {
-        const mid = midpoint(points);
-        gesture = { x: mid.x, y: mid.y, dx: 0, dy: 0, spread: spreadOf(points), at: now, pinch: false };
+        // A second finger that joins soon enough makes one gesture with the
+        // first, timed and measured from when and where each landed.
+        const landed = points.map((p) => (Number.isFinite(p.downAt) ? p.downAt : now));
+        const joined = now - Math.min(...landed) <= SWIPE_JOIN_MS;
+        const origins = new Map(points.map((p, i) => [keyOf(p, i), joined && isPoint({ x: p.x0, y: p.y0 })
+          ? { x: p.x0, y: p.y0 }
+          : { x: p.x, y: p.y }]));
+        gesture = { origins, dx: 0, dy: 0, spread: spreadOf(points), at: joined ? Math.min(...landed) : now, pinch: false };
       } else if (points.length > 2) {
         // Three or more fingers are someone else's gesture.
         gesture = null;
@@ -86,9 +104,11 @@ export function createSwipeDetector({
 
     move(points) {
       if (!gesture || !Array.isArray(points) || points.length !== 2 || !points.every(isPoint)) return false;
-      const mid = midpoint(points);
-      gesture.dx = mid.x - gesture.x;
-      gesture.dy = mid.y - gesture.y;
+      const origins = points.map((p, i) => gesture.origins.get(keyOf(p, i)));
+      // Not the two fingers the gesture started with.
+      if (origins.some((o) => !o)) return false;
+      gesture.dx = ((points[0].x - origins[0].x) + (points[1].x - origins[1].x)) / 2;
+      gesture.dy = ((points[0].y - origins[0].y) + (points[1].y - origins[1].y)) / 2;
       if (Math.abs(spreadOf(points) - gesture.spread) > gesture.spread * PINCH_SPREAD_SHARE) {
         gesture.pinch = true;
       }
@@ -151,7 +171,16 @@ export const acceptFrameTouchMessage = (event, expectedSource, expectedOrigin) =
   const data = event.data;
   if (!data || typeof data !== 'object' || data.type !== FRAME_TOUCH_MESSAGE_TYPE) return null;
   if (!['start', 'move', 'end', 'cancel'].includes(data.phase)) return null;
-  const points = Array.isArray(data.points) ? data.points.slice(0, 10).filter(isPoint) : [];
+  // Each point is {id, x, y}, and on a start also where its finger landed and
+  // how long ago (x0, y0, age in ms): the frame's clock isn't the page's.
+  const points = (Array.isArray(data.points) ? data.points.slice(0, 10).filter(isPoint) : []).map((p) => {
+    const point = { x: p.x, y: p.y };
+    if (Number.isInteger(p.id)) point.id = p.id;
+    if (isPoint({ x: p.x0, y: p.y0 }) && Number.isFinite(p.age) && p.age >= 0) {
+      Object.assign(point, { x0: p.x0, y0: p.y0, age: Math.min(p.age, 60000) });
+    }
+    return point;
+  });
   const fingers = Number.isInteger(data.fingers) && data.fingers >= 0 ? data.fingers : points.length;
   return { phase: data.phase, points, fingers };
 };
@@ -181,25 +210,40 @@ export function attachTwoFingerSwipe({ target, onSwipe, ignore = () => false, no
     return detectors.get(key);
   };
   const page = detectorFor('page');
+  // Where and when each finger on the page landed, by touch id.
+  const landings = new Map();
   const finish = (direction) => {
     if (direction) onSwipe(direction);
   };
 
   const onStart = (event) => {
-    const points = touchPoints(event.touches);
+    const at = now();
+    const changed = event.changedTouches || [];
+    for (let i = 0; i < changed.length; i += 1) {
+      landings.set(changed[i].identifier, { x: changed[i].clientX, y: changed[i].clientY, at });
+    }
+    const points = touchPoints(event.touches, landings);
     if (points.length === 2 && ignore(event)) {
       page.cancel();
       return;
     }
-    page.start(points, now());
+    page.start(points, at);
   };
   const onMove = (event) => {
     if (page.move(touchPoints(event.touches)) && event.cancelable) event.preventDefault();
   };
+  const forgetLifted = (event) => {
+    const changed = event.changedTouches || [];
+    for (let i = 0; i < changed.length; i += 1) landings.delete(changed[i].identifier);
+  };
   const onEnd = (event) => {
+    forgetLifted(event);
     finish(page.end(event.touches ? event.touches.length : 0, now()));
   };
-  const onCancel = () => page.cancel();
+  const onCancel = (event) => {
+    forgetLifted(event);
+    page.cancel();
+  };
 
   const onFrameTouch = (event) => {
     const detail = event?.detail;
@@ -210,7 +254,9 @@ export function attachTwoFingerSwipe({ target, onSwipe, ignore = () => false, no
         detector.cancel();
         return;
       }
-      detector.start(detail.points, now());
+      const at = now();
+      const points = detail.points.map((p) => (Number.isFinite(p.age) ? { ...p, downAt: at - p.age } : p));
+      detector.start(points, at);
     } else if (detail.phase === 'move') {
       detector.move(detail.points);
     } else if (detail.phase === 'end') {

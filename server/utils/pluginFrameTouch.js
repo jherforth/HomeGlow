@@ -11,7 +11,9 @@
 // (client/src/utils/twoFingerSwipe.js) decides whether they were a swipe; with
 // pinch zoom blocked, it gives the page the same touch-action as the dashboard.
 //
-// Only two-finger touches are reported, and only their positions. Once the two
+// Only two-finger touches are reported, and only their positions; a start also
+// says where each finger landed and how long ago, since fingers rarely land
+// together and a second finger may join a first that is already moving. Once the two
 // fingers are clearly travelling sideways together, the script stops the
 // browser's own handling of that touch, as the dashboard does; the thresholds
 // below mirror CLAIM_DISTANCE and PINCH_SPREAD_SHARE there. Listeners exist
@@ -23,22 +25,25 @@
 const PLUGIN_FRAME_TOUCH_SCRIPT = `(function(){
 if(window.parent===window)return;
 var CLAIM=20,PINCH=0.4,BLOCK="pan-x pan-y";
-var listening=false,gesture=null,blocked=false,before="";
-function points(t){var p=[];for(var i=0;i<t.length&&i<10;i++)p.push({x:t[i].clientX,y:t[i].clientY});return p;}
-function post(phase,e){try{window.parent.postMessage({type:"homeglow:touch",phase:phase,points:points(e.touches),fingers:e.touches.length},"*");}catch(x){}}
-function mid(p){return{x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2};}
+var listening=false,gesture=null,blocked=false,before="",landed={};
+function points(t,withLanding){var p=[],now=Date.now();for(var i=0;i<t.length&&i<10;i++){var o={id:t[i].identifier,x:t[i].clientX,y:t[i].clientY},l=landed[t[i].identifier];
+if(withLanding&&l){o.x0=l.x;o.y0=l.y;o.age=now-l.t;}p.push(o);}return p;}
+function post(phase,e,withLanding){try{window.parent.postMessage({type:"homeglow:touch",phase:phase,points:points(e.touches,withLanding),fingers:e.touches.length},"*");}catch(x){}}
 function spread(p){return Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);}
-function onStart(e){var n=e.touches.length;
-if(n===2){var p=points(e.touches),m=mid(p);gesture={x:m.x,y:m.y,s:spread(p),pinch:false};post("start",e);}
-else if(n>2&&gesture){gesture=null;post("cancel",e);}}
-function onMove(e){if(!gesture||e.touches.length!==2)return;post("move",e);
-var p=points(e.touches),m=mid(p),dx=m.x-gesture.x,dy=m.y-gesture.y;
+function from(p){var l=landed[p.id];return l?{x:l.x,y:l.y}:{x:p.x,y:p.y};}
+function remember(e){for(var i=0;i<e.changedTouches.length;i++){var c=e.changedTouches[i];landed[c.identifier]={x:c.clientX,y:c.clientY,t:Date.now()};}}
+function forget(e){for(var i=0;i<e.changedTouches.length;i++)delete landed[e.changedTouches[i].identifier];}
+function onStart(e){remember(e);var n=e.touches.length;
+if(n===2){var p=points(e.touches,false);gesture={a:from(p[0]),b:from(p[1]),s:spread(p),pinch:false};post("start",e,true);}
+else if(n>2&&gesture){gesture=null;post("cancel",e,false);}}
+function onMove(e){if(!gesture||e.touches.length!==2)return;post("move",e,false);
+var p=points(e.touches,false),dx=(p[0].x-gesture.a.x+p[1].x-gesture.b.x)/2,dy=(p[0].y-gesture.a.y+p[1].y-gesture.b.y)/2;
 if(Math.abs(spread(p)-gesture.s)>gesture.s*PINCH)gesture.pinch=true;
 if(!gesture.pinch&&Math.abs(dx)>CLAIM&&Math.abs(dx)>Math.abs(dy)&&e.cancelable)e.preventDefault();}
-function onEnd(e){if(!gesture||e.touches.length>1)return;gesture=null;post("end",e);}
-function onCancel(e){if(!gesture)return;gesture=null;post("cancel",e);}
+function onEnd(e){forget(e);if(!gesture||e.touches.length>1)return;gesture=null;post("end",e,false);}
+function onCancel(e){forget(e);if(!gesture)return;gesture=null;post("cancel",e,false);}
 var opts={capture:true,passive:true},moveOpts={capture:true,passive:false};
-function listen(on){if(on===listening)return;listening=on;gesture=null;
+function listen(on){if(on===listening)return;listening=on;gesture=null;landed={};
 var f=on?"addEventListener":"removeEventListener";
 window[f]("touchstart",onStart,opts);window[f]("touchmove",onMove,moveOpts);
 window[f]("touchend",onEnd,opts);window[f]("touchcancel",onCancel,opts);}

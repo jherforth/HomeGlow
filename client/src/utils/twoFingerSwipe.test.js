@@ -38,7 +38,7 @@ describe('createSwipeDetector', () => {
   it('leaves short, slow, mostly vertical and pinching gestures alone', () => {
     const short = createSwipeDetector();
     short.start(pair(500, 300), 0);
-    short.move(pair(450, 300));
+    short.move(pair(440, 300));
     expect(short.end(0, 200)).toBe(0);
 
     const slow = createSwipeDetector();
@@ -81,6 +81,47 @@ describe('createSwipeDetector', () => {
     const upward = createSwipeDetector();
     upward.start(pair(500, 300), 0);
     expect(upward.move(pair(470, 250))).toBe(false);
+  });
+
+  it("lets a second finger join late, counting the first finger's travel since it landed", () => {
+    const detector = createSwipeDetector();
+    // The first finger landed 300ms ago at x=500 and has moved 60px left.
+    detector.start([
+      { id: 1, x: 440, y: 300, x0: 500, y0: 300, downAt: 0 },
+      { id: 2, x: 560, y: 300, x0: 560, y0: 300, downAt: 300 },
+    ], 300);
+    // Both then travel 40px more: (100 + 40) / 2 = 70 on average.
+    detector.move([{ id: 1, x: 400, y: 300 }, { id: 2, x: 520, y: 300 }]);
+    expect(detector.end(0, 700)).toBe(1);
+  });
+
+  it('times a joined gesture from its first finger', () => {
+    const detector = createSwipeDetector();
+    detector.start([
+      { id: 1, x: 500, y: 300, x0: 500, y0: 300, downAt: 0 },
+      { id: 2, x: 600, y: 300, x0: 600, y0: 300, downAt: 500 },
+    ], 500);
+    detector.move([{ id: 1, x: 350, y: 300 }, { id: 2, x: 450, y: 300 }]);
+    expect(detector.end(0, 1200)).toBe(0);
+  });
+
+  it('starts afresh when the second finger lands long after the first', () => {
+    const detector = createSwipeDetector();
+    // The first finger dragged 200px left on its own a second ago; that was
+    // something else, and doesn't count.
+    detector.start([
+      { id: 1, x: 300, y: 300, x0: 500, y0: 300, downAt: 0 },
+      { id: 2, x: 400, y: 300, x0: 400, y0: 300, downAt: 1000 },
+    ], 1000);
+    detector.move([{ id: 1, x: 280, y: 300 }, { id: 2, x: 380, y: 300 }]);
+    expect(detector.end(0, 1200)).toBe(0);
+  });
+
+  it('matches fingers by id, whatever order the browser lists them in', () => {
+    const detector = createSwipeDetector();
+    detector.start([{ id: 4, x: 500, y: 300 }, { id: 9, x: 600, y: 300 }], 0);
+    detector.move([{ id: 9, x: 500, y: 300 }, { id: 4, x: 400, y: 300 }]);
+    expect(detector.end(0, 300)).toBe(1);
   });
 
   it('forgets the gesture on cancel', () => {
@@ -148,7 +189,7 @@ describe('frame messages', () => {
     expect(acceptFrameTouchMessage(message({ type: FRAME_TOUCH_MESSAGE_TYPE, phase: 'wave' }), frame, origin)).toBeNull();
     expect(acceptFrameTouchMessage(message('text'), frame, origin)).toBeNull();
 
-    const messy = { type: FRAME_TOUCH_MESSAGE_TYPE, phase: 'move', points: [{ x: 1, y: 2 }, { x: 'a', y: 3 }, null] };
+    const messy = { type: FRAME_TOUCH_MESSAGE_TYPE, phase: 'move', points: [{ x: 1, y: 2, extra: 'no' }, { x: 'a', y: 3 }, null] };
     expect(acceptFrameTouchMessage(message(messy), frame, origin)).toEqual({
       phase: 'move',
       points: [{ x: 1, y: 2 }],
@@ -222,6 +263,44 @@ describe('attachTwoFingerSwipe', () => {
 
     expect(onSwipe).toHaveBeenCalledTimes(1);
     expect(onSwipe).toHaveBeenCalledWith(-1);
+  });
+
+  it("lets a page finger join a first one that's already moving", () => {
+    const target = fakeTarget();
+    const onSwipe = vi.fn();
+    let clock = 0;
+    attachTwoFingerSwipe({ target, onSwipe, now: () => clock });
+    const touch = (identifier, clientX, clientY = 300) => ({ identifier, clientX, clientY });
+
+    target.fire('touchstart', { touches: [touch(1, 500)], changedTouches: [touch(1, 500)] });
+    clock = 250;
+    target.fire('touchmove', { touches: [touch(1, 440)], cancelable: true, preventDefault: vi.fn() });
+    target.fire('touchstart', { touches: [touch(1, 440), touch(2, 560)], changedTouches: [touch(2, 560)] });
+    clock = 450;
+    target.fire('touchmove', { touches: [touch(1, 400), touch(2, 520)], cancelable: true, preventDefault: vi.fn() });
+    clock = 500;
+    target.fire('touchend', { touches: [], changedTouches: [touch(1, 400), touch(2, 520)] });
+
+    expect(onSwipe).toHaveBeenCalledWith(1);
+  });
+
+  it("uses a frame finger's landing, sent as an age because the frame's clock isn't the page's", () => {
+    const target = fakeTarget();
+    const onSwipe = vi.fn();
+    let clock = 10000;
+    attachTwoFingerSwipe({ target, onSwipe, now: () => clock });
+    const fire = (phase, points, fingers = points.length) =>
+      target.fire(FRAME_TOUCH_EVENT, { detail: { sourceKey: 'f', phase, points, fingers } });
+
+    fire('start', [
+      { id: 1, x: 440, y: 100, x0: 500, y0: 100, age: 300 },
+      { id: 2, x: 560, y: 100, x0: 560, y0: 100, age: 0 },
+    ]);
+    clock = 10300;
+    fire('move', [{ id: 1, x: 400, y: 100 }, { id: 2, x: 520, y: 100 }]);
+    fire('end', [], 0);
+
+    expect(onSwipe).toHaveBeenCalledWith(1);
   });
 
   it('removes every listener it added', () => {

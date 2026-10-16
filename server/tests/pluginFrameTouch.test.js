@@ -19,7 +19,9 @@ function frame({ topLevel = false } = {}) {
     };
     window.parent = topLevel ? window : parent;
     const document = { documentElement: { style: { touchAction: '' } } };
-    vm.runInNewContext(PLUGIN_FRAME_TOUCH_SCRIPT, { window, document, Math });
+    let clock = 1000;
+    const Date = { now: () => clock };
+    vm.runInNewContext(PLUGIN_FRAME_TOUCH_SCRIPT, { window, document, Math, Date });
     return {
         window,
         parent,
@@ -27,13 +29,17 @@ function frame({ topLevel = false } = {}) {
         posted,
         listeners,
         fire: (type, event) => listeners.get(type)?.fn(event),
+        tick: (ms) => { clock += ms; },
         settings: (data, source = parent) => listeners.get('message').fn({ source, data: { type: 'homeglow:touch-settings', ...data } }),
     };
 }
 
-const touches = (...points) => points.map(([x, y]) => ({ clientX: x, clientY: y }));
+const touches = (...points) => points.map(([x, y, id], i) => ({ identifier: id ?? i, clientX: x, clientY: y }));
 const touchEvent = (...points) => {
-    const event = { touches: touches(...points), cancelable: true, prevented: false };
+    const list = touches(...points);
+    // Every finger counts as just landed or lifted; tests that need otherwise
+    // pass changedTouches themselves.
+    const event = { touches: list, changedTouches: list, cancelable: true, prevented: false };
     event.preventDefault = () => { event.prevented = true; };
     return event;
 };
@@ -79,7 +85,10 @@ test('with swiping on, reports two-finger touches and claims a sideways swipe', 
     assert.deepEqual(f.posted[0].data, {
         type: 'homeglow:touch',
         phase: 'start',
-        points: [{ x: 100, y: 100 }, { x: 200, y: 100 }],
+        points: [
+            { id: 0, x: 100, y: 100, x0: 100, y0: 100, age: 0 },
+            { id: 1, x: 200, y: 100, x0: 200, y0: 100, age: 0 },
+        ],
         fingers: 2,
     });
     assert.equal(f.posted[3].data.fingers, 0);
@@ -118,4 +127,26 @@ test('removes its touch listeners when swiping is turned off', () => {
     assert.ok(f.listeners.has('touchstart'));
     f.settings({ swipe: false });
     assert.deepEqual([...f.listeners.keys()], ['message']);
+});
+
+test("a second finger landing later says where and when the first landed, and the first finger's travel counts", () => {
+    const f = frame();
+    f.settings({ swipe: true });
+
+    f.fire('touchstart', touchEvent([300, 100, 7]));
+    f.tick(250);
+    // The first finger has moved 30px left before the second lands.
+    const second = touchEvent([270, 100, 7], [380, 100, 9]);
+    second.changedTouches = [second.touches[1]];
+    f.fire('touchstart', second);
+
+    assert.deepEqual(f.posted[0].data.points, [
+        { id: 7, x: 270, y: 100, x0: 300, y0: 100, age: 250 },
+        { id: 9, x: 380, y: 100, x0: 380, y0: 100, age: 0 },
+    ]);
+
+    // Measured from where each landed: (-50 + -20) / 2 = -35, past the claim.
+    const move = touchEvent([250, 100, 7], [360, 100, 9]);
+    f.fire('touchmove', move);
+    assert.equal(move.prevented, true);
 });
