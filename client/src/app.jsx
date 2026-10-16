@@ -24,6 +24,11 @@ import {
   wantsActivityListeners,
 } from './utils/dockIdleHide.js';
 import {
+  BLOCK_PINCH_TOUCH_ACTION,
+  attachTwoFingerSwipe,
+  swipeTargetTab,
+} from './utils/twoFingerSwipe.js';
+import {
   hexToRgbTriplet,
   readLocalScreensaverSettings,
   parseVacationModeSetting,
@@ -969,6 +974,41 @@ const App = () => {
     dockIdleRef.current?.setSuspended(showAdminPanel);
   }, [showAdminPanel]);
 
+  // Two fingers swiped sideways change the tab, and pinch zoom can be blocked
+  // (utils/twoFingerSwipe.js). This display's choice, never on a phone, which
+  // has no tabs. Plugin frames get the same settings from their wrappers.
+  const swipeBetweenTabs = !isMobile && screensaverSettings.twoFingerSwipe === true;
+  const pinchZoomBlocked = !isMobile && screensaverSettings.blockPinchZoom === true;
+  const frameTouch = useMemo(
+    () => ({ swipe: swipeBetweenTabs, blockPinchZoom: pinchZoomBlocked }),
+    [swipeBetweenTabs, pinchZoomBlocked]
+  );
+
+  useEffect(() => {
+    if (!swipeBetweenTabs) return undefined;
+    return attachTwoFingerSwipe({
+      target: window,
+      onSwipe: (direction) => {
+        setActiveTab((current) => swipeTargetTab(tabsRef.current, current, direction) ?? current);
+      },
+      // Not while Admin or the screensaver is up, and not in a dialog: a swipe
+      // there would change the tab behind it.
+      ignore: (event) => showAdminPanelRef.current
+        || screensaverActiveRef.current
+        || !!event?.target?.closest?.('.MuiModal-root'),
+    });
+  }, [swipeBetweenTabs]);
+
+  useEffect(() => {
+    if (!pinchZoomBlocked) return undefined;
+    const style = document.documentElement.style;
+    const before = style.touchAction;
+    style.touchAction = BLOCK_PINCH_TOUCH_ACTION;
+    return () => {
+      style.touchAction = before;
+    };
+  }, [pinchZoomBlocked]);
+
   // One set of window listeners serves every idle feature: the screensaver
   // and the dock. A kiosk should not carry two sets of mousemove handlers.
   const listenForActivity = wantsActivityListeners({
@@ -1314,12 +1354,13 @@ const App = () => {
           transparentBackground={pSettings.transparent || false}
           events={plugin.manifest?.events || []}
           hiddenControls={unprefixedHiddenControlsFor(hiddenControls, plugin.manifest?.id)}
+          touch={frameTouch}
         />,
       });
     });
 
     return result;
-  }, [widgetSettings, pluginSettings, activeTab, widgetAssignments, installedPlugins, displayTheme, themeColors, demoStatus.demo, hiddenControls]);
+  }, [widgetSettings, pluginSettings, activeTab, widgetAssignments, installedPlugins, displayTheme, themeColors, demoStatus.demo, hiddenControls, frameTouch]);
 
   // Mobile stack (issue #118): same widget content nodes, fixed order, photos
   // excluded, grid metadata ignored.

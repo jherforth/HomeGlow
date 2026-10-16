@@ -41,6 +41,10 @@ export const DEFAULT_SCREENSAVER_SETTINGS = {
   // Minutes without interaction before the dock fades out; 0 keeps it shown
   // (issue #77). Off by default so no display changes on upgrade.
   dockHideMinutes: 0,
+  // Two fingers swiped sideways change the tab, and pinch zoom is blocked
+  // (utils/twoFingerSwipe.js). Off by default so no display changes on upgrade.
+  twoFingerSwipe: false,
+  blockPinchZoom: false,
 };
 
 export const PHOTO_LAYOUTS = ['fit', 'ambient', 'collage'];
@@ -119,6 +123,8 @@ export const normalizeScreensaverSettings = (raw) => {
     overlayCalendarDays: Number.isFinite(days) ? Math.min(7, Math.max(1, days)) : 1,
     photoLayout: PHOTO_LAYOUTS.includes(merged.photoLayout) ? merged.photoLayout : 'fit',
     dockHideMinutes: normalizeDockHideMinutes(merged.dockHideMinutes),
+    twoFingerSwipe: merged.twoFingerSwipe === true,
+    blockPinchZoom: merged.blockPinchZoom === true,
   };
 };
 

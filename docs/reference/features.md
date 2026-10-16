@@ -408,6 +408,34 @@ calculation); `server/services/homeAssistant.js` for the connection.
 
 **Code:** `ScreenSaver.jsx`, `ScreensaverCountdown.jsx`, timer logic in `app.jsx`.
 
+## Touch gestures (wall displays)
+
+- **Swipe with two fingers to change tabs** (Admin Panel → Displays →
+  Screensaver, under Touch). Two fingers travelling sideways together go to the
+  next tab (fingers moving left) or the previous one (moving right), in the
+  dock's order, wrapping around at the ends. The fingers needn't land together:
+  a second finger landing within 0.6 s of the first joins it, and each finger's
+  travel counts from where it landed. One finger still scrolls and taps,
+  and a pinch, a vertical drag or a slow drag is left alone. Ignored while
+  Admin, the screensaver or a dialog is open.
+- **Block pinch zoom**: gives the page `touch-action: pan-x pan-y`, so pinching
+  or double-tapping no longer zooms the board by accident while scrolling still
+  works.
+- Both are this display's own settings, saved with the screensaver's, off by
+  default, and never apply on a phone (no tabs there, and its owner may need to
+  zoom).
+- **Over plugins too.** A plugin is an iframe whose touches the dashboard never
+  sees, so every plugin page is served with a small inert script
+  (`server/utils/pluginFrameTouch.js`). Each plugin's wrapper posts it this
+  display's settings; with swiping on, it reports two-finger touches back to
+  the wrapper, which checks they came from its own frame and hands them to the
+  same detector. With pinch zoom blocked, the plugin page gets the same
+  `touch-action`.
+
+**Code:** `utils/twoFingerSwipe.js` (detector, tab order, frame messages),
+wiring in `app.jsx` and `PluginWidgetWrapper.jsx`, settings in
+`utils/interfaceSettings.js`, UI in `AdminPanel.jsx`.
+
 ## Vacation mode
 
 - A **household** setting (Admin Panel → Family → Vacation; issues #121, #230)

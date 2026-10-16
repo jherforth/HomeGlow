@@ -149,6 +149,12 @@ body { color: var(--text); font-family: var(--hg-font-body, system-ui); }
   the household's card opacity, or none when the widget is set transparent, so
   the page's own `body` background is cleared. A widget with a palette of its
   own, such as a team's colors, paints it on a full-size wrapper element instead.
+- **Two-finger swipes pass through.** A display can switch tabs with a
+  two-finger sideways swipe, and block pinch zoom. Your page is served with a
+  small script that, when the display has these on, reports two-finger touches
+  to the dashboard and sets `touch-action` on your `<html>`. One-finger touches
+  are never reported or stopped, so drags, sliders and scrolling in your widget
+  are unaffected. Avoid building your own two-finger sideways gesture.
 - **Keep fallbacks** (`var(--text, #e8e8e8)`), for a direct load of the file and
   for dashboards older than version 2. `HomeGlow.theme.tokens` has the values in
   JavaScript.

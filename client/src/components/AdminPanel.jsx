@@ -3244,6 +3244,36 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                     </Alert>
                   )}
 
+                  {/* Touch gestures (utils/twoFingerSwipe.js). This display
+                      only, like the dock; saved with the screensaver. */}
+                  <Typography variant="subtitle2" sx={{ mt: 1, mb: 1, fontWeight: 'bold' }}>
+                    {t('admin:screensaver.touchHeading')}
+                  </Typography>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={screensaverSettings.twoFingerSwipe === true}
+                        onChange={(e) => setScreensaverSettings(prev => ({ ...prev, twoFingerSwipe: e.target.checked }))}
+                      />
+                    }
+                    label={t('admin:screensaver.twoFingerSwipe')}
+                  />
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, ml: 6 }}>
+                    {t('admin:screensaver.twoFingerSwipeHelp')}
+                  </Typography>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={screensaverSettings.blockPinchZoom === true}
+                        onChange={(e) => setScreensaverSettings(prev => ({ ...prev, blockPinchZoom: e.target.checked }))}
+                      />
+                    }
+                    label={t('admin:screensaver.blockPinchZoom')}
+                  />
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2, ml: 6 }}>
+                    {t('admin:screensaver.blockPinchZoomHelp')}
+                  </Typography>
+
                   <Button
                     variant="contained"
                     onClick={saveScreensaverSettings}

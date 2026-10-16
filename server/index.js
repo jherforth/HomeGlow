@@ -184,6 +184,7 @@ const {
 const { httpsAgentFor, isCertificateVerificationSkipped } = require('./utils/outboundTls');
 const { createUpdateChecker } = require('./services/updateCheck');
 const { PLUGIN_AUTHOR_MAX_LENGTH, resolvePluginAuthor } = require('./utils/pluginAuthor');
+const { PLUGIN_FRAME_TOUCH_SCRIPT } = require('./utils/pluginFrameTouch');
 const { sqliteUtcToIso, sqliteUtcToMs } = require('./utils/sqliteTime');
 const {
   DEVICE_NAME_RULE_MESSAGE,
@@ -681,6 +682,10 @@ fastify.get('/widgets/:filename', async (request, reply) => {
     if (pluginId) {
       injection += `<script>window.__HOMEGLOW_PLUGIN__={id:"${pluginId}",apiVersion:"v1"};</script>`;
     }
+    // Every plugin, manifest or not, so a two-finger swipe between tabs works
+    // over it and a blocked pinch stays blocked on it. Inert until the
+    // dashboard turns it on for this display.
+    injection += `<script>${PLUGIN_FRAME_TOUCH_SCRIPT}</script>`;
     // Inject at the START of <head> so the identity script runs before any
     // plugin script — including an SDK <script src> placed early in head.
     const headOpen = content.match(/<head\b[^>]*>/i);
