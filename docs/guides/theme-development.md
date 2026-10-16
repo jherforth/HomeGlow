@@ -48,7 +48,7 @@ folder name must match the manifest's `id`.
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `manifestVersion` | yes | `1`; `2` for a theme that uses `ornaments`, the meter tokens or `clumps`; `3` for one that uses the button tokens or curved flybys; `4` for one with `weather` scenes or a `flash` layer; `5` for one that uses orbits; `6` for one with a confetti `cast`. A HomeGlow older than the version refuses the theme. |
+| `manifestVersion` | yes | `1`; `2` for a theme that uses `ornaments`, the meter tokens or `clumps`; `3` for one that uses the button tokens or curved flybys; `4` for one with `weather` scenes or a `flash` layer; `5` for one that uses orbits; `6` for one with a confetti `cast`; `7` for one with pictures that bend (`flex`). A HomeGlow older than the version refuses the theme. |
 | `id` | yes | Lowercase slug (a-z, 0-9, hyphens), the same as the folder name. |
 | `name` | yes | Shown in the theme picker. |
 | `version`, `author`, `description` | | As in a plugin manifest. The author shows as "by ...". |
@@ -117,13 +117,13 @@ stars.
 
 | Layer | Draws | Options |
 | --- | --- | --- |
-| `image` | A still picture, or one of a list | `src` (a picture or a list), `anchor` (`bottom`, `top`, `center`, `fill`), `height` (e.g. `"42vh"`), `angle` (turns it, growing it to cover the screen), `flip`, `opacity` |
-| `sprites` | Copies of a picture, or a mix of pictures, spread across the screen | `src` or `pictures`, `count`, `height` (vh), `aspect` (width ÷ height), `span` (`[from, to]` %), `base` (distance from the bottom), `clumps` and `clumpWidth` (gather copies into that many patches, each that many percent wide, with open ground between, as plants grow), `lift` (percent of the screen above `base`, drawn per copy), `hue` (degrees to turn each copy's colors), `motion` (`sway`, `bob`, `pulse`, `none`), `angle` (sway degrees) or `distance` (bob px), `seconds`, `tint`, `flip`, `current`, `opacity` |
+| `image` | A still picture, or one of a list | `src` (a picture or a list), `anchor` (`bottom`, `top`, `center`, `fill`), `height` (e.g. `"42vh"`), `angle` (turns it, growing it to cover the screen), `flip`, `opacity`, `flex` (see [Pictures that bend](#4d-pictures-that-bend)) |
+| `sprites` | Copies of a picture, or a mix of pictures, spread across the screen | `src` or `pictures`, `count`, `height` (vh), `aspect` (width ÷ height), `span` (`[from, to]` %), `base` (distance from the bottom), `clumps` and `clumpWidth` (gather copies into that many patches, each that many percent wide, with open ground between, as plants grow), `lift` (percent of the screen above `base`, drawn per copy), `hue` (degrees to turn each copy's colors), `motion` (`sway`, `bob`, `pulse`, `none`), `angle` (sway degrees) or `distance` (bob px), `seconds`, `tint`, `flip`, `current`, `opacity`. Each of its `pictures` can bend with `flex` (see [Pictures that bend](#4d-pictures-that-bend)). |
 | `particles` | Many small things | `src` or `colors` (plain dots), `motion` (`rise`, `fall`, `twinkle`), `count`, `size` (px), `seconds`, `drift` (px), `span`, `opacity` |
 | `dots` | A still field of dots, painted once | `count`, `colors`, `size`, `opacity`. Each dot's size and opacity follow one brightness, mostly dim, so dim dots are small; the brightest get a halo. |
 | `field` | Drifting light (caustics) | `strength` (`soft`, `bright`), `spacing`, `seconds` |
 | `streaks` | An occasional streak on a random path | `color`, `length`, `every` (pause, seconds), `seconds`, `burst` (streaks per pass: a meteor storm) |
-| `flyby` | Now and then, one picture crossing the screen | `pictures`, `height` (vh), `every` (pause, seconds), `seconds` (to cross), `span` (`[from, to]` % from the top), `tilt` (degrees of climb), `spin` (degrees of tumble per crossing), `opacity`. Draw pictures facing right. |
+| `flyby` | Now and then, one picture crossing the screen | `pictures`, `height` (vh), `every` (pause, seconds), `seconds` (to cross), `span` (`[from, to]` % from the top), `tilt` (degrees of climb), `spin` (degrees of tumble per crossing), `opacity`. Draw pictures facing right. A picture can bend as it goes with `flex`. |
 | `blobs` | Soft color blobs drifting and swelling | `colors`, `count`, `size` (vmin), `seconds`, `opacity` |
 | `flash` | Now and then, lightning: a glow from the top of the sky that brightens and fades (manifest version 4) | `color`, `every` (seconds between strikes, at least 4), `strength` (0.05 to 0.5), `double` (a second, weaker flicker; on by default). Kept gentle for anyone sensitive to flashing light, and still under reduced motion. |
 
@@ -269,6 +269,36 @@ or `wander`). `seconds` is 2 to 30; the defaults are 3 to 5 pictures, 8 to 14vh
 tall, crossing in 5 to 8 seconds. The same pictures as an ambience layer work
 well: people know them from the scene. A weather scene's `confetti` can have
 its own cast. Nothing crosses for people who ask for reduced motion.
+
+## 4d. Pictures that bend
+
+With `flex` (manifest version 7) a picture bends from one fixed edge, the bend
+travelling out to the tip: kelp curving in a current, a fish's tail beating.
+It goes on any entry of a `sprites` or `flyby` layer's `pictures` (a `cast`'s
+too), or on an `image` layer.
+
+```json
+{ "src": "assets/kelp.svg", "aspect": 0.28, "height": [30, 50],
+  "flex": { "kind": "sway", "amount": [6, 10], "seconds": [7, 12], "segments": 6 } }
+```
+
+| Option | What it does |
+| --- | --- |
+| `kind` | `sway`: leans side to side, more toward the tip (plants, tentacles). `beat`: narrows and opens again, twice a cycle, as a fish's tail does seen from the side. Required. |
+| `from` | For a `sway`, the fixed edge: `bottom` (the default, a plant) or `top` (tentacles hanging). A `beat` bends from the `right` edge (the default and only choice), since pictures face right and the tail is on the left. |
+| `start` | How far from the fixed edge the bend begins, 0 to 0.95. Below it the picture stays still. Default 0 for `sway`, 0.5 for `beat`. |
+| `amount` | `sway`: the tip's total lean in degrees. `beat`: how much narrower the tip gets, at most 0.8. A number or `[low, high]`. |
+| `seconds` | One full cycle. A number or `[low, high]`. |
+| `segments` | Slices in the bend, 2 to 12 (default 6). More is smoother and costs a little more. |
+| `wave` | How far the tip lags the root, in cycles (default 0.25). |
+
+The engine cuts the picture into slices, each nested in the one before and
+animating only its transform, so the bend runs on the GPU like the rest of
+the scene. To sway part of a photographic backdrop, lift that part into its
+own picture the same size as the backdrop, paint it out of the backdrop, and
+lay it over with an `image` layer (`anchor: fill`) that has `flex`; it lines
+up on any screen. Keep amounts small: a few degrees reads as a current.
+Confetti pieces (`confetti.pictures`) do not bend.
 
 ## 5. Performance rules
 
