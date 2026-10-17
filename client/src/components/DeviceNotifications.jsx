@@ -1,25 +1,20 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import {
-  Alert, Box, Button, Checkbox, Chip, CircularProgress, FormControlLabel, FormGroup, IconButton,
-  Radio, RadioGroup, Typography,
+  Alert, Box, Button, Chip, CircularProgress, IconButton, Typography,
 } from '@mui/material';
 import { NotificationsActive, NotificationsOff } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import {
-  NOTIFICATION_EVENTS, pushSupport, readDeviceNotifications, sendTestNotification,
+  pushSupport, readDeviceNotifications, sendTestNotification,
   turnOffNotifications, turnOnNotifications, updateNotifications,
 } from '../utils/pushNotifications.js';
+import NotificationAudience from './NotificationAudience.jsx';
 
 // Push notifications in Admin → Displays → Devices: this device's own card
 // (turning them on must happen on the device itself, which asks its owner),
 // and a status cell for each device in the table.
-
-const EVENT_LABELS = {
-  'chore.completed': 'admin:devices.notifications.eventCompleted',
-  'chore.allCompleted': 'admin:devices.notifications.eventAllDone',
-};
 
 export function DeviceNotificationsCard({ deviceName, onChanged }) {
   const { t, i18n } = useTranslation(['admin', 'common']);
@@ -68,17 +63,6 @@ export function DeviceNotificationsCard({ deviceName, onChanged }) {
   const test = () => act(async () => { await sendTestNotification(deviceName); return null; }, t('admin:devices.notifications.testSent'));
   const change = (changes) => act(() => updateNotifications(deviceName, changes));
 
-  const toggleEvent = (event, on) => {
-    const events = new Set(state.events);
-    if (on) events.add(event); else events.delete(event);
-    void change({ events: NOTIFICATION_EVENTS.filter((e) => events.has(e)) });
-  };
-  const chosen = Array.isArray(state?.members) ? state.members : null;
-  const toggleMember = (id) => {
-    const next = new Set(chosen || []);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    if (next.size) void change({ members: [...next] });
-  };
 
   // Over plain http no browser allows push, so there is nothing to offer.
   // A device that has them on still gets its card, to turn them off.
@@ -111,40 +95,13 @@ export function DeviceNotificationsCard({ deviceName, onChanged }) {
 
       {state?.enabled && (
         <>
-          <Typography variant="body2" sx={{ mb: 1 }}>{t('admin:devices.notifications.tellMeWhen')}</Typography>
-          <FormGroup sx={{ mb: 1.5 }}>
-            {NOTIFICATION_EVENTS.map((event) => (
-              <FormControlLabel
-                key={event}
-                control={<Checkbox checked={state.events.includes(event)} onChange={(e) => toggleEvent(event, e.target.checked)} disabled={busy} />}
-                label={t(EVENT_LABELS[event])}
-              />
-            ))}
-          </FormGroup>
-
-          <Typography variant="body2" sx={{ mb: 0.5 }}>{t('admin:devices.notifications.whose')}</Typography>
-          <RadioGroup
-            row
-            value={chosen ? 'some' : 'all'}
-            onChange={(e) => change({ members: e.target.value === 'all' ? 'all' : members.map((m) => m.id) })}
-          >
-            <FormControlLabel value="all" control={<Radio disabled={busy} />} label={t('admin:devices.notifications.everyone')} />
-            <FormControlLabel value="some" control={<Radio disabled={busy || !members.length} />} label={t('admin:devices.notifications.only')} />
-          </RadioGroup>
-          {chosen && (
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
-              {members.map((m) => (
-                <Chip
-                  key={m.id}
-                  label={m.username}
-                  color={chosen.includes(m.id) ? 'primary' : 'default'}
-                  variant={chosen.includes(m.id) ? 'filled' : 'outlined'}
-                  onClick={() => toggleMember(m.id)}
-                  disabled={busy}
-                />
-              ))}
-            </Box>
-          )}
+          <NotificationAudience
+            events={state.events}
+            members={state.members}
+            people={members}
+            onChange={(changes) => { void change(changes); }}
+            disabled={busy}
+          />
 
           {state.lastFailure && (
             <Alert severity="warning" sx={{ mb: 1.5 }}>

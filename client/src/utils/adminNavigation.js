@@ -19,7 +19,7 @@ export const ADMIN_LAYOUT = [
   { tab: 'displays', sections: ['devices', 'screensaver'] },
   {
     tab: 'family',
-    sections: ['users', 'chores', 'routines', 'prizes', 'vacation'],
+    sections: ['users', 'chores', 'routines', 'prizes', 'vacation', 'notifications'],
     subsections: { chores: ['definitions', 'history', 'settings'], routines: ['routines', 'steps'] },
   },
   { tab: 'security', sections: [] },
@@ -27,6 +27,19 @@ export const ADMIN_LAYOUT = [
 ];
 
 export const ADMIN_TABS = ADMIN_LAYOUT.map((entry) => entry.tab);
+
+// Sections that show only when a connection is on: Family → Notifications
+// lists ntfy topics, so it appears once ntfy is turned on in Connections.
+const CONDITIONAL_SECTIONS = { notifications: 'ntfyEnabled' };
+
+/**
+ * A tab's sections as the panel shows them. `flags` says which connections
+ * are on ({ ntfyEnabled }); a section that needs one that's off is left out.
+ */
+export function visibleSections(tab, flags = {}) {
+  const sections = ADMIN_LAYOUT.find((entry) => entry.tab === tab)?.sections || [];
+  return sections.filter((name) => !CONDITIONAL_SECTIONS[name] || flags[CONDITIONAL_SECTIONS[name]] === true);
+}
 
 // Names from before #230, so old bookmarks and links land in the section's
 // new home. The hash is then rewritten to the new name.

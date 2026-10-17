@@ -174,6 +174,11 @@ static route.
 | GET/PUT/DELETE | `/api/devices/:deviceName/notifications` | A device's push notifications: read, turn on or change (`subscription`, `events`, `members`, `language`), turn off. |
 | POST | `/api/devices/:deviceName/notifications/test` | Send the device a test notification. |
 | GET | `/api/notifications/key` | The server's public push key (VAPID), for a browser to subscribe with. |
+| GET/PUT | `/api/connections/ntfy/status`, `/api/connections/ntfy` | The ntfy connection: `{ enabled, server, hasToken, openUrl }`; save with `enabled`, `server`, `token` (left out keeps it, `''` clears it) and `open_url`. The token is never returned. |
+| POST | `/api/connections/ntfy/test` | Publish to a throwaway topic to check the server and token. |
+| GET/POST | `/api/ntfy-topics` | The household's ntfy topics (`{ topics, enabled }`) / add one: `label`, `topic` (letters, digits, `-`, `_`; unique), `events`, `members`, `language`. |
+| PATCH/DELETE | `/api/ntfy-topics/:id` | Change or remove a topic. |
+| POST | `/api/ntfy-topics/:id/test` | Send the topic a test message (400 while ntfy is off). |
 | GET/POST | `/api/devices/:deviceName/tabs` | List / create tabs. |
 | PATCH | `/api/devices/:deviceName/tabs/:tabNumber` | Update a tab. |
 | PATCH | `/api/devices/:deviceName/tabs/reorder` | Reorder tabs. |

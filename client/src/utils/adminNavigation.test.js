@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
+  visibleSections,
   ADMIN_LAYOUT,
   ADMIN_TABS,
   isAdminHash,
@@ -148,5 +149,15 @@ describe('adminNavigation', () => {
       expect(win.replaceState).not.toHaveBeenCalled();
       expect(win.url.hash).toBe('#/administrator');
     });
+  });
+});
+
+describe('visibleSections', () => {
+  it('leaves Family → Notifications out until ntfy is on', () => {
+    expect(visibleSections('family')).not.toContain('notifications');
+    expect(visibleSections('family', { ntfyEnabled: false })).not.toContain('notifications');
+    expect(visibleSections('family', { ntfyEnabled: true })).toEqual(['users', 'chores', 'routines', 'prizes', 'vacation', 'notifications']);
+    expect(visibleSections('system')).toEqual(['region', 'connections', 'about']);
+    expect(visibleSections('look')).toEqual([]);
   });
 });

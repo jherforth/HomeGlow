@@ -124,12 +124,25 @@ const parseJson = (text, fallback) => {
 };
 
 /**
+ * Whether a recipient's row (a device's, or an ntfy topic's) wants `event`
+ * about `userId`: its events_json lists it, and its members_json is
+ * everyone (NULL) or names them.
+ */
+function wants(row, event, userId) {
+  if (!parseJson(row.events_json, []).includes(event)) return false;
+  const members = row.members_json ? parseJson(row.members_json, null) : null;
+  return !members || members.includes(userId);
+}
+
+/**
  * The notifier. `send(subscription, payload, options)` is web-push's
  * sendNotification (injected, so tests can stand in for the push services);
  * `generateKeys()` is its generateVAPIDKeys.
  */
 function createNotifier({
   db, send, generateKeys, encrypt, decrypt,
+  // services/ntfy.js: topics that hear the same messages, published to ntfy.
+  ntfy = null,
   contact = process.env.HOMEGLOW_PUSH_CONTACT || DEFAULT_CONTACT,
   now = () => Date.now(), log = console,
 }) {
@@ -233,6 +246,7 @@ function createNotifier({
    * means the phone dropped it, so the row goes too.
    */
   async function deliver(row, payload) {
+    if (row.kind === 'ntfy') return ntfy.deliver(row, payload);
     const { publicKey, privateKey } = vapidKeys();
     try {
       await send(
@@ -268,13 +282,12 @@ function createNotifier({
 
   const userName = (userId) => db.prepare('SELECT username FROM users WHERE id = ?').get(userId)?.username || null;
 
-  // The devices that want `event` about `userId`.
+  // The devices that want `event` about `userId`, and the ntfy topics
+  // that do (while ntfy is on): each is sent the same message.
   function recipients(event, userId) {
-    return db.prepare('SELECT * FROM device_notifications').all().filter((row) => {
-      if (!parseJson(row.events_json, []).includes(event)) return false;
-      const members = row.members_json ? parseJson(row.members_json, null) : null;
-      return !members || members.includes(userId);
-    });
+    const devices = db.prepare('SELECT * FROM device_notifications').all().filter((row) => wants(row, event, userId));
+    const topics = ntfy ? ntfy.recipients(event, userId).map((row) => ({ ...row, kind: 'ntfy' })) : [];
+    return [...devices, ...topics];
   }
 
   // What was finished, for the message: a routine by its name, else the chore.
@@ -368,6 +381,10 @@ function createNotifier({
 
 module.exports = {
   NOTIFICATION_EVENTS,
+  parseEvents,
+  parseMembers,
+  textFor,
+  wants,
   PUSH_SERVICE_HOSTS,
   PRIVATE_KEY_SETTING,
   isPushServiceEndpoint,

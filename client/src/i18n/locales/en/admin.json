@@ -510,7 +510,21 @@
     "saveHomeAssistant": "Save Home Assistant",
     "testConnection": "Test Connection",
     "testing": "Testing...",
-    "encryptionRequired": "Set an encryption key on the server before saving a Home Assistant token."
+    "encryptionRequired": "Set an encryption key on the server before saving a Home Assistant token.",
+    "ntfyHeading": "ntfy notifications",
+    "ntfyHelp": "Send chore news to phones with the free ntfy app (Android, including F-Droid, and iPhone). Unlike browser notifications it works without HTTPS and without adding HomeGlow to the Home Screen. Once it is on, add a topic for each phone in Family → Notifications.",
+    "ntfyEnabled": "Send notifications with ntfy",
+    "ntfyServer": "ntfy server",
+    "ntfyServerHelp": "https://ntfy.sh, or the address of your own ntfy server.",
+    "ntfyToken": "Access token (optional)",
+    "ntfyTokenHelp": "Only for a protected or self-hosted server. Stored encrypted.",
+    "ntfyTokenStoredHelp": "A token is stored. Leave this blank to keep it.",
+    "ntfyClearToken": "Remove token",
+    "ntfyOpenUrl": "Address a tap opens",
+    "ntfyOpenUrlHelp": "Tapping a notification opens this. It defaults to the address you're using now.",
+    "ntfySave": "Save ntfy",
+    "ntfySaved": "ntfy settings saved.",
+    "ntfyTopicsWhere": "Add topics in Family → Notifications."
   },
   "about": {
     "heading": "About",
@@ -641,7 +655,8 @@
     "vacation": "Vacation",
     "region": "Language & time",
     "connections": "Connections",
-    "about": "About"
+    "about": "About",
+    "notifications": "Notifications"
   },
   "panelTitle": "Admin Panel",
   "themes": {
@@ -765,5 +780,33 @@
       "doneMissing_one": "{{name}} is imported. {{count}} tile shows as missing until you fix it.",
       "doneMissing_other": "{{name}} is imported. {{count}} tiles show as missing until you fix them."
     }
+  },
+  "ntfy": {
+    "heading": "ntfy topics",
+    "add": "Add topic",
+    "intro": "Each topic is a phone (or several) with the ntfy app subscribed to it, on {{server}}. It hears about the events and people you choose, like a device's browser notifications.",
+    "none": "No topics yet. Add one for each phone that should hear about chores.",
+    "name": "Name",
+    "namePlaceholder": "Mom's phone",
+    "topic": "Topic",
+    "topicHelp": "Letters, digits, - and _. A long random name keeps it private.",
+    "newTopic": "New random topic",
+    "hears": "Hears about",
+    "last": "Last message",
+    "delivered": "Delivered",
+    "failed": "Failed",
+    "addTitle": "Add an ntfy topic",
+    "editTitle": "Edit ntfy topic",
+    "publicWarning": "On ntfy.sh, anyone who knows a topic's name can read it, and these messages name your children. Keep the random name, or use your own ntfy server.",
+    "howTo": "On the phone: open the ntfy app, tap +, and enter the topic {{topic}}.",
+    "howToServer": "On the phone: open the ntfy app, tap +, enter the topic {{topic}}, and choose \"Use another server\": {{server}}.",
+    "saved": "Saved {{name}}.",
+    "testSent": "Test sent to {{name}}.",
+    "testAria": "Send a test to {{name}}",
+    "editAria": "Edit {{name}}",
+    "deleteAria": "Delete {{name}}",
+    "deleteTitle": "Delete topic",
+    "deletePrompt": "Stop sending notifications to {{name}}? The ntfy app keeps the topic until it is removed there.",
+    "about": "About"
   }
 }

@@ -469,6 +469,39 @@ sending), `server/routes/notifications.js`, `client/public/sw.js` (shows a
 message, handles a tap), `client/src/utils/pushNotifications.js`,
 `client/src/components/DeviceNotifications.jsx`.
 
+### ntfy (issue #288)
+
+The same messages can also go to the free [ntfy](https://ntfy.sh) app (Android,
+including the F-Droid build that needs no Google services, and iPhone). HomeGlow
+publishes each message to an ntfy *topic* and the app shows it, so it needs
+**no HTTPS** and no web app on the Home Screen: only that the server can reach
+the ntfy server. Browser push keeps working alongside it.
+
+- **System → Connections → ntfy:** turn it on, and choose the server
+  (`https://ntfy.sh`, or your own), an optional access token (for a protected or
+  self-hosted server; stored encrypted, never sent to a browser), and the
+  address a tap on a notification opens (by default, the address Admin was
+  open on). **Test** publishes to a throwaway topic and says whether the server
+  answered and the token was accepted.
+- **Family → Notifications** appears once ntfy is on: the household's topics,
+  each with a name ("Mom's phone"), its topic, which of the two events, and
+  about whom (everyone or chosen members), with a test, the last result, edit
+  and delete. A new topic gets a long random name.
+- **On the phone:** in the ntfy app, tap **+** and enter the topic (and the
+  server, if it isn't ntfy.sh).
+- **Privacy:** on public ntfy.sh, anyone who knows a topic's name can read it,
+  and the messages name the children. The topic dialog says so; keep the random
+  name, or use your own ntfy server with a token.
+- Turned off, nothing is published and Family → Notifications hides; the topics
+  are kept for when it's turned on again. A refused or failed publish is shown
+  on the topic and the topic is kept.
+
+**Code:** `server/services/ntfy.js` (the connection, the topics, publishing),
+`server/routes/ntfy.js`, and `createNotifier`'s `ntfy` in
+`server/services/notifications.js` (one composer, two ways to deliver);
+`client/src/components/NtfyConnection.jsx`, `NtfyTopicsTab.jsx`,
+`NotificationAudience.jsx` (the events and people, shared with browser push).
+
 ## Vacation mode
 
 - A **household** setting (Admin Panel → Family → Vacation; issues #121, #230)

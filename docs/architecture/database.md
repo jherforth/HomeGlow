@@ -169,6 +169,15 @@ members_json -- null for everyone, else a list of user ids
 language, created_at, last_success_at, last_failure_at, last_failure
 ```
 
+**`ntfy_topics`** — the household's ntfy topics (schema 34): the same messages
+as browser push, published to the ntfy app. The connection is in `settings`:
+`NTFY_ENABLED`, `NTFY_SERVER`, `NTFY_TOKEN_ENC` (encrypted, never returned),
+`NTFY_OPEN_URL`.
+```
+id, label, topic (UNIQUE), events_json, members_json -- as device_notifications
+language, created_at, last_success_at, last_failure_at, last_failure
+```
+
 **`tabs`** — dashboard tabs for a device.
 ```
 id, device_name ─▶ devices(name) CASCADE, number, label, icon, show_label,

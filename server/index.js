@@ -224,6 +224,8 @@ const { HaLive } = require('./services/haLive');
 const { registerHaPanelRoutes, lazyDb } = require('./routes/haPanels');
 const { registerRoutineRoutes } = require('./routes/routines');
 const { registerNotificationRoutes } = require('./routes/notifications');
+const { registerNtfyRoutes } = require('./routes/ntfy');
+const ntfyService = require('./services/ntfy');
 const notifications = require('./services/notifications');
 const webPush = require('web-push');
 const initializeDatabase = require('./migrations/initializeDatabase');
@@ -263,6 +265,7 @@ const schemaMigrations = [
   { schemaId: 31, migrationPath: './migrations/schema31-routineStreakBase', },
   { schemaId: 32, migrationPath: './migrations/schema32-choreExpiry', },
   { schemaId: 33, migrationPath: './migrations/schema33-deviceNotifications', },
+  { schemaId: 34, migrationPath: './migrations/schema34-ntfy', },
 ];
 
 const ALLOWED_SCHEDULE_DURATIONS = new Set(['day-of', 'until-completed', 'once-completed']);
@@ -1112,15 +1115,25 @@ const routines = registerRoutineRoutes(fastify, {
   isVacation: isVacationActiveOn,
 });
 
-// Push notifications to devices, from the chore events (services/notifications.js).
+// Push notifications to devices, from the chore events (services/notifications.js),
+// and the same messages to the household's ntfy topics (services/ntfy.js).
+const ntfy = ntfyService.createNtfy({
+  db: haDb,
+  post: (url, body, options) => axios.post(url, body, options),
+  agentFor: httpsAgentFor,
+  encrypt,
+  decrypt,
+});
 const notifier = notifications.createNotifier({
   db: haDb,
   send: (subscription, payload, options) => webPush.sendNotification(subscription, payload, options),
   generateKeys: () => webPush.generateVAPIDKeys(),
   encrypt,
   decrypt,
+  ntfy,
 });
 registerNotificationRoutes(fastify, { notifier, demoBlocked, ensureDevice: (name) => ensureDeviceExists(name) });
+registerNtfyRoutes(fastify, { ntfy, demoBlocked });
 pluginEvents.subscribe((message) => { void notifier.handle(message); });
 
 // Helper: Load legacy on-disk widget registry (kept for the debug endpoint)
@@ -4514,6 +4527,8 @@ const REDACTED_SETTING_KEYS = new Set([
   'WEATHER_API_KEY',
   // The push key's private half (services/notifications.js); only the server signs.
   notifications.PRIVATE_KEY_SETTING,
+  // The ntfy access token (services/ntfy.js); status reports only whether one is set.
+  ntfyService.TOKEN_SETTING,
 ]);
 
 // Convert an array of {key, value} settings rows into a single {key: value}

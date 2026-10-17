@@ -510,7 +510,21 @@
     "saveHomeAssistant": "Guardar Home Assistant",
     "testConnection": "Probar conexión",
     "testing": "Probando...",
-    "encryptionRequired": "Configura una clave de cifrado en el servidor antes de guardar un token de Home Assistant."
+    "encryptionRequired": "Configura una clave de cifrado en el servidor antes de guardar un token de Home Assistant.",
+    "ntfyHeading": "Notificaciones con ntfy",
+    "ntfyHelp": "Envía las novedades de tareas a teléfonos con la app gratuita ntfy (Android, incluida F-Droid, e iPhone). A diferencia de las notificaciones del navegador, funciona sin HTTPS y sin añadir HomeGlow a la pantalla de inicio. Una vez activada, añade un tema para cada teléfono en Familia → Notificaciones.",
+    "ntfyEnabled": "Enviar notificaciones con ntfy",
+    "ntfyServer": "Servidor ntfy",
+    "ntfyServerHelp": "https://ntfy.sh, o la dirección de tu propio servidor ntfy.",
+    "ntfyToken": "Token de acceso (opcional)",
+    "ntfyTokenHelp": "Solo para un servidor protegido o propio. Se guarda cifrado.",
+    "ntfyTokenStoredHelp": "Hay un token guardado. Déjalo en blanco para conservarlo.",
+    "ntfyClearToken": "Quitar token",
+    "ntfyOpenUrl": "Dirección que abre un toque",
+    "ntfyOpenUrlHelp": "Al tocar una notificación se abre esta dirección. Por defecto, la que usas ahora.",
+    "ntfySave": "Guardar ntfy",
+    "ntfySaved": "Ajustes de ntfy guardados.",
+    "ntfyTopicsWhere": "Añade temas en Familia → Notificaciones."
   },
   "about": {
     "heading": "Acerca de",
@@ -641,7 +655,8 @@
     "vacation": "Vacaciones",
     "region": "Idioma y hora",
     "connections": "Conexiones",
-    "about": "Acerca de"
+    "about": "Acerca de",
+    "notifications": "Notificaciones"
   },
   "panelTitle": "Panel de administración",
   "themes": {
@@ -765,5 +780,33 @@
       "doneMissing_one": "{{name}} está importado. {{count}} mosaico aparece como no encontrado hasta que lo arregles.",
       "doneMissing_other": "{{name}} está importado. {{count}} mosaicos aparecen como no encontrados hasta que los arregles."
     }
+  },
+  "ntfy": {
+    "heading": "Temas de ntfy",
+    "add": "Añadir tema",
+    "intro": "Cada tema es un teléfono (o varios) con la app ntfy suscrita a él, en {{server}}. Recibe los eventos y las personas que elijas, como las notificaciones del navegador de un dispositivo.",
+    "none": "Aún no hay temas. Añade uno para cada teléfono que deba saber de las tareas.",
+    "name": "Nombre",
+    "namePlaceholder": "Teléfono de mamá",
+    "topic": "Tema",
+    "topicHelp": "Letras, dígitos, - y _. Un nombre largo y aleatorio lo mantiene privado.",
+    "newTopic": "Nuevo tema aleatorio",
+    "hears": "Recibe",
+    "last": "Último mensaje",
+    "delivered": "Entregado",
+    "failed": "Falló",
+    "addTitle": "Añadir un tema de ntfy",
+    "editTitle": "Editar tema de ntfy",
+    "publicWarning": "En ntfy.sh, cualquiera que conozca el nombre de un tema puede leerlo, y estos mensajes nombran a tus hijos. Conserva el nombre aleatorio o usa tu propio servidor ntfy.",
+    "howTo": "En el teléfono: abre la app ntfy, toca + e introduce el tema {{topic}}.",
+    "howToServer": "En el teléfono: abre la app ntfy, toca +, introduce el tema {{topic}} y elige «Usar otro servidor»: {{server}}.",
+    "saved": "Se guardó {{name}}.",
+    "testSent": "Prueba enviada a {{name}}.",
+    "testAria": "Enviar una prueba a {{name}}",
+    "editAria": "Editar {{name}}",
+    "deleteAria": "Eliminar {{name}}",
+    "deleteTitle": "Eliminar tema",
+    "deletePrompt": "¿Dejar de enviar notificaciones a {{name}}? La app ntfy conserva el tema hasta que se quite allí.",
+    "about": "Sobre"
   }
 }

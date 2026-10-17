@@ -98,7 +98,10 @@ import RefreshIntervalSelect from './RefreshIntervalSelect';
 import ScreensaverIntervalSlider from './ScreensaverIntervalSlider';
 import GoogleAccountConnection from './GoogleAccountConnection';
 import ClamValueModal from './ClamValueModal';
-import { ADMIN_LAYOUT, ADMIN_TABS, normalizeAdminLocation, parseAdminHash, setAdminHash } from '../utils/adminNavigation.js';
+import { ADMIN_LAYOUT, ADMIN_TABS, normalizeAdminLocation, parseAdminHash, setAdminHash, visibleSections } from '../utils/adminNavigation.js';
+import NtfyConnection from './NtfyConnection.jsx';
+import NtfyTopicsTab from './NtfyTopicsTab.jsx';
+import { readNtfyConnection } from '../utils/ntfy.js';
 import SoundPicker from './SoundPicker';
 import ControlsOnDisplay from './ControlsOnDisplay';
 import useFetchTabs from '../hooks/useFetchTabs.js';
@@ -192,7 +195,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   // Where the panel is: { tab, section, subsection }, named as in the URL hash
   // (utils/adminNavigation.js). Tabs group what you're managing (issue #230).
   const [location, setLocation] = useState(() => parseAdminHash() || normalizeAdminLocation());
-  const sections = ADMIN_LAYOUT.find((entry) => entry.tab === location.tab)?.sections || [];
+  // The ntfy connection (System → Connections): Family → Notifications shows
+  // once it is on. null until read.
+  const [ntfyStatus, setNtfyStatus] = useState(null);
+  const sections = visibleSections(location.tab, { ntfyEnabled: ntfyStatus?.enabled === true });
   const choresSubsections = ADMIN_LAYOUT.find((entry) => entry.tab === 'family').subsections.chores;
   const routinesSubsections = ADMIN_LAYOUT.find((entry) => entry.tab === 'family').subsections.routines;
 
@@ -202,6 +208,17 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     setLocation(normalized);
     setAdminHash(normalized);
   }, []);
+
+  useEffect(() => {
+    readNtfyConnection().then(setNtfyStatus).catch(() => setNtfyStatus({ enabled: false }));
+  }, []);
+
+  // A link to Family → Notifications while ntfy is off opens Family instead.
+  useEffect(() => {
+    if (ntfyStatus && !ntfyStatus.enabled && location.section === 'notifications') {
+      navigate({ tab: 'family', section: 'users' });
+    }
+  }, [ntfyStatus, location.section, navigate]);
 
   // If the hash is edited while the panel is open, follow it.
   useEffect(() => {
@@ -3849,6 +3866,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
         </Card>
       )}
 
+      {location.section === 'notifications' && ntfyStatus?.enabled && (
+        <NtfyTopicsTab connection={ntfyStatus} />
+      )}
+
       {location.section === 'vacation' && (
         <Card>
           <CardContent>
@@ -4277,6 +4298,17 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
               <Divider sx={{ my: 2 }} />
 
               <GoogleAccountConnection
+                onMessage={({ type, text }) => {
+                  setSaveMessage({ show: true, type, text });
+                  setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+                }}
+              />
+
+              <Divider sx={{ my: 2 }} />
+
+              {/* ntfy (issue #288): turning it on shows Family → Notifications. */}
+              <NtfyConnection
+                onChanged={setNtfyStatus}
                 onMessage={({ type, text }) => {
                   setSaveMessage({ show: true, type, text });
                   setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
