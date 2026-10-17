@@ -159,6 +159,16 @@ id (=1), pin_hash, created_at, updated_at
 id, name (UNIQUE), updateTime, device_settings_json  -- JSON blob of widget/plugin/theme settings
 ```
 
+**`device_notifications`** — push notifications for a device (schema 33), one
+row per device that has them on. The push keys live here rather than in
+`device_settings_json`, which every page load of the device reads.
+```
+id, device_id ─▶ devices(id) CASCADE (UNIQUE), endpoint, p256dh, auth,
+events_json  -- e.g. ["chore.completed", "chore.allCompleted"]
+members_json -- null for everyone, else a list of user ids
+language, created_at, last_success_at, last_failure_at, last_failure
+```
+
 **`tabs`** — dashboard tabs for a device.
 ```
 id, device_name ─▶ devices(name) CASCADE, number, label, icon, show_label,

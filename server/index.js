@@ -222,6 +222,9 @@ const haPanelRules = require('./services/haPanels');
 const { HaLive } = require('./services/haLive');
 const { registerHaPanelRoutes, lazyDb } = require('./routes/haPanels');
 const { registerRoutineRoutes } = require('./routes/routines');
+const { registerNotificationRoutes } = require('./routes/notifications');
+const notifications = require('./services/notifications');
+const webPush = require('web-push');
 const initializeDatabase = require('./migrations/initializeDatabase');
 const migrateChoresDatabase = require('./migrations/migrateChoresDatabase');
 const migrateClamsToHistory = require('./migrations/migrateClamsToHistory');
@@ -258,6 +261,7 @@ const schemaMigrations = [
   { schemaId: 30, migrationPath: './migrations/schema30-importRoutinesPlugin', },
   { schemaId: 31, migrationPath: './migrations/schema31-routineStreakBase', },
   { schemaId: 32, migrationPath: './migrations/schema32-choreExpiry', },
+  { schemaId: 33, migrationPath: './migrations/schema33-deviceNotifications', },
 ];
 
 const ALLOWED_SCHEDULE_DURATIONS = new Set(['day-of', 'until-completed', 'once-completed']);
@@ -1106,6 +1110,17 @@ const routines = registerRoutineRoutes(fastify, {
   calendarEvents: (from, to) => (calendarSyncService || new CalendarSyncService(db, decryptPassword)).getCachedEvents(from, to),
   isVacation: isVacationActiveOn,
 });
+
+// Push notifications to devices, from the chore events (services/notifications.js).
+const notifier = notifications.createNotifier({
+  db: haDb,
+  send: (subscription, payload, options) => webPush.sendNotification(subscription, payload, options),
+  generateKeys: () => webPush.generateVAPIDKeys(),
+  encrypt,
+  decrypt,
+});
+registerNotificationRoutes(fastify, { notifier, demoBlocked, ensureDevice: (name) => ensureDeviceExists(name) });
+pluginEvents.subscribe((message) => { void notifier.handle(message); });
 
 // Helper: Load legacy on-disk widget registry (kept for the debug endpoint)
 async function loadWidgetRegistry() {
@@ -2635,8 +2650,9 @@ function touchDeviceUpdateTime(deviceName) {
 // Devices API Endpoints
 fastify.get('/api/devices', async (request, reply) => {
   try {
-    const devices = db.prepare('SELECT name, updateTime FROM devices ORDER BY updateTime DESC').all();
-    return devices.map((device) => {
+    const devices = db.prepare('SELECT id, name, updateTime FROM devices ORDER BY updateTime DESC').all();
+    const notifying = notifier.enabledDeviceIds();
+    return devices.map(({ id, ...device }) => {
       const tabs = getTabsForDevice(device.name);
       const widgetCount = tabs.reduce((count, tab) => {
         const layoutMap = parseTabConfigJson(tab.config_json);
@@ -2647,6 +2663,7 @@ fastify.get('/api/devices', async (request, reply) => {
         ...device,
         updateTime: sqliteUtcToIso(device.updateTime),
         widgets: widgetCount,
+        notifications: notifying.has(id),
       };
     });
   } catch (error) {
@@ -4494,6 +4511,8 @@ const REDACTED_SETTING_KEYS = new Set([
   // on the client needs it — the Admin Panel shows whether one is stored via
   // GET /api/connections/weather/status and writes a replacement blind.
   'WEATHER_API_KEY',
+  // The push key's private half (services/notifications.js); only the server signs.
+  notifications.PRIVATE_KEY_SETTING,
 ]);
 
 // Convert an array of {key, value} settings rows into a single {key: value}

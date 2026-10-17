@@ -4,6 +4,11 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/HomeGlowLogo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Installable as an app, which phones need for push notifications. The
+         manifest is fetched with credentials so a login in front of HomeGlow
+         (Cloudflare Access, a reverse proxy) doesn't turn it away. -->
+    <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <title>HomeGlow</title>
   </head>
   <body>
