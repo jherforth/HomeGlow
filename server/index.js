@@ -183,6 +183,7 @@ const {
 } = require('./utils/encryption');
 const { httpsAgentFor, isCertificateVerificationSkipped } = require('./utils/outboundTls');
 const { createUpdateChecker } = require('./services/updateCheck');
+const immichPhotos = require('./services/immichPhotos');
 const { PLUGIN_AUTHOR_MAX_LENGTH, resolvePluginAuthor } = require('./utils/pluginAuthor');
 const { PLUGIN_FRAME_TOUCH_SCRIPT } = require('./utils/pluginFrameTouch');
 const { sqliteUtcToIso, sqliteUtcToMs } = require('./utils/sqliteTime');
@@ -6978,22 +6979,10 @@ fastify.get('/api/photo-items', async (request, reply) => {
           let assets = [];
 
           if (source.album_id) {
-            // Immich v3 removed the `assets` array from GET /api/albums/{id}
-            // (https://immich.app/blog/v3-migration). Fetch album assets via the
-            // paginated metadata search instead — works on both Immich v2 and v3.
-            let page = 1;
-            while (page && assets.length < 1000) {
-              const searchResponse = await axios.post(`${apiBase}/search/metadata`,
-                { albumIds: [source.album_id], page, size: 1000 },
-                {
-                  headers: immichHeaders,
-                  timeout: 15000
-                }
-              );
-              const bucket = searchResponse.data?.assets || {};
-              assets.push(...(bucket.items || []));
-              page = bucket.nextPage ? Number(bucket.nextPage) : null;
-            }
+            // 100 at random from the whole album (services/immichPhotos.js).
+            assets = await immichPhotos.fetchAlbumAssets({
+              post: axios.post, apiBase, headers: immichHeaders, albumId: source.album_id,
+            });
             shuffleInPlace(assets);
             assets = assets.slice(0, 100);
           } else {
