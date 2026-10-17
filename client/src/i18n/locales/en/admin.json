@@ -211,7 +211,31 @@
     "renameTitle": "Rename Current Device Name",
     "newName": "New Device Name",
     "saveName": "Save Name",
-    "nameRule": "Name must be 1–64 characters, contain at least one letter or digit, and may only include letters, digits, spaces, and _ - . ' ( )."
+    "nameRule": "Name must be 1–64 characters, contain at least one letter or digit, and may only include letters, digits, spaces, and _ - . ' ( ).",
+    "notifications": {
+      "column": "Notifications",
+      "on": "On",
+      "heading": "Notifications on this device",
+      "offHelp": "Get a notification on this device when a chore or routine is done, even when HomeGlow is closed.",
+      "turnOn": "Turn on notifications",
+      "turnedOn": "Notifications are on. Send a test to check.",
+      "tellMeWhen": "Tell me when:",
+      "eventCompleted": "A chore or routine is done",
+      "eventAllDone": "Someone finishes all of today's chores",
+      "whose": "About:",
+      "everyone": "Everyone",
+      "only": "Only these people",
+      "lastFailure": "The last notification didn't arrive: {{reason}}",
+      "sendTest": "Send a test",
+      "testSent": "Test sent.",
+      "turnOff": "Turn off notifications",
+      "blocked": "Notifications are blocked for HomeGlow on this device. Allow them in the phone's or browser's settings, then try again.",
+      "support": {
+        "install-first": "On iPhone and iPad, add HomeGlow to your Home Screen first: tap Share, then Add to Home Screen. Open HomeGlow from there and turn notifications on here.",
+        "unsupported": "This browser can't receive notifications.",
+        "blocked": "Notifications are blocked for HomeGlow on this device. Allow them in the phone's or browser's settings, then try again."
+      }
+    }
   },
   "screensaver": {
     "heading": "Screensaver",

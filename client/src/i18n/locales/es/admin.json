@@ -211,7 +211,31 @@
     "renameTitle": "Cambiar el nombre del dispositivo actual",
     "newName": "Nuevo nombre del dispositivo",
     "saveName": "Guardar el nombre",
-    "nameRule": "El nombre debe tener entre 1 y 64 caracteres, contener al menos una letra o dígito, y solo puede incluir letras, dígitos, espacios y _ - . ' ( )."
+    "nameRule": "El nombre debe tener entre 1 y 64 caracteres, contener al menos una letra o dígito, y solo puede incluir letras, dígitos, espacios y _ - . ' ( ).",
+    "notifications": {
+      "column": "Notificaciones",
+      "on": "Activadas",
+      "heading": "Notificaciones en este dispositivo",
+      "offHelp": "Recibe una notificación en este dispositivo cuando se termine una tarea o rutina, aunque HomeGlow esté cerrado.",
+      "turnOn": "Activar notificaciones",
+      "turnedOn": "Las notificaciones están activadas. Envía una prueba para comprobarlo.",
+      "tellMeWhen": "Avísame cuando:",
+      "eventCompleted": "Se termine una tarea o rutina",
+      "eventAllDone": "Alguien termine todas las tareas de hoy",
+      "whose": "Sobre:",
+      "everyone": "Todos",
+      "only": "Solo estas personas",
+      "lastFailure": "La última notificación no llegó: {{reason}}",
+      "sendTest": "Enviar una prueba",
+      "testSent": "Prueba enviada.",
+      "turnOff": "Desactivar notificaciones",
+      "blocked": "Las notificaciones de HomeGlow están bloqueadas en este dispositivo. Permítelas en los ajustes del teléfono o del navegador y vuelve a intentarlo.",
+      "support": {
+        "install-first": "En iPhone y iPad, primero añade HomeGlow a la pantalla de inicio: toca Compartir y luego Añadir a pantalla de inicio. Abre HomeGlow desde ahí y activa las notificaciones aquí.",
+        "unsupported": "Este navegador no puede recibir notificaciones.",
+        "blocked": "Las notificaciones de HomeGlow están bloqueadas en este dispositivo. Permítelas en los ajustes del teléfono o del navegador y vuelve a intentarlo."
+      }
+    }
   },
   "screensaver": {
     "heading": "Salvapantallas",

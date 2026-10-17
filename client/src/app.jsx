@@ -11,7 +11,8 @@ import TabBar from './components/TabBar.jsx';
 import ScreensaverCountdown from './components/ScreensaverCountdown.jsx';
 import UpdateIndicator from './components/UpdateIndicator.jsx';
 import { API_BASE_URL } from './utils/apiConfig.js';
-import { getDeviceApiBase } from './utils/deviceName.js';
+import { getDeviceApiBase, getDeviceName } from './utils/deviceName.js';
+import { refreshSubscription } from './utils/pushNotifications.js';
 import { unlockAudio } from './utils/choreSound.js';
 import useChoreSoundScheduler from './hooks/useChoreSoundScheduler.js';
 import useFetchTabs from './hooks/useFetchTabs.js';
@@ -283,6 +284,12 @@ const App = () => {
   // place of the household's interface colors, including for plugins.
   const themeRegistry = useThemeRegistry();
   useEffect(() => { loadInstalledThemes(); }, []);
+
+  // A phone's browser can replace its push subscription by itself; hand the
+  // server the current one (utils/pushNotifications.js). Quiet: it never asks.
+  useEffect(() => {
+    refreshSubscription(getDeviceName()).catch(() => {});
+  }, []);
   // A theme installed since this display loaded its list: read it again.
   const themeKnown = themeRegistry.themes.some((entry) => entry.id === appearance.theme);
   useEffect(() => {

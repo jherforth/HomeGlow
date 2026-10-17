@@ -436,6 +436,39 @@ calculation); `server/services/homeAssistant.js` for the connection.
 wiring in `app.jsx` and `PluginWidgetWrapper.jsx`, settings in
 `utils/interfaceSettings.js`, UI in `AdminPanel.jsx`.
 
+## Push notifications (phones)
+
+- A device can get a notification when a chore or routine is done, or when
+  someone finishes all of today's chores, even with HomeGlow closed. Turned on
+  from the device itself, in **Admin Panel → Displays → Devices** ("Notifications
+  on this device"), which asks the phone's permission.
+- **Each device chooses for itself:** which of the two events, and about whom
+  (everyone, or chosen family members). The phone's own quiet hours (Focus, Do
+  Not Disturb) decide when it makes a sound. Completions by one person close
+  together update one notification ("Ava finished 3 chores") rather than
+  stacking up.
+- A tap opens HomeGlow. Messages are in the language the device used when it
+  turned them on (English or Spanish).
+- The devices table shows which devices have them on, with a test and a way to
+  turn them off from any device. Deleting a device turns its notifications off.
+- **Needs HTTPS.** Browsers only allow push on a secure page, so a HomeGlow
+  opened at `http://192.168.…` can't have them, and Admin doesn't offer them there. On iPhone and
+  iPad (iOS 16.4 or later), HomeGlow must be added to the Home Screen and opened
+  from there, which is why HomeGlow is now an installable app (a web app
+  manifest and icons). Away from home, a notification still arrives; opening
+  HomeGlow then needs whatever remote access the household has.
+- Messages go through the phone's own push service (Apple's, Google's or
+  Mozilla's), encrypted end to end, so the service can't read them. The server
+  signs them with a key pair it makes on first use; the private half is stored
+  encrypted with `ENCRYPTION_KEY`. It only ever sends to those push services.
+  `HOMEGLOW_PUSH_CONTACT` sets the contact address the push services see (by
+  default, the project's GitHub page).
+
+**Code:** `server/services/notifications.js` (who hears what, the wording,
+sending), `server/routes/notifications.js`, `client/public/sw.js` (shows a
+message, handles a tap), `client/src/utils/pushNotifications.js`,
+`client/src/components/DeviceNotifications.jsx`.
+
 ## Vacation mode
 
 - A **household** setting (Admin Panel → Family → Vacation; issues #121, #230)
