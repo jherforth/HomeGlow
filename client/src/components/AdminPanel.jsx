@@ -79,6 +79,7 @@ import HomeAssistantPanels from './HomeAssistantPanels';
 import ThemeLibrary from './ThemeLibrary';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
+import { revealTabPicker } from '../utils/revealTabPicker.js';
 import { getDeviceApiBase, getDeviceName, setDeviceName, isValidDeviceName } from '../utils/deviceName.js';
 import { fetchPinRemembered, setPinRemembered, forgetPinOnAllDevices, shouldPromptForPin } from '../utils/adminPinDevice.js';
 import PinModal from './PinModal';
@@ -912,6 +913,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     const missingEnabledWidgets = getMissingEnabledCoreWidgetAssignments(widgetSettings, widgetAssignments);
     if (missingEnabledWidgets.length > 0) {
       setSaveMessage({ show: true, type: 'error', text: t('admin:messages.widgetNeedsTab') });
+      revealTabPicker(missingEnabledWidgets);
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 4000);
       return;
     }
@@ -947,6 +949,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     const missingEnabledPlugins = getMissingEnabledPluginAssignments(pluginSettings, pluginAssignments, uploadedWidgets);
     if (missingEnabledPlugins.length > 0) {
       setSaveMessage({ show: true, type: 'error', text: t('admin:messages.pluginNeedsTab') });
+      revealTabPicker(missingEnabledPlugins);
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 4000);
       return;
     }
@@ -2058,7 +2061,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                       </Grid>
                     </Grid>
 
-                    <Box sx={{ mt: 2 }}>
+                    <Box sx={{ mt: 2 }} data-tab-picker={widget}>
                       <Autocomplete
                         multiple
                         options={tabs}
@@ -2131,7 +2134,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                     </Grid>
                   </Grid>
 
-                  <Box sx={{ mt: 2 }}>
+                  <Box sx={{ mt: 2 }} data-tab-picker="weather">
                     <Autocomplete
                       multiple
                       options={tabs}
@@ -2676,7 +2679,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                             </Box>
                           )}
 
-                          <Box sx={{ mt: 2 }}>
+                          <Box sx={{ mt: 2 }} data-tab-picker={pluginWidgetName}>
                             <Autocomplete
                               multiple
                               options={tabs}
