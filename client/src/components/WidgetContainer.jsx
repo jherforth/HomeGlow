@@ -1,5 +1,7 @@
 import React, { Suspense, useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Box, IconButton } from '@mui/material';
+import { CloseFullscreen, Fullscreen, OpenInFull } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 import GridLayout, { getCompactor } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
@@ -20,6 +22,20 @@ import { readGridMetrics } from '../utils/gridMetrics';
 import { frameDecoration } from '../utils/widgetFrame';
 import FrameOrnaments from './FrameOrnaments';
 import ThemeAmbience from '../themes/engine/ThemeAmbience.jsx';
+import {
+  BUTTON_REVEAL_MS,
+  DOUBLE_TAP_MS,
+  FRAME_EXPAND_EVENT,
+  REPLAYED_CLICK_FLAG,
+  createDoubleTapDetector,
+  expandIdleTimeoutMs,
+  expandedRect,
+  isInteractiveElement,
+  isWidgetExpandable,
+  nextSizeOnDoubleTap,
+  normalizeExpandMethod,
+  replayClick,
+} from '../utils/widgetExpand';
 
 // No auto-compaction; block overlaps (same as compactType={null} + preventCollision).
 const GRID_COMPACTOR = getCompactor(null, false, true);
@@ -36,6 +52,37 @@ const resolveWidgetName = (widgetId) => {
   if (widgetId.startsWith('plugin-')) return `plugin:${widgetId.slice(7)}`;
   return null;
 };
+
+// The page's visible size, for placing an expanded widget: the width without
+// a scrollbar, and the full height.
+const readViewport = () => ({
+  width: document.documentElement.clientWidth || window.innerWidth,
+  height: window.innerHeight,
+});
+
+// Expanding and putting back are animated: the widget's box moves and
+// resizes between its place on the grid and the top half or the whole page
+// (never scaled, so its contents never look stretched), and the page behind
+// dims in and out alongside it. Not for people who ask their system for
+// reduced motion.
+const EXPAND_MS = 280;
+const EXPAND_EASING = 'cubic-bezier(0.2, 0, 0, 1)';
+const prefersReducedMotion = () => {
+  try {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch {
+    return false;
+  }
+};
+// Two frames: the browser paints the starting box before the change, so the
+// change is animated rather than jumped to.
+const afterPaint = (fn) => requestAnimationFrame(() => requestAnimationFrame(fn));
+
+// Above every widget and the page's badges (1200), below MUI's dialogs and
+// menus (1300), so a dialog the widget opens still shows over it. The dock
+// sits higher still; the dashboard hides it while a widget fills the page.
+const EXPANDED_Z = 1250;
+const EXPAND_BACKDROP_Z = 1240;
 
 // Core widgets arrive Suspense-wrapped (they're lazy-loaded). Props cloned
 // onto a Suspense boundary are silently dropped, so inject them into the
@@ -57,7 +104,13 @@ const WidgetContainer = ({
   deviceWidgetSettings = {},
   devicePluginSettings = {},
   isActive = true,
+  // This display's screensaver settings, which carry the expand settings
+  // (utils/widgetExpand.js). Null leaves expanding off.
+  expandSettings = null,
+  // Told 'normal', 'half' or 'full' whenever the expanded size changes.
+  onExpandedSizeChange,
 }) => {
+  const { t } = useTranslation('common');
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const [containerWidth, setContainerWidth] = useState(1200);
   const [gridCols, setGridCols] = useState(12);
@@ -445,6 +498,286 @@ const WidgetContainer = ({
     return () => window.cancelAnimationFrame(rafId);
   }, [locked, selectedWidget, layout]);
 
+  // --- Expanding a widget (utils/widgetExpand.js) ---
+  // Only while the board is locked: unlocked, a tap selects a widget to move.
+  const expandOn = locked && expandSettings?.expandWidgets === true;
+  const expandMethod = normalizeExpandMethod(expandSettings?.expandMethod);
+  const expandIdleMs = expandIdleTimeoutMs(expandSettings?.expandIdleMinutes);
+  // The expanded widget: { id, size: 'half' | 'full', phase, home }.
+  // phase: 'from' (lifted out, still over its grid place, about to grow),
+  // 'open', 'closing' (shrinking back over its grid place), 'settle' (back in
+  // the grid, one frame without the grid's own transitions). home is its grid
+  // place in page coordinates, where it grows from and shrinks back to.
+  const [expanded, setExpanded] = useState(null);
+  const closeTimerRef = useRef(null);
+  const expandedRef = useRef(expanded);
+  expandedRef.current = expanded;
+  const [viewport, setViewport] = useState(readViewport);
+  // Button mode: the expand buttons show for a while after a touch.
+  const [expandButtonsShown, setExpandButtonsShown] = useState(false);
+  const tapDetectorsRef = useRef(new Map());
+  // A single tap held back in double-tap mode: { target, clientX, clientY, timer }.
+  const heldClickRef = useRef(null);
+
+  const canExpand = useCallback((widget) => Boolean(widget) && expandOn && isWidgetExpandable({
+    settings: expandSettings,
+    widgetName: resolveWidgetName(widget.id),
+    manifestExpand: widget.expandable === false ? false : undefined,
+  }), [expandOn, expandSettings]);
+
+  const tapDetectorFor = (widgetId) => {
+    let detector = tapDetectorsRef.current.get(widgetId);
+    if (!detector) {
+      detector = createDoubleTapDetector();
+      tapDetectorsRef.current.set(widgetId, detector);
+    }
+    return detector;
+  };
+
+  const dropHeldClick = useCallback(() => {
+    if (heldClickRef.current) {
+      clearTimeout(heldClickRef.current.timer);
+      heldClickRef.current = null;
+    }
+  }, []);
+
+  // Let a held tap through now, rather than at the end of its wait.
+  const flushHeldClick = useCallback(() => {
+    const held = heldClickRef.current;
+    dropHeldClick();
+    if (held) replayClick(held.target, held);
+  }, [dropHeldClick]);
+
+  // Back in the grid: one frame with the grid's transitions off, so the
+  // widget doesn't slide in from the page corner as its grid transform returns.
+  const settleWidget = useCallback((widgetId) => {
+    setExpanded(widgetId ? { id: widgetId, phase: 'settle' } : null);
+    if (!widgetId) return;
+    afterPaint(() => setExpanded((prev) => (prev && prev.phase === 'settle' && prev.id === widgetId ? null : prev)));
+  }, []);
+
+  // size: 'half', 'full' or 'normal'. animate: false puts it back at once (a
+  // tab change, the setting turned off).
+  const setWidgetSize = useCallback((widgetId, size, { animate = true } = {}) => {
+    dropHeldClick();
+    tapDetectorsRef.current.forEach((detector) => detector.reset());
+    clearTimeout(closeTimerRef.current);
+    const current = expandedRef.current;
+    const live = current && current.phase !== 'settle' ? current : null;
+    const instant = !animate || prefersReducedMotion();
+
+    if (size === 'half' || size === 'full') {
+      // Already lifted out (open, or shrinking back): change size from where
+      // it is now.
+      if (live && live.id === widgetId) {
+        setExpanded({ ...live, size, phase: 'open' });
+        return;
+      }
+      const element = containerRef.current?.querySelector(`[data-widget-id="${CSS.escape(widgetId)}"]`);
+      const box = element?.getBoundingClientRect();
+      const home = box
+        ? { top: box.top + window.scrollY, left: box.left + window.scrollX, width: box.width, height: box.height }
+        : null;
+      if (instant || !home) {
+        setExpanded({ id: widgetId, size, phase: 'open', home });
+        return;
+      }
+      setExpanded({ id: widgetId, size, phase: 'from', home });
+      afterPaint(() => setExpanded((prev) => (prev && prev.id === widgetId && prev.phase === 'from' ? { ...prev, phase: 'open' } : prev)));
+      return;
+    }
+
+    if (!live) return;
+    if (instant || !live.home || live.phase === 'from') {
+      settleWidget(live.id);
+      return;
+    }
+    setExpanded({ ...live, phase: 'closing' });
+    closeTimerRef.current = setTimeout(() => settleWidget(live.id), EXPAND_MS + 40);
+  }, [dropHeldClick, settleWidget]);
+
+  const widgetsForExpandRef = useRef(widgets);
+  widgetsForExpandRef.current = widgets;
+  const handleDoubleTap = useCallback((widgetId) => {
+    if (expandMethod !== 'doubleTap') return;
+    const widget = widgetsForExpandRef.current.find((w) => w.id === widgetId);
+    if (!canExpand(widget)) return;
+    const current = expandedRef.current;
+    const isOpen = current && current.id === widgetId && (current.phase === 'open' || current.phase === 'from');
+    setWidgetSize(widgetId, nextSizeOnDoubleTap(isOpen ? current.size : 'normal'));
+  }, [expandMethod, canExpand, setWidgetSize]);
+  const handleDoubleTapRef = useRef(handleDoubleTap);
+  handleDoubleTapRef.current = handleDoubleTap;
+
+  // Double-tap mode: a tap on a widget's plain area waits DOUBLE_TAP_MS, so
+  // that a second tap can make it a double-tap instead. Buttons, fields and
+  // keyboard clicks go through at once and never count.
+  const handleExpandClickCapture = (widget, e) => {
+    if (expandMethod !== 'doubleTap' || !canExpand(widget)) return;
+    if (e.nativeEvent?.[REPLAYED_CLICK_FLAG] || e.detail === 0) return;
+    // A dialog the widget opened lives elsewhere on the page; React still
+    // routes its clicks through here.
+    if (!e.currentTarget.contains(e.target)) return;
+    if (isInteractiveElement(e.target)) {
+      tapDetectorFor(widget.id).reset();
+      flushHeldClick();
+      return;
+    }
+    e.stopPropagation();
+    e.preventDefault();
+    const result = tapDetectorFor(widget.id).tap({ x: e.clientX, y: e.clientY, at: Date.now() });
+    if (result === 'double') {
+      dropHeldClick();
+      handleDoubleTap(widget.id);
+      return;
+    }
+    flushHeldClick();
+    const held = { target: e.target, clientX: e.clientX, clientY: e.clientY };
+    held.timer = setTimeout(() => {
+      if (heldClickRef.current === held) heldClickRef.current = null;
+      replayClick(held.target, held);
+    }, DOUBLE_TAP_MS);
+    heldClickRef.current = held;
+  };
+
+  // A mouse double-click would select a word as well; not on a widget that
+  // expands by double-tap.
+  const handleExpandMouseDownCapture = (widget, e) => {
+    if (e.detail < 2 || expandMethod !== 'doubleTap' || !canExpand(widget)) return;
+    if (isInteractiveElement(e.target)) return;
+    e.preventDefault();
+  };
+
+  // Back to normal on a tab change, when the board is unlocked or expanding
+  // is turned off, and when the expanded widget leaves the board.
+  useEffect(() => {
+    setWidgetSize(null, 'normal', { animate: false });
+  }, [activeTab, setWidgetSize]);
+  useEffect(() => {
+    if (!expandOn) setWidgetSize(null, 'normal', { animate: false });
+  }, [expandOn, setWidgetSize]);
+  useEffect(() => {
+    if (expanded && expanded.phase !== 'settle' && !canExpand(widgets.find((w) => w.id === expanded.id))) {
+      setWidgetSize(null, 'normal', { animate: false });
+    }
+  }, [expanded, widgets, canExpand, setWidgetSize]);
+  useEffect(() => () => {
+    dropHeldClick();
+    clearTimeout(closeTimerRef.current);
+  }, [dropHeldClick]);
+
+  // Shrinking back counts as normal already: the dock comes back and the
+  // calendar returns to its own view as the widget shrinks.
+  const isOpenPhase = expanded?.phase === 'from' || expanded?.phase === 'open';
+  const expandedSize = isOpenPhase ? expanded.size : 'normal';
+  const onExpandedSizeChangeRef = useRef(onExpandedSizeChange);
+  onExpandedSizeChangeRef.current = onExpandedSizeChange;
+  useEffect(() => {
+    onExpandedSizeChangeRef.current?.(expandedSize);
+  }, [expandedSize]);
+  // A tab with no widgets unmounts the grid; nothing is expanded then.
+  useEffect(() => () => onExpandedSizeChangeRef.current?.('normal'), []);
+
+  // Follow the window while a widget is expanded.
+  const isAnyExpanded = isOpenPhase;
+  useEffect(() => {
+    if (!isAnyExpanded) return undefined;
+    const update = () => setViewport(readViewport());
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, [isAnyExpanded]);
+
+  // Escape puts it back, for a display with a keyboard.
+  useEffect(() => {
+    if (!isAnyExpanded) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setWidgetSize(null, 'normal');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isAnyExpanded, setWidgetSize]);
+
+  // Auto-return: back to normal after this long with no touch, anywhere,
+  // including inside plugin frames (which report their touches).
+  useEffect(() => {
+    if (!isOpenPhase || !expandIdleMs) return undefined;
+    let timer = null;
+    const arm = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => setWidgetSize(null, 'normal'), expandIdleMs);
+    };
+    arm();
+    const events = ['pointerdown', 'keydown', 'wheel'];
+    events.forEach((type) => window.addEventListener(type, arm, { capture: true, passive: true }));
+    window.addEventListener(FRAME_EXPAND_EVENT, arm);
+    return () => {
+      clearTimeout(timer);
+      events.forEach((type) => window.removeEventListener(type, arm, { capture: true }));
+      window.removeEventListener(FRAME_EXPAND_EVENT, arm);
+    };
+  }, [isOpenPhase, expanded?.id, expanded?.size, expandIdleMs, setWidgetSize]);
+
+  // Button mode: show the expand buttons for a while after any touch.
+  useEffect(() => {
+    if (!expandOn || expandMethod !== 'button') {
+      setExpandButtonsShown(false);
+      return undefined;
+    }
+    let timer = null;
+    const show = () => {
+      setExpandButtonsShown(true);
+      clearTimeout(timer);
+      timer = setTimeout(() => setExpandButtonsShown(false), BUTTON_REVEAL_MS);
+    };
+    const onFrame = (e) => {
+      if (e.detail?.kind === 'activity') show();
+    };
+    window.addEventListener('pointerdown', show, { capture: true, passive: true });
+    window.addEventListener(FRAME_EXPAND_EVENT, onFrame);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('pointerdown', show, { capture: true });
+      window.removeEventListener(FRAME_EXPAND_EVENT, onFrame);
+    };
+  }, [expandOn, expandMethod]);
+
+  // Double-taps inside a plugin's frame, reported by its touch script and
+  // raised on the frame element by its wrapper.
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) return undefined;
+    const onFrame = (e) => {
+      if (e.detail?.kind !== 'doubleTap') return;
+      const wrapper = e.target?.closest?.('[data-widget-id]');
+      if (wrapper) handleDoubleTapRef.current(wrapper.getAttribute('data-widget-id'));
+    };
+    element.addEventListener(FRAME_EXPAND_EVENT, onFrame);
+    return () => element.removeEventListener(FRAME_EXPAND_EVENT, onFrame);
+  }, []);
+
+  const renderExpandButton = ({ label, icon, onClick }) => (
+    <IconButton
+      aria-label={label}
+      title={label}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      sx={{
+        width: 44,
+        height: 44,
+        color: 'var(--text)',
+        backgroundColor: 'var(--card-bg)',
+        border: '1px solid var(--card-border)',
+        boxShadow: '0 2px 8px var(--hg-black-30)',
+        '&:hover': { backgroundColor: 'var(--card-bg)', filter: 'brightness(1.05)' },
+      }}
+    >
+      {icon}
+    </IconButton>
+  );
+
   const getWidgetRefreshInterval = (widgetId) => {
     const widgetMap = {
       'chores-widget': 'chores',
@@ -548,6 +881,24 @@ const WidgetContainer = ({
       }}
     >
       <ThemeAmbience />
+      {/* The dimmed page behind an expanded widget. A tap on it puts the
+          widget back. */}
+      {expanded && expanded.phase !== 'settle' && (
+        <Box
+          className={`expand-backdrop ${expanded.phase === 'open' ? 'shown' : ''}`}
+          aria-hidden="true"
+          onClick={() => setWidgetSize(null, 'normal')}
+          sx={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: EXPAND_BACKDROP_Z,
+            backgroundColor: 'var(--hg-black-50)',
+            opacity: expanded.phase === 'open' ? 1 : 0,
+            pointerEvents: expanded.phase === 'closing' ? 'none' : 'auto',
+            transition: prefersReducedMotion() ? 'none' : `opacity ${EXPAND_MS}ms ${EXPAND_EASING}`,
+          }}
+        />
+      )}
       {layout.length > 0 && (
         <GridLayout
           className="layout"
@@ -574,6 +925,30 @@ const WidgetContainer = ({
             // card color and no resting shadow, which would otherwise draw the
             // rectangle the setting is meant to remove. The selection border stays.
             const restingShadow = widget.transparent ? 'none' : 'var(--hg-frame-shadow)';
+            const expandable = canExpand(widget);
+            const expandState = expandable && expanded?.id === widget.id ? expanded : null;
+            const widgetExpandSize = expandState && (expandState.phase === 'from' || expandState.phase === 'open')
+              ? expandState.size
+              : 'normal';
+            const isExpanded = widgetExpandSize !== 'normal';
+            // Where the lifted-out box is drawn: its grid place while it is
+            // about to grow or shrinking back, the top half or whole page
+            // while open.
+            let expandRect = null;
+            if (expandState && expandState.phase === 'open') {
+              expandRect = expandedRect(expandState.size, { ...viewport, gap: gridMetrics.gap });
+            } else if (expandState && expandState.home && (expandState.phase === 'from' || expandState.phase === 'closing')) {
+              expandRect = {
+                top: expandState.home.top - window.scrollY,
+                left: expandState.home.left - window.scrollX,
+                width: expandState.home.width,
+                height: expandState.home.height,
+              };
+            }
+            const settling = expandState?.phase === 'settle';
+            // The expand buttons: in button mode, for a while after a touch;
+            // in either mode, always while the widget is expanded.
+            const expandButtonsVisible = expandable && (isExpanded || (expandMethod === 'button' && expandButtonsShown));
             const currentLayout = layout.find(l => l.i === widget.id);
             const fallbackLayout = {
               i: widget.id,
@@ -626,7 +1001,10 @@ const WidgetContainer = ({
             return (
               <Box
                 key={widget.id}
-                className={`widget-wrapper ${isSelected ? 'selected' : ''}`}
+                data-widget-id={widget.id}
+                className={`widget-wrapper ${isSelected ? 'selected' : ''} ${isExpanded ? 'expanded' : ''}`}
+                onClickCapture={(e) => handleExpandClickCapture(widget, e)}
+                onMouseDownCapture={(e) => handleExpandMouseDownCapture(widget, e)}
                 onPointerDownCapture={(e) => {
                   if (!locked && !isSelected && !e.target.closest('.drag-handle') && !e.target.closest('.resize-button')) {
                     if (isInteractiveTarget(e.target)) {
@@ -655,7 +1033,11 @@ const WidgetContainer = ({
                   backgroundImage: widget.transparent ? 'none' : 'var(--hg-frame-image)',
                   overflow: 'hidden',
                   cursor: locked ? 'default' : (isSelected ? 'move' : 'pointer'),
-                  touchAction: locked ? 'auto' : (isSelected ? 'none' : 'manipulation'),
+                  // In double-tap mode the browser's own double-tap zoom is
+                  // stopped on the widget, so the double-tap is ours.
+                  touchAction: locked
+                    ? (expandable && expandMethod === 'doubleTap' ? 'manipulation' : 'auto')
+                    : (isSelected ? 'none' : 'manipulation'),
                   '@media (hover: hover) and (pointer: fine)': {
                     '&:hover': {
                       border: locked
@@ -671,9 +1053,64 @@ const WidgetContainer = ({
                     }
                   },
                   '&::after': frameDecoration,
+                  // Expanded: lifted out of the grid to the top half or the
+                  // whole page. The grid still holds its place, and this is
+                  // the same element, so the widget is not reloaded.
+                  ...(expandRect && {
+                    position: 'fixed !important',
+                    top: `${expandRect.top}px !important`,
+                    left: `${expandRect.left}px !important`,
+                    width: `${expandRect.width}px !important`,
+                    height: `${expandRect.height}px !important`,
+                    transform: 'none !important',
+                    transition: prefersReducedMotion()
+                      ? 'none !important'
+                      : ['top', 'left', 'width', 'height', 'box-shadow']
+                        .map((property) => `${property} ${EXPAND_MS}ms ${EXPAND_EASING}`)
+                        .join(', ') + ' !important',
+                    zIndex: EXPANDED_Z,
+                    boxShadow: expandState.phase === 'open' ? '0 16px 48px var(--hg-black-50)' : restingShadow,
+                    background: 'var(--hg-frame-bg)',
+                    backgroundImage: 'var(--hg-frame-image)',
+                  }),
+                  ...(settling && { transition: 'none !important' }),
                 }}
               >
                 <FrameOrnaments />
+                {expandable && (
+                  <Box
+                    className="expand-controls"
+                    sx={{
+                      position: 'absolute',
+                      right: 8,
+                      bottom: 8,
+                      zIndex: 1004,
+                      display: 'flex',
+                      gap: 1,
+                      opacity: expandButtonsVisible ? 1 : 0,
+                      visibility: expandButtonsVisible ? 'visible' : 'hidden',
+                      transition: expandButtonsVisible
+                        ? 'opacity 150ms ease'
+                        : 'opacity 400ms ease, visibility 0s linear 400ms',
+                    }}
+                  >
+                    {!isExpanded && renderExpandButton({
+                      label: t('expand.expand'),
+                      icon: <OpenInFull />,
+                      onClick: () => setWidgetSize(widget.id, 'half'),
+                    })}
+                    {widgetExpandSize === 'half' && renderExpandButton({
+                      label: t('expand.fullPage'),
+                      icon: <Fullscreen />,
+                      onClick: () => setWidgetSize(widget.id, 'full'),
+                    })}
+                    {isExpanded && renderExpandButton({
+                      label: t('expand.shrink'),
+                      icon: <CloseFullscreen />,
+                      onClick: () => setWidgetSize(widget.id, 'normal'),
+                    })}
+                  </Box>
+                )}
                 {!locked && !isSelected && (
                   <Box
                     className="selection-overlay"
@@ -819,6 +1256,10 @@ const WidgetContainer = ({
                       width: effectiveLayout.w,
                       height: effectiveLayout.h,
                     },
+                    // 'normal', 'half' or 'full'; the calendar shows its month
+                    // view when expanded, and plugins are told.
+                    expandSize: widgetExpandSize,
+                    expandMode: expandable ? expandMethod : false,
                   })}
                 </Box>
               </Box>

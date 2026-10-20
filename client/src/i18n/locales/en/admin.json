@@ -111,7 +111,8 @@
     "pinDevicesPartlyForgotten": "Could not update {{failed}} of {{total}} devices. Try again.",
     "pinDevicesForgetFailed": "Could not update devices. Try again.",
     "pinChangedDevicesForgotten": "PIN updated. Every device will be asked for it again.",
-    "pinChangedDevicesNotForgotten": "PIN updated, but some devices may still skip it. Use “Require PIN on all devices again”."
+    "pinChangedDevicesNotForgotten": "PIN updated, but some devices may still skip it. Use “Require PIN on all devices again”.",
+    "displaySaved": "Settings saved for this display."
   },
   "confirm": {
     "deletePrize": "Are you sure you want to delete this prize?",
@@ -255,14 +256,14 @@
     "keepScreenAwakeHelp": "When on, the screensaver prevents the screen from sleeping. Turn off on a wall kiosk so the device's own power management can dim and sleep the display while the screensaver runs.",
     "dockHideHeading": "Hide the dock when idle",
     "dockHideLabel": "Minutes (0 = never)",
-    "dockHideHelp": "The dock fades out after this many minutes without a touch, and any touch, tap, key or mouse move brings it back. This display only. Phones always show the dock.",
+    "dockHideHelp": "The dock fades out after this many minutes without a touch, and any touch, tap, key or mouse move brings it back. Phones always show the dock.",
     "dockHidePreempted_one": "The screensaver starts after {{count}} minute, before the dock would hide. Use fewer minutes to see the dock hide.",
     "dockHidePreempted_other": "The screensaver starts after {{count}} minutes, before the dock would hide. Use fewer minutes to see the dock hide.",
     "touchHeading": "Touch",
     "twoFingerSwipe": "Swipe with two fingers to change tabs",
-    "twoFingerSwipeHelp": "Swipe left with two fingers for the next tab and right for the previous one, anywhere on the board, including over plugins. One finger still scrolls and taps as before. This display only. Phones are left alone.",
+    "twoFingerSwipeHelp": "Swipe left with two fingers for the next tab and right for the previous one, anywhere on the board, including over plugins. One finger still scrolls and taps as before. Phones are left alone.",
     "blockPinchZoom": "Block pinch zoom",
-    "blockPinchZoomHelp": "Stops pinching or double-tapping from zooming the board by accident. Scrolling still works. This display only. Phones are left alone.",
+    "blockPinchZoomHelp": "Stops pinching or double-tapping from zooming the board by accident. Scrolling still works. Phones are left alone.",
     "save": "Save Screensaver Settings",
     "overlayHeading": "Show on photos",
     "overlayHelp": "Draw a little of your day over the slideshow, in the corner, in plain white text.",
@@ -281,7 +282,39 @@
       "ambientHelp": "One photo at a time, with a soft blurred copy of it filling the space around it.",
       "collage": "Collage",
       "collageHelp": "Several photos tiled to fill the screen, matched to spaces of their own shape. One photo changes each interval, and the arrangement changes every few rounds. Needs at least 3 photos."
+    },
+    "expand": {
+      "heading": "Expand widgets",
+      "enable": "Let widgets expand",
+      "enableHelp": "A widget can grow to the top half of the page, or the whole page, to show more, then go back to its place. Tap the dimmed page around it to put it back. Phones are left alone.",
+      "method": "How to expand",
+      "methods": {
+        "doubleTap": "Double-tap",
+        "doubleTapHelp": "Double-tap a widget for the top half, and double-tap again to put it back. A single tap on a widget waits a moment before it goes through, so a double-tap can win. Buttons still work at once.",
+        "button": "Button",
+        "buttonHelp": "An expand button shows in each widget's corner for a few seconds after you touch the screen. Taps are never held back."
+      },
+      "idle": "Put back on its own after",
+      "idleOff": "Never",
+      "idleMinutes_one": "{{count}} minute with no touch",
+      "idleMinutes_other": "{{count}} minutes with no touch",
+      "idleHelp": "While a widget is the top half, a button takes it to the whole page.",
+      "chooseAll": "All widgets can expand. Choose widgets",
+      "chooseSome_one": "{{count}} widget left out. Choose widgets",
+      "chooseSome_other": "{{count}} widgets left out. Choose widgets",
+      "pluginBlocks": "This plugin doesn't expand.",
+      "widgetNames": {
+        "calendar": "Calendar",
+        "weather": "Weather",
+        "chores": "Chores",
+        "photos": "Photos"
+      }
     }
+  },
+  "thisDisplay": {
+    "heading": "This Display",
+    "help": "Settings for this screen only. Every display, and every phone, keeps its own.",
+    "save": "Save Display Settings"
   },
   "vacation": {
     "heading": "Vacation Mode",
@@ -641,7 +674,8 @@
     "vacation": "Vacation",
     "region": "Language & time",
     "connections": "Connections",
-    "about": "About"
+    "about": "About",
+    "thisdisplay": "This Display"
   },
   "panelTitle": "Admin Panel",
   "themes": {

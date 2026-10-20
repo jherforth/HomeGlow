@@ -204,6 +204,9 @@ const CalendarWidget = ({
   activeTab = 1,
   activeTabConfigJson = null,
   hiddenControls = [],
+  // 'normal', or 'half' / 'full' while the display has this widget expanded
+  // (utils/widgetExpand.js). Expanded, the calendar shows its month view.
+  expandSize = 'normal',
 }) => {
   const { t } = useTranslation(['calendar', 'common']);
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
@@ -219,7 +222,16 @@ const CalendarWidget = ({
   const [selectedDateEvents, setSelectedDateEvents] = useState([]);
   const [showDayModal, setShowDayModal] = useState(false);
   const [settingsAnchor, setSettingsAnchor] = useState(null);
-  const [viewMode, setViewMode] = useState('month');
+  // The view this tab keeps (saved per tab), and the view shown while the
+  // widget is expanded: month when it grows, switchable while it is big,
+  // forgotten when it goes back. `viewMode` is whichever is on screen.
+  const [tabViewMode, setViewMode] = useState('month');
+  const isExpanded = expandSize === 'half' || expandSize === 'full';
+  const [expandedViewMode, setExpandedViewMode] = useState('month');
+  useEffect(() => {
+    if (!isExpanded) setExpandedViewMode('month');
+  }, [isExpanded]);
+  const viewMode = isExpanded ? expandedViewMode : tabViewMode;
   const [currentDate, setCurrentDate] = useState(new Date());
   const [eventColors, setEventColors] = useState({ ...DEFAULT_CALENDAR_EVENT_COLORS });
   // Idle auto-return: 0 means DISABLED, not "return instantly".
@@ -1194,8 +1206,14 @@ const CalendarWidget = ({
   const handleViewModeChange = (event, newViewMode) => {
     if (newViewMode === null || !TAB_CALENDAR_VIEW_MODES.has(newViewMode)) return;
 
-    // Optimistic UI: switch instantly, then persist in the background.
     markActivity();
+    // While expanded, the toggle changes only the big view; the tab keeps
+    // its own.
+    if (isExpanded) {
+      setExpandedViewMode(newViewMode);
+      return;
+    }
+    // Optimistic UI: switch instantly, then persist in the background.
     setViewMode(newViewMode);
     void persistViewModeForTab(activeTab, newViewMode);
   };

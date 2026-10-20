@@ -119,6 +119,7 @@ Open with the gear (⚙️) icon. These persist server-side (global settings in 
 | **Look** | Theme, light/dark mode, interface colors, accent, background, card opacity | `settings` (`appearance`, household) with per-device overrides in `device_settings_json` |
 | **Displays → Devices** | Name this display; list and manage the others | `devices` |
 | **Displays → Screensaver** | Screensaver for this display | `localStorage` (per display) |
+| **Displays → This Display** | Hide the dock when idle, touch gestures (two-finger swipe, block pinch zoom), expand widgets | `localStorage` (per display, saved with the screensaver's) |
 | **Family → Users** | Family members, avatars, clam adjustments | `users`, `chore_history` |
 | **Family → Chores** | Chore definitions, schedules (cron/duration/interval), history | `chores`, `chore_schedules`, `chore_history` |
 | **Family → Chores → Settings: rewards** | Daily completion bonus (`daily_completion_clam_reward`), all-chores-done celebration (`CHORE_CELEBRATION_ENABLED`, default on) | `settings` (global) |

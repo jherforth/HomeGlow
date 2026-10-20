@@ -111,7 +111,8 @@
     "pinDevicesPartlyForgotten": "No se pudieron actualizar {{failed}} de {{total}} dispositivos. Inténtalo de nuevo.",
     "pinDevicesForgetFailed": "No se pudieron actualizar los dispositivos. Inténtalo de nuevo.",
     "pinChangedDevicesForgotten": "PIN actualizado. Se volverá a pedir en todos los dispositivos.",
-    "pinChangedDevicesNotForgotten": "PIN actualizado, pero puede que algunos dispositivos sigan omitiéndolo. Usa «Volver a exigir el PIN en todos los dispositivos»."
+    "pinChangedDevicesNotForgotten": "PIN actualizado, pero puede que algunos dispositivos sigan omitiéndolo. Usa «Volver a exigir el PIN en todos los dispositivos».",
+    "displaySaved": "Ajustes guardados para esta pantalla."
   },
   "confirm": {
     "deletePrize": "¿Seguro que quieres eliminar este premio?",
@@ -255,14 +256,14 @@
     "keepScreenAwakeHelp": "Si está activo, el salvapantallas impide que la pantalla se apague. Desactívalo en un quiosco de pared para que la gestión de energía del dispositivo pueda atenuar y apagar la pantalla mientras el salvapantallas esté en marcha.",
     "dockHideHeading": "Ocultar la barra en reposo",
     "dockHideLabel": "Minutos (0 = nunca)",
-    "dockHideHelp": "La barra se desvanece tras estos minutos sin tocar la pantalla, y cualquier toque, tecla o movimiento del ratón la devuelve. Solo esta pantalla. En los teléfonos la barra siempre se muestra.",
+    "dockHideHelp": "La barra se desvanece tras estos minutos sin tocar la pantalla, y cualquier toque, tecla o movimiento del ratón la devuelve. En los teléfonos la barra siempre se muestra.",
     "dockHidePreempted_one": "El salvapantallas empieza tras {{count}} minuto, antes de que la barra se oculte. Usa menos minutos para ver cómo se oculta.",
     "dockHidePreempted_other": "El salvapantallas empieza tras {{count}} minutos, antes de que la barra se oculte. Usa menos minutos para ver cómo se oculta.",
     "touchHeading": "Tacto",
     "twoFingerSwipe": "Deslizar con dos dedos para cambiar de pestaña",
-    "twoFingerSwipeHelp": "Desliza dos dedos hacia la izquierda para ir a la pestaña siguiente y hacia la derecha para la anterior, en cualquier parte del tablero, también sobre los plugins. Un dedo sigue desplazando y tocando como antes. Solo esta pantalla. Los teléfonos no cambian.",
+    "twoFingerSwipeHelp": "Desliza dos dedos hacia la izquierda para ir a la pestaña siguiente y hacia la derecha para la anterior, en cualquier parte del tablero, también sobre los plugins. Un dedo sigue desplazando y tocando como antes. Los teléfonos no cambian.",
     "blockPinchZoom": "Bloquear el zoom con los dedos",
-    "blockPinchZoomHelp": "Evita que pellizcar o tocar dos veces amplíe el tablero sin querer. Desplazarse sigue funcionando. Solo esta pantalla. Los teléfonos no cambian.",
+    "blockPinchZoomHelp": "Evita que pellizcar o tocar dos veces amplíe el tablero sin querer. Desplazarse sigue funcionando. Los teléfonos no cambian.",
     "save": "Guardar los ajustes del salvapantallas",
     "overlayHeading": "Mostrar sobre las fotos",
     "overlayHelp": "Muestra un poco de tu día sobre la presentación, en una esquina, con texto blanco sencillo.",
@@ -281,7 +282,39 @@
       "ambientHelp": "Una foto a la vez, con una copia suave y difuminada que llena el espacio a su alrededor.",
       "collage": "Collage",
       "collageHelp": "Varias fotos en mosaico que llenan la pantalla, cada una en un espacio de su misma forma. Cambia una foto en cada intervalo y la disposición cambia cada pocas rondas. Necesita al menos 3 fotos."
+    },
+    "expand": {
+      "heading": "Ampliar widgets",
+      "enable": "Permitir ampliar widgets",
+      "enableHelp": "Un widget puede crecer a la mitad superior de la página, o a toda la página, para mostrar más, y luego volver a su lugar. Toca la página atenuada a su alrededor para devolverlo. Los teléfonos no cambian.",
+      "method": "Cómo ampliar",
+      "methods": {
+        "doubleTap": "Doble toque",
+        "doubleTapHelp": "Toca dos veces un widget para la mitad superior, y otra vez dos veces para devolverlo. Un solo toque en un widget espera un momento antes de actuar, para que el doble toque pueda ganar. Los botones siguen funcionando al instante.",
+        "button": "Botón",
+        "buttonHelp": "Un botón de ampliar aparece en la esquina de cada widget durante unos segundos después de tocar la pantalla. Los toques nunca se retrasan."
+      },
+      "idle": "Devolver solo después de",
+      "idleOff": "Nunca",
+      "idleMinutes_one": "{{count}} minuto sin tocar",
+      "idleMinutes_other": "{{count}} minutos sin tocar",
+      "idleHelp": "Mientras un widget ocupa la mitad superior, un botón lo lleva a toda la página.",
+      "chooseAll": "Todos los widgets se pueden ampliar. Elegir widgets",
+      "chooseSome_one": "{{count}} widget excluido. Elegir widgets",
+      "chooseSome_other": "{{count}} widgets excluidos. Elegir widgets",
+      "pluginBlocks": "Este plugin no se amplía.",
+      "widgetNames": {
+        "calendar": "Calendario",
+        "weather": "Tiempo",
+        "chores": "Tareas",
+        "photos": "Fotos"
+      }
     }
+  },
+  "thisDisplay": {
+    "heading": "Esta pantalla",
+    "help": "Ajustes solo para esta pantalla. Cada pantalla, y cada teléfono, guarda los suyos.",
+    "save": "Guardar ajustes de la pantalla"
   },
   "vacation": {
     "heading": "Modo vacaciones",
@@ -641,7 +674,8 @@
     "vacation": "Vacaciones",
     "region": "Idioma y hora",
     "connections": "Conexiones",
-    "about": "Acerca de"
+    "about": "Acerca de",
+    "thisdisplay": "Esta pantalla"
   },
   "panelTitle": "Panel de administración",
   "themes": {

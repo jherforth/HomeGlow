@@ -964,6 +964,8 @@ const App = () => {
   // phone, where the dock is the navigation, and never while Admin is open.
   const dockHideMs = isMobile ? null : dockHideTimeoutMs(screensaverSettings.dockHideMinutes);
   const [dockHidden, setDockHidden] = useState(false);
+  // How big the expanded widget is, if any (utils/widgetExpand.js).
+  const [expandedWidgetSize, setExpandedWidgetSize] = useState('normal');
   const dockIdleRef = useRef(null);
 
   useEffect(() => {
@@ -1348,6 +1350,8 @@ const App = () => {
       result.push({
         id: `plugin-${plugin.filename}`,
         transparent: Boolean(pSettings.transparent),
+        // "expand": false in the manifest keeps it from being expanded.
+        expandable: plugin.manifest?.expand !== false,
         defaultPosition: { x: 0, y: 0 },
         defaultSize: { width: 6, height: 4 },
         minWidth: 2,
@@ -1477,6 +1481,8 @@ const App = () => {
             deviceWidgetSettings={widgetSettings}
             devicePluginSettings={pluginSettings}
             isActive={widgetsActive}
+            expandSettings={screensaverSettings}
+            onExpandedSizeChange={setExpandedWidgetSize}
           />
         )}
         {shouldRunWeatherBackgroundPrefetch && (
@@ -1587,7 +1593,8 @@ const App = () => {
         onToggleLock={toggleWidgetsLock}
         onOpenSettings={toggleAdminPanel}
         onRefresh={handlePageRefresh}
-        hidden={dockHidden}
+        // A widget filling the whole page covers the dock too.
+        hidden={dockHidden || expandedWidgetSize === 'full'}
         theme={displayTheme}
         themeMode={themeMode}
         screensaverCountdown={

@@ -411,7 +411,7 @@ calculation); `server/services/homeAssistant.js` for the connection.
 ## Touch gestures (wall displays)
 
 - **Swipe with two fingers to change tabs** (Admin Panel → Displays →
-  Screensaver, under Touch). Two fingers travelling sideways together go to the
+  This Display, under Touch). Two fingers travelling sideways together go to the
   next tab (fingers moving left) or the previous one (moving right), in the
   dock's order, wrapping around at the ends. The fingers needn't land together:
   a second finger landing within 0.6 s of the first joins it, and each finger's
@@ -435,6 +435,47 @@ calculation); `server/services/homeAssistant.js` for the connection.
 **Code:** `utils/twoFingerSwipe.js` (detector, tab order, frame messages),
 wiring in `app.jsx` and `PluginWidgetWrapper.jsx`, settings in
 `utils/interfaceSettings.js`, UI in `AdminPanel.jsx`.
+
+## Expanding a widget (wall displays)
+
+- **Let widgets expand** (Admin Panel → Displays → This Display, under Expand
+  widgets). A widget grows to the **top half** of the page, or to the **whole
+  page** (dock included, but not the browser's own full screen), to show more,
+  then goes back to its place on the grid. The rest of the page dims behind
+  it; tapping the dimmed page puts the widget back, and so does Escape.
+- **How to expand**, per display:
+  - **Double-tap**: double-tap a widget for the top half, and again to put it
+    back. So that a double-tap can win, a single tap on a widget's plain area
+    (not a button, link or field) waits about a third of a second before it
+    goes through; buttons act at once and never count. The browser's own
+    double-tap zoom is turned off on those widgets.
+  - **Button**: an expand button fades in at each widget's corner for a few
+    seconds after the screen is touched. No tap is ever held back.
+  - Either way, a widget at the top half shows a button that takes it to the
+    whole page, and a button that puts it back.
+- **Put back on its own** after a chosen time with no touch (1, 2, 5, 10 or 30
+  minutes, or never; 2 by default), on a tab change, when the board is
+  unlocked, and when expanding is turned off.
+- **Choose widgets**: a folded list of the widgets turned on here, each with a
+  switch, for a widget whose own taps or drags would fight with expanding.
+  A plugin can leave itself out with `"expand": false` in its manifest.
+- **The calendar** shows its month view while expanded and goes back to the
+  tab's own view after. Its month/week switch still works while it is big,
+  without changing the tab's saved view. Plugins are told their size through
+  `HomeGlow.onExpand`.
+- The widget is the same element lifted out of the grid, so it is never
+  reloaded: a plugin keeps its state. Dialogs it opens still show above it.
+- This display's own settings (in **This Display**, saved with the screensaver's), off by default,
+  and never on a phone (each widget is already the width of the screen there).
+- **Over plugins too.** The touch script every plugin page is served with
+  (`server/utils/pluginFrameTouch.js`) reports touches (for the buttons and the
+  auto-return) and, in double-tap mode, double-taps, holding single taps on
+  the page's plain area as the dashboard does.
+
+**Code:** `utils/widgetExpand.js` (settings, sizes, double-tap detector, frame
+messages), `WidgetContainer.jsx` (expanding, held taps, buttons, timers),
+`PluginWidgetWrapper.jsx` and `server/utils/pluginFrameTouch.js` (plugins),
+`CalendarWidget.jsx` (month view), `ExpandWidgetsSettings.jsx` (Admin).
 
 ## Push notifications (phones)
 

@@ -150,12 +150,14 @@ export const swipeTargetTab = (tabs, activeTab, direction) => {
 
 /**
  * The message the dashboard posts into each plugin frame, telling its touch
- * script what to do on this display.
+ * script what to do on this display. `expand` is how this plugin expands here
+ * ('doubleTap' or 'button'), or false (utils/widgetExpand.js).
  */
-export const buildFrameTouchSettingsMessage = ({ swipe, blockPinchZoom }) => ({
+export const buildFrameTouchSettingsMessage = ({ swipe, blockPinchZoom, expand = false }) => ({
   type: FRAME_TOUCH_SETTINGS_MESSAGE_TYPE,
   swipe: swipe === true,
   blockPinchZoom: blockPinchZoom === true,
+  expand: expand === 'doubleTap' || expand === 'button' ? expand : false,
 });
 
 /**

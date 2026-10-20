@@ -21,7 +21,20 @@ function frame({ topLevel = false } = {}) {
     const document = { documentElement: { style: { touchAction: '' } } };
     let clock = 1000;
     const Date = { now: () => clock };
-    vm.runInNewContext(PLUGIN_FRAME_TOUCH_SCRIPT, { window, document, Math, Date });
+    // Timers run when the test moves the clock past them.
+    let timers = [];
+    let nextTimer = 1;
+    const setTimeout = (fn, ms) => { const id = nextTimer++; timers.push({ id, fn, at: clock + ms }); return id; };
+    const clearTimeout = (id) => { timers = timers.filter((t) => t.id !== id); };
+    class MouseEvent {
+        constructor(type, init) { Object.assign(this, { type }, init); }
+    }
+    vm.runInNewContext(PLUGIN_FRAME_TOUCH_SCRIPT, { window, document, Math, Date, setTimeout, clearTimeout, MouseEvent });
+    const runTimers = () => {
+        const due = timers.filter((t) => t.at <= clock);
+        timers = timers.filter((t) => t.at > clock);
+        due.forEach((t) => t.fn());
+    };
     return {
         window,
         parent,
@@ -29,7 +42,7 @@ function frame({ topLevel = false } = {}) {
         posted,
         listeners,
         fire: (type, event) => listeners.get(type)?.fn(event),
-        tick: (ms) => { clock += ms; },
+        tick: (ms) => { clock += ms; runTimers(); },
         settings: (data, source = parent) => listeners.get('message').fn({ source, data: { type: 'homeglow:touch-settings', ...data } }),
     };
 }
@@ -149,4 +162,129 @@ test("a second finger landing later says where and when the first landed, and th
     const move = touchEvent([250, 100, 7], [360, 100, 9]);
     f.fire('touchmove', move);
     assert.equal(move.prevented, true);
+});
+
+// Expanding a widget: the frame reports touches and double-taps to the
+// dashboard, and holds a plain single tap for a moment so a double-tap can win.
+
+// A click on an element of the plugin page. `interactive` makes it a button.
+function clickOn(f, { x = 50, y = 50, interactive = false, detail = 1 } = {}) {
+    const target = {
+        isConnected: true,
+        closest: (selector) => (interactive && selector.includes('button') ? target : null),
+        received: [],
+        dispatchEvent: (event) => { target.received.push(event); f.fire('click', event); },
+    };
+    const event = { target, clientX: x, clientY: y, detail, stopped: false, prevented: false };
+    event.stopImmediatePropagation = () => { event.stopped = true; };
+    event.preventDefault = () => { event.prevented = true; };
+    f.fire('click', event);
+    return { event, target };
+}
+
+test('expanding off: no click or touch listeners at all', () => {
+    const f = frame();
+    f.settings({ swipe: false, expand: false });
+    assert.deepEqual([...f.listeners.keys()], ['message']);
+    assert.equal(f.document.documentElement.style.touchAction, '');
+});
+
+test('double-tap expanding: two close taps are one double-tap, and neither reaches the plugin', () => {
+    const f = frame();
+    f.settings({ expand: 'doubleTap' });
+    assert.equal(f.listeners.get('click').options, true);
+    assert.equal(f.document.documentElement.style.touchAction, 'manipulation');
+
+    const first = clickOn(f, { x: 100, y: 100 });
+    assert.equal(first.event.stopped, true);
+    f.tick(150);
+    const second = clickOn(f, { x: 110, y: 104 });
+    assert.equal(second.event.stopped, true);
+    f.tick(1000);
+
+    assert.deepEqual(f.posted.map(({ data }) => data.type), ['homeglow:double-tap']);
+    // The held first tap was dropped, not replayed.
+    assert.equal(first.target.received.length, 0);
+});
+
+test('double-tap expanding: a lone tap is replayed on what it was meant for', () => {
+    const f = frame();
+    f.settings({ expand: 'doubleTap' });
+    const { event, target } = clickOn(f, { x: 30, y: 40 });
+    assert.equal(event.stopped, true);
+    f.tick(200);
+    assert.equal(target.received.length, 0);
+    f.tick(200);
+    assert.equal(target.received.length, 1);
+    const replayed = target.received[0];
+    assert.equal(replayed.type, 'click');
+    assert.equal(replayed.clientX, 30);
+    assert.equal(replayed.clientY, 40);
+    // The replay goes through untouched.
+    assert.equal(replayed.__homeglowReplayedClick, true);
+    assert.equal(f.posted.length, 0);
+});
+
+test('double-tap expanding: taps far apart, or slow, are two single taps', () => {
+    const f = frame();
+    f.settings({ expand: 'doubleTap' });
+    const a = clickOn(f, { x: 10, y: 10 });
+    f.tick(100);
+    const b = clickOn(f, { x: 300, y: 10 });
+    f.tick(500);
+    const c = clickOn(f, { x: 300, y: 10 });
+    f.tick(500);
+    assert.equal(f.posted.length, 0);
+    // The second tap let the first through at once rather than wait.
+    assert.equal(a.target.received.length, 1);
+    assert.equal(b.target.received.length, 1);
+    assert.equal(c.target.received.length, 1);
+});
+
+test('double-tap expanding: buttons and keyboard clicks act at once and never count', () => {
+    const f = frame();
+    f.settings({ expand: 'doubleTap' });
+    const button1 = clickOn(f, { interactive: true });
+    const button2 = clickOn(f, { interactive: true });
+    const keyboard = clickOn(f, { detail: 0 });
+    assert.equal(button1.event.stopped, false);
+    assert.equal(button2.event.stopped, false);
+    assert.equal(keyboard.event.stopped, false);
+    f.tick(1000);
+    assert.equal(f.posted.length, 0);
+});
+
+test('either method reports a touch at most once a second', () => {
+    const f = frame();
+    f.settings({ expand: 'button' });
+    assert.ok(f.listeners.has('pointerdown'));
+    // Button mode never holds a tap.
+    const { event } = clickOn(f);
+    assert.equal(event.stopped, false);
+    assert.equal(f.document.documentElement.style.touchAction, '');
+
+    f.fire('pointerdown', {});
+    f.tick(300);
+    f.fire('pointerdown', {});
+    f.tick(1000);
+    f.fire('pointerdown', {});
+    assert.deepEqual(f.posted.map(({ data }) => data.type), ['homeglow:frame-activity', 'homeglow:frame-activity']);
+});
+
+test('turning expanding off removes its listeners and gives back the touch-action', () => {
+    const f = frame();
+    f.document.documentElement.style.touchAction = 'auto';
+    f.settings({ expand: 'doubleTap' });
+    assert.equal(f.document.documentElement.style.touchAction, 'manipulation');
+    f.settings({ expand: false });
+    assert.deepEqual([...f.listeners.keys()], ['message']);
+    assert.equal(f.document.documentElement.style.touchAction, 'auto');
+});
+
+test('a blocked pinch wins over double-tap expanding, and both work together', () => {
+    const f = frame();
+    f.settings({ expand: 'doubleTap', blockPinchZoom: true });
+    assert.equal(f.document.documentElement.style.touchAction, 'pan-x pan-y');
+    f.settings({ expand: 'doubleTap', blockPinchZoom: false });
+    assert.equal(f.document.documentElement.style.touchAction, 'manipulation');
 });

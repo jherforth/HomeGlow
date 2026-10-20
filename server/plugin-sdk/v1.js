@@ -74,6 +74,10 @@
   var loadedFonts = {};
   var currentTheme = null;
   var themeHandlers = [];
+  // How big the dashboard shows this plugin: 'normal', or 'half' / 'full'
+  // while it is expanded (client/src/utils/widgetExpand.js).
+  var expandSize = 'normal';
+  var expandHandlers = [];
   function applyTheme(data) {
     var root = document.documentElement;
     var theme = data.theme === 'light' ? 'light' : (data.theme === 'dark' ? 'dark' : null);
@@ -138,6 +142,19 @@
     var data = messageEvent.data;
     if (data && data.type === 'homeglow:theme') {
       applyTheme(data);
+      return;
+    }
+    if (data && data.type === 'homeglow:expand') {
+      var size = data.size === 'half' || data.size === 'full' ? data.size : 'normal';
+      if (size === expandSize) return;
+      expandSize = size;
+      expandHandlers.slice().forEach(function (handler) {
+        try {
+          handler(size);
+        } catch (error) {
+          console.error('HomeGlow SDK: expand handler failed', error);
+        }
+      });
       return;
     }
     if (!data || data.type !== 'homeglow:event' || typeof data.event !== 'string') return;
@@ -218,6 +235,32 @@
       return function () {
         var index = themeHandlers.indexOf(handler);
         if (index !== -1) themeHandlers.splice(index, 1);
+      };
+    },
+
+    /**
+     * How big the dashboard shows this plugin right now: 'normal', 'half'
+     * (the top half of the page) or 'full' (the whole page). Plugins grow and
+     * shrink with their frame on their own; this is for showing more when
+     * there is room, as the calendar switches to its month view.
+     */
+    get expandSize() {
+      return expandSize;
+    },
+
+    /**
+     * Subscribe to the plugin being expanded or put back: handler('normal' |
+     * 'half' | 'full'). Called at once with the current size. Returns an
+     * unsubscribe function. Older HomeGlows have no onExpand(); check for it
+     * first. A plugin that must not expand sets "expand": false in its
+     * manifest.
+     */
+    onExpand: function (handler) {
+      expandHandlers.push(handler);
+      handler(expandSize);
+      return function () {
+        var index = expandHandlers.indexOf(handler);
+        if (index !== -1) expandHandlers.splice(index, 1);
       };
     },
 

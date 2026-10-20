@@ -190,6 +190,17 @@ test('invalid manifests reject the upload with a clear error', async () => {
     assert.equal(list.body.some((widget) => widget.filename === 'bad-manifest.html'), false);
 });
 
+test('"expand" in a manifest must be true or false', async () => {
+    const bad = { ...validManifest, id: 'expand-check', expand: 'no' };
+    const upload = await uploadWidget('expand-bad.html', widgetHtml(bad));
+    assert.equal(upload.status, 400);
+    assert.match(upload.body.error, /expand must be a boolean/);
+
+    const good = { ...validManifest, id: 'expand-check', expand: false };
+    const ok = await uploadWidget('expand-good.html', widgetHtml(good));
+    assert.equal(ok.status, 200);
+});
+
 test('a second widget cannot claim an existing pluginId', async () => {
     const upload = await uploadWidget('impostor.html', widgetHtml(validManifest));
     assert.equal(upload.status, 409);
