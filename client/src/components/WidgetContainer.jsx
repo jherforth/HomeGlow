@@ -892,7 +892,7 @@ const WidgetContainer = ({
             position: 'fixed',
             inset: 0,
             zIndex: EXPAND_BACKDROP_Z,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            backgroundColor: 'var(--hg-black-50)',
             opacity: expanded.phase === 'open' ? 1 : 0,
             pointerEvents: expanded.phase === 'closing' ? 'none' : 'auto',
             transition: prefersReducedMotion() ? 'none' : `opacity ${EXPAND_MS}ms ${EXPAND_EASING}`,
