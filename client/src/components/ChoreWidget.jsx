@@ -31,7 +31,7 @@ import {
   Popover,
   Switch
 } from '@mui/material';
-import { Edit, Save, Cancel, Add, Delete, Check, Close, Undo, SwapHoriz, Snooze, Backspace, Settings as SettingsIcon } from '@mui/icons-material';
+import { Edit, Save, Cancel, Add, Delete, Check, Close, Undo, SwapHoriz, Snooze, History, Backspace, Settings as SettingsIcon } from '@mui/icons-material';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import LoadingBackdrop from './LoadingBackdrop';
@@ -54,11 +54,19 @@ import LateApprovalDialog from './LateApprovalDialog.jsx';
 import { householdNow, isExpired } from '../utils/choreExpiry.js';
 import useRoutinesToday from '../utils/useRoutinesToday.js';
 import { shouldPersistSettings } from '../utils/widgetSettingsPersist';
+import { parseVacationModeSetting } from '../utils/interfaceSettings.js';
+import { addDays, choreDays } from '../utils/choreDays.js';
+import { getServerTimezoneSync } from '../utils/timezone.js';
+import ChoreDayMark from './ChoreDayMark.jsx';
+import ChoreHistoryDialog from './ChoreHistoryDialog.jsx';
 
 // Shared by the initial state and by the snapshot taken when a load returns no
 // stored settings, so "never saved" and "saved the defaults" compare equal.
 const DEFAULT_SHOW_BONUS_CHORES = true;
 const DEFAULT_SOUND_ENABLED = true;
+// Off by default: the 7-day row under each chore is opt-in per display.
+const DEFAULT_SHOW_WEEK = false;
+const WEEK_DAYS = 7;
 // Frozen: it is shared by every instance's initial state and by the
 // no-stored-settings snapshot, so an in-place mutation would corrupt both.
 const DEFAULT_HIDDEN_USER_IDS = Object.freeze([]);
@@ -83,6 +91,9 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
   const [chores, setChores] = useState([]);
   const [schedules, setSchedules] = useState([]);
   const [history, setHistory] = useState([]);
+  // The last WEEK_DAYS days of history, only while the 7-day row is on.
+  const [weekHistory, setWeekHistory] = useState([]);
+  const [vacation, setVacation] = useState(null);
   const [prizes, setPrizes] = useState([]);
   const [newChore, setNewChore] = useState({
     user_id: '',
@@ -100,6 +111,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
   // A routine's card (Family → Routines) shows its steps; keyed by schedule id.
   const { routines: routineDays, reload: reloadRoutines, toggleStep: toggleRoutineStep } = useRoutinesToday();
   const [soundEnabled, setSoundEnabled] = useState(DEFAULT_SOUND_ENABLED);
+  const [showWeek, setShowWeek] = useState(DEFAULT_SHOW_WEEK);
   // Per-device: which real users this display hides. Bonus pseudo-user (id 0)
   // is not a real user and is not offered in the selector — the "Bonus Chores"
   // column already has its own toggle.
@@ -117,6 +129,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
   const [choreMenu, setChoreMenu] = useState({ position: null, schedule: null });
   const [transferDialog, setTransferDialog] = useState({ open: false, schedule: null, targetUserId: null, mode: 'keep', bonus: 1 });
   const [snoozeDialog, setSnoozeDialog] = useState({ open: false, schedule: null, until: '' });
+  const [historyDialog, setHistoryDialog] = useState({ open: false, schedule: null });
   const [pinGate, setPinGate] = useState({ open: false, onSuccess: null });
   // A chore past its expiry was tapped (issue #279): { name, approve } while
   // the child is asked to fetch a parent.
@@ -197,10 +210,14 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
           hiddenUserIds: choreSettings && Array.isArray(choreSettings.hiddenUserIds)
             ? choreSettings.hiddenUserIds.map((id) => Number(id)).filter((id) => Number.isFinite(id))
             : DEFAULT_HIDDEN_USER_IDS,
+          showWeek: choreSettings && typeof choreSettings.showWeek === 'boolean'
+            ? choreSettings.showWeek
+            : DEFAULT_SHOW_WEEK,
         };
         setShowBonusChores(adopted.showBonusChores);
         setSoundEnabled(adopted.soundEnabled);
         setHiddenUserIds(adopted.hiddenUserIds);
+        setShowWeek(adopted.showWeek);
       } catch (error) {
         console.error('Error loading chore widget settings:', error);
       } finally {
@@ -229,7 +246,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
       return;
     }
 
-    const current = { showBonusChores, soundEnabled, hiddenUserIds };
+    const current = { showBonusChores, soundEnabled, hiddenUserIds, showWeek };
     // The load itself is not an edit. Without this the effect writes back what
     // it just read on every mount — and on every tab change that remounts the
     // widget, which on a rotating display is a write a minute.
@@ -249,7 +266,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
     }, 250);
 
     return () => clearTimeout(timeoutId);
-  }, [API_DEVICE_URL, deviceSettingsLoaded, showBonusChores, soundEnabled, hiddenUserIds]);
+  }, [API_DEVICE_URL, deviceSettingsLoaded, showBonusChores, soundEnabled, hiddenUserIds, showWeek]);
 
   useEffect(() => {
     const onUsersUpdated = () => {
@@ -417,6 +434,8 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
       // setting only exists once a parent has turned it off (issue #140).
       setCelebrationEnabled(response.data.CHORE_CELEBRATION_ENABLED !== 'false'
         && response.data.CHORE_CELEBRATION_ENABLED !== false);
+      // Vacation days read as vacation, not as days left undone.
+      setVacation(parseVacationModeSetting(response.data.vacation_mode));
     } catch (error) {
       console.error('Error fetching settings:', error);
     }
@@ -457,7 +476,30 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
     } catch (error) {
       console.error('Error fetching history:', error);
     }
+    fetchWeekHistory();
   };
+
+  // Read through a ref so fetchHistory, called from long-lived handlers, sees
+  // the current setting.
+  const showWeekRef = useRef(showWeek);
+  showWeekRef.current = showWeek;
+  const fetchWeekHistory = async () => {
+    if (!showWeekRef.current) return;
+    try {
+      const today = getTodayDateString();
+      const response = await axios.get(`${API_BASE_URL}/api/chore-history`, {
+        params: { date_from: addDays(today, -(WEEK_DAYS - 1)) },
+      });
+      setWeekHistory(response.data);
+    } catch (error) {
+      console.error('Error fetching week history:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (showWeek) fetchWeekHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showWeek]);
 
   const fetchPrizes = async () => {
     try {
@@ -709,7 +751,9 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
       && schedule.transferable !== 0
       && users.filter(u => u.id !== 0 && u.id !== schedule.user_id).length > 0;
     const canSnooze = !hideSnoozeChore && schedule.can_snooze !== 0;
-    if (!canTransfer && !canSnooze) return;
+    // History is one person's record, so an unassigned bonus chore has none.
+    const canHistory = Boolean(schedule.user_id);
+    if (!canTransfer && !canSnooze && !canHistory) return;
     choreMenuOpenedAtRef.current = Date.now();
     setChoreMenu({ position: { top: clientY, left: clientX }, schedule });
   };
@@ -864,6 +908,13 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
     d.setDate(d.getDate() + daysFromNow);
     d.setHours(0, 0, 0, 0);
     return toDatetimeLocalString(d);
+  };
+
+  // Read-only, so no PIN.
+  const openHistoryDialog = () => {
+    const schedule = choreMenu.schedule;
+    closeChoreMenu();
+    if (schedule) setHistoryDialog({ open: true, schedule });
   };
 
   const openSnoozeDialog = () => {
@@ -1168,6 +1219,14 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
             </Typography>
           )}
           {routineDay && <RoutineSteps day={routineDay} onToggle={tickRoutineStep} expired={expired} />}
+          {showWeek && schedule.user_id ? (
+            <Box sx={{ display: 'flex', gap: '2px', mt: 0.5 }} aria-label={t('chores:history.weekAria', { title: schedule.title })}>
+              {choreDays({ rows: weekHistory, schedule, userId: schedule.user_id, today: getTodayDateString(), count: WEEK_DAYS, vacation, timeZone: getServerTimezoneSync() })
+                .map((day) => (
+                  <ChoreDayMark key={day.date} state={day.state} size={14} label={`${day.date}: ${t(`chores:history.state.${day.state}`)}`} />
+                ))}
+            </Box>
+          ) : null}
         </Box>
         <Box sx={{ display: 'flex', gap: 0.5 }}>
           {/* The chore's icon takes the place of the checkmark while the chore
@@ -1284,6 +1343,17 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
               title={soundEnabled ? "Mute chore sounds on this display" : "Enable chore sounds on this display"}
             >
               {soundEnabled ? '🔔' : '🔕'}
+            </Button>
+            <Button
+              onClick={() => setShowWeek(!showWeek)}
+              variant={showWeek ? "contained" : "outlined"}
+              size="small"
+              sx={{ minWidth: 'auto', px: 1 }}
+              title={showWeek ? t('chores:history.hideWeek') : t('chores:history.showWeek')}
+              aria-label={showWeek ? t('chores:history.hideWeek') : t('chores:history.showWeek')}
+              aria-pressed={showWeek}
+            >
+              ⭐
             </Button>
             <Button
               onClick={() => setShowPrizesModal(true)}
@@ -1888,7 +1958,21 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
               <ListItemText primary={t('chores:snooze.menuItem')} />
             </MenuItem>
           )}
+          {Boolean(choreMenu.schedule?.user_id) && (
+            <MenuItem onClick={openHistoryDialog}>
+              <ListItemIcon><History fontSize="small" /></ListItemIcon>
+              <ListItemText primary={t('chores:history.menuItem')} />
+            </MenuItem>
+          )}
         </Menu>
+
+        <ChoreHistoryDialog
+          open={historyDialog.open}
+          onClose={() => setHistoryDialog({ open: false, schedule: null })}
+          schedule={historyDialog.schedule}
+          user={users.find((u) => u.id === historyDialog.schedule?.user_id)}
+          vacation={vacation}
+        />
 
         {/* Transfer chore dialog */}
         <Dialog
