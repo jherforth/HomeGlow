@@ -438,7 +438,7 @@ wiring in `app.jsx` and `PluginWidgetWrapper.jsx`, settings in
 
 ## Expanding a widget (wall displays)
 
-- **Let widgets expand** (Admin Panel → Displays → Screensaver, under Expand
+- **Let widgets expand** (Admin Panel → Displays → This Display, under Expand
   widgets). A widget grows to the **top half** of the page, or to the **whole
   page** (dock included, but not the browser's own full screen), to show more,
   then goes back to its place on the grid. The rest of the page dims behind
@@ -465,7 +465,7 @@ wiring in `app.jsx` and `PluginWidgetWrapper.jsx`, settings in
   `HomeGlow.onExpand`.
 - The widget is the same element lifted out of the grid, so it is never
   reloaded: a plugin keeps its state. Dialogs it opens still show above it.
-- This display's own settings, saved with the screensaver's, off by default,
+- This display's own settings (in **This Display**, saved with the screensaver's), off by default,
   and never on a phone (each widget is already the width of the screen there).
 - **Over plugins too.** The touch script every plugin page is served with
   (`server/utils/pluginFrameTouch.js`) reports touches (for the buttons and the

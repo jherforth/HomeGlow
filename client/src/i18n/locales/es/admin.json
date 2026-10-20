@@ -111,7 +111,8 @@
     "pinDevicesPartlyForgotten": "No se pudieron actualizar {{failed}} de {{total}} dispositivos. Inténtalo de nuevo.",
     "pinDevicesForgetFailed": "No se pudieron actualizar los dispositivos. Inténtalo de nuevo.",
     "pinChangedDevicesForgotten": "PIN actualizado. Se volverá a pedir en todos los dispositivos.",
-    "pinChangedDevicesNotForgotten": "PIN actualizado, pero puede que algunos dispositivos sigan omitiéndolo. Usa «Volver a exigir el PIN en todos los dispositivos»."
+    "pinChangedDevicesNotForgotten": "PIN actualizado, pero puede que algunos dispositivos sigan omitiéndolo. Usa «Volver a exigir el PIN en todos los dispositivos».",
+    "displaySaved": "Ajustes guardados para esta pantalla."
   },
   "confirm": {
     "deletePrize": "¿Seguro que quieres eliminar este premio?",
@@ -255,7 +256,7 @@
     "keepScreenAwakeHelp": "Si está activo, el salvapantallas impide que la pantalla se apague. Desactívalo en un quiosco de pared para que la gestión de energía del dispositivo pueda atenuar y apagar la pantalla mientras el salvapantallas esté en marcha.",
     "dockHideHeading": "Ocultar la barra en reposo",
     "dockHideLabel": "Minutos (0 = nunca)",
-    "dockHideHelp": "La barra se desvanece tras estos minutos sin tocar la pantalla, y cualquier toque, tecla o movimiento del ratón la devuelve. Solo esta pantalla. En los teléfonos la barra siempre se muestra.",
+    "dockHideHelp": "La barra se desvanece tras estos minutos sin tocar la pantalla, y cualquier toque, tecla o movimiento del ratón la devuelve. En los teléfonos la barra siempre se muestra.",
     "dockHidePreempted_one": "El salvapantallas empieza tras {{count}} minuto, antes de que la barra se oculte. Usa menos minutos para ver cómo se oculta.",
     "dockHidePreempted_other": "El salvapantallas empieza tras {{count}} minutos, antes de que la barra se oculte. Usa menos minutos para ver cómo se oculta.",
     "touchHeading": "Tacto",
@@ -285,7 +286,7 @@
     "expand": {
       "heading": "Ampliar widgets",
       "enable": "Permitir ampliar widgets",
-      "enableHelp": "Un widget puede crecer a la mitad superior de la página, o a toda la página, para mostrar más, y luego volver a su lugar. Toca la página atenuada a su alrededor para devolverlo. Solo esta pantalla. Los teléfonos no cambian.",
+      "enableHelp": "Un widget puede crecer a la mitad superior de la página, o a toda la página, para mostrar más, y luego volver a su lugar. Toca la página atenuada a su alrededor para devolverlo. Los teléfonos no cambian.",
       "method": "Cómo ampliar",
       "methods": {
         "doubleTap": "Doble toque",
@@ -309,6 +310,11 @@
         "photos": "Fotos"
       }
     }
+  },
+  "thisDisplay": {
+    "heading": "Esta pantalla",
+    "help": "Ajustes solo para esta pantalla. Cada pantalla, y cada teléfono, guarda los suyos.",
+    "save": "Guardar ajustes de la pantalla"
   },
   "vacation": {
     "heading": "Modo vacaciones",
@@ -668,7 +674,8 @@
     "vacation": "Vacaciones",
     "region": "Idioma y hora",
     "connections": "Conexiones",
-    "about": "Acerca de"
+    "about": "Acerca de",
+    "thisdisplay": "Esta pantalla"
   },
   "panelTitle": "Panel de administración",
   "themes": {

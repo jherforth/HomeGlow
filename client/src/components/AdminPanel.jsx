@@ -62,6 +62,7 @@ import {
   Timer,
   Lock,
   Nightlight,
+  Tv,
   BeachAccess,
   Tab as TabIcon,
   DragIndicator,
@@ -1379,13 +1380,15 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     }
   };
 
-  const saveScreensaverSettings = async () => {
+  // The screensaver and This Display sections share one saved object; each
+  // says so in its own words.
+  const saveScreensaverSettings = async (savedMessageKey = 'admin:messages.screensaverSaved') => {
     try {
       setIsLoading(true);
       const normalizedScreensaver = normalizeScreensaverSettings(screensaverSettings);
       localStorage.setItem(SCREENSAVER_SETTINGS_STORAGE_KEY, JSON.stringify(normalizedScreensaver));
       window.dispatchEvent(new Event(INTERFACE_SETTINGS_UPDATED_EVENT));
-      setSaveMessage({ show: true, type: 'success', text: t('admin:messages.screensaverSaved') });
+      setSaveMessage({ show: true, type: 'success', text: t(typeof savedMessageKey === 'string' ? savedMessageKey : 'admin:messages.screensaverSaved') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } catch (error) {
       console.error('Error saving screensaver settings:', error);
@@ -2964,6 +2967,80 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
               </>
             )}
 
+            {/* This Display: settings for this screen that aren't about the
+                screensaver. Kept, like the screensaver's, in this display's own
+                storage, so they are saved together. */}
+            {location.section === 'thisdisplay' && (
+              <>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+                  <Tv />
+                  <Typography variant="h6">{t('admin:thisDisplay.heading')}</Typography>
+                </Box>
+
+                <Alert severity="info" sx={{ mb: 3 }}>
+                  {t('admin:thisDisplay.help')}
+                </Alert>
+
+                <Box sx={{ maxWidth: 600, mx: 'auto' }}>
+                  {/* Dock idle hide (issue #77). Saved with the screensaver settings. */}
+                  <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                    {t('admin:screensaver.dockHideHeading')}
+                  </Typography>
+                  <TextField
+                    type="number"
+                    size="small"
+                    label={t('admin:screensaver.dockHideLabel')}
+                    value={screensaverSettings.dockHideMinutes}
+                    onChange={(e) => setScreensaverSettings(prev => ({ ...prev, dockHideMinutes: e.target.value }))}
+                    slotProps={{ htmlInput: { min: 0, max: MAX_DOCK_HIDE_MINUTES, step: 1 } }}
+                    sx={{ mb: 1, width: 200 }}
+                  />
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    {t('admin:screensaver.dockHideHelp')}
+                  </Typography>
+                  {screensaverPreemptsDock({
+                    screensaverEnabled: screensaverSettings.enabled,
+                    screensaverMinutes: screensaverSettings.timeout,
+                    dockHideMinutes: screensaverSettings.dockHideMinutes,
+                  }) && (
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                      {t('admin:screensaver.dockHidePreempted', { count: screensaverSettings.timeout })}
+                    </Alert>
+                  )}
+
+                  {/* Expanding widgets (utils/widgetExpand.js). Saved with the
+                      screensaver settings. The list offers the widgets turned
+                      on here. */}
+                  <ExpandWidgetsSettings
+                    settings={screensaverSettings}
+                    onChange={(patch) => setScreensaverSettings(prev => ({ ...prev, ...patch }))}
+                    widgets={[
+                      ...['calendar', 'weather', 'chores', 'photos']
+                        .filter((key) => widgetSettings[key]?.enabled)
+                        .map((key) => ({ name: key, label: t(`admin:screensaver.expand.widgetNames.${key}`) })),
+                      ...uploadedWidgets
+                        .filter((plugin) => pluginSettings[plugin.filename]?.enabled)
+                        .map((plugin) => ({
+                          name: `plugin:${plugin.filename}`,
+                          label: plugin.name || plugin.filename,
+                          manifestBlocks: plugin.manifest?.expand === false,
+                        })),
+                    ]}
+                  />
+
+                  <Button
+                    variant="contained"
+                    onClick={() => saveScreensaverSettings('admin:messages.displaySaved')}
+                    startIcon={<Save />}
+                    fullWidth
+                    sx={{ mt: 2 }}
+                  >
+                    {t('admin:thisDisplay.save')}
+                  </Button>
+                </Box>
+              </>
+            )}
+
             {location.section === 'screensaver' && (
               <>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
@@ -3232,35 +3309,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                     {t('admin:screensaver.keepScreenAwakeHelp')}
                   </Typography>
 
-                  {/* Dock idle hide (issue #77). This display only, like the
-                      screensaver; saved with it. */}
-                  <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                    {t('admin:screensaver.dockHideHeading')}
-                  </Typography>
-                  <TextField
-                    type="number"
-                    size="small"
-                    label={t('admin:screensaver.dockHideLabel')}
-                    value={screensaverSettings.dockHideMinutes}
-                    onChange={(e) => setScreensaverSettings(prev => ({ ...prev, dockHideMinutes: e.target.value }))}
-                    slotProps={{ htmlInput: { min: 0, max: MAX_DOCK_HIDE_MINUTES, step: 1 } }}
-                    sx={{ mb: 1, width: 200 }}
-                  />
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    {t('admin:screensaver.dockHideHelp')}
-                  </Typography>
-                  {screensaverPreemptsDock({
-                    screensaverEnabled: screensaverSettings.enabled,
-                    screensaverMinutes: screensaverSettings.timeout,
-                    dockHideMinutes: screensaverSettings.dockHideMinutes,
-                  }) && (
-                    <Alert severity="info" sx={{ mb: 2 }}>
-                      {t('admin:screensaver.dockHidePreempted', { count: screensaverSettings.timeout })}
-                    </Alert>
-                  )}
-
                   {/* Touch gestures (utils/twoFingerSwipe.js). This display
-                      only, like the dock; saved with the screensaver. */}
+                      only; saved with the screensaver. */}
                   <Typography variant="subtitle2" sx={{ mt: 1, mb: 1, fontWeight: 'bold' }}>
                     {t('admin:screensaver.touchHeading')}
                   </Typography>
@@ -3289,29 +3339,9 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                     {t('admin:screensaver.blockPinchZoomHelp')}
                   </Typography>
 
-                  {/* Expanding widgets (utils/widgetExpand.js). This display
-                      only, like the touch gestures; saved with the screensaver.
-                      The list offers the widgets turned on here. */}
-                  <ExpandWidgetsSettings
-                    settings={screensaverSettings}
-                    onChange={(patch) => setScreensaverSettings(prev => ({ ...prev, ...patch }))}
-                    widgets={[
-                      ...['calendar', 'weather', 'chores', 'photos']
-                        .filter((key) => widgetSettings[key]?.enabled)
-                        .map((key) => ({ name: key, label: t(`admin:screensaver.expand.widgetNames.${key}`) })),
-                      ...uploadedWidgets
-                        .filter((plugin) => pluginSettings[plugin.filename]?.enabled)
-                        .map((plugin) => ({
-                          name: `plugin:${plugin.filename}`,
-                          label: plugin.name || plugin.filename,
-                          manifestBlocks: plugin.manifest?.expand === false,
-                        })),
-                    ]}
-                  />
-
                   <Button
                     variant="contained"
-                    onClick={saveScreensaverSettings}
+                    onClick={() => saveScreensaverSettings()}
                     startIcon={<Save />}
                     fullWidth
                     sx={{ mt: 2 }}

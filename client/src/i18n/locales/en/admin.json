@@ -111,7 +111,8 @@
     "pinDevicesPartlyForgotten": "Could not update {{failed}} of {{total}} devices. Try again.",
     "pinDevicesForgetFailed": "Could not update devices. Try again.",
     "pinChangedDevicesForgotten": "PIN updated. Every device will be asked for it again.",
-    "pinChangedDevicesNotForgotten": "PIN updated, but some devices may still skip it. Use “Require PIN on all devices again”."
+    "pinChangedDevicesNotForgotten": "PIN updated, but some devices may still skip it. Use “Require PIN on all devices again”.",
+    "displaySaved": "Settings saved for this display."
   },
   "confirm": {
     "deletePrize": "Are you sure you want to delete this prize?",
@@ -255,7 +256,7 @@
     "keepScreenAwakeHelp": "When on, the screensaver prevents the screen from sleeping. Turn off on a wall kiosk so the device's own power management can dim and sleep the display while the screensaver runs.",
     "dockHideHeading": "Hide the dock when idle",
     "dockHideLabel": "Minutes (0 = never)",
-    "dockHideHelp": "The dock fades out after this many minutes without a touch, and any touch, tap, key or mouse move brings it back. This display only. Phones always show the dock.",
+    "dockHideHelp": "The dock fades out after this many minutes without a touch, and any touch, tap, key or mouse move brings it back. Phones always show the dock.",
     "dockHidePreempted_one": "The screensaver starts after {{count}} minute, before the dock would hide. Use fewer minutes to see the dock hide.",
     "dockHidePreempted_other": "The screensaver starts after {{count}} minutes, before the dock would hide. Use fewer minutes to see the dock hide.",
     "touchHeading": "Touch",
@@ -285,7 +286,7 @@
     "expand": {
       "heading": "Expand widgets",
       "enable": "Let widgets expand",
-      "enableHelp": "A widget can grow to the top half of the page, or the whole page, to show more, then go back to its place. Tap the dimmed page around it to put it back. This display only. Phones are left alone.",
+      "enableHelp": "A widget can grow to the top half of the page, or the whole page, to show more, then go back to its place. Tap the dimmed page around it to put it back. Phones are left alone.",
       "method": "How to expand",
       "methods": {
         "doubleTap": "Double-tap",
@@ -309,6 +310,11 @@
         "photos": "Photos"
       }
     }
+  },
+  "thisDisplay": {
+    "heading": "This Display",
+    "help": "Settings for this screen only. Every display, and every phone, keeps its own.",
+    "save": "Save Display Settings"
   },
   "vacation": {
     "heading": "Vacation Mode",
@@ -668,7 +674,8 @@
     "vacation": "Vacation",
     "region": "Language & time",
     "connections": "Connections",
-    "about": "About"
+    "about": "About",
+    "thisdisplay": "This Display"
   },
   "panelTitle": "Admin Panel",
   "themes": {
