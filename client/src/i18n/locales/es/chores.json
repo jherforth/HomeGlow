@@ -409,5 +409,33 @@
     "no": "No",
     "yes": "Sí",
     "approveFailed": "No se pudo marcar como hecha."
+  },
+  "history": {
+    "menuItem": "Historial",
+    "showWeek": "Mostrar los últimos 7 días",
+    "hideWeek": "Ocultar los últimos 7 días",
+    "weekAria": "Últimos 7 días de {{title}}",
+    "lastDays": "Últimos {{count}} días",
+    "streak_one": "{{count}} día seguido",
+    "streak_other": "{{count}} días seguidos",
+    "streakCapped_one": "{{count}}+ día seguido",
+    "streakCapped_other": "{{count}}+ días seguidos",
+    "noStreak": "Sin racha actual",
+    "doneOfDue": "hecha {{done}} de {{due}} ({{rate}} %)",
+    "doneTimes_one": "hecha {{count}} vez",
+    "doneTimes_other": "hecha {{count}} veces",
+    "untrackedClams": "No se registran las faltas de las tareas con almejas, así que una estrella vacía solo significa que no se registró nada.",
+    "untrackedOther": "No se registran las faltas de esta tarea, así que una estrella vacía solo significa que no se registró nada.",
+    "recent": "Recientes",
+    "none": "Aún no hay nada registrado.",
+    "loadError": "No se pudo cargar el historial.",
+    "state": {
+      "done": "Hecha",
+      "missed": "No hecha",
+      "open": "Sin registro",
+      "today": "Para hoy",
+      "vacation": "Vacaciones",
+      "off": "No tocaba"
+    }
   }
 }

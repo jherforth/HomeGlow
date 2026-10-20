@@ -409,5 +409,33 @@
     "no": "No",
     "yes": "Yes",
     "approveFailed": "Could not mark it done."
+  },
+  "history": {
+    "menuItem": "History",
+    "showWeek": "Show the last 7 days",
+    "hideWeek": "Hide the last 7 days",
+    "weekAria": "Last 7 days of {{title}}",
+    "lastDays": "Last {{count}} days",
+    "streak_one": "{{count}} day in a row",
+    "streak_other": "{{count}} days in a row",
+    "streakCapped_one": "{{count}}+ day in a row",
+    "streakCapped_other": "{{count}}+ days in a row",
+    "noStreak": "No current streak",
+    "doneOfDue": "done {{done}} of {{due}} ({{rate}}%)",
+    "doneTimes_one": "done {{count}} time",
+    "doneTimes_other": "done {{count}} times",
+    "untrackedClams": "Misses aren't recorded for chores worth clams, so an empty star only means nothing was logged.",
+    "untrackedOther": "Misses aren't recorded for this chore, so an empty star only means nothing was logged.",
+    "recent": "Recent",
+    "none": "Nothing logged yet.",
+    "loadError": "Could not load the history.",
+    "state": {
+      "done": "Done",
+      "missed": "Missed",
+      "open": "Not logged",
+      "today": "Due today",
+      "vacation": "Vacation",
+      "off": "Not due"
+    }
   }
 }
