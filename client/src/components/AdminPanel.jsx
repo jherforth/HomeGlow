@@ -102,6 +102,7 @@ import ClamValueModal from './ClamValueModal';
 import { ADMIN_LAYOUT, ADMIN_TABS, normalizeAdminLocation, parseAdminHash, setAdminHash } from '../utils/adminNavigation.js';
 import SoundPicker from './SoundPicker';
 import ControlsOnDisplay from './ControlsOnDisplay';
+import ExpandWidgetsSettings from './ExpandWidgetsSettings';
 import useFetchTabs from '../hooks/useFetchTabs.js';
 import { MAX_DOCK_HIDE_MINUTES, screensaverPreemptsDock } from '../utils/dockIdleHide.js';
 import useIsMobile from '../hooks/useIsMobile.js';
@@ -3287,6 +3288,26 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2, ml: 6 }}>
                     {t('admin:screensaver.blockPinchZoomHelp')}
                   </Typography>
+
+                  {/* Expanding widgets (utils/widgetExpand.js). This display
+                      only, like the touch gestures; saved with the screensaver.
+                      The list offers the widgets turned on here. */}
+                  <ExpandWidgetsSettings
+                    settings={screensaverSettings}
+                    onChange={(patch) => setScreensaverSettings(prev => ({ ...prev, ...patch }))}
+                    widgets={[
+                      ...['calendar', 'weather', 'chores', 'photos']
+                        .filter((key) => widgetSettings[key]?.enabled)
+                        .map((key) => ({ name: key, label: t(`admin:screensaver.expand.widgetNames.${key}`) })),
+                      ...uploadedWidgets
+                        .filter((plugin) => pluginSettings[plugin.filename]?.enabled)
+                        .map((plugin) => ({
+                          name: `plugin:${plugin.filename}`,
+                          label: plugin.name || plugin.filename,
+                          manifestBlocks: plugin.manifest?.expand === false,
+                        })),
+                    ]}
+                  />
 
                   <Button
                     variant="contained"

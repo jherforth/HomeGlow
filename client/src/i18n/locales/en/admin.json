@@ -281,6 +281,33 @@
       "ambientHelp": "One photo at a time, with a soft blurred copy of it filling the space around it.",
       "collage": "Collage",
       "collageHelp": "Several photos tiled to fill the screen, matched to spaces of their own shape. One photo changes each interval, and the arrangement changes every few rounds. Needs at least 3 photos."
+    },
+    "expand": {
+      "heading": "Expand widgets",
+      "enable": "Let widgets expand",
+      "enableHelp": "A widget can grow to the top half of the page, or the whole page, to show more, then go back to its place. Tap the dimmed page around it to put it back. This display only. Phones are left alone.",
+      "method": "How to expand",
+      "methods": {
+        "doubleTap": "Double-tap",
+        "doubleTapHelp": "Double-tap a widget for the top half, and double-tap again to put it back. A single tap on a widget waits a moment before it goes through, so a double-tap can win. Buttons still work at once.",
+        "button": "Button",
+        "buttonHelp": "An expand button shows in each widget's corner for a few seconds after you touch the screen. Taps are never held back."
+      },
+      "idle": "Put back on its own after",
+      "idleOff": "Never",
+      "idleMinutes_one": "{{count}} minute with no touch",
+      "idleMinutes_other": "{{count}} minutes with no touch",
+      "idleHelp": "While a widget is the top half, a button takes it to the whole page.",
+      "chooseAll": "All widgets can expand. Choose widgets",
+      "chooseSome_one": "{{count}} widget left out. Choose widgets",
+      "chooseSome_other": "{{count}} widgets left out. Choose widgets",
+      "pluginBlocks": "This plugin doesn't expand.",
+      "widgetNames": {
+        "calendar": "Calendar",
+        "weather": "Weather",
+        "chores": "Chores",
+        "photos": "Photos"
+      }
     }
   },
   "vacation": {

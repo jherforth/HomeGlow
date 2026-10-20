@@ -169,7 +169,14 @@ describe('frame messages', () => {
       type: FRAME_TOUCH_SETTINGS_MESSAGE_TYPE,
       swipe: true,
       blockPinchZoom: false,
+      expand: false,
     });
+  });
+
+  it('passes on how the plugin expands, and nothing else', () => {
+    expect(buildFrameTouchSettingsMessage({ swipe: false, blockPinchZoom: false, expand: 'doubleTap' }).expand).toBe('doubleTap');
+    expect(buildFrameTouchSettingsMessage({ swipe: false, blockPinchZoom: false, expand: 'button' }).expand).toBe('button');
+    expect(buildFrameTouchSettingsMessage({ swipe: false, blockPinchZoom: false, expand: 'wiggle' }).expand).toBe(false);
   });
 
   it("accepts a touch report from the wrapper's own frame and origin only", () => {

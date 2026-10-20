@@ -281,6 +281,33 @@
       "ambientHelp": "Una foto a la vez, con una copia suave y difuminada que llena el espacio a su alrededor.",
       "collage": "Collage",
       "collageHelp": "Varias fotos en mosaico que llenan la pantalla, cada una en un espacio de su misma forma. Cambia una foto en cada intervalo y la disposición cambia cada pocas rondas. Necesita al menos 3 fotos."
+    },
+    "expand": {
+      "heading": "Ampliar widgets",
+      "enable": "Permitir ampliar widgets",
+      "enableHelp": "Un widget puede crecer a la mitad superior de la página, o a toda la página, para mostrar más, y luego volver a su lugar. Toca la página atenuada a su alrededor para devolverlo. Solo esta pantalla. Los teléfonos no cambian.",
+      "method": "Cómo ampliar",
+      "methods": {
+        "doubleTap": "Doble toque",
+        "doubleTapHelp": "Toca dos veces un widget para la mitad superior, y otra vez dos veces para devolverlo. Un solo toque en un widget espera un momento antes de actuar, para que el doble toque pueda ganar. Los botones siguen funcionando al instante.",
+        "button": "Botón",
+        "buttonHelp": "Un botón de ampliar aparece en la esquina de cada widget durante unos segundos después de tocar la pantalla. Los toques nunca se retrasan."
+      },
+      "idle": "Devolver solo después de",
+      "idleOff": "Nunca",
+      "idleMinutes_one": "{{count}} minuto sin tocar",
+      "idleMinutes_other": "{{count}} minutos sin tocar",
+      "idleHelp": "Mientras un widget ocupa la mitad superior, un botón lo lleva a toda la página.",
+      "chooseAll": "Todos los widgets se pueden ampliar. Elegir widgets",
+      "chooseSome_one": "{{count}} widget excluido. Elegir widgets",
+      "chooseSome_other": "{{count}} widgets excluidos. Elegir widgets",
+      "pluginBlocks": "Este plugin no se amplía.",
+      "widgetNames": {
+        "calendar": "Calendario",
+        "weather": "Tiempo",
+        "chores": "Tareas",
+        "photos": "Fotos"
+      }
     }
   },
   "vacation": {

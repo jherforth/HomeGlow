@@ -1,4 +1,11 @@
 import { normalizeDockHideMinutes } from './dockIdleHide.js';
+import {
+  DEFAULT_EXPAND_IDLE_MINUTES,
+  DEFAULT_EXPAND_METHOD,
+  normalizeExpandIdleMinutes,
+  normalizeExpandMethod,
+  normalizeExpandOff,
+} from './widgetExpand.js';
 
 // Single source of truth for the "interface" settings that live in localStorage:
 // interface colors, screensaver settings, and auto-dark-mode settings. Also
@@ -45,6 +52,13 @@ export const DEFAULT_SCREENSAVER_SETTINGS = {
   // (utils/twoFingerSwipe.js). Off by default so no display changes on upgrade.
   twoFingerSwipe: false,
   blockPinchZoom: false,
+  // Expanding a widget to the top half or the whole page (utils/widgetExpand.js).
+  // Off by default so no display changes on upgrade. expandOff lists the
+  // widgets left out, by widget name.
+  expandWidgets: false,
+  expandMethod: DEFAULT_EXPAND_METHOD,
+  expandIdleMinutes: DEFAULT_EXPAND_IDLE_MINUTES,
+  expandOff: [],
 };
 
 export const PHOTO_LAYOUTS = ['fit', 'ambient', 'collage'];
@@ -125,6 +139,10 @@ export const normalizeScreensaverSettings = (raw) => {
     dockHideMinutes: normalizeDockHideMinutes(merged.dockHideMinutes),
     twoFingerSwipe: merged.twoFingerSwipe === true,
     blockPinchZoom: merged.blockPinchZoom === true,
+    expandWidgets: merged.expandWidgets === true,
+    expandMethod: normalizeExpandMethod(merged.expandMethod),
+    expandIdleMinutes: normalizeExpandIdleMinutes(merged.expandIdleMinutes),
+    expandOff: normalizeExpandOff(merged.expandOff),
   };
 };
 

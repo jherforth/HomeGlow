@@ -155,6 +155,13 @@ body { color: var(--text); font-family: var(--hg-font-body, system-ui); }
   to the dashboard and sets `touch-action` on your `<html>`. One-finger touches
   are never reported or stopped, so drags, sliders and scrolling in your widget
   are unaffected. Avoid building your own two-finger sideways gesture.
+- **Double-tap to expand.** A display can let widgets expand by double-tap
+  (see "Being expanded" in §5). Then the same script holds a single click on
+  your page's plain area for about a third of a second, so a double-tap can
+  win, and replays it on its target after; clicks on buttons, links, fields
+  and anything with a button-like `role` go through at once. Pointer events
+  (drags, sliders, drawing) are never held. If your plugin has its own
+  double-tap, set `"expand": false` in the manifest.
 - **Keep fallbacks** (`var(--text, #e8e8e8)`), for a direct load of the file and
   for dashboards older than version 2. `HomeGlow.theme.tokens` has the values in
   JavaScript.
@@ -209,6 +216,7 @@ serving your widget, and the SDK picks it up — you never pass your own id.
 | `events` | — | Core events to receive while mounted (see §5). |
 | `reactions` | — | Server-side increments run on events (see §6). Requires `storage: true`. |
 | `hideableControls` | — | Controls a display may be configured to hide (see §4). |
+| `expand` | — | `false` keeps the plugin from being expanded to half or the whole page on a display that expands widgets, for a plugin whose own double-tap or drag would fight with it. Leave it out otherwise (see "Being expanded" in §5). |
 | `homeAssistant` | — | `{ "entities": [...], "control": true }`: the Home Assistant entities the plugin may read and operate (see §5a). |
 
 Keys not listed here are **ignored**, not rejected — so a misspelled field fails
@@ -450,6 +458,27 @@ the household's to control, not yours:
   system for reduced motion.
 - **Check for it first.** A HomeGlow older than the call has no `celebrate`.
 - **Keep it for real moments.** Every tick of a checkbox is not one.
+
+### Being expanded
+
+A display can let people expand a widget to the top half of the page, or the
+whole page, and back (Admin → Displays). Your page just gets a bigger frame,
+and keeps its state: it is not reloaded. To show more when there is room, as
+the calendar switches to its month view, listen for it:
+
+```js
+if (typeof HomeGlow.onExpand === 'function') {
+  HomeGlow.onExpand((size) => {
+    // 'normal', 'half' (the top half of the page) or 'full' (the whole page)
+    document.body.classList.toggle('roomy', size !== 'normal');
+  });
+}
+```
+
+`onExpand` calls you at once with the current size, then on every change, and
+returns an unsubscribe function; `HomeGlow.expandSize` has the current size.
+A plugin whose own double-tap or drag would fight with expanding sets
+`"expand": false` in its manifest, and is never expanded.
 
 ## 5a. Home Assistant — read and operate devices
 

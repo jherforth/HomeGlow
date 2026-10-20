@@ -920,6 +920,12 @@ function extractPluginManifest(htmlContent) {
   if (manifest.storage !== undefined && typeof manifest.storage !== 'boolean') {
     errors.push('storage must be a boolean.');
   }
+  // false keeps the plugin from being expanded to half or the whole page on
+  // a display that expands widgets (client/src/utils/widgetExpand.js), for a
+  // plugin whose own double-tap or drag would fight with it.
+  if (manifest.expand !== undefined && typeof manifest.expand !== 'boolean') {
+    errors.push('expand must be a boolean.');
+  }
   // Home Assistant entities the plugin may read and operate through
   // /api/plugin/v1/ha (issue #252), under the same rules as a built panel.
   if (manifest.homeAssistant !== undefined) {

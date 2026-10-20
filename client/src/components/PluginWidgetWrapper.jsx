@@ -9,6 +9,7 @@ import { acceptPluginCelebrateMessage, requestCelebration } from '../utils/celeb
 import { THEME_TOKENS_APPLIED_EVENT, buildPluginThemeMessage, readRoleTokens } from '../utils/pluginThemeBridge.js';
 import { ThemeContext } from '../themes/engine/ThemeContext.js';
 import { acceptFrameTouchMessage, buildFrameTouchSettingsMessage, emitFrameTouch } from '../utils/twoFingerSwipe.js';
+import { acceptFrameExpandMessage, buildFrameExpandMessage, emitFrameExpand } from '../utils/widgetExpand.js';
 
 const PluginWidgetWrapper = ({
   filename,
@@ -28,6 +29,11 @@ const PluginWidgetWrapper = ({
   // so a two-finger swipe between tabs works over the plugin and a blocked
   // pinch stays blocked on it (utils/twoFingerSwipe.js).
   touch = null,
+  // Expanding (utils/widgetExpand.js), handed in by the widget grid: how this
+  // plugin expands on this display ('doubleTap', 'button' or false), and how
+  // big it is shown now ('normal', 'half', 'full'), which the plugin is told.
+  expandMode = false,
+  expandSize = 'normal',
 }) => {
   const { i18n } = useTranslation();
   // Manifest plugins need the display's device name so device-scoped settings
@@ -80,6 +86,13 @@ const PluginWidgetWrapper = ({
         requestCelebration(`plugin:${filename}`);
         return;
       }
+      // A double-tap or a touch inside the frame, for expanding. Raised on
+      // the frame element so the widget grid around it hears it.
+      const expandReport = acceptFrameExpandMessage(event, frame, iframeOrigin);
+      if (expandReport) {
+        emitFrameExpand(iframeRef.current, expandReport);
+        return;
+      }
       const touchReport = acceptFrameTouchMessage(event, frame, iframeOrigin);
       if (touchReport) {
         emitFrameTouch(touchSourceKey, touchReport);
@@ -129,15 +142,28 @@ const PluginWidgetWrapper = ({
   const postTouch = useCallback(() => {
     const target = iframeRef.current?.contentWindow;
     if (!target) return;
-    target.postMessage(buildFrameTouchSettingsMessage({ swipe: swipeOn, blockPinchZoom: pinchBlocked }), iframeOrigin);
-  }, [iframeOrigin, swipeOn, pinchBlocked]);
+    target.postMessage(
+      buildFrameTouchSettingsMessage({ swipe: swipeOn, blockPinchZoom: pinchBlocked, expand: expandMode }),
+      iframeOrigin
+    );
+  }, [iframeOrigin, swipeOn, pinchBlocked, expandMode]);
   useEffect(() => {
     postTouch();
   }, [postTouch]);
+  // The plugin's size goes the same way: HomeGlow.onExpand in the SDK.
+  const postExpand = useCallback(() => {
+    const target = iframeRef.current?.contentWindow;
+    if (!target) return;
+    target.postMessage(buildFrameExpandMessage(expandSize), iframeOrigin);
+  }, [iframeOrigin, expandSize]);
+  useEffect(() => {
+    postExpand();
+  }, [postExpand]);
   const handleFrameLoad = useCallback(() => {
     postTheme();
     postTouch();
-  }, [postTheme, postTouch]);
+    postExpand();
+  }, [postTheme, postTouch, postExpand]);
 
   // Omitted entirely when nothing is hidden: a plugin (and an older dashboard)
   // must read "no hide param" as "hide nothing". Flattened to a string so an

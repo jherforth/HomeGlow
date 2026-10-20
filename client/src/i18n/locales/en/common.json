@@ -58,5 +58,10 @@
   "update": {
     "available": "HomeGlow {{latest}} is available. This display is running {{current}}.",
     "details": "Settings → About has the release notes."
+  },
+  "expand": {
+    "expand": "Expand",
+    "fullPage": "Fill the page",
+    "shrink": "Put back"
   }
 }
