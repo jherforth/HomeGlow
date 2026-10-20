@@ -411,7 +411,7 @@ calculation); `server/services/homeAssistant.js` for the connection.
 ## Touch gestures (wall displays)
 
 - **Swipe with two fingers to change tabs** (Admin Panel → Displays →
-  Screensaver, under Touch). Two fingers travelling sideways together go to the
+  This Display, under Touch). Two fingers travelling sideways together go to the
   next tab (fingers moving left) or the previous one (moving right), in the
   dock's order, wrapping around at the ends. The fingers needn't land together:
   a second finger landing within 0.6 s of the first joins it, and each finger's
