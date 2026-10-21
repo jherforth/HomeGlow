@@ -3412,8 +3412,16 @@ fastify.post('/api/chore-history', async (request, reply) => {
     if (!user_id || !date) {
       return reply.status(400).send({ error: 'user_id and date are required' });
     }
+    if (!normalizeDueDate(date).valid) {
+      return reply.status(400).send({ error: 'date must be a real YYYY-MM-DD date' });
+    }
     if (kind !== undefined && !CHORE_HISTORY_KINDS.has(kind)) {
       return reply.status(400).send({ error: `kind must be one of: ${[...CHORE_HISTORY_KINDS].join(', ')}` });
+    }
+    // The daily bonus is the server's to award, once per person and day
+    // (awardDailyRegularBonusIfDue); a posted one would stack on top.
+    if (kind === 'daily_bonus') {
+      return reply.status(400).send({ error: 'daily_bonus is awarded by the server, not posted' });
     }
     const rowKind = kind || (chore_schedule_id ? 'completion' : 'adjustment');
 
@@ -3691,8 +3699,9 @@ function removeOpenFollowupsFrom(scheduleId, date) {
 // chore due today is completed and the bonus hasn't already been recorded.
 // Never removes points; safe to call any time a user's chore set changes (e.g. reassignment).
 function awardDailyRegularBonusIfDue(userId, date) {
-  const today = getTodayLocalDateString();
-  const todaysChores = getTodaysRegularChoresForUser(userId, today);
+  // The day being completed decides, not today: a chore done for an earlier
+  // day pays that day's bonus only when that day's chores are all done.
+  const todaysChores = getTodaysRegularChoresForUser(userId, date);
   const uncompletedRegularChores = todaysChores.filter(cs => cs.completed_today == 0);
 
   if (!todaysChores.length || uncompletedRegularChores.length) {
@@ -3759,6 +3768,9 @@ function completeChoreSchedule(input) {
   const { chore_schedule_id, user_id, date } = input || {};
   if (!chore_schedule_id || !user_id || !date) {
     return { status: 400, error: 'chore_schedule_id, user_id, and date are required' };
+  }
+  if (!normalizeDueDate(date).valid) {
+    return { status: 400, error: 'date must be a real YYYY-MM-DD date' };
   }
 
   const schedule = db.prepare('SELECT cs.*, c.clam_value, c.title FROM chore_schedules cs JOIN chores c ON cs.chore_id = c.id WHERE cs.id = ?').get(chore_schedule_id);
@@ -3854,6 +3866,9 @@ function uncompleteChoreSchedule(input) {
   if (!chore_schedule_id || !user_id || !date) {
     return { status: 400, error: 'chore_schedule_id, user_id, and date are required' };
   }
+  if (!normalizeDueDate(date).valid) {
+    return { status: 400, error: 'date must be a real YYYY-MM-DD date' };
+  }
 
   // kind-based lookup finds the actual completion record, never a transfer
   // payout or a stale missed row (issue #72).
@@ -3927,6 +3942,9 @@ fastify.post('/api/users/:id/clams/add', async (request, reply) => {
   try {
     if (!amount || amount <= 0) {
       return reply.status(400).send({ error: 'Valid positive amount is required' });
+    }
+    if (!normalizeDueDate(date).valid) {
+      return reply.status(400).send({ error: 'date must be a real YYYY-MM-DD date' });
     }
 
     const useDate = date || getTodayLocalDateString();
