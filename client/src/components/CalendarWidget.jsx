@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Card, Typography, Box, List, ListItem, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, Button, ButtonBase, IconButton, Popover, ToggleButton, ToggleButtonGroup, TextField, Switch, Checkbox, FormControlLabel, Select, MenuItem, FormControl, InputLabel, Chip, Divider, CircularProgress, Alert, Tooltip } from '@mui/material';
+import { Card, Typography, Box, List, ListItem, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, Button, ButtonBase, IconButton, Popover, ToggleButton, ToggleButtonGroup, TextField, Switch, Checkbox, FormControlLabel, Select, MenuItem, FormControl, InputLabel, Chip, Divider, CircularProgress, LinearProgress, Alert, Tooltip } from '@mui/material';
 import { Settings, ViewModule, ViewWeek, ChevronLeft, ChevronRight, Add, Delete, Edit, Refresh, Remove, Sync, Schedule, Today } from '@mui/icons-material';
 import moment from 'moment';
 import { SketchPicker } from 'react-color';
@@ -216,7 +216,11 @@ const CalendarWidget = ({
   const isMobile = useIsMobile();
   const defaultViewMode = isMobile ? 'week' : 'month';
   const [events, setEvents] = useState([]);
+  // The full spinner is for the first load only. Later fetches (auto-refresh,
+  // a sync, a new month) keep the events on screen and show a thin bar.
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const loadedOnceRef = useRef(false);
   const [error, setError] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedDateEvents, setSelectedDateEvents] = useState([]);
@@ -662,9 +666,14 @@ const CalendarWidget = ({
     return formatShortDateTime(date);
   };
 
+  // Resolves to the events now on screen, so a caller can refresh a list it
+  // derived from them.
   const fetchCalendarEvents = async () => {
+    const firstLoad = !loadedOnceRef.current;
+    let shown = events;
     try {
-      setLoading(true);
+      if (firstLoad) setLoading(true);
+      else setRefreshing(true);
       setError(null);
 
       // Limit the query to the visible range (+ padding). Fetching the entire
@@ -698,17 +707,25 @@ const CalendarWidget = ({
           merged_from: Array.isArray(event.merged_from) ? event.merged_from : undefined
         }));
 
-        setEvents(formattedEvents);
+        shown = formattedEvents;
       } else {
-        setEvents([]);
+        shown = [];
       }
+      setEvents(shown);
     } catch (error) {
       console.error('Error fetching calendar events:', error);
       setError('Failed to load calendar events. Please configure calendars in settings.');
-      setEvents([]);
+      // A failed refresh keeps what's already on the wall.
+      if (firstLoad) {
+        shown = [];
+        setEvents(shown);
+      }
     } finally {
+      loadedOnceRef.current = true;
       setLoading(false);
+      setRefreshing(false);
     }
+    return shown;
   };
   const loadGoogleCalendars = async () => {
     setGoogleCalendarsLoading(true);
@@ -1005,12 +1022,10 @@ const CalendarWidget = ({
         );
       }
       closeEventDialog();
-      await fetchCalendarEvents();
+      const latest = await fetchCalendarEvents();
+      // The open day's list is a snapshot; show the saved event in it.
       if (selectedDate) {
-        const dayDate = moment(selectedDate).startOf('day').toDate();
-        setTimeout(() => {
-          setSelectedDateEvents((prev) => prev);
-        }, 0);
+        setSelectedDateEvents(eventsOnDay(latest, selectedDate));
       }
     } catch (err) {
       setEventError(err?.response?.data?.error || 'Failed to save event.');
@@ -1033,70 +1048,35 @@ const CalendarWidget = ({
     }
   };
 
-  const handleSelectSlot = ({ start }) => {
-    markActivity();
-    const selectedDay = moment(start).startOf('day');
-    const dayDate = selectedDay.toDate();
-    const dayEvents = events
+  // A day's events for the day list: all-day first, then by start time.
+  const eventsOnDay = (list, day) => {
+    const dayDate = moment(day).startOf('day').toDate();
+    return list
       .filter(event => eventSpansDay(event, dayDate))
       .sort((a, b) => {
         if (a.all_day && !b.all_day) return -1;
         if (!a.all_day && b.all_day) return 1;
         return a.start - b.start;
       });
+  };
 
+  const handleSelectSlot = ({ start }) => {
+    markActivity();
+    const selectedDay = moment(start).startOf('day');
     setSelectedDate(selectedDay.toDate());
-    setSelectedDateEvents(dayEvents);
+    setSelectedDateEvents(eventsOnDay(events, selectedDay));
     setShowDayModal(true);
   };
 
   const handleSelectEvent = (event) => {
     markActivity();
     const selectedDay = moment(event.start).startOf('day');
-    const dayDate = selectedDay.toDate();
-    const dayEvents = events
-      .filter(e => eventSpansDay(e, dayDate))
-      .sort((a, b) => {
-        if (a.all_day && !b.all_day) return -1;
-        if (!a.all_day && b.all_day) return 1;
-        return a.start - b.start;
-      });
-
     setSelectedDate(selectedDay.toDate());
-    setSelectedDateEvents(dayEvents);
+    setSelectedDateEvents(eventsOnDay(events, selectedDay));
     setShowDayModal(true);
   };
 
-  const getCurrentDayOfWeek = () => {
-    return new Date().getDay();
-  };
 
-  useEffect(() => {
-    const highlightCurrentWeek = () => {
-      const today = new Date();
-      const rows = document.querySelectorAll('.rbc-month-row');
-
-      rows.forEach(row => {
-        row.classList.remove('rbc-current-week');
-        const dateCells = row.querySelectorAll('.rbc-date-cell');
-        dateCells.forEach(cell => {
-          const dateElement = cell.querySelector('button');
-          if (dateElement) {
-            const dateText = dateElement.textContent;
-            const date = new Date(currentDate);
-            date.setDate(parseInt(dateText));
-
-            if (moment(date).isSame(today, 'week') && moment(date).isSame(currentDate, 'month')) {
-              row.classList.add('rbc-current-week');
-            }
-          }
-        });
-      });
-    };
-
-    const timer = setTimeout(highlightCurrentWeek, 100);
-    return () => clearTimeout(timer);
-  }, [currentDate, events]);
 
   const isMultiDay = (event) => {
     return !event.all_day && !moment(event.start).isSame(moment(event.end), 'day');
@@ -1296,19 +1276,6 @@ const CalendarWidget = ({
     }
   };
 
-  const CustomHeader = ({ date, label }) => {
-    const today = new Date();
-    const isToday = moment(date).isSame(today, 'day');
-    const currentDayOfWeek = getCurrentDayOfWeek();
-    const headerDayOfWeek = date.getDay();
-    const isCurrentDayOfWeek = headerDayOfWeek === currentDayOfWeek;
-
-    return (
-      <div className={isCurrentDayOfWeek ? 'rbc-current-day-header' : ''}>
-        {label}
-      </div>
-    );
-  };
 
   const colorMode = getPreferredColorMode();
 
@@ -1340,8 +1307,15 @@ const CalendarWidget = ({
       display: 'flex',
       flexDirection: 'column',
       overflow: 'hidden',
+      position: 'relative',
       p: 2
     }}>
+      {refreshing && (
+        <LinearProgress
+          aria-label={t('calendar:widget.loading')}
+          sx={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2 }}
+        />
+      )}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <IconButton
