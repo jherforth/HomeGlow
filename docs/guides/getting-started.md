@@ -34,7 +34,6 @@ TZ=America/New_York
 Create `client/.env`:
 ```env
 VITE_REACT_APP_API_URL=http://localhost:5001
-VITE_OPENWEATHER_API_KEY=your_openweather_api_key_here
 ```
 
 > **Port note:** the client's dev default expects the backend on **5001**

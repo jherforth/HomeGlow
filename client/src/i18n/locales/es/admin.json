@@ -102,7 +102,6 @@
     "widgetInstalled": "¡El widget \"{{name}}\" se instaló correctamente!",
     "widgetInstallFailed": "No se pudo instalar el widget. Inténtalo de nuevo.",
     "scheduleDeleteFailed": "No se pudo eliminar la programación. Inténtalo de nuevo.",
-    "uploadingPicture": "Subiendo la foto...",
     "pictureUploadFailed": "No se pudo subir la foto de perfil. Inténtalo de nuevo.",
     "pinSet": "¡PIN de administrador configurado!",
     "pinRemoved": "PIN de administrador eliminado. El panel ya no está protegido.",

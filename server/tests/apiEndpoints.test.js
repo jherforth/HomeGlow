@@ -493,6 +493,12 @@ test('settings endpoints persist and query values', async () => {
     assert.equal(searchRes.status, 200);
     assert.deepEqual(searchRes.body.TEST_SETTING_JSON, { featureEnabled: true, retries: 2 });
 
+    // Anything but a key or a list of keys is a bad request, not a 500.
+    for (const body of ['42', '{"key":"TEST_SETTING_JSON"}', '[1, 2]']) {
+        const bad = await api('/api/settings/search', { method: 'POST', body });
+        assert.equal(bad.status, 400, `search with ${body}`);
+    }
+
     // The same lookup over GET, so a read does not have to be a POST. The POST
     // stays supported: it is documented for plugin authors.
     const getFiltered = await api('/api/settings?keys=TEST_SETTING_*');

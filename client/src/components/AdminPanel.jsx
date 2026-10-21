@@ -1703,30 +1703,21 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
 
   const handleProfilePictureUpload = async (userId, event) => {
     const file = event.target.files[0];
-    if (!file) {
-      console.log('No file selected');
-      return;
-    }
-
-    console.log('File selected:', file.name, 'Size:', file.size, 'Type:', file.type);
+    if (!file) return;
 
     const formData = new FormData();
     formData.append('file', file);
 
     try {
       setIsLoading(true);
-      console.log(t('admin:messages.uploadingPicture'));
 
-      const response = await axios.post(
+      await axios.post(
         `${API_BASE_URL}/api/users/${userId}/upload-picture`,
         formData,
         { headers: { 'Content-Type': 'multipart/form-data' } }
       );
 
-      console.log('Upload response:', response.data);
-
       await fetchUsers();
-      console.log('Users fetched after upload');
     } catch (error) {
       console.error('Error uploading profile picture:', error);
       console.error('Error details:', error.response?.data);
