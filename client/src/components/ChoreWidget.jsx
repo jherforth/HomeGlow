@@ -1023,7 +1023,6 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
 
   const renderUserAvatar = (user) => {
     const handleImageError = (e) => {
-      console.log(`Profile picture failed to load for user ${user.username}:`, user.profile_picture);
       e.target.style.display = 'none';
       e.target.nextSibling.style.display = 'flex';
     };

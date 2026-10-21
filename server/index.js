@@ -4513,6 +4513,11 @@ fastify.post('/api/settings/search', async (request, reply) => {
     console.log('=== SEARCHING SETTINGS ===');
     // coerce the request body to array of strings to search the settings database by key:
     const keys = Array.isArray(request.body) ? request.body : [request.body];
+    // selectSettings calls replaceAll on each key, so anything but a string
+    // (a number, an object, no body) threw and answered 500.
+    if (!keys.every((key) => typeof key === 'string')) {
+      return reply.status(400).send({ error: 'Body must be a setting key or an array of setting keys' });
+    }
 
     // Kept as-is: this is a documented plugin endpoint (plugin-development.md),
     // so third-party plugins call it and it stays supported. GET /api/settings

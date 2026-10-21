@@ -102,7 +102,6 @@
     "widgetInstalled": "Widget \"{{name}}\" installed successfully!",
     "widgetInstallFailed": "Failed to install widget. Please try again.",
     "scheduleDeleteFailed": "Failed to delete chore schedule. Please try again.",
-    "uploadingPicture": "Uploading picture...",
     "pictureUploadFailed": "Failed to upload profile picture. Please try again.",
     "pinSet": "Admin PIN set successfully!",
     "pinRemoved": "Admin PIN removed. Admin panel is now unprotected.",

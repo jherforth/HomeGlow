@@ -43,7 +43,6 @@ PORT=5000
 Create `client/.env`:
 ```env
 VITE_REACT_APP_API_URL=http://localhost:5000
-VITE_OPENWEATHER_API_KEY=your_openweather_api_key_here
 ```
 
 #### Step 3: Run Development Servers

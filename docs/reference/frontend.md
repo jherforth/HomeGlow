@@ -124,5 +124,4 @@ npm run test:coverage
 The production build is served by Nginx (see [`client/Dockerfile`](../../client/Dockerfile)
 and [`client/nginx.conf`](../../client/nginx.conf)). Vite build-time variables
 (`VITE_APP_VERSION`, `VITE_GIT_COMMIT`, `VITE_GITHUB_REPOSITORY`,
-`VITE_OPENWEATHER_API_KEY`, `VITE_REACT_APP_API_URL`) are injected as Docker build
-args.
+`VITE_REACT_APP_API_URL`) are injected as Docker build args.

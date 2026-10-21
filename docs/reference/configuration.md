@@ -94,7 +94,6 @@ is still treated as local.
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `VITE_REACT_APP_API_URL` | same-origin (prod) / `http://localhost:5001` (dev) | API base URL. Empty in prod means "use the current origin" (Nginx proxies `/api`). |
-| `VITE_OPENWEATHER_API_KEY` | — | **Unused since weather moved server-side (#57).** The key now lives only in the `settings` table and never reaches the bundle. |
 | `VITE_APP_VERSION`, `VITE_GIT_COMMIT`, `VITE_GITHUB_REPOSITORY` | build metadata | Version display. |
 
 ### `.env` for Docker Compose
