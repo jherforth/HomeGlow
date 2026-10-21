@@ -73,17 +73,21 @@ Migrations are described in detail in
    inside a transaction; the template already commits and writes the new
    `SYSTEM_SCHEMA_ID`. Use `PRAGMA table_info(...)` guards to stay idempotent when
    adding columns.
-3. Register it in the `schemaMigrations` array in
-   [`server/index.js`](../../server/index.js):
+3. Register it in
+   [`server/migrations/registry.js`](../../server/migrations/registry.js):
    ```js
    { schemaId: NN, migrationPath: './migrations/schemaNN-shortName' },
    ```
+   `npm test` fails if two entries share a number, a file is missing or
+   unregistered, or a file's number doesn't match its entry. If another open PR
+   takes your number, renumber yours after it merges.
 4. Test against a copy of a real DB and a fresh DB. Migrations only run when their
    `schemaId` exceeds the stored version, so they apply exactly once per database.
 
 **Don't** edit `initializeDatabase.js` or existing numbered migrations for schema
 changes on existing installs — always add a new numbered migration so upgrades apply
-cleanly.
+cleanly. A pull request that edits a numbered migration fails the Migrations check;
+a maintainer can add the `migration-edit` label when the edit is deliberate.
 
 ## Documentation
 

@@ -1,0 +1,39 @@
+name: Migrations
+
+# A numbered migration runs once per database, so editing one that has shipped
+# never reaches an install that already ran it. Fix forward with a new
+# migration instead. For a deliberate edit (one that has never run anywhere, or
+# a change that does not alter what it does), add the `migration-edit` label.
+#
+# Its own workflow so that adding or removing the label reruns only this check.
+# The duplicate-number check is a server test (tests/migrationRegistry.test.js).
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+    paths:
+      - 'server/migrations/**'
+
+permissions:
+  contents: read
+
+jobs:
+  shipped-migrations-unchanged:
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'migration-edit') }}
+    steps:
+      # The pull_request checkout is the merge commit: its first parent is the
+      # base branch, so HEAD^1..HEAD is exactly what the PR changes.
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+
+      - name: Fail on an edited numbered migration
+        run: |
+          changed=$(git diff --diff-filter=MR --name-only HEAD^1 HEAD -- 'server/migrations/schema[0-9]*-*.js')
+          if [ -n "$changed" ]; then
+            echo "These migrations already exist on the base branch and were changed:"
+            echo "$changed"
+            echo "Add a new migration instead, or label the PR migration-edit if the edit is deliberate."
+            exit 1
+          fi
