@@ -173,6 +173,76 @@ test('daily bonus revoke survives a reward-setting change (fragile-tuple regress
     await api('/api/settings', { method: 'POST', body: JSON.stringify({ key: 'daily_completion_clam_reward', value: '2' }) });
 });
 
+// Issue: the bonus was decided by today's chores but recorded on the request's
+// date, so a catch-up for an earlier day paid or withheld that day's bonus
+// depending on whether today happened to be finished.
+test('a catch-up for an earlier day earns that day\'s bonus while today is still open', async () => {
+    const userId = await createUser('catchup-open-today-kid');
+    const { scheduleId } = await createDailyChore(userId, 'Feed fish');
+
+    const res = await api('/api/chores/complete', {
+        method: 'POST',
+        body: JSON.stringify({ chore_schedule_id: scheduleId, user_id: userId, date: localDate(1) }),
+    });
+    assert.equal(res.status, 200);
+
+    const bonuses = (await historyFor(userId)).filter((r) => r.kind === 'daily_bonus');
+    assert.deepEqual(bonuses.map((r) => r.date), [localDate(1)]);
+});
+
+test('a finished today does not pay an earlier day that is still unfinished', async () => {
+    const userId = await createUser('catchup-done-today-kid');
+    const first = await createDailyChore(userId, 'Make bed');
+    const second = await createDailyChore(userId, 'Brush teeth');
+    for (const { scheduleId } of [first, second]) {
+        await api('/api/chores/complete', {
+            method: 'POST',
+            body: JSON.stringify({ chore_schedule_id: scheduleId, user_id: userId, date: localDate(0) }),
+        });
+    }
+
+    await api('/api/chores/complete', {
+        method: 'POST',
+        body: JSON.stringify({ chore_schedule_id: first.scheduleId, user_id: userId, date: localDate(1) }),
+    });
+
+    const bonuses = (await historyFor(userId)).filter((r) => r.kind === 'daily_bonus');
+    assert.deepEqual(bonuses.map((r) => r.date), [localDate(0)], 'yesterday still has Brush teeth open');
+});
+
+test('chore routes, the history ledger and clams/add refuse a date that is not a real day', async () => {
+    const userId = await createUser('bad-date-kid');
+    const { scheduleId } = await createDailyChore(userId, 'Tidy desk');
+
+    for (const date of ['2026-99-99', '2026-02-30', 'yesterday']) {
+        for (const route of ['/api/chores/complete', '/api/chores/uncomplete']) {
+            const res = await api(route, {
+                method: 'POST',
+                body: JSON.stringify({ chore_schedule_id: scheduleId, user_id: userId, date }),
+            });
+            assert.equal(res.status, 400, `${route} with ${date}`);
+        }
+        const posted = await api('/api/chore-history', {
+            method: 'POST',
+            body: JSON.stringify({ user_id: userId, date, clam_value: 1, kind: 'adjustment' }),
+        });
+        assert.equal(posted.status, 400, `history with ${date}`);
+        const added = await api(`/api/users/${userId}/clams/add`, { method: 'POST', body: JSON.stringify({ amount: 1, date }) });
+        assert.equal(added.status, 400, `clams/add with ${date}`);
+    }
+    assert.equal((await historyFor(userId)).length, 0);
+});
+
+test('a daily bonus cannot be posted to the ledger', async () => {
+    const userId = await createUser('posted-bonus-kid');
+    const res = await api('/api/chore-history', {
+        method: 'POST',
+        body: JSON.stringify({ user_id: userId, date: localDate(0), clam_value: 2, kind: 'daily_bonus' }),
+    });
+    assert.equal(res.status, 400);
+    assert.equal((await historyFor(userId)).length, 0);
+});
+
 test('spending clams is non-destructive: history rows survive, a negative spent row is added', async () => {
     const userId = await createUser('spender-kid');
     await api(`/api/users/${userId}/clams/add`, { method: 'POST', body: JSON.stringify({ amount: 10 }) });
