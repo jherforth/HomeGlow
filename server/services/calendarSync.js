@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const axios = require('axios');
 const ICAL = require('ical.js');
 const node_ical = require('node-ical');
@@ -10,6 +11,9 @@ const { dedupeCalendarEvents } = require('../utils/calendarDedup');
 // standalone (tests construct it directly). `debug` maps to nothing in the
 // fallback: without a level there is no way to honour one, and per-cycle chatter
 // is exactly what must not be printed unconditionally.
+// The CalDAV path's timeout, applied to ICS feeds too.
+const ICS_FETCH_TIMEOUT_MS = 15000;
+
 const CONSOLE_LOGGER = {
   debug: () => { },
   info: (...args) => console.log(...args),
@@ -32,6 +36,8 @@ class CalendarSyncService {
     this.log = logger;
     this.syncIntervals = new Map();
     this.isSyncing = new Map();
+    // sha256 of the rows last written per source (see syncSource).
+    this.cacheHashes = new Map();
   }
 
   initialize() {
@@ -100,38 +106,48 @@ class CalendarSyncService {
         events = await this.fetchAppleCalDAVEvents(source);
       }
 
-      this.db.prepare('DELETE FROM calendar_events_cache WHERE source_id = ?').run(sourceId);
+      // Rows are built before anything is written, so a bad value (an
+      // invalid Date throws in toISOString) fails the sync with the old cache
+      // still in place.
+      const rows = events.map((event) => [
+        sourceId,
+        event.uid,
+        event.title,
+        event.start.toISOString(),
+        event.end.toISOString(),
+        event.description || null,
+        event.location || null,
+        event.all_day ? 1 : 0,
+        JSON.stringify(event.raw || {}),
+      ]);
 
-      const insertStmt = this.db.prepare(`
-        INSERT OR REPLACE INTO calendar_events_cache
-        (source_id, event_uid, title, start_time, end_time, description, location, all_day, raw_data)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
+      // A feed fetched again is usually unchanged. Rewriting identical rows
+      // every cycle is wasted writes, which matter most on SD-card storage.
+      // The hash lives in memory, so the first sync after a restart writes.
+      const hash = crypto.createHash('sha256').update(JSON.stringify(rows)).digest('hex');
+      const cachedCount = this.db.prepare('SELECT COUNT(*) AS n FROM calendar_events_cache WHERE source_id = ?').get(sourceId).n;
+      const unchanged = this.cacheHashes.get(sourceId) === hash && cachedCount === rows.length;
 
-      const insertMany = this.db.transaction((events) => {
-        for (const event of events) {
-          insertStmt.run(
-            sourceId,
-            event.uid,
-            event.title,
-            event.start.toISOString(),
-            event.end.toISOString(),
-            event.description || null,
-            event.location || null,
-            event.all_day ? 1 : 0,
-            JSON.stringify(event.raw || {})
-          );
-        }
-      });
+      if (!unchanged) {
+        const insertStmt = this.db.prepare(`
+          INSERT OR REPLACE INTO calendar_events_cache
+          (source_id, event_uid, title, start_time, end_time, description, location, all_day, raw_data)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
 
-      insertMany(events);
+        // One transaction: if any insert fails, the delete rolls back too and
+        // the source keeps its previous events instead of going blank.
+        const replaceCache = this.db.transaction(() => {
+          this.db.prepare('DELETE FROM calendar_events_cache WHERE source_id = ?').run(sourceId);
+          for (const row of rows) insertStmt.run(...row);
+        });
+        replaceCache();
+        this.cacheHashes.set(sourceId, hash);
+      }
 
       const duration = Date.now() - startTime;
 
-      this.db.prepare(`
-        INSERT OR REPLACE INTO calendar_sync_status (source_id, last_sync_at, last_sync_status, last_sync_message, event_count)
-        VALUES (?, datetime('now'), 'success', ?, ?)
-      `).run(sourceId, `Synced ${events.length} events in ${duration}ms`, events.length);
+      this.writeSyncStatus(sourceId, 'success', `Synced ${events.length} events in ${duration}ms`, events.length);
 
       this.log.info(`Synced ${events.length} events for ${source.name} in ${duration}ms`);
 
@@ -139,10 +155,7 @@ class CalendarSyncService {
     } catch (error) {
       this.log.error(`Error syncing calendar source ${sourceId}: ${error.message}`);
 
-      this.db.prepare(`
-        INSERT OR REPLACE INTO calendar_sync_status (source_id, last_sync_at, last_sync_status, last_sync_message)
-        VALUES (?, datetime('now'), 'error', ?)
-      `).run(sourceId, error.message);
+      this.writeSyncStatus(sourceId, 'error', error.message);
 
       return { success: false, error: error.message };
     } finally {
@@ -150,8 +163,24 @@ class CalendarSyncService {
     }
   }
 
+  // Touches only the status columns. INSERT OR REPLACE replaced the whole row,
+  // which reset sync_interval_minutes to its default on every sync.
+  writeSyncStatus(sourceId, status, message, eventCount = null) {
+    this.db.prepare(`
+      INSERT INTO calendar_sync_status (source_id, last_sync_at, last_sync_status, last_sync_message, event_count)
+      VALUES (?, datetime('now'), ?, ?, COALESCE(?, 0))
+      ON CONFLICT(source_id) DO UPDATE SET
+        last_sync_at = excluded.last_sync_at,
+        last_sync_status = excluded.last_sync_status,
+        last_sync_message = excluded.last_sync_message,
+        event_count = COALESCE(?, calendar_sync_status.event_count)
+    `).run(sourceId, status, message, eventCount, eventCount);
+  }
+
   async fetchICSEvents(source) {
-    const events = await node_ical.async.fromURL(source.url);
+    // Same limit as the CalDAV path: a server that accepts the connection and
+    // then stalls would otherwise hold this source's sync lock.
+    const events = await node_ical.async.fromURL(source.url, { signal: AbortSignal.timeout(ICS_FETCH_TIMEOUT_MS) });
     const out = [];
 
     const rangeStart = new Date(Date.now() - 13 * 30 * 24 * 60 * 60 * 1000);
@@ -429,7 +458,7 @@ class CalendarSyncService {
 
   setSyncInterval(sourceId, intervalMinutes) {
     this.db.prepare(`
-      INSERT OR REPLACE INTO calendar_sync_status (source_id, sync_interval_minutes)
+      INSERT INTO calendar_sync_status (source_id, sync_interval_minutes)
       VALUES (?, ?)
       ON CONFLICT(source_id) DO UPDATE SET sync_interval_minutes = excluded.sync_interval_minutes
     `).run(sourceId, intervalMinutes);
@@ -439,7 +468,8 @@ class CalendarSyncService {
 
   getSyncInterval(sourceId) {
     const row = this.db.prepare('SELECT sync_interval_minutes FROM calendar_sync_status WHERE source_id = ?').get(sourceId);
-    return row?.sync_interval_minutes || 15;
+    // ?? not ||: 0 is "Disabled", not missing.
+    return row?.sync_interval_minutes ?? 15;
   }
 
   startSyncJob(sourceId) {
@@ -507,6 +537,7 @@ class CalendarSyncService {
   }
 
   onSourceDeleted(sourceId) {
+    this.cacheHashes.delete(sourceId);
     if (this.syncIntervals.has(sourceId)) {
       clearInterval(this.syncIntervals.get(sourceId));
       this.syncIntervals.delete(sourceId);
