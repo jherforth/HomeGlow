@@ -756,7 +756,15 @@ How the pieces cooperate:
      homeglow-backend`), never surfaced to the triggering user.
 5. Publishing: submit to
    [jherforth/HomeGlowPlugins](https://github.com/jherforth/HomeGlowPlugins) so
-   others can install it from the Admin Panel's GitHub tab.
+   others can install it from the Admin Panel's GitHub tab. Each plugin has a
+   folder of its own inside its category's, named as its manifest `category`:
+   `household/Vacuum/Vacuum.html`, with its preview (`Vacuum.png`) and any
+   docs beside it. Keep the file name once it's published. Installs know a
+   plugin by it, so a renamed file arrives as a second plugin. The Admin Panel
+   lists any `.html` file there, at any depth. One that should show only to a
+   HomeGlow older than 1.10, which lists just the top two levels, says
+   `"storeNotice": true` in its manifest. Older versions ignore the key, and
+   newer ones leave the file out of the list.
 
 ## 9. Rules of thumb
 

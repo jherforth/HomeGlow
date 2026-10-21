@@ -21,5 +21,6 @@ repo, which is what the Admin Panel's GitHub install tab reads.
 1. Develop or update a plugin file here (e.g. `chore-metrics.html`).
 2. Test it by uploading through **Admin Panel → Custom Widgets** (the same
    flow a HomeGlowPlugins user gets).
-3. Copy the finished file into your local clone of HomeGlowPlugins and open
-   a PR there.
+3. Copy the finished file into your local clone of HomeGlowPlugins, in
+   `<category>/<Plugin>/` (`chores-rewards/chore-metrics/chore-metrics.html`,
+   with its `.png` beside it), and open a PR there.
