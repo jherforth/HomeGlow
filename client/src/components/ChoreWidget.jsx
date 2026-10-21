@@ -1167,6 +1167,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
           mb: 1,
           bgcolor: rowBgColor,
           display: 'flex',
+          flexWrap: 'wrap',
           justifyContent: 'space-between',
           alignItems: 'center',
           // Keep long-press from triggering text selection / iOS callout.
@@ -1219,14 +1220,6 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
             </Typography>
           )}
           {routineDay && <RoutineSteps day={routineDay} onToggle={tickRoutineStep} expired={expired} />}
-          {showWeek && schedule.user_id ? (
-            <Box sx={{ display: 'flex', gap: '2px', mt: 0.5 }} aria-label={t('chores:history.weekAria', { title: schedule.title })}>
-              {choreDays({ rows: weekHistory, schedule, userId: schedule.user_id, today: getTodayDateString(), count: WEEK_DAYS, vacation, timeZone: getServerTimezoneSync() })
-                .map((day) => (
-                  <ChoreDayMark key={day.date} state={day.state} size={14} label={`${day.date}: ${t(`chores:history.state.${day.state}`)}`} />
-                ))}
-            </Box>
-          ) : null}
         </Box>
         <Box sx={{ display: 'flex', gap: 0.5 }}>
           {/* The chore's icon takes the place of the checkmark while the chore
@@ -1281,6 +1274,16 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                 : <Check fontSize="small" />)}
           </IconButton>
         </Box>
+          {/* Its own line under the title and the button: beside the button,
+              seven marks don't fit a narrow column and push the button out. */}
+          {showWeek && schedule.user_id ? (
+            <Box sx={{ flexBasis: '100%', display: 'flex', gap: '2px', mt: 0.5 }} aria-label={t('chores:history.weekAria', { title: schedule.title })}>
+              {choreDays({ rows: weekHistory, schedule, userId: schedule.user_id, today: getTodayDateString(), count: WEEK_DAYS, vacation, timeZone: getServerTimezoneSync() })
+                .map((day) => (
+                  <ChoreDayMark key={day.date} state={day.state} size={14} label={`${day.date}: ${t(`chores:history.state.${day.state}`)}`} />
+                ))}
+            </Box>
+          ) : null}
       </Box>
     );
   };
