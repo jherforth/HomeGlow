@@ -75,13 +75,26 @@ const TYPES = {
   borderStyle: oneOf('none', 'solid', 'dashed', 'dotted', 'double'),
   textTransform: oneOf('none', 'uppercase', 'capitalize', 'lowercase'),
   gridGap: oneOf('0', '0px', '8px', '16px', '24px'),
-  backdrop: (v) => v === 'none' || /^blur\((?:[0-9]|1[0-9]|2[0-4])px\)$/.test(v),
+  backdrop: (v) => v === 'none' || isBackdrop(v),
   lineCap: oneOf('round', 'square', 'butt'),
   // A meter's line: 1 to 12px, so it fits the controls that draw one.
   meterThickness: (v) => /^(?:[1-9]|1[0-2])px$/.test(v),
   // A fill: one color, or a gradient (Classic's buttons blend two).
   paint: (v) => isColor(v) || isGradient(v),
   fontWeight: (v) => /^[1-9]00$/.test(v),
+};
+
+// What a frame does to the page behind it: a blur of 0 to 24px, a
+// saturation of 0 to 300% (glass that lifts the colors it shows), or both,
+// each at most once.
+const BACKDROP_FILTERS = {
+  blur: /^blur\((?:[0-9]|1[0-9]|2[0-4])px\)$/,
+  saturate: /^saturate\((?:[0-9]|[1-9][0-9]|[12][0-9]{2}|300)%\)$/,
+};
+const isBackdrop = (v) => {
+  const parts = v.split(/\s+/);
+  const kinds = parts.map((part) => Object.keys(BACKDROP_FILTERS).find((kind) => BACKDROP_FILTERS[kind].test(part)));
+  return parts.length <= 2 && kinds.every(Boolean) && new Set(kinds).size === kinds.length;
 };
 
 const tokenTypes = (type, names) => Object.fromEntries(names.map((name) => [name, type]));
@@ -257,6 +270,13 @@ const allConfetti = (pkg) => [
   ...Object.values(isObject(pkg.weather?.scenes) ? pkg.weather.scenes : {}).map((scene) => scene?.confetti),
 ].filter(isObject);
 
+// Every token set a theme has: its own and each weather scene's, all modes.
+const allTokenSets = (pkg) => [
+  pkg.tokens,
+  pkg.weather?.default?.tokens,
+  ...Object.values(isObject(pkg.weather?.scenes) ? pkg.weather.scenes : {}).map((scene) => scene?.tokens),
+].filter(isObject).flatMap((tokens) => ['all', ...MODES].map((key) => tokens[key])).filter(isObject);
+
 // Every ambience list a theme has: its own and each weather scene's.
 const allAmbience = (pkg) => [
   pkg.ambience,
@@ -280,7 +300,8 @@ export function validateThemePackage(pkg, { assets } = {}) {
     // Each version adds things a theme may use: 2, ornaments, the meter roles
     // and clumped sprites; 3, the button roles and curved flyby crossings
     // (path, count, begin and the rest); 4, weather scenes and lightning
-    // flashes; 5, orbits; 6, a confetti cast; 7, bending pictures (flex).
+    // flashes; 5, orbits; 6, a confetti cast; 7, bending pictures (flex);
+    // 8, a frame backdrop that saturates.
     // A theme that uses them says so, so a core too old
     // to draw them refuses it plainly.
     const tokenNames = ['all', ...MODES].flatMap((key) => Object.keys(pkg.tokens?.[key] || {}));
@@ -312,6 +333,13 @@ export function validateThemePackage(pkg, { assets } = {}) {
     needs(7, [
       (layers.some((layer) => layer?.flex !== undefined || bends(layer?.pictures))
         || allConfetti(pkg).some((confetti) => bends(confetti?.cast?.pictures))) && 'flex',
+    ]);
+    needs(8, [
+      // A valid one only; checkTokens reports the rest.
+      allTokenSets(pkg).some((tokens) => {
+        const value = tokens['--hg-frame-backdrop'];
+        return typeof value === 'string' && isBackdrop(value.trim()) && value.includes('saturate(');
+      }) && 'saturate',
     ]);
   }
   if (typeof pkg.id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(pkg.id)) errors.push('id must be a lowercase slug (a-z, 0-9, hyphens, max 64)');
@@ -361,10 +389,10 @@ export const DEFAULT_THEME_ID = 'classic';
  * theme it cannot draw rather than half-applying it (theme-architecture.md
  * §5). 2: ornaments and the meter roles. 3: the button roles and curved
  * flybys. 4: weather scenes and the flash layer. 5: orbits. 6: a confetti
- * cast. 7: bending pictures (flex). The server's MANIFEST_VERSION (services/themeStore.js) matches; a
+ * cast. 7: bending pictures (flex). 8: saturate() in the frame backdrop. The server's MANIFEST_VERSION (services/themeStore.js) matches; a
  * server test holds them equal.
  */
-export const MANIFEST_VERSION = 7;
+export const MANIFEST_VERSION = 8;
 
 /** The problem reported for a theme newer than this core; the admin page words it for people. */
 export const NEEDS_NEWER_HOMEGLOW = 'needs a newer version of HomeGlow';

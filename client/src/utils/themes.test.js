@@ -102,6 +102,22 @@ describe('validateThemePackage', () => {
     expect(errors).toHaveLength(Object.keys(attempts).length);
   });
 
+  it('takes a frame backdrop of blur, saturate or both, from manifest version 8 for saturate', () => {
+    const glass = (backdrop, manifestVersion = 8) => validateThemePackage({ ...base, manifestVersion, tokens: { all: { '--hg-frame-backdrop': backdrop } } });
+    expect(glass('blur(16px) saturate(180%)')).toEqual([]);
+    expect(glass('saturate(140%) blur(8px)')).toEqual([]);
+    expect(glass('saturate(300%)')).toEqual([]);
+    expect(glass('blur(10px)', 1)).toEqual([]);
+    ['saturate(301%)', 'saturate(1.8)', 'blur(16px) blur(8px)', 'blur(16px) saturate(180%) blur(2px)', 'brightness(120%)', 'blur(25px) saturate(100%)']
+      .forEach((value) => expect(glass(value)).toHaveLength(1));
+    expect(glass('blur(16px) saturate(180%)', 7)).toEqual(['saturate need manifestVersion 8']);
+    expect(validateThemePackage({
+      ...base,
+      manifestVersion: 7,
+      weather: { default: {}, scenes: { rainy: { tokens: { dark: { '--hg-frame-backdrop': 'saturate(150%)' } } } } },
+    })).toContain('saturate need manifestVersion 8');
+  });
+
   it('checks the package shape', () => {
     expect(validateThemePackage({ manifestVersion: 1, id: 'Bad Id', name: '' })).toHaveLength(2);
     expect(validateThemePackage({ ...base, modes: ['sepia'] })).toHaveLength(1);
@@ -109,7 +125,7 @@ describe('validateThemePackage', () => {
   });
 
   it('follows the plugin manifest rules for manifestVersion, author and version', () => {
-    expect(validateThemePackage({ id: 'probe', name: 'Probe' })).toEqual(['manifestVersion must be 1 to 7']);
+    expect(validateThemePackage({ id: 'probe', name: 'Probe' })).toEqual(['manifestVersion must be 1 to 8']);
     expect(validateThemePackage({ ...base, author: 'Jane Diver', version: '2.1.0' })).toEqual([]);
     expect(validateThemePackage({ ...base, author: 'x'.repeat(81) })).toHaveLength(1);
     expect(validateThemePackage({ ...base, author: { name: 'Jane' } })).toHaveLength(1);
