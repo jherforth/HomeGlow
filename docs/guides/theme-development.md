@@ -48,7 +48,7 @@ folder name must match the manifest's `id`.
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `manifestVersion` | yes | `1`; `2` for a theme that uses `ornaments`, the meter tokens or `clumps`; `3` for one that uses the button tokens or curved flybys; `4` for one with `weather` scenes or a `flash` layer; `5` for one that uses orbits; `6` for one with a confetti `cast`; `7` for one with pictures that bend (`flex`). A HomeGlow older than the version refuses the theme. |
+| `manifestVersion` | yes | `1`; `2` for a theme that uses `ornaments`, the meter tokens or `clumps`; `3` for one that uses the button tokens or curved flybys; `4` for one with `weather` scenes or a `flash` layer; `5` for one that uses orbits; `6` for one with a confetti `cast`; `7` for one with pictures that bend (`flex`); `8` for one whose frames saturate what is behind them (`saturate()` in `--hg-frame-backdrop`). A HomeGlow older than the version refuses the theme. |
 | `id` | yes | Lowercase slug (a-z, 0-9, hyphens), the same as the folder name. |
 | `name` | yes | Shown in the theme picker. |
 | `version`, `author`, `description` | | As in a plugin manifest. The author shows as "by ...". |
@@ -80,6 +80,7 @@ the most useful:
 | `--hg-frame-decoration-width`, `-style`, `-color` | lengths, keyword, up to four colors | A border drawn over the frame's edge (Starship's elbows) |
 | `--hg-frame-inset` | 0 to `24px` a side | Room inside the frame for its decoration and ornaments; widget content, plugins included, sits inside it |
 | `--hg-frame-image`, `--hg-frame-overlay` | gradient | A tint under the frame's content, a reflection over it (Reef's glass) |
+| `--hg-frame-backdrop` | `none`, `blur(0-24px)`, `saturate(0-300%)`, or a blur and a saturate | What a frame does to the page behind it: frosted glass. Only over a still scene (§5). `saturate()` needs manifest version 8 |
 | `--dock-bg`, `--dock-active-bg`, `--dock-active-image` | color, gradient | The dock |
 | `--hg-font-body`, `--hg-font-heading` | font list | Type |
 | `--hg-grid-gap` | `0`, `8px`, `16px` or `24px` | The gap between widgets; rows keep their pitch |
