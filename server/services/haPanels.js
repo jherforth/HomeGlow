@@ -561,6 +561,84 @@ function accessFromRecipe(recipe) {
   return { read, control };
 }
 
+// --- Phones (the Companion app's notify actions) ------------------------------
+//
+// For the plugin notify API (routes/pluginNotify.js): a plugin that declares
+// `"notify": true` may list the household's phones and send one a short
+// message. Here, Home Assistant's: only Mobile App phones (its
+// notify.mobile_app_<name> actions), only a title, a message, a label and an
+// "urgent" flag: never notify data a plugin writes itself, so a plugin can't
+// open a page, run a command on the phone or reach any other notify target.
+
+const PHONE_ID = /^mobile_app_[a-z0-9_]{1,80}$/;
+const NOTE_TAG = /^[a-z0-9][a-z0-9-]{0,39}$/;
+const MAX_TITLE = 60;
+const MAX_MESSAGE = 300;
+
+/** Home Assistant's slugify, as it names a phone's notify action. */
+const slugify = (text) => String(text || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+
+/** Plain text, one line apart from line breaks, trimmed to `max`. */
+const noteText = (value, max) => (typeof value === 'string'
+  ? value.replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, ' ').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim().slice(0, max)
+  : '');
+
+/**
+ * The household's phones: every notify.mobile_app_* action Home Assistant
+ * offers (`services`, from GET /api/services), named from its device
+ * (`devices`, the device registry; null when it can't be read), and whether
+ * it is an iPhone or an Android, which "urgent" needs. Sorted by name.
+ * -> [{ id, name, platform: 'ios' | 'android' | null, via: 'home_assistant' }]
+ */
+function phonesFrom(services, devices) {
+  const notify = Array.isArray(services) ? services.find((entry) => entry?.domain === 'notify') : null;
+  const ids = Object.keys(notify?.services || {}).filter((name) => PHONE_ID.test(name));
+  const apps = (Array.isArray(devices) ? devices : [])
+    .filter((device) => Array.isArray(device?.identifiers) && device.identifiers.some((pair) => Array.isArray(pair) && pair[0] === 'mobile_app'));
+  return ids.map((id) => {
+    const slug = id.slice('mobile_app_'.length);
+    const device = apps.find((d) => slugify(d.name) === slug) || apps.find((d) => slugify(d.name_by_user) === slug);
+    const maker = String(device?.manufacturer || '').toLowerCase();
+    const os = String(device?.sw_version || '').toLowerCase();
+    const platform = !device ? null : (maker === 'apple' || /^(ios|ipados)\b/.test(os) ? 'ios' : 'android');
+    const fallback = slug.replace(/_/g, ' ').replace(/\b[a-z]/g, (c) => c.toUpperCase());
+    return { id, name: String(device?.name_by_user || device?.name || fallback).slice(0, 60), platform, via: 'home_assistant' };
+  }).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** A plugin's label, made its own so it can't touch another's messages. */
+const noteTag = (pluginId, tag) => `homeglow-${pluginId}-${tag}`;
+
+/**
+ * Check a message and turn it into the notify call for one phone:
+ * { title, message, urgent, tag } -> { domain, service, data }. Urgent rings
+ * through silent: Android's alarm stream, an iPhone's critical alert (which
+ * the phone's owner must allow for the app). Every message asks to arrive at
+ * once (`priority: high`, `ttl: 0`), so a sleeping Android doesn't hold it.
+ * A phone of unknown make gets both sets of keys; each app ignores the other's.
+ */
+function notifyCall({ phone, pluginId, title, message, urgent, tag }) {
+  const text = noteText(message, MAX_MESSAGE);
+  if (!text) throw new ActionError('A notification needs a message.');
+  if (urgent !== undefined && typeof urgent !== 'boolean') throw new ActionError('urgent must be true or false.');
+  if (tag !== undefined && (typeof tag !== 'string' || !NOTE_TAG.test(tag))) throw new ActionError('tag must be up to 40 lowercase letters, numbers and dashes.');
+  const ios = phone.platform !== 'android';
+  const android = phone.platform !== 'ios';
+  const data = {};
+  if (android) Object.assign(data, { priority: 'high', ttl: 0 }, urgent ? { channel: 'alarm_stream' } : {});
+  if (ios && urgent) data.push = { sound: { name: 'default', critical: 1, volume: 1.0 } };
+  if (tag) data.tag = noteTag(pluginId, tag);
+  const heading = noteText(title, MAX_TITLE);
+  return { domain: 'notify', service: phone.id, data: { ...(heading ? { title: heading } : {}), message: text, data } };
+}
+
+/** Take back a message sent with this label. */
+function clearCall({ phone, pluginId, tag }) {
+  if (typeof tag !== 'string' || !NOTE_TAG.test(tag)) throw new ActionError('tag must be up to 40 lowercase letters, numbers and dashes.');
+  return { domain: 'notify', service: phone.id, data: { message: 'clear_notification', data: { tag: noteTag(pluginId, tag) } } };
+}
+
 /** Problems with a hand-written plugin's `homeAssistant` manifest block. */
 // Domains a plugin may be granted whole: a published plugin (a music
 // player, say) can't know a household's entity ids. Never the ones that open
@@ -684,14 +762,17 @@ module.exports = {
   accessFromRecipe,
   canControl,
   canRead,
+  clearCall,
   defaultControl,
   domainOf,
   filterState,
   isSensitive,
   isSupportedEntity,
   normalizeRecipe,
+  notifyCall,
   panelManifest,
   panelPluginId,
+  phonesFrom,
   resolveAction,
   validateManifestAccess,
   validateRecipe,

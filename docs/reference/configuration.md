@@ -129,6 +129,7 @@ Open with the gear (⚙️) icon. These persist server-side (global settings in 
 | **System → Language & time** | Language for this display; the household time zone | `localStorage` (language); `settings` (`APP_TIMEZONE`) |
 | **System → Connections → Weather** | Provider choice (`WEATHER_PROVIDER`: `openweathermap` \| `homeassistant`), OpenWeatherMap key (`WEATHER_API_KEY`, write-only) | `settings` (global) |
 | **System → Connections → Home Assistant** | Base URL (`HOME_ASSISTANT_URL`), long-lived token (`HOME_ASSISTANT_TOKEN_ENC`, encrypted + write-only), weather entity (`HOME_ASSISTANT_WEATHER_ENTITY`) | `settings` (global) |
+| **System → Connections → Pushover** | Application token (`PUSHOVER_APP_TOKEN_ENC`) and user or group key (`PUSHOVER_USER_KEY_ENC`), both encrypted + write-only. For plugins' phone notifications without Home Assistant | `settings` (global) |
 | **System → Connections → Google** | Google OAuth linking | `google_accounts` |
 | **Calendar** | ICS/CalDAV/Google sources, colors, sync intervals | `calendar_sources`, `calendar_sync_status` |
 | **Photos** | Immich/Google/upload sources | `photo_sources`, media tables |

@@ -505,6 +505,24 @@ messages), `WidgetContainer.jsx` (expanding, held taps, buttons, timers),
   `HOMEGLOW_PUSH_CONTACT` sets the contact address the push services see (by
   default, the project's GitHub page).
 
+### From plugins: Home Assistant's app or Pushover
+
+A plugin that declares `"notify": true` (the Grill card's alerts, say) can send
+the household's phones a short message of its own. These don't go through the
+browser push above, so they need no HTTPS and can ring through silent:
+
+- **Home Assistant's Companion app:** every phone with the app, found by itself
+  once Home Assistant is connected.
+- **Pushover** (pushover.net), for households without Home Assistant:
+  **Admin Panel → System → Connections → Pushover** takes the household's
+  application key and user key (or a delivery group's key, for the whole
+  family), stored encrypted. **Send test** checks them and sends a message.
+  Each person needs the Pushover app, a one-time purchase after a free trial.
+
+Each plugin offers its own choice of phones. Messages are text only; an urgent
+one rings through a silent phone where the phone allows it (Pushover repeats
+it until someone acknowledges it). See §5b of the plugin guide.
+
 **Code:** `server/services/notifications.js` (who hears what, the wording,
 sending), `server/routes/notifications.js`, `client/public/sw.js` (shows a
 message, handles a tap), `client/src/utils/pushNotifications.js`,

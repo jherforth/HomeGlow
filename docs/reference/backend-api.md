@@ -146,6 +146,9 @@ for the developer-facing detail and the `HomeGlow.*` SDK wrappers.
 | GET | `/api/plugin/v1/ha/:pluginId/state` | A Home Assistant panel's (or a plugin's declared) entities, filtered attributes, which it may operate, where each comes from (`sources`: its integration and a device tag, from Home Assistant's entity registry), and whether the live link is up. A domain grant leaves out entities hidden or disabled in Home Assistant. Answered from memory. |
 | POST | `/api/plugin/v1/ha/:pluginId/action` | `{ entity` or `entities, action, value, pin, device }`, checked against the panel's recipe or the plugin's manifest and turned into one service call each. Media actions: `play_media` (a key from browse or search), `play_url` (an address on the media server the plugin's `playUrlsFrom` setting names), `seek`, `shuffle`, `join` (other speakers the panel may operate, up to 8) and `unjoin`; slow ones answer `pending: true` after 1.5 seconds. 401 `needsPin` for unlocking, disarming or opening a garage door under PIN protection (not from a display that remembers the PIN); 429 over 10 a second. |
 | GET | `/api/plugin/v1/ha/:pluginId/camera/:entityId` | A camera snapshot, only for a camera on the panel. |
+| GET | `/api/plugin/v1/notify/:pluginId/phones` | For a plugin whose manifest says `notify: true`: the household's phones, `{ id, name, platform, via }`. Home Assistant's Companion app phones (`notify.mobile_app_*` from `GET /api/services`, named from the device registry, `platform` `ios`/`android`/`null`) and Pushover's devices (`pushover:<device>`, or `pushover` for a group), each read at most every 60 seconds. `errors` names a way that couldn't be asked. 503 when neither is set up. |
+| POST | `/api/plugin/v1/notify/:pluginId` | `{ phones, title, message, urgent, tag, device }`, text only, up to 8 phones. Home Assistant: one `notify.mobile_app_*` call per phone with `priority: high` and `ttl: 0`; `urgent` adds `channel: alarm_stream` on Android and a critical alert on iOS. Pushover: one message to its devices; `urgent` is emergency priority (repeats every 60 s, up to an hour). `tag` is prefixed with the plugin id. 403 without `notify`, 404 for an unknown phone, 429 over 30 a minute. Logged in the Home Assistant history. |
+| POST | `/api/plugin/v1/notify/:pluginId/clear` | `{ phones, tag, device }`: Home Assistant's `clear_notification` for the plugin's own tag; Pushover's `cancel_by_tag` (stops an urgent message repeating). |
 | GET | `/api/plugin/v1/ha/:pluginId/media/:entityId/browse?item=` | A media player's library, a level at a time (`media_player/browse_media`). Items carry keys, never content ids. Needs control of the player. |
 | GET | `/api/plugin/v1/ha/:pluginId/media/:entityId/search?q=` | Search the player's library (`media_player/search_media`) and remember the query. |
 | GET/DELETE | `/api/plugin/v1/ha/:pluginId/media/:entityId/recent` | The plugin's last eight searches; DELETE forgets them. |
@@ -310,6 +313,10 @@ server-side.
 | POST | `/api/connections/homeassistant/test` | `{ok, message, version}` — health check against `GET /api/`. |
 | GET | `/api/connections/homeassistant/weather-entities` | List `weather.*` entities for the Admin Panel picker. |
 | DELETE | `/api/connections/homeassistant` | Clear the stored connection. |
+| GET | `/api/connections/pushover/status` | `{has_token, has_user, configured, encryption_configured}` — never the keys. |
+| PUT | `/api/connections/pushover` | Save the application token and user (or group) key: 30 letters and digits each, stored encrypted. An omitted or empty one keeps the stored one. |
+| POST | `/api/connections/pushover/test` | Checks the keys with Pushover (`users/validate.json`) and sends one message to every device: `{ok, group, devices}`. |
+| DELETE | `/api/connections/pushover` | Clear the stored keys. |
 | GET | `/api/connections/weather/status` | Active provider, whether it is usable, and why not if it isn't. |
 
 ### Home Assistant panels (issue #252)

@@ -225,6 +225,8 @@ const { HaLive } = require('./services/haLive');
 const { registerHaPanelRoutes, lazyDb } = require('./routes/haPanels');
 const { registerRoutineRoutes } = require('./routes/routines');
 const { registerNotificationRoutes } = require('./routes/notifications');
+const { registerPluginNotifyRoutes } = require('./routes/pluginNotify');
+const pushover = require('./services/pushover');
 const notifications = require('./services/notifications');
 const webPush = require('web-push');
 const initializeDatabase = require('./migrations/initializeDatabase');
@@ -903,6 +905,11 @@ function extractPluginManifest(htmlContent) {
   if (manifest.homeAssistant !== undefined) {
     errors.push(...haPanelRules.validateManifestAccess(manifest.homeAssistant, manifest));
   }
+  // true lets the plugin send the household's phones a short message
+  // (routes/pluginNotify.js), through Home Assistant's Companion app or Pushover.
+  if (manifest.notify !== undefined && typeof manifest.notify !== 'boolean') {
+    errors.push('notify must be a boolean.');
+  }
   if (manifest.events !== undefined) {
     if (!Array.isArray(manifest.events) || manifest.events.some((event) => typeof event !== 'string')) {
       errors.push('events must be an array of strings.');
@@ -1073,6 +1080,16 @@ const haPanels = registerHaPanelRoutes(fastify, {
     const value = readHouseholdPluginSettings(pluginId)[key];
     return typeof value === 'string' ? value : null;
   },
+});
+
+// Phone notifications from plugins that declare "notify": true, through Home
+// Assistant's Companion app or Pushover (routes/pluginNotify.js).
+const pluginNotify = registerPluginNotifyRoutes(fastify, {
+  db: haDb,
+  ha: homeAssistant,
+  live: haLive,
+  pushover,
+  demoMode: DEMO_MODE,
 });
 
 // Routines: steps a child ticks off, each routine one ordinary chore
@@ -4459,6 +4476,9 @@ const REDACTED_SETTING_KEYS = new Set([
   'WEATHER_API_KEY',
   // The push key's private half (services/notifications.js); only the server signs.
   notifications.PRIVATE_KEY_SETTING,
+  // Pushover's application token and user (or group) key (services/pushover.js).
+  pushover.TOKEN_KEY,
+  pushover.USER_KEY,
 ]);
 
 // Convert an array of {key, value} settings rows into a single {key: value}
@@ -5764,6 +5784,7 @@ fastify.put('/api/connections/homeassistant', async (request, reply) => {
     // Panels' live link starts again with the new address or token.
     haLive.reset();
     haPanels.refreshWatched();
+    pluginNotify.reset();
     return { success: true, status: homeAssistant.getHomeAssistantStatus(db) };
   } catch (error) {
     console.error('Error saving Home Assistant config:', error);
@@ -5802,11 +5823,53 @@ fastify.delete('/api/connections/homeassistant', async (request, reply) => {
     weatherService.clearCache();
     haLive.reset();
     haPanels.refreshWatched();
+    pluginNotify.reset();
     return { success: true };
   } catch (error) {
     console.error('Error clearing Home Assistant config:', error);
     reply.status(500).send({ error: error.message || 'Failed to clear Home Assistant config' });
   }
+});
+
+// Pushover: phone notifications for plugins without Home Assistant
+// (services/pushover.js). The keys are written blind and stored encrypted;
+// the status reports only whether each is stored.
+fastify.get('/api/connections/pushover/status', async (request, reply) => {
+  try {
+    return pushover.getStatus(db);
+  } catch (error) {
+    console.error('Error fetching Pushover status:', error);
+    return reply.status(500).send({ error: 'Failed to fetch Pushover status' });
+  }
+});
+
+fastify.put('/api/connections/pushover', async (request, reply) => {
+  if (demoBlocked(reply)) return;
+  try {
+    const { token, user } = request.body || {};
+    pushover.saveConfig(db, { token, user });
+    return { success: true, status: pushover.getStatus(db) };
+  } catch (error) {
+    reply.status(error.status && error.status < 600 ? error.status : 400).send({ error: error.message || 'Failed to save Pushover keys' });
+  }
+});
+
+// Checks the keys with Pushover and sends one message to every device.
+fastify.post('/api/connections/pushover/test', async (request, reply) => {
+  if (demoBlocked(reply)) return;
+  try {
+    const reach = await pushover.sendTest(db);
+    return { ok: true, ...reach };
+  } catch (error) {
+    console.error('Error testing Pushover:', error.message);
+    reply.status(error.status && error.status < 600 ? error.status : 502).send({ error: error.message || 'Failed to test Pushover' });
+  }
+});
+
+fastify.delete('/api/connections/pushover', async (request, reply) => {
+  if (demoBlocked(reply)) return;
+  pushover.clearConfig(db);
+  return { success: true };
 });
 
 // Which weather provider is active and whether it is usable. Lets the Admin

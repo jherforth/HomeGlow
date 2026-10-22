@@ -99,6 +99,7 @@ import LoadingBackdrop from './LoadingBackdrop';
 import RefreshIntervalSelect from './RefreshIntervalSelect';
 import ScreensaverIntervalSlider from './ScreensaverIntervalSlider';
 import GoogleAccountConnection from './GoogleAccountConnection';
+import PushoverConnection from './PushoverConnection';
 import ClamValueModal from './ClamValueModal';
 import { ADMIN_LAYOUT, ADMIN_TABS, normalizeAdminLocation, parseAdminHash, setAdminHash } from '../utils/adminNavigation.js';
 import SoundPicker from './SoundPicker';
@@ -4318,6 +4319,16 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                   </Button>
                 </Box>
               </Box>
+
+              <Divider sx={{ my: 2 }} />
+
+              {/* Pushover: phone notifications for plugins without Home Assistant */}
+              <PushoverConnection
+                onMessage={({ type, text }) => {
+                  setSaveMessage({ show: true, type, text });
+                  setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+                }}
+              />
 
               <Divider sx={{ my: 2 }} />
 

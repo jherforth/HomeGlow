@@ -542,7 +542,28 @@
     "saveHomeAssistant": "Save Home Assistant",
     "testConnection": "Test Connection",
     "testing": "Testing...",
-    "encryptionRequired": "Set an encryption key on the server before saving a Home Assistant token."
+    "encryptionRequired": "Set an encryption key on the server before saving a Home Assistant token.",
+    "pushover": {
+      "heading": "Pushover",
+      "help": "Pushover sends plugins' notifications to phones, Android or iPhone, without Home Assistant. Each person installs the Pushover app (a one-time purchase after a free trial). The keys stay on the server and are never sent to a display.",
+      "token": "Application key",
+      "tokenHelp": "On pushover.net, create an application (any name, such as HomeGlow) and paste its API token here.",
+      "user": "User or group key",
+      "userHelp": "Your user key, from the top of your pushover.net dashboard. To reach the whole family, make a delivery group and paste its key instead.",
+      "keyStored": "A key is already saved",
+      "keyStoredHelp": "A key is saved. Leave blank to keep it, or paste a new one to replace it.",
+      "encryptionRequired": "Set an encryption key on the server before saving Pushover keys.",
+      "save": "Save Pushover",
+      "sendTest": "Send test",
+      "sending": "Sending...",
+      "remove": "Remove",
+      "saved": "Pushover keys saved.",
+      "removed": "Pushover removed.",
+      "testSentDevices": "Sent. Phones that can get it: {{devices}}.",
+      "testSentGroup": "Sent to everyone in the group.",
+      "testSent": "Sent to every device on this account.",
+      "failed": "Pushover: {{error}}"
+    }
   },
   "about": {
     "heading": "About",

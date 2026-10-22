@@ -542,7 +542,28 @@
     "saveHomeAssistant": "Guardar Home Assistant",
     "testConnection": "Probar conexión",
     "testing": "Probando...",
-    "encryptionRequired": "Configura una clave de cifrado en el servidor antes de guardar un token de Home Assistant."
+    "encryptionRequired": "Configura una clave de cifrado en el servidor antes de guardar un token de Home Assistant.",
+    "pushover": {
+      "heading": "Pushover",
+      "help": "Pushover envía las notificaciones de los complementos a teléfonos, Android o iPhone, sin Home Assistant. Cada persona instala la app de Pushover (una compra única tras una prueba gratuita). Las claves permanecen en el servidor y nunca se envían a una pantalla.",
+      "token": "Clave de la aplicación",
+      "tokenHelp": "En pushover.net, crea una aplicación (cualquier nombre, como HomeGlow) y pega aquí su token de API.",
+      "user": "Clave de usuario o de grupo",
+      "userHelp": "Tu clave de usuario, en la parte superior de tu panel de pushover.net. Para llegar a toda la familia, crea un grupo de entrega y pega su clave.",
+      "keyStored": "Ya hay una clave guardada",
+      "keyStoredHelp": "Hay una clave guardada. Déjalo en blanco para conservarla o pega una nueva para reemplazarla.",
+      "encryptionRequired": "Configura una clave de cifrado en el servidor antes de guardar las claves de Pushover.",
+      "save": "Guardar Pushover",
+      "sendTest": "Enviar prueba",
+      "sending": "Enviando...",
+      "remove": "Quitar",
+      "saved": "Claves de Pushover guardadas.",
+      "removed": "Pushover quitado.",
+      "testSentDevices": "Enviado. Teléfonos que pueden recibirlo: {{devices}}.",
+      "testSentGroup": "Enviado a todos los del grupo.",
+      "testSent": "Enviado a todos los dispositivos de esta cuenta.",
+      "failed": "Pushover: {{error}}"
+    }
   },
   "about": {
     "heading": "Acerca de",
