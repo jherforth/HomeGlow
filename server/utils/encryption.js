@@ -125,22 +125,9 @@ function loadKey() {
         }
     }
 
-    let buf;
     const trimmed = raw.trim();
-    try {
-        if (/^[A-Za-z0-9+/=]+$/.test(trimmed) && trimmed.length >= 43) {
-            buf = Buffer.from(trimmed, 'base64');
-        } else if (/^[A-Fa-f0-9]{64}$/.test(trimmed)) {
-            buf = Buffer.from(trimmed, 'hex');
-        } else {
-            buf = Buffer.from(trimmed, 'utf8');
-        }
-    } catch (err) {
-        cachedKeyStatus = 'invalid';
-        return null;
-    }
-
-    if (buf.length !== 32) {
+    const buf = parseKeyMaterial(trimmed);
+    if (!buf) {
         cachedKeyStatus = 'invalid';
         return null;
     }

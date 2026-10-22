@@ -8,6 +8,7 @@ import {
 import { CloudUpload, Refresh, Schedule, SettingsBackupRestore, RestartAlt, Undo, Key } from '@mui/icons-material';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
+import PinModal from './PinModal';
 
 export default function GoogleDriveBackupSection() {
   const [loading, setLoading] = useState(false);
@@ -98,24 +99,51 @@ export default function GoogleDriveBackupSection() {
     }
   };
 
+  // The key unlocks every stored credential, so the server asks for the
+  // admin PIN (when one is set) before handing it over, even on a device
+  // that remembers the PIN for the rest of the panel.
+  const [keyPinOpen, setKeyPinOpen] = useState(false);
+
+  const saveBackupKey = async (fileId, pin) => {
+    const res = await axios.post(
+      `${API_BASE_URL}/api/backup/drive/backup-key`,
+      { fileId, ...(pin ? { pin } : {}) },
+      { responseType: 'blob' }
+    );
+    const url = URL.createObjectURL(res.data);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'homeglow-encryption-key.txt';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const handleDownloadBackupKey = async () => {
     const file = confirmAction?.file;
     if (!file) return;
     try {
-      const res = await axios.post(
-        `${API_BASE_URL}/api/backup/drive/backup-key`,
-        { fileId: file.id },
-        { responseType: 'blob' }
-      );
-      const url = URL.createObjectURL(res.data);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'homeglow-encryption-key.txt';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      const { data } = await axios.get(`${API_BASE_URL}/api/admin-pin/exists`);
+      if (data?.exists === true) {
+        setKeyPinOpen(true);
+        return;
+      }
+      await saveBackupKey(file.id);
     } catch (err) {
+      setMessage({ type: 'error', text: 'That backup does not contain an encryption key, or it could not be downloaded.' });
+    }
+  };
+
+  const handleKeyPin = async (pin) => {
+    const file = confirmAction?.file;
+    if (!file) return;
+    try {
+      await saveBackupKey(file.id, pin);
+      setKeyPinOpen(false);
+    } catch (err) {
+      if (err.response?.status === 403) throw new Error('Incorrect PIN. Please try again.');
+      setKeyPinOpen(false);
       setMessage({ type: 'error', text: 'That backup does not contain an encryption key, or it could not be downloaded.' });
     }
   };
@@ -338,6 +366,12 @@ export default function GoogleDriveBackupSection() {
           </Button>
         </DialogActions>
       </Dialog>
+      <PinModal
+        open={keyPinOpen}
+        onClose={() => setKeyPinOpen(false)}
+        onVerify={handleKeyPin}
+        title="Enter the admin PIN to download the encryption key"
+      />
     </Box>
   );
 }

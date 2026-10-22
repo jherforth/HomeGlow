@@ -1,4 +1,5 @@
 const path = require('path');
+const crypto = require('crypto');
 const googleConnection = require('../services/googleConnection');
 const driveBackup = require('../services/googleDriveBackup');
 const driveRestore = require('../services/driveRestore');
@@ -8,6 +9,7 @@ module.exports = async function (fastify, opts) {
   // The uploads directory the server itself uses (index.js's UPLOADS_ROOT),
   // threaded into the backup/restore services — no guessing from DB_PATH.
   const uploadsDir = opts.uploadsDir || null;
+  const demoMode = opts.demoMode === true;
   const dbPath = process.env.DB_PATH ? path.resolve(process.env.DB_PATH) : path.resolve(__dirname, '../data/tasks.db');
 
   driveBackup.initAutomatedBackupScheduler(db, dbPath, uploadsDir);
@@ -104,10 +106,25 @@ module.exports = async function (fastify, opts) {
   // Proxmox install's /opt/homeglow/.env) differs from the backup's key:
   // staging refuses in that case, and this key is what the new server's
   // ENCRYPTION_KEY must be set to before the restore can proceed.
+  //
+  // The one route that hands out a secret: the key that unlocks every stored
+  // credential. The Admin Panel's PIN only guards the panel, not the API, so
+  // this route checks the PIN itself when one is set (the body's `pin`), and
+  // the public demo never serves it.
   fastify.post('/api/backup/drive/backup-key', async (request, reply) => {
-    const { fileId } = request.body || {};
+    if (demoMode) {
+      return reply.code(403).send({ error: 'Not available in the demo.' });
+    }
+    const { fileId, pin } = request.body || {};
     if (!fileId || typeof fileId !== 'string') {
       return reply.code(400).send({ error: 'A backup fileId is required.' });
+    }
+    const stored = db.prepare('SELECT pin_hash FROM admin_pin WHERE id = 1').get();
+    if (stored) {
+      const given = typeof pin === 'string' ? crypto.createHash('sha256').update(pin).digest('hex') : '';
+      const ok = given.length === stored.pin_hash.length
+        && crypto.timingSafeEqual(Buffer.from(given), Buffer.from(stored.pin_hash));
+      if (!ok) return reply.code(403).send({ error: 'The admin PIN is needed to download an encryption key.' });
     }
     try {
       const account = googleConnection.getConnectedAccount(db);

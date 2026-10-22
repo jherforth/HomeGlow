@@ -17,7 +17,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
-const { execFileSync } = require('child_process');
+const { createArchive } = require('../utils/tarArchive');
 const googleConnection = require('./googleConnection');
 const { getEffectiveKeyForBackup } = require('../utils/encryption');
 
@@ -124,7 +124,7 @@ function createBackupArchive(db, dbPath, archivePath, uploadsDir) {
     }
 
     fs.writeFileSync(path.join(tmpStaging, 'manifest.json'), JSON.stringify(manifest, null, 2));
-    execFileSync('tar', ['-czf', archivePath, '-C', tmpStaging, '.']);
+    createArchive(archivePath, tmpStaging);
     return manifest;
   } finally {
     try {

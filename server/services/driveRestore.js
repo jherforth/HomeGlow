@@ -21,7 +21,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
-const { execFileSync } = require('child_process');
+const { extractArchive } = require('../utils/tarArchive');
 const { Readable, Transform } = require('stream');
 const { pipeline } = require('stream/promises');
 const Database = require('better-sqlite3');
@@ -210,7 +210,7 @@ function stageRestoreArchive(db, dbPath, { archivePath, source, name, backupCrea
     fs.rmSync(paths.stagingDir, { recursive: true, force: true });
     fs.mkdirSync(paths.contentsDir, { recursive: true });
     try {
-      execFileSync('tar', ['-xzf', archivePath, '-C', paths.contentsDir]);
+      extractArchive(archivePath, paths.contentsDir);
     } catch (_) {
       throw new Error('This file could not be read as a backup archive (.tar.gz). The restore was not staged.');
     }
@@ -310,7 +310,7 @@ async function extractBackupKey(db, accountId, fileId) {
   try {
     await downloadDriveFileToPath(db, accountId, fileId, tmpArchive);
     try {
-      execFileSync('tar', ['-xzf', tmpArchive, '-C', tmpDir, './.encryption-key']);
+      extractArchive(tmpArchive, tmpDir, ['./.encryption-key']);
     } catch (_) {
       return null; // no key member in the archive
     }

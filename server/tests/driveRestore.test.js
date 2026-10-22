@@ -2,7 +2,7 @@ const assert = require('assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { execFileSync } = require('child_process');
+const { createArchive, extractArchive } = require('../utils/tarArchive');
 const { describe, it } = require('node:test');
 const Database = require('better-sqlite3');
 
@@ -89,7 +89,7 @@ function readMarker(dbPath) {
 
 function extractTo(archivePath, destDir) {
   fs.mkdirSync(destDir, { recursive: true });
-  execFileSync('tar', ['-xzf', archivePath, '-C', destDir]);
+  extractArchive(archivePath, destDir);
 }
 
 describe('Drive restore (staged, boot-applied)', () => {
@@ -213,7 +213,7 @@ describe('Drive restore (staged, boot-applied)', () => {
         manifest.files['tasks.db'].sha256 = '0'.repeat(64);
         fs.writeFileSync(manifestPath, JSON.stringify(manifest));
         const badArchive = path.join(inst.root, 'tampered.tar.gz');
-        execFileSync('tar', ['-czf', badArchive, '-C', tamperDir, '.']);
+        createArchive(badArchive, tamperDir);
 
         assert.throws(
           () => driveRestore.stageRestoreArchive(db, inst.dbPath, {
@@ -239,7 +239,7 @@ describe('Drive restore (staged, boot-applied)', () => {
         fs.mkdirSync(noKeyDir, { recursive: true });
         fs.copyFileSync(inst.dbPath, path.join(noKeyDir, 'tasks.db'));
         const noKeyArchive = path.join(inst.root, 'nokey.tar.gz');
-        execFileSync('tar', ['-czf', noKeyArchive, '-C', noKeyDir, '.']);
+        createArchive(noKeyArchive, noKeyDir);
         assert.throws(
           () => driveRestore.stageRestoreArchive(db, inst.dbPath, {
             archivePath: noKeyArchive, source: 'drive', name: 'nokey', fileId: 'k', uploadsDir: inst.uploadsDir,
@@ -274,7 +274,7 @@ describe('Drive restore (staged, boot-applied)', () => {
         fs.copyFileSync(path.join(inst.dataDir, '.encryption-key'), path.join(legacyDir, '.encryption-key'));
         fs.cpSync(inst.uploadsDir, path.join(legacyDir, 'uploads'), { recursive: true });
         const legacyArchive = path.join(inst.root, 'legacy.tar.gz');
-        execFileSync('tar', ['-czf', legacyArchive, '-C', legacyDir, '.']);
+        createArchive(legacyArchive, legacyDir);
 
         const db = new Database(inst.dbPath);
         const staged = driveRestore.stageRestoreArchive(db, inst.dbPath, {
