@@ -118,6 +118,12 @@ describe('validateThemePackage', () => {
     })).toContain('saturate need manifestVersion 8');
   });
 
+  it('needs manifest version 9 for a flyby lens', () => {
+    const ambience = [{ layer: 'flyby', pictures: [{ src: 'assets/hole.svg' }], height: 30, lens: 0.8 }];
+    expect(validateThemePackage({ ...base, manifestVersion: 8, ambience }, { assets: ['assets/hole.svg'] })).toEqual(['lens need manifestVersion 9']);
+    expect(validateThemePackage({ ...base, manifestVersion: 9, ambience }, { assets: ['assets/hole.svg'] })).toEqual([]);
+  });
+
   it('checks the package shape', () => {
     expect(validateThemePackage({ manifestVersion: 1, id: 'Bad Id', name: '' })).toHaveLength(2);
     expect(validateThemePackage({ ...base, modes: ['sepia'] })).toHaveLength(1);
@@ -125,7 +131,7 @@ describe('validateThemePackage', () => {
   });
 
   it('follows the plugin manifest rules for manifestVersion, author and version', () => {
-    expect(validateThemePackage({ id: 'probe', name: 'Probe' })).toEqual(['manifestVersion must be 1 to 8']);
+    expect(validateThemePackage({ id: 'probe', name: 'Probe' })).toEqual(['manifestVersion must be 1 to 9']);
     expect(validateThemePackage({ ...base, author: 'Jane Diver', version: '2.1.0' })).toEqual([]);
     expect(validateThemePackage({ ...base, author: 'x'.repeat(81) })).toHaveLength(1);
     expect(validateThemePackage({ ...base, author: { name: 'Jane' } })).toHaveLength(1);
