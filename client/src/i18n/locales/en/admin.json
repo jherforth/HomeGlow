@@ -222,6 +222,7 @@
       "tellMeWhen": "Tell me when:",
       "eventCompleted": "A chore or routine is done",
       "eventAllDone": "Someone finishes all of today's chores",
+      "fromPlugins": "Messages from:",
       "whose": "About:",
       "everyone": "Everyone",
       "only": "Only these people",

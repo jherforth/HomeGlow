@@ -171,9 +171,10 @@ static route.
 | PATCH | `/api/devices/:deviceName` | Rename a device. |
 | POST | `/api/devices/:deviceName/copy-from/:sourceDeviceName` | Copy tabs + settings from another device. |
 | DELETE | `/api/devices/:deviceName` | Delete a device (cascades tabs and its notifications). |
-| GET/PUT/DELETE | `/api/devices/:deviceName/notifications` | A device's push notifications: read, turn on or change (`subscription`, `events`, `members`, `language`), turn off. |
+| GET/PUT/DELETE | `/api/devices/:deviceName/notifications` | A device's push notifications: read, turn on or change (`subscription`, `events`, `members`, `language`), turn off. `events` may include `plugin:<id>` for an installed plugin that declares `notify`; reading lists those as `plugins`. |
 | POST | `/api/devices/:deviceName/notifications/test` | Send the device a test notification. |
 | GET | `/api/notifications/key` | The server's public push key (VAPID), for a browser to subscribe with. |
+| POST | `/api/plugin/v1/notify/:pluginId` | A plugin that declares `"notify": true` sends `{ message, title?, tag?, about? }` to the devices that ticked that plugin. |
 | GET/POST | `/api/devices/:deviceName/tabs` | List / create tabs. |
 | PATCH | `/api/devices/:deviceName/tabs/:tabNumber` | Update a tab. |
 | PATCH | `/api/devices/:deviceName/tabs/reorder` | Reorder tabs. |
