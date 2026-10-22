@@ -118,7 +118,7 @@ function assertBackupKeyCompatible(contentsDir) {
   const keyPath = path.join(contentsDir, '.encryption-key');
   const backupKey = fs.existsSync(keyPath) ? fs.readFileSync(keyPath, 'utf8').trim() : null;
   if (!backupKey || !encryptionKeysEqual(backupKey, envKey)) {
-    throw new Error('This server\'s ENCRYPTION_KEY (set in its environment — on Proxmox installs, /opt/homeglow/.env) is different from the key this backup was made with, so the restored data would be unreadable. Download this backup\'s encryption key (in the restore dialog), set ENCRYPTION_KEY to it on this server, restart, and then restore. The restore was not staged.');
+    throw new Error('This server\'s ENCRYPTION_KEY (set in its environment — on Proxmox installs, /opt/homeglow/.env) is different from the key this backup was made with, so the restored data would be unreadable. Set ENCRYPTION_KEY on this server to the backup\'s key, restart, and then restore: the Google Drive restore dialog can download that key, and in a backup file it is the .encryption-key file inside the archive. The restore was not staged.');
   }
 }
 

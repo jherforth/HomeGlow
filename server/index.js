@@ -225,6 +225,7 @@ const { HaLive } = require('./services/haLive');
 const { registerHaPanelRoutes, lazyDb } = require('./routes/haPanels');
 const { registerRoutineRoutes } = require('./routes/routines');
 const { registerNotificationRoutes } = require('./routes/notifications');
+const { registerLocalBackupRoutes } = require('./routes/localBackup');
 const notifications = require('./services/notifications');
 const webPush = require('web-push');
 const initializeDatabase = require('./migrations/initializeDatabase');
@@ -7207,6 +7208,8 @@ const start = async () => {
 
     // Google Drive backup & restore endpoints (Admin → Google Account).
     fastify.register(require("./routes/driveBackup"), { db, uploadsDir: UPLOADS_ROOT, demoMode: DEMO_MODE });
+    // Backup to a file and restore from one, without Google (issue #305).
+    registerLocalBackupRoutes(fastify, { db: haDb, dbPath, uploadsDir: UPLOADS_ROOT, demoMode: DEMO_MODE });
 
     await fastify.listen({ port: process.env.PORT || 5000, host: '0.0.0.0' });
     console.log(`Server running on port ${process.env.PORT || 5000}`);

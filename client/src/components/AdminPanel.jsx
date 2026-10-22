@@ -84,6 +84,7 @@ import { revealTabPicker } from '../utils/revealTabPicker.js';
 import { getDeviceApiBase, getDeviceName, setDeviceName, isValidDeviceName } from '../utils/deviceName.js';
 import { fetchPinRemembered, setPinRemembered, forgetPinOnAllDevices, shouldPromptForPin } from '../utils/adminPinDevice.js';
 import PinModal from './PinModal';
+import LocalBackupSection from './LocalBackupSection.jsx';
 import ChoreSchedulesTab from './ChoreSchedulesTab';
 import ChoreHistoryTab from './ChoreHistoryTab';
 import { DeviceNotificationsCard, DeviceNotificationStatus } from './DeviceNotifications';
@@ -4331,6 +4332,9 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
           </CardContent>
         </Card>
       )}
+
+      {/* Backup to a file and restore from one, without Google (issue #305). */}
+      {location.section === 'backup' && <LocalBackupSection />}
 
       {location.section === 'about' && (
         <Card>

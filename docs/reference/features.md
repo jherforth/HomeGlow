@@ -602,6 +602,40 @@ gates in `app.jsx` (sound scheduler + screensaver render), UI in `AdminPanel.jsx
 `routes/haPanels.js`, `services/haPanels.js` (rules), `services/haLive.js`
 (live link), `ha-panels/template.html`.
 
+## Backup & restore
+
+Everything HomeGlow holds (the database, the encryption key in use, and the
+uploaded photos, sounds and themes) can be saved to one `.tar.gz` file and
+restored from one, on the same server or on a new one when moving.
+
+- **Admin → System → Backup** (issue #305) needs no account:
+  - **Download backup** saves the file. It holds the key to every stored
+    password and token, so when an admin PIN is set the server asks for it.
+  - **Choose backup file** uploads one (up to 4 GB) to restore it.
+- **Google Drive** (#304, in System → Connections → Google account) makes the
+  same file every night, keeps the newest 14, and restores from any of them.
+- **A restore is staged, then applied on restart.**
+  - It is checked first: the manifest's database hash, SQLite's integrity
+    check, and a backup from a newer HomeGlow is refused.
+  - The current data is saved, so the restore can be rolled back.
+  - Nothing changes until **Restart now**. HomeGlow exits, and Docker's
+    `restart: unless-stopped` brings it back with the restore applied. The
+    data replaced is kept in `data/replaced-data/`.
+- **The encryption key.** When the server's `ENCRYPTION_KEY` is set (the
+  Proxmox installers set it in `/opt/homeglow/.env`) and differs from the
+  backup's, the restore is refused, since the restored passwords and tokens
+  would be unreadable. Set `ENCRYPTION_KEY` to the backup's key (the
+  `.encryption-key` file inside the archive), restart, and restore again.
+- **Behind your own reverse proxy,** its upload limit applies to a restore too
+  (Cloudflare's free plan stops at 100 MB). The bundled nginx allows 4 GB on
+  `/api/backup/local/`.
+
+**Code:** `server/routes/localBackup.js`, `server/routes/driveBackup.js`,
+`server/services/googleDriveBackup.js` (the archive), `server/services/driveRestore.js`
+(staging and the start-up step), `server/utils/tarArchive.js`;
+`client/src/components/LocalBackupSection.jsx`, `GoogleDriveBackupSection.jsx`,
+`RestoreStatusAlerts.jsx` (shared).
+
 ## Admin Panel & PIN
 
 - The gear icon opens `AdminPanel.jsx`, the single place to configure everything

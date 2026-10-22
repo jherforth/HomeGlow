@@ -674,7 +674,8 @@
     "region": "Idioma y hora",
     "connections": "Conexiones",
     "about": "Acerca de",
-    "thisdisplay": "Esta pantalla"
+    "thisdisplay": "Esta pantalla",
+    "backup": "Copia de seguridad"
   },
   "panelTitle": "Panel de administración",
   "themes": {
@@ -798,5 +799,41 @@
       "doneMissing_one": "{{name}} está importado. {{count}} mosaico aparece como no encontrado hasta que lo arregles.",
       "doneMissing_other": "{{name}} está importado. {{count}} mosaicos aparecen como no encontrados hasta que los arregles."
     }
+  },
+  "backup": {
+    "heading": "Copia de seguridad y restauración",
+    "intro": "Guarda todo lo que contiene HomeGlow en un archivo y restáuralo desde uno: en este servidor o en uno nuevo cuando te mudes. No hace falta ninguna cuenta. (Con una cuenta de Google conectada, HomeGlow también puede hacer una copia en Google Drive cada noche: ve a Sistema → Conexiones).",
+    "exportHeading": "Descargar una copia",
+    "exportHelp": "Un archivo con la base de datos, la clave de cifrado y las fotos, sonidos y temas subidos. Guárdalo en un lugar seguro: contiene la clave de todas las contraseñas y tokens guardados.",
+    "exportButton": "Descargar copia",
+    "exported": "Copia descargada.",
+    "exportFailed": "No se pudo descargar la copia.",
+    "pinTitle": "Introduce el PIN de administrador para descargar una copia",
+    "wrongPin": "PIN incorrecto. Inténtalo de nuevo.",
+    "importHeading": "Restaurar desde una copia",
+    "importHelp": "Elige un archivo de copia (.tar.gz) hecho aquí o con la copia de Google Drive. Primero se comprueba, tus datos actuales se guardan para poder deshacerlo y nada cambia hasta que HomeGlow se reinicie.",
+    "importButton": "Elegir archivo de copia",
+    "importConfirmTitle": "¿Restaurar esta copia?",
+    "importConfirmBody": "HomeGlow se restaurará a {{name}}. Todo lo de aquí, incluido lo añadido después de esa copia, se reemplazará cuando HomeGlow se reinicie. Tus datos actuales se guardan antes, para poder deshacerlo.",
+    "importConfirm": "Comprobar y preparar",
+    "uploading": "Subiendo… {{percent}} %",
+    "checking": "Comprobando la copia…",
+    "imported": "{{name}} está comprobada y preparada. Reinicia HomeGlow para aplicarla.",
+    "importFailed": "No se pudo restaurar la copia.",
+    "restarting": "HomeGlow se está reiniciando para aplicar la restauración. Esta página dejará de responder: espera unos segundos y vuelve a cargarla.",
+    "restartNow": "Reiniciar ahora",
+    "cancelStaged": "Cancelar",
+    "stagedLabel": "Restauración preparada:",
+    "legacy": "(formato de copia antiguo, comprobado por su base de datos)",
+    "stagedHelp": "Se aplica cuando HomeGlow se reinicia. Tus datos actuales se han guardado, así que puedes deshacerlo después si algo no está bien.",
+    "lastRestore": "Última restauración: {{name}}, aplicada el {{when}}.",
+    "rollbackKept": "El estado de antes sigue guardado.",
+    "rollBack": "Deshacer",
+    "rollbackTitle": "¿Deshacer la última restauración?",
+    "rollbackBody": "HomeGlow volverá al estado guardado justo antes de restaurar {{name}}. Lo que haya cambiado desde entonces se reemplazará cuando HomeGlow se reinicie.",
+    "rollbackConfirm": "Preparar deshacer",
+    "rollbackStaged": "Deshacer está preparado. Reinicia HomeGlow para volver al estado guardado.",
+    "cancelled": "Se canceló la restauración preparada. No cambió nada.",
+    "actionFailed": "No funcionó."
   }
 }

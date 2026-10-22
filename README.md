@@ -127,7 +127,7 @@ DISCLAIMER: This project uses AI in its development process. While you are right
 
 ## 🗂️ Data
 
-**Backup**: Copy `./homeglow/data/` (SQLite database) and `./homeglow/uploads/` (photos)
+**Backup**: Admin → System → Backup downloads one file with everything, and restores from one (or back up to Google Drive nightly). By hand: copy `./homeglow/data/` (database and encryption key) and `./homeglow/uploads/` (photos)
 
 **Database**: SQLite with tables for users, chores, calendars, settings, prizes, and menus
 
