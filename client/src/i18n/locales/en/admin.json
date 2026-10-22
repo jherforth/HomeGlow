@@ -675,8 +675,7 @@
     "region": "Language & time",
     "connections": "Connections",
     "about": "About",
-    "thisdisplay": "This Display",
-    "backup": "Backup"
+    "thisdisplay": "This Display"
   },
   "panelTitle": "Admin Panel",
   "themes": {
@@ -803,7 +802,7 @@
   },
   "backup": {
     "heading": "Backup & restore",
-    "intro": "Save everything HomeGlow holds to a file and restore it from one: on this server, or on a new one when you move. No account is needed. With a Google account connected, HomeGlow can also back up to Google Drive every night.",
+    "intro": "Save everything HomeGlow holds to a file and restore it from one: on this server, or on a new one when you move. No account is needed.",
     "exportHeading": "Download a backup",
     "exportHelp": "One file with the database, the encryption key, and uploaded photos, sounds and themes. Keep it somewhere safe: it holds the key to every stored password and token.",
     "exportButton": "Download backup",
@@ -837,7 +836,6 @@
     "cancelled": "The staged restore was cancelled. Nothing was changed.",
     "actionFailed": "That did not work.",
     "driveHeading": "Google Drive",
-    "driveNotConnected": "Connect a Google account in System → Connections to also back up to Google Drive every night, and restore from those backups here.",
-    "openConnections": "Open Connections"
+    "driveNotConnected": "Connect a Google account above to also back up to Google Drive every night, and restore from those backups here."
   }
 }

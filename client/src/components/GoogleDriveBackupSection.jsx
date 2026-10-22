@@ -8,11 +8,12 @@ import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import PinModal from './PinModal';
 
-// Google Drive backup, as part of Admin → System → Backup (shown there once a
-// Google account is connected). Nightly or on-demand backups to Drive, and a
-// restore from any of them. Where a restore stands (staged, restart, roll
-// back) is shown once for the whole page, by LocalBackupSection; this part
-// reads it as `restore` and says when it staged one (`onRestoreChanged`).
+// Google Drive backup, as part of Backup & restore (BackupRestoreSection, in
+// System → Connections; shown once a Google account is connected). Nightly or
+// on-demand backups to Drive, and a restore from any of them. Where a restore
+// stands (staged, restart, roll back) is shown once for the whole box, by
+// BackupRestoreSection; this part reads it as `restore` and says when it
+// staged one (`onRestoreChanged`).
 export default function GoogleDriveBackupSection({ restore = {}, onRestoreChanged }) {
   const [loading, setLoading] = useState(false);
   const [backups, setBackups] = useState([]);
@@ -159,7 +160,7 @@ export default function GoogleDriveBackupSection({ restore = {}, onRestoreChange
       <Stack spacing={2} sx={{ mb: 3, p: 2, bgcolor: 'var(--hg-white-10)', borderRadius: 1.5 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box>
-            <Typography variant="subtitle2" fontWeight="600">Automated Nightly Backups</Typography>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Automated Nightly Backups</Typography>
             <Typography variant="caption" color="text.secondary">Automatically creates a backup snapshot every day</Typography>
           </Box>
           <Switch
@@ -201,7 +202,7 @@ export default function GoogleDriveBackupSection({ restore = {}, onRestoreChange
         </Button>
       </Box>
 
-      <Typography variant="subtitle2" gutterBottom>Available Cloud Backups</Typography>
+      <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>Available Cloud Backups</Typography>
       {loading && backups.length === 0 ? (
         <CircularProgress size={20} />
       ) : backups.length === 0 ? (
