@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Box, Typography, Button, Paper, Alert, CircularProgress,
-  List, ListItem, ListItemText,
-  Switch, TextField, Stack,
-  Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions
+  Box, Typography, Button, Alert, CircularProgress, List, ListItem, ListItemText, Switch, TextField, Stack, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions
 } from '@mui/material';
-import { CloudUpload, Refresh, Schedule, SettingsBackupRestore, RestartAlt, Undo, Key } from '@mui/icons-material';
+import { CloudUpload, Refresh, Schedule, SettingsBackupRestore, Key } from '@mui/icons-material';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import PinModal from './PinModal';
+import RestoreStatusAlerts from './RestoreStatusAlerts.jsx';
 
 export default function GoogleDriveBackupSection() {
   const [loading, setLoading] = useState(false);
@@ -192,53 +190,14 @@ export default function GoogleDriveBackupSection() {
 
       {message && <Alert severity={message.type} sx={{ mb: 2 }}>{message.text}</Alert>}
 
-      {restarting && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          HomeGlow is restarting to apply the restore. This page will stop responding — give it
-          a few seconds, then reload.
-        </Alert>
-      )}
-
-      {restore.staged && !restarting && (
-        <Alert
-          severity="warning"
-          sx={{ mb: 2 }}
-          action={
-            <Stack direction="row" spacing={1}>
-              <Button color="inherit" size="small" startIcon={<RestartAlt />} onClick={handleRestartNow} disabled={loading}>
-                Restart Now
-              </Button>
-              <Button color="inherit" size="small" onClick={handleCancelStaged} disabled={loading}>
-                Cancel
-              </Button>
-            </Stack>
-          }
-        >
-          <strong>Restore staged:</strong> {restore.staged.name}
-          {restore.staged.legacy ? ' (older backup format — validated by database checks)' : ''}
-          <br />
-          It takes effect when HomeGlow restarts. Your current data has been saved, so you can
-          roll back afterwards if anything looks wrong.
-        </Alert>
-      )}
-
-      {restore.lastRestore && !restore.staged && (
-        <Alert
-          severity="info"
-          sx={{ mb: 2 }}
-          action={restore.rollbackAvailable ? (
-            <Button color="inherit" size="small" startIcon={<Undo />} onClick={() => setConfirmAction({ type: 'rollback' })} disabled={loading}>
-              Roll Back
-            </Button>
-          ) : null}
-        >
-          Last restore: <strong>{restore.lastRestore.name}</strong> — applied{' '}
-          {formatFileDate(restore.lastRestore.appliedAt)}.
-          {restore.rollbackAvailable
-            ? ' The state from before that restore is still saved.'
-            : ''}
-        </Alert>
-      )}
+      <RestoreStatusAlerts
+        restore={restore}
+        restarting={restarting}
+        busy={loading}
+        onRestart={handleRestartNow}
+        onCancel={handleCancelStaged}
+        onRollback={() => setConfirmAction({ type: 'rollback' })}
+      />
 
       <Stack spacing={2} sx={{ mb: 3, p: 2, bgcolor: 'var(--hg-white-10)', borderRadius: 1.5 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

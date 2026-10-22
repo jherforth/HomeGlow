@@ -49,6 +49,7 @@ describe('adminNavigation', () => {
       expect(parseAdminHash('#/admin/family/routines/steps')).toEqual(at('family', 'routines', 'steps'));
       expect(parseAdminHash('#/admin/Family/Chores/Settings/')).toEqual(at('family', 'chores', 'settings'));
       expect(parseAdminHash('#/admin/system/about')).toEqual(at('system', 'about'));
+      expect(parseAdminHash('#/admin/system/backup')).toEqual(at('system', 'backup'));
       expect(parseAdminHash('#/admin/displays/screensaver')).toEqual(at('displays', 'screensaver'));
     });
 

@@ -1,8 +1,8 @@
 const path = require('path');
-const crypto = require('crypto');
 const googleConnection = require('../services/googleConnection');
 const driveBackup = require('../services/googleDriveBackup');
 const driveRestore = require('../services/driveRestore');
+const { adminPinMatches } = require('../utils/adminPin');
 
 module.exports = async function (fastify, opts) {
   const db = opts.db;
@@ -119,12 +119,8 @@ module.exports = async function (fastify, opts) {
     if (!fileId || typeof fileId !== 'string') {
       return reply.code(400).send({ error: 'A backup fileId is required.' });
     }
-    const stored = db.prepare('SELECT pin_hash FROM admin_pin WHERE id = 1').get();
-    if (stored) {
-      const given = typeof pin === 'string' ? crypto.createHash('sha256').update(pin).digest('hex') : '';
-      const ok = given.length === stored.pin_hash.length
-        && crypto.timingSafeEqual(Buffer.from(given), Buffer.from(stored.pin_hash));
-      if (!ok) return reply.code(403).send({ error: 'The admin PIN is needed to download an encryption key.' });
+    if (!adminPinMatches(db, pin)) {
+      return reply.code(403).send({ error: 'The admin PIN is needed to download an encryption key.' });
     }
     try {
       const account = googleConnection.getConnectedAccount(db);

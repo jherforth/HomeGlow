@@ -23,7 +23,7 @@ export const ADMIN_LAYOUT = [
     subsections: { chores: ['definitions', 'history', 'settings'], routines: ['routines', 'steps'] },
   },
   { tab: 'security', sections: [] },
-  { tab: 'system', sections: ['region', 'connections', 'about'] },
+  { tab: 'system', sections: ['region', 'connections', 'backup', 'about'] },
 ];
 
 export const ADMIN_TABS = ADMIN_LAYOUT.map((entry) => entry.tab);

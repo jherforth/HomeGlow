@@ -306,6 +306,10 @@ server-side.
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/api/connections/homeassistant/status` | `{has_url, has_token, url, weather_entity, encryption}` — never the token. |
+| POST | `/api/backup/local/export` | Download a full backup (`.tar.gz`: database, the encryption key in use, uploads, `manifest.json`). Body `{ pin }` when an admin PIN is set (403 otherwise). Not in the demo. |
+| POST | `/api/backup/local/import` | Multipart upload of one backup file (up to 4 GB): checked and staged for the next start, the current data saved for rollback → `{ staged }`. 400 for a file that isn't a backup, or one made under a different `ENCRYPTION_KEY`; 409 while another restore is staged. Not in the demo. |
+| GET | `/api/backup/drive/status` | Drive backup settings, and `restore: { staged, lastRestore, rollbackAvailable }`, which a backup file's restore shares. |
+| POST | `/api/backup/drive/restore/cancel`, `/restore/rollback`, `/restart` | Cancel a staged restore, stage a rollback of the last one, or exit so a staged restore is applied on start-up. Shared by Drive and file restores. |
 | PUT | `/api/connections/homeassistant` | Save URL / token / weather entity. An omitted or empty `token` keeps the stored one. Rejects non-http(s) URLs with 400. |
 | POST | `/api/connections/homeassistant/test` | `{ok, message, version}` — health check against `GET /api/`. |
 | GET | `/api/connections/homeassistant/weather-entities` | List `weather.*` entities for the Admin Panel picker. |

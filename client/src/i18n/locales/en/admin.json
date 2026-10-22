@@ -674,7 +674,8 @@
     "region": "Language & time",
     "connections": "Connections",
     "about": "About",
-    "thisdisplay": "This Display"
+    "thisdisplay": "This Display",
+    "backup": "Backup"
   },
   "panelTitle": "Admin Panel",
   "themes": {
@@ -798,5 +799,41 @@
       "doneMissing_one": "{{name}} is imported. {{count}} tile shows as missing until you fix it.",
       "doneMissing_other": "{{name}} is imported. {{count}} tiles show as missing until you fix them."
     }
+  },
+  "backup": {
+    "heading": "Backup & restore",
+    "intro": "Save everything HomeGlow holds to a file, and restore it from one: on this server, or on a new one when you move. No account is needed. (With a Google account connected, HomeGlow can also back up to Google Drive every night: see System → Connections.)",
+    "exportHeading": "Download a backup",
+    "exportHelp": "One file with the database, the encryption key, and uploaded photos, sounds and themes. Keep it somewhere safe: it holds the key to every stored password and token.",
+    "exportButton": "Download backup",
+    "exported": "Backup downloaded.",
+    "exportFailed": "The backup could not be downloaded.",
+    "pinTitle": "Enter the admin PIN to download a backup",
+    "wrongPin": "Incorrect PIN. Please try again.",
+    "importHeading": "Restore from a backup",
+    "importHelp": "Choose a backup file (.tar.gz) made here or by Google Drive backup. It is checked first, your current data is saved so you can roll back, and nothing changes until HomeGlow restarts.",
+    "importButton": "Choose backup file",
+    "importConfirmTitle": "Restore this backup?",
+    "importConfirmBody": "HomeGlow will be restored to {{name}}. Everything here, including anything added after that backup, will be replaced when HomeGlow restarts. Your current data is saved first, so you can roll back.",
+    "importConfirm": "Check and stage",
+    "uploading": "Uploading… {{percent}}%",
+    "checking": "Checking the backup…",
+    "imported": "{{name}} is checked and staged. Restart HomeGlow to apply it.",
+    "importFailed": "The backup could not be restored.",
+    "restarting": "HomeGlow is restarting to apply the restore. This page will stop responding: give it a few seconds, then reload.",
+    "restartNow": "Restart now",
+    "cancelStaged": "Cancel",
+    "stagedLabel": "Restore staged:",
+    "legacy": "(older backup format, checked by its database)",
+    "stagedHelp": "It takes effect when HomeGlow restarts. Your current data has been saved, so you can roll back afterwards if anything looks wrong.",
+    "lastRestore": "Last restore: {{name}}, applied {{when}}.",
+    "rollbackKept": "The state from before it is still saved.",
+    "rollBack": "Roll back",
+    "rollbackTitle": "Roll back the last restore?",
+    "rollbackBody": "HomeGlow will return to the state saved just before {{name}} was restored. Anything changed since will be replaced when HomeGlow restarts.",
+    "rollbackConfirm": "Stage rollback",
+    "rollbackStaged": "Rollback is staged. Restart HomeGlow to return to the saved state.",
+    "cancelled": "The staged restore was cancelled. Nothing was changed.",
+    "actionFailed": "That did not work."
   }
 }
