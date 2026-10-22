@@ -1,14 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Box, Typography, Button, Alert, CircularProgress, List, ListItem, ListItemText, Switch, TextField, Stack, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions
+  Box, Typography, Button, Alert, CircularProgress, List, ListItem, ListItemText, Paper, Switch, TextField, Stack,
+  Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
 } from '@mui/material';
 import { CloudUpload, Refresh, Schedule, SettingsBackupRestore, Key } from '@mui/icons-material';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import PinModal from './PinModal';
-import RestoreStatusAlerts from './RestoreStatusAlerts.jsx';
 
-export default function GoogleDriveBackupSection() {
+// Google Drive backup, as part of Backup & restore (BackupRestoreSection, in
+// System → Connections; shown once a Google account is connected). Nightly or
+// on-demand backups to Drive, and a restore from any of them. Where a restore
+// stands (staged, restart, roll back) is shown once for the whole box, by
+// BackupRestoreSection; this part reads it as `restore` and says when it
+// staged one (`onRestoreChanged`).
+export default function GoogleDriveBackupSection({ restore = {}, onRestoreChanged }) {
   const [loading, setLoading] = useState(false);
   const [backups, setBackups] = useState([]);
   const [message, setMessage] = useState(null);
@@ -17,9 +23,7 @@ export default function GoogleDriveBackupSection() {
   const [backupTime, setBackupTime] = useState('02:00');
   const [timezone, setTimezone] = useState('');
 
-  const [restore, setRestore] = useState({ staged: null, lastRestore: null, rollbackAvailable: false });
-  const [confirmAction, setConfirmAction] = useState(null); // { type: 'restore', file } | { type: 'rollback' }
-  const [restarting, setRestarting] = useState(false);
+  const [confirmFile, setConfirmFile] = useState(null);
 
   const fetchConfigAndBackups = useCallback(async () => {
     setLoading(true);
@@ -31,7 +35,6 @@ export default function GoogleDriveBackupSection() {
       setAutoEnabled(statusRes.data.autoEnabled ?? false);
       setBackupTime(statusRes.data.backupTime || '02:00');
       setTimezone(statusRes.data.serverTimezone || '');
-      setRestore(statusRes.data.restore || { staged: null, lastRestore: null, rollbackAvailable: false });
       setBackups(listRes.data.files || []);
     } catch (err) {
       console.error('Failed to load backup data', err);
@@ -69,27 +72,19 @@ export default function GoogleDriveBackupSection() {
     }
   };
 
-  const handleConfirmAction = async () => {
-    const action = confirmAction;
-    setConfirmAction(null);
-    if (!action) return;
+  const handleConfirmRestore = async () => {
+    const file = confirmFile;
+    setConfirmFile(null);
+    if (!file) return;
     setLoading(true);
     setMessage(null);
     try {
-      if (action.type === 'restore') {
-        await axios.post(`${API_BASE_URL}/api/backup/drive/restore/stage`, { fileId: action.file.id });
-        setMessage({
-          type: 'success',
-          text: `Restore of "${action.file.name}" is staged and verified. Restart HomeGlow to apply it.`
-        });
-      } else if (action.type === 'rollback') {
-        await axios.post(`${API_BASE_URL}/api/backup/drive/restore/rollback`);
-        setMessage({
-          type: 'success',
-          text: 'Rollback is staged. Restart HomeGlow to return to the saved state.'
-        });
-      }
-      await fetchConfigAndBackups();
+      await axios.post(`${API_BASE_URL}/api/backup/drive/restore/stage`, { fileId: file.id });
+      setMessage({
+        type: 'success',
+        text: `Restore of "${file.name}" is staged and verified. Restart HomeGlow to apply it.`
+      });
+      onRestoreChanged?.();
     } catch (err) {
       setMessage({ type: 'error', text: err.response?.data?.error || 'Could not stage the restore.' });
     } finally {
@@ -119,7 +114,7 @@ export default function GoogleDriveBackupSection() {
   };
 
   const handleDownloadBackupKey = async () => {
-    const file = confirmAction?.file;
+    const file = confirmFile;
     if (!file) return;
     try {
       const { data } = await axios.get(`${API_BASE_URL}/api/admin-pin/exists`);
@@ -134,7 +129,7 @@ export default function GoogleDriveBackupSection() {
   };
 
   const handleKeyPin = async (pin) => {
-    const file = confirmAction?.file;
+    const file = confirmFile;
     if (!file) return;
     try {
       await saveBackupKey(file.id, pin);
@@ -146,29 +141,6 @@ export default function GoogleDriveBackupSection() {
     }
   };
 
-  const handleCancelStaged = async () => {
-    setLoading(true);
-    setMessage(null);
-    try {
-      await axios.post(`${API_BASE_URL}/api/backup/drive/restore/cancel`);
-      setMessage({ type: 'success', text: 'Staged restore cancelled. Nothing was changed.' });
-      await fetchConfigAndBackups();
-    } catch (err) {
-      setMessage({ type: 'error', text: err.response?.data?.error || 'Could not cancel the staged restore.' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRestartNow = async () => {
-    try {
-      await axios.post(`${API_BASE_URL}/api/backup/drive/restart`);
-      setRestarting(true);
-    } catch (err) {
-      setMessage({ type: 'error', text: err.response?.data?.error || 'Could not trigger the restart.' });
-    }
-  };
-
   const formatFileDate = (isoString) => {
     if (!isoString) return '';
     const date = new Date(isoString);
@@ -176,33 +148,19 @@ export default function GoogleDriveBackupSection() {
   };
 
   return (
-    <Box sx={{ mt: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 2 }}>
-      <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-        ☁️ Google Drive Backup &amp; Transfer
-      </Typography>
+    <Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Nightly snapshots of the database, encryption key, and uploads, saved to your connected
-        Google Drive (newest 14 kept). Restore any backup right here — the restore is verified,
-        staged, and applied safely when HomeGlow restarts, and your current data is saved first
-        so you can roll back. The same flow moves HomeGlow to a new device: install it there,
-        connect this Google account, and restore.
+        Google Drive (newest 14 kept), and restorable from here. The same backups move HomeGlow
+        to a new device: install it there, connect this Google account, and restore.
       </Typography>
 
       {message && <Alert severity={message.type} sx={{ mb: 2 }}>{message.text}</Alert>}
 
-      <RestoreStatusAlerts
-        restore={restore}
-        restarting={restarting}
-        busy={loading}
-        onRestart={handleRestartNow}
-        onCancel={handleCancelStaged}
-        onRollback={() => setConfirmAction({ type: 'rollback' })}
-      />
-
       <Stack spacing={2} sx={{ mb: 3, p: 2, bgcolor: 'var(--hg-white-10)', borderRadius: 1.5 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box>
-            <Typography variant="subtitle2" fontWeight="600">Automated Nightly Backups</Typography>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Automated Nightly Backups</Typography>
             <Typography variant="caption" color="text.secondary">Automatically creates a backup snapshot every day</Typography>
           </Box>
           <Switch
@@ -235,7 +193,7 @@ export default function GoogleDriveBackupSection() {
         )}
       </Stack>
 
-      <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+      <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
         <Button variant="contained" startIcon={<CloudUpload />} onClick={handleBackupNow} disabled={loading}>
           Backup Now
         </Button>
@@ -244,7 +202,7 @@ export default function GoogleDriveBackupSection() {
         </Button>
       </Box>
 
-      <Typography variant="subtitle2" gutterBottom>Available Cloud Backups</Typography>
+      <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>Available Cloud Backups</Typography>
       {loading && backups.length === 0 ? (
         <CircularProgress size={20} />
       ) : backups.length === 0 ? (
@@ -261,7 +219,7 @@ export default function GoogleDriveBackupSection() {
                   variant="outlined"
                   startIcon={<SettingsBackupRestore />}
                   disabled={loading || Boolean(restore.staged)}
-                  onClick={() => setConfirmAction({ type: 'restore', file })}
+                  onClick={() => setConfirmFile(file)}
                 >
                   Restore
                 </Button>
@@ -282,46 +240,30 @@ export default function GoogleDriveBackupSection() {
         it into the new install's data folder, and start HomeGlow again.
       </Typography>
 
-      <Dialog open={Boolean(confirmAction)} onClose={() => setConfirmAction(null)}>
-        <DialogTitle>
-          {confirmAction?.type === 'rollback' ? 'Roll back the last restore?' : 'Restore this backup?'}
-        </DialogTitle>
+      <Dialog open={Boolean(confirmFile)} onClose={() => setConfirmFile(null)}>
+        <DialogTitle>Restore this backup?</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            {confirmAction?.type === 'rollback' ? (
-              <>
-                HomeGlow will return to the state saved just before the last restore
-                ({restore.lastRestore ? ` "${restore.lastRestore.name}"` : ''}) was applied.
-                Anything changed since that restore will be replaced.
-              </>
-            ) : (
-              <>
-                HomeGlow will be restored to <strong>{confirmAction?.file?.name}</strong>{' '}
-                (created {confirmAction?.file ? formatFileDate(confirmAction.file.createdTime) : ''}).
-                Everything in the current install — including anything created after that
-                backup — will be replaced.
-              </>
-            )}
+            HomeGlow will be restored to <strong>{confirmFile?.name}</strong>{' '}
+            (created {confirmFile ? formatFileDate(confirmFile.createdTime) : ''}).
+            Everything in the current install — including anything created after that
+            backup — will be replaced.
             <br /><br />
             The restore is verified and staged first, your current data is saved so you can
             roll back, and nothing changes until HomeGlow restarts.
-            {confirmAction?.type === 'restore' && (
-              <>
-                <br /><br />
-                Moving to a new device? If this install sets ENCRYPTION_KEY in its environment
-                (Proxmox installs do, in /opt/homeglow/.env) and it differs from the backup's
-                key, staging will refuse until that variable is set to the backup's key.{' '}
-                <Button size="small" startIcon={<Key />} onClick={handleDownloadBackupKey} sx={{ verticalAlign: 'baseline', textTransform: 'none', p: 0, minWidth: 0 }}>
-                  Download this backup's encryption key
-                </Button>
-              </>
-            )}
+            <br /><br />
+            Moving to a new device? If this install sets ENCRYPTION_KEY in its environment
+            (Proxmox installs do, in /opt/homeglow/.env) and it differs from the backup's
+            key, staging will refuse until that variable is set to the backup's key.{' '}
+            <Button size="small" startIcon={<Key />} onClick={handleDownloadBackupKey} sx={{ verticalAlign: 'baseline', textTransform: 'none', p: 0, minWidth: 0 }}>
+              Download this backup's encryption key
+            </Button>
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmAction(null)}>Keep Current Data</Button>
-          <Button color="warning" variant="contained" onClick={handleConfirmAction} autoFocus>
-            {confirmAction?.type === 'rollback' ? 'Stage Rollback' : 'Stage Restore'}
+          <Button onClick={() => setConfirmFile(null)}>Keep Current Data</Button>
+          <Button color="warning" variant="contained" onClick={handleConfirmRestore} autoFocus>
+            Stage Restore
           </Button>
         </DialogActions>
       </Dialog>

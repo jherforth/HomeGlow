@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import {
-  Alert, Box, Button, Card, CardContent, Dialog, DialogActions, DialogContent, DialogContentText,
+  Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText,
   DialogTitle, LinearProgress, Stack, Typography,
 } from '@mui/material';
 import { Download, Upload } from '@mui/icons-material';
@@ -9,11 +9,16 @@ import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import PinModal from './PinModal';
 import RestoreStatusAlerts from './RestoreStatusAlerts.jsx';
+import GoogleDriveBackupSection from './GoogleDriveBackupSection.jsx';
 
-// Admin → System → Backup (issue #305): back HomeGlow up to a file and
-// restore it from one, without Google. The file is the same archive a Google
-// Drive backup holds, and an import goes through the same staged restore:
-// verified first, the current data saved for rollback, applied on restart.
+// Backup & restore, in Admin → System → Connections at the foot of the Google
+// account card: everything about backing HomeGlow up and restoring it. A
+// backup file to download and upload (issue #305), and, once a Google account
+// is connected (`googleConnected`, from that card), Google Drive backup as an
+// alternative (#304).
+// Both make the same archive and restore it the same way: verified first, the
+// current data saved for rollback, applied on restart. Where a restore stands
+// is shown once, at the top, whichever way it was staged.
 
 const errorText = (error, fallback) => error?.response?.data?.error || error?.message || fallback;
 
@@ -43,7 +48,7 @@ async function readBlobError(error) {
   return null;
 }
 
-export default function LocalBackupSection() {
+export default function BackupRestoreSection({ googleConnected = false }) {
   const { t } = useTranslation(['admin', 'common']);
   const fileInput = useRef(null);
   const [restore, setRestore] = useState({ staged: null, lastRestore: null, rollbackAvailable: false });
@@ -65,6 +70,7 @@ export default function LocalBackupSection() {
   }, []);
 
   useEffect(() => { void loadStatus(); }, [loadStatus]);
+
 
   // --- export -------------------------------------------------------------------
 
@@ -171,9 +177,10 @@ export default function LocalBackupSection() {
   };
 
   return (
-    <Card>
-      <CardContent>
-        <Typography variant="h6" gutterBottom>{t('admin:backup.heading')}</Typography>
+    <Box sx={{ mt: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 2 }}>
+        <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 700 }}>
+          💾 {t('admin:backup.heading')}
+        </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{t('admin:backup.intro')}</Typography>
 
         {message && <Alert severity={message.type} sx={{ mb: 2 }}>{message.text}</Alert>}
@@ -188,7 +195,7 @@ export default function LocalBackupSection() {
 
         <Stack spacing={3}>
           <Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{t('admin:backup.exportHeading')}</Typography>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{t('admin:backup.exportHeading')}</Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>{t('admin:backup.exportHelp')}</Typography>
             <Button variant="contained" startIcon={<Download />} onClick={startExport} disabled={busy || restarting}>
               {t('admin:backup.exportButton')}
@@ -196,7 +203,7 @@ export default function LocalBackupSection() {
           </Box>
 
           <Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{t('admin:backup.importHeading')}</Typography>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{t('admin:backup.importHeading')}</Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>{t('admin:backup.importHelp')}</Typography>
             <input
               ref={fileInput}
@@ -222,8 +229,17 @@ export default function LocalBackupSection() {
               </Box>
             )}
           </Box>
+
+          {/* The alternative to a backup file, once Google is connected. */}
+          <Box>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>☁️ {t('admin:backup.driveHeading')}</Typography>
+            {googleConnected ? (
+              <GoogleDriveBackupSection restore={restore} onRestoreChanged={loadStatus} />
+            ) : (
+              <Typography variant="body2" color="text.secondary">{t('admin:backup.driveNotConnected')}</Typography>
+            )}
+          </Box>
         </Stack>
-      </CardContent>
 
       <Dialog open={Boolean(chosenFile)} onClose={() => setChosenFile(null)} maxWidth="sm" fullWidth>
         <DialogTitle>{t('admin:backup.importConfirmTitle')}</DialogTitle>
@@ -253,6 +269,6 @@ export default function LocalBackupSection() {
         onVerify={exportWithPin}
         title={t('admin:backup.pinTitle')}
       />
-    </Card>
+    </Box>
   );
 }
