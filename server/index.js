@@ -1088,6 +1088,7 @@ const routines = registerRoutineRoutes(fastify, {
   // reader without jobs: the constructor starts nothing).
   calendarEvents: (from, to) => (calendarSyncService || new CalendarSyncService(db, decryptPassword)).getCachedEvents(from, to),
   isVacation: isVacationActiveOn,
+  awardDailyBonusesAfterRemoval: (userIds) => awardDailyBonusesAfterRemoval(userIds),
 });
 
 // Push notifications to devices, from the chore events (services/notifications.js).
@@ -2842,6 +2843,8 @@ fastify.patch('/api/chores/:id', async (request, reply) => {
     if (info.changes === 0) {
       return reply.status(404).send({ error: 'Chore not found' });
     }
+    // With clams it's a bonus chore, no longer one the day needs.
+    awardDailyBonusesAfterRemoval(assigneesOfChore(id));
     return { success: true };
   } catch (error) {
     console.error('Error updating chore:', error);
@@ -2868,10 +2871,12 @@ fastify.delete('/api/chores/bulk', async (request, reply) => {
   try {
     const deleteSchedules = db.prepare('DELETE FROM chore_schedules WHERE chore_id = ?');
     const deleteChore = db.prepare('DELETE FROM chores WHERE id = ?');
+    const assignees = uniqueIds.flatMap(assigneesOfChore);
     const deleted = db.transaction(() => uniqueIds.reduce((count, id) => {
       deleteSchedules.run(id);
       return count + deleteChore.run(id).changes;
     }, 0))();
+    awardDailyBonusesAfterRemoval(assignees);
     return { deleted };
   } catch (error) {
     console.error('Error bulk deleting chores:', error);
@@ -2882,12 +2887,14 @@ fastify.delete('/api/chores/bulk', async (request, reply) => {
 fastify.delete('/api/chores/:id', async (request, reply) => {
   const { id } = request.params;
   try {
+    const assignees = assigneesOfChore(id);
     db.prepare('DELETE FROM chore_schedules WHERE chore_id = ?').run(id);
     const stmt = db.prepare('DELETE FROM chores WHERE id = ?');
     const info = stmt.run(id);
     if (info.changes === 0) {
       return reply.status(404).send({ error: 'Chore not found' });
     }
+    awardDailyBonusesAfterRemoval(assignees);
     return { success: true, message: 'Chore deleted successfully' };
   } catch (error) {
     console.error('Error deleting chore:', error);
@@ -3261,13 +3268,12 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
     }
 
     // Snoozing defers a chore out of today's required set — if that was the
-    // assignee's last open chore, their day is now complete. Award-only:
-    // un-snoozing never takes points back.
-    if (snoozed_until !== undefined) {
+    // assignee's last open chore, their day is now complete. Hiding it, or
+    // moving it to other days, does the same (issue #298). Award-only:
+    // un-snoozing or showing it again never takes points back.
+    if (snoozed_until !== undefined || visible !== undefined || crontab !== undefined) {
       const assigneeId = user_id !== undefined ? (user_id || null) : existingSchedule.user_id;
-      if (assigneeId) {
-        awardDailyRegularBonusIfDue(assigneeId, getTodayLocalDateString());
-      }
+      awardDailyBonusesAfterRemoval([assigneeId]);
     }
 
     // Made sticky, given a new timing, or shown again: if it now fires
@@ -3287,11 +3293,13 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
 fastify.delete('/api/chore-schedules/:id', async (request, reply) => {
   const { id } = request.params;
   try {
+    const assignee = db.prepare('SELECT user_id FROM chore_schedules WHERE id = ?').get(id)?.user_id;
     const stmt = db.prepare('DELETE FROM chore_schedules WHERE id = ?');
     const info = stmt.run(id);
     if (info.changes === 0) {
       return reply.status(404).send({ error: 'Schedule not found' });
     }
+    awardDailyBonusesAfterRemoval([assignee]);
     return { success: true, message: 'Schedule deleted successfully' };
   } catch (error) {
     console.error('Error deleting schedule:', error);
@@ -3718,6 +3726,22 @@ function awardDailyRegularBonusIfDue(userId, date) {
 // Deletes the user's daily-completion bonus row for the given date, if present.
 // Used when uncompleting a regular chore, and by the transfer dialog's explicit
 // "revoke current reward and assign" option (issue #122).
+// A chore taken off people's day (its schedule or chore deleted, hidden, moved
+// to other days, made a bonus chore, or a routine deleted) can leave the rest
+// of their day done, as a snooze or a reassignment can (issue #298). Award-only
+// like those: putting a chore back never takes the bonus away. `userIds` may
+// repeat or hold null (an unassigned bonus chore); each person is checked once.
+function awardDailyBonusesAfterRemoval(userIds) {
+  const today = getTodayLocalDateString();
+  for (const userId of new Set(userIds)) {
+    if (userId) awardDailyRegularBonusIfDue(userId, today);
+  }
+}
+
+// The people a chore's schedules are assigned to.
+const assigneesOfChore = (choreId) => db.prepare('SELECT DISTINCT user_id FROM chore_schedules WHERE chore_id = ?')
+  .all(choreId).map((row) => row.user_id);
+
 function revokeDailyRegularBonus(userId, date) {
   const bonusEntry = db.prepare(`
       SELECT id FROM chore_history

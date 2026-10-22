@@ -20,6 +20,8 @@ function registerRoutineRoutes(fastify, deps) {
   const {
     db, pluginEvents, completeChoreSchedule, uncompleteChoreSchedule,
     timezone, today, calendarEvents = () => [], isVacation = () => false,
+    // A routine deleted can leave its person's day done (issue #298).
+    awardDailyBonusesAfterRemoval = () => {},
   } = deps;
 
   // (scheduleId|date) pairs this module is itself uncompleting, so the chore
@@ -403,12 +405,15 @@ function registerRoutineRoutes(fastify, deps) {
     if (!unique.every((id) => Number.isInteger(id) && id > 0)) {
       return reply.status(400).send({ error: 'Every id must be a positive whole number' });
     }
+    const people = [];
     const deleted = db.transaction(() => unique.reduce((count, id) => {
-      const r = db.prepare('SELECT chore_id FROM routines WHERE id = ?').get(id);
+      const r = db.prepare('SELECT chore_id, user_id FROM routines WHERE id = ?').get(id);
       if (!r) return count;
+      people.push(r.user_id);
       db.prepare('DELETE FROM chores WHERE id = ?').run(r.chore_id);
       return count + 1;
     }, 0))();
+    awardDailyBonusesAfterRemoval(people);
     return { deleted };
   });
 
@@ -430,6 +435,7 @@ function registerRoutineRoutes(fastify, deps) {
     const r = routine(request.params.id);
     if (!r) return reply.status(404).send({ error: 'No such routine.' });
     db.prepare('DELETE FROM chores WHERE id = ?').run(r.chore_id);
+    awardDailyBonusesAfterRemoval([r.user_id]);
     return { success: true };
   });
 
