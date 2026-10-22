@@ -201,7 +201,9 @@ test('Home Assistant and Pushover together: each phone the way it is reached', n
 
 test('only phones, only text: anything else is refused before it goes out', needsWebSocket, async () => {
   await delay(1100);
-  const before = { ha: fake.calls.length, po: pushoverCalls.length };
+  // Only messages and cancels count: an unknown phone makes HomeGlow read the phone list again once (users/validate).
+  const sent = () => pushoverCalls.filter((c) => c.path === '/1/messages.json' || c.path.startsWith('/1/receipts/')).length;
+  const before = { ha: fake.calls.length, po: sent() };
   const send = (body) => post('/api/plugin/v1/notify/phone-test', { message: 'hi', ...body });
   assert.equal((await send({ phones: ['notify'] })).status, 404, 'notify.notify is no phone');
   assert.equal((await send({ phones: ['persistent_notification'] })).status, 404);
@@ -212,7 +214,7 @@ test('only phones, only text: anything else is refused before it goes out', need
   assert.equal((await send({ phones: ['mobile_app_sam_s_pixel'], urgent: 'loud' })).status, 400);
   assert.equal((await send({ phones: ['mobile_app_sam_s_pixel'], tag: 'Not OK!' })).status, 400);
   assert.equal(fake.calls.length, before.ha, 'nothing refused reached Home Assistant');
-  assert.equal(pushoverCalls.length, before.po, 'or Pushover');
+  assert.equal(sent(), before.po, 'or Pushover');
 
   // Notify data of the plugin's own never reaches a phone.
   await delay(1100);
