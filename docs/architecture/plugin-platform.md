@@ -647,7 +647,7 @@ New/changed persistence, all additive:
 > `plugin_storage` takes **19** when Phase 1 lands. Follow
 > [`migrationTemplate.js`](../../server/migrations/migrationTemplate.js) and the
 > [Contributing → adding a migration](../guides/contributing.md#adding-a-database-migration)
-> steps: register each in the `schemaMigrations` map in `server/index.js`, wrap it
+> steps: register each in `server/migrations/registry.js`, wrap it
 > in a transaction, and write `SYSTEM_SCHEMA_ID` before commit.
 
 ---

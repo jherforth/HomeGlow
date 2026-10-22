@@ -30,8 +30,8 @@ They create the original tables and perform one-off data reshaping:
 ### 2. Numbered schema migrations (versioned)
 The current version is stored in `settings` under the key `SYSTEM_SCHEMA_ID`.
 On startup, every migration whose `schemaId` is greater than the stored value is
-run in ascending order. The registry lives in `schemaMigrations` in
-[`server/index.js`](../../server/index.js):
+run in ascending order. The registry is
+[`server/migrations/registry.js`](../../server/migrations/registry.js):
 
 | schemaId | Module | What it does |
 | --- | --- | --- |
