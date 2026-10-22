@@ -4334,7 +4334,9 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
       )}
 
       {/* Backup to a file and restore from one, without Google (issue #305). */}
-      {location.section === 'backup' && <LocalBackupSection />}
+      {location.section === 'backup' && (
+        <LocalBackupSection onOpenConnections={() => navigate({ tab: 'system', section: 'connections' })} />
+      )}
 
       {location.section === 'about' && (
         <Card>

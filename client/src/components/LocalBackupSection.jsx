@@ -2,18 +2,21 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import {
   Alert, Box, Button, Card, CardContent, Dialog, DialogActions, DialogContent, DialogContentText,
-  DialogTitle, LinearProgress, Stack, Typography,
+  DialogTitle, Divider, LinearProgress, Stack, Typography,
 } from '@mui/material';
 import { Download, Upload } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import PinModal from './PinModal';
 import RestoreStatusAlerts from './RestoreStatusAlerts.jsx';
+import GoogleDriveBackupSection from './GoogleDriveBackupSection.jsx';
 
-// Admin → System → Backup (issue #305): back HomeGlow up to a file and
-// restore it from one, without Google. The file is the same archive a Google
-// Drive backup holds, and an import goes through the same staged restore:
-// verified first, the current data saved for rollback, applied on restart.
+// Admin → System → Backup: everything about backing HomeGlow up and
+// restoring it. A backup file to download and upload (issue #305), and, once
+// a Google account is connected, Google Drive backup as an alternative (#304).
+// Both make the same archive and restore it the same way: verified first, the
+// current data saved for rollback, applied on restart. Where a restore stands
+// is shown once, at the top, whichever way it was staged.
 
 const errorText = (error, fallback) => error?.response?.data?.error || error?.message || fallback;
 
@@ -43,7 +46,7 @@ async function readBlobError(error) {
   return null;
 }
 
-export default function LocalBackupSection() {
+export default function LocalBackupSection({ onOpenConnections }) {
   const { t } = useTranslation(['admin', 'common']);
   const fileInput = useRef(null);
   const [restore, setRestore] = useState({ staged: null, lastRestore: null, rollbackAvailable: false });
@@ -54,6 +57,8 @@ export default function LocalBackupSection() {
   const [chosenFile, setChosenFile] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(null);
   const [confirmRollback, setConfirmRollback] = useState(false);
+  // Google Drive backup shows once a Google account is connected.
+  const [googleConnected, setGoogleConnected] = useState(null);
 
   const loadStatus = useCallback(async () => {
     try {
@@ -65,6 +70,11 @@ export default function LocalBackupSection() {
   }, []);
 
   useEffect(() => { void loadStatus(); }, [loadStatus]);
+  useEffect(() => {
+    axios.get(`${API_BASE_URL}/api/connections/google/status`)
+      .then(({ data }) => setGoogleConnected(Boolean(data?.account)))
+      .catch(() => setGoogleConnected(false));
+  }, []);
 
   // --- export -------------------------------------------------------------------
 
@@ -220,6 +230,26 @@ export default function LocalBackupSection() {
                   {uploadProgress < 100 ? t('admin:backup.uploading', { percent: uploadProgress }) : t('admin:backup.checking')}
                 </Typography>
               </Box>
+            )}
+          </Box>
+
+          <Divider />
+
+          {/* The alternative to a backup file, once Google is connected. */}
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.5 }}>{t('admin:backup.driveHeading')}</Typography>
+            {googleConnected === true && (
+              <GoogleDriveBackupSection restore={restore} onRestoreChanged={loadStatus} />
+            )}
+            {googleConnected === false && (
+              <Alert
+                severity="info"
+                action={onOpenConnections ? (
+                  <Button color="inherit" size="small" onClick={onOpenConnections}>{t('admin:backup.openConnections')}</Button>
+                ) : null}
+              >
+                {t('admin:backup.driveNotConnected')}
+              </Alert>
             )}
           </Box>
         </Stack>

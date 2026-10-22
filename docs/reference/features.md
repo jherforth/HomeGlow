@@ -615,12 +615,16 @@ Everything HomeGlow holds (the database, the encryption key in use, and the
 uploaded photos, sounds and themes) can be saved to one `.tar.gz` file and
 restored from one, on the same server or on a new one when moving.
 
-- **Admin → System → Backup** (issue #305) needs no account:
+All of it is in **Admin → System → Backup**:
+- **A backup file** (issue #305) needs no account:
   - **Download backup** saves the file. It holds the key to every stored
     password and token, so when an admin PIN is set the server asks for it.
   - **Choose backup file** uploads one (up to 4 GB) to restore it.
-- **Google Drive** (#304, in System → Connections → Google account) makes the
-  same file every night, keeps the newest 14, and restores from any of them.
+- **Google Drive** (#304) appears on the same page once a Google account is
+  connected (System → Connections). It makes the same file every night, keeps
+  the newest 14, and restores from any of them.
+- **One status for both.** A staged restore, Restart now and Roll back show
+  once at the top of the page, whichever way the restore was staged.
 - **A restore is staged, then applied on restart.**
   - It is checked first: the manifest's database hash, SQLite's integrity
     check, and a backup from a newer HomeGlow is refused.

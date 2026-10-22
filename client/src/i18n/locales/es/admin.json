@@ -803,7 +803,7 @@
   },
   "backup": {
     "heading": "Copia de seguridad y restauración",
-    "intro": "Guarda todo lo que contiene HomeGlow en un archivo y restáuralo desde uno: en este servidor o en uno nuevo cuando te mudes. No hace falta ninguna cuenta. (Con una cuenta de Google conectada, HomeGlow también puede hacer una copia en Google Drive cada noche: ve a Sistema → Conexiones).",
+    "intro": "Guarda todo lo que contiene HomeGlow en un archivo y restáuralo desde uno: en este servidor o en uno nuevo cuando te mudes. No hace falta ninguna cuenta. Con una cuenta de Google conectada, HomeGlow también puede hacer una copia en Google Drive cada noche.",
     "exportHeading": "Descargar una copia",
     "exportHelp": "Un archivo con la base de datos, la clave de cifrado y las fotos, sonidos y temas subidos. Guárdalo en un lugar seguro: contiene la clave de todas las contraseñas y tokens guardados.",
     "exportButton": "Descargar copia",
@@ -835,6 +835,9 @@
     "rollbackConfirm": "Preparar deshacer",
     "rollbackStaged": "Deshacer está preparado. Reinicia HomeGlow para volver al estado guardado.",
     "cancelled": "Se canceló la restauración preparada. No cambió nada.",
-    "actionFailed": "No funcionó."
+    "actionFailed": "No funcionó.",
+    "driveHeading": "Google Drive",
+    "driveNotConnected": "Conecta una cuenta de Google en Sistema → Conexiones para hacer también una copia en Google Drive cada noche y restaurar esas copias aquí.",
+    "openConnections": "Abrir Conexiones"
   }
 }

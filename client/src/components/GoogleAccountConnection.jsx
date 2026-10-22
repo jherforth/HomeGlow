@@ -24,7 +24,6 @@ import {
 } from '@mui/icons-material';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
-import GoogleDriveBackupSection from './GoogleDriveBackupSection.jsx';
 
 const initialDraft = { client_id: '', client_secret: '', redirect_uri: '' };
 
@@ -337,7 +336,8 @@ const GoogleAccountConnection = ({ onMessage }) => {
             </Typography>
             <Typography variant="body2" color="text.secondary">
               Connecting your Google account enables Google Calendar (2-way sync) and Google Photos
-              as sources for the Calendar and Photo widgets.
+              as sources for the Calendar and Photo widgets, and nightly backups to Google Drive
+              (in System → Backup).
             </Typography>
           </Box>
           <Button
@@ -351,7 +351,6 @@ const GoogleAccountConnection = ({ onMessage }) => {
         </Box>
       )}
 
-      <GoogleDriveBackupSection />
     </Box>
   );
 };
