@@ -7117,7 +7117,7 @@ const start = async () => {
     if (!DEMO_MODE && dbPath !== ':memory:') {
       try {
         const { applyPendingRestore } = require('./services/driveRestore');
-        applyPendingRestore(dbPath);
+        applyPendingRestore(dbPath, UPLOADS_ROOT);
       } catch (restoreErr) {
         console.error('[DriveRestore] Could not apply staged restore:', restoreErr.message);
         throw restoreErr;
@@ -7206,7 +7206,7 @@ const start = async () => {
     }
 
     // Google Drive backup & restore endpoints (Admin → Google Account).
-    fastify.register(require("./routes/driveBackup"), { db });
+    fastify.register(require("./routes/driveBackup"), { db, uploadsDir: UPLOADS_ROOT });
 
     await fastify.listen({ port: process.env.PORT || 5000, host: '0.0.0.0' });
     console.log(`Server running on port ${process.env.PORT || 5000}`);

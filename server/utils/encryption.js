@@ -23,6 +23,56 @@ function getEncryptionKeyFilePath() {
         : DEFAULT_KEY_FILE;
 }
 
+// The key currently in effect and where it came from ('env', 'file', or
+// 'generated'). Backups must carry THIS key — not whatever sits in the key
+// file — because ENCRYPTION_KEY wins over the file, so on installs that
+// set it (e.g. the Proxmox installers) the file may hold a different,
+// unused key. Returns null when no valid key is configured.
+function getEffectiveKeyForBackup() {
+    const key = loadKey();
+    if (!key) return null;
+    const source = cachedKeySource === 'env'
+        ? 'env'
+        : cachedKeySource === 'auto'
+            ? 'generated'
+            : 'file';
+    // Canonical base64 text form — the same format key files store — so a
+    // backup archive's .encryption-key is a drop-in key file regardless of
+    // whether the source key was supplied as base64, hex, or raw bytes.
+    return { key: key.toString('base64'), source };
+}
+
+// Parse key material the same way loadKey does (base64, hex, or raw
+// UTF-8), returning the 32-byte key or null when it is not a valid key.
+function parseKeyMaterial(raw) {
+    if (typeof raw !== 'string') return null;
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    let buf;
+    try {
+        if (/^[A-Za-z0-9+/=]+$/.test(trimmed) && trimmed.length >= 43) {
+            buf = Buffer.from(trimmed, 'base64');
+        } else if (/^[A-Fa-f0-9]{64}$/.test(trimmed)) {
+            buf = Buffer.from(trimmed, 'hex');
+        } else {
+            buf = Buffer.from(trimmed, 'utf8');
+        }
+    } catch (_) {
+        return null;
+    }
+    return buf.length === 32 ? buf : null;
+}
+
+// True when two key representations (e.g. an ENCRYPTION_KEY value and a
+// backup's key-file contents) decode to the same key bytes. Falls back to
+// exact string comparison when either side is not parseable key material.
+function encryptionKeysEqual(a, b) {
+    const pa = parseKeyMaterial(a);
+    const pb = parseKeyMaterial(b);
+    if (pa && pb) return crypto.timingSafeEqual(pa, pb);
+    return typeof a === 'string' && typeof b === 'string' && a.trim() === b.trim();
+}
+
 function resetEncryptionKeyCache() {
     cachedKey = null;
     cachedKeyStatus = null;
@@ -31,8 +81,9 @@ function resetEncryptionKeyCache() {
 
 function readKeyFromFile() {
     try {
-        if (!fs.existsSync(KEY_FILE)) return null;
-        const contents = fs.readFileSync(KEY_FILE, 'utf8').trim();
+        const keyFile = getEncryptionKeyFilePath();
+        if (!fs.existsSync(keyFile)) return null;
+        const contents = fs.readFileSync(keyFile, 'utf8').trim();
         return contents || null;
     } catch (_) {
         return null;
@@ -41,9 +92,10 @@ function readKeyFromFile() {
 
 function writeKeyToFile(value) {
     try {
-        fs.mkdirSync(path.dirname(KEY_FILE), { recursive: true });
-        fs.writeFileSync(KEY_FILE, value + '\n', { mode: 0o600 });
-        try { fs.chmodSync(KEY_FILE, 0o600); } catch (_) {}
+        const keyFile = getEncryptionKeyFilePath();
+        fs.mkdirSync(path.dirname(keyFile), { recursive: true });
+        fs.writeFileSync(keyFile, value + '\n', { mode: 0o600 });
+        try { fs.chmodSync(keyFile, 0o600); } catch (_) {}
         return true;
     } catch (err) {
         console.error('Failed to persist encryption key:', err.message);
@@ -66,7 +118,7 @@ function loadKey() {
         if (writeKeyToFile(generated)) {
             raw = generated;
             source = 'auto';
-            console.log(`Generated new encryption key at ${KEY_FILE}. Back this file up to keep stored secrets recoverable.`);
+            console.log(`Generated new encryption key at ${getEncryptionKeyFilePath()}. Back this file up to keep stored secrets recoverable.`);
         } else {
             cachedKeyStatus = 'missing';
             return null;
@@ -104,9 +156,9 @@ function loadKey() {
     // removing the variable a no-op instead of a trap. Only written when the
     // file is absent, so it never overwrites an existing key, and only after
     // validation, so a malformed value is never persisted.
-    if (source === 'env' && !fs.existsSync(KEY_FILE)) {
+    if (source === 'env' && !fs.existsSync(getEncryptionKeyFilePath())) {
         if (writeKeyToFile(trimmed)) {
-            console.log(`Persisted ENCRYPTION_KEY to ${KEY_FILE} so the variable is safe to remove later.`);
+            console.log(`Persisted ENCRYPTION_KEY to ${getEncryptionKeyFilePath()} so the variable is safe to remove later.`);
         }
     }
 
@@ -212,6 +264,8 @@ module.exports = {
     getEncryptionSource,
     resetEncryptionKeyCache,
     getEncryptionKeyFilePath,
+    getEffectiveKeyForBackup,
+    encryptionKeysEqual,
     isLegacyCiphertext,
     decryptLegacy,
     LEGACY_FALLBACK_KEY,

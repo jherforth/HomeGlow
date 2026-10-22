@@ -5,9 +5,12 @@ const driveRestore = require('../services/driveRestore');
 
 module.exports = async function (fastify, opts) {
   const db = opts.db;
+  // The uploads directory the server itself uses (index.js's UPLOADS_ROOT),
+  // threaded into the backup/restore services — no guessing from DB_PATH.
+  const uploadsDir = opts.uploadsDir || null;
   const dbPath = process.env.DB_PATH ? path.resolve(process.env.DB_PATH) : path.resolve(__dirname, '../data/tasks.db');
 
-  driveBackup.initAutomatedBackupScheduler(db, dbPath);
+  driveBackup.initAutomatedBackupScheduler(db, dbPath, uploadsDir);
 
   fastify.get('/api/backup/drive/status', async (request, reply) => {
     try {
@@ -65,7 +68,7 @@ module.exports = async function (fastify, opts) {
     try {
       const account = googleConnection.getConnectedAccount(db);
       if (!account) return reply.status(404).send({ error: 'No Google account connected.' });
-      const result = await driveBackup.uploadBackupToDrive(db, account.id, dbPath);
+      const result = await driveBackup.uploadBackupToDrive(db, account.id, dbPath, uploadsDir);
       return { success: true, file: result };
     } catch (err) {
       fastify.log.error(`[DriveBackup] Upload failed: ${err.message}`);
@@ -87,7 +90,7 @@ module.exports = async function (fastify, opts) {
     try {
       const account = googleConnection.getConnectedAccount(db);
       if (!account) return reply.status(404).send({ error: 'No Google account connected.' });
-      const staged = await driveRestore.stageRestoreFromDrive(db, dbPath, account.id, fileId);
+      const staged = await driveRestore.stageRestoreFromDrive(db, dbPath, account.id, fileId, uploadsDir);
       return { success: true, staged };
     } catch (err) {
       fastify.log.error(`[DriveRestore] Stage failed: ${err.message}`);
@@ -96,9 +99,36 @@ module.exports = async function (fastify, opts) {
     }
   });
 
+  // Download the encryption key bundled in one backup. Needed when moving
+  // to a new device whose ENCRYPTION_KEY (from its environment — e.g. a
+  // Proxmox install's /opt/homeglow/.env) differs from the backup's key:
+  // staging refuses in that case, and this key is what the new server's
+  // ENCRYPTION_KEY must be set to before the restore can proceed.
+  fastify.post('/api/backup/drive/backup-key', async (request, reply) => {
+    const { fileId } = request.body || {};
+    if (!fileId || typeof fileId !== 'string') {
+      return reply.code(400).send({ error: 'A backup fileId is required.' });
+    }
+    try {
+      const account = googleConnection.getConnectedAccount(db);
+      if (!account) return reply.status(404).send({ error: 'No Google account connected.' });
+      const key = await driveRestore.extractBackupKey(db, account.id, fileId);
+      if (!key) {
+        return reply.code(404).send({ error: 'That backup does not contain an encryption key (it was made on an install with no key configured).' });
+      }
+      return reply
+        .header('Content-Type', 'text/plain; charset=utf-8')
+        .header('Content-Disposition', 'attachment; filename="homeglow-encryption-key.txt"')
+        .send(key);
+    } catch (err) {
+      fastify.log.error(`[DriveBackup] Key download failed: ${err.message}`);
+      return reply.code(500).send({ error: err.message });
+    }
+  });
+
   fastify.post('/api/backup/drive/restore/rollback', async (request, reply) => {
     try {
-      const staged = driveRestore.stageRollback(db, dbPath);
+      const staged = driveRestore.stageRollback(db, dbPath, uploadsDir);
       return { success: true, staged };
     } catch (err) {
       fastify.log.error(`[DriveRestore] Rollback stage failed: ${err.message}`);

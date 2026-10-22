@@ -8,6 +8,11 @@ const Database = require('better-sqlite3');
 
 const driveBackup = require('../services/googleDriveBackup');
 const driveRestore = require('../services/driveRestore');
+const encryption = require('../utils/encryption');
+
+const FILE_KEY = Buffer.alloc(32, 3).toString('base64');
+const ENV_KEY_A = Buffer.alloc(32, 11).toString('base64');
+const ENV_KEY_B = Buffer.alloc(32, 22).toString('base64');
 
 // Build a throwaway "install": data/tasks.db (+ settings schema row and a
 // marker row), data/.encryption-key, and uploads/ next to the data dir —
@@ -19,7 +24,7 @@ function makeInstall(schemaVersion, marker) {
   fs.mkdirSync(dataDir, { recursive: true });
   fs.mkdirSync(uploadsDir, { recursive: true });
   fs.writeFileSync(path.join(uploadsDir, 'note.txt'), marker);
-  fs.writeFileSync(path.join(dataDir, '.encryption-key'), 'test-key-material');
+  fs.writeFileSync(path.join(dataDir, '.encryption-key'), FILE_KEY);
 
   const dbPath = path.join(dataDir, 'tasks.db');
   const db = new Database(dbPath);
@@ -38,13 +43,38 @@ function makeInstall(schemaVersion, marker) {
 // ENCRYPTION_KEY_FILE (as the encryption module does); point it at the
 // install under test for the duration of fn.
 function withKeyFile(inst, fn) {
-  const prev = process.env.ENCRYPTION_KEY_FILE;
+  const prevFile = process.env.ENCRYPTION_KEY_FILE;
+  const prevEnv = process.env.ENCRYPTION_KEY;
   process.env.ENCRYPTION_KEY_FILE = path.join(inst.dataDir, '.encryption-key');
+  delete process.env.ENCRYPTION_KEY;
+  encryption.resetEncryptionKeyCache();
   try {
     return fn();
   } finally {
-    if (prev === undefined) delete process.env.ENCRYPTION_KEY_FILE;
-    else process.env.ENCRYPTION_KEY_FILE = prev;
+    if (prevFile === undefined) delete process.env.ENCRYPTION_KEY_FILE;
+    else process.env.ENCRYPTION_KEY_FILE = prevFile;
+    if (prevEnv === undefined) delete process.env.ENCRYPTION_KEY;
+    else process.env.ENCRYPTION_KEY = prevEnv;
+    encryption.resetEncryptionKeyCache();
+  }
+}
+
+// Run fn with ENCRYPTION_KEY set (as the Proxmox installers set it) over
+// the install's key file — the environment key must win.
+function withEnvKey(inst, envKey, fn) {
+  const prevFile = process.env.ENCRYPTION_KEY_FILE;
+  const prevEnv = process.env.ENCRYPTION_KEY;
+  process.env.ENCRYPTION_KEY_FILE = path.join(inst.dataDir, '.encryption-key');
+  process.env.ENCRYPTION_KEY = envKey;
+  encryption.resetEncryptionKeyCache();
+  try {
+    return fn();
+  } finally {
+    if (prevFile === undefined) delete process.env.ENCRYPTION_KEY_FILE;
+    else process.env.ENCRYPTION_KEY_FILE = prevFile;
+    if (prevEnv === undefined) delete process.env.ENCRYPTION_KEY;
+    else process.env.ENCRYPTION_KEY = prevEnv;
+    encryption.resetEncryptionKeyCache();
   }
 }
 
@@ -69,11 +99,12 @@ describe('Drive restore (staged, boot-applied)', () => {
       withKeyFile(inst, () => {
         const archivePath = path.join(inst.root, 'backup.tar.gz');
         const db = new Database(inst.dbPath);
-        const manifest = driveBackup.createBackupArchive(db, inst.dbPath, archivePath);
+        const manifest = driveBackup.createBackupArchive(db, inst.dbPath, archivePath, inst.uploadsDir);
         db.close();
 
         assert.strictEqual(manifest.backupFormat, 1);
         assert.strictEqual(manifest.schemaVersion, 5);
+        assert.strictEqual(manifest.encryptionKeySource, 'file');
         assert.ok(manifest.files['tasks.db'].sha256);
         assert.ok(manifest.files['.encryption-key'].sha256);
         assert.strictEqual(manifest.files.uploads.fileCount, 1);
@@ -96,14 +127,14 @@ describe('Drive restore (staged, boot-applied)', () => {
         // Back up v1, then move the live install on to v2.
         let db = new Database(inst.dbPath);
         const archiveA = path.join(inst.root, 'backup-a.tar.gz');
-        driveBackup.createBackupArchive(db, inst.dbPath, archiveA);
+        driveBackup.createBackupArchive(db, inst.dbPath, archiveA, inst.uploadsDir);
         db.prepare('UPDATE app_state SET note = ? WHERE id = 1').run('v2');
         fs.writeFileSync(path.join(inst.uploadsDir, 'note.txt'), 'v2');
         fs.writeFileSync(path.join(inst.uploadsDir, 'extra.txt'), 'only-in-v2');
 
         // Stage the v1 restore while v2 keeps running.
         const staged = driveRestore.stageRestoreArchive(db, inst.dbPath, {
-          archivePath: archiveA, source: 'drive', name: 'backup-a', fileId: 'file-a',
+          archivePath: archiveA, source: 'drive', name: 'backup-a', fileId: 'file-a', uploadsDir: inst.uploadsDir,
         });
         db.close();
         assert.strictEqual(staged.schemaVersion, 5);
@@ -112,7 +143,7 @@ describe('Drive restore (staged, boot-applied)', () => {
         assert.strictEqual(driveRestore.getRestoreStatus(inst.dbPath).rollbackAvailable, false);
 
         // "Reboot": the staged restore is applied before the DB opens.
-        const applied = driveRestore.applyPendingRestore(inst.dbPath);
+        const applied = driveRestore.applyPendingRestore(inst.dbPath, inst.uploadsDir);
         assert.strictEqual(applied.applied, true);
         assert.strictEqual(readMarker(inst.dbPath), 'v1');
         assert.strictEqual(fs.readFileSync(path.join(inst.uploadsDir, 'note.txt'), 'utf8'), 'v1');
@@ -123,10 +154,10 @@ describe('Drive restore (staged, boot-applied)', () => {
 
         // Roll back to the pre-restore (v2) state.
         db = new Database(inst.dbPath);
-        const rollback = driveRestore.stageRollback(db, inst.dbPath);
+        const rollback = driveRestore.stageRollback(db, inst.dbPath, inst.uploadsDir);
         db.close();
         assert.strictEqual(rollback.source, 'pre-restore');
-        const rolledBack = driveRestore.applyPendingRestore(inst.dbPath);
+        const rolledBack = driveRestore.applyPendingRestore(inst.dbPath, inst.uploadsDir);
         assert.strictEqual(rolledBack.applied, true);
         assert.strictEqual(readMarker(inst.dbPath), 'v2');
         assert.strictEqual(fs.readFileSync(path.join(inst.uploadsDir, 'note.txt'), 'utf8'), 'v2');
@@ -146,7 +177,7 @@ describe('Drive restore (staged, boot-applied)', () => {
       const archivePath = path.join(newer.root, 'future.tar.gz');
       withKeyFile(newer, () => {
         const db = new Database(newer.dbPath);
-        driveBackup.createBackupArchive(db, newer.dbPath, archivePath);
+        driveBackup.createBackupArchive(db, newer.dbPath, archivePath, newer.uploadsDir);
         db.close();
       });
 
@@ -154,7 +185,7 @@ describe('Drive restore (staged, boot-applied)', () => {
         const liveDb = new Database(live.dbPath);
         assert.throws(
           () => driveRestore.stageRestoreArchive(liveDb, live.dbPath, {
-            archivePath, source: 'drive', name: 'future', fileId: 'f',
+            archivePath, source: 'drive', name: 'future', fileId: 'f', uploadsDir: live.uploadsDir,
           }),
           /newer version of HomeGlow/,
         );
@@ -173,7 +204,7 @@ describe('Drive restore (staged, boot-applied)', () => {
       withKeyFile(inst, () => {
         const db = new Database(inst.dbPath);
         const archivePath = path.join(inst.root, 'good.tar.gz');
-        driveBackup.createBackupArchive(db, inst.dbPath, archivePath);
+        driveBackup.createBackupArchive(db, inst.dbPath, archivePath, inst.uploadsDir);
 
         const tamperDir = path.join(inst.root, 'tampered');
         extractTo(archivePath, tamperDir);
@@ -186,7 +217,7 @@ describe('Drive restore (staged, boot-applied)', () => {
 
         assert.throws(
           () => driveRestore.stageRestoreArchive(db, inst.dbPath, {
-            archivePath: badArchive, source: 'drive', name: 'tampered', fileId: 't',
+            archivePath: badArchive, source: 'drive', name: 'tampered', fileId: 't', uploadsDir: inst.uploadsDir,
           }),
           /integrity check/,
         );
@@ -211,7 +242,7 @@ describe('Drive restore (staged, boot-applied)', () => {
         execFileSync('tar', ['-czf', noKeyArchive, '-C', noKeyDir, '.']);
         assert.throws(
           () => driveRestore.stageRestoreArchive(db, inst.dbPath, {
-            archivePath: noKeyArchive, source: 'drive', name: 'nokey', fileId: 'k',
+            archivePath: noKeyArchive, source: 'drive', name: 'nokey', fileId: 'k', uploadsDir: inst.uploadsDir,
           }),
           /encryption key/,
         );
@@ -221,7 +252,7 @@ describe('Drive restore (staged, boot-applied)', () => {
         fs.writeFileSync(garbage, 'this is not a gzip archive');
         assert.throws(
           () => driveRestore.stageRestoreArchive(db, inst.dbPath, {
-            archivePath: garbage, source: 'drive', name: 'garbage', fileId: 'g',
+            archivePath: garbage, source: 'drive', name: 'garbage', fileId: 'g', uploadsDir: inst.uploadsDir,
           }),
           /could not be read as a backup archive/,
         );
@@ -247,14 +278,14 @@ describe('Drive restore (staged, boot-applied)', () => {
 
         const db = new Database(inst.dbPath);
         const staged = driveRestore.stageRestoreArchive(db, inst.dbPath, {
-          archivePath: legacyArchive, source: 'drive', name: 'legacy', fileId: 'l',
+          archivePath: legacyArchive, source: 'drive', name: 'legacy', fileId: 'l', uploadsDir: inst.uploadsDir,
         });
         assert.strictEqual(staged.legacy, true);
         assert.strictEqual(staged.schemaVersion, 5);
 
         assert.throws(
           () => driveRestore.stageRestoreArchive(db, inst.dbPath, {
-            archivePath: legacyArchive, source: 'drive', name: 'again', fileId: 'l2',
+            archivePath: legacyArchive, source: 'drive', name: 'again', fileId: 'l2', uploadsDir: inst.uploadsDir,
           }),
           /already staged/,
         );
@@ -262,13 +293,104 @@ describe('Drive restore (staged, boot-applied)', () => {
         driveRestore.cancelStagedRestore(inst.dbPath);
         assert.strictEqual(driveRestore.isRestoreStaged(inst.dbPath), false);
         const restaged = driveRestore.stageRestoreArchive(db, inst.dbPath, {
-          archivePath: legacyArchive, source: 'drive', name: 'legacy', fileId: 'l',
+          archivePath: legacyArchive, source: 'drive', name: 'legacy', fileId: 'l', uploadsDir: inst.uploadsDir,
         });
         assert.strictEqual(restaged.name, 'legacy');
         db.close();
       });
     } finally {
       fs.rmSync(inst.root, { recursive: true, force: true });
+    }
+  });
+
+  it('applies a restore when the uploads directory itself cannot be renamed (mount point)', () => {
+    const inst = makeInstall(5, 'v1');
+    try {
+      withKeyFile(inst, () => {
+        let db = new Database(inst.dbPath);
+        const archiveA = path.join(inst.root, 'backup-a.tar.gz');
+        driveBackup.createBackupArchive(db, inst.dbPath, archiveA, inst.uploadsDir);
+        db.prepare('UPDATE app_state SET note = ? WHERE id = 1').run('v2');
+        fs.writeFileSync(path.join(inst.uploadsDir, 'note.txt'), 'v2');
+        driveRestore.stageRestoreArchive(db, inst.dbPath, {
+          archivePath: archiveA, source: 'drive', name: 'backup-a', fileId: 'file-a', uploadsDir: inst.uploadsDir,
+        });
+        db.close();
+
+        // Simulate the standard Docker install, where uploads is a mount
+        // point: renaming the directory itself fails with EBUSY. The apply
+        // must swap the contents instead and still succeed.
+        const originalRenameSync = fs.renameSync;
+        fs.renameSync = (src, dest, ...rest) => {
+          if (String(src) === inst.uploadsDir || String(dest) === inst.uploadsDir) {
+            const err = new Error('Device or resource busy');
+            err.code = 'EBUSY';
+            throw err;
+          }
+          return originalRenameSync(src, dest, ...rest);
+        };
+        let applied;
+        try {
+          applied = driveRestore.applyPendingRestore(inst.dbPath, inst.uploadsDir);
+        } finally {
+          fs.renameSync = originalRenameSync;
+        }
+        assert.strictEqual(applied.applied, true);
+        assert.strictEqual(readMarker(inst.dbPath), 'v1');
+        assert.strictEqual(fs.readFileSync(path.join(inst.uploadsDir, 'note.txt'), 'utf8'), 'v1');
+      });
+    } finally {
+      fs.rmSync(inst.root, { recursive: true, force: true });
+    }
+  });
+
+  it('backs up the ENCRYPTION_KEY in use and refuses to stage it under a different one', () => {
+    const source = makeInstall(5, 'from-source');
+    const dest = makeInstall(5, 'on-dest');
+    try {
+      const archivePath = path.join(source.root, 'env-key-backup.tar.gz');
+      // The backup is made on an install whose environment key (ENV_KEY_A)
+      // wins over its key file (FILE_KEY): the archive must carry ENV_KEY_A
+      // and say so in the manifest.
+      withEnvKey(source, ENV_KEY_A, () => {
+        const db = new Database(source.dbPath);
+        const manifest = driveBackup.createBackupArchive(db, source.dbPath, archivePath, source.uploadsDir);
+        db.close();
+        assert.strictEqual(manifest.encryptionKeySource, 'env');
+      });
+      const checkDir = path.join(source.root, 'extracted');
+      extractTo(archivePath, checkDir);
+      assert.strictEqual(fs.readFileSync(path.join(checkDir, '.encryption-key'), 'utf8').trim(), ENV_KEY_A);
+
+      // Staging it on a server running under a DIFFERENT environment key
+      // is refused — the restored secrets would be unreadable there.
+      withEnvKey(dest, ENV_KEY_B, () => {
+        const db = new Database(dest.dbPath);
+        assert.throws(
+          () => driveRestore.stageRestoreArchive(db, dest.dbPath, {
+            archivePath, source: 'drive', name: 'env-key-backup', fileId: 'e', uploadsDir: dest.uploadsDir,
+          }),
+          /ENCRYPTION_KEY/,
+        );
+        db.close();
+        assert.strictEqual(driveRestore.isRestoreStaged(dest.dbPath), false);
+      });
+
+      // Under the SAME environment key it stages and applies.
+      withEnvKey(dest, ENV_KEY_A, () => {
+        const db = new Database(dest.dbPath);
+        const staged = driveRestore.stageRestoreArchive(db, dest.dbPath, {
+          archivePath, source: 'drive', name: 'env-key-backup', fileId: 'e', uploadsDir: dest.uploadsDir,
+        });
+        db.close();
+        assert.strictEqual(staged.name, 'env-key-backup');
+        const applied = driveRestore.applyPendingRestore(dest.dbPath, dest.uploadsDir);
+        assert.strictEqual(applied.applied, true);
+        assert.strictEqual(readMarker(dest.dbPath), 'from-source');
+      });
+    } finally {
+      fs.rmSync(source.root, { recursive: true, force: true });
+      fs.rmSync(dest.root, { recursive: true, force: true });
     }
   });
 });

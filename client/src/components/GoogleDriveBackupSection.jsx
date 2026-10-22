@@ -5,7 +5,7 @@ import {
   Switch, TextField, Stack,
   Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions
 } from '@mui/material';
-import { CloudUpload, Refresh, Schedule, SettingsBackupRestore, RestartAlt, Undo } from '@mui/icons-material';
+import { CloudUpload, Refresh, Schedule, SettingsBackupRestore, RestartAlt, Undo, Key } from '@mui/icons-material';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 
@@ -95,6 +95,28 @@ export default function GoogleDriveBackupSection() {
       setMessage({ type: 'error', text: err.response?.data?.error || 'Could not stage the restore.' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDownloadBackupKey = async () => {
+    const file = confirmAction?.file;
+    if (!file) return;
+    try {
+      const res = await axios.post(
+        `${API_BASE_URL}/api/backup/drive/backup-key`,
+        { fileId: file.id },
+        { responseType: 'blob' }
+      );
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'homeglow-encryption-key.txt';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setMessage({ type: 'error', text: 'That backup does not contain an encryption key, or it could not be downloaded.' });
     }
   };
 
@@ -296,6 +318,17 @@ export default function GoogleDriveBackupSection() {
             <br /><br />
             The restore is verified and staged first, your current data is saved so you can
             roll back, and nothing changes until HomeGlow restarts.
+            {confirmAction?.type === 'restore' && (
+              <>
+                <br /><br />
+                Moving to a new device? If this install sets ENCRYPTION_KEY in its environment
+                (Proxmox installs do, in /opt/homeglow/.env) and it differs from the backup's
+                key, staging will refuse until that variable is set to the backup's key.{' '}
+                <Button size="small" startIcon={<Key />} onClick={handleDownloadBackupKey} sx={{ verticalAlign: 'baseline', textTransform: 'none', p: 0, minWidth: 0 }}>
+                  Download this backup's encryption key
+                </Button>
+              </>
+            )}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
