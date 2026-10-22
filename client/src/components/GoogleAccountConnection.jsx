@@ -24,6 +24,7 @@ import {
 } from '@mui/icons-material';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
+import GoogleDriveBackupSection from './GoogleDriveBackupSection.jsx';
 
 const initialDraft = { client_id: '', client_secret: '', redirect_uri: '' };
 
@@ -349,6 +350,8 @@ const GoogleAccountConnection = ({ onMessage }) => {
           </Button>
         </Box>
       )}
+
+      <GoogleDriveBackupSection />
     </Box>
   );
 };
