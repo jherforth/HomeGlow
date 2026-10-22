@@ -13,6 +13,16 @@ let cachedKey = null;
 let cachedKeyStatus = null;
 let cachedKeySource = null;
 
+// The file this module reads the key from (env override wins). Resolved on
+// each call so tests and relocated installs point at the right file; the
+// Drive backup/restore services use this to back up and restore the exact
+// key the running app encrypts with.
+function getEncryptionKeyFilePath() {
+    return process.env.ENCRYPTION_KEY_FILE
+        ? path.resolve(process.env.ENCRYPTION_KEY_FILE)
+        : DEFAULT_KEY_FILE;
+}
+
 function resetEncryptionKeyCache() {
     cachedKey = null;
     cachedKeyStatus = null;
@@ -201,6 +211,7 @@ module.exports = {
     getEncryptionStatus,
     getEncryptionSource,
     resetEncryptionKeyCache,
+    getEncryptionKeyFilePath,
     isLegacyCiphertext,
     decryptLegacy,
     LEGACY_FALLBACK_KEY,

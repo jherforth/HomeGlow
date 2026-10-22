@@ -7111,6 +7111,18 @@ fastify.get('/api/system/backgroundTasks', async (request, reply) => {
 // Start server
 const start = async () => {
   try {
+    // Apply a staged Google Drive restore, if one is pending, before the
+    // database is opened: the file swap is only safe while no connection
+    // holds the database. See services/driveRestore.js.
+    if (!DEMO_MODE && dbPath !== ':memory:') {
+      try {
+        const { applyPendingRestore } = require('./services/driveRestore');
+        applyPendingRestore(dbPath);
+      } catch (restoreErr) {
+        console.error('[DriveRestore] Could not apply staged restore:', restoreErr.message);
+        throw restoreErr;
+      }
+    }
     db = await ConnectOrCreateDb();
     isFreshInstall = !doesTableExist('settings');
     if (isFreshInstall) {
@@ -7192,6 +7204,9 @@ const start = async () => {
       console.warn(' server/data/.encryption-key to regenerate on restart.');
       console.warn('================================================================');
     }
+
+    // Google Drive backup & restore endpoints (Admin → Google Account).
+    fastify.register(require("./routes/driveBackup"), { db });
 
     await fastify.listen({ port: process.env.PORT || 5000, host: '0.0.0.0' });
     console.log(`Server running on port ${process.env.PORT || 5000}`);
