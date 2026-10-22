@@ -16,8 +16,22 @@
 // the rest of the server already emits (services/pluginEvents.js). A tap opens
 // HomeGlow's start page: an iPhone opens the app on a tap whatever it is told,
 // so every message says where.
+//
+// A plugin whose manifest says "notify": true may send a short message of its
+// own (sendFromPlugin). A device hears a plugin only after it ticks that
+// plugin, kept with its events as "plugin:<id>"; it starts with none.
 
 const NOTIFICATION_EVENTS = Object.freeze(['chore.completed', 'chore.allCompleted']);
+const PLUGIN_EVENT_PREFIX = 'plugin:';
+
+// A plugin's message: a title and a line of text, nothing of its own beyond
+// that. Tags are the plugin's own (homeglow-plugin-<id>-<tag>), so one plugin
+// can only replace its own messages.
+const PLUGIN_TITLE_MAX = 60;
+const PLUGIN_MESSAGE_MAX = 300;
+const PLUGIN_TAG = /^[a-z0-9][a-z0-9-]{0,39}$/;
+// How many messages one plugin may send: a burst, and an hour's worth.
+const PLUGIN_LIMITS = [{ windowMs: 60 * 1000, max: 5 }, { windowMs: 60 * 60 * 1000, max: 30 }];
 
 const PUBLIC_KEY_SETTING = 'PUSH_VAPID_PUBLIC_KEY';
 const PRIVATE_KEY_SETTING = 'PUSH_VAPID_PRIVATE_KEY_ENC';
@@ -98,10 +112,15 @@ function parseSubscription(raw) {
   return { endpoint, p256dh: keys.p256dh, auth: keys.auth };
 }
 
-/** The events a device asked for, checked: a subset of NOTIFICATION_EVENTS. */
-function parseEvents(raw) {
+/**
+ * The events a device asked for, checked: NOTIFICATION_EVENTS, and
+ * "plugin:<id>" for any of `pluginIds` (the plugins that may notify).
+ */
+function parseEvents(raw, pluginIds = new Set()) {
   if (!Array.isArray(raw)) return { error: 'events must be a list' };
-  const unknown = raw.filter((event) => !NOTIFICATION_EVENTS.includes(event));
+  const known = (event) => NOTIFICATION_EVENTS.includes(event)
+    || (typeof event === 'string' && event.startsWith(PLUGIN_EVENT_PREFIX) && pluginIds.has(event.slice(PLUGIN_EVENT_PREFIX.length)));
+  const unknown = raw.filter((event) => !known(event));
   if (unknown.length) return { error: `unknown events: ${unknown.join(', ')}` };
   return { events: [...new Set(raw)] };
 }
@@ -161,9 +180,17 @@ function createNotifier({
     JOIN devices d ON d.id = n.device_id WHERE d.name = ?
   `).get(deviceName);
 
+  // The installed plugins that may notify, for a device to choose from.
+  function notifyPlugins() {
+    return db.prepare('SELECT plugin_id, name, manifest_json FROM plugins ORDER BY name COLLATE NOCASE').all()
+      .filter((row) => parseJson(row.manifest_json || 'null', null)?.notify === true)
+      .map((row) => ({ id: row.plugin_id, name: row.name || row.plugin_id }));
+  }
+
   const describe = (row) => (row ? {
     enabled: true,
     events: parseJson(row.events_json, []),
+    plugins: notifyPlugins(),
     members: row.members_json ? parseJson(row.members_json, null) : 'all',
     language: row.language || null,
     createdAt: row.created_at,
@@ -188,7 +215,7 @@ function createNotifier({
     }
     const events = body.events === undefined && existing
       ? { events: parseJson(existing.events_json, []) }
-      : parseEvents(body.events ?? NOTIFICATION_EVENTS);
+      : parseEvents(body.events ?? NOTIFICATION_EVENTS, new Set(notifyPlugins().map((plugin) => plugin.id)));
     if (events.error) return { status: 400, error: events.error };
     const knownIds = new Set(db.prepare('SELECT id FROM users WHERE id != 0').all().map((u) => u.id));
     const members = body.members === undefined && existing
@@ -268,12 +295,13 @@ function createNotifier({
 
   const userName = (userId) => db.prepare('SELECT username FROM users WHERE id = ?').get(userId)?.username || null;
 
-  // The devices that want `event` about `userId`.
+  // The devices that want `event` about `userId`. A message about no one in
+  // particular (userId null) goes to every device that wants the event.
   function recipients(event, userId) {
     return db.prepare('SELECT * FROM device_notifications').all().filter((row) => {
       if (!parseJson(row.events_json, []).includes(event)) return false;
       const members = row.members_json ? parseJson(row.members_json, null) : null;
-      return !members || members.includes(userId);
+      return !members || userId === null || members.includes(userId);
     });
   }
 
@@ -342,6 +370,46 @@ function createNotifier({
     });
   }
 
+  const pluginSends = new Map();
+  // True when this send would take the plugin over a limit; counts it if not.
+  function overLimit(pluginId) {
+    const at = now();
+    const longest = Math.max(...PLUGIN_LIMITS.map((limit) => limit.windowMs));
+    const recentSends = (pluginSends.get(pluginId) || []).filter((sent) => at - sent < longest);
+    pluginSends.set(pluginId, recentSends);
+    if (PLUGIN_LIMITS.some(({ windowMs, max }) => recentSends.filter((sent) => at - sent < windowMs).length >= max)) return true;
+    recentSends.push(at);
+    return false;
+  }
+
+  /**
+   * A plugin's own message, to the devices that ticked that plugin.
+   * `about` (a family member's id) lets each device's "About" choice apply;
+   * without it every such device hears it. Resolves { status, body | error }.
+   */
+  async function sendFromPlugin({ pluginId, pluginName, title, message, tag, about }) {
+    if (typeof message !== 'string' || !message.trim()) return { status: 400, error: 'A notification needs a message.' };
+    if (title !== undefined && title !== null && typeof title !== 'string') return { status: 400, error: 'title must be text.' };
+    if (tag !== undefined && tag !== null && (typeof tag !== 'string' || !PLUGIN_TAG.test(tag))) {
+      return { status: 400, error: 'tag must be up to 40 lowercase letters, numbers and dashes.' };
+    }
+    let userId = null;
+    if (about !== undefined && about !== null) {
+      userId = Number(about);
+      if (!Number.isInteger(userId) || userId === 0 || !userName(userId)) return { status: 400, error: 'about must be a family member\'s id.' };
+    }
+    if (overLimit(pluginId)) return { status: 429, error: 'This plugin has sent too many notifications; try again later.' };
+
+    const payload = {
+      title: (title && title.trim() ? title.trim() : pluginName || pluginId).slice(0, PLUGIN_TITLE_MAX),
+      body: message.trim().slice(0, PLUGIN_MESSAGE_MAX),
+      url: '/',
+    };
+    if (tag) payload.tag = `homeglow-plugin-${pluginId}-${tag}`;
+    const results = await Promise.all(recipients(`${PLUGIN_EVENT_PREFIX}${pluginId}`, userId).map((row) => deliver(row, payload)));
+    return { status: 200, body: { sent: results.filter((result) => result.ok).length } };
+  }
+
   /** A pluginEvents subscriber: sends what an event makes, in the background. */
   function handle(message) {
     let messages;
@@ -360,6 +428,7 @@ function createNotifier({
     save,
     remove,
     sendTest,
+    sendFromPlugin,
     compose,
     handle,
     enabledDeviceIds: () => new Set(db.prepare('SELECT device_id FROM device_notifications').all().map((r) => r.device_id)),

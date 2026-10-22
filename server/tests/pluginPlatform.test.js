@@ -201,6 +201,21 @@ test('"expand" in a manifest must be true or false', async () => {
     assert.equal(ok.status, 200);
 });
 
+test('"notify" in a manifest must be true or false, and lets the plugin send', async () => {
+    const bad = { ...validManifest, id: 'notify-check', notify: 'yes' };
+    const upload = await uploadWidget('notify-bad.html', widgetHtml(bad));
+    assert.equal(upload.status, 400);
+    assert.match(upload.body.error, /notify must be a boolean/);
+
+    const good = { ...validManifest, id: 'notify-check', notify: true };
+    assert.equal((await uploadWidget('notify-good.html', widgetHtml(good))).status, 200);
+    const sent = await api('/api/plugin/v1/notify/notify-check', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'Hello' }),
+    });
+    assert.equal(sent.status, 200, JSON.stringify(sent.body));
+    assert.deepEqual(sent.body, { sent: 0 });
+});
+
 test('a second widget cannot claim an existing pluginId', async () => {
     const upload = await uploadWidget('impostor.html', widgetHtml(validManifest));
     assert.equal(upload.status, 409);

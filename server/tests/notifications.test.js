@@ -20,6 +20,9 @@ function freshDb() {
     CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT);
     CREATE TABLE chores (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT);
     CREATE TABLE routines (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, chore_id INTEGER);
+    CREATE TABLE plugins (id INTEGER PRIMARY KEY AUTOINCREMENT, plugin_id TEXT, name TEXT, manifest_json TEXT);
+    INSERT INTO plugins (plugin_id, name, manifest_json) VALUES
+      ('polls', 'Polls', '{"notify":true}'), ('grill', 'Grill', '{"notify":true}'), ('clock', 'Clock', '{}');
     INSERT INTO users (id, username) VALUES (0, 'bonus'), (1, 'Ava'), (2, 'Leo');
     INSERT INTO chores (id, title) VALUES (10, 'Feed the cat'), (11, 'Make the bed'), (12, 'Morning');
     INSERT INTO routines (name, chore_id) VALUES ('Morning', 12);
@@ -87,7 +90,7 @@ test('a device turns notifications on, changes them, and turns them off', () => 
 
   const on = notifier.save('Mom phone', { subscription: subscription(), language: 'es' });
   assert.equal(on.status, 200);
-  assert.deepEqual(on.body.events, NOTIFICATION_EVENTS, 'every event by default');
+  assert.deepEqual(on.body.events, NOTIFICATION_EVENTS, 'the chore events by default, no plugins');
   assert.equal(on.body.members, 'all');
 
   const changed = notifier.save('Mom phone', { events: ['chore.allCompleted'], members: [1] });
@@ -208,4 +211,50 @@ test('a test message reports how it went', async () => {
   assert.equal(result.status, 200);
   assert.equal(sent[0].payload.title, 'Notifications are working');
   assert.ok(notifier.get('Mom phone').lastSuccessAt);
+});
+
+test('a device chooses among the plugins that may notify', () => {
+  const { notifier } = setup();
+  const on = notifier.save('Mom phone', { subscription: subscription() });
+  assert.deepEqual(on.body.plugins, [{ id: 'grill', name: 'Grill' }, { id: 'polls', name: 'Polls' }], 'not Clock, which does not notify');
+  assert.equal(notifier.save('Mom phone', { events: ['plugin:polls'] }).status, 200);
+  assert.equal(notifier.save('Mom phone', { events: ['plugin:clock'] }).status, 400, 'Clock does not notify');
+  assert.equal(notifier.save('Mom phone', { events: ['plugin:nothere'] }).status, 400);
+});
+
+test('a plugin message goes only to devices that ticked that plugin, about whom they asked', async () => {
+  const { notifier, sent } = setup();
+  notifier.save('Mom phone', { subscription: subscription(1), events: ['chore.completed', 'plugin:grill', 'plugin:polls'] });
+  notifier.save('Dad phone', { subscription: subscription(2), events: ['plugin:grill', 'plugin:polls'], members: [2] });
+  notifier.save('Kitchen', { subscription: subscription(3), events: ['plugin:polls'] });
+
+  const anyone = await notifier.sendFromPlugin({ pluginId: 'grill', pluginName: 'Grill', message: ' Brisket is ready ' });
+  assert.deepEqual(anyone, { status: 200, body: { sent: 2 } });
+  assert.deepEqual(sent.map((s) => s.endpoint.slice(-1)).sort(), ['1', '2'], 'not Kitchen, which ticked only Polls');
+  assert.deepEqual(sent[0].payload, { title: 'Grill', body: 'Brisket is ready', url: '/' }, 'titled by the plugin, untagged');
+
+  sent.length = 0;
+  const aboutAva = await notifier.sendFromPlugin({ pluginId: 'polls', pluginName: 'Polls', title: 'Vote closed', message: 'Pizza won', tag: 'vote-7', about: 1 });
+  assert.equal(aboutAva.body.sent, 2);
+  assert.deepEqual(sent.map((s) => s.endpoint.slice(-1)).sort(), ['1', '3'], 'Dad hears only about Leo');
+  assert.equal(sent[0].payload.tag, 'homeglow-plugin-polls-vote-7', 'the tag is the plugin\'s own');
+  assert.equal(sent[0].payload.title, 'Vote closed');
+});
+
+test('a plugin message is checked and limited', async () => {
+  const { notifier, advance } = setup();
+  const send = (fields) => notifier.sendFromPlugin({ pluginId: 'p', pluginName: 'P', message: 'hi', ...fields });
+  assert.equal((await send({ message: '  ' })).status, 400);
+  assert.equal((await send({ tag: 'Has Spaces' })).status, 400);
+  assert.equal((await send({ about: 0 })).status, 400, 'not the bonus user');
+  assert.equal((await send({ about: 99 })).status, 400);
+  assert.equal((await send({ title: 5 })).status, 400);
+
+  const long = await notifier.sendFromPlugin({ pluginId: 'q', pluginName: 'Q', message: 'x' });
+  assert.equal(long.status, 200);
+  for (let i = 0; i < 5; i += 1) assert.equal((await send({})).status, 200, 'refused sends above did not count');
+  assert.equal((await send({})).status, 429, 'five a minute');
+  assert.equal((await notifier.sendFromPlugin({ pluginId: 'q', pluginName: 'Q', message: 'x' })).status, 200, 'per plugin');
+  advance(61 * 1000);
+  assert.equal((await send({})).status, 200, 'a minute later');
 });

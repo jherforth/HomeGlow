@@ -278,6 +278,20 @@
       }
     },
 
+    /**
+     * Send a short notification to the household's phones: those that ticked
+     * this plugin in Admin → Displays → Devices. Needs "notify": true
+     * in the manifest. { message, title?, tag?, about? }: title defaults to
+     * the plugin's name, a tag replaces your last message with that tag, and
+     * about (a family member's id) lets a phone that hears only some people
+     * skip it. Resolves { sent }, the number of phones reached. A plugin may
+     * send 5 a minute and 30 an hour. Older HomeGlows have no notify(); check
+     * for it first.
+     */
+    notify: function (note) {
+      return request('POST', '/notify/' + encodeURIComponent(requirePluginId()), note || {});
+    },
+
     /** Remove a handler added with on(). */
     off: function (event, handler) {
       var handlers = eventHandlers[event];

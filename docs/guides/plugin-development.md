@@ -218,6 +218,7 @@ serving your widget, and the SDK picks it up — you never pass your own id.
 | `hideableControls` | — | Controls a display may be configured to hide (see §4). |
 | `expand` | — | `false` keeps the plugin from being expanded to half or the whole page on a display that expands widgets, for a plugin whose own double-tap or drag would fight with it. Leave it out otherwise (see "Being expanded" in §5). |
 | `homeAssistant` | — | `{ "entities": [...], "control": true }`: the Home Assistant entities the plugin may read and operate (see §5a). |
+| `notify` | — | `true` to send notifications to the household's phones with `HomeGlow.notify` (see "Sending a notification" in §5). Without it, sends are 403. |
 
 Keys not listed here are **ignored**, not rejected — so a misspelled field fails
 silently rather than loudly.
@@ -458,6 +459,38 @@ the household's to control, not yours:
   system for reduced motion.
 - **Check for it first.** A HomeGlow older than the call has no `celebrate`.
 - **Keep it for real moments.** Every tick of a checkbox is not one.
+
+### Sending a notification
+
+For news someone away from the board would want (a poll closed, the
+brisket is ready), declare `"notify": true` and send a short message to the
+household's phones:
+
+```js
+if (typeof HomeGlow.notify === 'function') {
+  await HomeGlow.notify({ title: 'Poll closed', message: 'Pizza won, 4 votes to 2', tag: 'poll-7' });
+}
+```
+
+It goes through HomeGlow's own push notifications. Each phone with
+notifications on lists the installed plugins that declare `notify` under
+**Messages from:** in Admin → Displays → Devices, and hears only the ones it
+ticks. Every plugin starts unticked, so a send may reach no one; it resolves
+`{ sent }`, the number of phones reached.
+
+- **`message`** is required (up to 300 characters). **`title`** defaults to
+  your plugin's name (up to 60).
+- **`tag`** (lowercase letters, numbers and dashes, up to 40) replaces your
+  last message with the same tag instead of adding another. It is yours
+  alone: another plugin's tag never touches it.
+- **`about`**, a family member's id, lets a phone that hears about only some
+  people skip it. Leave it out for news about the whole household.
+- **Limits:** 5 a minute and 30 an hour per plugin (`429` over them). Text
+  only; a tap opens HomeGlow.
+- **Check for it first.** A HomeGlow older than the call has no `notify`.
+
+Most plugins don't need this: a calendar, weather or photo service already
+has its own app that notifies. Keep it for what only your plugin knows.
 
 ### Being expanded
 
@@ -829,6 +862,7 @@ see §3–§5. The raw endpoints:
 | `GET` | `/api/plugin/v1/ha/:pluginId/state` | → `{ entities, control, live, unit, pinProtection, error? }` (§5a) |
 | `POST` | `/api/plugin/v1/ha/:pluginId/action` | body: `{ entity` or `entities, action, value?, pin?, device? }` → `{ ok, entities }`; `401 { needsPin }`, `403` outside your list, `429` over 10 a second |
 | `GET` | `/api/plugin/v1/ha/:pluginId/camera/:entityId` | → a declared camera's snapshot image |
+| `POST` | `/api/plugin/v1/notify/:pluginId` | body: `{ message, title?, tag?, about? }` → `{ sent }`; `403` without `"notify": true`, `429` over 5 a minute or 30 an hour |
 
 `:pluginId` must match your manifest `id`, and storage/settings require
 `"storage": true` / declared `settings` respectively (else `403`).

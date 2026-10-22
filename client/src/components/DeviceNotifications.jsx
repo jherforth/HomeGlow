@@ -20,6 +20,8 @@ const EVENT_LABELS = {
   'chore.completed': 'admin:devices.notifications.eventCompleted',
   'chore.allCompleted': 'admin:devices.notifications.eventAllDone',
 };
+// A plugin that may notify is ticked per device, as one of its events.
+const pluginEvent = (pluginId) => `plugin:${pluginId}`;
 
 export function DeviceNotificationsCard({ deviceName, onChanged }) {
   const { t, i18n } = useTranslation(['admin', 'common']);
@@ -68,10 +70,13 @@ export function DeviceNotificationsCard({ deviceName, onChanged }) {
   const test = () => act(async () => { await sendTestNotification(deviceName); return null; }, t('admin:devices.notifications.testSent'));
   const change = (changes) => act(() => updateNotifications(deviceName, changes));
 
+  const plugins = Array.isArray(state?.plugins) ? state.plugins : [];
   const toggleEvent = (event, on) => {
     const events = new Set(state.events);
     if (on) events.add(event); else events.delete(event);
-    void change({ events: NOTIFICATION_EVENTS.filter((e) => events.has(e)) });
+    // Only what can still be chosen: a plugin removed since drops out.
+    const choosable = [...NOTIFICATION_EVENTS, ...plugins.map((plugin) => pluginEvent(plugin.id))];
+    void change({ events: choosable.filter((e) => events.has(e)) });
   };
   const chosen = Array.isArray(state?.members) ? state.members : null;
   const toggleMember = (id) => {
@@ -121,6 +126,27 @@ export function DeviceNotificationsCard({ deviceName, onChanged }) {
               />
             ))}
           </FormGroup>
+
+          {plugins.length > 0 && (
+            <>
+              <Typography variant="body2" sx={{ mb: 1 }}>{t('admin:devices.notifications.fromPlugins')}</Typography>
+              <FormGroup sx={{ mb: 1.5 }}>
+                {plugins.map((plugin) => (
+                  <FormControlLabel
+                    key={plugin.id}
+                    control={(
+                      <Checkbox
+                        checked={state.events.includes(pluginEvent(plugin.id))}
+                        onChange={(e) => toggleEvent(pluginEvent(plugin.id), e.target.checked)}
+                        disabled={busy}
+                      />
+                    )}
+                    label={plugin.name}
+                  />
+                ))}
+              </FormGroup>
+            </>
+          )}
 
           <Typography variant="body2" sx={{ mb: 0.5 }}>{t('admin:devices.notifications.whose')}</Typography>
           <RadioGroup

@@ -483,11 +483,18 @@ messages), `WidgetContainer.jsx` (expanding, held taps, buttons, timers),
   someone finishes all of today's chores, even with HomeGlow closed. Turned on
   from the device itself, in **Admin Panel → Displays → Devices** ("Notifications
   on this device"), which asks the phone's permission.
-- **Each device chooses for itself:** which of the two events, and about whom
+- **Each device chooses for itself:** which events, and about whom
   (everyone, or chosen family members). The phone's own quiet hours (Focus, Do
   Not Disturb) decide when it makes a sound. Completions by one person close
   together update one notification ("Ava finished 3 chores") rather than
   stacking up.
+- **Plugins can send a message too**, when their manifest declares `"notify":
+  true` (a poll closed, the brisket is ready). Those plugins are listed on
+  each device's card under **Messages from:**, and a device hears only the
+  ones it ticks; each starts unticked. A plugin can say
+  whom a message is about, and a device's "About" choice then applies. Five a
+  minute and 30 an hour per plugin. See the plugin guide, "Sending a
+  notification".
 - A tap opens HomeGlow. Messages are in the language the device used when it
   turned them on (English or Spanish).
 - The devices table shows which devices have them on, with a test and a way to

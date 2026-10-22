@@ -893,6 +893,11 @@ function extractPluginManifest(htmlContent) {
   if (manifest.storage !== undefined && typeof manifest.storage !== 'boolean') {
     errors.push('storage must be a boolean.');
   }
+  // true lets the plugin send short messages to the phones that ticked it
+  // (/api/plugin/v1/notify, services/notifications.js).
+  if (manifest.notify !== undefined && typeof manifest.notify !== 'boolean') {
+    errors.push('notify must be a boolean.');
+  }
   // false keeps the plugin from being expanded to half or the whole page on
   // a display that expands widgets (client/src/utils/widgetExpand.js), for a
   // plugin whose own double-tap or drag would fight with it.
@@ -1100,7 +1105,15 @@ const notifier = notifications.createNotifier({
   encrypt,
   decrypt,
 });
-registerNotificationRoutes(fastify, { notifier, demoBlocked, ensureDevice: (name) => ensureDeviceExists(name) });
+registerNotificationRoutes(fastify, {
+  notifier,
+  demoBlocked,
+  ensureDevice: (name) => ensureDeviceExists(name),
+  pluginManifest: (pluginId) => {
+    const row = db.prepare('SELECT manifest_json FROM plugins WHERE plugin_id = ?').get(pluginId);
+    return row ? parseJsonObject(row.manifest_json, {}) : null;
+  },
+});
 pluginEvents.subscribe((message) => { void notifier.handle(message); });
 
 // Helper: Load legacy on-disk widget registry (kept for the debug endpoint)

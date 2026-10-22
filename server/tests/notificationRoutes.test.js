@@ -124,3 +124,27 @@ test('turning them off, and a test for a device without them', async () => {
   assert.equal(first.status, 200, 'turning them on makes the device record');
   assert.ok((await api('/api/devices')).body.some((d) => d.name === 'New-phone' && d.notifications));
 });
+
+test('a plugin notifies only when its manifest declares notify', async () => {
+  const db = new Database(testDbPath);
+  const add = db.prepare('INSERT INTO plugins (plugin_id, filename, name, content, source, manifest_json) VALUES (?, ?, ?, ?, ?, ?)');
+  add.run('notifier', 'Notifier.html', 'Notifier', '<html></html>', 'github', JSON.stringify({ id: 'notifier', name: 'Notifier', notify: true }));
+  add.run('quiet', 'Quiet.html', 'Quiet', '<html></html>', 'github', JSON.stringify({ id: 'quiet', name: 'Quiet' }));
+  db.close();
+
+  const sent = await post('/api/plugin/v1/notify/notifier', { message: 'Hello' });
+  assert.equal(sent.status, 200, JSON.stringify(sent.body));
+  assert.deepEqual(sent.body, { sent: 0 }, 'no device has ticked it');
+  assert.equal((await post('/api/plugin/v1/notify/notifier', {})).status, 400);
+  assert.equal((await post('/api/plugin/v1/notify/quiet', { message: 'Hello' })).status, 403);
+  assert.equal((await post('/api/plugin/v1/notify/nobody', { message: 'Hello' })).status, 403);
+
+  // A device chooses among the plugins that may notify (sending is left out:
+  // this would reach a real push service).
+  const on = await put('/api/devices/Plugin%20phone/notifications', { subscription, events: ['plugin:notifier'] });
+  assert.equal(on.status, 200, JSON.stringify(on.body));
+  assert.deepEqual(on.body.events, ['plugin:notifier']);
+  assert.deepEqual(on.body.plugins, [{ id: 'notifier', name: 'Notifier' }]);
+  assert.equal((await put('/api/devices/Plugin%20phone/notifications', { events: ['plugin:quiet'] })).status, 400);
+  assert.equal((await del('/api/devices/Plugin%20phone/notifications')).status, 200);
+});
