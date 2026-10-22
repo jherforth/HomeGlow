@@ -135,3 +135,17 @@ describe('clumped placement', () => {
     expect(check([{ layer: 'sprites', src: 'assets/kelp.svg', count: 4, height: 30, clumps: 0 }])).toHaveLength(1);
   });
 });
+
+describe('flyby lens', () => {
+  const lensLayer = { layer: 'flyby', pictures: [{ src: 'assets/kelp.svg', aspect: 1 }], height: [20, 30], lens: 0.8 };
+
+  it('accepts one lens in flight up to 50vh, and nothing else', () => {
+    expect(check([lensLayer])).toEqual([]);
+    expect(check([{ ...lensLayer, count: 1 }])).toEqual([]);
+    expect(check([{ ...lensLayer, lens: 1.5 }])).toHaveLength(1);
+    expect(check([{ ...lensLayer, count: 2 }])).toEqual(['ambience[0].count must be 1 for a lens']);
+    expect(check([{ ...lensLayer, height: [30, 60] }])).toEqual(['ambience[0]: a lens picture may be at most 50vh tall']);
+    expect(check([{ layer: 'flyby', lens: 0.8, pictures: [{ src: 'assets/kelp.svg', height: 55 }] }]))
+      .toEqual(['ambience[0]: a lens picture may be at most 50vh tall']);
+  });
+});

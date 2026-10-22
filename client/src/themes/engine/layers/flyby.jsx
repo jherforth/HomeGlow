@@ -4,6 +4,7 @@ import { keyframes } from '@emotion/react';
 import { cross, draw, forMode, pick, pickWeighted } from '../motion.js';
 import { pathKeyframes, planOrbitSystem, planPath } from '../paths.js';
 import { Flexed, planFlex } from '../flex.jsx';
+import { LensFilter } from '../lens.jsx';
 
 // Now and then, one picture crosses the screen: a ship, a passing whale, a
 // drifting astronaut. Each pass picks a picture (weighted), a side to enter
@@ -18,7 +19,9 @@ import { Flexed, planFlex } from '../flex.jsx';
 // its path when the page loads, so the scene does not start empty. With
 // `path: orbit`, every picture in the layer circles one focus, the same way
 // round, each on its own ellipse. A picture with `flex` bends as it goes
-// (flex.jsx): a fish's tail beating.
+// (flex.jsx): a fish's tail beating. With `lens`, the scene behind the picture
+// bends toward its middle as it passes (lens.jsx): a black hole. A lens layer
+// keeps one picture in flight.
 const screenAspect = () => (typeof window !== 'undefined' && window.innerHeight
   ? window.innerWidth / window.innerHeight
   : 16 / 9);
@@ -80,6 +83,18 @@ function nextPass(random, options, mode, first = false, system = null) {
   };
 }
 
+// Pixels per vh, kept current while a lens needs its filter sized in pixels.
+function useVhPixels(active) {
+  const [px, setPx] = useState(() => (typeof window !== 'undefined' ? window.innerHeight / 100 : 10));
+  useEffect(() => {
+    if (!active) return undefined;
+    const update = () => setPx(window.innerHeight / 100);
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, [active]);
+  return px;
+}
+
 const prefersReducedMotion = () => typeof window !== 'undefined'
   && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
@@ -89,6 +104,10 @@ function Traveler({ options, assets, random, mode, system, onDone }) {
   const [pass, setPass] = useState(() => nextPass(random, options, mode, !onDone, system));
   const travel = useMemo(() => (pass.frames ? keyframes`${pass.frames}` : null), [pass.frames]);
   const url = assets[pass.src];
+  const lens = options.lens > 0 ? options.lens : 0;
+  const vhPixels = useVhPixels(lens > 0);
+  // A filter id per pass; CSS ids can't start with a digit.
+  const lensId = lens ? `hg-lens-${String(pass.id).slice(2, 12)}` : null;
   useEffect(() => {
     if (!url && onDone) onDone();
   }, [url, onDone]);
@@ -114,7 +133,11 @@ function Traveler({ options, assets, random, mode, system, onDone }) {
         top: 0,
         width: `${pass.width}vh`,
         height: `${pass.height}vh`,
-        opacity: options.opacity ?? 1,
+        // A lens bends what is behind this box, so the box itself stays
+        // opaque (opacity below 1 would leave it nothing behind to bend);
+        // the picture inside takes the layer's opacity instead.
+        opacity: lens ? 1 : options.opacity ?? 1,
+        ...(lensId ? { backdropFilter: `url(#${lensId})`, WebkitBackdropFilter: `url(#${lensId})` } : {}),
         ...(travel
           ? { animation: `${travel} ${pass.seconds}s linear ${pass.pause}s 1 both` }
           : {
@@ -128,10 +151,12 @@ function Traveler({ options, assets, random, mode, system, onDone }) {
         willChange: 'transform',
       }}
     >
+      {lensId ? <LensFilter id={lensId} width={pass.width * vhPixels} height={pass.height * vhPixels} strength={lens} /> : null}
       <Box
         sx={{
           position: 'absolute',
           inset: 0,
+          ...(lens && options.opacity !== undefined ? { opacity: options.opacity } : {}),
           ...(pass.flex ? {} : picture),
           // A path's keyframes carry their own mirroring.
           ...(() => {
@@ -149,7 +174,7 @@ function Traveler({ options, assets, random, mode, system, onDone }) {
 
 function Flyby({ options, assets, random, mode }) {
   const [still] = useState(prefersReducedMotion);
-  const [count] = useState(() => Math.max(1, draw(random, options.count ?? 1, { integer: true })));
+  const [count] = useState(() => (options.lens > 0 ? 1 : Math.max(1, draw(random, options.count ?? 1, { integer: true }))));
   // One focus and one way round for the whole layer, so the planets keep company.
   const [system] = useState(() => (options.path === 'orbit' ? planOrbitSystem(random, options) : null));
   if (still) return null;

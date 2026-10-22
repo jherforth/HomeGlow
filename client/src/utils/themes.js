@@ -301,7 +301,7 @@ export function validateThemePackage(pkg, { assets } = {}) {
     // and clumped sprites; 3, the button roles and curved flyby crossings
     // (path, count, begin and the rest); 4, weather scenes and lightning
     // flashes; 5, orbits; 6, a confetti cast; 7, bending pictures (flex);
-    // 8, a frame backdrop that saturates.
+    // 8, a frame backdrop that saturates; 9, a flyby lens.
     // A theme that uses them says so, so a core too old
     // to draw them refuses it plainly.
     const tokenNames = ['all', ...MODES].flatMap((key) => Object.keys(pkg.tokens?.[key] || {}));
@@ -341,6 +341,7 @@ export function validateThemePackage(pkg, { assets } = {}) {
         return typeof value === 'string' && isBackdrop(value.trim()) && value.includes('saturate(');
       }) && 'saturate',
     ]);
+    needs(9, [layers.some((layer) => layer?.layer === 'flyby' && layer.lens !== undefined) && 'lens']);
   }
   if (typeof pkg.id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(pkg.id)) errors.push('id must be a lowercase slug (a-z, 0-9, hyphens, max 64)');
   if (typeof pkg.name !== 'string' || !pkg.name.trim() || pkg.name.length > 60) errors.push('name is required');
@@ -389,10 +390,10 @@ export const DEFAULT_THEME_ID = 'classic';
  * theme it cannot draw rather than half-applying it (theme-architecture.md
  * §5). 2: ornaments and the meter roles. 3: the button roles and curved
  * flybys. 4: weather scenes and the flash layer. 5: orbits. 6: a confetti
- * cast. 7: bending pictures (flex). 8: saturate() in the frame backdrop. The server's MANIFEST_VERSION (services/themeStore.js) matches; a
+ * cast. 7: bending pictures (flex). 8: saturate() in the frame backdrop. 9: a flyby lens. The server's MANIFEST_VERSION (services/themeStore.js) matches; a
  * server test holds them equal.
  */
-export const MANIFEST_VERSION = 8;
+export const MANIFEST_VERSION = 9;
 
 /** The problem reported for a theme newer than this core; the admin page words it for people. */
 export const NEEDS_NEWER_HOMEGLOW = 'needs a newer version of HomeGlow';

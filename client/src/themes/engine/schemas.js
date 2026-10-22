@@ -116,6 +116,9 @@ export const LAYER_SCHEMAS = {
     focusY: range(-300, 400),
     eccentricity: range(0, 0.9),
     direction: { type: 'enum', values: ['either', 'clockwise', 'counterclockwise'] },
+    // A gravitational lens (manifest version 9; lens.jsx): how strongly the
+    // scene behind each picture bends. One in flight, at most 50vh tall.
+    lens: num(0, 1),
   },
   blobs: {
     colors: { type: 'colors', required: true },
@@ -142,6 +145,9 @@ export const FLYBY_CURVE_OPTIONS = ['path', 'bend', 'wander', 'facing', 'pitch',
 /** The flyby options manifest version 5 added: orbits around a shared focus. */
 export const FLYBY_ORBIT_OPTIONS = ['focusX', 'focusY', 'eccentricity', 'direction'];
 
+/** The tallest a lens picture may be, in vh: as large as was measured on a Pi. */
+export const MAX_LENS_HEIGHT = 50;
+
 // A theme's own confetti (chore and prize celebrations): its colors, which of
 // the standard shapes, and pictures from its folder mixed in. `pictures`
 // heights are in px; `mix` is the share of pieces that are pictures.
@@ -157,7 +163,7 @@ export const CONFETTI_SCHEMA = {
 // `confetti.cast` (manifest version 6): the theme's own pictures crossing the
 // screen once with the confetti, a few at a time. A flyby's options, without
 // the ones about waiting (`every`, `begin`) or orbits: it is one pass.
-const NOT_IN_CAST = ['every', 'begin', 'focusX', 'focusY', 'eccentricity', 'direction'];
+const NOT_IN_CAST = ['every', 'begin', 'focusX', 'focusY', 'eccentricity', 'direction', 'lens'];
 export const CAST_SCHEMA = {
   ...Object.fromEntries(Object.entries(LAYER_SCHEMAS.flyby).filter(([key]) => !NOT_IN_CAST.includes(key))),
   path: { type: 'enum', values: ['line', 'arc', 'wander'] },
@@ -328,6 +334,13 @@ export function validateAmbience(ambience, { assets, isColor }) {
     }
     if (entry.layer === 'sprites' && entry.src !== undefined && entry.height === undefined) {
       errors.push(`${where}.height is required`);
+    }
+    if (entry.layer === 'flyby' && entry.lens !== undefined) {
+      // Kept to what was measured on a Pi: one lens in flight, at most 50vh.
+      if (entry.count !== undefined && [entry.count].flat().some((n) => n !== 1)) errors.push(`${where}.count must be 1 for a lens`);
+      const heights = [entry.height ?? [5, 9], ...(Array.isArray(entry.pictures) ? entry.pictures.map((p) => p?.height) : [])]
+        .filter((h) => h !== undefined).flat();
+      if (heights.some((h) => isNumber(h) && h > MAX_LENS_HEIGHT)) errors.push(`${where}: a lens picture may be at most ${MAX_LENS_HEIGHT}vh tall`);
     }
   });
   return errors;

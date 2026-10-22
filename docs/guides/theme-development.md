@@ -48,7 +48,7 @@ folder name must match the manifest's `id`.
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `manifestVersion` | yes | `1`; `2` for a theme that uses `ornaments`, the meter tokens or `clumps`; `3` for one that uses the button tokens or curved flybys; `4` for one with `weather` scenes or a `flash` layer; `5` for one that uses orbits; `6` for one with a confetti `cast`; `7` for one with pictures that bend (`flex`); `8` for one whose frames saturate what is behind them (`saturate()` in `--hg-frame-backdrop`). A HomeGlow older than the version refuses the theme. |
+| `manifestVersion` | yes | `1`; `2` for a theme that uses `ornaments`, the meter tokens or `clumps`; `3` for one that uses the button tokens or curved flybys; `4` for one with `weather` scenes or a `flash` layer; `5` for one that uses orbits; `6` for one with a confetti `cast`; `7` for one with pictures that bend (`flex`); `8` for one whose frames saturate what is behind them (`saturate()` in `--hg-frame-backdrop`); `9` for one with a flyby `lens`. A HomeGlow older than the version refuses the theme. |
 | `id` | yes | Lowercase slug (a-z, 0-9, hyphens), the same as the folder name. |
 | `name` | yes | Shown in the theme picker. |
 | `version`, `author`, `description` | | As in a plugin manifest. The author shows as "by ...". |
@@ -157,6 +157,16 @@ moves quicker nearer the focus.
 | `focusX`, `focusY` | Where the shared focus may fall, in vw and vh. Keep it off screen; the default is below the screen, so orbits arch across the sky |
 | `eccentricity` | 0 (a circle) to 0.9: how oval each orbit is |
 | `direction` | `clockwise`, `counterclockwise` or `either` (the default: picked once per page load) |
+
+A flyby can bend the scene behind it (manifest version 9). With `lens` (0 to
+1), each picture is a gravitational lens: whatever is drawn under it, in the
+layers listed before it, bends toward its middle, most near the center and not
+at all at its edge. Layers listed after it pass in front, unbent, so a lens
+early in the list bends the sky and the stars while ships cross in front of
+it. HomeGlow builds the filter; Safari shows the picture without the bend. A
+lens layer keeps one picture in flight (`count` 1), at most 50vh tall: the
+size measured on a Raspberry Pi display, where it held a full frame rate.
+Starship's black hole uses it.
 
 Starship's planets orbit slowly across the sky. A `wander` path with `turn`
 suits fish: they face where they swim and sometimes turn back.
