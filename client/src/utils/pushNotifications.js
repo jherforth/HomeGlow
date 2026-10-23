@@ -37,14 +37,6 @@ export function pushSupport(win = window) {
   return 'ready';
 }
 
-/**
- * Whether the devices table has a Notifications column: always on a secure
- * page, and over plain http only when some device has them on.
- */
-export function notificationsColumnShown(devices, win = window) {
-  return pushSupport(win) !== 'insecure' || devices.some((device) => device.notifications);
-}
-
 // The server's public key, as the bytes PushManager.subscribe wants.
 export function keyBytes(base64url) {
   const base64 = (base64url + '='.repeat((4 - (base64url.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/');

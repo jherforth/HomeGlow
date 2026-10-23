@@ -213,8 +213,6 @@
     "saveName": "Save Name",
     "nameRule": "Name must be 1–64 characters, contain at least one letter or digit, and may only include letters, digits, spaces, and _ - . ' ( ).",
     "notifications": {
-      "column": "Notifications",
-      "on": "On",
       "heading": "Notifications on this device",
       "offHelp": "Get a notification on this device when a chore or routine is done, even when HomeGlow is closed.",
       "turnOn": "Turn on notifications",
@@ -234,7 +232,8 @@
       "support": {
         "install-first": "On iPhone and iPad, add HomeGlow to your Home Screen first: tap Share, then Add to Home Screen. Open HomeGlow from there and turn notifications on here.",
         "unsupported": "This browser can't receive notifications.",
-        "blocked": "Notifications are blocked for HomeGlow on this device. Allow them in the phone's or browser's settings, then try again."
+        "blocked": "Notifications are blocked for HomeGlow on this device. Allow them in the phone's or browser's settings, then try again.",
+        "insecure": "Browser notifications need HomeGlow opened over HTTPS (or on this computer as localhost). Over plain http, use ntfy or the Home Assistant app below."
       }
     }
   },
@@ -543,7 +542,18 @@
     "saveHomeAssistant": "Save Home Assistant",
     "testConnection": "Test Connection",
     "testing": "Testing...",
-    "encryptionRequired": "Set an encryption key on the server before saving a Home Assistant token."
+    "encryptionRequired": "Set an encryption key on the server before saving a Home Assistant token.",
+    "ntfyHeading": "ntfy",
+    "ntfyHelp": "Send the same news to phones with the free ntfy app (Android, including F-Droid, and iPhone). Unlike browser notifications it needs no HTTPS and no web app on the Home Screen. Use ntfy.sh or your own ntfy server.",
+    "ntfyEnabled": "Send notifications with ntfy",
+    "ntfyServer": "ntfy server",
+    "ntfyServerHelp": "https://ntfy.sh, or the address of your own ntfy server.",
+    "ntfyToken": "Access token (optional)",
+    "ntfyTokenHelp": "Only for a protected or self-hosted server. Stored encrypted.",
+    "ntfyTokenStoredHelp": "A token is stored. Leave this blank to keep it.",
+    "ntfyClearToken": "Remove token",
+    "ntfySave": "Save ntfy",
+    "ntfySaved": "ntfy settings saved."
   },
   "about": {
     "heading": "About",
@@ -675,7 +685,8 @@
     "region": "Language & time",
     "connections": "Connections",
     "about": "About",
-    "thisdisplay": "This Display"
+    "thisdisplay": "This Display",
+    "notifications": "Notifications"
   },
   "panelTitle": "Admin Panel",
   "themes": {
@@ -837,5 +848,64 @@
     "actionFailed": "That did not work.",
     "driveHeading": "Google Drive",
     "driveNotConnected": "Connect a Google account above to also back up to Google Drive every night, and restore from those backups here."
+  },
+  "notify": {
+    "heading": "Notifications",
+    "intro": "Tell phones when a chore or a whole day is done, or what a plugin has to say. Browser notifications suit most households; ntfy and the Home Assistant app are there for more. Each phone, topic or device chooses what it hears about, and about whom.",
+    "openUrl": "Address a tap opens",
+    "openUrlHelp": "Tapping an ntfy or Home Assistant notification opens this.",
+    "openUrlUnsaved": "Not saved yet: ntfy and Home Assistant notifications open nothing until it is. This is the address you're using now.",
+    "openUrlSaved": "Saved.",
+    "browserHeading": "Browser notifications",
+    "browserIntro": "Each device turns these on from itself, which asks its owner. Here: this device, then every device that has them on.",
+    "browserDevices": "Devices with notifications on",
+    "noDevices": "No device has notifications on yet.",
+    "hears": "Hears about",
+    "last": "Last message",
+    "delivered": "Delivered",
+    "failed": "Failed",
+    "nothing": "Nothing",
+    "aboutWhom": "About: {{whom}}",
+    "testSent": "Test sent to {{name}}.",
+    "testAria": "Send a test to {{name}}",
+    "turnOffAria": "Turn off notifications on {{name}}"
+  },
+  "ntfy": {
+    "heading": "Topics",
+    "add": "Add topic",
+    "intro": "Each topic is a phone (or several) with the ntfy app subscribed to it, on {{server}}.",
+    "none": "No topics yet. Add one for each phone that should hear the news.",
+    "name": "Name",
+    "namePlaceholder": "Mom's phone",
+    "topic": "Topic",
+    "topicHelp": "Letters, digits, - and _. A long random name keeps it private.",
+    "newTopic": "New random topic",
+    "addTitle": "Add an ntfy topic",
+    "editTitle": "Edit ntfy topic",
+    "publicWarning": "On ntfy.sh, anyone who knows a topic's name can read it, and these messages name your children. Keep the random name, or use your own ntfy server.",
+    "howTo": "On the phone: open the ntfy app, tap +, and enter the topic {{topic}}.",
+    "howToServer": "On the phone: open the ntfy app, tap +, enter the topic {{topic}}, and choose \"Use another server\": {{server}}.",
+    "saved": "Saved {{name}}.",
+    "editAria": "Edit {{name}}",
+    "deleteAria": "Delete {{name}}",
+    "deleteTitle": "Delete topic",
+    "deletePrompt": "Stop sending notifications to {{name}}? The ntfy app keeps the topic until it is removed there."
+  },
+  "haNotify": {
+    "heading": "Home Assistant app",
+    "intro": "Every phone with the Home Assistant Companion app signed in to your Home Assistant. Turn one on, then choose what it hears about.",
+    "urgentHelp": "A plugin can mark a message urgent: it then rings through silent mode, on Android through the alarm sound and on iPhone as a critical alert (allow Critical Alerts for the Home Assistant app in the iPhone's settings).",
+    "notConnected": "Connect Home Assistant in System → Connections, and every phone with its Companion app will be listed here.",
+    "openConnections": "Open Connections",
+    "disconnected": "Home Assistant isn't connected, so these phones hear nothing until it is again.",
+    "refresh": "Look again",
+    "phone": "Phone",
+    "none": "Home Assistant has no Companion app phones.",
+    "off": "Off",
+    "missing": "Not in Home Assistant",
+    "switchAria": "Notifications on {{name}}",
+    "editAria": "Edit {{name}}",
+    "editTitle": "Edit phone",
+    "turnedOn": "{{name}} is on. Send a test to check."
   }
 }

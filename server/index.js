@@ -225,8 +225,12 @@ const { HaLive } = require('./services/haLive');
 const { registerHaPanelRoutes, lazyDb } = require('./routes/haPanels');
 const { registerRoutineRoutes } = require('./routes/routines');
 const { registerNotificationRoutes } = require('./routes/notifications');
+const { registerNtfyRoutes } = require('./routes/ntfy');
+const { registerHaNotifyRoutes } = require('./routes/haNotify');
 const { registerLocalBackupRoutes } = require('./routes/localBackup');
 const notifications = require('./services/notifications');
+const ntfyService = require('./services/ntfy');
+const haNotifyService = require('./services/haNotify');
 const webPush = require('web-push');
 const initializeDatabase = require('./migrations/initializeDatabase');
 const migrateChoresDatabase = require('./migrations/migrateChoresDatabase');
@@ -1097,16 +1101,31 @@ const routines = registerRoutineRoutes(fastify, {
   awardDailyBonusesAfterRemoval: (userIds) => awardDailyBonusesAfterRemoval(userIds),
 });
 
-// Push notifications to devices, from the chore events (services/notifications.js).
+// Notifications, from the chore events and plugins (services/notifications.js
+// composes them), set up in Admin → System → Notifications: browser push to
+// a device, and two more ways to deliver the same messages, ntfy topics and
+// the Home Assistant Companion app's phones.
+const ntfy = ntfyService.createNtfy({
+  db: haDb,
+  post: (url, body, options) => axios.post(url, body, options),
+  agentFor: (url) => httpsAgentFor(new URL(url)),
+  encrypt,
+  decrypt,
+});
+const haNotify = haNotifyService.createHaNotify({ db: haDb, ha: homeAssistant, live: haLive });
 const notifier = notifications.createNotifier({
   db: haDb,
   send: (subscription, payload, options) => webPush.sendNotification(subscription, payload, options),
   generateKeys: () => webPush.generateVAPIDKeys(),
   encrypt,
   decrypt,
+  channels: [ntfy, haNotify],
 });
+registerNtfyRoutes(fastify, { ntfy, demoBlocked });
+registerHaNotifyRoutes(fastify, { haNotify, demoBlocked });
 registerNotificationRoutes(fastify, {
   notifier,
+  db: haDb,
   demoBlocked,
   ensureDevice: (name) => ensureDeviceExists(name),
   pluginManifest: (pluginId) => {
@@ -4473,6 +4492,8 @@ const REDACTED_SETTING_KEYS = new Set([
   'WEATHER_API_KEY',
   // The push key's private half (services/notifications.js); only the server signs.
   notifications.PRIVATE_KEY_SETTING,
+  // The ntfy access token (services/ntfy.js); GET /api/notifications/ntfy says whether one is set.
+  ntfyService.TOKEN_SETTING,
 ]);
 
 // Convert an array of {key, value} settings rows into a single {key: value}

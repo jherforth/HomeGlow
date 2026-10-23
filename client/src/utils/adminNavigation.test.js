@@ -49,6 +49,7 @@ describe('adminNavigation', () => {
       expect(parseAdminHash('#/admin/family/routines/steps')).toEqual(at('family', 'routines', 'steps'));
       expect(parseAdminHash('#/admin/Family/Chores/Settings/')).toEqual(at('family', 'chores', 'settings'));
       expect(parseAdminHash('#/admin/system/about')).toEqual(at('system', 'about'));
+      expect(parseAdminHash('#/admin/system/notifications')).toEqual(at('system', 'notifications'));
       expect(parseAdminHash('#/admin/displays/screensaver')).toEqual(at('displays', 'screensaver'));
     });
 
@@ -91,6 +92,7 @@ describe('adminNavigation', () => {
       expect(buildAdminHash(at('family', 'chores', 'history'))).toBe('#/admin/family/chores/history');
       expect(buildAdminHash(at('family', 'routines', 'steps'))).toBe('#/admin/family/routines/steps');
       expect(buildAdminHash(at('system', 'about'))).toBe('#/admin/system/about');
+      expect(buildAdminHash(at('system', 'notifications'))).toBe('#/admin/system/notifications');
 
       for (const { tab, sections, subsections } of ADMIN_LAYOUT) {
         const places = sections.length

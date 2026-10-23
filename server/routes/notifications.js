@@ -4,11 +4,16 @@
 // so these sit with the device's other settings. Like the rest of Admin they
 // are behind the admin PIN on the client.
 //
+// Admin → System → Notifications also lists every device with them on, and
+// keeps the settings every way of delivering shares (the address a tap opens).
+//
 // A plugin that declares "notify": true sends through the plugin contract:
-//   POST /api/plugin/v1/notify/:pluginId   { title?, message, tag?, about? } -> { sent }
+//   POST /api/plugin/v1/notify/:pluginId   { title?, message, tag?, about?, urgent? } -> { sent }
+
+const notifications = require('../services/notifications');
 
 function registerNotificationRoutes(fastify, {
-  notifier, ensureDevice = () => {}, demoBlocked = () => false, pluginManifest = () => null,
+  notifier, db, ensureDevice = () => {}, demoBlocked = () => false, pluginManifest = () => null,
 }) {
   const reply = (res, result) => (result.error
     ? res.status(result.status).send({ error: result.error })
@@ -23,6 +28,27 @@ function registerNotificationRoutes(fastify, {
       return res.status(500).send({ error: 'Push notifications are not available on this server' });
     }
   });
+
+  // What every way of delivering shares: the address a tap opens, and the
+  // plugins a recipient may choose to hear from.
+  fastify.get('/api/notifications/settings', async () => ({
+    openUrl: notifications.openUrlFrom(db),
+    plugins: notifier.plugins(),
+  }));
+
+  fastify.put('/api/notifications/settings', async (request, res) => {
+    const openUrl = notifications.parseOpenUrl(request.body?.openUrl);
+    if (openUrl.error) return res.status(400).send({ error: openUrl.error });
+    if (openUrl.value) {
+      db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(notifications.OPEN_URL_SETTING, openUrl.value);
+    } else {
+      db.prepare('DELETE FROM settings WHERE key = ?').run(notifications.OPEN_URL_SETTING);
+    }
+    return { openUrl: openUrl.value, plugins: notifier.plugins() };
+  });
+
+  // Every device with browser push on.
+  fastify.get('/api/notifications/devices', async () => ({ devices: notifier.listDevices() }));
 
   fastify.get('/api/devices/:deviceName/notifications', async (request) => notifier.get(request.params.deviceName));
 
@@ -59,8 +85,8 @@ function registerNotificationRoutes(fastify, {
     if (manifest.notify !== true) return res.status(403).send({ error: `Plugin "${pluginId}" does not declare notify in its manifest.` });
     if (demoBlocked(res)) return undefined;
     try {
-      const { title, message, tag, about } = request.body || {};
-      return reply(res, await notifier.sendFromPlugin({ pluginId, pluginName: manifest.name, title, message, tag, about }));
+      const { title, message, tag, about, urgent } = request.body || {};
+      return reply(res, await notifier.sendFromPlugin({ pluginId, pluginName: manifest.name, title, message, tag, about, urgent }));
     } catch (error) {
       console.error('Error sending a plugin notification:', error);
       return res.status(500).send({ error: 'Failed to send the notification' });

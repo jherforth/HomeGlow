@@ -143,6 +143,76 @@ const parseJson = (text, fallback) => {
 };
 
 /**
+ * Whether a recipient's row (a device's, an ntfy topic's, a Home Assistant
+ * phone's) wants `event` about `userId`: its events_json lists it, and its
+ * members_json is everyone (NULL) or names them. A message about no one in
+ * particular (userId null) goes to every recipient that wants the event.
+ */
+function wants(row, event, userId) {
+  if (!parseJson(row.events_json, []).includes(event)) return false;
+  const members = row.members_json ? parseJson(row.members_json, null) : null;
+  return !members || userId === null || members.includes(userId);
+}
+
+/** The installed plugins that may notify (their manifest says "notify": true). */
+function notifyPluginsFrom(db) {
+  return db.prepare('SELECT plugin_id, name, manifest_json FROM plugins ORDER BY name COLLATE NOCASE').all()
+    .filter((row) => parseJson(row.manifest_json || 'null', null)?.notify === true)
+    .map((row) => ({ id: row.plugin_id, name: row.name || row.plugin_id }));
+}
+
+/**
+ * A recipient's choices, checked against an existing row (null for a new
+ * one), the same for every channel: { events, members, language } with
+ * events and members as stored (JSON text, members NULL for everyone), or
+ * { error }.
+ */
+function parseAudience(db, body, existing) {
+  const pluginIds = new Set(notifyPluginsFrom(db).map((plugin) => plugin.id));
+  const events = body.events === undefined && existing
+    ? { events: parseJson(existing.events_json, []) }
+    : parseEvents(body.events ?? NOTIFICATION_EVENTS, pluginIds);
+  if (events.error) return { error: events.error };
+  const knownIds = new Set(db.prepare('SELECT id FROM users WHERE id != 0').all().map((u) => u.id));
+  const members = body.members === undefined && existing
+    ? { members: existing.members_json ? parseJson(existing.members_json, null) : null }
+    : parseMembers(body.members, knownIds);
+  if (members.error) return { error: members.error };
+  const language = typeof body.language === 'string' && body.language.length <= 16
+    ? body.language
+    : (existing?.language || null);
+  return {
+    events: JSON.stringify(events.events),
+    members: members.members ? JSON.stringify(members.members) : null,
+    language,
+  };
+}
+
+/** A recipient's choices for the Admin Panel, from its stored row. */
+const audienceOf = (row) => ({
+  events: parseJson(row.events_json, []),
+  members: row.members_json ? parseJson(row.members_json, null) : 'all',
+  language: row.language || null,
+});
+
+// The HomeGlow address a tap on a notification opens, for the channels that
+// need an absolute one (ntfy, the Home Assistant app). Admin → System →
+// Notifications; by default the address the Admin Panel was open on.
+const OPEN_URL_SETTING = 'NOTIFY_OPEN_URL';
+const openUrlFrom = (db) => db.prepare('SELECT value FROM settings WHERE key = ?').get(OPEN_URL_SETTING)?.value || null;
+
+/** The open address, checked: an http(s) URL without credentials, or '' to clear. */
+function parseOpenUrl(raw) {
+  const text = typeof raw === 'string' ? raw.trim() : '';
+  if (!text) return { value: null };
+  let url;
+  try { url = new URL(text); } catch { return { error: 'The address must be an http:// or https:// address.' }; }
+  if (!['http:', 'https:'].includes(url.protocol)) return { error: 'The address must be an http:// or https:// address.' };
+  if (url.username || url.password) return { error: 'The address must not contain a user name or password.' };
+  return { value: text.replace(/\/+$/, '') };
+}
+
+/**
  * The notifier. `send(subscription, payload, options)` is web-push's
  * sendNotification (injected, so tests can stand in for the push services);
  * `generateKeys()` is its generateVAPIDKeys.
@@ -151,6 +221,9 @@ function createNotifier({
   db, send, generateKeys, encrypt, decrypt,
   contact = process.env.HOMEGLOW_PUSH_CONTACT || DEFAULT_CONTACT,
   now = () => Date.now(), log = console,
+  // More ways to deliver the same messages: [{ kind, recipients(event,
+  // userId), deliver(row, payload) }] (services/ntfy.js, services/haNotify.js).
+  channels = [],
 }) {
   let keys = null;
   // userId -> { at, date, titles }: recent completions, for merging.
@@ -181,11 +254,7 @@ function createNotifier({
   `).get(deviceName);
 
   // The installed plugins that may notify, for a device to choose from.
-  function notifyPlugins() {
-    return db.prepare('SELECT plugin_id, name, manifest_json FROM plugins ORDER BY name COLLATE NOCASE').all()
-      .filter((row) => parseJson(row.manifest_json || 'null', null)?.notify === true)
-      .map((row) => ({ id: row.plugin_id, name: row.name || row.plugin_id }));
-  }
+  const notifyPlugins = () => notifyPluginsFrom(db);
 
   const describe = (row) => (row ? {
     enabled: true,
@@ -213,20 +282,11 @@ function createNotifier({
       subscription = parseSubscription(body.subscription);
       if (subscription.error) return { status: 400, error: subscription.error };
     }
-    const events = body.events === undefined && existing
-      ? { events: parseJson(existing.events_json, []) }
-      : parseEvents(body.events ?? NOTIFICATION_EVENTS, new Set(notifyPlugins().map((plugin) => plugin.id)));
-    if (events.error) return { status: 400, error: events.error };
-    const knownIds = new Set(db.prepare('SELECT id FROM users WHERE id != 0').all().map((u) => u.id));
-    const members = body.members === undefined && existing
-      ? { members: existing.members_json ? parseJson(existing.members_json, null) : null }
-      : parseMembers(body.members, knownIds);
-    if (members.error) return { status: 400, error: members.error };
-    const language = typeof body.language === 'string' && body.language.length <= 16
-      ? body.language
-      : (existing?.language || null);
-
-    const membersJson = members.members ? JSON.stringify(members.members) : null;
+    const audience = parseAudience(db, body, existing);
+    if (audience.error) return { status: 400, error: audience.error };
+    const { language } = audience;
+    const events = { events: JSON.parse(audience.events) };
+    const membersJson = audience.members;
     if (existing) {
       const sub = subscription || existing;
       // A new subscription starts its send record afresh.
@@ -260,12 +320,21 @@ function createNotifier({
    * means the phone dropped it, so the row goes too.
    */
   async function deliver(row, payload) {
+    if (row.kind && row.kind !== 'webpush') {
+      const channel = channels.find((c) => c.kind === row.kind);
+      try {
+        return channel ? await channel.deliver(row, payload) : { ok: false, error: `no channel ${row.kind}` };
+      } catch (error) {
+        log.warn?.(`notifications: ${row.kind} send failed: ${error?.message || error}`);
+        return { ok: false, error: String(error?.message || error) };
+      }
+    }
     const { publicKey, privateKey } = vapidKeys();
     try {
       await send(
         { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
         JSON.stringify(payload),
-        { vapidDetails: { subject: contact, publicKey, privateKey }, TTL: TTL_SECONDS, urgency: 'normal' }
+        { vapidDetails: { subject: contact, publicKey, privateKey }, TTL: TTL_SECONDS, urgency: payload.urgent ? 'high' : 'normal' }
       );
       db.prepare('UPDATE device_notifications SET last_success_at = CURRENT_TIMESTAMP WHERE id = ?').run(row.id);
       return { ok: true };
@@ -295,14 +364,24 @@ function createNotifier({
 
   const userName = (userId) => db.prepare('SELECT username FROM users WHERE id = ?').get(userId)?.username || null;
 
-  // The devices that want `event` about `userId`. A message about no one in
-  // particular (userId null) goes to every device that wants the event.
+  // Everyone that wants `event` about `userId`: the devices with browser
+  // push, then each channel's own (an ntfy topic, a Home Assistant phone),
+  // each row marked with its channel. A message about no one in particular
+  // (userId null) goes to every recipient that wants the event. A channel
+  // that can't list its recipients just has none this time.
   function recipients(event, userId) {
-    return db.prepare('SELECT * FROM device_notifications').all().filter((row) => {
-      if (!parseJson(row.events_json, []).includes(event)) return false;
-      const members = row.members_json ? parseJson(row.members_json, null) : null;
-      return !members || userId === null || members.includes(userId);
+    const devices = db.prepare('SELECT * FROM device_notifications').all()
+      .filter((row) => wants(row, event, userId))
+      .map((row) => ({ ...row, kind: 'webpush' }));
+    const others = channels.flatMap((channel) => {
+      try {
+        return channel.recipients(event, userId).map((row) => ({ ...row, kind: channel.kind }));
+      } catch (error) {
+        log.warn?.(`notifications: ${channel.kind} recipients failed: ${error?.message || error}`);
+        return [];
+      }
     });
+    return [...devices, ...others];
   }
 
   // What was finished, for the message: a routine by its name, else the chore.
@@ -387,8 +466,9 @@ function createNotifier({
    * `about` (a family member's id) lets each device's "About" choice apply;
    * without it every such device hears it. Resolves { status, body | error }.
    */
-  async function sendFromPlugin({ pluginId, pluginName, title, message, tag, about }) {
+  async function sendFromPlugin({ pluginId, pluginName, title, message, tag, about, urgent }) {
     if (typeof message !== 'string' || !message.trim()) return { status: 400, error: 'A notification needs a message.' };
+    if (urgent !== undefined && urgent !== null && typeof urgent !== 'boolean') return { status: 400, error: 'urgent must be true or false.' };
     if (title !== undefined && title !== null && typeof title !== 'string') return { status: 400, error: 'title must be text.' };
     if (tag !== undefined && tag !== null && (typeof tag !== 'string' || !PLUGIN_TAG.test(tag))) {
       return { status: 400, error: 'tag must be up to 40 lowercase letters, numbers and dashes.' };
@@ -406,6 +486,8 @@ function createNotifier({
       url: '/',
     };
     if (tag) payload.tag = `homeglow-plugin-${pluginId}-${tag}`;
+    // Rings through a silent phone where the way it's delivered allows.
+    if (urgent === true) payload.urgent = true;
     const results = await Promise.all(recipients(`${PLUGIN_EVENT_PREFIX}${pluginId}`, userId).map((row) => deliver(row, payload)));
     return { status: 200, body: { sent: results.filter((result) => result.ok).length } };
   }
@@ -432,11 +514,35 @@ function createNotifier({
     compose,
     handle,
     enabledDeviceIds: () => new Set(db.prepare('SELECT device_id FROM device_notifications').all().map((r) => r.device_id)),
+    // Every device with browser push on, for Admin → System → Notifications.
+    listDevices: () => db.prepare(`
+      SELECT n.*, d.name AS device_name FROM device_notifications n
+      JOIN devices d ON d.id = n.device_id ORDER BY d.name COLLATE NOCASE
+    `).all().map((row) => ({
+      deviceName: row.device_name,
+      ...audienceOf(row),
+      createdAt: row.created_at,
+      lastSuccessAt: row.last_success_at,
+      lastFailureAt: row.last_failure_at,
+      lastFailure: row.last_failure,
+    })),
+    plugins: notifyPlugins,
   };
 }
 
 module.exports = {
   NOTIFICATION_EVENTS,
+  PLUGIN_EVENT_PREFIX,
+  OPEN_URL_SETTING,
+  parseEvents,
+  parseMembers,
+  parseAudience,
+  audienceOf,
+  textFor,
+  wants,
+  notifyPluginsFrom,
+  openUrlFrom,
+  parseOpenUrl,
   PUSH_SERVICE_HOSTS,
   PRIVATE_KEY_SETTING,
   isPushServiceEndpoint,

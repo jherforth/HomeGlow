@@ -477,34 +477,64 @@ messages), `WidgetContainer.jsx` (expanding, held taps, buttons, timers),
 `PluginWidgetWrapper.jsx` and `server/utils/pluginFrameTouch.js` (plugins),
 `CalendarWidget.jsx` (month view), `ExpandWidgetsSettings.jsx` (Admin).
 
-## Push notifications (phones)
+## Notifications (phones)
 
-- A device can get a notification when a chore or routine is done, or when
-  someone finishes all of today's chores, even with HomeGlow closed. Turned on
-  from the device itself, in **Admin Panel → Displays → Devices** ("Notifications
-  on this device"), which asks the phone's permission.
-- **Each device chooses for itself:** which events, and about whom
-  (everyone, or chosen family members). The phone's own quiet hours (Focus, Do
-  Not Disturb) decide when it makes a sound. Completions by one person close
-  together update one notification ("Ava finished 3 chores") rather than
-  stacking up.
+HomeGlow can tell a phone when a chore or routine is done, or someone finishes
+all of today's chores, even with HomeGlow closed, and pass on what a plugin has
+to say. Everything is set up in **Admin Panel → System → Notifications**, one
+page with three ways of delivering the same messages:
+
+- **Browser notifications** (the default, enough for most households). A
+  device turns them on from itself, which asks the phone's permission. The page
+  shows this device's card, then every device that has them on, with a test and
+  a way to turn them off from any device. Deleting a device turns its
+  notifications off.
+- **ntfy**, for more: the free ntfy app (Android, including the F-Droid build,
+  and iPhone), on ntfy.sh or a self-hosted server. Turn it on, give the server
+  and an optional access token (stored encrypted, never shown again), then add
+  a topic for each phone. New topics get a long random name; on ntfy.sh, where
+  anyone who knows a topic can read it, the dialog says so. ntfy needs no HTTPS
+  and no web app on the Home Screen, only that the server can reach ntfy.
+- **The Home Assistant app**, when Home Assistant is connected (System →
+  Connections): every phone with the Companion app is listed, and a switch turns
+  each one on. Messages go through Home Assistant's `notify.mobile_app_*`
+  actions; only a title, a message, a tag, the tap address and (for urgent
+  ones) the alarm sound are ever sent.
+
+Common to all three:
+
+- **Each recipient chooses for itself** (a device, a topic, a phone): which
+  events, which plugins, and about whom (everyone, or chosen family members).
+  The phone's own quiet hours (Focus, Do Not Disturb) decide when it makes a
+  sound. Completions by one person close together update one notification
+  ("Ava finished 3 chores") in a browser and the Home Assistant app, rather
+  than stacking up.
 - **Plugins can send a message too**, when their manifest declares `"notify":
-  true` (a poll closed, the brisket is ready). Those plugins are listed on
-  each device's card under **Messages from:**, and a device hears only the
-  ones it ticks; each starts unticked. A plugin can say
-  whom a message is about, and a device's "About" choice then applies. Five a
-  minute and 30 an hour per plugin. See the plugin guide, "Sending a
-  notification".
-- A tap opens HomeGlow. Messages are in the language the device used when it
-  turned them on (English or Spanish).
-- The devices table shows which devices have them on, with a test and a way to
-  turn them off from any device. Deleting a device turns its notifications off.
+  true` (a poll closed, the brisket is ready). They are listed under
+  **Messages from:** for each recipient, which hears only the ones it ticks;
+  each starts unticked. A plugin can say whom a message is about, and a
+  recipient's "About" choice then applies. Five a minute and 30 an hour per
+  plugin. See the plugin guide, "Sending a notification".
+- **Urgent:** a plugin can mark a message urgent, for what can't wait. It rings
+  through silent mode where the way of delivering allows: Android's alarm
+  sound and an iPhone critical alert through the Home Assistant app (the
+  iPhone's owner must allow Critical Alerts for it), ntfy's top priority, and
+  high urgency for browser push.
+- **A tap opens HomeGlow.** For ntfy and the Home Assistant app that is the
+  **Address a tap opens** at the top of the page (`NOTIFY_OPEN_URL`), which
+  starts as the address Admin is open on until saved.
+- Messages are in the language the recipient was set up in (English or
+  Spanish). Each recipient shows how its last message went.
+
+Browser notifications in more detail:
+
 - **Needs HTTPS.** Browsers only allow push on a secure page, so a HomeGlow
-  opened at `http://192.168.…` can't have them, and Admin doesn't offer them there. On iPhone and
-  iPad (iOS 16.4 or later), HomeGlow must be added to the Home Screen and opened
-  from there, which is why HomeGlow is now an installable app (a web app
-  manifest and icons). Away from home, a notification still arrives; opening
-  HomeGlow then needs whatever remote access the household has.
+  opened at `http://192.168.…` can't have them; the page then points to ntfy
+  and the Home Assistant app. On iPhone and iPad (iOS 16.4 or later), HomeGlow
+  must be added to the Home Screen and opened from there, which is why
+  HomeGlow is an installable app (a web app manifest and icons). Away from
+  home, a notification still arrives; opening HomeGlow then needs whatever
+  remote access the household has.
 - Messages go through the phone's own push service (Apple's, Google's or
   Mozilla's), encrypted end to end, so the service can't read them. The server
   signs them with a key pair it makes on first use; the private half is stored
@@ -512,10 +542,17 @@ messages), `WidgetContainer.jsx` (expanding, held taps, buttons, timers),
   `HOMEGLOW_PUSH_CONTACT` sets the contact address the push services see (by
   default, the project's GitHub page).
 
+In the public demo, sending (tests, and ntfy's connection, which holds a
+credential) is turned off.
+
 **Code:** `server/services/notifications.js` (who hears what, the wording,
-sending), `server/routes/notifications.js`, `client/public/sw.js` (shows a
-message, handles a tap), `client/src/utils/pushNotifications.js`,
-`client/src/components/DeviceNotifications.jsx`.
+browser push, and the channels), `server/services/ntfy.js`,
+`server/services/haNotify.js`, `server/routes/notifications.js`,
+`server/routes/ntfy.js`, `server/routes/haNotify.js`, `client/public/sw.js`
+(shows a browser notification, handles a tap),
+`client/src/utils/pushNotifications.js`, `client/src/components/NotificationsTab.jsx`
+and the components it uses (`DeviceNotifications.jsx`, `NtfyConnection.jsx`,
+`NtfyTopics.jsx`, `HaNotifyPhones.jsx`, `NotificationAudience.jsx`).
 
 ## Vacation mode
 
