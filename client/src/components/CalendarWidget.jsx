@@ -2026,7 +2026,7 @@ const CalendarWidget = ({
                 type={eventForm.all_day ? 'date' : 'datetime-local'}
                 value={eventForm.start}
                 onChange={(e) => setEventForm({ ...eventForm, start: e.target.value })}
-                InputLabelProps={{ shrink: true }}
+                slotProps={{ inputLabel: { shrink: true } }}
                 required
               />
               <TextField
@@ -2034,7 +2034,7 @@ const CalendarWidget = ({
                 type={eventForm.all_day ? 'date' : 'datetime-local'}
                 value={eventForm.end}
                 onChange={(e) => setEventForm({ ...eventForm, end: e.target.value })}
-                InputLabelProps={{ shrink: true }}
+                slotProps={{ inputLabel: { shrink: true } }}
                 required
               />
             </Box>

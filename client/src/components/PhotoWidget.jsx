@@ -594,7 +594,7 @@ const PhotoWidget = ({ refreshNonce = 0, isActive = true, hiddenControls = [] })
       >
         <Box sx={{ p: 2, minWidth: 300, maxWidth: 400 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="subtitle1" fontWeight="bold">{t('photos:settings.sources')}</Typography>
+            <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>{t('photos:settings.sources')}</Typography>
             <Button
               startIcon={<Add />}
               onClick={handleAddSource}
@@ -606,7 +606,7 @@ const PhotoWidget = ({ refreshNonce = 0, isActive = true, hiddenControls = [] })
           </Box>
 
           <Box sx={{ mb: 2 }}>
-            <Typography variant="caption" color="text.secondary" gutterBottom display="block">
+            <Typography variant="caption" color="text.secondary" gutterBottom sx={{ display: 'block' }}>
               {t('photos:settings.photosPerView')}
             </Typography>
             <Select
@@ -626,7 +626,7 @@ const PhotoWidget = ({ refreshNonce = 0, isActive = true, hiddenControls = [] })
           </Box>
 
           <Box sx={{ mb: 2 }}>
-            <Typography variant="caption" color="text.secondary" gutterBottom display="block">
+            <Typography variant="caption" color="text.secondary" gutterBottom sx={{ display: 'block' }}>
               {t('photos:settings.photoSize')}
             </Typography>
             <Select
@@ -649,7 +649,7 @@ const PhotoWidget = ({ refreshNonce = 0, isActive = true, hiddenControls = [] })
           </Box>
 
           <Box sx={{ mb: 2 }}>
-            <Typography variant="caption" color="text.secondary" gutterBottom display="block">
+            <Typography variant="caption" color="text.secondary" gutterBottom sx={{ display: 'block' }}>
               {t('photos:settings.transitionEffect')}
             </Typography>
             <Select
@@ -669,7 +669,7 @@ const PhotoWidget = ({ refreshNonce = 0, isActive = true, hiddenControls = [] })
           </Box>
 
           <Box sx={{ mb: 2 }}>
-            <Typography variant="caption" color="text.secondary" gutterBottom display="block">
+            <Typography variant="caption" color="text.secondary" gutterBottom sx={{ display: 'block' }}>
               {t('photos:settings.slideshowSpeed')}
             </Typography>
             <Select

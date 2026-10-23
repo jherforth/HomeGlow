@@ -832,7 +832,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
                     />
                   </TableCell>
                   <TableCell data-label={t('common:labels.title')}>
-                    <Typography variant="body2" fontWeight="bold">
+                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                       {/* Inline rather than its own column: this table stacks
                           into rows on mobile, and an icon-only column would
                           become a near-empty labelled row down there. */}
@@ -962,7 +962,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
                 <TableRow key={s.id} sx={{ opacity: s.visible ? 1 : 0.5 }}>
                   <TableCell data-label={t('chores:schedules.chore')}>
                     <Box>
-                      <Typography variant="body2" fontWeight="bold">
+                      <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                         {s.title}
                         {s.triggered_on && (
                           <Chip label={t('chores:followups.chip')} size="small" variant="outlined" sx={{ ml: 1 }} />
@@ -1515,7 +1515,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
                     placeholder="0 0 * * 1"
                     error={!!crontabError}
                     helperText={crontabError || (scheduleForm.customCrontab.trim() ? 'Format: minute hour day-of-month month day-of-week' : t('chores:schedules.crontabRequired'))}
-                    InputProps={{ sx: { fontFamily: 'var(--hg-font-mono)' } }}
+                    slotProps={{ input: { sx: { fontFamily: 'var(--hg-font-mono)' } } }}
                   />
                 )}
               </>
@@ -1635,7 +1635,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
                   value={scheduleForm.reminder_interval_minutes}
                   onChange={(e) => updateScheduleForm({ reminder_interval_minutes: e.target.value })}
                   helperText={t('chores:schedules.repeatReminderHelp')}
-                  inputProps={{ min: 0 }}
+                  slotProps={{ htmlInput: { min: 0 } }}
                   sx={{ maxWidth: 280 }}
                 />
               </Box>

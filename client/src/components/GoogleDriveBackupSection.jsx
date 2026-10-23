@@ -186,7 +186,7 @@ export default function GoogleDriveBackupSection({ restore = {}, onRestoreChange
                 setBackupTime(val);
                 handleSaveConfig(autoEnabled, val);
               }}
-              InputLabelProps={{ shrink: true }}
+              slotProps={{ inputLabel: { shrink: true } }}
               helperText={`Local time (default 02:00 AM ${timezone ? `in ${timezone}` : ''})`}
             />
           </Box>

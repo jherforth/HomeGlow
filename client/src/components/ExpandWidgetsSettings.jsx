@@ -158,7 +158,7 @@ const ExpandWidgetsSettings = ({ settings, onChange, widgets = [] }) => {
                         )}
                       </Box>
                       <Switch
-                        inputProps={{ 'aria-label': widget.label }}
+                        slotProps={{ input: { 'aria-label': widget.label } }}
                         checked={!widget.manifestBlocks && !off.includes(widget.name)}
                         disabled={widget.manifestBlocks}
                         onChange={(e) => onChange({

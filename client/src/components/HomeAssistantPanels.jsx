@@ -531,7 +531,7 @@ const HomeAssistantPanels = ({ onNavigate }) => {
               sx={{ mt: 1 }}
               label={importState?.exportOnly ? t('admin:haPanels.import.copyThis') : t('admin:haPanels.import.paste')}
               value={importState?.text || ''}
-              InputProps={{ readOnly: !!importState?.exportOnly }}
+              slotProps={{ input: { readOnly: !!importState?.exportOnly } }}
               onChange={(e) => setImportState((prev) => ({ ...prev, text: e.target.value }))}
             />
           )}
