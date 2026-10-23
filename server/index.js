@@ -259,6 +259,9 @@ const shuffleInPlace = (array) => {
 const GITHUB_REPO_OWNER = 'jherforth';
 const GITHUB_REPO_NAME = 'HomeGlowPlugins';
 const GITHUB_API_BASE = 'https://api.github.com';
+// Where the plugin listing's download addresses point, and the only place a
+// GitHub install fetches from.
+const PLUGIN_REPOSITORY_RAW_PREFIX = `https://raw.githubusercontent.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/`;
 
 const DEFAULT_HOMEGLOW_REPOSITORY = 'jherforth/HomeGlow';
 const BACKEND_VERSION = (process.env.BACKEND_VERSION || process.env.APP_VERSION || serverPackageJson.version || 'dev').trim();
@@ -840,6 +843,19 @@ function pluginContentSha(content) {
 const PLUGIN_SETTING_TYPES = new Set(['number', 'string', 'boolean', 'select']);
 const PLUGIN_SETTING_SCOPES = new Set(['household', 'device']);
 
+// Segments an increment's path may never walk through: on a plain object each
+// reaches Object.prototype (or a function), so a crafted path would write into
+// every object in the server process (mrramam/HomeGlow#54).
+const UNSAFE_PATH_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
+// What is wrong with a split increment path, or null.
+function storagePathProblem(segments) {
+  if (segments.some((segment) => segment.length === 0)) return 'path segments must be non-empty.';
+  if (segments.some((segment) => UNSAFE_PATH_SEGMENTS.has(segment))) {
+    return 'path segments may not be __proto__, constructor or prototype.';
+  }
+  return null;
+}
+
 // Returns { manifest: object|null, errors: string[] }. A missing block is not
 // an error (legacy widget); a present-but-invalid block is, so a typo'd
 // manifest fails the upload loudly instead of silently installing as legacy.
@@ -959,8 +975,8 @@ function extractPluginManifest(htmlContent) {
           errors.push(`reactions[${index}].key must be a valid storage key.`);
         }
         if (typeof reaction.path !== 'string' || reaction.path.length === 0 ||
-            reaction.path.split('.').some((segment) => segment.length === 0)) {
-          errors.push(`reactions[${index}].path must be a non-empty dot-separated path.`);
+            storagePathProblem(reaction.path.split('.'))) {
+          errors.push(`reactions[${index}].path must be a dot-separated path of non-empty segments, none of them __proto__, constructor or prototype.`);
         }
         // Optional multiplier applied to the resolved delta — factor: -1 lets a
         // mirror reaction (e.g. on chore.uncompleted) compensate a setting- or
@@ -1394,8 +1410,17 @@ fastify.delete('/api/plugin/v1/storage/:pluginId/:key', async (request, reply) =
 // the clam-bucket siphon needs ("add N to the give pool") without a general
 // transaction API. Creates the key/path if missing. Body: { path, delta }.
 const incrementPluginStorage = (pluginId, key, pathSegments, delta) => {
+  const problem = storagePathProblem(pathSegments);
+  if (problem) throw Object.assign(new Error(problem), { statusCode: 400 });
   const row = db.prepare('SELECT value_json FROM plugin_storage WHERE plugin_id = ? AND key = ?').get(pluginId, key);
   let doc = {};
+  if (!row) {
+    // A new key counts against the cap, as a PUT does.
+    const { count } = db.prepare('SELECT COUNT(*) AS count FROM plugin_storage WHERE plugin_id = ?').get(pluginId);
+    if (count >= PLUGIN_STORAGE_MAX_KEYS) {
+      throw Object.assign(new Error(`Plugin storage is limited to ${PLUGIN_STORAGE_MAX_KEYS} keys.`), { statusCode: 413 });
+    }
+  }
   if (row) {
     try {
       doc = JSON.parse(row.value_json);
@@ -1407,9 +1432,11 @@ const incrementPluginStorage = (pluginId, key, pathSegments, delta) => {
     }
   }
 
+  // Own properties only: an inherited one is never stepped onto or written.
+  const own = (object, name) => (Object.hasOwn(object, name) ? object[name] : undefined);
   let target = doc;
   for (const segment of pathSegments.slice(0, -1)) {
-    if (target[segment] === undefined) {
+    if (own(target, segment) === undefined) {
       target[segment] = {};
     }
     if (!target[segment] || typeof target[segment] !== 'object' || Array.isArray(target[segment])) {
@@ -1419,7 +1446,7 @@ const incrementPluginStorage = (pluginId, key, pathSegments, delta) => {
   }
 
   const leaf = pathSegments[pathSegments.length - 1];
-  const current = target[leaf] === undefined ? 0 : target[leaf];
+  const current = own(target, leaf) === undefined ? 0 : target[leaf];
   if (typeof current !== 'number' || !Number.isFinite(current)) {
     throw Object.assign(new Error(`Value at path is not a number.`), { statusCode: 409 });
   }
@@ -1454,8 +1481,9 @@ fastify.post('/api/plugin/v1/storage/:pluginId/:key/increment', async (request, 
     return reply.status(400).send({ error: 'delta must be a finite number.' });
   }
   const pathSegments = incrementPath.split('.');
-  if (pathSegments.some((segment) => segment.length === 0)) {
-    return reply.status(400).send({ error: 'path segments must be non-empty.' });
+  const pathProblem = storagePathProblem(pathSegments);
+  if (pathProblem) {
+    return reply.status(400).send({ error: pathProblem });
   }
 
   try {
@@ -2015,6 +2043,11 @@ fastify.post('/api/widgets/github/install', async (request, reply) => {
     if (!download_url || !filename) {
       return reply.status(400).send({ error: 'download_url and filename are required' });
     }
+    // Only a file in the plugin repository, as the listing gives it: the
+    // server fetches this address, so it must not be one a caller chooses.
+    if (typeof download_url !== 'string' || !download_url.startsWith(PLUGIN_REPOSITORY_RAW_PREFIX)) {
+      return reply.status(400).send({ error: `download_url must be a file in ${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME} on raw.githubusercontent.com` });
+    }
 
     console.log(`Installing widget ${filename} from GitHub...`);
 
@@ -2024,7 +2057,8 @@ fastify.post('/api/widgets/github/install', async (request, reply) => {
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'User-Agent': 'HomeGlow-Server/1.0'
       },
-      timeout: 15000
+      timeout: 15000,
+      maxRedirects: 0,
     });
 
     // Sanitize filename
@@ -2056,15 +2090,11 @@ fastify.post('/api/widgets/github/install', async (request, reply) => {
   } catch (error) {
     console.error('Error installing GitHub widget:', error);
     if (error.response) {
-      return reply.status(error.response.status).send({
-        error: `Failed to download widget: ${error.response.status} ${error.response.statusText}`,
-        details: error.response.data
+      return reply.status(502).send({
+        error: `Failed to download widget: GitHub answered ${error.response.status} ${error.response.statusText}`,
       });
     }
-    return reply.status(500).send({
-      error: 'Failed to install widget from GitHub',
-      details: error.message
-    });
+    return reply.status(500).send({ error: 'Failed to install widget from GitHub' });
   }
 });
 
@@ -5168,10 +5198,16 @@ fastify.get('/api/proxy', async (request, reply) => {
     whitelist = []; // Default to empty for security
   }
 
+  // Set when a redirect leads off the whitelist, to answer 403 for it.
+  let blockedRedirect = null;
   try {
     const target = new URL(targetUrl);
     const targetHostname = target.hostname;
     console.log('Target hostname:', targetHostname);
+
+    if (!['http:', 'https:'].includes(target.protocol)) {
+      return reply.status(400).send({ error: 'The proxy only fetches http:// and https:// addresses.' });
+    }
 
     if (!whitelist.includes(targetHostname)) {
       console.warn(`Proxy request blocked for non-whitelisted domain: ${targetHostname}`);
@@ -5191,6 +5227,16 @@ fastify.get('/api/proxy', async (request, reply) => {
         'Accept-Encoding': 'gzip, deflate'
       },
       maxRedirects: 5,
+      // A whitelisted host may redirect, but only to another whitelisted one:
+      // otherwise any of them could send the proxy to an address on the
+      // household's own network.
+      beforeRedirect: (options) => {
+        const hop = String(options.hostname || '').replace(/^\[|\]$/g, '');
+        if (!['http:', 'https:'].includes(options.protocol) || !whitelist.includes(hop)) {
+          blockedRedirect = hop || String(options.protocol);
+          throw new Error(`Redirect to ${blockedRedirect} is not on the proxy whitelist.`);
+        }
+      },
       validateStatus: function (status) {
         return status < 500; // Resolve only if the status code is less than 500
       },
@@ -5222,6 +5268,10 @@ fastify.get('/api/proxy', async (request, reply) => {
     return reply.status(response.status).send(response.data);
 
   } catch (error) {
+    if (blockedRedirect) {
+      console.warn(`Proxy redirect blocked: ${blockedRedirect} is not whitelisted`);
+      return reply.status(403).send({ error: 'The target redirected to a domain that is not allowed through the proxy.' });
+    }
     console.error('Error in proxy request:', error.message);
     console.error('Full error details:', {
       message: error.message,

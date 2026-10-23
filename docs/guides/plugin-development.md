@@ -245,8 +245,10 @@ const existed = await HomeGlow.storage.remove('buckets:user:3');
 const { result, value } = await HomeGlow.storage.increment('give-pool', 'total', 2);
 ```
 
-Limits: 64 KB per value, 500 keys per plugin. (Storage works in demo mode too —
-it just resets with the demo cycle.)
+Limits: 64 KB per value, 500 keys per plugin; a write or an increment that
+would add key 501 answers `413`. An increment's path is dot-separated, and no
+segment may be empty or `__proto__`, `constructor` or `prototype` (`400`).
+(Storage works in demo mode too — it just resets with the demo cycle.)
 
 Raw endpoints (if you prefer `fetch`):
 
@@ -663,7 +665,7 @@ setting to `total` inside my `give-pool` storage document.*
 | --- | --- |
 | `on` | An event from the catalog. |
 | `action` | `"increment"` (the only action today). |
-| `key` / `path` | Storage document and dot-path to the number (created on demand). |
+| `key` / `path` | Storage document and dot-path to the number (created on demand). No segment may be `__proto__`, `constructor` or `prototype`. |
 | `delta` | A literal number, `{ "setting": "<key>" }` (a declared **household number** setting — resolved live at fire time), or `{ "payload": "<field>" }` (a numeric field from the event payload, e.g. `amount`). |
 | `factor` | Optional multiplier on the resolved delta (default `1`). `factor: -1` builds a **mirror reaction** that compensates an undo event. |
 
@@ -929,7 +931,10 @@ To reach an external service that lacks CORS headers, route the request through
 `GET /api/proxy?targetUrl=<encoded-url>`. Two constraints:
 
 - The target host must be in the `PROXY_WHITELIST` setting (an admin adds it) —
-  otherwise `403`.
+  otherwise `403`. A redirect is followed only to another whitelisted host, so
+  a whitelisted site can't send the proxy somewhere else on the household's
+  network; one that leads off the list answers `403`.
+- Only `http://` and `https://` addresses (`400` otherwise).
 - It is **disabled in demo mode** (so the demo can't be used as an open relay).
 
 ### Beyond this list

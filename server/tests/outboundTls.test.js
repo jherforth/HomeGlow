@@ -134,6 +134,9 @@ async function usePort() {
 let serverProcess;
 let serverLogs = '';
 let originHttp;
+let innerHttp;
+let innerPort;
+let innerHits = 0;
 let originPort;
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -154,7 +157,24 @@ test.before(async () => {
 
     // A plain-HTTP origin standing in for a LAN service, which is how a great
     // many HomeGlow installs actually talk to Immich or Home Assistant.
+    // A second service the proxy must never reach: it is not on the
+    // whitelist, so a redirect to it is refused (mrramam/HomeGlow#56).
+    innerHttp = http.createServer((req, res) => {
+        innerHits += 1;
+        res.end('internal');
+    });
+    await new Promise((resolve) => innerHttp.listen(0, '127.0.0.1', resolve));
+    innerPort = innerHttp.address().port;
+
     originHttp = http.createServer((req, res) => {
+        if (req.url === '/redirect-out') {
+            res.writeHead(302, { Location: `http://localhost:${innerPort}/secret` });
+            return res.end();
+        }
+        if (req.url === '/redirect-in') {
+            res.writeHead(302, { Location: `http://127.0.0.1:${originPort}/hello` });
+            return res.end();
+        }
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({ ok: true, path: req.url }));
     });
@@ -201,12 +221,31 @@ test.after(async () => {
         });
     }
     if (originHttp) await new Promise((resolve) => originHttp.close(resolve));
+    if (innerHttp) await new Promise((resolve) => innerHttp.close(resolve));
     if (!keepTestArtifacts) {
         for (const suffix of ['', '-shm', '-wal', '-journal']) {
             const p = `${testDbPath}${suffix}`;
             if (fs.existsSync(p)) fs.unlinkSync(p);
         }
     }
+});
+
+test('a redirect off the whitelist is refused, and never followed', async () => {
+    const result = await api(`/api/proxy?targetUrl=${encodeURIComponent(`http://127.0.0.1:${originPort}/redirect-out`)}`);
+    assert.equal(result.status, 403);
+    assert.match(result.body.error, /redirected to a domain that is not allowed/);
+    assert.equal(innerHits, 0, 'the off-whitelist host was never asked');
+});
+
+test('a redirect to another whitelisted address is followed', async () => {
+    const result = await api(`/api/proxy?targetUrl=${encodeURIComponent(`http://127.0.0.1:${originPort}/redirect-in`)}`);
+    assert.equal(result.status, 200);
+    assert.equal(result.body.path, '/hello');
+});
+
+test('the proxy fetches only http and https addresses', async () => {
+    const result = await api(`/api/proxy?targetUrl=${encodeURIComponent('ftp://127.0.0.1/file')}`);
+    assert.equal(result.status, 400);
 });
 
 test('proxying a plain-HTTP LAN target still works', async () => {
