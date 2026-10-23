@@ -1626,7 +1626,15 @@ fastify.put('/api/plugin/v1/settings/:pluginId', async (request, reply) => {
 // message ({ event, payload, emittedAt }) and the client bridge filters per
 // plugin against its declared events. Delivery is ephemeral by design (no
 // replay) — durable state belongs in plugin storage.
+// Each stream holds a subscriber and a heartbeat timer until it closes, so
+// the number open at once is capped well above a household's dashboards.
+const EVENT_STREAM_MAX = 100;
+let openEventStreams = 0;
 fastify.get('/api/plugin/v1/events/stream', (request, reply) => {
+  if (openEventStreams >= EVENT_STREAM_MAX) {
+    return reply.status(503).send({ error: 'Too many open event streams.' });
+  }
+  openEventStreams += 1;
   reply.hijack();
   reply.raw.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -1649,7 +1657,8 @@ fastify.get('/api/plugin/v1/events/stream', (request, reply) => {
     reply.raw.write(': ping\n\n');
   }, 25000);
 
-  request.raw.on('close', () => {
+  request.raw.once('close', () => {
+    openEventStreams -= 1;
     clearInterval(heartbeat);
     unsubscribe();
   });
@@ -5157,13 +5166,6 @@ fastify.get('/api/proxy', async (request, reply) => {
   } catch (dbError) {
     console.error('Error fetching proxy whitelist from settings:', dbError);
     whitelist = []; // Default to empty for security
-  }
-
-  // For immediate use, we'll ensure the calendar API is always allowed.
-  // A more robust solution might involve seeding this in the database on startup.
-  if (!whitelist.includes('calapi.inadiutorium.cz')) {
-    whitelist.push('calapi.inadiutorium.cz');
-    console.log('Added calapi.inadiutorium.cz to whitelist');
   }
 
   try {
