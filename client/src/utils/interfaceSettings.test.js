@@ -1,4 +1,10 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+const zones = vi.hoisted(() => ({ server: 'UTC' }));
+vi.mock('./timezone.js', async (importOriginal) => ({
+    ...(await importOriginal()),
+    getServerTimezoneSync: () => zones.server,
+}));
 
 // The vitest environment is node — provide a minimal localStorage.
 const storageBacking = new Map();
@@ -104,6 +110,28 @@ describe('isVacationModeActiveToday', () => {
     it('auto-expires: enabled with a past endDate is inactive (and a future startDate is not yet active)', () => {
         expect(isVacationModeActiveToday({ enabled: true, startDate: '', endDate: '2026-07-01' }, TODAY)).toBe(false);
         expect(isVacationModeActiveToday({ enabled: true, startDate: '2026-08-01', endDate: '' }, TODAY)).toBe(false);
+    });
+});
+
+// With no date passed (as app.jsx calls it), "today" is the household's date,
+// not the browser's (fork issue #68).
+describe('isVacationModeActiveToday without a date', () => {
+    const browserTz = process.env.TZ;
+    afterEach(() => {
+        vi.useRealTimers();
+        zones.server = 'UTC';
+        if (browserTz === undefined) delete process.env.TZ; else process.env.TZ = browserTz;
+    });
+
+    it('starts on the household date when the browser is still on the day before', () => {
+        // 03:00 UTC on the 20th is the evening of the 19th in Los Angeles.
+        process.env.TZ = 'America/Los_Angeles';
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-07-20T03:00:00Z'));
+        const range = { enabled: true, startDate: '2026-07-20', endDate: '2026-07-25' };
+        expect(isVacationModeActiveToday(range)).toBe(true);
+        zones.server = 'America/Los_Angeles';
+        expect(isVacationModeActiveToday(range)).toBe(false);
     });
 });
 

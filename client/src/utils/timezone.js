@@ -1,6 +1,8 @@
 import { API_BASE_URL } from './apiConfig.js';
 
-const FALLBACK_TIMEZONE = 'America/New_York';
+// Until /api/timezone answers (or if it fails), the browser's own zone is the
+// best guess; watchServerTimezone corrects it on its next check.
+const FALLBACK_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
 let cachedTimezone = null;
 
