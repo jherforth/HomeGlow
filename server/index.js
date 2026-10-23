@@ -5620,7 +5620,17 @@ fastify.get('/api/connections/google/authorize', async (request, reply) => {
 fastify.get('/api/connections/google/callback', async (request, reply) => {
   if (demoBlocked(reply)) return;
   const { code, state, error: oauthError } = request.query || {};
-  const renderPage = (title, message, ok) => {
+  // title and message carry Google's ?error=, error messages and the
+  // account's name, so both are escaped here for every caller.
+  const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+  // The result goes to the opener with target '*': this page cannot know the
+  // app's origin when the API is served from another one, and the message
+  // carries only ok. The client accepts it only from its own popup.
+  const renderPage = (rawTitle, rawMessage, ok) => {
+    const title = escapeHtml(rawTitle);
+    const message = escapeHtml(rawMessage);
     reply.header('Content-Type', 'text/html; charset=utf-8');
     return `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>
 <style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0f172a;color:#f8fafc;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:24px}
