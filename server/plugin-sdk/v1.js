@@ -122,7 +122,9 @@
       } catch (error) {
         return;
       }
-      if (origin !== window.location.origin) return;
+      // This page's address, not its origin: the frame is sandboxed with an
+      // opaque origin, whose serialization is "null".
+      if (origin !== new URL(window.location.href).origin) return;
       var weight = Number(font.weight);
       if (!(weight >= 100 && weight <= 900)) return;
       var style = font.style === 'italic' ? 'italic' : 'normal';

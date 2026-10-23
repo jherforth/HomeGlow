@@ -20,8 +20,9 @@ app required.
   read-only fallback.)
 - On the dashboard, [`PluginWidgetWrapper.jsx`](../../client/src/components/PluginWidgetWrapper.jsx)
   renders the widget in an `<iframe>` with
-  `sandbox="allow-scripts allow-same-origin allow-forms allow-popups"`, passing the
-  current theme as a query param: `/widgets/myWidget.html?theme=dark`.
+  `sandbox="allow-scripts allow-forms allow-popups"` (no `allow-same-origin`, so the
+  widget has an opaque origin and can't reach the dashboard), passing the current
+  theme as a query param: `/widgets/myWidget.html?theme=dark`.
 - When serving widget HTML, the backend rewrites hardcoded `localhost:PORT`
   references to the current origin and injects an overflow-fix `<style>` so widgets
   size correctly.
@@ -62,10 +63,13 @@ colors: light `#333`, dark `#a6a6d1`. A full template is in the
 
 ## Calling APIs from a widget
 
-Because widgets are sandboxed and same-origin, they can call HomeGlow's backend —
-including the generic CORS proxy at `GET /api/proxy` for reaching external services
-that lack CORS headers. Keep widgets lightweight and avoid external CDN dependencies
-where possible.
+A widget calls HomeGlow's backend as usual (`fetch('/api/users')`): HomeGlow adds
+the page's token to requests to its own host. A plugin may read the core data
+the plugin guide lists, use its own platform API, and use the generic CORS proxy
+at `GET /api/proxy` for external services that lack CORS headers; any other
+route answers `403`. `localStorage` works, but it is the widget's own, on that
+display. See [Plugin Development §10.0](plugin-development.md#100-the-sandbox-what-a-plugin-can-reach).
+Keep widgets lightweight and avoid external CDN dependencies where possible.
 
 ## Platform plugins: manifest + server-side storage
 

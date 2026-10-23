@@ -103,6 +103,7 @@ import { ADMIN_LAYOUT, ADMIN_TABS, normalizeAdminLocation, parseAdminHash, setAd
 import SoundPicker from './SoundPicker';
 import ControlsOnDisplay from './ControlsOnDisplay';
 import ExpandWidgetsSettings from './ExpandWidgetsSettings';
+import { frameNameFor } from '../utils/pluginLocalStore.js';
 import useFetchTabs from '../hooks/useFetchTabs.js';
 import { MAX_DOCK_HIDE_MINUTES, screensaverPreemptsDock } from '../utils/dockIdleHide.js';
 import useIsMobile from '../hooks/useIsMobile.js';
@@ -2539,7 +2540,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                                 // it, so a plugin whose own UI saves one would fail here
                                 // while working fine on the dashboard.
                                 src={`${API_BASE_URL}/widgets/${encodeURIComponent(plugin.filename)}?theme=${document.documentElement.getAttribute('data-theme') || 'light'}&device=${encodeURIComponent(currentDeviceName)}&lang=${i18n.language || 'en'}`}
-                                sandbox="allow-scripts allow-same-origin"
+                                // Opaque, like the dashboard's frames (PluginWidgetWrapper):
+                                // a plugin can't act as HomeGlow from here either.
+                                sandbox="allow-scripts allow-forms"
+                                name={frameNameFor(plugin.filename)}
                                 style={{ width: '100%', height: '100%', border: 0, display: 'block', backgroundColor: 'var(--card-bg)' }}
                               />
                             </Box>

@@ -198,8 +198,14 @@ test('the theme routes upload, list, serve and remove', async (t) => {
     assert.equal(served.headers.get('content-type'), 'image/svg+xml');
     assert.match(served.headers.get('content-security-policy'), /sandbox/);
     assert.equal(served.headers.get('x-content-type-options'), 'nosniff');
-    assert.equal(served.headers.get('access-control-allow-origin'), '*');
     assert.deepEqual(Buffer.from(await served.arrayBuffer()), SVG);
+    // A plugin's sandboxed frame (Origin: null) loads a theme's fonts by CORS,
+    // with no token: it is answered. Another site is not.
+    const font = await fetch(`${baseUrl}/api/themes/${id}/fonts/face-400.woff2?v=1`, { headers: { Origin: 'null' } });
+    assert.equal(font.status, 200);
+    assert.equal(font.headers.get('access-control-allow-origin'), 'null');
+    const foreign = await fetch(`${baseUrl}/api/themes/${id}/fonts/face-400.woff2?v=1`, { headers: { Origin: 'https://evil.example' } });
+    assert.equal(foreign.headers.get('access-control-allow-origin'), null);
 
     assert.equal((await fetch(`${baseUrl}/api/themes/${id}/theme.json/x`)).status, 404);
     assert.equal((await fetch(`${baseUrl}/api/themes/${id}/assets/..%2F..%2F..%2Findex.js`)).status, 404);

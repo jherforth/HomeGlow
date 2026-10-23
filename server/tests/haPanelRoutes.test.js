@@ -130,7 +130,7 @@ test('a saved panel becomes a plugin that serves the template with its recipe', 
   const page = await api('/widgets/ha-kitchen.html');
   assert.match(page.body, /window\.__HA_PANEL__=/);
   assert.match(page.body, /"pluginId":"ha-kitchen"/);
-  assert.match(page.body, /window\.__HOMEGLOW_PLUGIN__=\{id:"ha-kitchen"/);
+  assert.match(page.body, /"__HOMEGLOW_PLUGIN__",\{value:Object\.freeze\(\{id:"ha-kitchen"/);
   assert.doesNotMatch(page.body, /ha-secret/, 'the token never reaches a page');
 
   // An upload of the same file name must not replace the panel.
