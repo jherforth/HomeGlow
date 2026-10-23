@@ -367,6 +367,13 @@ test('a GitHub install fetches only from the plugin repository', async () => {
         'https://raw.githubusercontent.com/someone-else/HomeGlowPlugins/main/x.html',
         'https://raw.githubusercontent.com.evil.example/jherforth/HomeGlowPlugins/main/x.html',
         'file:///etc/passwd',
+        // Normalized when fetched: these would leave the repository (Mrramam, #319).
+        'https://raw.githubusercontent.com/jherforth/HomeGlowPlugins/%2e%2e/%2e%2e/someone-else/repo/main/x.html',
+        'https://raw.githubusercontent.com/jherforth/HomeGlowPlugins/../../someone-else/repo/main/x.html',
+        'https://raw.githubusercontent.com/jherforth/HomeGlowPlugins/main/%2E%2E%2F%2E%2E%2Fother/x.html',
+        'https://raw.githubusercontent.com/jherforth/HomeGlowPlugins/main/a%5c..%5cx.html',
+        'https://user:pass@raw.githubusercontent.com/jherforth/HomeGlowPlugins/main/x.html',
+        'https://raw.githubusercontent.com:8443/jherforth/HomeGlowPlugins/main/x.html',
     ]) {
         const res = await api('/api/widgets/github/install', {
             method: 'POST',

@@ -261,7 +261,23 @@ const GITHUB_REPO_NAME = 'HomeGlowPlugins';
 const GITHUB_API_BASE = 'https://api.github.com';
 // Where the plugin listing's download addresses point, and the only place a
 // GitHub install fetches from.
-const PLUGIN_REPOSITORY_RAW_PREFIX = `https://raw.githubusercontent.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/`;
+const PLUGIN_REPOSITORY_RAW_ORIGIN = 'https://raw.githubusercontent.com';
+const PLUGIN_REPOSITORY_RAW_PATH = `/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/`;
+
+// A download address in the plugin repository, as the address that will be
+// fetched, or null. Checked after parsing: fetching normalizes the URL, so
+// ".../HomeGlowPlugins/%2e%2e/%2e%2e/someone/else/..." would otherwise pass
+// a check on the raw string and load another repository's file. Encoded dots,
+// slashes and backslashes are refused outright, so nothing on GitHub's side
+// can decode them into a different path either.
+function pluginRepositoryFileUrl(raw) {
+  if (typeof raw !== 'string' || raw.length > 2048) return null;
+  let url;
+  try { url = new URL(raw); } catch { return null; }
+  if (url.origin !== PLUGIN_REPOSITORY_RAW_ORIGIN || url.username || url.password) return null;
+  if (!url.pathname.startsWith(PLUGIN_REPOSITORY_RAW_PATH) || /%2e|%2f|%5c|\\/i.test(url.pathname)) return null;
+  return url.href;
+}
 
 const DEFAULT_HOMEGLOW_REPOSITORY = 'jherforth/HomeGlow';
 const BACKEND_VERSION = (process.env.BACKEND_VERSION || process.env.APP_VERSION || serverPackageJson.version || 'dev').trim();
@@ -2045,14 +2061,15 @@ fastify.post('/api/widgets/github/install', async (request, reply) => {
     }
     // Only a file in the plugin repository, as the listing gives it: the
     // server fetches this address, so it must not be one a caller chooses.
-    if (typeof download_url !== 'string' || !download_url.startsWith(PLUGIN_REPOSITORY_RAW_PREFIX)) {
+    const downloadUrl = pluginRepositoryFileUrl(download_url);
+    if (!downloadUrl) {
       return reply.status(400).send({ error: `download_url must be a file in ${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME} on raw.githubusercontent.com` });
     }
 
     console.log(`Installing widget ${filename} from GitHub...`);
 
     // Download the widget file
-    const response = await axios.get(download_url, {
+    const response = await axios.get(downloadUrl, {
       headers: {
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'User-Agent': 'HomeGlow-Server/1.0'
@@ -2072,7 +2089,7 @@ fastify.post('/api/widgets/github/install', async (request, reply) => {
       fallbackName: name || sanitizedFilename.replace('.html', ''),
       content,
       source: 'github',
-      originalUrl: download_url,
+      originalUrl: downloadUrl,
     });
     if (result.error) {
       return reply.status(result.status).send({ error: result.error });
