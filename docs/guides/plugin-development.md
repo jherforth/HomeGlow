@@ -76,7 +76,7 @@ Create a single HTML file:
 Install it via **Admin Panel → Dashboard → Plugins → Upload Widget**, enable it,
 assign it to a tab. Test both themes with `?theme=dark` / `?theme=light` while
 developing. For external services without CORS headers, use the proxy:
-`GET /api/proxy?url=...`.
+`GET /api/proxy?targetUrl=...`.
 
 > **Which endpoints can I call?** See the [API reference](#10-api-reference)
 > (§10) for the data endpoints a plugin commonly reads and the stable plugin
@@ -926,7 +926,7 @@ your plugin can subscribe to (§5) and drive [reactions](#6-reactions--server-si
 ### 10.3 The CORS proxy (`/api/proxy`)
 
 To reach an external service that lacks CORS headers, route the request through
-`GET /api/proxy?url=<encoded-url>`. Two constraints:
+`GET /api/proxy?targetUrl=<encoded-url>`. Two constraints:
 
 - The target host must be in the `PROXY_WHITELIST` setting (an admin adds it) —
   otherwise `403`.

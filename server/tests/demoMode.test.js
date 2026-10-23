@@ -187,7 +187,7 @@ test('abuse-prone routes are blocked with 403', async () => {
     // deliberately NOT blocked — plugins are a showcase feature and their
     // state lives in the in-memory demo DB, wiped on the reset cycle.
     const blocked = [
-        ['GET', '/api/proxy?url=https://example.com'],
+        ['GET', '/api/proxy?targetUrl=https://example.com'],
         ['POST', '/api/sounds/upload'],
         ['DELETE', '/api/sounds/some-sound.mp3'],
         ['POST', '/api/users/1/upload-picture'],

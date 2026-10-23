@@ -1226,3 +1226,46 @@ test('Google OAuth callback page escapes what it is given', async () => {
     assert.ok(!response.body.includes(payload), response.body);
     assert.ok(response.body.includes('Google reported: &lt;img src=x onerror=alert(1)&gt;'), response.body);
 });
+
+test('the Liturgical Day host is seeded into PROXY_WHITELIST once, and stays out once removed', async () => {
+    const seeded = await api('/api/settings');
+    assert.ok(seeded.body.PROXY_WHITELIST.split(',').includes('calapi.inadiutorium.cz'), seeded.body.PROXY_WHITELIST);
+
+    const saved = await api('/api/settings', { method: 'POST', body: JSON.stringify({ key: 'PROXY_WHITELIST', value: 'example.com' }) });
+    assert.equal(saved.status, 200);
+    const target = encodeURIComponent('https://calapi.inadiutorium.cz/api/v0/en/calendars/default/today');
+    const blocked = await api(`/api/proxy?targetUrl=${target}`);
+    assert.equal(blocked.status, 403);
+});
+
+test('event streams past the cap are refused with 503 until one closes', async () => {
+    const http = require('node:http');
+    const open = (onStatus) => {
+        const req = http.get(`${baseUrl}/api/plugin/v1/events/stream`, (res) => {
+            onStatus(res.statusCode);
+            res.resume();
+        });
+        req.on('error', () => {});
+        return req;
+    };
+    const opened = await Promise.all(Array.from({ length: 100 }, () => new Promise((resolve) => {
+        const req = open((status) => resolve({ req, status }));
+    })));
+    try {
+        assert.ok(opened.every((stream) => stream.status === 200));
+        const refused = await new Promise((resolve) => open(resolve));
+        assert.equal(refused, 503);
+
+        opened.pop().req.destroy();
+        let status;
+        for (let i = 0; i < 20 && status !== 200; i += 1) {
+            await delay(50);
+            const req = await new Promise((resolve) => { const r = open((s) => resolve({ r, s })); });
+            status = req.s;
+            if (status === 200) opened.push({ req: req.r, status });
+        }
+        assert.equal(status, 200);
+    } finally {
+        opened.forEach((stream) => stream.req.destroy());
+    }
+});
