@@ -40,17 +40,17 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       # The version the Docker image runs (server/Dockerfile): tests should
       # see the runtime's Node, built-in WebSocket client included.
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 24
 
       - name: Install dependencies (${{ matrix.name }})
-        run: npm install
+        run: npm ci
         working-directory: ${{ matrix.path }}
 
       - name: Run tests (${{ matrix.name }})
@@ -71,7 +71,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: ShellCheck
         run: shellcheck -x proxmox/install-homeglow.sh proxmox/tests/install-homeglow.test.sh
