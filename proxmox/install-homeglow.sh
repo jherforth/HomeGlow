@@ -600,6 +600,33 @@ want="$(printf "%s" "$WANT_LANG" | sed "s/\.[Uu][Tt][Ff]-\{0,1\}8/.utf8/" | tr "
 locale -a | tr "[:upper:]" "[:lower:]" | grep -qxF "$want"
 update-locale LANG="$WANT_LANG"
 '
+
+# Docker from its own signed apt repository, rather than piping the
+# get.docker.com convenience script into a root shell. The repository's
+# signing key is checked against the fingerprint Docker publishes
+# (docs.docker.com/engine/install/debian), so apt only takes packages signed
+# by Docker. Debian's own docker.io has no Compose v2 plugin on bookworm.
+# Runs inside the container with WANT_FPR set.
+DOCKER_KEY_FINGERPRINT="9DC858229FC7DD38854AE2D88D81803C0EBFCD88"
+# shellcheck disable=SC2016
+DOCKER_SCRIPT='
+set -e
+export DEBIAN_FRONTEND=noninteractive
+os_id="$(. /etc/os-release && echo "$ID")"
+codename="$(. /etc/os-release && echo "$VERSION_CODENAME")"
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL "https://download.docker.com/linux/${os_id}/gpg" -o /etc/apt/keyrings/docker.asc
+fpr="$(gpg --show-keys --with-colons /etc/apt/keyrings/docker.asc 2>/dev/null | awk -F: "/^fpr:/ { print \$10; exit }")"
+if [ "$fpr" != "$WANT_FPR" ]; then
+  echo "Docker signing key fingerprint is ${fpr:-unreadable}, expected ${WANT_FPR}" >&2
+  rm -f /etc/apt/keyrings/docker.asc
+  exit 1
+fi
+chmod a+r /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/${os_id} ${codename} stable" >/etc/apt/sources.list.d/docker.list
+apt-get update -qq
+apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin >/dev/null
+'
 install_homeglow() {
   # --- ensure a Debian 12 template is available ------------------------------
   msg_info "Ensuring the Debian 12 LXC template is available"
@@ -656,7 +683,7 @@ install_homeglow() {
   run() { pct exec "$CTID" -- env LANG=C.UTF-8 LC_ALL=C.UTF-8 bash -c "$1"; }
 
   msg_info "Installing base dependencies"
-  run "export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get install -y -qq ca-certificates curl openssl locales >/dev/null" \
+  run "export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get install -y -qq ca-certificates curl openssl locales gnupg >/dev/null" \
     || die "Dependency install failed."
   msg_ok "Base dependencies installed"
 
@@ -673,7 +700,8 @@ install_homeglow() {
   fi
 
   msg_info "Installing Docker (this can take a few minutes)"
-  run "curl -fsSL https://get.docker.com | sh >/dev/null 2>&1" || die "Docker install failed."
+  pct exec "$CTID" -- env LANG=C.UTF-8 LC_ALL=C.UTF-8 WANT_FPR="$DOCKER_KEY_FINGERPRINT" bash -c "$DOCKER_SCRIPT" >/dev/null 2>&1 \
+    || die "Docker install failed."
   run "systemctl enable --now docker >/dev/null 2>&1" || true
   msg_ok "Docker installed"
 
@@ -681,12 +709,16 @@ install_homeglow() {
   run "mkdir -p /opt/homeglow"
   run "curl -fsSL '${REPO_RAW}/docker-compose.yml' -o /opt/homeglow/docker-compose.yml" \
     || die "Could not fetch docker-compose.yml."
-  # Generate a stable .env once (never regenerated on re-run/update).
-  run "test -f /opt/homeglow/.env || cat > /opt/homeglow/.env <<EOF
+  # Generate a stable .env once (never regenerated on re-run/update). It holds
+  # ENCRYPTION_KEY, which decrypts every stored password and token, so only
+  # root may read it: made under umask 077, and set to 600 either way.
+  run "test -f /opt/homeglow/.env || (umask 077 && cat > /opt/homeglow/.env <<EOF
 TZ=${TZ_NAME}
 FRONTEND_PORT=${FRONTEND_PORT}
 ENCRYPTION_KEY=\$(openssl rand -base64 32)
-EOF"
+EOF
+)"
+  run "chmod 600 /opt/homeglow/.env" || die "Could not protect /opt/homeglow/.env."
   run "cd /opt/homeglow && docker compose pull >/dev/null 2>&1 && docker compose up -d >/dev/null 2>&1" \
     || die "docker compose up failed."
   msg_ok "${APP} deployed"
@@ -702,7 +734,7 @@ EOF"
   msg_ok "${APP} is installed in LXC ${CTID}."
   echo -e "   ${BL}Open:${CL}          ${BD}${AM}${UL}http://${ip:-<container-ip>}:${FRONTEND_PORT}${CL}"
   echo -e "   ${BL}Shell:${CL}         pct enter ${CTID}"
-  echo -e "   ${BL}Update later:${CL}  pct exec ${CTID} -- sh -c 'cd /opt/homeglow && docker compose pull && docker compose up -d'"
+  echo -e "   ${BL}Update later:${CL}  pct exec ${CTID} -- sh -c 'cd /opt/homeglow && chmod 600 .env && docker compose pull && docker compose up -d'"
   echo
 }
 

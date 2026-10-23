@@ -260,6 +260,12 @@ check "draws it in the logo's colors" has out.txt $'\033[38;2;69;114;153m'
 check "lists the settings being used" has out.txt "Using recommended settings"
 check "runs container commands in C.UTF-8" execs_use_c_locale
 check "installs the locales package" has pct.log "openssl\ locales"
+check "installs gnupg, to check Docker's signing key" has pct.log "locales\ gnupg"
+check "installs Docker from its signed apt repository" has pct.log "download.docker.com/linux"
+check "never pipes get.docker.com into a shell" lacks pct.log "get.docker.com"
+check "checks Docker's key against its published fingerprint" has pct.log "WANT_FPR=9DC858229FC7DD38854AE2D88D81803C0EBFCD88"
+check "creates .env readable by root only" has pct.log "umask 077"
+check "sets .env to 600, for a container that already had one" has pct.log "chmod\ 600\ /opt/homeglow/.env"
 check "generates the host's locale in the container" has pct.log "WANT_LANG=en_US.UTF-8"
 check "asks nothing about storage when there is one pool" lacks ui.log "Container disk storage"
 check "uses the only pool" has pct.log "local-lvm:6"
@@ -400,7 +406,7 @@ check "creates nothing" lacks pct.log "create"
 scenario failure-cleanup host_lvm \
   "0" "0 default" "0" \
   "0"
-MOCK_FAIL_PATTERN="get.docker.com" run_installer
+MOCK_FAIL_PATTERN="download.docker.com" run_installer
 check "exits with an error" rc_is 1
 check "asks about the half-installed container" has ui.log "yesno|Installation failed|"
 check "removes it when asked" has pct.log "destroy 105 --purge"
@@ -434,7 +440,7 @@ check "creates nothing" lacks pct.log "create"
 
 # Once a container exists, running out of input is a "no", not a cancel.
 scenario plain-input-runs-out-after-create host_lvm
-MOCK_FAIL_PATTERN="get.docker.com" run_installer plain "\n\n\n"
+MOCK_FAIL_PATTERN="download.docker.com" run_installer plain "\n\n\n"
 check "exits with an error" rc_is 1
 check "keeps the container" lacks pct.log "destroy"
 check "does not claim nothing changed" lacks out.txt "Nothing was changed"

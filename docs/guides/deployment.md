@@ -56,6 +56,14 @@ in one command:
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/jherforth/HomeGlow/main/proxmox/install-homeglow.sh)"
 ```
 
+It runs as root on the host. To read it before running it:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/jherforth/HomeGlow/main/proxmox/install-homeglow.sh
+less install-homeglow.sh
+bash install-homeglow.sh
+```
+
 See [`proxmox/README.md`](../../proxmox/README.md) for details, updating, and the
 path to the official community-scripts listing.
 

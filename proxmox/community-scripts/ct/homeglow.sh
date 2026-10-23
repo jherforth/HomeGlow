@@ -28,6 +28,11 @@ function update_script() {
     exit
   fi
   msg_info "Updating ${APP}"
+  # Installs from before this check left .env (and its ENCRYPTION_KEY)
+  # world-readable.
+  if [[ -f /opt/homeglow/.env ]]; then
+    chmod 600 /opt/homeglow/.env
+  fi
   cd /opt/homeglow || exit
   $STD docker compose pull
   $STD docker compose up -d

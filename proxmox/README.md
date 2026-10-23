@@ -51,8 +51,10 @@ the logo's colors; set `NO_COLOR=1` for plain text. Then it:
    an unprivileged container).
 3. Generates your shell's locale inside the container, so `apt` (now and in later
    `pct enter` sessions) doesn't warn about a missing `en_US.UTF-8`.
-4. Installs Docker, fetches `docker-compose.yml`, generates a stable `ENCRYPTION_KEY` into
-   `/opt/homeglow/.env`, and runs `docker compose up -d`.
+4. Installs Docker from Docker's signed apt repository (its signing key checked against the
+   fingerprint Docker publishes), fetches `docker-compose.yml`, generates a stable
+   `ENCRYPTION_KEY` into `/opt/homeglow/.env` (readable by root only: it decrypts every
+   stored password and token), and runs `docker compose up -d`.
 5. Prints the access URL (`http://<container-ip>:<port>`).
 
 ### Testing changes to the script
@@ -67,8 +69,11 @@ dialogs by hand on a Proxmox host.
 ### Updating
 
 ```bash
-pct exec <CTID> -- sh -c 'cd /opt/homeglow && docker compose pull && docker compose up -d'
+pct exec <CTID> -- sh -c 'cd /opt/homeglow && chmod 600 .env && docker compose pull && docker compose up -d'
 ```
+
+The `chmod` closes a gap in installs made before it: their `.env`, which holds
+`ENCRYPTION_KEY`, was readable by every user in the container.
 
 This works across HomeGlow releases because the compose file pulls `:latest`, which CI now
 publishes on every tagged release.
