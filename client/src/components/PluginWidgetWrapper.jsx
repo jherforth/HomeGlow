@@ -1,4 +1,4 @@
-import React, { useCallback, useContext, useEffect, useId, useRef } from 'react';
+import React, { useCallback, useContext, useEffect, useId, useMemo, useRef } from 'react';
 import { Box } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../utils/apiConfig.js';
@@ -10,6 +10,16 @@ import { THEME_TOKENS_APPLIED_EVENT, buildPluginThemeMessage, readRoleTokens } f
 import { ThemeContext } from '../themes/engine/ThemeContext.js';
 import { acceptFrameTouchMessage, buildFrameTouchSettingsMessage, emitFrameTouch } from '../utils/twoFingerSwipe.js';
 import { acceptFrameExpandMessage, buildFrameExpandMessage, emitFrameExpand } from '../utils/widgetExpand.js';
+import { LOCAL_STORAGE_MESSAGE_TYPE, applyPluginStoreChange, frameNameFor } from '../utils/pluginLocalStore.js';
+
+// Plugin frames are sandboxed without allow-same-origin (mrramam/HomeGlow#50):
+// the plugin's page gets an opaque origin, so it can't read this page, its
+// storage or its API as HomeGlow, wherever it was served from. Messages from
+// it say they come from "null"; messages to it can't name its origin, so they
+// go to "*". The source check (this wrapper's own frame) is the real gate.
+export const PLUGIN_FRAME_SANDBOX = 'allow-scripts allow-forms allow-popups';
+const FRAME_ORIGIN = 'null';
+const TO_FRAME = '*';
 
 const PluginWidgetWrapper = ({
   filename,
@@ -44,12 +54,8 @@ const PluginWidgetWrapper = ({
   // each gets its own swipe detector. The same plugin can be on the board twice.
   const touchSourceKey = useId();
 
-  // The iframe's document comes from API_BASE_URL, which is NOT this page's
-  // origin in dev mode / split-origin deployments — postMessage must target
-  // the iframe's actual origin or the browser silently drops the message.
-  const iframeOrigin = API_BASE_URL
-    ? new URL(API_BASE_URL, window.location.href).origin
-    : window.location.origin;
+  // The origin messages from the frame carry: opaque, so always "null".
+  const iframeOrigin = FRAME_ORIGIN;
 
   // Forward core events this plugin declared in its manifest into the iframe
   // (issue #105 Phase 3). Legacy widgets declare nothing and skip the stream.
@@ -65,10 +71,10 @@ const PluginWidgetWrapper = ({
       if (!target) return;
       target.postMessage(
         { type: 'homeglow:event', event: message.event, payload: message.payload, emittedAt: message.emittedAt },
-        iframeOrigin
+        TO_FRAME
       );
     });
-  }, [eventsKey, iframeOrigin]);
+  }, [eventsKey]);
 
   // The reverse direction: a plugin that wrote core data through the REST API
   // tells the host, so widgets showing that data can refetch instead of
@@ -80,6 +86,11 @@ const PluginWidgetWrapper = ({
   useEffect(() => {
     const onMessage = (event) => {
       const frame = iframeRef.current?.contentWindow;
+      // The plugin's localStorage (its stand-in posts each change here).
+      if (frame && event.source === frame && event.origin === iframeOrigin && event.data?.type === LOCAL_STORAGE_MESSAGE_TYPE) {
+        applyPluginStoreChange(filename, event.data);
+        return;
+      }
       // HomeGlow.celebrate(): the board's celebration, which CelebrationHost
       // rate-limits per plugin.
       if (acceptPluginCelebrateMessage(event, frame, iframeOrigin)) {
@@ -124,8 +135,8 @@ const PluginWidgetWrapper = ({
     if (!target) return;
     const { theme: mode, colors: picked, fonts } = sendRef.current;
     const message = buildPluginThemeMessage(mode, picked, { tokens: readRoleTokens(document.documentElement), fonts });
-    target.postMessage(message, iframeOrigin);
-  }, [iframeOrigin]);
+    target.postMessage(message, TO_FRAME);
+  }, []);
   useEffect(() => {
     const frame = requestAnimationFrame(postTheme);
     return () => cancelAnimationFrame(frame);
@@ -144,9 +155,9 @@ const PluginWidgetWrapper = ({
     if (!target) return;
     target.postMessage(
       buildFrameTouchSettingsMessage({ swipe: swipeOn, blockPinchZoom: pinchBlocked, expand: expandMode }),
-      iframeOrigin
+      TO_FRAME
     );
-  }, [iframeOrigin, swipeOn, pinchBlocked, expandMode]);
+  }, [swipeOn, pinchBlocked, expandMode]);
   useEffect(() => {
     postTouch();
   }, [postTouch]);
@@ -154,8 +165,8 @@ const PluginWidgetWrapper = ({
   const postExpand = useCallback(() => {
     const target = iframeRef.current?.contentWindow;
     if (!target) return;
-    target.postMessage(buildFrameExpandMessage(expandSize), iframeOrigin);
-  }, [iframeOrigin, expandSize]);
+    target.postMessage(buildFrameExpandMessage(expandSize), TO_FRAME);
+  }, [expandSize]);
   useEffect(() => {
     postExpand();
   }, [postExpand]);
@@ -170,6 +181,11 @@ const PluginWidgetWrapper = ({
   // unchanged hidden set produces a byte-identical src — changing src navigates
   // the frame, which is what makes a newly hidden control take effect, and is
   // waste when a settings refetch merely handed us an equal array.
+  // The plugin's saved localStorage on this display, read when the frame is
+  // made (again on a refresh), for its stand-in to start from.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const frameName = useMemo(() => frameNameFor(filename), [filename, refreshNonce]);
+
   const hideParam = (Array.isArray(hiddenControls) ? hiddenControls : [])
     .map((id) => encodeURIComponent(id))
     .join(',');
@@ -188,6 +204,7 @@ const PluginWidgetWrapper = ({
         // ignore it are unaffected.
         src={`${API_BASE_URL}/widgets/${filename}?theme=${theme}&device=${encodeURIComponent(deviceName)}&lang=${i18n.language || 'en'}${hideParam ? `&hide=${hideParam}` : ''}${transparentBackground ? '&transparent=true' : ''}`}
         title={name}
+        name={frameName}
         style={{
           width: '100%',
           height: '100%',
@@ -200,7 +217,7 @@ const PluginWidgetWrapper = ({
           borderRadius: 'max(0px, calc(var(--hg-frame-radius) - var(--hg-frame-inset) - 3px))',
           overflow: 'hidden',
         }}
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+        sandbox={PLUGIN_FRAME_SANDBOX}
       />
     </Box>
   );

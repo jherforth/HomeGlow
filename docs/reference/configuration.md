@@ -20,6 +20,7 @@ database). This page covers both.
 | `HOMEGLOW_DISABLE_CALENDAR_SYNC` | `0` | Set to `1` to disable the calendar sync service. |
 | `HOMEGLOW_DISABLE_UPDATE_CHECK` | `0` | Set to `1` to stop the server asking GitHub for the latest release. The update indicator then never shows. |
 | `HOMEGLOW_THEMES_REPOSITORY` | `jherforth/HomeGlowThemes` | The GitHub repository Admin → Look → Themes installs from: one folder per theme at its root. |
+| `CORS_ORIGINS` | — | Comma-separated origins, besides HomeGlow's own, that may read the API from a browser (for example a dashboard served from another host). Unset, only HomeGlow itself can, plus the Vite dev server on `localhost` when `NODE_ENV` isn't `production`. Plugins are handled separately (see the plugin guide, §10.0). |
 | `DEMO_MODE` | `false` | Set to `true` to run a **public demo instance**: in-memory DB (wiped on stop), admin PIN disabled, sample data seeded and reset every 6h (incl. live demo calendar feeds and a static weather snapshot), and abuse-prone routes (uploads, CORS proxy, OAuth, calendar source management) return 403 — calendar sync only ever fetches the seeded demo feeds. See the [Demo Mode](../guides/demo-mode.md) guide. |
 | `BACKEND_VERSION` / `BACKEND_GIT_COMMIT` / `BACKEND_GITHUB_REPOSITORY` | build metadata | Surfaced by `GET /api/stats`; set by CI. |
 

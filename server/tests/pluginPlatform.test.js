@@ -152,7 +152,7 @@ test('uploading a widget with a valid embedded manifest registers its pluginId',
 test('served manifest plugin HTML gets its identity injected at the start of head', async () => {
     const served = await api('/widgets/manifest-widget.html?theme=dark');
     assert.equal(served.status, 200);
-    assert.ok(served.body.includes(`window.__HOMEGLOW_PLUGIN__={id:"${PLUGIN_ID}",apiVersion:"v1"}`));
+    assert.ok(served.body.includes(`"__HOMEGLOW_PLUGIN__",{value:Object.freeze({id:"${PLUGIN_ID}",apiVersion:"v1"}),writable:false,configurable:false`));
     // The identity script must run before any plugin script in <head> — an SDK
     // <script src> placed early in head would otherwise see no identity.
     assert.ok(
@@ -161,6 +161,10 @@ test('served manifest plugin HTML gets its identity injected at the start of hea
     );
     // The touch script for the two-finger swipe and the pinch block.
     assert.ok(served.body.includes('homeglow:touch-settings'));
+    // The frame script: the page's token and its storage, also before any
+    // plugin content.
+    assert.ok(served.body.includes('X-HomeGlow-Plugin-Token'));
+    assert.ok(served.body.indexOf('X-HomeGlow-Plugin-Token') < served.body.indexOf('homeglow-manifest'));
 });
 
 test('widget serving rejects traversal-shaped filenames', async () => {
@@ -536,12 +540,15 @@ test('settings endpoints reject unknown plugins and bad manifests reject select 
 // Opens the SSE stream and collects parsed `data:` messages.
 async function openEventStream() {
     const controller = new AbortController();
-    const response = await fetch(`${baseUrl}/api/plugin/v1/events/stream`, { signal: controller.signal });
+    // As the dashboard's dev server (Vite) opens it.
+    const devOrigin = 'http://localhost:3001';
+    const response = await fetch(`${baseUrl}/api/plugin/v1/events/stream`, { signal: controller.signal, headers: { Origin: devOrigin } });
     assert.equal(response.status, 200);
     assert.match(response.headers.get('content-type'), /text\/event-stream/);
     // reply.hijack() bypasses @fastify/cors — the route must set this itself
-    // or cross-origin EventSources (dev mode) are blocked.
-    assert.equal(response.headers.get('access-control-allow-origin'), '*');
+    // or cross-origin EventSources (dev mode) are blocked. Only for an
+    // allowed origin: never '*'.
+    assert.equal(response.headers.get('access-control-allow-origin'), devOrigin);
 
     const messages = [];
     const reader = response.body.getReader();

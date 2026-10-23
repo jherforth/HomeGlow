@@ -11,6 +11,7 @@ import TabBar from './components/TabBar.jsx';
 import ScreensaverCountdown from './components/ScreensaverCountdown.jsx';
 import UpdateIndicator from './components/UpdateIndicator.jsx';
 import { API_BASE_URL } from './utils/apiConfig.js';
+import { migrateLegacyPluginStorage } from './utils/pluginLocalStore.js';
 import { getDeviceApiBase, getDeviceName } from './utils/deviceName.js';
 import { refreshSubscription } from './utils/pushNotifications.js';
 import { unlockAudio } from './utils/choreSound.js';
@@ -326,7 +327,11 @@ const App = () => {
   const fetchInstalledPlugins = async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/widgets`);
-      setInstalledPlugins(Array.isArray(response.data) ? response.data : []);
+      const plugins = Array.isArray(response.data) ? response.data : [];
+      // Before any plugin frame is drawn: carry the plugins' old localStorage
+      // into their own stores, once per display (utils/pluginLocalStore.js).
+      migrateLegacyPluginStorage(plugins);
+      setInstalledPlugins(plugins);
     } catch {
       setInstalledPlugins([]);
     }

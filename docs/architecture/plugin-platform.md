@@ -28,8 +28,8 @@ deliberately minimal:
 | **Format** | A single `.html` file uploaded via Admin Panel → Dashboard → Plugins, or installed from the `jherforth/HomeGlowPlugins` GitHub repo. |
 | **Storage** | ~~`server/widgets/<file>.html` + `widgets_registry.json`~~ → now the `plugins` table in `tasks.db` (§10, implemented). |
 | **Serving** | `GET /widgets/:filename` — backend rewrites `localhost:PORT` to the live origin and injects an overflow-fix `<style>`. |
-| **Rendering** | [`PluginWidgetWrapper.jsx`](../../client/src/components/PluginWidgetWrapper.jsx) renders an `<iframe sandbox="allow-scripts allow-same-origin allow-forms allow-popups">` at `/widgets/<file>?theme=<t>`. |
-| **API access** | Because the iframe is **same-origin**, a plugin can already `fetch()` the entire REST API, including the CORS proxy at `GET /api/proxy`. There is no auth — plugins are fully trusted. |
+| **Rendering** | [`PluginWidgetWrapper.jsx`](../../client/src/components/PluginWidgetWrapper.jsx) renders an `<iframe sandbox="allow-scripts allow-forms allow-popups">` (no `allow-same-origin`: an opaque origin, §9) at `/widgets/<file>?theme=<t>`. |
+| **API access** | A plugin reaches its own platform API, the core reads and household writes in the plugin guide (§10.0), and the proxy, with a token its page is served with. Everything else answers `403` (§9). |
 | **Settings** | Only `enabled`, `transparentBackground`, and a refresh interval, stored **per device** inside `devices.device_settings_json → pluginSettings[filename]`. |
 
 ### What plugins cannot do today
@@ -205,16 +205,16 @@ promise** and plugins are documented as using them at their own risk.
 Because everything a "platform plugin" needs now flows through one namespace, a
 future capability/permission model has a single choke point: the manifest
 declares intent (`storage`, `events`, which domains it touches), and a middleware
-on `/api/plugin/v1` could later enforce it with a per-plugin token. **For 1.7
-plugins remain fully trusted** — we only build the *shape* that makes enforcement
-possible later, we don't build enforcement.
+on `/api/plugin/v1` enforces it with a per-plugin token. The token half is now
+built (§9): a plugin reaches its own namespace only. Narrowing what each plugin
+may do by what its manifest declares is still the future step.
 
 ### 5.4 Identifying the calling plugin
 
 Storage and settings endpoints are namespaced by `pluginId` in the path
-(`/api/plugin/v1/storage/:pluginId/...`). For the trusted model this is
-sufficient. When a permission model arrives, the path `pluginId` is validated
-against a token minted for the iframe (see §9, open questions).
+(`/api/plugin/v1/storage/:pluginId/...`), and the path `pluginId` is checked
+against the token the plugin's page was served with (§9), so a plugin can't
+use another's namespace by naming it (mrramam/HomeGlow#49).
 
 ---
 
@@ -470,27 +470,52 @@ can render without extra round-trips.
 
 ## 9. Security & trust model
 
-The current model is **"same-origin iframe, fully trusted, LAN-only, no auth"**
-(see [overview](overview.md) security note). The platform must not quietly widen
-the blast radius:
+A plugin is code someone else wrote, running on the household's network, so it
+is isolated from HomeGlow (mrramam/HomeGlow#50, #49):
 
-- **No arbitrary server-side plugin code in 1.7.** Storage, settings, and reactions
-  are all *data and declarations* the backend interprets — never `eval`'d plugin
-  JS. This is the single most important constraint and the reason Model A is
-  deferred.
-- **Namespacing is enforced server-side**, not trusted from the client: storage
-  and settings are keyed by a `pluginId` that must exist as an installed manifest
-  plugin; one plugin cannot read another's namespace by path alone (and a future
-  token model closes the "any same-origin script can hit any namespace" gap).
-- **Manifest is validated on upload/install**, bounding what a malformed or
-  malicious manifest can declare (event names against the known catalog, setting
-  types against the allowed set, size/key caps on storage).
-- **postMessage uses an explicit same-origin target**, never `"*"`, and plugins
-  verify `event.origin`.
-- The **fully-trusted reality is unchanged for 1.7** (any same-origin script can
-  still call any API). The platform's job is to add the *seams* — one API
-  namespace, declared capabilities in the manifest — where enforcement can later
-  be added without another redesign. This is the "off-ramp" the issue asks for.
+- **An opaque origin.** Plugin frames are sandboxed without
+  `allow-same-origin`. The page can't read the dashboard's DOM, storage or
+  globals, can't read another plugin's page, and every request it makes
+  arrives with `Origin: null`.
+- **A token per page.** `/widgets/:filename` serves each page with a token,
+  `HMAC(secret, "plugin:<id>")` (`"widget:<filename>"` for a plain widget),
+  signed with the `PLUGIN_TOKEN_SECRET` setting (made on first use, never
+  returned). An injected frame script
+  ([`server/utils/pluginFrameShims.js`](../../server/utils/pluginFrameShims.js))
+  adds it to fetch and XHR calls to HomeGlow's own host, so plugins and the
+  SDK call the API as before. Another plugin can't read it: `/widgets/*`
+  sends no CORS headers.
+- **One request policy**
+  ([`server/utils/pluginRequestPolicy.js`](../../server/utils/pluginRequestPolicy.js)).
+  A request with `Origin: null` needs a valid token, and then reaches only:
+  its own `/api/plugin/v1/…/<id>` routes; the core reads and the four
+  household writes the plugin guide lists (§10.0 there); the proxy; and a
+  theme's files (which need no token, since `FontFace` can't add one).
+  Everything else answers `403`. Requests with no `Origin` (an `<img>`, a
+  navigation) or the dashboard's own are unaffected.
+- **No more `Access-Control-Allow-Origin: *`.** The API answers CORS only for
+  a plugin's allowed requests, the dev server, and `CORS_ORIGINS`, so another
+  website can't read it.
+- **`localStorage` per plugin.** The frame script replaces it with a stand-in
+  the dashboard keeps per plugin and display
+  ([`client/src/utils/pluginLocalStore.js`](../../client/src/utils/pluginLocalStore.js)),
+  seeded through the frame's `name`. The published plugins' old keys are
+  carried over once per display, for the plugins installed then only.
+- **No arbitrary server-side plugin code.** Storage, settings, and reactions
+  are all *data and declarations* the backend interprets, never `eval`'d
+  plugin JS.
+- **The manifest is validated on upload and install**, bounding what it can
+  declare (event names against the catalog, setting types, storage caps, and
+  safe increment paths).
+- **postMessage:** the dashboard checks that a message came from its own frame
+  (`event.source`) and from an opaque origin (`"null"`), and posts to the
+  frame with `"*"`, since an opaque origin can't be named. The frame trusts
+  only `window.parent`.
+
+What this does not cover: a plugin can still show anything, read the
+household's core data, and spend or add clams through the documented
+household writes. And a website open on the LAN can still *send* a simple
+request (a form POST) to the API, though it can't read the answer.
 
 ---
 

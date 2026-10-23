@@ -188,6 +188,8 @@ const immichPhotos = require('./services/immichPhotos');
 const { PLUGIN_AUTHOR_MAX_LENGTH, resolvePluginAuthor } = require('./utils/pluginAuthor');
 const { listPluginsFromTree } = require('./utils/pluginStoreListing');
 const { PLUGIN_FRAME_TOUCH_SCRIPT } = require('./utils/pluginFrameTouch');
+const { pluginFrameShimScript } = require('./utils/pluginFrameShims');
+const pluginRequestPolicy = require('./utils/pluginRequestPolicy');
 const { sqliteUtcToIso, sqliteUtcToMs } = require('./utils/sqliteTime');
 const {
   DEVICE_NAME_RULE_MESSAGE,
@@ -588,11 +590,53 @@ function decryptPassword(encryptedPassword) {
   }
 }
 
-// Initialize Fastify with CORS
+// CORS (mrramam/HomeGlow#50, #62). The dashboard is served from the API's own
+// origin in production and needs none. Who else may read a response:
+//   - a plugin (its sandboxed frame sends Origin: null), only for what
+//     utils/pluginRequestPolicy.js lets it reach;
+//   - the CORS_ORIGINS list, and in development the Vite dev server.
+// Any other site gets no CORS headers, so it can't read the API.
+const isAllowedApiOrigin = pluginRequestPolicy.createOriginAllowList();
+// The secret plugin tokens are signed with, made on first use. Read through
+// a function: the database opens after the routes are registered.
+let pluginTokenSecret = null;
+function getPluginTokenSecret() {
+  if (pluginTokenSecret) return pluginTokenSecret;
+  const key = pluginRequestPolicy.TOKEN_SECRET_SETTING;
+  db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)').run(key, crypto.randomBytes(32).toString('base64url'));
+  pluginTokenSecret = db.prepare('SELECT value FROM settings WHERE key = ?').get(key).value;
+  return pluginTokenSecret;
+}
+const CORS_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'];
+const CORS_HEADERS = ['Content-Type', 'Authorization'];
 fastify.register(require('@fastify/cors'), {
-  origin: '*', // Allow all origins for development. Consider restricting in production.
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], // Explicitly allow PATCH
-  allowedHeaders: ['Content-Type', 'Authorization'], // Add any other headers your client might send
+  delegator: (request, callback) => {
+    const origin = request.headers.origin;
+    if (origin === 'null') {
+      const decision = pluginRequestPolicy.decide(request, getPluginTokenSecret);
+      return callback(null, decision.allow
+        ? { origin: true, credentials: true, methods: CORS_METHODS, allowedHeaders: [...CORS_HEADERS, 'X-HomeGlow-Plugin-Token'] }
+        : { origin: false });
+    }
+    if (isAllowedApiOrigin(origin)) return callback(null, { origin: true, methods: CORS_METHODS, allowedHeaders: CORS_HEADERS });
+    return callback(null, { origin: false });
+  },
+});
+
+// A plugin's request (Origin: null) goes no further than the policy allows,
+// and the route it reaches knows which plugin is asking.
+fastify.decorateRequest('pluginCaller', null);
+fastify.addHook('onRequest', async (request, reply) => {
+  if (request.headers.origin !== 'null' || request.method === 'OPTIONS') return undefined;
+  const decision = pluginRequestPolicy.decide(request, getPluginTokenSecret);
+  if (!decision.applies) return undefined;
+  if (!decision.allow) {
+    // Readable by the plugin, so its author sees why.
+    reply.header('Access-Control-Allow-Origin', 'null');
+    return reply.status(403).send({ error: decision.reason });
+  }
+  request.pluginCaller = decision.subject;
+  return undefined;
 });
 
 fastify.register(multipart, {
@@ -694,8 +738,14 @@ fastify.get('/widgets/:filename', async (request, reply) => {
     // which storage/settings namespace to talk to. plugin_id is validated to
     // [a-z0-9-] at install time, so it is safe to embed verbatim.
     if (pluginId) {
-      injection += `<script>window.__HOMEGLOW_PLUGIN__={id:"${pluginId}",apiVersion:"v1"};</script>`;
+      // Fixed: a plugin can't rename itself (mrramam/HomeGlow#49).
+      injection += `<script>Object.defineProperty(window,"__HOMEGLOW_PLUGIN__",{value:Object.freeze({id:"${pluginId}",apiVersion:"v1"}),writable:false,configurable:false,enumerable:true});</script>`;
     }
+    // The page's token and its storage, before any plugin script runs
+    // (utils/pluginFrameShims.js). A plain widget's token reaches no
+    // plugin's platform API, only the read-only core data.
+    const tokenSubject = pluginId ? `plugin:${pluginId}` : `widget:${filename}`;
+    injection += `<script>${pluginFrameShimScript(pluginRequestPolicy.issueToken(getPluginTokenSecret(), tokenSubject))}</script>`;
     // Every plugin, manifest or not, so a two-finger swipe between tabs works
     // over it and a blocked pinch stays blocked on it. Inert until the
     // dashboard turns it on for this display.
@@ -1686,10 +1736,11 @@ fastify.get('/api/plugin/v1/events/stream', (request, reply) => {
     'Connection': 'keep-alive',
     // Tell the Nginx reverse proxy not to buffer the stream.
     'X-Accel-Buffering': 'no',
-    // reply.hijack() bypasses @fastify/cors, so mirror its policy (origin '*',
-    // see the cors registration above) or cross-origin EventSources (dev mode)
-    // are blocked by the browser.
-    'Access-Control-Allow-Origin': '*',
+    // reply.hijack() bypasses @fastify/cors, so mirror its policy (see the
+    // cors registration above) or cross-origin EventSources (dev mode) are
+    // blocked by the browser. Plugins never reach here: the request policy
+    // refuses them the stream.
+    ...(isAllowedApiOrigin(request.headers.origin) ? { 'Access-Control-Allow-Origin': request.headers.origin } : {}),
   });
   reply.raw.write(': connected\n\n');
 
@@ -4563,6 +4614,8 @@ const REDACTED_SETTING_KEYS = new Set([
   notifications.PRIVATE_KEY_SETTING,
   // The ntfy access token (services/ntfy.js); GET /api/notifications/ntfy says whether one is set.
   ntfyService.TOKEN_SETTING,
+  // Signs plugin tokens (utils/pluginRequestPolicy.js).
+  pluginRequestPolicy.TOKEN_SECRET_SETTING,
 ]);
 
 // Convert an array of {key, value} settings rows into a single {key: value}
@@ -5276,11 +5329,6 @@ fastify.get('/api/proxy', async (request, reply) => {
       reply.header('Content-Type', response.headers['content-type']);
     }
 
-    // Add CORS headers
-    reply.header('Access-Control-Allow-Origin', '*');
-    reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
     console.log('Sending successful response');
     return reply.status(response.status).send(response.data);
 
@@ -5983,6 +6031,9 @@ fastify.post('/api/connections/apple/calendars', async (request, reply) => {
 fastify.get('/api/calendar-sources', async (request, reply) => {
   try {
     const rows = db.prepare('SELECT id, name, type, url, username, color, enabled, sort_order, created_at FROM calendar_sources ORDER BY sort_order, id').all();
+    // A private ICS link reads the whole calendar to whoever holds it, so a
+    // plugin gets everything but the address and the account.
+    if (request.pluginCaller) return rows.map(({ url, username, ...rest }) => rest);
     return rows;
   } catch (error) {
     console.error('Error fetching calendar sources:', error);
