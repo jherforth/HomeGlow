@@ -130,6 +130,7 @@ Open with the gear (⚙️) icon. These persist server-side (global settings in 
 | **System → Connections → Weather** | Provider choice (`WEATHER_PROVIDER`: `openweathermap` \| `homeassistant`), OpenWeatherMap key (`WEATHER_API_KEY`, write-only) | `settings` (global) |
 | **System → Connections → Home Assistant** | Base URL (`HOME_ASSISTANT_URL`), long-lived token (`HOME_ASSISTANT_TOKEN_ENC`, encrypted + write-only), weather entity (`HOME_ASSISTANT_WEATHER_ENTITY`) | `settings` (global) |
 | **System → Connections → Google** | Google OAuth linking | `google_accounts` |
+| **System → Notifications** | The address a tap opens (`NOTIFY_OPEN_URL`); browser notifications for this device and every device; ntfy (`NTFY_ENABLED`, `NTFY_SERVER`, `NTFY_TOKEN_ENC` encrypted + write-only) and its topics; Home Assistant Companion app phones | `settings` (global), `device_notifications`, `ntfy_topics`, `ha_notify_phones` |
 | **Calendar** | ICS/CalDAV/Google sources, colors, sync intervals | `calendar_sources`, `calendar_sync_status` |
 | **Photos** | Immich/Google/upload sources | `photo_sources`, media tables |
 | **APIs** | ICS calendar URL | `settings` (global) |

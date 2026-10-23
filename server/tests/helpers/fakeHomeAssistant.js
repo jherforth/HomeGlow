@@ -1,7 +1,8 @@
 // A stand-in Home Assistant for the panel tests (issue #252): the REST API
 // HomeGlow calls, and the WebSocket API's auth, subscribe_entities (with its
 // compressed diffs), the three registries, and a music player's library
-// (media_player/browse_media and search_media). Service calls change the
+// (media_player/browse_media and search_media), and two phones' notify
+// actions (GET /api/services). Service calls change the
 // fake's states the way a real home would, and every call is recorded.
 //
 //   const ha = await startFakeHomeAssistant({ token: 'secret' });
@@ -89,7 +90,18 @@ const SEARCH = [
 ];
 
 const AREAS = [{ area_id: 'kitchen', name: 'Kitchen' }, { area_id: 'living_room', name: 'Living room' }, { area_id: 'outside', name: 'Outside' }];
-const DEVICES = [{ id: 'dev-shade', area_id: 'living_room' }, { id: 'dev-speaker', area_id: 'living_room' }];
+const DEVICES = [
+  { id: 'dev-shade', area_id: 'living_room' },
+  { id: 'dev-speaker', area_id: 'living_room' },
+  // Two Companion app phones: their notify actions are below.
+  { id: 'dev-pixel', name: "Sam's Pixel", manufacturer: 'Google', model: 'Pixel 8', sw_version: '15', identifiers: [['mobile_app', 'pixel-1']] },
+  { id: 'dev-iphone', name: "Alex's iPhone", manufacturer: 'Apple', model: 'iPhone16,1', sw_version: '18.1', identifiers: [['mobile_app', 'iphone-1']] },
+];
+// What GET /api/services lists: the phones' notify actions beside other ones.
+const SERVICES = [
+  { domain: 'light', services: { turn_on: {}, turn_off: {}, toggle: {} } },
+  { domain: 'notify', services: { notify: {}, persistent_notification: {}, send_message: {}, mobile_app_sam_s_pixel: {}, mobile_app_alex_s_iphone: {} } },
+];
 const ENTITY_REGISTRY = [
   { entity_id: 'light.kitchen', area_id: 'kitchen' },
   { entity_id: 'switch.coffee', area_id: 'kitchen' },
@@ -271,6 +283,7 @@ async function startFakeHomeAssistant({ token = 'secret-token', port = 0, wsEnab
       if (req.method === 'GET' && url.pathname === '/api/') return send(200, { message: 'API running.' });
       if (req.method === 'GET' && url.pathname === '/api/config') return send(200, { location_name: 'Fake Home', version: '2026.10.0', unit_system: { temperature: '°F' } });
       if (req.method === 'GET' && url.pathname === '/api/states') return send(200, [...states.values()]);
+      if (req.method === 'GET' && url.pathname === '/api/services') return send(200, SERVICES);
       const stateMatch = url.pathname.match(/^\/api\/states\/(.+)$/);
       if (req.method === 'GET' && stateMatch) {
         const state = states.get(decodeURIComponent(stateMatch[1]));
@@ -280,6 +293,9 @@ async function startFakeHomeAssistant({ token = 'secret-token', port = 0, wsEnab
       if (req.method === 'POST' && serviceMatch) {
         const data = body ? JSON.parse(body) : {};
         calls.push({ domain: serviceMatch[1], service: serviceMatch[2], data });
+        if (serviceMatch[1] === 'notify' && !SERVICES.find((s) => s.domain === 'notify').services[serviceMatch[2]]) {
+          return send(400, { message: `Action notify.${serviceMatch[2]} not found.` });
+        }
         const refused = refusedMedia(serviceMatch[1], serviceMatch[2], data);
         if (refused) return send(400, { message: refused });
         if (serviceDelayMs) {

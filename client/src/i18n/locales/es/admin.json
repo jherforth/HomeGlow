@@ -213,8 +213,6 @@
     "saveName": "Guardar el nombre",
     "nameRule": "El nombre debe tener entre 1 y 64 caracteres, contener al menos una letra o dígito, y solo puede incluir letras, dígitos, espacios y _ - . ' ( ).",
     "notifications": {
-      "column": "Notificaciones",
-      "on": "Activadas",
       "heading": "Notificaciones en este dispositivo",
       "offHelp": "Recibe una notificación en este dispositivo cuando se termine una tarea o rutina, aunque HomeGlow esté cerrado.",
       "turnOn": "Activar notificaciones",
@@ -234,7 +232,8 @@
       "support": {
         "install-first": "En iPhone y iPad, primero añade HomeGlow a la pantalla de inicio: toca Compartir y luego Añadir a pantalla de inicio. Abre HomeGlow desde ahí y activa las notificaciones aquí.",
         "unsupported": "Este navegador no puede recibir notificaciones.",
-        "blocked": "Las notificaciones de HomeGlow están bloqueadas en este dispositivo. Permítelas en los ajustes del teléfono o del navegador y vuelve a intentarlo."
+        "blocked": "Las notificaciones de HomeGlow están bloqueadas en este dispositivo. Permítelas en los ajustes del teléfono o del navegador y vuelve a intentarlo.",
+        "insecure": "Las notificaciones del navegador necesitan HomeGlow abierto con HTTPS (o en este equipo como localhost). Con http sin cifrar, usa ntfy o la app de Home Assistant, más abajo."
       }
     }
   },
@@ -543,7 +542,18 @@
     "saveHomeAssistant": "Guardar Home Assistant",
     "testConnection": "Probar conexión",
     "testing": "Probando...",
-    "encryptionRequired": "Configura una clave de cifrado en el servidor antes de guardar un token de Home Assistant."
+    "encryptionRequired": "Configura una clave de cifrado en el servidor antes de guardar un token de Home Assistant.",
+    "ntfyHeading": "ntfy",
+    "ntfyHelp": "Envía las mismas novedades a teléfonos con la app gratuita ntfy (Android, incluida F-Droid, e iPhone). A diferencia de las notificaciones del navegador, no necesita HTTPS ni añadir la app web a la pantalla de inicio. Usa ntfy.sh o tu propio servidor ntfy.",
+    "ntfyEnabled": "Enviar notificaciones con ntfy",
+    "ntfyServer": "Servidor ntfy",
+    "ntfyServerHelp": "https://ntfy.sh, o la dirección de tu propio servidor ntfy.",
+    "ntfyToken": "Token de acceso (opcional)",
+    "ntfyTokenHelp": "Solo para un servidor protegido o propio. Se guarda cifrado.",
+    "ntfyTokenStoredHelp": "Hay un token guardado. Déjalo en blanco para conservarlo.",
+    "ntfyClearToken": "Quitar token",
+    "ntfySave": "Guardar ntfy",
+    "ntfySaved": "Ajustes de ntfy guardados."
   },
   "about": {
     "heading": "Acerca de",
@@ -675,7 +685,8 @@
     "region": "Idioma y hora",
     "connections": "Conexiones",
     "about": "Acerca de",
-    "thisdisplay": "Esta pantalla"
+    "thisdisplay": "Esta pantalla",
+    "notifications": "Notificaciones"
   },
   "panelTitle": "Panel de administración",
   "themes": {
@@ -837,5 +848,64 @@
     "actionFailed": "No funcionó.",
     "driveHeading": "Google Drive",
     "driveNotConnected": "Conecta una cuenta de Google arriba para hacer también una copia en Google Drive cada noche y restaurar esas copias aquí."
+  },
+  "notify": {
+    "heading": "Notificaciones",
+    "intro": "Avisa a los teléfonos cuando se termina una tarea o todo el día, o de lo que un plugin tenga que decir. Las notificaciones del navegador bastan a la mayoría de los hogares; ntfy y la app de Home Assistant están para más. Cada teléfono, tema o dispositivo elige qué recibe y sobre quién.",
+    "openUrl": "Dirección que abre un toque",
+    "openUrlHelp": "Al tocar una notificación de ntfy o de Home Assistant se abre esta dirección.",
+    "openUrlUnsaved": "Aún sin guardar: las notificaciones de ntfy y de Home Assistant no abren nada hasta que se guarde. Es la dirección que usas ahora.",
+    "openUrlSaved": "Guardado.",
+    "browserHeading": "Notificaciones del navegador",
+    "browserIntro": "Cada dispositivo las activa desde sí mismo, lo que pide permiso a su dueño. Aquí: este dispositivo y, después, todos los que las tienen activadas.",
+    "browserDevices": "Dispositivos con notificaciones",
+    "noDevices": "Ningún dispositivo tiene las notificaciones activadas todavía.",
+    "hears": "Recibe",
+    "last": "Último mensaje",
+    "delivered": "Entregado",
+    "failed": "Falló",
+    "nothing": "Nada",
+    "aboutWhom": "Sobre: {{whom}}",
+    "testSent": "Prueba enviada a {{name}}.",
+    "testAria": "Enviar una prueba a {{name}}",
+    "turnOffAria": "Desactivar las notificaciones en {{name}}"
+  },
+  "ntfy": {
+    "heading": "Temas",
+    "add": "Añadir tema",
+    "intro": "Cada tema es un teléfono (o varios) con la app ntfy suscrita a él, en {{server}}.",
+    "none": "Aún no hay temas. Añade uno para cada teléfono que deba recibir las novedades.",
+    "name": "Nombre",
+    "namePlaceholder": "Teléfono de mamá",
+    "topic": "Tema",
+    "topicHelp": "Letras, dígitos, - y _. Un nombre largo y aleatorio lo mantiene privado.",
+    "newTopic": "Nuevo tema aleatorio",
+    "addTitle": "Añadir un tema de ntfy",
+    "editTitle": "Editar tema de ntfy",
+    "publicWarning": "En ntfy.sh, cualquiera que conozca el nombre de un tema puede leerlo, y estos mensajes nombran a tus hijos. Conserva el nombre aleatorio o usa tu propio servidor ntfy.",
+    "howTo": "En el teléfono: abre la app ntfy, toca + e introduce el tema {{topic}}.",
+    "howToServer": "En el teléfono: abre la app ntfy, toca +, introduce el tema {{topic}} y elige «Usar otro servidor»: {{server}}.",
+    "saved": "Se guardó {{name}}.",
+    "editAria": "Editar {{name}}",
+    "deleteAria": "Eliminar {{name}}",
+    "deleteTitle": "Eliminar tema",
+    "deletePrompt": "¿Dejar de enviar notificaciones a {{name}}? La app ntfy conserva el tema hasta que se quite allí."
+  },
+  "haNotify": {
+    "heading": "App de Home Assistant",
+    "intro": "Cada teléfono con la app Home Assistant Companion conectada a tu Home Assistant. Activa uno y elige qué recibe.",
+    "urgentHelp": "Un plugin puede marcar un mensaje como urgente: entonces suena aunque el teléfono esté en silencio, en Android con el sonido de alarma y en iPhone como alerta crítica (permite las alertas críticas para la app de Home Assistant en los ajustes del iPhone).",
+    "notConnected": "Conecta Home Assistant en Sistema → Conexiones y aquí aparecerá cada teléfono con su app Companion.",
+    "openConnections": "Abrir Conexiones",
+    "disconnected": "Home Assistant no está conectado, así que estos teléfonos no reciben nada hasta que vuelva a estarlo.",
+    "refresh": "Buscar de nuevo",
+    "phone": "Teléfono",
+    "none": "Home Assistant no tiene teléfonos con la app Companion.",
+    "off": "Desactivado",
+    "missing": "No está en Home Assistant",
+    "switchAria": "Notificaciones en {{name}}",
+    "editAria": "Editar {{name}}",
+    "editTitle": "Editar teléfono",
+    "turnedOn": "{{name}} está activado. Envía una prueba para comprobarlo."
   }
 }

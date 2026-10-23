@@ -163,6 +163,22 @@ Default sounds ship in `server/assets/sounds/` and are seeded into
 `uploads/sounds/` on startup; all sounds are served via the existing `/Uploads/`
 static route.
 
+### Notifications (Admin → System → Notifications)
+Every recipient (a device's browser push, an ntfy topic, a Home Assistant phone) chooses `events` (`chore.completed`, `chore.allCompleted`, `plugin:<id>`), `members` (`'all'` or user ids) and `language` the same way.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET/PUT | `/api/notifications/settings` | `{ openUrl }`: the HomeGlow address a tap on an ntfy or Home Assistant notification opens (`NOTIFY_OPEN_URL`; `''` clears it). Reading also lists the installed plugins that may notify as `plugins`. |
+| GET | `/api/notifications/devices` | Every device with browser push on, with what it hears and its last send. |
+| GET/PUT | `/api/notifications/ntfy` | The ntfy connection: `{ enabled, server, token? }`. The token is write-only (`hasToken` on read); `''` removes it. Saving is demo-blocked. |
+| POST | `/api/notifications/ntfy/test` | Publish to a throwaway topic, to check the server and token. Demo-blocked. |
+| GET/POST | `/api/notifications/ntfy/topics` | List the topics (with `enabled`) / add one: `{ label, topic, events, members, language }`. |
+| PATCH/DELETE | `/api/notifications/ntfy/topics/:id` | Change / remove a topic. |
+| POST | `/api/notifications/ntfy/topics/:id/test` | Send the topic a test. Demo-blocked. |
+| GET | `/api/notifications/ha/phones` | `{ connected, phones, error? }`: every Companion app phone Home Assistant lists (`notify.mobile_app_*`), each with its settings when turned on, plus turned-on phones Home Assistant no longer lists (`missing`). Cached for a minute; `?fresh=1` asks again. |
+| PUT/DELETE | `/api/notifications/ha/phones/:phoneId` | Turn a phone on or change it (`{ label?, events, members, language }`) / turn it off. |
+| POST | `/api/notifications/ha/phones/:phoneId/test` | Send the phone a test. Demo-blocked. |
+
 ### Devices, tabs & layout (device-scoped)
 | Method | Path | Purpose |
 | --- | --- | --- |
@@ -174,7 +190,7 @@ static route.
 | GET/PUT/DELETE | `/api/devices/:deviceName/notifications` | A device's push notifications: read, turn on or change (`subscription`, `events`, `members`, `language`), turn off. `events` may include `plugin:<id>` for an installed plugin that declares `notify`; reading lists those as `plugins`. |
 | POST | `/api/devices/:deviceName/notifications/test` | Send the device a test notification. |
 | GET | `/api/notifications/key` | The server's public push key (VAPID), for a browser to subscribe with. |
-| POST | `/api/plugin/v1/notify/:pluginId` | A plugin that declares `"notify": true` sends `{ message, title?, tag?, about? }` to the devices that ticked that plugin. |
+| POST | `/api/plugin/v1/notify/:pluginId` | A plugin that declares `"notify": true` sends `{ message, title?, tag?, about?, urgent? }` to every recipient (device, ntfy topic, Home Assistant phone) that ticked that plugin. `urgent: true` rings through silent mode where the way of delivering allows. |
 | GET/POST | `/api/devices/:deviceName/tabs` | List / create tabs. |
 | PATCH | `/api/devices/:deviceName/tabs/:tabNumber` | Update a tab. |
 | PATCH | `/api/devices/:deviceName/tabs/reorder` | Reorder tabs. |

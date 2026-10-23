@@ -169,6 +169,20 @@ members_json -- null for everyone, else a list of user ids
 language, created_at, last_success_at, last_failure_at, last_failure
 ```
 
+**`ntfy_topics`** and **`ha_notify_phones`** — the two other ways the same
+notifications are delivered (schema 34), set up in Admin → System →
+Notifications. Each row chooses its events, members and language as a
+device's row does, and keeps the same send record. ntfy's connection is in
+`settings` (`NTFY_ENABLED`, `NTFY_SERVER`, `NTFY_TOKEN_ENC`, encrypted and
+never returned); `NOTIFY_OPEN_URL` is the address a tap opens on either.
+```
+ntfy_topics:      id, label, topic (UNIQUE), events_json, members_json, language,
+                  created_at, last_success_at, last_failure_at, last_failure
+ha_notify_phones: id, phone_id (UNIQUE: the notify.mobile_app_<name> action), label,
+                  platform ('ios' | 'android' | null), events_json, members_json,
+                  language, created_at, last_success_at, last_failure_at, last_failure
+```
+
 **`tabs`** — dashboard tabs for a device.
 ```
 id, device_name ─▶ devices(name) CASCADE, number, label, icon, show_label,

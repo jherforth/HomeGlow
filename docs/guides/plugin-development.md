@@ -472,11 +472,12 @@ if (typeof HomeGlow.notify === 'function') {
 }
 ```
 
-It goes through HomeGlow's own push notifications. Each phone with
-notifications on lists the installed plugins that declare `notify` under
-**Messages from:** in Admin → Displays → Devices, and hears only the ones it
-ticks. Every plugin starts unticked, so a send may reach no one; it resolves
-`{ sent }`, the number of phones reached.
+It goes wherever the household gets HomeGlow's notifications: a browser, the
+ntfy app, or the Home Assistant app (Admin → System → Notifications). Each
+of those lists the installed plugins that declare `notify` under
+**Messages from:**, and hears only the ones it ticks. Every plugin starts
+unticked, so a send may reach no one; it resolves `{ sent }`, the number of
+recipients reached.
 
 - **`message`** is required (up to 300 characters). **`title`** defaults to
   your plugin's name (up to 60).
@@ -485,6 +486,10 @@ ticks. Every plugin starts unticked, so a send may reach no one; it resolves
   alone: another plugin's tag never touches it.
 - **`about`**, a family member's id, lets a phone that hears about only some
   people skip it. Leave it out for news about the whole household.
+- **`urgent: true`** rings through a silenced phone where the way it's
+  delivered allows: an alarm on Android and a critical alert on iPhone through
+  the Home Assistant app, ntfy's top priority, and high urgency for browser
+  push. Keep it for what can't wait (the grill is on fire), never for news.
 - **Limits:** 5 a minute and 30 an hour per plugin (`429` over them). Text
   only; a tap opens HomeGlow.
 - **Check for it first.** A HomeGlow older than the call has no `notify`.

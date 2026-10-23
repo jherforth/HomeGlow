@@ -280,11 +280,13 @@
 
     /**
      * Send a short notification to the household's phones: those that ticked
-     * this plugin in Admin → Displays → Devices. Needs "notify": true
-     * in the manifest. { message, title?, tag?, about? }: title defaults to
-     * the plugin's name, a tag replaces your last message with that tag, and
-     * about (a family member's id) lets a phone that hears only some people
-     * skip it. Resolves { sent }, the number of phones reached. A plugin may
+     * this plugin in Admin → System → Notifications (in a browser, through
+     * ntfy or the Home Assistant app). Needs "notify": true in the manifest.
+     * { message, title?, tag?, about?, urgent? }: title defaults to the
+     * plugin's name, a tag replaces your last message with that tag, about
+     * (a family member's id) lets a phone that hears only some people skip
+     * it, and urgent: true rings through a silenced phone where it can (keep
+     * it for what can't wait). Resolves { sent }, the number reached. A plugin may
      * send 5 a minute and 30 an hour. Older HomeGlows have no notify(); check
      * for it first.
      */

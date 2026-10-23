@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import axios from 'axios';
 import {
-  keyBytes, notificationsColumnShown, pushSupport, refreshSubscription, turnOffNotifications, turnOnNotifications,
+  keyBytes, pushSupport, refreshSubscription, turnOffNotifications, turnOnNotifications,
 } from './pushNotifications.js';
 
 vi.mock('axios', () => ({ default: { get: vi.fn(), put: vi.fn(), delete: vi.fn(), post: vi.fn() } }));
@@ -60,22 +60,6 @@ describe('pushSupport', () => {
     expect(pushSupport(fakeWindow({ push: false }).win)).toBe('unsupported');
     expect(pushSupport(fakeWindow({ permission: 'denied' }).win)).toBe('blocked');
     expect(pushSupport(fakeWindow().win)).toBe('ready');
-  });
-});
-
-describe('notificationsColumnShown', () => {
-  const off = [{ name: 'Kitchen', notifications: false }];
-  const on = [...off, { name: 'Mom phone', notifications: true }];
-
-  it('is always there on a secure page', () => {
-    expect(notificationsColumnShown(off, fakeWindow().win)).toBe(true);
-    expect(notificationsColumnShown([], fakeWindow().win)).toBe(true);
-  });
-
-  it('over plain http, only while some device has them on', () => {
-    expect(notificationsColumnShown(off, fakeWindow({ secure: false }).win)).toBe(false);
-    expect(notificationsColumnShown([], fakeWindow({ secure: false }).win)).toBe(false);
-    expect(notificationsColumnShown(on, fakeWindow({ secure: false }).win)).toBe(true);
   });
 });
 
