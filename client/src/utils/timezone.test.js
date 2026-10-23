@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
+const BROWSER_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
 describe('timezone utilities', () => {
     const originalFetch = globalThis.fetch;
 
@@ -28,7 +30,7 @@ describe('timezone utilities', () => {
         expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
-    it('falls back to America/New_York when fetch fails', async () => {
+    it('falls back to the browser\'s own zone when fetch fails', async () => {
         globalThis.fetch = vi.fn(async () => {
             throw new Error('network down');
         });
@@ -36,13 +38,13 @@ describe('timezone utilities', () => {
         const timezone = await import('./timezone.js');
         const value = await timezone.getServerTimezone();
 
-        expect(value).toBe('America/New_York');
+        expect(value).toBe(BROWSER_TZ);
     });
 
     it('getServerTimezoneSync defaults before initialization', async () => {
         const timezone = await import('./timezone.js');
 
-        expect(timezone.getServerTimezoneSync()).toBe('America/New_York');
+        expect(timezone.getServerTimezoneSync()).toBe(BROWSER_TZ);
     });
 
     it('initTimezone primes the cache', async () => {
@@ -81,7 +83,7 @@ describe('timezone utilities', () => {
 
         const timezone = await import('./timezone.js');
         await expect(timezone.saveServerTimezone('Nope')).rejects.toThrow('Unknown time zone: Nope');
-        expect(timezone.getServerTimezoneSync()).toBe('America/New_York');
+        expect(timezone.getServerTimezoneSync()).toBe(BROWSER_TZ);
     });
 
     describe('watchServerTimezone', () => {

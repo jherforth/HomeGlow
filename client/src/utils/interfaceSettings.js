@@ -1,4 +1,5 @@
 import { normalizeDockHideMinutes } from './dockIdleHide.js';
+import { getTodayDateString } from './choreHelpers.js';
 import {
   DEFAULT_EXPAND_IDLE_MINUTES,
   DEFAULT_EXPAND_METHOD,
@@ -201,14 +202,12 @@ export const normalizeVacationModeSettings = (raw) => ({
 // mirrors the server's isVacationActiveOn, and gives bounded vacations
 // client-side auto-expiry — chimes and the vacation screensaver come back on
 // their own the day after endDate.
-export const isVacationModeActiveToday = (settings, today = null) => {
+// Vacation dates are the household's, so "today" is the household's date
+// (the server's time zone), not the browser's.
+export const isVacationModeActiveToday = (settings, today = getTodayDateString()) => {
   if (!settings || settings.enabled !== true) return false;
-  const d = today || (() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  })();
-  if (settings.startDate && d < settings.startDate) return false;
-  if (settings.endDate && d > settings.endDate) return false;
+  if (settings.startDate && today < settings.startDate) return false;
+  if (settings.endDate && today > settings.endDate) return false;
   return true;
 };
 

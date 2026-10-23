@@ -1,7 +1,12 @@
-import { CronExpressionParser } from 'cron-parser';
 import { getServerTimezoneSync } from './timezone.js';
+import { cronFiresOn } from './choreDays.js';
 
-export function shouldShowChoreToday(schedule) {
+// Whether a chore is on today's list. "Today" is the household's date (the
+// server's time zone), not the browser's: a display in another zone must
+// show the same chores as the server counts for the daily bonus. The
+// crontab is matched on that date's calendar fields, as the server's
+// cronFiresOnDate and the history row's cronFiresOn do.
+export function shouldShowChoreToday(schedule, today = getTodayDateString()) {
   if (!schedule.visible) {
     return false;
   }
@@ -16,24 +21,7 @@ export function shouldShowChoreToday(schedule) {
     return true;
   }
 
-  try {
-    const tz = getServerTimezoneSync();
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const interval = CronExpressionParser.parse(schedule.crontab, {
-      currentDate: new Date(today.getTime() + 24 * 60 * 60 * 1000),
-      tz
-    });
-
-    const prevOccurrence = interval.prev().toDate();
-    prevOccurrence.setHours(0, 0, 0, 0);
-
-    return prevOccurrence.getTime() === today.getTime();
-  } catch (error) {
-    console.error('Error parsing crontab:', schedule.crontab, error);
-    return false;
-  }
+  return cronFiresOn(schedule.crontab, today);
 }
 
 /**
@@ -61,7 +49,7 @@ export function hasOutstandingBonusChore(schedules, history, userId, today) {
   return schedules
     .filter((schedule) => schedule.user_id === userId
       && (schedule.clam_value || 0) > 0
-      && shouldShowChoreToday(schedule))
+      && shouldShowChoreToday(schedule, today))
     .some((schedule) => !history.some((entry) => entry.chore_schedule_id === schedule.id
       && entry.user_id === userId
       && entry.date === today));

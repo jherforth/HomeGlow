@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest';
 
+const zones = vi.hoisted(() => ({ server: 'UTC' }));
 vi.mock('./timezone.js', () => ({
-    getServerTimezoneSync: () => 'UTC',
+    getServerTimezoneSync: () => zones.server,
 }));
 
 import { shouldShowChoreToday, convertDaysToCrontab, getDueDateStatus, formatDueDate, hasOutstandingBonusChore, compareByKey, countsTowardDailyBonus } from './choreHelpers.js';
@@ -151,11 +152,6 @@ describe('hasOutstandingBonusChore', () => {
 
     it('does not block on a bonus chore that is not due today', () => {
         // Thursday-only chore, uncompleted, on a Sunday: nothing is outstanding.
-        // Avoid the day immediately after TODAY here: shouldShowChoreToday
-        // compares a cron occurrence resolved in the SERVER zone against local
-        // midnight, so with the mocked server zone (UTC) ahead of the runner's,
-        // tomorrow-00:00 lands on today's local date. That skew is issue #21,
-        // not this helper.
         const schedules = [bonus(24, '0 0 * * 4')];
         expect(hasOutstandingBonusChore(schedules, [], 4, TODAY)).toBe(false);
     });
@@ -303,5 +299,50 @@ describe('compareByKey', () => {
             { id: 7, title: 'seven' },
             { id: 3, title: 'three' },
         ], byNext)).toEqual(['three', 'seven']);
+    });
+});
+
+// A display whose browser is in another time zone than the household still
+// shows the household's day: the server counts chores, and the daily bonus,
+// on that date (fork issue #68).
+describe('shouldShowChoreToday across time zones', () => {
+    const browserTz = process.env.TZ;
+    const MONDAY_ONLY = { visible: true, crontab: '0 0 * * 1' };
+
+    afterEach(() => {
+        vi.useRealTimers();
+        zones.server = 'UTC';
+        if (browserTz === undefined) delete process.env.TZ; else process.env.TZ = browserTz;
+    });
+
+    const at = (iso, browser, server) => {
+        process.env.TZ = browser;
+        zones.server = server;
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date(iso));
+    };
+
+    it('a browser west of the household follows the household into Monday', () => {
+        // Monday 03:00 in UTC is still Sunday evening in Los Angeles.
+        at('2026-10-19T03:00:00Z', 'America/Los_Angeles', 'UTC');
+        expect(shouldShowChoreToday(MONDAY_ONLY)).toBe(true);
+    });
+
+    it('a browser west of the household does not show Monday chores on Sunday', () => {
+        // Sunday 20:00 in UTC; Los Angeles is Sunday too, the household is Sunday.
+        at('2026-10-18T20:00:00Z', 'America/Los_Angeles', 'UTC');
+        expect(shouldShowChoreToday(MONDAY_ONLY)).toBe(false);
+    });
+
+    it('a browser behind a household in Tokyo follows Tokyo', () => {
+        // Sunday 16:00 UTC is Monday 01:00 in Tokyo.
+        at('2026-10-18T16:00:00Z', 'UTC', 'Asia/Tokyo');
+        expect(shouldShowChoreToday(MONDAY_ONLY)).toBe(true);
+    });
+
+    it('a browser east of the household waits for the household day', () => {
+        // Monday 01:00 in Tokyo is Sunday 16:00 in UTC, the household's zone.
+        at('2026-10-18T16:00:00Z', 'Asia/Tokyo', 'UTC');
+        expect(shouldShowChoreToday(MONDAY_ONLY)).toBe(false);
     });
 });
