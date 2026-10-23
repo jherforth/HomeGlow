@@ -2028,7 +2028,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                     label={t('chores:transfer.bonusWhenCompleted')}
                     value={transferDialog.bonus}
                     onChange={(e) => setTransferDialog(prev => ({ ...prev, bonus: e.target.value }))}
-                    inputProps={{ min: 0 }}
+                    slotProps={{ htmlInput: { min: 0 } }}
                     sx={{ mt: 1 }}
                   />
                 )}
@@ -2066,7 +2066,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
               label={t('chores:snooze.until')}
               value={snoozeDialog.until}
               onChange={(e) => setSnoozeDialog(prev => ({ ...prev, until: e.target.value }))}
-              InputLabelProps={{ shrink: true }}
+              slotProps={{ inputLabel: { shrink: true } }}
             />
           </DialogContent>
           <DialogActions>

@@ -2647,7 +2647,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                                           type="number"
                                           label={label}
                                           value={value ?? ''}
-                                          inputProps={{ min: setting.min, max: setting.max }}
+                                          slotProps={{ htmlInput: { min: setting.min, max: setting.max } }}
                                           onChange={(event) => {
                                             const parsed = Number(event.target.value);
                                             setValue(event.target.value === '' || Number.isNaN(parsed) ? '' : parsed);

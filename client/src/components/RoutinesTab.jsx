@@ -238,7 +238,7 @@ export default function RoutinesTab({ subsection, subsections, onSubsection, set
                     return (
                       <TableRow key={step.id}>
                         <TableCell data-label={t('chores:routines.stepName')}>
-                          <Typography variant="body2" fontWeight="bold">
+                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                             {step.icon && <Box component="span" sx={{ mr: 0.75 }}>{step.icon}</Box>}
                             {step.label}
                           </Typography>
@@ -341,7 +341,7 @@ export default function RoutinesTab({ subsection, subsections, onSubsection, set
                         />
                       </TableCell>
                       <TableCell data-label={t('chores:routines.name')}>
-                        <Typography variant="body2" fontWeight="bold">
+                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                           {routine.icon && <Box component="span" sx={{ mr: 0.75 }}>{routine.icon}</Box>}
                           {routine.name}
                         </Typography>
