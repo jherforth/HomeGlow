@@ -1,3 +1,172 @@
+# HomeGlow v 1.10 Changelog
+
+## 🎉 Recent Updates
+
+The biggest HomeGlow release yet: 87 changes from four contributors.
+
+- **Themes** become packages you install, and a theme can follow the weather.
+- **Home Assistant** gets panels you build in the Admin Panel, with no code, and plugins can play music.
+- **Routines** move into the core.
+- **Chores** can expire, hand on a follow-up, and show a week of stars.
+- **Phones** can get notifications, through the browser, the ntfy app or the Home Assistant app.
+- **Backups:** the whole household can be saved to a file or to Google Drive, and restored from either.
+- **The Admin Panel** is regrouped by what you're managing.
+- **Security:** a round of hardening across uploads, the proxy, plugins and the Proxmox installer.
+
+---
+
+## New Features
+
+### Themes and appearance (#223, #225, #226, #229, #231, #238, #239, #247, #248)
+- **Household look, per-display overrides.** — **@mrramam**
+  - **Admin → Look** sets the look for the whole household, and any display can override any part of it.
+  - The first time each display opens 1.10, it keeps exactly the look it had.
+- **Personalize:** an accent color, your own background (a color, gradient or photo), and how see-through the cards are. — **@mrramam**
+- **Install themes.** — **@mrramam**
+  - **Admin → Look → Themes → Get themes** installs from the [HomeGlowThemes](https://github.com/jherforth/HomeGlowThemes) repository.
+  - **Add a theme folder** installs one you've made.
+  - **Reef and Starship now live there.** See the upgrade notes.
+- **Weather scenes:** a theme can show a different scene for the weather outside. Admin previews each one on the display.
+- **Celebrations bring the theme's cast:** a theme can send a few of its own pictures across the screen with the confetti (#271). — **@mrramam**
+- For theme authors: flybys that curve, orbit and bend the scene behind them, pictures that flex, and frames that saturate as well as blur (#240, #242, #249, #283, #299, #300). — **@mrramam**
+
+### Home Assistant panels (#252, #257)
+- **Admin → Dashboard → Home Assistant** builds panels of tiles for your devices, with no code.
+  - Pick devices, or start from an area in one tap.
+  - Choose each tile's label, icon, size, "view only", "press and hold", and "show only when…".
+  - A live preview shows the panel in your theme.
+- **Each panel is a widget** you can place on any tab.
+- **Locks, alarms and garage doors** always need press and hold. Unlocking, disarming and opening them asks for the PIN.
+- **The Home Assistant token never leaves the server.**
+
+### Home Assistant music for plugins (#265, #266, #267, #268, #269)
+- Plugins can browse and search a speaker's library, play, seek and shuffle, show album art, and group speakers to play in step. They can also play from your own media server, such as Jellyfin.
+- The **Music** plugin in HomeGlowPlugins is built on this.
+
+### Routines, in the core (#278)
+- **Admin → Family → Routines:** checklists of steps a child ticks off in the Chores widget.
+  - They run on chosen weekdays, or on the days of matching calendar events ("Get ready for soccer").
+  - Rewards are paid at streak milestones.
+- **Moving from the Routines plugin is automatic.** Steps, routines, ticks, calendar days and rewards carry over, on the same chores, so history and streaks continue.
+
+### Chores
+- **Chores that expire (#279, #280, #281).**
+  - A chore can expire at its due time, or a set time after.
+  - Once expired it turns red and stops chiming, and only a parent (with the PIN) can mark it done.
+- **Follow-up chores (#243):** "Then give **Unload the dishwasher** to **Liam**, after 2 hours."
+- **A week of stars, and one person's history (#292, #293):** a 7-day row of stars on the chore card, and a History view for one person's record of one chore. — **@mrramam**
+- **Chore history in Admin** can be filtered, sorted and grouped (#255). — **@mrramam**
+- **Faster setup:**
+  - one schedule for several people at once (#237, building on @adamecker's #234);
+  - bulk delete (#260 — **@adamecker**);
+  - your own emoji as an icon (#270 — **@adamecker**);
+  - a folded icon picker with a Sports group (#245).
+- **Prizes can have a description,** shown in the prize store (#315). — **@mrramam**
+
+### Notifications on phones (#286, #307, #309)
+- **Admin → System → Notifications**, one page with three ways to deliver:
+  - **browser notifications** on a phone or computer (needs HTTPS);
+  - **ntfy**, on ntfy.sh or your own server;
+  - **the Home Assistant Companion app.**
+- Each device, topic or phone chooses which events, which plugins, and about whom.
+- Plugins can send their own messages, and mark one urgent to ring through silent mode.
+- Browser notifications and plugin messages: **@mrramam**
+
+### Backup & restore (#304, #305, #306, #308)
+- **Admin → System → Connections → Backup & restore.**
+- **Download backup** saves everything (the database, the encryption key, photos, sounds and themes) to one file.
+- **Choose backup file** restores one, on this server or a new one. It's checked first, the current data is kept so you can roll back, and nothing changes until **Restart now**.
+- **With a Google account connected,** HomeGlow also backs up to Google Drive every night and keeps the newest 14.
+- Google Drive backup: **@adamecker**
+
+### Wall displays
+- **Expand a widget** to the top half or the whole screen, by double-tap or a button, then put it back (#290 — **@jasonstantler**).
+- **Swipe with two fingers to change tabs**, and **block pinch zoom** (#284 — **@jasonstantler**).
+- **Hide the dock when idle** (#261 — **@mrramam**).
+- **The admin panel is regrouped** into Dashboard, Look, Displays, Family, Security and System (#236). Old links still land in the right place.
+- **A badge says when a newer release is out** (#221).
+- **A display left open across an update** reloads into the new build instead of breaking (#285 — **@mrramam**).
+
+### Plugins
+- **The plugin store** groups plugins by category, with a search (#224, #227).
+  - It shows each plugin's author and version, and offers **Update** when a newer copy is out (#222, #273, #274).
+  - It reads plugins in folders at any depth, ready for the plugins repository's new layout (#291).
+- **Plugins match the widgets beside them,** with rounded corners at the card opacity (#272 — **@mrramam**), and each installed plugin's heading is a full-width band (#282).
+- **Calendar:** pick a Google event's color in the editor (#244, #246).
+
+---
+
+## Fixes
+
+- **Chores:**
+  - The daily bonus is decided by the day being completed (#294), and is paid when someone's last open chore is taken off their day (#298, #302). — **@mrramam**
+  - Sticky schedules appear the day they're set up (#256, #259).
+  - A display in another time zone shows the household's chore day (#318). — **@mrramam**
+- **Calendar:**
+  - A failed sync keeps the cached events, and the sync interval sticks (#295). — **@mrramam**
+  - A refresh keeps the events on screen (#296). — **@mrramam**
+  - All-day events saved from the editor stay all-day (#216).
+- **Photos:**
+  - An Immich album's photos are picked from the whole album, not just its first 1,000 (#287).
+  - Photos over 1 MB upload (#253). — **@mrramam**
+- **Layout:** layouts no longer overlap when converted between 12 and 8 columns, and a save no longer nudges widgets nobody moved (#214, #217 — **@adamecker**).
+- **Admin:** a Save refused for a missing tab now shows where the tab goes (#289). — **@mrramam**
+- **Other fixes:**
+  - Google calls give up instead of hanging (#254 — **@mrramam**);
+  - Chrome's prerendered pages draw their scenery (#262 — **@mrramam**);
+  - device reads are never served stale from the browser cache (#219 — **@mrramam**);
+  - the Home Assistant panel preview works behind nginx (#258).
+
+## Security
+
+Thanks to **@mrramam** for a thorough audit.
+
+- **Uploads:**
+  - Profile pictures and photos are typed by their bytes, not the name or type the browser sends.
+  - Files under `/Uploads/` can't run script in HomeGlow's origin (#311).
+- **Plugins:**
+  - Plugin storage paths can't reach `Object.prototype`.
+  - Storage `increment` respects the 500-key cap.
+  - The proxy follows a redirect only to another whitelisted host.
+  - A GitHub install fetches only from the plugin repository (#319).
+- **The proxy and the event stream:**
+  - The proxy guide names `targetUrl`.
+  - The Liturgical Day host is written into the proxy whitelist once, so an admin can remove it.
+  - Event streams are capped (#313).
+- **Google:** the OAuth callback page escapes what it shows, and takes its message only from HomeGlow's own popup (#312).
+- **Proxmox installer:** Docker comes from its signed repository, and `.env` (which holds `ENCRYPTION_KEY`) is readable by root only (#314).
+- **Logs and CI:**
+  - No secret reaches the log at `info` (#250).
+  - CI actions are pinned to commit SHAs, and installs use `npm ci` (#316, #317).
+  - CI catches duplicate or edited migrations (#301).
+
+---
+
+## 📝 Notes
+
+**Back up before upgrading.** Migrations run on start. 1.9.1 has no backup button, so copy `./homeglow/data` and `./homeglow/uploads` first. From 1.10 on, **Download backup** does it for you.
+
+**Upgrading** is still a pull of the new images:
+```bash
+docker compose pull && docker compose up -d
+```
+
+- **Reef or Starship:**
+  - A display using one of them shows Classic after the upgrade.
+  - Install the theme again from **Admin → Look → Themes → Get themes**.
+- **Routines plugin:** it's replaced by the built-in Routines automatically, on the same chores. Each display's plugin spot becomes the Chores widget.
+- **Notifications:** browser notifications moved from Displays → Devices to **System → Notifications**. Devices that had them on keep them.
+- **Proxmox installs:** the update command now sets `.env` to root-only too:
+  ```bash
+  pct exec <CTID> -- sh -c 'cd /opt/homeglow && chmod 600 .env && docker compose pull && docker compose up -d'
+  ```
+- **Photos:** SVG files are no longer accepted as photos or profile pictures.
+- **The plugins repository is reorganizing.** Plugins are moving into folders, one per category, after this release. 1.10 reads the new layout; older versions will see a notice asking them to update. Installed plugins keep working either way.
+
+For questions or issues, please visit our [GitHub Issues](https://github.com/jherforth/HomeGlow/issues) page.
+
+---
+
 # HomeGlow v 1.9.1 Changelog
 
 ## 🎉 Recent Updates
