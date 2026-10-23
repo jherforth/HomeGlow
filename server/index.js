@@ -167,6 +167,7 @@ const googleCalendar = require('./services/googleCalendar');
 const appleCalDAV = require('./services/appleCalDAV');
 const googlePhotos = require('./services/googlePhotos');
 const appearanceAssets = require('./services/appearanceAssets');
+const { sniffImage, IMAGE_MIMES } = require('./utils/imageType');
 const { inlineCssImports } = require('./utils/inlineCssImports');
 const themeStore = require('./services/themeStore');
 const googlePhotosPicker = require('./services/googlePhotosPicker');
@@ -599,6 +600,18 @@ fastify.register(multipart, {
 // response to a Fastify Reply and `res.setHeader` became an uncaught
 // TypeError that killed the process on the first file request. Headers are
 // deliberately kept minimal to avoid "Request Header Fields Too Large".
+// Uploaded files are served with nosniff and a sandbox CSP, so a file that
+// isn't the image or sound it claims to be (an .html or .svg stored before
+// uploads were typed by content) can't run script in the app's origin.
+// Neither header affects an <img> or <audio> that loads it.
+const UPLOAD_SERVE_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'Content-Security-Policy': 'sandbox',
+};
+fastify.addHook('onRequest', async (request, reply) => {
+  if (request.url.startsWith('/Uploads/')) reply.headers(UPLOAD_SERVE_HEADERS);
+});
+
 fastify.register(require('@fastify/static'), {
   root: path.join(__dirname, 'uploads'),
   prefix: '/Uploads/',
@@ -4198,9 +4211,10 @@ fastify.post('/api/users/:id/upload-picture', async (request, reply) => {
 
     console.log('File received:', data.filename, 'Type:', data.mimetype);
 
-    // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
-    if (!allowedTypes.includes(data.mimetype)) {
+    // The type, and the stored extension, come from the file's bytes.
+    const buffer = await data.toBuffer();
+    const sniffed = sniffImage(buffer);
+    if (!sniffed || !['jpg', 'png', 'gif'].includes(sniffed.ext)) {
       console.log('Invalid file type:', data.mimetype);
       return reply.status(400).send({ error: 'Only image files (JPEG, PNG, GIF) are allowed' });
     }
@@ -4210,14 +4224,13 @@ fastify.post('/api/users/:id/upload-picture', async (request, reply) => {
     await fs.mkdir(usersDir, { recursive: true });
 
     // Generate unique filename
-    const fileExtension = data.filename.split('.').pop();
-    const filename = `user_${id}_${Date.now()}.${fileExtension}`;
+    const filename = `user_${id}_${Date.now()}.${sniffed.ext}`;
     const filepath = path.join(usersDir, filename);
 
     console.log('Saving file to:', filepath);
 
     // Save file
-    await fs.writeFile(filepath, await data.toBuffer());
+    await fs.writeFile(filepath, buffer);
     console.log('File saved successfully');
 
     // Update user record
@@ -6483,7 +6496,15 @@ fastify.get('/api/photo-sources/:sourceId/uploaded/:photoId/file', async (reques
     if (!row) return reply.status(404).send({ error: 'Photo not found' });
     const filePath = path.join(__dirname, 'uploads', 'homeglow-photos', String(sourceId), row.filename);
     if (!fsSync.existsSync(filePath)) return reply.status(404).send({ error: 'File missing' });
-    reply.header('Content-Type', row.mime_type || 'image/jpeg');
+    // A row stored before uploads were typed by content can name any type,
+    // SVG included; anything but a known image is only a download.
+    if (IMAGE_MIMES.has(row.mime_type)) {
+      reply.header('Content-Type', row.mime_type);
+    } else {
+      reply.header('Content-Type', 'application/octet-stream');
+      reply.header('Content-Disposition', 'attachment');
+    }
+    reply.headers(UPLOAD_SERVE_HEADERS);
     reply.header('Cache-Control', 'private, max-age=86400');
     return reply.send(fsSync.createReadStream(filePath));
   } catch (error) {
@@ -6518,19 +6539,23 @@ fastify.post('/api/photo-sources/:sourceId/uploaded', async (request, reply) => 
         continue;
       }
       try {
-        const ext = path.extname(part.filename || '') || '.jpg';
-        const safeBase = crypto.randomBytes(12).toString('hex');
-        const filename = `${safeBase}${ext.toLowerCase()}`;
-        const filePath = path.join(uploadDir, filename);
         const buffer = await part.toBuffer();
         if (part.file.truncated) {
           failed.push({ name: part.filename, reason: 'Larger than 25 MB' });
           continue;
         }
+        // The extension and the stored type come from the file's bytes.
+        const sniffed = sniffImage(buffer);
+        if (!sniffed) {
+          failed.push({ name: part.filename, reason: 'Not a supported image' });
+          continue;
+        }
+        const filename = `${crypto.randomBytes(12).toString('hex')}.${sniffed.ext}`;
+        const filePath = path.join(uploadDir, filename);
         await fs.writeFile(filePath, buffer);
         const info = db.prepare(
           `INSERT INTO homeglow_photos (source_id, filename, original_name, mime_type, size) VALUES (?, ?, ?, ?, ?)`
-        ).run(sourceId, filename, part.filename || null, part.mimetype, buffer.length);
+        ).run(sourceId, filename, part.filename || null, sniffed.mime, buffer.length);
         added.push({ id: info.lastInsertRowid, filename, original_name: part.filename });
       } catch (err) {
         console.error('Upload failure for part:', err);
