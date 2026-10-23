@@ -340,6 +340,86 @@ test('increment rejects bad input and non-numeric targets', async () => {
     assert.equal(nonNumeric.status, 409);
 });
 
+// mrramam/HomeGlow#54: a path through __proto__ reached Object.prototype.
+test('increment refuses paths through __proto__, constructor or prototype', async () => {
+    for (const crafted of ['__proto__.pwned', 'constructor.prototype.pwned', 'a.__proto__.pwned', 'prototype']) {
+        const res = await api(`/api/plugin/v1/storage/${PLUGIN_ID}/proto-probe/increment`, {
+            method: 'POST',
+            body: JSON.stringify({ path: crafted, delta: 1 }),
+        });
+        assert.equal(res.status, 400, crafted);
+        assert.match(res.body.error, /__proto__, constructor or prototype/);
+    }
+    // Nothing was stored, and an ordinary increment on the key still works.
+    assert.equal((await api(`/api/plugin/v1/storage/${PLUGIN_ID}/proto-probe`)).status, 404);
+    const ok = await api(`/api/plugin/v1/storage/${PLUGIN_ID}/proto-probe/increment`, {
+        method: 'POST',
+        body: JSON.stringify({ path: 'count', delta: 1 }),
+    });
+    assert.equal(ok.status, 200);
+    assert.deepEqual(ok.body.value, { count: 1 });
+});
+
+// mrramam/HomeGlow#56: the install fetched any address it was handed.
+test('a GitHub install fetches only from the plugin repository', async () => {
+    for (const download_url of [
+        'http://127.0.0.1:1/plugin.html',
+        'https://raw.githubusercontent.com/someone-else/HomeGlowPlugins/main/x.html',
+        'https://raw.githubusercontent.com.evil.example/jherforth/HomeGlowPlugins/main/x.html',
+        'file:///etc/passwd',
+        // Normalized when fetched: these would leave the repository (Mrramam, #319).
+        'https://raw.githubusercontent.com/jherforth/HomeGlowPlugins/%2e%2e/%2e%2e/someone-else/repo/main/x.html',
+        'https://raw.githubusercontent.com/jherforth/HomeGlowPlugins/../../someone-else/repo/main/x.html',
+        'https://raw.githubusercontent.com/jherforth/HomeGlowPlugins/main/%2E%2E%2F%2E%2E%2Fother/x.html',
+        'https://raw.githubusercontent.com/jherforth/HomeGlowPlugins/main/a%5c..%5cx.html',
+        'https://user:pass@raw.githubusercontent.com/jherforth/HomeGlowPlugins/main/x.html',
+        'https://raw.githubusercontent.com:8443/jherforth/HomeGlowPlugins/main/x.html',
+    ]) {
+        const res = await api('/api/widgets/github/install', {
+            method: 'POST',
+            body: JSON.stringify({ download_url, filename: 'x.html' }),
+        });
+        assert.equal(res.status, 400, download_url);
+        assert.match(res.body.error, /jherforth\/HomeGlowPlugins on raw\.githubusercontent\.com/);
+    }
+});
+
+test('a manifest reaction may not name an unsafe path', async () => {
+    const manifest = {
+        ...validManifest,
+        id: 'proto-reaction-plugin',
+        reactions: [{ on: 'clam.deposited', action: 'increment', key: 'bank', path: '__proto__.pwned', delta: 1 }],
+    };
+    const upload = await uploadWidget('proto-reaction.html', widgetHtml(manifest));
+    assert.equal(upload.status, 400);
+    assert.match(upload.body.error, /reactions\[0\]\.path/);
+});
+
+// mrramam/HomeGlow#60: increment added keys past the 500-key cap PUT enforces.
+test('increment counts a new key against the 500-key cap', async () => {
+    const capId = 'storage-cap-plugin';
+    const upload = await uploadWidget('storage-cap.html', widgetHtml({ ...validManifest, id: capId }));
+    assert.equal(upload.status, 200, JSON.stringify(upload.body));
+    const Database = require('better-sqlite3');
+    const db = new Database(testDbPath);
+    const insert = db.prepare('INSERT INTO plugin_storage (plugin_id, key, value_json) VALUES (?, ?, ?)');
+    db.transaction(() => { for (let i = 0; i < 500; i += 1) insert.run(capId, `k${i}`, '{}'); })();
+    db.close();
+
+    const over = await api(`/api/plugin/v1/storage/${capId}/one-too-many/increment`, {
+        method: 'POST',
+        body: JSON.stringify({ path: 'n', delta: 1 }),
+    });
+    assert.equal(over.status, 413);
+    assert.match(over.body.error, /limited to 500 keys/);
+    // A key that already exists can still be incremented.
+    const existing = await api(`/api/plugin/v1/storage/${capId}/k1/increment`, {
+        method: 'POST',
+        body: JSON.stringify({ path: 'n', delta: 1 }),
+    });
+    assert.equal(existing.status, 200);
+});
+
 // --- Declared settings (Phase 2) ---
 
 const SETTINGS_PLUGIN_ID = 'settings-test-plugin';
