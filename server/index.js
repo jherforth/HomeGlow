@@ -5272,14 +5272,25 @@ fastify.get('/api/proxy', async (request, reply) => {
 
 // Prize routes
 
+const PRIZE_DESCRIPTION_MAX = 500;
+
 // Shared validation for the prize create/update body. Returns { error } on
-// failure, or the parsed { name, clam_cost } on success.
+// failure, or the parsed { name, clam_cost, description } on success.
+// description is optional: undefined leaves it as it is (PATCH), and an
+// empty string or null clears it.
 const validatePrizeBody = (body) => {
-  const { name, clam_cost } = body || {};
+  const { name, clam_cost, description } = body || {};
   if (!name || !clam_cost || clam_cost <= 0) {
     return { error: 'Prize name and a positive clam cost are required.' };
   }
-  return { name, clam_cost };
+  if (description !== undefined && description !== null && typeof description !== 'string') {
+    return { error: 'Prize description must be text.' };
+  }
+  if (typeof description === 'string' && description.trim().length > PRIZE_DESCRIPTION_MAX) {
+    return { error: `Prize description must be ${PRIZE_DESCRIPTION_MAX} characters or fewer.` };
+  }
+  const parsedDescription = description === undefined ? undefined : ((description || '').trim() || null);
+  return { name, clam_cost, description: parsedDescription };
 };
 
 fastify.get('/api/prizes', async (request, reply) => {
@@ -5293,14 +5304,14 @@ fastify.get('/api/prizes', async (request, reply) => {
 });
 
 fastify.post('/api/prizes', async (request, reply) => {
-  const { name, clam_cost, error: validationError } = validatePrizeBody(request.body);
+  const { name, clam_cost, description, error: validationError } = validatePrizeBody(request.body);
   if (validationError) {
     return reply.status(400).send({ error: validationError });
   }
   try {
     const repeatable = request.body.repeatable === true ? 1 : 0;
-    const stmt = db.prepare('INSERT INTO prizes (name, clam_cost, repeatable) VALUES (?, ?, ?)');
-    const info = stmt.run(name, clam_cost, repeatable);
+    const stmt = db.prepare('INSERT INTO prizes (name, clam_cost, repeatable, description) VALUES (?, ?, ?, ?)');
+    const info = stmt.run(name, clam_cost, repeatable, description ?? null);
     return { id: info.lastInsertRowid };
   } catch (error) {
     console.error('Error adding prize:', error);
@@ -5310,15 +5321,18 @@ fastify.post('/api/prizes', async (request, reply) => {
 
 fastify.patch('/api/prizes/:id', async (request, reply) => {
   const { id } = request.params;
-  const { name, clam_cost, error: validationError } = validatePrizeBody(request.body);
+  const { name, clam_cost, description, error: validationError } = validatePrizeBody(request.body);
   if (validationError) {
     return reply.status(400).send({ error: validationError });
   }
   try {
+    // repeatable and description change only when the body names them.
     const repeatable = request.body.repeatable === true ? 1 : (request.body.repeatable === false ? 0 : null);
-    const info = repeatable === null
-      ? db.prepare('UPDATE prizes SET name = ?, clam_cost = ? WHERE id = ?').run(name, clam_cost, id)
-      : db.prepare('UPDATE prizes SET name = ?, clam_cost = ?, repeatable = ? WHERE id = ?').run(name, clam_cost, repeatable, id);
+    const sets = ['name = ?', 'clam_cost = ?'];
+    const values = [name, clam_cost];
+    if (repeatable !== null) { sets.push('repeatable = ?'); values.push(repeatable); }
+    if (description !== undefined) { sets.push('description = ?'); values.push(description); }
+    const info = db.prepare(`UPDATE prizes SET ${sets.join(', ')} WHERE id = ?`).run(...values, id);
     if (info.changes === 0) {
       return reply.status(404).send({ error: 'Prize not found' });
     }
@@ -5358,7 +5372,7 @@ fastify.get('/api/prize-offers', async (request, reply) => {
     return db.prepare(`
       SELECT po.id, po.prize_id, po.status, po.requested_by, po.requested_at, po.created_at,
              po.split_user_ids,
-             p.name, p.clam_cost, p.repeatable,
+             p.name, p.clam_cost, p.repeatable, p.description,
              u.username AS requested_by_name
       FROM prize_offers po
       JOIN prizes p ON po.prize_id = p.id

@@ -36,4 +36,5 @@ module.exports = [
   { schemaId: 33, migrationPath: './migrations/schema33-deviceNotifications', },
   { schemaId: 34, migrationPath: './migrations/schema34-notificationChannels', },
   { schemaId: 35, migrationPath: './migrations/schema35-proxyWhitelistSeed', },
+  { schemaId: 36, migrationPath: './migrations/schema36-prizeDescription', },
 ];

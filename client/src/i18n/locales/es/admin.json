@@ -431,6 +431,7 @@
     "addNew": "Añadir un premio",
     "name": "Nombre del premio",
     "cost": "Coste en almejas",
+    "description": "Descripción (opcional)",
     "add": "Añadir premio",
     "repeatableTooltip": "Un premio repetible se queda en la tienda tras canjearse en lugar de consumirse",
     "repeatableLabel": "Repetible (se puede canjear más de una vez)",

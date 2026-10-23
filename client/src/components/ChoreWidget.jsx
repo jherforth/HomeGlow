@@ -1584,6 +1584,11 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                       <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{offer.name}</Typography>
                       <Chip label={`${offer.clam_cost} 🥟`} sx={{ bgcolor: 'var(--accent)', color: 'white', fontWeight: 'bold' }} />
                     </Box>
+                    {offer.description && (
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1, whiteSpace: 'pre-line' }}>
+                        {offer.description}
+                      </Typography>
+                    )}
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                       {/* Composed from fragments rather than one interpolated
                           string so the names can stay bold. */}
@@ -1641,6 +1646,11 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                       </Typography>
                       <Chip label={`${offer.clam_cost} 🥟`} sx={{ bgcolor: 'var(--accent)', color: 'white', fontWeight: 'bold' }} />
                     </Box>
+                    {offer.description && (
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1, whiteSpace: 'pre-line' }}>
+                        {offer.description}
+                      </Typography>
+                    )}
                     {splitDraft.offerId === offer.id ? (() => {
                       const count = splitDraft.userIds.length;
                       const share = count > 0 ? Math.floor(offer.clam_cost / count) : offer.clam_cost;

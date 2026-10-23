@@ -431,6 +431,7 @@
     "addNew": "Add New Prize",
     "name": "Prize Name",
     "cost": "Clam Cost",
+    "description": "Description (optional)",
     "add": "Add Prize",
     "repeatableTooltip": "A repeatable prize stays on the store shelf after redemption instead of being consumed",
     "repeatableLabel": "Repeatable (can be redeemed more than once)",
