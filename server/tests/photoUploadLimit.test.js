@@ -87,7 +87,8 @@ test('a photo over 25 MB is reported as failed, and the others are kept', async 
     });
     const { id } = await created.json();
 
-    const photo = (bytes) => new Blob([Buffer.alloc(bytes, 7)], { type: 'image/jpeg' });
+    const jpeg = (bytes) => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(bytes - 4, 7)]);
+    const photo = (bytes) => new Blob([jpeg(bytes)], { type: 'image/jpeg' });
     const form = new FormData();
     form.append('photos', photo(100 * 1024), 'one.jpg');
     form.append('photos', photo(100 * 1024), 'two.jpg');
