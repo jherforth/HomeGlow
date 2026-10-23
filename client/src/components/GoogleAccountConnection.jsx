@@ -24,6 +24,7 @@ import {
 } from '@mui/icons-material';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
+import { acceptGoogleOAuthMessage, originOf } from '../utils/googleOAuth.js';
 import BackupRestoreSection from './BackupRestoreSection.jsx';
 
 const initialDraft = { client_id: '', client_secret: '', redirect_uri: '' };
@@ -37,6 +38,7 @@ const GoogleAccountConnection = ({ onMessage }) => {
   const [draft, setDraft] = useState(initialDraft);
   const [localError, setLocalError] = useState('');
   const popupRef = useRef(null);
+  const callbackOriginRef = useRef(null);
 
   const notify = useCallback((type, text) => {
     if (onMessage) onMessage({ type, text });
@@ -64,7 +66,7 @@ const GoogleAccountConnection = ({ onMessage }) => {
 
   useEffect(() => {
     const handler = (event) => {
-      if (!event?.data || event.data.type !== 'homeglow:google-oauth') return;
+      if (!acceptGoogleOAuthMessage(event, popupRef.current, callbackOriginRef.current)) return;
       if (event.data.ok) {
         notify('success', 'Google account connected.');
       } else {
@@ -116,6 +118,7 @@ const GoogleAccountConnection = ({ onMessage }) => {
     try {
       const { data } = await axios.get(`${API_BASE_URL}/api/connections/google/authorize`);
       if (!data?.url) throw new Error('Authorize URL missing.');
+      callbackOriginRef.current = originOf(data.redirect_uri);
       const width = 520;
       const height = 680;
       const left = window.screenX + Math.max(0, (window.outerWidth - width) / 2);

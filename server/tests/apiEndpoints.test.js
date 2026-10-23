@@ -1217,3 +1217,12 @@ test('history rows carry the person and the chore, and keep the title once the s
     assert.equal(orphan.title, 'Water the plants');
     assert.equal(orphan.username, 'History Hana');
 });
+
+test('Google OAuth callback page escapes what it is given', async () => {
+    const payload = '<img src=x onerror=alert(1)>';
+    const response = await api(`/api/connections/google/callback?error=${encodeURIComponent(payload)}`);
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type'), /text\/html/);
+    assert.ok(!response.body.includes(payload), response.body);
+    assert.ok(response.body.includes('Google reported: &lt;img src=x onerror=alert(1)&gt;'), response.body);
+});
