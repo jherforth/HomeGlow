@@ -240,9 +240,9 @@ Every recipient (a device's browser push, an ntfy topic, a Home Assistant phone)
 ### Prizes & the prize store
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET/POST | `/api/prizes` | List / create prize definitions (the ledger). Optional `repeatable: true` — the offer returns to the shelf after each redemption. |
-| PATCH/DELETE | `/api/prizes/:id` | Update / delete a prize definition (PATCH accepts optional `repeatable`). |
-| GET/POST | `/api/prize-offers` | List store offers / place a ledger prize in the store. |
+| GET/POST | `/api/prizes` | List / create prize definitions (the ledger). Optional `repeatable: true` — the offer returns to the shelf after each redemption. Optional `description` (text, up to 500 characters). |
+| PATCH/DELETE | `/api/prizes/:id` | Update / delete a prize definition (PATCH accepts optional `repeatable` and `description`; `""` or `null` clears the description). |
+| GET/POST | `/api/prize-offers` | List store offers (with the prize's `description`) / place a ledger prize in the store. |
 | DELETE | `/api/prize-offers/:id` | Remove an unredeemed offer from the store. |
 | POST | `/api/prize-offers/:id/request` | Kid requests an available offer (`{ user_id }`). Optional `split_user_ids: [id, …]` names co-spenders sharing the cost. |
 | POST | `/api/prize-offers/:id/cancel-request` | Withdraw a pending request (clears any split). |

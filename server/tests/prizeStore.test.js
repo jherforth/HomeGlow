@@ -339,3 +339,32 @@ test('split validation: unknown or broke co-spenders are handled; cancel clears 
     assert.equal(offer.status, 'available');
     assert.deepEqual(offer.split_user_ids, []);
 });
+
+test('a prize can carry a description: set, kept, cleared, and shown in the store', async () => {
+    const created = await api('/api/prizes', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'Movie night', clam_cost: 25, description: '  You pick the film and the snacks.  ' }),
+    });
+    assert.equal(created.status, 200);
+    const id = created.body.id;
+    const prize = async () => (await api('/api/prizes')).body.find((p) => p.id === id);
+    assert.equal((await prize()).description, 'You pick the film and the snacks.');
+
+    // A PATCH that doesn't name the description keeps it.
+    assert.equal((await api(`/api/prizes/${id}`, { method: 'PATCH', body: JSON.stringify({ name: 'Movie night', clam_cost: 30 }) })).status, 200);
+    assert.equal((await prize()).description, 'You pick the film and the snacks.');
+
+    const offer = await api('/api/prize-offers', { method: 'POST', body: JSON.stringify({ prize_id: id }) });
+    const inStore = (await api('/api/prize-offers')).body.find((o) => o.id === offer.body.id);
+    assert.equal(inStore.description, 'You pick the film and the snacks.');
+
+    assert.equal((await api(`/api/prizes/${id}`, { method: 'PATCH', body: JSON.stringify({ name: 'Movie night', clam_cost: 30, description: '' }) })).status, 200);
+    assert.equal((await prize()).description, null);
+
+    const tooLong = await api(`/api/prizes/${id}`, { method: 'PATCH', body: JSON.stringify({ name: 'Movie night', clam_cost: 30, description: 'x'.repeat(501) }) });
+    assert.equal(tooLong.status, 400);
+    const notText = await api('/api/prizes', { method: 'POST', body: JSON.stringify({ name: 'Odd', clam_cost: 5, description: 42 }) });
+    assert.equal(notText.status, 400);
+
+    await api(`/api/prize-offers/${offer.body.id}`, { method: 'DELETE' });
+});
