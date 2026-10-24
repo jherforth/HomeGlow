@@ -92,6 +92,15 @@ test('a theme\'s files need no token: FontFace can\'t add one', () => {
   assert.equal(decide(request('OPTIONS', '/api/themes/weather/fonts/Inter.woff2', { 'access-control-request-method': 'PUT' }), () => SECRET).allow, false);
 });
 
+test('the bundled Inter files need no token: a sandboxed frame fetches them in CORS mode', () => {
+  const lazy = () => { throw new Error('no secret needed'); };
+  assert.equal(decide(request('GET', '/fonts/inter-roman.woff2'), lazy).allow, true);
+  assert.equal(decide(request('POST', '/fonts/inter-roman.woff2'), () => SECRET).allow, false);
+  assert.equal(decide(request('OPTIONS', '/fonts/inter-roman.woff2', { 'access-control-request-method': 'GET' }), lazy).allow, true);
+  // Only a file directly under /fonts/, not a nested path.
+  assert.equal(decide(request('GET', '/fonts/sub/inter-roman.woff2'), () => SECRET).allow, false);
+});
+
 test('only listed origins, and the dev server in development, may read the API', () => {
   const production = createOriginAllowList({ corsOrigins: 'https://dash.example.com/, http://tablet.lan:8080', nodeEnv: 'production' });
   assert.equal(production('https://dash.example.com'), true);
