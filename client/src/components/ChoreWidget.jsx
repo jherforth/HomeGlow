@@ -91,6 +91,14 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
   const [chores, setChores] = useState([]);
   const [schedules, setSchedules] = useState([]);
   const [history, setHistory] = useState([]);
+  // In-flight chore toggles, keyed by schedule id: the row flips the moment
+  // it is tapped instead of waiting for the POST plus a full refetch (the
+  // old path also flashed a full-screen spinner over the widget). The
+  // override only changes what the row shows: celebrations still watch
+  // server history, so nothing celebrates until the POST succeeds and the
+  // history refetch lands. Cleared on success and on failure (the row
+  // snaps back).
+  const [pendingToggles, setPendingToggles] = useState({});
   // The last WEEK_DAYS days of history, only while the 7-day row is on.
   const [weekHistory, setWeekHistory] = useState([]);
   const [vacation, setVacation] = useState(null);
@@ -405,18 +413,47 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
     celebrationSeededRef.current = true;
   }, [users, schedules, history, celebrationEnabled, loading, celebrateDayComplete]);
 
+  // One render for a full load: fetch every source in parallel, then set all
+  // state in one block. The old version let each fetcher set its own state
+  // as it resolved, re-rendering this large widget up to eight times per
+  // load — and every tab switch remounts the widget, so every switch paid
+  // it too. The individual fetchers stay for targeted callers (prize
+  // redemptions, week toggles); this is only the full-load path. Sources
+  // stay independent: one failing must not wipe out the rest.
   const fetchData = async () => {
+    const names = ['users', 'chores', 'schedules', 'history', 'prizes', 'prize offers', 'settings'];
     try {
-      await Promise.all([
-        fetchUsers(),
-        fetchChores(),
-        fetchSchedules(),
-        fetchHistory(),
-        fetchPrizes(),
-        fetchPrizeOffers(),
-        fetchSettings(),
-        reloadRoutines()
+      const today = getTodayDateString();
+      const results = await Promise.allSettled([
+        axios.get(`${API_BASE_URL}/api/users`),
+        axios.get(`${API_BASE_URL}/api/chores`),
+        axios.get(`${API_BASE_URL}/api/chore-schedules?usage=chart`),
+        axios.get(`${API_BASE_URL}/api/chore-history?date=${today}`),
+        axios.get(`${API_BASE_URL}/api/prizes`),
+        axios.get(`${API_BASE_URL}/api/prize-offers`),
+        axios.get(`${API_BASE_URL}/api/settings`),
       ]);
+      results.forEach((result, i) => {
+        if (result.status === 'rejected') {
+          console.error(`Error fetching ${names[i]}:`, result.reason);
+          return;
+        }
+        const data = result.value.data;
+        if (i === 0) setUsers(data.filter(user => user.id !== 0));
+        else if (i === 1) setChores(data);
+        else if (i === 2) setSchedules(data);
+        else if (i === 3) setHistory(data);
+        else if (i === 4) setPrizes(data);
+        else if (i === 5) setPrizeOffers(Array.isArray(data) ? data : []);
+        else if (i === 6) applySettings(data);
+      });
+      // Week history rides along with today's, as fetchHistory does.
+      fetchWeekHistory();
+      try {
+        await reloadRoutines();
+      } catch (error) {
+        console.error('Error reloading routines:', error);
+      }
       setLoading(false);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -424,18 +461,22 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
     }
   };
 
+  const applySettings = (data) => {
+    if (data.daily_completion_clam_reward) {
+      setDailyClamReward(parseInt(data.daily_completion_clam_reward, 10));
+    }
+    // Defaults on: the celebration is the point of the feature, and the
+    // setting only exists once a parent has turned it off (issue #140).
+    setCelebrationEnabled(data.CHORE_CELEBRATION_ENABLED !== 'false'
+      && data.CHORE_CELEBRATION_ENABLED !== false);
+    // Vacation days read as vacation, not as days left undone.
+    setVacation(parseVacationModeSetting(data.vacation_mode));
+  };
+
   const fetchSettings = async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/settings`);
-      if (response.data.daily_completion_clam_reward) {
-        setDailyClamReward(parseInt(response.data.daily_completion_clam_reward, 10));
-      }
-      // Defaults on: the celebration is the point of the feature, and the
-      // setting only exists once a parent has turned it off (issue #140).
-      setCelebrationEnabled(response.data.CHORE_CELEBRATION_ENABLED !== 'false'
-        && response.data.CHORE_CELEBRATION_ENABLED !== false);
-      // Vacation days read as vacation, not as days left undone.
-      setVacation(parseVacationModeSetting(response.data.vacation_mode));
+      applySettings(response.data);
     } catch (error) {
       console.error('Error fetching settings:', error);
     }
@@ -660,18 +701,28 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
       askParentForChore(schedule);
       return;
     }
+    // A tap already in flight for this chore: ignore the second one rather
+    // than POSTing twice (the second would 409 and snap the row back).
+    if (pendingToggles[schedule.id] !== undefined) return;
+    const today = getTodayDateString();
+    // Flip the row now; the server round-trip happens behind it. No
+    // full-screen spinner: a checkbox tap should never block the widget.
+    setPendingToggles((prev) => ({ ...prev, [schedule.id]: !isCompleted }));
+    const clearPending = () => setPendingToggles((prev) => {
+      const next = { ...prev };
+      delete next[schedule.id];
+      return next;
+    });
     try {
-      setIsLoading(true);
-      const today = getTodayDateString();
-
+      let result;
       if (isCompleted) {
-        await axios.post(`${API_BASE_URL}/api/chores/uncomplete`, {
+        result = await axios.post(`${API_BASE_URL}/api/chores/uncomplete`, {
           chore_schedule_id: schedule.id,
           user_id: schedule.user_id,
           date: today
         });
       } else {
-        await axios.post(`${API_BASE_URL}/api/chores/complete`, {
+        result = await axios.post(`${API_BASE_URL}/api/chores/complete`, {
           chore_schedule_id: schedule.id,
           user_id: schedule.user_id,
           date: today
@@ -680,13 +731,24 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
         if (routineDays[schedule.id]) requestCelebration('chores');
       }
 
-      await fetchData();
+      // Server-confirmed: drop the override and refresh only what a toggle
+      // can change — today's history (the row state, celebrations,
+      // follow-ups) and the schedules (a once-completed parent reschedules,
+      // an uncomplete re-arms a transfer bonus). Clam totals come back in
+      // the response, so users, chores, prizes, settings and routines need
+      // no refetch here. The celebration effect watches history, so it
+      // still fires only on confirmed data.
+      clearPending();
+      if (result?.data?.clam_total !== undefined) {
+        setUsers((prev) => prev.map((u) => (u.id === schedule.user_id ? { ...u, clam_total: result.data.clam_total } : u)));
+      }
+      await Promise.all([fetchHistory(), fetchSchedules()]);
     } catch (error) {
+      // Roll the row back to server truth.
+      clearPending();
       // Expired since this screen last looked: ask for a parent after all.
       if (error?.response?.data?.code === 'CHORE_EXPIRED') askParentForChore(schedule);
       else console.error('Error toggling chore completion:', error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -999,15 +1061,19 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
       })
       .map(schedule => {
         const today = getTodayDateString();
-        const completed = history.some(h =>
-          h.chore_schedule_id === schedule.id &&
-          h.user_id === userId &&
-          h.date === today
-        );
+        const pending = pendingToggles[schedule.id];
+        const completed = pending !== undefined
+          ? pending
+          : history.some(h =>
+            h.chore_schedule_id === schedule.id &&
+            h.user_id === userId &&
+            h.date === today
+          );
 
         return {
           ...schedule,
           completed,
+          pending: pending !== undefined,
           id: schedule.id
         };
       });
@@ -1230,6 +1296,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
               with no icon keep the checkmark. */}
           <IconButton
             color={schedule.completed ? "secondary" : "primary"}
+            disabled={schedule.pending}
             onClick={() => toggleChoreCompletion(schedule, schedule.completed)}
             size="small"
             aria-label={schedule.completed
