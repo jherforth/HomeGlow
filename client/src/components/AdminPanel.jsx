@@ -2543,6 +2543,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                                 // Opaque, like the dashboard's frames (PluginWidgetWrapper):
                                 // a plugin can't act as HomeGlow from here either.
                                 sandbox="allow-scripts allow-forms"
+                                allow="geolocation"
                                 name={frameNameFor(plugin.filename)}
                                 style={{ width: '100%', height: '100%', border: 0, display: 'block', backgroundColor: 'var(--card-bg)' }}
                               />

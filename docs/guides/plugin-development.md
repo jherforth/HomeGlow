@@ -861,6 +861,11 @@ Your page runs in an iframe sandboxed **without `allow-same-origin`**
   `HomeGlow.on`), and every other route. `/api/calendar-sources` leaves out
   each calendar's `url` and `username` for a plugin: a private ICS link reads
   the whole calendar.
+
+  Your page's own scripts, stylesheets, images and sounds load as usual
+  (`<script src="/plugin-sdk/v1.js">`, `<link href="/index.css">`, `<img>`):
+  a `GET` isn't refused, it just isn't readable by your page unless it's one
+  of the routes above.
 - **`localStorage` is your own**, on this display. The real one throws in a
   sandbox, so HomeGlow puts a stand-in in its place: the same methods
   (`getItem`, `setItem`, `removeItem`, `clear`, `key`, `length`, and
@@ -874,6 +879,8 @@ Your page runs in an iframe sandboxed **without `allow-same-origin`**
   as `homeglow:data-changed` (§5) and `HomeGlow.celebrate()` already do.
 - **`window.__HOMEGLOW_PLUGIN__` is fixed.** Your page can't claim another
   plugin's id; the server checks the token, not the id you send.
+- **Location:** your page may ask for it (`navigator.geolocation`); the
+  browser asks the household first.
 - **Other sites:** `fetch` to a third-party API works if that API sends CORS
   headers for any origin (`*`); otherwise use the proxy. Your token is never
   sent there.

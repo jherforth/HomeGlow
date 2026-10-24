@@ -631,6 +631,14 @@ fastify.addHook('onRequest', async (request, reply) => {
   const decision = pluginRequestPolicy.decide(request, getPluginTokenSecret);
   if (!decision.applies) return undefined;
   if (!decision.allow) {
+    // A GET or HEAD the policy refuses still goes through, unreadable: the
+    // CORS plugin adds no headers for it, so the frame can't see the answer,
+    // and no GET route changes anything. Refusing it outright broke a plugin
+    // page's own script, style and image loads (/plugin-sdk/v1.js) in
+    // browsers that send Origin: null with them. A fetch the policy refuses
+    // (Sec-Fetch-Mode: cors) gets the readable 403, so its author sees why.
+    const read = request.method === 'GET' || request.method === 'HEAD';
+    if (read && request.headers['sec-fetch-mode'] !== 'cors') return undefined;
     // Readable by the plugin, so its author sees why.
     reply.header('Access-Control-Allow-Origin', 'null');
     return reply.status(403).send({ error: decision.reason });
