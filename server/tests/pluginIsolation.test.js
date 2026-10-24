@@ -28,10 +28,23 @@ async function api(pathname, options = {}) {
   return { status: response.status, body, headers: response.headers };
 }
 
-// As a plugin's frame asks: Origin null, and the page's token when it has one.
+// As a plugin's frame asks with fetch: Origin null, Sec-Fetch-Mode cors (as
+// browsers send for fetch and XHR), and the page's token when it has one.
 const fromPlugin = (pathname, token, options = {}) => api(pathname, {
   ...options,
-  headers: { Origin: 'null', ...(token ? { 'X-HomeGlow-Plugin-Token': token } : {}), ...(options.headers || {}) },
+  headers: { Origin: 'null', 'Sec-Fetch-Mode': 'cors', ...(token ? { 'X-HomeGlow-Plugin-Token': token } : {}), ...(options.headers || {}) },
+});
+// As a plugin page loads a script, style or image: a GET, no token. Some
+// browsers send Origin: null with these; some send no Sec-Fetch-Mode at all.
+// Plain http, since Node's fetch sets Sec-Fetch-Mode: cors itself.
+const subresource = (pathname, mode) => new Promise((resolve, reject) => {
+  const http = require('node:http');
+  const req = http.get(`${baseUrl}${pathname}`, { headers: { Origin: 'null', ...(mode ? { 'Sec-Fetch-Mode': mode } : {}) } }, (res) => {
+    let body = '';
+    res.on('data', (chunk) => { body += chunk; });
+    res.on('end', () => resolve({ status: res.statusCode, body, headers: { get: (name) => res.headers[name.toLowerCase()] ?? null } }));
+  });
+  req.on('error', reject);
 });
 
 const manifestPage = (manifest) => `<html><head><title>t</title><script type="application/json" id="homeglow-manifest">${JSON.stringify(manifest)}</script></head><body>p</body></html>`;
@@ -172,6 +185,22 @@ test('everything else is closed to a plugin, token or not', async () => {
   const settings = (await api('/api/settings')).body;
   assert.notEqual(settings.PROXY_WHITELIST, '192.168.1.1', 'the write never happened');
   assert.equal(settings.PLUGIN_TOKEN_SECRET, undefined, 'the signing secret is never handed out');
+});
+
+test('a plugin page\'s own scripts, styles and images load, even with Origin: null', async () => {
+  for (const mode of ['no-cors', undefined]) {
+    const sdk = await subresource('/plugin-sdk/v1.js', mode);
+    assert.equal(sdk.status, 200, `SDK, mode ${mode}`);
+    assert.match(String(sdk.body), /window\.HomeGlow/);
+    assert.equal((await subresource('/index.css', mode)).status, 200, `stylesheet, mode ${mode}`);
+  }
+  // Another plugin's data, loaded as if it were an image: it goes through,
+  // but with no CORS headers, so the page can't read it.
+  const other = await subresource('/api/plugin/v1/storage/plugin-b/secret', 'no-cors');
+  assert.equal(other.headers.get('access-control-allow-origin'), null, 'not readable by the frame');
+  // A write is never let through that way.
+  const write = await api('/api/settings', { method: 'POST', headers: { Origin: 'null', 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'x', value: 'y' }) });
+  assert.equal(write.status, 403);
 });
 
 test('a preflight is answered only for what a plugin may do', async () => {

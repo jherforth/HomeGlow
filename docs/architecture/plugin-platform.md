@@ -491,8 +491,15 @@ is isolated from HomeGlow (mrramam/HomeGlow#50, #49):
   its own `/api/plugin/v1/…/<id>` routes; the core reads and the four
   household writes the plugin guide lists (§10.0 there); the proxy; and a
   theme's files (which need no token, since `FontFace` can't add one).
-  Everything else answers `403`. Requests with no `Origin` (an `<img>`, a
+  Everything else answers `403`, except a `GET` or `HEAD` that isn't a
+  `fetch` (`Sec-Fetch-Mode` other than `cors`): a page's own script, style
+  and image loads, which some browsers send with `Origin: null`. Those go
+  through without CORS headers, so the page can use but not read them, and no
+  `GET` route changes anything. Requests with no `Origin` (an `<img>`, a
   navigation) or the dashboard's own are unaffected.
+- **Location:** plugin frames carry `allow="geolocation"`, since a
+  cross-origin frame can't ask for it otherwise (Sunrise & Sunset does). The
+  browser still asks the household.
 - **No more `Access-Control-Allow-Origin: *`.** The API answers CORS only for
   a plugin's allowed requests, the dev server, and `CORS_ORIGINS`, so another
   website can't read it.

@@ -18,6 +18,10 @@ import { LOCAL_STORAGE_MESSAGE_TYPE, applyPluginStoreChange, frameNameFor } from
 // it say they come from "null"; messages to it can't name its origin, so they
 // go to "*". The source check (this wrapper's own frame) is the real gate.
 export const PLUGIN_FRAME_SANDBOX = 'allow-scripts allow-forms allow-popups';
+// A cross-origin (here: opaque) frame may not ask for the location unless its
+// iframe allows it, and Sunrise & Sunset finds where it is that way. The
+// browser still asks the household first. Scoped to the plugin's own address.
+export const PLUGIN_FRAME_ALLOW = 'geolocation';
 const FRAME_ORIGIN = 'null';
 const TO_FRAME = '*';
 
@@ -218,6 +222,7 @@ const PluginWidgetWrapper = ({
           overflow: 'hidden',
         }}
         sandbox={PLUGIN_FRAME_SANDBOX}
+        allow={PLUGIN_FRAME_ALLOW}
       />
     </Box>
   );
