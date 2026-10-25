@@ -52,7 +52,7 @@ describe('built-in themes', () => {
   });
 
   it('are discovered from their folders, Classic first and then by name', () => {
-    expect(BUILT_IN_THEMES.map((theme) => theme.id)).toEqual(['classic']);
+    expect(BUILT_IN_THEMES.map((theme) => theme.id)).toEqual(['classic', 'fern', 'glacier', 'harbor-fog', 'harvest', 'morning-paper', 'night-owl', 'playroom-pop', 'storm']);
   });
 
   it('the stand-in themes are valid packages', () => {
@@ -124,6 +124,12 @@ describe('validateThemePackage', () => {
     expect(validateThemePackage({ ...base, manifestVersion: 9, ambience }, { assets: ['assets/hole.svg'] })).toEqual([]);
   });
 
+  it('needs manifest version 10 for particle sway and blur', () => {
+    const ambience = [{ layer: 'particles', src: 'assets/leaf.svg', motion: 'fall', count: 5, sway: 40, swaySeconds: 5, blur: 1.2 }];
+    expect(validateThemePackage({ ...base, manifestVersion: 9, ambience }, { assets: ['assets/leaf.svg'] })).toEqual(['particle sway, particle blur need manifestVersion 10']);
+    expect(validateThemePackage({ ...base, manifestVersion: 10, ambience }, { assets: ['assets/leaf.svg'] })).toEqual([]);
+  });
+
   it('checks the package shape', () => {
     expect(validateThemePackage({ manifestVersion: 1, id: 'Bad Id', name: '' })).toHaveLength(2);
     expect(validateThemePackage({ ...base, modes: ['sepia'] })).toHaveLength(1);
@@ -131,7 +137,7 @@ describe('validateThemePackage', () => {
   });
 
   it('follows the plugin manifest rules for manifestVersion, author and version', () => {
-    expect(validateThemePackage({ id: 'probe', name: 'Probe' })).toEqual(['manifestVersion must be 1 to 9']);
+    expect(validateThemePackage({ id: 'probe', name: 'Probe' })).toEqual(['manifestVersion must be 1 to 10']);
     expect(validateThemePackage({ ...base, author: 'Jane Diver', version: '2.1.0' })).toEqual([]);
     expect(validateThemePackage({ ...base, author: 'x'.repeat(81) })).toHaveLength(1);
     expect(validateThemePackage({ ...base, author: { name: 'Jane' } })).toHaveLength(1);
