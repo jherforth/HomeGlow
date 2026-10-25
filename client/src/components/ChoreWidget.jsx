@@ -96,9 +96,14 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
   // old path also flashed a full-screen spinner over the widget). The
   // override only changes what the row shows: celebrations still watch
   // server history, so nothing celebrates until the POST succeeds and the
-  // history refetch lands. Cleared on success and on failure (the row
-  // snaps back).
+  // full reload lands. Cleared once that reload finishes, or at once on
+  // failure (the row snaps back).
   const [pendingToggles, setPendingToggles] = useState({});
+  // Monotonic id of the latest fetchData run. A load that a newer one has
+  // overtaken drops its results instead of overwriting fresher state —
+  // without this, a slow reload landing after a newer one could settle a
+  // row in the wrong state or flicker it through the pre-tap value.
+  const loadSeqRef = useRef(0);
   // The last WEEK_DAYS days of history, only while the 7-day row is on.
   const [weekHistory, setWeekHistory] = useState([]);
   const [vacation, setVacation] = useState(null);
@@ -421,6 +426,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
   // redemptions, week toggles); this is only the full-load path. Sources
   // stay independent: one failing must not wipe out the rest.
   const fetchData = async () => {
+    const seq = ++loadSeqRef.current;
     const names = ['users', 'chores', 'schedules', 'history', 'prizes', 'prize offers', 'settings'];
     try {
       const today = getTodayDateString();
@@ -433,6 +439,10 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
         axios.get(`${API_BASE_URL}/api/prize-offers`),
         axios.get(`${API_BASE_URL}/api/settings`),
       ]);
+      // A newer load started while this one was in flight: its results are
+      // at least as fresh, so this one's are dropped wholesale rather than
+      // partially applied over them.
+      if (seq !== loadSeqRef.current) return;
       results.forEach((result, i) => {
         if (result.status === 'rejected') {
           console.error(`Error fetching ${names[i]}:`, result.reason);
@@ -447,7 +457,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
         else if (i === 5) setPrizeOffers(Array.isArray(data) ? data : []);
         else if (i === 6) applySettings(data);
       });
-      // Week history rides along with today's, as fetchHistory does.
+      // Week history rides along with today's.
       fetchWeekHistory();
       try {
         await reloadRoutines();
@@ -500,28 +510,8 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
     }
   };
 
-  const fetchSchedules = async () => {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/api/chore-schedules?usage=chart`);
-      setSchedules(response.data);
-    } catch (error) {
-      console.error('Error fetching schedules:', error);
-    }
-  };
-
-  const fetchHistory = async () => {
-    try {
-      const today = getTodayDateString();
-      const response = await axios.get(`${API_BASE_URL}/api/chore-history?date=${today}`);
-      setHistory(response.data);
-    } catch (error) {
-      console.error('Error fetching history:', error);
-    }
-    fetchWeekHistory();
-  };
-
-  // Read through a ref so fetchHistory, called from long-lived handlers, sees
-  // the current setting.
+  // Read through a ref so fetchWeekHistory, called from long-lived handlers,
+  // sees the current setting.
   const showWeekRef = useRef(showWeek);
   showWeekRef.current = showWeek;
   const fetchWeekHistory = async () => {
@@ -714,15 +704,14 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
       return next;
     });
     try {
-      let result;
       if (isCompleted) {
-        result = await axios.post(`${API_BASE_URL}/api/chores/uncomplete`, {
+        await axios.post(`${API_BASE_URL}/api/chores/uncomplete`, {
           chore_schedule_id: schedule.id,
           user_id: schedule.user_id,
           date: today
         });
       } else {
-        result = await axios.post(`${API_BASE_URL}/api/chores/complete`, {
+        await axios.post(`${API_BASE_URL}/api/chores/complete`, {
           chore_schedule_id: schedule.id,
           user_id: schedule.user_id,
           date: today
@@ -731,18 +720,18 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
         if (routineDays[schedule.id]) requestCelebration('chores');
       }
 
-      // Server-confirmed: drop the override and refresh only what a toggle
-      // can change — today's history (the row state, celebrations,
-      // follow-ups) and the schedules (a once-completed parent reschedules,
-      // an uncomplete re-arms a transfer bonus). Clam totals come back in
-      // the response, so users, chores, prizes, settings and routines need
-      // no refetch here. The celebration effect watches history, so it
-      // still fires only on confirmed data.
+      // Server-confirmed, but the row stays optimistic until a full reload
+      // lands: a hand-picked refresh can leave other sources stale, and
+      // clearing the override before the reload returns flickers the row
+      // through its pre-tap state. The reload is one render now that the
+      // load is batched, so it costs no more than the selective refresh
+      // did. Clearing after the reload is safe even if a newer load
+      // overtook this one — the guard drops the stale results, and the
+      // newer load read server state from after this POST. The
+      // celebration effect watches history, so it still fires only on
+      // confirmed data.
+      await fetchData();
       clearPending();
-      if (result?.data?.clam_total !== undefined) {
-        setUsers((prev) => prev.map((u) => (u.id === schedule.user_id ? { ...u, clam_total: result.data.clam_total } : u)));
-      }
-      await Promise.all([fetchHistory(), fetchSchedules()]);
     } catch (error) {
       // Roll the row back to server truth.
       clearPending();
