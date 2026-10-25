@@ -75,10 +75,15 @@ let adminPaused = false;
 // the whole dashboard a few pixels on a slow cycle, so static elements
 // never sit on the exact same pixels. 4px / 4 minutes is the optimum in
 // Samsung's signage manuals (range 0-4px, 1-4 min); Philips shifts up to
-// 8px every 80 seconds — the same order of magnitude. Translate-only on
-// #root (no scale, so no scrollbars), slow eased drift. The dim shield
-// lives on <body> outside #root, so it stays viewport-fixed. Off by
-// default; enabled per display or household in the dimming card.
+// 8px every 80 seconds — the same order of magnitude. Slow eased drift,
+// via relative left/top offsets on #root — never a transform: a transform
+// would make #root the containing block for its position:fixed descendants
+// (dock, screensaver, theme scene) and give it its own stacking context,
+// while relative offsets leave every fixed layer viewport-anchored. A
+// positive-x step would widen the page, so horizontal overflow is hidden
+// on <body> while the shift is on. The dim shield lives on <body> outside
+// #root, so it stays viewport-fixed. Off by default; enabled per display
+// or household in the dimming card.
 export const PIXEL_SHIFT_OFFSETS = [
   { x: 0, y: 0 },
   { x: 4, y: 3 },
@@ -101,9 +106,28 @@ function applyPixelShift() {
   if (!root || !root.style) return;
   pixelShiftStep += 1;
   const { x, y } = pixelShiftOffset(pixelShiftStep);
-  root.style.transition = 'transform 1.5s ease';
-  root.style.transform = `translate(${x}px, ${y}px)`;
+  root.style.position = 'relative';
+  root.style.transition = 'left 1.5s ease, top 1.5s ease';
+  root.style.left = `${x}px`;
+  root.style.top = `${y}px`;
   if (root.dataset) root.dataset.pixelShift = 'on';
+  if (document.body) document.body.style.overflowX = 'hidden';
+}
+
+// Switching pixel shift off must leave no trace: the last offset, the
+// transition, the marker, and the overflow-x clamp all go away at once,
+// so the display is exactly as it was before the shift ran.
+function resetPixelShift() {
+  if (typeof document === 'undefined') return;
+  const root = document.getElementById('root');
+  if (root && root.style) {
+    root.style.position = '';
+    root.style.transition = '';
+    root.style.left = '';
+    root.style.top = '';
+    if (root.dataset) delete root.dataset.pixelShift;
+  }
+  if (document.body) document.body.style.overflowX = '';
 }
 
 // The live target: the night level inside the household night window, else
@@ -191,6 +215,8 @@ export function updateDisplayDimming(settings, zone) {
   if (zone !== undefined) timeZone = zone;
   lastActivity = Date.now();
   if (!started) return;
+  if (!config.pixelShift) resetPixelShift();
+  else if (document.body) document.body.style.overflowX = 'hidden';
   if (liveTarget() == null) setDimmed(false);
   else if (config.after === 0) setDimmed(true);
   else setDimmed(false);
