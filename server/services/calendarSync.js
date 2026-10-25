@@ -29,6 +29,20 @@ function localDateFromYmd(ymd) {
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
 }
 
+// 'YYYY-MM-DD' for a cached all-day value, in the server's zone, which is the
+// household's (process.env.TZ follows the time zone setting). A bare date is
+// returned as it is.
+function householdDateKey(value) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) return String(value);
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+// More than any two zones differ (UTC-12 to UTC+14).
+const ALL_DAY_RANGE_SLACK_MS = 2 * 24 * 60 * 60 * 1000;
+
 class CalendarSyncService {
   constructor(db, decryptPassword, logger = CONSOLE_LOGGER) {
     this.db = db;
@@ -394,13 +408,19 @@ class CalendarSyncService {
     `;
     const params = [];
 
+    // An all-day row holds the household's midnight, and the bounds are a
+    // display's own midnights. West of the household, the event's day starts
+    // after the household's midnight, so all-day rows get some slack either
+    // side (mrramam/HomeGlow#69). A day outside the window is never drawn.
     if (startDate) {
-      query += ' AND end_time >= ?';
-      params.push(new Date(startDate).toISOString());
+      const start = new Date(startDate);
+      query += ' AND end_time >= CASE WHEN all_day = 1 THEN ? ELSE ? END';
+      params.push(new Date(start.getTime() - ALL_DAY_RANGE_SLACK_MS).toISOString(), start.toISOString());
     }
     if (endDate) {
-      query += ' AND start_time <= ?';
-      params.push(new Date(endDate).toISOString());
+      const end = new Date(endDate);
+      query += ' AND start_time <= CASE WHEN all_day = 1 THEN ? ELSE ? END';
+      params.push(new Date(end.getTime() + ALL_DAY_RANGE_SLACK_MS).toISOString(), end.toISOString());
     }
 
     query += ' ORDER BY start_time ASC';
@@ -417,6 +437,14 @@ class CalendarSyncService {
         description: row.description,
         location: row.location,
         all_day: row.all_day === 1,
+        // An all-day event is a date, the same on every display. `start` and
+        // `end` are the household's midnight, which a display in another zone
+        // reads as a different day (mrramam/HomeGlow#69). `end_date` is the
+        // last day, inclusive.
+        ...(row.all_day === 1 ? {
+          start_date: householdDateKey(row.start_time),
+          end_date: householdDateKey(row.end_time),
+        } : {}),
         source_id: row.source_id,
         source_name: source?.name || 'Unknown',
         source_color: source?.color || '#6e44ff',

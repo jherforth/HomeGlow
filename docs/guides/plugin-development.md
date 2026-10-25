@@ -972,7 +972,7 @@ earned = sum of positive values; spent = −sum of `spent` rows.
 | `GET` | `/api/prizes` | → `[{ id, name, clam_cost }]` |
 | `GET` | `/api/settings` | → `{ KEY: value, ... }` (global app settings). `?keys=KEY,PREFIX_*` narrows it (`*` wildcards, comma-separated); no `keys` returns everything |
 | `POST` | `/api/settings/search` | body: `["KEY", "PREFIX_*"]` → matching settings object (`*` wildcards). Still supported; prefer the `GET` above for new plugins |
-| `GET` | `/api/calendar-events?start=&end=` | → cached synced calendar events in the window |
+| `GET` | `/api/calendar-events?start=&end=` | → cached synced calendar events in the window. For an all-day event, use `start_date` and `end_date` (`YYYY-MM-DD`, end inclusive) and read them as local dates (`new Date(y, m - 1, d)`, not `new Date(string)`, which is UTC). Its `start` and `end` are the household's midnights, a different day on a display in another zone |
 | `GET` | `/api/calendar` | → locally-created events |
 | `GET` | `/api/photo-items` | → `[{ id, url, thumbnail, type, source_id, source_name, source_type }]` |
 

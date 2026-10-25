@@ -2516,6 +2516,9 @@ function applyAppTimezone(saved) {
   if (APP_TIMEZONE !== previous) {
     console.log(`Time zone set to ${APP_TIMEZONE} (from ${APP_TIMEZONE_STATE.source}; was ${previous})`);
     if (nightlyCronTask) startNightlyCronJob();
+    // All-day events are cached as the old zone's midnights; a sync rewrites
+    // them for the new one, so their dates don't drift until the next cycle.
+    if (calendarSyncService) calendarSyncService.syncAllSources().catch(() => { });
   }
 }
 

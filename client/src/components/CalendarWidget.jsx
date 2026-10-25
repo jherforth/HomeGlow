@@ -37,6 +37,7 @@ import {
   formatDayOfMonth,
   getWeekdayLabels,
   getWeekdayOptions,
+  fromDateKey,
 } from '../utils/dateUtils.js';
 
 // Stored values for the week/month start settings. Display names come from
@@ -689,8 +690,11 @@ const CalendarWidget = ({
         const formattedEvents = response.data.map(event => ({
           id: event.id || Math.random().toString(),
           title: event.title || event.summary || 'Untitled Event',
-          start: new Date(event.start),
-          end: new Date(event.end),
+          // An all-day event is the household's date on every display. Its
+          // start and end are the household's midnight, which a display in
+          // another zone reads as a different day (mrramam/HomeGlow#69).
+          start: event.all_day && event.start_date ? fromDateKey(event.start_date) : new Date(event.start),
+          end: event.all_day && event.end_date ? fromDateKey(event.end_date) : new Date(event.end),
           description: event.description || '',
           location: event.location || '',
           all_day: event.all_day || false,

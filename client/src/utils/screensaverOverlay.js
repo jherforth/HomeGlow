@@ -47,27 +47,10 @@ export function addDaysToKey(key, delta) {
   return date.toISOString().slice(0, 10);
 }
 
-/**
- * The day keys an event occupies, oldest first.
- *
- * Treats the end as exclusive, which is what ICS and Google both mean: a
- * single-day all-day event runs to the next midnight, and counting that
- * midnight as a day would list it twice. An end at or before the start — real
- * feeds contain these — is treated as a single day rather than looped or
- * dropped.
- */
-export function eventDayKeys(event, timeZone) {
-  const start = new Date(event.start);
-  if (Number.isNaN(start.getTime())) return [];
+const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
-  const end = event.end ? new Date(event.end) : start;
-  const lastInstant = !Number.isNaN(end.getTime()) && end.getTime() > start.getTime()
-    ? new Date(end.getTime() - 1)
-    : start;
-
-  const first = localDateKey(start, timeZone);
-  const last = localDateKey(lastInstant, timeZone);
-
+// Every key from `first` to `last`, both included.
+function keysThrough(first, last) {
   const keys = [];
   let cursor = first;
   // Bounded: a malformed year-long event must not render a thousand rows.
@@ -76,6 +59,38 @@ export function eventDayKeys(event, timeZone) {
     cursor = addDaysToKey(cursor, 1);
   }
   return keys;
+}
+
+/**
+ * The day keys an event occupies, oldest first.
+ *
+ * An all-day event from the server names its days: `start_date` to
+ * `end_date`, inclusive, the household's dates on every display
+ * (mrramam/HomeGlow#69). Its `start` and `end` are the household's
+ * midnights, which a display in another zone reads as different days.
+ *
+ * Otherwise the end is exclusive, which is what ICS and Google both mean: an
+ * event ending at midnight doesn't occupy the next day. An end at or before
+ * the start — real feeds contain these — is treated as a single day rather
+ * than looped or dropped.
+ */
+export function eventDayKeys(event, timeZone) {
+  if (event.all_day && DATE_KEY.test(event.start_date || '')) {
+    const last = DATE_KEY.test(event.end_date || '') && event.end_date > event.start_date
+      ? event.end_date
+      : event.start_date;
+    return keysThrough(event.start_date, last);
+  }
+
+  const start = new Date(event.start);
+  if (Number.isNaN(start.getTime())) return [];
+
+  const end = event.end ? new Date(event.end) : start;
+  const lastInstant = !Number.isNaN(end.getTime()) && end.getTime() > start.getTime()
+    ? new Date(end.getTime() - 1)
+    : start;
+
+  return keysThrough(localDateKey(start, timeZone), localDateKey(lastInstant, timeZone));
 }
 
 /**

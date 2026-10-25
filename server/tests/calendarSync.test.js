@@ -122,9 +122,9 @@ test('getCachedEvents maps cached rows with source metadata', () => {
     const mapped = service.getCachedEvents('2026-05-01', '2026-05-03');
 
     assert.equal(mapped.length, 2);
-    assert.ok(capturedQuery.includes('end_time >= ?'));
-    assert.ok(capturedQuery.includes('start_time <= ?'));
-    assert.equal(capturedParams.length, 2);
+    assert.ok(capturedQuery.includes('end_time >= CASE WHEN all_day = 1'));
+    assert.ok(capturedQuery.includes('start_time <= CASE WHEN all_day = 1'));
+    assert.equal(capturedParams.length, 4);
 
     assert.equal(mapped[0].source_name, 'Family');
     assert.equal(mapped[0].source_color, '#123456');
@@ -452,5 +452,83 @@ test('Google and ICS store the same all-day event the same way (#209)', async ()
         assert.equal(google.end.toISOString(), service.normalizeAllDayEnd(parsed.end).toISOString());
     } finally {
         process.env.TZ = original;
+    }
+});
+
+// mrramam/HomeGlow#69: an all-day event is the household's date on every
+// display, whatever zone the display is in.
+function allDayService(rows) {
+    const fakeDb = {
+        prepare(query) {
+            if (query.includes('SELECT id, name, color FROM calendar_sources')) {
+                return { all: () => [{ id: 1, name: 'Family', color: '#123456' }] };
+            }
+            if (query.includes("key = 'CALENDAR_DEDUP_ENABLED'")) return { get: () => ({ value: 'false' }) };
+            return { all: () => rows };
+        },
+    };
+    return new CalendarSyncService(fakeDb, () => null);
+}
+
+test('an all-day event carries its household dates, inclusive (#69)', () => {
+    const original = process.env.TZ;
+    process.env.TZ = 'America/New_York';
+    try {
+        // As cached by a New York server: Thanksgiving, and a trip over a month end.
+        const service = allDayService([
+            { source_id: 1, event_uid: 'thanksgiving', title: 'Thanksgiving', all_day: 1,
+                start_time: '2026-11-26T05:00:00.000Z', end_time: '2026-11-26T05:00:00.000Z' },
+            { source_id: 1, event_uid: 'trip', title: 'Trip', all_day: 1,
+                start_time: '2026-11-30T05:00:00.000Z', end_time: '2026-12-02T05:00:00.000Z' },
+            { source_id: 1, event_uid: 'dinner', title: 'Dinner', all_day: 0,
+                start_time: '2026-11-26T23:00:00.000Z', end_time: '2026-11-27T01:00:00.000Z' },
+        ]);
+        const [thanksgiving, trip, dinner] = service.getCachedEvents();
+        assert.equal(thanksgiving.start_date, '2026-11-26');
+        assert.equal(thanksgiving.end_date, '2026-11-26');
+        assert.equal(trip.start_date, '2026-11-30');
+        assert.equal(trip.end_date, '2026-12-02');
+        assert.equal(thanksgiving.start.toISOString(), '2026-11-26T05:00:00.000Z', 'start is unchanged');
+        assert.equal('start_date' in dinner, false, 'a timed event has no dates');
+    } finally {
+        process.env.TZ = original;
+    }
+});
+
+test('a bare-date all-day value passes through as is (#69)', () => {
+    const service = allDayService([
+        { source_id: 1, event_uid: 'x', title: 'X', all_day: 1, start_time: '2026-11-26', end_time: '2026-11-27' },
+    ]);
+    const [event] = service.getCachedEvents();
+    assert.equal(event.start_date, '2026-11-26');
+    assert.equal(event.end_date, '2026-11-27');
+});
+
+test('a display west of the household still gets all-day events on the first and last day of its range (#69)', () => {
+    const better = require('better-sqlite3');
+    const db = new better(':memory:');
+    const original = process.env.TZ;
+    process.env.TZ = 'America/New_York';
+    try {
+        db.exec(`
+            CREATE TABLE calendar_sources (id INTEGER PRIMARY KEY, name TEXT, color TEXT, enabled INTEGER);
+            CREATE TABLE calendar_events_cache (source_id INTEGER, event_uid TEXT, title TEXT, start_time TEXT,
+                end_time TEXT, description TEXT, location TEXT, all_day INTEGER, raw_data TEXT);
+            CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
+            INSERT INTO calendar_sources VALUES (1, 'Family', '#123456', 1);
+        `);
+        const insert = db.prepare('INSERT INTO calendar_events_cache (source_id, event_uid, title, start_time, end_time, all_day) VALUES (1, ?, ?, ?, ?, ?)');
+        // New York midnights: the 1st and the 30th of November.
+        insert.run('first', 'First', '2026-11-01T04:00:00.000Z', '2026-11-01T04:00:00.000Z', 1);
+        insert.run('last', 'Last', '2026-11-30T05:00:00.000Z', '2026-11-30T05:00:00.000Z', 1);
+        // Timed, the evening before the range in Los Angeles: still excluded.
+        insert.run('before', 'Before', '2026-11-01T05:00:00.000Z', '2026-11-01T06:00:00.000Z', 0);
+        const service = new CalendarSyncService(db, () => null);
+        // A Los Angeles display asking for November: its midnights, as instants.
+        const titles = service.getCachedEvents('2026-11-01T07:00:00.000Z', '2026-12-01T07:59:59.999Z').map((e) => e.title);
+        assert.deepEqual(titles.sort(), ['First', 'Last']);
+    } finally {
+        process.env.TZ = original;
+        db.close();
     }
 });
