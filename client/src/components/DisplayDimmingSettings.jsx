@@ -162,6 +162,21 @@ const DisplayDimmingSettings = () => {
         sx={{ mb: 2, display: 'block' }}
       />
 
+      <FormControlLabel
+        control={(
+          <Switch
+            checked={dimming.pixelShift ?? DEFAULT_DIMMING.pixelShift}
+            disabled={locked}
+            onChange={(e) => updateDimming({ pixelShift: e.target.checked })}
+          />
+        )}
+        label={t('admin:appearance.dimming.pixelShift')}
+        sx={{ mb: 1, display: 'block' }}
+      />
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+        {t('admin:appearance.dimming.pixelShiftHelp')}
+      </Typography>
+
       <TextField
         type="number"
         size="small"

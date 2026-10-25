@@ -621,6 +621,8 @@
       "heading": "Display dimming",
       "help": "Dims the dashboard itself after a period without interaction, for wall panels whose backlight is still too bright at its lowest setting. The screen stays live, just darker.",
       "enabled": "Dim the display when idle",
+      "pixelShift": "Pixel shift",
+      "pixelShiftHelp": "Nudge the whole picture a few pixels every few minutes, so static dashboard elements never sit on the exact same pixels. Helps prevent image persistence on always-on displays.",
       "day": "Daytime brightness",
       "night": "Nighttime brightness",
       "after": "Idle seconds before dimming",

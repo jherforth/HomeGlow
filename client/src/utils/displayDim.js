@@ -71,6 +71,41 @@ let shield = null;
 let started = false;
 let adminPaused = false;
 
+// Pixel shift against image persistence on always-on displays: nudge
+// the whole dashboard a few pixels on a slow cycle, so static elements
+// never sit on the exact same pixels. 4px / 4 minutes is the optimum in
+// Samsung's signage manuals (range 0-4px, 1-4 min); Philips shifts up to
+// 8px every 80 seconds — the same order of magnitude. Translate-only on
+// #root (no scale, so no scrollbars), slow eased drift. The dim shield
+// lives on <body> outside #root, so it stays viewport-fixed. Off by
+// default; enabled per display or household in the dimming card.
+export const PIXEL_SHIFT_OFFSETS = [
+  { x: 0, y: 0 },
+  { x: 4, y: 3 },
+  { x: -3, y: 4 },
+  { x: -4, y: -2 },
+  { x: 3, y: -4 },
+];
+export const PIXEL_SHIFT_INTERVAL_MS = 4 * 60 * 1000;
+
+export function pixelShiftOffset(step) {
+  const n = PIXEL_SHIFT_OFFSETS.length;
+  return PIXEL_SHIFT_OFFSETS[((step % n) + n) % n];
+}
+
+let pixelShiftStep = 0;
+let pixelShiftSeconds = 0;
+function applyPixelShift() {
+  if (typeof document === 'undefined') return;
+  const root = document.getElementById('root');
+  if (!root || !root.style) return;
+  pixelShiftStep += 1;
+  const { x, y } = pixelShiftOffset(pixelShiftStep);
+  root.style.transition = 'transform 1.5s ease';
+  root.style.transform = `translate(${x}px, ${y}px)`;
+  if (root.dataset) root.dataset.pixelShift = 'on';
+}
+
 // The live target: the night level inside the household night window, else
 // the day level.
 function liveTarget(now = new Date()) {
@@ -186,6 +221,13 @@ export function initDisplayDim() {
   lastActivity = Date.now();
   if (liveTarget() != null && config.after === 0) setDimmed(true);
   window.setInterval(() => {
+    if (config.pixelShift) {
+      pixelShiftSeconds += 1;
+      if (pixelShiftSeconds * 1000 >= PIXEL_SHIFT_INTERVAL_MS) {
+        pixelShiftSeconds = 0;
+        applyPixelShift();
+      }
+    }
     if (adminPaused) return;
     if (!dimmed && liveTarget() != null && Date.now() - lastActivity >= config.after * 1000) {
       setDimmed(true);
