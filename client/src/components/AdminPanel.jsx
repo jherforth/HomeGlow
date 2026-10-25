@@ -92,6 +92,7 @@ import RoutinesTab from './RoutinesTab';
 import TabIconModal from './TabIconModal';
 import DeleteConfirmationDialog from './DeleteConfirmationDialog';
 import AdminFormSection from './AdminFormSection';
+import ProxyWhitelistSettings from './ProxyWhitelistSettings.jsx';
 import TimezoneSettings from './TimezoneSettings';
 import VersionInfoCard from './VersionInfoCard';
 import { groupPluginsByCategory, pluginStoreStatus, storeEntryOf } from '../utils/pluginCatalog.js';
@@ -863,7 +864,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
       await Promise.all([
         axios.post(`${API_BASE_URL}/api/settings`, { key: 'WEATHER_API_KEY', value: settings.WEATHER_API_KEY || '' }),
         axios.post(`${API_BASE_URL}/api/settings`, { key: 'WEATHER_PROVIDER', value: settings.WEATHER_PROVIDER || 'openweathermap' }),
-        axios.post(`${API_BASE_URL}/api/settings`, { key: 'PROXY_WHITELIST', value: settings.PROXY_WHITELIST || '' })
       ]);
       // Clear the write-only field and re-read what the server now holds.
       setSettings((prev) => ({ ...prev, WEATHER_API_KEY: '' }));
@@ -4167,7 +4167,19 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
             <Typography variant="h6" gutterBottom>{t('admin:connections.heading')}</Typography>
 
             <Box sx={{ maxWidth: 700 }}>
+              {/* Not weather's: any plugin fetching another site uses it
+                  (issue #328). Saves on each change. */}
               <Typography variant="subtitle1" sx={{ mt: 1, mb: 1.5, fontWeight: 600 }}>
+                {t('admin:connections.proxyHeading')}
+              </Typography>
+              <ProxyWhitelistSettings
+                value={settings.PROXY_WHITELIST || ''}
+                onSaved={(value) => setSettings((prev) => ({ ...prev, PROXY_WHITELIST: value }))}
+              />
+
+              <Divider sx={{ my: 3 }} />
+
+              <Typography variant="subtitle1" sx={{ mt: 2, mb: 1.5, fontWeight: 600 }}>
                 {t('admin:connections.weatherHeading')}
               </Typography>
 
@@ -4215,15 +4227,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                     }
                   />
                 )}
-
-                <TextField
-                  fullWidth
-                  label={t('admin:connections.proxyWhitelist')}
-                  value={settings.PROXY_WHITELIST || ''}
-                  onChange={(e) => setSettings(prev => ({ ...prev, PROXY_WHITELIST: e.target.value }))}
-                  sx={{ mb: 2 }}
-                  helperText={t('admin:connections.proxyHelp')}
-                />
 
                 <Button
                   type="submit"
