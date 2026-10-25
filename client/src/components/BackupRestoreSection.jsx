@@ -8,6 +8,7 @@ import { Download, Upload } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import PinModal from './PinModal';
+import { useAdminPinPrompt } from '../hooks/useAdminPinPrompt.js';
 import RestoreStatusAlerts from './RestoreStatusAlerts.jsx';
 import GoogleDriveBackupSection from './GoogleDriveBackupSection.jsx';
 
@@ -55,10 +56,12 @@ export default function BackupRestoreSection({ googleConnected = false }) {
   const [message, setMessage] = useState(null);
   const [busy, setBusy] = useState(false);
   const [restarting, setRestarting] = useState(false);
-  const [exportPinOpen, setExportPinOpen] = useState(false);
   const [chosenFile, setChosenFile] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(null);
   const [confirmRollback, setConfirmRollback] = useState(false);
+  // Downloading a backup, restoring one and rolling back ask for the admin
+  // PIN when one is set; the server checks it too.
+  const { ask: askPin, pinModalProps } = useAdminPinPrompt({ wrongPin: t('admin:backup.wrongPin') });
 
   const loadStatus = useCallback(async () => {
     try {
@@ -79,16 +82,11 @@ export default function BackupRestoreSection({ googleConnected = false }) {
     saveBlob(res.data, filenameFrom(res.headers['content-disposition']));
   };
 
-  const startExport = async () => {
+  const runExport = async (pin) => {
     setMessage(null);
     setBusy(true);
     try {
-      const { data } = await axios.get(`${API_BASE_URL}/api/admin-pin/exists`);
-      if (data?.exists === true) {
-        setExportPinOpen(true);
-        return;
-      }
-      await download();
+      await download(pin);
       setMessage({ type: 'success', text: t('admin:backup.exported') });
     } catch (error) {
       setMessage({ type: 'error', text: (await readBlobError(error)) || t('admin:backup.exportFailed') });
@@ -97,21 +95,7 @@ export default function BackupRestoreSection({ googleConnected = false }) {
     }
   };
 
-  // The PIN dialog: a wrong PIN stays in the dialog; anything else closes it.
-  const exportWithPin = async (pin) => {
-    try {
-      setBusy(true);
-      await download(pin);
-      setExportPinOpen(false);
-      setMessage({ type: 'success', text: t('admin:backup.exported') });
-    } catch (error) {
-      if (error?.response?.status === 403) throw new Error(t('admin:backup.wrongPin'));
-      setExportPinOpen(false);
-      setMessage({ type: 'error', text: (await readBlobError(error)) || t('admin:backup.exportFailed') });
-    } finally {
-      setBusy(false);
-    }
-  };
+  const startExport = () => askPin(t('admin:backup.pinTitle'), runExport);
 
   // --- import -------------------------------------------------------------------
 
@@ -121,14 +105,20 @@ export default function BackupRestoreSection({ googleConnected = false }) {
     if (file) setChosenFile(file);
   };
 
-  const importFile = async () => {
+  const confirmImport = () => {
     const file = chosenFile;
     setChosenFile(null);
+    if (file) void askPin(t('admin:backup.pinTitleImport'), (pin) => importFile(file, pin));
+  };
+
+  const importFile = async (file, pin) => {
     setMessage(null);
     setBusy(true);
     setUploadProgress(0);
     try {
       const form = new FormData();
+      // Before the file: the server checks the PIN before it reads the upload.
+      if (pin) form.append('pin', pin);
       form.append('file', file, file.name);
       await axios.post(`${API_BASE_URL}/api/backup/local/import`, form, {
         onUploadProgress: (event) => {
@@ -173,7 +163,10 @@ export default function BackupRestoreSection({ googleConnected = false }) {
   const cancel = () => act(() => axios.post(`${API_BASE_URL}/api/backup/drive/restore/cancel`), t('admin:backup.cancelled'));
   const rollBack = () => {
     setConfirmRollback(false);
-    void act(() => axios.post(`${API_BASE_URL}/api/backup/drive/restore/rollback`), t('admin:backup.rollbackStaged'));
+    void askPin(t('admin:backup.pinTitleRollback'), (pin) => act(
+      () => axios.post(`${API_BASE_URL}/api/backup/drive/restore/rollback`, pin ? { pin } : {}),
+      t('admin:backup.rollbackStaged'),
+    ));
   };
 
   return (
@@ -248,7 +241,7 @@ export default function BackupRestoreSection({ googleConnected = false }) {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setChosenFile(null)}>{t('common:actions.cancel')}</Button>
-          <Button color="warning" variant="contained" onClick={importFile}>{t('admin:backup.importConfirm')}</Button>
+          <Button color="warning" variant="contained" onClick={confirmImport}>{t('admin:backup.importConfirm')}</Button>
         </DialogActions>
       </Dialog>
 
@@ -263,12 +256,7 @@ export default function BackupRestoreSection({ googleConnected = false }) {
         </DialogActions>
       </Dialog>
 
-      <PinModal
-        open={exportPinOpen}
-        onClose={() => setExportPinOpen(false)}
-        onVerify={exportWithPin}
-        title={t('admin:backup.pinTitle')}
-      />
+      <PinModal {...pinModalProps} />
     </Box>
   );
 }

@@ -37,6 +37,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const rules = require('../services/haPanels');
+const { checkAdminPin, refusePin } = require('../utils/adminPin');
 const media = require('../services/haMedia');
 
 const TEMPLATE_PATH = path.join(__dirname, '..', 'ha-panels', 'template.html');
@@ -459,8 +460,6 @@ function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginR
     return recent.length > RATE_LIMIT;
   };
 
-  const pinHash = (pin) => crypto.createHash('sha256').update(String(pin)).digest('hex');
-
   // A display that remembers the admin PIN is trusted with what the PIN
   // guards: the household chose to unlock it.
   const displayRemembersPin = (deviceName) => {
@@ -578,9 +577,11 @@ function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginR
     // Unlocking, disarming and opening a garage door need the household PIN
     // when PIN protection is on, unless this display remembers it.
     if (calls.some((call) => call.opens) && pinProtection() && !displayRemembersPin(device)) {
-      const stored = db.prepare('SELECT pin_hash FROM admin_pin WHERE id = 1').get();
-      if (stored && (typeof pin !== 'string' || pinHash(pin) !== stored.pin_hash)) {
-        logAction({ pluginId, device, entity: targets.join(','), action, ok: false, error: pin ? 'wrong PIN' : 'PIN needed' });
+      const check = await checkAdminPin(db, typeof pin === 'string' ? pin : undefined);
+      if (!check.ok) {
+        const locked = check.reason === 'locked';
+        logAction({ pluginId, device, entity: targets.join(','), action, ok: false, error: locked ? 'too many wrong PINs' : pin ? 'wrong PIN' : 'PIN needed' });
+        if (locked) return refusePin(reply, check);
         return reply.status(401).send({ error: pin ? 'That PIN is not right.' : 'Enter the household PIN.', needsPin: true });
       }
     }

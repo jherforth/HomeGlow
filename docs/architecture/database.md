@@ -147,7 +147,7 @@ issue #105 Phase 2).
 key (PK), value
 ```
 
-**`admin_pin`** — single-row optional PIN hash for the Admin Panel.
+**`admin_pin`** — single-row optional PIN hash for the Admin Panel: `scrypt$<salt>$<hash>`. An unsalted SHA-256 from an older version is rehashed on its next correct entry (`server/utils/adminPin.js`).
 ```
 id (=1), pin_hash, created_at, updated_at
 ```

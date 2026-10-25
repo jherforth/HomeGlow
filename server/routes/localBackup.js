@@ -9,16 +9,18 @@
 // routes, which are not Google-specific.
 //
 //   POST /api/backup/local/export   { pin? }  -> the .tar.gz, as a download
-//   POST /api/backup/local/import   multipart, one file -> { staged }
+//   POST /api/backup/local/import   multipart, pin? then one file -> { staged }
 //
-// An export holds the key that unlocks every stored credential, so it asks
-// for the admin PIN when one is set. Neither is available in the demo.
+// An export holds the key that unlocks every stored credential, and an import
+// replaces the household's data, so both ask for the admin PIN when one is
+// set. An import's `pin` field must come before its file. Neither is
+// available in the demo.
 const fs = require('fs');
 const path = require('path');
 const { pipeline } = require('stream/promises');
 const driveBackup = require('../services/googleDriveBackup');
 const driveRestore = require('../services/driveRestore');
-const { adminPinMatches } = require('../utils/adminPin');
+const { checkAdminPin, refusePin } = require('../utils/adminPin');
 
 // The largest backup file an import takes. Photos can make a backup large;
 // the bundled nginx allows the same (client/nginx.conf).
@@ -42,9 +44,8 @@ function registerLocalBackupRoutes(fastify, { db, dbPath, uploadsDir = null, dem
 
   fastify.post('/api/backup/local/export', async (request, reply) => {
     if (notInDemo(reply)) return undefined;
-    if (!adminPinMatches(db, request.body?.pin)) {
-      return reply.code(403).send({ error: 'The admin PIN is needed to download a backup.' });
-    }
+    const pinCheck = await checkAdminPin(db, request.body?.pin);
+    if (!pinCheck.ok) return refusePin(reply, pinCheck, 'The admin PIN is needed to download a backup.');
     const workDir = fs.mkdtempSync(path.join(path.dirname(dbPath), 'export-'));
     const cleanUp = () => fs.rm(workDir, { recursive: true, force: true }, () => {});
     try {
@@ -78,6 +79,12 @@ function registerLocalBackupRoutes(fastify, { db, dbPath, uploadsDir = null, dem
       return reply.code(400).send({ error: 'Send the backup file as a form upload.' });
     }
     if (!part) return reply.code(400).send({ error: 'Choose a backup file to import.' });
+    // Checked before the file is written: a refused upload is drained, not kept.
+    const pinCheck = await checkAdminPin(db, part.fields?.pin?.value);
+    if (!pinCheck.ok) {
+      part.file.resume();
+      return refusePin(reply, pinCheck, 'The admin PIN is needed to restore a backup.');
+    }
 
     // Kept beside the database, on the data volume, rather than in the
     // container's temp folder: a backup can be large.

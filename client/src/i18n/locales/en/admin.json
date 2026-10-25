@@ -821,6 +821,8 @@
     "exported": "Backup downloaded.",
     "exportFailed": "The backup could not be downloaded.",
     "pinTitle": "Enter the admin PIN to download a backup",
+    "pinTitleImport": "Enter the admin PIN to restore a backup",
+    "pinTitleRollback": "Enter the admin PIN to roll back the restore",
     "wrongPin": "Incorrect PIN. Please try again.",
     "importHeading": "Restore from a backup",
     "importHelp": "Choose a backup file (.tar.gz) made here or by Google Drive backup. It is checked first, your current data is saved so you can roll back, and nothing changes until HomeGlow restarts.",

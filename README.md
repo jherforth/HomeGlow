@@ -122,9 +122,18 @@ Create HTML widgets with theme support. See `server/widgets/README.md` for detai
 
 ## 🔒 Security
 
+**HomeGlow is not secure, and it is not designed to be exposed to the internet.** It's a local-only app for a trusted home network. It has no logins or user accounts, so any device that can reach it can read and change its data.
+
+- **Keep it on your home network.** Don't port-forward it or publish it. To reach it away from home, connect to your network with a VPN (WireGuard, Tailscale).
+- **The admin PIN is tamper resistance, not access control.** It keeps household members who shouldn't make changes, such as children at a wall display or guests, out of the Admin Panel. It doesn't stop someone on your network who knows how to call HomeGlow's API directly.
+- **What HomeGlow does enforce:**
+  - downloading a backup, restoring one, and Home Assistant unlock actions need the PIN on the server too;
+  - wrong PINs are rate-limited;
+  - other websites can't use a browser on your network to read or change HomeGlow's data.
+
 DISCLAIMER: This project uses AI in its development process. While you are right to generally be skeptical about AI coding security, this project doesn't have any secure endpoints or credentials for AI to mishandle. Because there is no security implicitly or explicitly provided by this project, there cannot be any security failures from AI. When in doubt, don't expose services to the internet.
 
-**Reverse Proxy**: Use SSL terminators/Cloudflare for HTTPS and custom domains
+**Reverse Proxy**: A reverse proxy can add HTTPS and a custom name on your network. If yours reaches the internet (a Cloudflare Tunnel, for example), put a login in front of HomeGlow there, such as Cloudflare Access, because HomeGlow has none of its own.
 
 ## 🗂️ Data
 

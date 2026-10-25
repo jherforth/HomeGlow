@@ -150,8 +150,15 @@ the chore widget, stored as `choreWidgetSettings.soundEnabled` in that device's
 
 ## Security notes
 
-- HomeGlow has **no authentication** beyond the optional Admin PIN. Do not expose it
-  directly to the internet.
+- HomeGlow has **no authentication** and is built for a trusted home network. Do not
+  expose it to the internet.
+- The optional Admin PIN is tamper resistance, not access control: it guards the
+  Admin Panel on a display, and the server checks it only for backups, restores and
+  Home Assistant unlock actions. Wrong PINs are rate-limited (five free tries, then
+  a wait that doubles up to five minutes).
+- Writes from other websites are refused. A split frontend on another origin needs
+  that origin in `CORS_ORIGINS`.
 - For HTTPS / a custom domain, put it behind a reverse proxy (Nginx, Traefik,
-  Cloudflare Tunnel, etc.) and add your own access control.
+  Cloudflare Tunnel, etc.). If the proxy reaches the internet, add your own access
+  control in front of it.
 - Keep `ENCRYPTION_KEY` secret and stable.

@@ -190,6 +190,8 @@ const { listPluginsFromTree } = require('./utils/pluginStoreListing');
 const { PLUGIN_FRAME_TOUCH_SCRIPT } = require('./utils/pluginFrameTouch');
 const { pluginFrameShimScript } = require('./utils/pluginFrameShims');
 const pluginRequestPolicy = require('./utils/pluginRequestPolicy');
+const { isCrossSiteWrite } = require('./utils/crossSiteWrites');
+const adminPin = require('./utils/adminPin');
 const { sqliteUtcToIso, sqliteUtcToMs } = require('./utils/sqliteTime');
 const {
   DEVICE_NAME_RULE_MESSAGE,
@@ -645,6 +647,13 @@ fastify.addHook('onRequest', async (request, reply) => {
   }
   request.pluginCaller = decision.subject;
   return undefined;
+});
+
+// A form or multipart POST from another website reaches the API without
+// asking, CORS or not (utils/crossSiteWrites.js).
+fastify.addHook('onRequest', async (request, reply) => {
+  if (!isCrossSiteWrite(request, isAllowedApiOrigin)) return undefined;
+  return reply.status(403).send({ error: 'HomeGlow accepts changes only from its own pages.' });
 });
 
 fastify.register(multipart, {
@@ -7238,17 +7247,7 @@ fastify.post('/api/admin-pin/set', async (request, reply) => {
   }
 
   try {
-    const pinHash = crypto.createHash('sha256').update(pin).digest('hex');
-    const existingPin = db.prepare('SELECT id FROM admin_pin WHERE id = 1').get();
-
-    if (existingPin) {
-      const stmt = db.prepare('UPDATE admin_pin SET pin_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1');
-      stmt.run(pinHash);
-    } else {
-      const stmt = db.prepare('INSERT INTO admin_pin (id, pin_hash) VALUES (1, ?)');
-      stmt.run(pinHash);
-    }
-
+    await adminPin.setAdminPin(db, pin);
     return { success: true, message: 'PIN set successfully' };
   } catch (error) {
     console.error('Error setting PIN:', error);
@@ -7276,16 +7275,13 @@ fastify.post('/api/admin-pin/verify', async (request, reply) => {
   }
 
   try {
-    const storedPin = db.prepare('SELECT pin_hash FROM admin_pin WHERE id = 1').get();
-
-    if (!storedPin) {
+    const result = await adminPin.checkAdminPin(db, pin);
+    if (result.noPin) {
       return reply.status(404).send({ error: 'No PIN configured' });
     }
-
-    const pinHash = crypto.createHash('sha256').update(pin).digest('hex');
-    const isValid = pinHash === storedPin.pin_hash;
-
-    return { valid: isValid };
+    // Wrong guesses count toward one limit (utils/adminPin.js).
+    if (result.reason === 'locked') return adminPin.refusePin(reply, result);
+    return { valid: result.ok };
   } catch (error) {
     console.error('Error verifying PIN:', error);
     reply.status(500).send({ error: 'Failed to verify PIN' });

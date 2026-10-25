@@ -7,6 +7,7 @@ import { CloudUpload, Refresh, Schedule, SettingsBackupRestore, Key } from '@mui
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import PinModal from './PinModal';
+import { useAdminPinPrompt } from '../hooks/useAdminPinPrompt.js';
 
 // Google Drive backup, as part of Backup & restore (BackupRestoreSection, in
 // System → Connections; shown once a Google account is connected). Nightly or
@@ -24,6 +25,10 @@ export default function GoogleDriveBackupSection({ restore = {}, onRestoreChange
   const [timezone, setTimezone] = useState('');
 
   const [confirmFile, setConfirmFile] = useState(null);
+  // Staging a restore and downloading a backup's key ask for the admin PIN
+  // when one is set, even on a display that remembers it; the server checks
+  // it too.
+  const { ask: askPin, pinModalProps } = useAdminPinPrompt({ wrongPin: 'Incorrect PIN. Please try again.' });
 
   const fetchConfigAndBackups = useCallback(async () => {
     setLoading(true);
@@ -72,14 +77,17 @@ export default function GoogleDriveBackupSection({ restore = {}, onRestoreChange
     }
   };
 
-  const handleConfirmRestore = async () => {
+  const handleConfirmRestore = () => {
     const file = confirmFile;
     setConfirmFile(null);
-    if (!file) return;
+    if (file) void askPin('Enter the admin PIN to restore this backup', (pin) => stageRestore(file, pin));
+  };
+
+  const stageRestore = async (file, pin) => {
     setLoading(true);
     setMessage(null);
     try {
-      await axios.post(`${API_BASE_URL}/api/backup/drive/restore/stage`, { fileId: file.id });
+      await axios.post(`${API_BASE_URL}/api/backup/drive/restore/stage`, { fileId: file.id, ...(pin ? { pin } : {}) });
       setMessage({
         type: 'success',
         text: `Restore of "${file.name}" is staged and verified. Restart HomeGlow to apply it.`
@@ -91,11 +99,6 @@ export default function GoogleDriveBackupSection({ restore = {}, onRestoreChange
       setLoading(false);
     }
   };
-
-  // The key unlocks every stored credential, so the server asks for the
-  // admin PIN (when one is set) before handing it over, even on a device
-  // that remembers the PIN for the rest of the panel.
-  const [keyPinOpen, setKeyPinOpen] = useState(false);
 
   const saveBackupKey = async (fileId, pin) => {
     const res = await axios.post(
@@ -113,32 +116,17 @@ export default function GoogleDriveBackupSection({ restore = {}, onRestoreChange
     URL.revokeObjectURL(url);
   };
 
-  const handleDownloadBackupKey = async () => {
+  // The key unlocks every stored credential.
+  const handleDownloadBackupKey = () => {
     const file = confirmFile;
     if (!file) return;
-    try {
-      const { data } = await axios.get(`${API_BASE_URL}/api/admin-pin/exists`);
-      if (data?.exists === true) {
-        setKeyPinOpen(true);
-        return;
+    void askPin('Enter the admin PIN to download the encryption key', async (pin) => {
+      try {
+        await saveBackupKey(file.id, pin);
+      } catch (err) {
+        setMessage({ type: 'error', text: 'That backup does not contain an encryption key, or it could not be downloaded.' });
       }
-      await saveBackupKey(file.id);
-    } catch (err) {
-      setMessage({ type: 'error', text: 'That backup does not contain an encryption key, or it could not be downloaded.' });
-    }
-  };
-
-  const handleKeyPin = async (pin) => {
-    const file = confirmFile;
-    if (!file) return;
-    try {
-      await saveBackupKey(file.id, pin);
-      setKeyPinOpen(false);
-    } catch (err) {
-      if (err.response?.status === 403) throw new Error('Incorrect PIN. Please try again.');
-      setKeyPinOpen(false);
-      setMessage({ type: 'error', text: 'That backup does not contain an encryption key, or it could not be downloaded.' });
-    }
+    });
   };
 
   const formatFileDate = (isoString) => {
@@ -267,12 +255,7 @@ export default function GoogleDriveBackupSection({ restore = {}, onRestoreChange
           </Button>
         </DialogActions>
       </Dialog>
-      <PinModal
-        open={keyPinOpen}
-        onClose={() => setKeyPinOpen(false)}
-        onVerify={handleKeyPin}
-        title="Enter the admin PIN to download the encryption key"
-      />
+      <PinModal {...pinModalProps} />
     </Box>
   );
 }
