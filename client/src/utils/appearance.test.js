@@ -265,25 +265,3 @@ describe('normalizeDimming', () => {
     expect(resolved.source.dimming).toBe('household');
   });
 });
-
-describe('legacyLocalAppearance dimming seed', () => {
-  it('seeds dimming from the old kiosk keys, enabled when a level was stored', () => {
-    const local = legacyLocalAppearance(storage({ 'hg-dim': '0.7', 'hg-dim-night': '0.03', 'hg-dim-after': '20' }));
-    expect(local).toEqual({ dimming: { ...DEFAULT_DIMMING, enabled: true, day: 0.7, night: 0.03, after: 20 } });
-  });
-
-  it('seeds dimming even after the theme already migrated', () => {
-    const local = legacyLocalAppearance(storage({ appearanceMigrated: '1', 'hg-dim': '0.6' }));
-    expect(local).toEqual({ dimming: { ...DEFAULT_DIMMING, enabled: true, day: 0.6, night: 0.6 } });
-  });
-
-  it('does not seed from the delay alone, and stops after the dim marker', () => {
-    expect(legacyLocalAppearance(storage({ 'hg-dim-after': '20' }))).toBeNull();
-    expect(legacyLocalAppearance(storage({ dimmingMigrated: '1', 'hg-dim': '0.6' }))).toBeNull();
-  });
-
-  it('uploads only the dimming override when the household already matches the rest', () => {
-    const local = legacyLocalAppearance(storage({ 'hg-dim': '0.6' }));
-    expect(overridesFrom(local, {})).toEqual({ dimming: { ...DEFAULT_DIMMING, enabled: true, day: 0.6, night: 0.6 } });
-  });
-});

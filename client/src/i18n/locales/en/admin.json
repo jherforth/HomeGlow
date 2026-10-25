@@ -616,6 +616,7 @@
       "day": "Daytime brightness",
       "night": "Nighttime brightness",
       "after": "Idle seconds before dimming",
+      "nightHours": "Night hours",
       "nightStart": "Night starts (hour)",
       "nightEnd": "Night ends (hour)",
       "nightHelp": "The nighttime level applies from the start hour until the end hour (the end hour itself is daytime again, and the window may cross midnight). Set both hours the same to keep the daytime level all day."

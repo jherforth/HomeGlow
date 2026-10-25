@@ -3,7 +3,7 @@ import {
   activeDimTarget,
   initDisplayDim,
   isNightAt,
-  resolveDimmingConfig,
+  setDimmingPaused,
   updateDisplayDimming,
 } from './displayDim.js';
 import { DEFAULT_DIMMING } from './appearance.js';
@@ -29,6 +29,19 @@ describe('isNightAt', () => {
     expect(isNightAt(6, 6, atHour(3))).toBe(false);
     expect(isNightAt(6, 6, atHour(6))).toBe(false);
   });
+
+  it('reads the hour in the household timezone, not the device clock', () => {
+    // 08:00 UTC on Jan 1 is midnight in Los Angeles (PST, UTC-8) — inside
+    // the 00:00-06:00 window there, outside it in UTC.
+    const morningUtc = new Date(Date.UTC(2026, 0, 1, 8, 0, 0));
+    expect(isNightAt(0, 6, morningUtc, 'America/Los_Angeles')).toBe(true);
+    expect(isNightAt(0, 6, morningUtc, 'UTC')).toBe(false);
+  });
+
+  it('falls back to local hours for a zone Intl does not know', () => {
+    const date = new Date(Date.UTC(2026, 0, 1, 8, 0, 0));
+    expect(isNightAt(0, 6, date, 'Bogus/Zone')).toBe(isNightAt(0, 6, date));
+  });
 });
 
 describe('activeDimTarget', () => {
@@ -42,46 +55,20 @@ describe('activeDimTarget', () => {
     expect(activeDimTarget(config, atHour(12))).toBe(0.7);
     expect(activeDimTarget(config, atHour(2))).toBe(0.03);
   });
-});
 
-describe('resolveDimmingConfig', () => {
-  it('uses the settings as-is when no URL parameters are present', () => {
-    expect(resolveDimmingConfig({ settings: { enabled: true, day: 0.5 }, search: '' }))
-      .toEqual({ ...DEFAULT_DIMMING, enabled: true, day: 0.5 });
-  });
-
-  it('is disabled by default', () => {
-    expect(resolveDimmingConfig({})).toEqual(DEFAULT_DIMMING);
-  });
-
-  it('layers URL parameters on top of the settings and enables dimming', () => {
-    const config = resolveDimmingConfig({
-      settings: { enabled: false, day: 0.5, night: 0.1, after: 30, nightStart: 1, nightEnd: 5 },
-      search: '?dim=0.6&dimAfter=10',
-    });
-    expect(config).toEqual({
-      enabled: true, day: 0.6, night: 0.1, after: 10, nightStart: 1, nightEnd: 5,
-    });
-  });
-
-  it('ignores malformed URL values instead of breaking', () => {
-    const config = resolveDimmingConfig({ settings: { enabled: true }, search: '?dim=bright&nightStart=ten' });
-    expect(config.day).toBe(DEFAULT_DIMMING.day);
-    expect(config.nightStart).toBe(DEFAULT_DIMMING.nightStart);
-    expect(config.enabled).toBe(true);
-  });
-
-  it('clamps URL levels and hours', () => {
-    const config = resolveDimmingConfig({ search: '?dim=2&dimNight=-1&nightStart=30' });
-    expect(config.day).toBe(1);
-    expect(config.night).toBe(0);
-    expect(config.nightStart).toBe(23);
+  it('picks the level by the household timezone hour', () => {
+    const config = { ...DEFAULT_DIMMING, enabled: true, day: 0.7, night: 0.03, nightStart: 0, nightEnd: 6 };
+    const morningUtc = new Date(Date.UTC(2026, 0, 1, 8, 0, 0));
+    expect(activeDimTarget(config, morningUtc, 'America/Los_Angeles')).toBe(0.03);
+    expect(activeDimTarget(config, morningUtc, 'UTC')).toBe(0.7);
   });
 });
 
 describe('live dimming with a stubbed DOM', () => {
-  it('applies settings live and clears the filter when disabled', () => {
+  it('applies settings live, pauses while Admin is open, and wakes on plugin activity', () => {
     const el = { style: {}, classList: { toggle() {} } };
+    const listeners = {};
+    let tick;
     globalThis.document = {
       documentElement: el,
       body: { style: {}, appendChild() {} },
@@ -90,17 +77,40 @@ describe('live dimming with a stubbed DOM', () => {
       createElement: () => ({ style: {}, addEventListener() {} }),
     };
     globalThis.window = {
-      location: { search: '' },
-      addEventListener() {},
-      setInterval: () => 1,
+      addEventListener: (type, fn) => { listeners[type] = fn; },
+      setInterval: (fn) => { tick = fn; return 1; },
     };
 
     initDisplayDim();
     // Enabled with a zero delay dims immediately. An equal start/end window
     // never counts as night, so the day target applies whatever time the
     // test runs at.
-    updateDisplayDimming({ enabled: true, day: 0.7, night: 0.03, after: 0, nightStart: 6, nightEnd: 6 });
+    const immediate = { enabled: true, day: 0.7, night: 0.03, after: 0, nightStart: 6, nightEnd: 6 };
+    updateDisplayDimming(immediate);
     expect(el.style.filter).toBe('brightness(0.7)');
+
+    // Pausing (Admin open) undims at once, and the interval tick while
+    // paused leaves it undimmed.
+    setDimmingPaused(true);
+    expect(el.style.filter).toBe('');
+    tick();
+    expect(el.style.filter).toBe('');
+    // Unpausing restarts the idle clock, so it stays undimmed until the
+    // next tick, when the zero delay dims again.
+    setDimmingPaused(false);
+    expect(el.style.filter).toBe('');
+    tick();
+    expect(el.style.filter).toBe('brightness(0.7)');
+
+    // A plugin frame reporting use wakes the panel; any other message type
+    // does not.
+    listeners.message({ data: { type: 'homeglow:activity' } });
+    expect(el.style.filter).toBe('');
+    updateDisplayDimming(immediate);
+    expect(el.style.filter).toBe('brightness(0.7)');
+    listeners.message({ data: { type: 'homeglow:frame-activity' } });
+    expect(el.style.filter).toBe('brightness(0.7)');
+
     // Disabling clears the filter without a reload.
     updateDisplayDimming({ enabled: false });
     expect(el.style.filter).toBe('');

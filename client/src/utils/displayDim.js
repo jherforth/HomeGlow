@@ -12,18 +12,10 @@
 //
 // Configuration lives in the appearance settings (household default plus
 // per-display override, see utils/appearance.js) and is applied live by
-// updateDisplayDimming() whenever the resolved appearance changes. Kiosk
-// URL query parameters still work as a temporary override on top of the
-// settings, so existing kiosk launch URLs keep working during transition:
-//   ?dim=0.6        daytime target brightness (0-1)
-//   ?dimNight=0.08  night target brightness
-//   ?nightStart=0   night window start hour, local time
-//   ?nightEnd=6     night window end hour, local time
-//   ?dimAfter=20    idle seconds before dimming (0 = always)
-// Any dim parameter present also enables dimming for this session, even if
-// the settings have it off. Live tuning from devtools: hgSetDim(0.6) sets a
-// runtime day level, hgSetDim() clears the runtime override (settings win
-// again); unlike the old localStorage build it does not persist.
+// updateDisplayDimming() whenever the resolved appearance changes. The
+// night window is read in the household timezone (passed in by app.jsx),
+// not the device's own clock, so a display set to another zone still dims
+// on the household's night.
 //
 // While dimmed, the page background is forced black (unpainted canvas
 // would otherwise show as a bright edge) and scrollbars are hidden
@@ -31,82 +23,60 @@
 // Wake detection uses a transparent full-screen shield while dimmed:
 // plugin widgets render in iframes whose pointer events never reach this
 // document, but the shield sits above them and catches the first tap.
+// Activity inside a plugin frame while NOT dimmed reaches the parent as a
+// `homeglow:activity` postMessage (see server/utils/pluginFrameTouch.js),
+// so using a plugin counts as use and holds the dim off.
+//
+// Dimming pauses while the Admin Panel is open (app.jsx calls
+// setDimmingPaused): Admin must stay readable, and saving settings there
+// counts as activity, so the timer restarts from Admin closing.
 
 import { DEFAULT_DIMMING, normalizeDimming } from './appearance.js';
 
-// Effective config: the resolved settings, with any URL parameters present
-// layered on top. Pure, so it is unit-testable without a DOM.
-export function resolveDimmingConfig({ settings, search = '' } = {}) {
-  const base = normalizeDimming(settings);
-  let params = null;
+// The hour of `date` in `timeZone` (0-23), or the device's own hour when no
+// zone is given or the zone is not one Intl knows. Pure, for tests.
+export function hourInZone(date, timeZone) {
+  if (!timeZone) return date.getHours();
   try {
-    params = new URLSearchParams(search);
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', hourCycle: 'h23' }).formatToParts(date);
+    const hour = parts.find((part) => part.type === 'hour');
+    const h = hour ? parseInt(hour.value, 10) : NaN;
+    return Number.isFinite(h) ? h % 24 : date.getHours();
   } catch {
-    params = null;
+    return date.getHours();
   }
-  if (!params) return base;
-  const has = (name) => params.get(name) !== null;
-  if (!has('dim') && !has('dimNight') && !has('dimAfter') && !has('nightStart') && !has('nightEnd')) {
-    return base;
-  }
-  const level = (name) => {
-    const v = parseFloat(params.get(name));
-    return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : undefined;
-  };
-  const hour = (name) => {
-    const v = parseInt(params.get(name), 10);
-    return Number.isFinite(v) ? Math.min(23, Math.max(0, v)) : undefined;
-  };
-  const after = params.get('dimAfter');
-  const afterValue = after === null ? undefined : parseFloat(after);
-  return normalizeDimming({
-    ...base,
-    enabled: true,
-    ...(level('dim') !== undefined ? { day: level('dim') } : {}),
-    ...(level('dimNight') !== undefined ? { night: level('dimNight') } : {}),
-    ...(Number.isFinite(afterValue) && afterValue >= 0 ? { after: afterValue } : {}),
-    ...(hour('nightStart') !== undefined ? { nightStart: hour('nightStart') } : {}),
-    ...(hour('nightEnd') !== undefined ? { nightEnd: hour('nightEnd') } : {}),
-  });
 }
 
 // Pure night-window test: start inclusive, end exclusive; a window whose
-// start and end are equal never applies. Wraps past midnight.
-export function isNightAt(nightStart, nightEnd, date = new Date()) {
+// start and end are equal never applies. Wraps past midnight. The hour is
+// read in `timeZone` when given (the household zone), else local time.
+export function isNightAt(nightStart, nightEnd, date = new Date(), timeZone) {
   if (nightStart === nightEnd) return false;
-  const h = date.getHours();
+  const h = hourInZone(date, timeZone);
   if (nightStart < nightEnd) return h >= nightStart && h < nightEnd;
   return h >= nightStart || h < nightEnd;
 }
 
 // The brightness target right now, or null when dimming is off.
-export function activeDimTarget(config, now = new Date()) {
+export function activeDimTarget(config, now = new Date(), timeZone) {
   if (!config || !config.enabled) return null;
-  return isNightAt(config.nightStart, config.nightEnd, now) ? config.night : config.day;
+  return isNightAt(config.nightStart, config.nightEnd, now, timeZone) ? config.night : config.day;
 }
 
 let config = { ...DEFAULT_DIMMING };
-let runtimeDay = null;
+let timeZone;
 let dimmed = false;
 let lastActivity = Date.now();
 let shield = null;
 let started = false;
-let settingsApplied = false;
+let adminPaused = false;
 
-function searchString() {
-  try {
-    return window.location.search;
-  } catch {
-    return '';
-  }
-}
-
-// The live target: a devtools runtime level wins for the day target only;
-// the night level, window, and delay always come from the config.
+// The live target: the night level inside the household night window, else
+// the day level.
 function liveTarget(now = new Date()) {
   if (!config.enabled) return null;
-  if (isNightAt(config.nightStart, config.nightEnd, now)) return config.night;
-  return runtimeDay ?? config.day;
+  if (isNightAt(config.nightStart, config.nightEnd, now, timeZone)) return config.night;
+  return config.day;
 }
 
 function render() {
@@ -167,12 +137,20 @@ function poke() {
   if (dimmed) setDimmed(false);
 }
 
-// Apply the resolved appearance dimming, live. URL parameters still win
-// per-field (see resolveDimmingConfig). Saving in Admin counts as
-// activity, so a freshly enabled dimming never fires instantly.
-export function updateDisplayDimming(settings) {
-  config = resolveDimmingConfig({ settings, search: searchString() });
-  settingsApplied = true;
+// A plugin frame reporting use (see server/utils/pluginFrameTouch.js).
+// The message carries nothing sensitive, and plugins are household
+// installed, so the type alone is enough to count it as activity.
+function onPluginActivity(event) {
+  if (event?.data?.type === 'homeglow:activity') poke();
+}
+
+// Apply the resolved appearance dimming, live. `timeZone` is the household
+// zone for the night window; once set it sticks until a new one arrives.
+// Saving in Admin counts as activity, so a freshly enabled dimming never
+// fires instantly.
+export function updateDisplayDimming(settings, zone) {
+  config = normalizeDimming(settings);
+  if (zone !== undefined) timeZone = zone;
   lastActivity = Date.now();
   if (!started) return;
   if (liveTarget() == null) setDimmed(false);
@@ -180,33 +158,32 @@ export function updateDisplayDimming(settings) {
   else setDimmed(false);
 }
 
-// Devtools tuning: a runtime day level (null clears it, settings win again).
-export function applyDim(v) {
-  const parsed = v == null ? null : parseFloat(v);
-  runtimeDay = Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : null;
-  if (started) {
-    if (liveTarget() == null) setDimmed(false);
-    else if (config.after === 0) setDimmed(true);
-    else render();
+// Pause the idle timer while the Admin Panel is open: Admin must stay
+// readable. If dimming somehow fired already, opening Admin undims at
+// once; closing restarts the idle clock from zero, so dimming resumes
+// only after a full idle delay.
+export function setDimmingPaused(paused) {
+  adminPaused = paused;
+  if (paused) {
+    if (dimmed) setDimmed(false);
+  } else {
+    lastActivity = Date.now();
   }
 }
 
 export function initDisplayDim() {
   if (started) return;
   started = true;
-  // URL overrides apply immediately at boot, before settings have loaded;
-  // updateDisplayDimming() re-resolves with settings once they arrive. If
-  // settings already arrived first, keep them instead of re-resolving.
-  if (!settingsApplied) config = resolveDimmingConfig({ settings: undefined, search: searchString() });
   ensureStyle();
   ensureShield();
-  window.hgSetDim = (v) => applyDim(v == null ? null : v);
   for (const ev of ['pointerdown', 'touchstart', 'keydown', 'wheel']) {
     window.addEventListener(ev, poke, { passive: true, capture: true });
   }
+  window.addEventListener('message', onPluginActivity);
   lastActivity = Date.now();
   if (liveTarget() != null && config.after === 0) setDimmed(true);
   window.setInterval(() => {
+    if (adminPaused) return;
     if (!dimmed && liveTarget() != null && Date.now() - lastActivity >= config.after * 1000) {
       setDimmed(true);
     } else if (dimmed) {

@@ -38,7 +38,6 @@ import {
 } from './utils/interfaceSettings.js';
 import {
   APPEARANCE_SETTING_KEY,
-  LEGACY_DIMMING_MIGRATED_KEY,
   LEGACY_MIGRATED_KEY,
   activeTemporaryTheme,
   dockToggleAction,
@@ -59,7 +58,8 @@ import {
   themeTokens,
 } from './utils/themes.js';
 import { personalizationTokens } from './utils/personalize.js';
-import { updateDisplayDimming } from './utils/displayDim.js';
+import { updateDisplayDimming, setDimmingPaused } from './utils/displayDim.js';
+import { getServerTimezoneSync } from './utils/timezone.js';
 import { THEME_TOKENS_APPLIED_EVENT } from './utils/pluginThemeBridge.js';
 import { loadInstalledThemes, useThemeRegistry } from './utils/installedThemes.js';
 import { useWeatherCondition, useWeatherScenePreview } from './utils/useWeatherCondition.js';
@@ -873,9 +873,9 @@ const App = () => {
   // Dimming follows the resolved appearance live: saving in Admin refetches
   // both settings levels (see the interface-settings-updated listener), the
   // appearance memo recomputes, and this applies the new dimming without a
-  // reload. URL parameters still win per-field inside updateDisplayDimming.
+  // reload. The night window is read in the household timezone.
   useEffect(() => {
-    if (appearanceReady) updateDisplayDimming(appearance.dimming);
+    if (appearanceReady) updateDisplayDimming(appearance.dimming, getServerTimezoneSync());
   }, [appearanceReady, appearance.dimming]);
 
   // One-time upload of this browser's pre-cascade appearance as the display's
@@ -897,13 +897,10 @@ const App = () => {
           hydrateFromDeviceSettings(response.data || {});
         }
         // The old keys stay, so rolling back to a pre-cascade build still
-        // finds this display's look; each part sets only its own marker, so
-        // a theme migrated long ago does not block the dimming seed.
+        // finds this display's look; the theme marker is set once the
+        // theme fields upload.
         if (local.mode !== undefined || local.colors !== undefined || local.autoDark !== undefined) {
           localStorage.setItem(LEGACY_MIGRATED_KEY, '1');
-        }
-        if (local.dimming !== undefined) {
-          localStorage.setItem(LEGACY_DIMMING_MIGRATED_KEY, '1');
         }
       } catch (error) {
         // Left in place; the next load tries again.
@@ -1002,6 +999,12 @@ const App = () => {
 
   useEffect(() => {
     dockIdleRef.current?.setSuspended(showAdminPanel);
+  }, [showAdminPanel]);
+
+  // Dimming pauses while Admin is open, like the dock idle timer above:
+  // Admin must stay readable, and the idle clock restarts from closing.
+  useEffect(() => {
+    setDimmingPaused(showAdminPanel);
   }, [showAdminPanel]);
 
   // Two fingers swiped sideways change the tab, and pinch zoom can be blocked

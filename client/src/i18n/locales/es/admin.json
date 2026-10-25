@@ -616,6 +616,7 @@
       "day": "Brillo diurno",
       "night": "Brillo nocturno",
       "after": "Segundos sin actividad antes de atenuar",
+      "nightHours": "Horas nocturnas",
       "nightStart": "La noche empieza (hora)",
       "nightEnd": "La noche termina (hora)",
       "nightHelp": "El nivel nocturno se aplica desde la hora de inicio hasta la hora de fin (la propia hora de fin ya es diurna, y el intervalo puede cruzar la medianoche). Pon ambas horas iguales para mantener el nivel diurno todo el día."

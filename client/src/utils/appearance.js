@@ -51,13 +51,6 @@ export const LEGACY_THEME_MODE_KEY = 'themeMode';
 export const LEGACY_COLORS_KEY = 'interfaceColors';
 export const LEGACY_AUTO_DARK_KEY = 'autoDarkModeSettings';
 export const LEGACY_MIGRATED_KEY = 'appearanceMigrated';
-// The pre-settings kiosk dimming keys (see utils/displayDim.js). Dimming has
-// its own marker because a display may have migrated its theme long before
-// dimming became a setting, and the theme marker must not block the dim seed.
-export const LEGACY_DIM_KEY = 'hg-dim';
-export const LEGACY_DIM_NIGHT_KEY = 'hg-dim-night';
-export const LEGACY_DIM_AFTER_KEY = 'hg-dim-after';
-export const LEGACY_DIMMING_MIGRATED_KEY = 'dimmingMigrated';
 export const APPEARANCE_CACHE_KEY = 'appearanceCache';
 
 const isObject = (value) => !!value && typeof value === 'object' && !Array.isArray(value);
@@ -164,8 +157,6 @@ export function overridesFrom(appearance, household) {
 /**
  * This browser's pre-cascade appearance, or null when there is nothing to
  * upload: already migrated, or a browser that never stored any of it.
- * Theme and dimming migrate independently: each has its own marker, so a
- * display that migrated its theme long ago still seeds its kiosk dimming.
  */
 export function legacyLocalAppearance(storage) {
   const read = (key) => {
@@ -191,23 +182,6 @@ export function legacyLocalAppearance(storage) {
       out.mode = MODES.includes(storedMode) ? storedMode : theme;
       out.colors = normalizeInterfaceColors(parseMaybeJson(read(LEGACY_COLORS_KEY)) || {});
       if (isObject(storedAutoDark)) out.autoDark = normalizeAutoDarkModeSettings(storedAutoDark);
-    }
-  }
-
-  // A stored dim level meant dimming was on: the kiosk wrote a level only
-  // when it dimmed. The idle delay seeds too; the night window was URL-only
-  // before settings, so it takes the defaults.
-  if (!read(LEGACY_DIMMING_MIGRATED_KEY)) {
-    const day = parseFloat(read(LEGACY_DIM_KEY));
-    const night = parseFloat(read(LEGACY_DIM_NIGHT_KEY));
-    if (Number.isFinite(day) || Number.isFinite(night)) {
-      const after = parseFloat(read(LEGACY_DIM_AFTER_KEY));
-      out.dimming = normalizeDimming({
-        enabled: true,
-        day: Number.isFinite(day) ? day : night,
-        night: Number.isFinite(night) ? night : day,
-        ...(Number.isFinite(after) ? { after } : {}),
-      });
     }
   }
 

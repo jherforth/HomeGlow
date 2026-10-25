@@ -8,7 +8,6 @@ import {
   FormControlLabel,
   MenuItem,
   Select,
-  Slider,
   Switch,
   TextField,
   ToggleButton,
@@ -25,15 +24,14 @@ import { getDeviceApiBase, getDeviceName } from '../utils/deviceName.js';
 import {
   APPEARANCE_FIELDS,
   APPEARANCE_SETTING_KEY,
-  DEFAULT_DIMMING,
   MODES,
   normalizeDeviceAppearance,
   normalizeHouseholdAppearance,
   pruneMatchingOverrides,
   resolveAppearance,
 } from '../utils/appearance.js';
+import { saveAppearanceFields } from '../utils/appearanceSave.js';
 import { resolveTheme } from '../utils/themes.js';
-import { formatHourOfDay } from '../utils/dateUtils.js';
 import { useThemeRegistry } from '../utils/installedThemes.js';
 import { pickWeatherScene, weatherScenesOf } from '../utils/weatherScenes.js';
 import { PREVIEW_MS, setWeatherScenePreview, useWeatherScenePreview } from '../utils/useWeatherCondition.js';
@@ -160,13 +158,6 @@ const AppearanceSettings = () => {
     return { ...autoDark, enabled: true, locationQuery: query, lat: data.lat, lon: data.lon, resolvedName: data.resolvedName || query };
   };
 
-  const saveHousehold = (appearance) => axios.post(`${API_BASE_URL}/api/settings`, {
-    key: APPEARANCE_SETTING_KEY,
-    value: JSON.stringify(appearance),
-  });
-
-  const saveDevice = (overrides) => axios.patch(`${apiDeviceUrl}/settings`, { appearance: overrides });
-
   const finish = async (text) => {
     window.dispatchEvent(new Event(INTERFACE_SETTINGS_UPDATED_EVENT));
     await load();
@@ -175,11 +166,15 @@ const AppearanceSettings = () => {
 
   // A location that cannot be looked up must not cost the rest of the save:
   // theme, mode and colors are saved, and the auto-mode location stays as it
-  // was, with the reason shown.
+  // was, with the reason shown. Dimming is not written here at all: it has
+  // its own card (DisplayDimmingSettings), and saves go through
+  // saveAppearanceFields, which re-reads the stored appearance first — so
+  // saving dimming, then saving here without reloading, leaves the dimming
+  // setting exactly as saved.
   const save = async () => {
     setSaving(true);
     try {
-      let fields = APPEARANCE_FIELDS.filter((field) => scope === 'household' || !inherit[field]);
+      let fields = APPEARANCE_FIELDS.filter((field) => field !== 'dimming' && (scope === 'household' || !inherit[field]));
       let next = { ...draft };
       let locationProblem = null;
       if (fields.includes('autoDark')) {
@@ -192,11 +187,9 @@ const AppearanceSettings = () => {
           else fields = fields.filter((field) => field !== 'autoDark');
         }
       }
-      if (scope === 'household') {
-        await saveHousehold(next);
-      } else {
-        await saveDevice(Object.fromEntries(fields.map((field) => [field, next[field]])));
-      }
+      await saveAppearanceFields(scope, Object.fromEntries(fields.map((field) => [field, next[field]])), {
+        useHousehold: scope === 'device' ? APPEARANCE_FIELDS.filter((field) => field !== 'dimming' && inherit[field]) : [],
+      });
       await finish(t('admin:appearance.saved'));
       if (locationProblem) flash('warning', t('admin:appearance.savedButLocation', { reason: locationProblem }));
     } catch (error) {
@@ -209,12 +202,18 @@ const AppearanceSettings = () => {
 
   // This display's look becomes the household's; other displays drop the
   // overrides that now match it, so they follow the household from here on.
+  // Dimming is not part of this: it has its own card, so the household's
+  // dimming and every display's dimming override are left exactly as they
+  // are, and only this card's fields move.
   const makeHouseholdDefault = async () => {
     setSaving(true);
     try {
-      const nextHousehold = pickFields(resolveAppearance(household, device));
-      await saveHousehold(nextHousehold);
-      await saveDevice({});
+      const fields = pickFields(resolveAppearance(household, device));
+      delete fields.dimming;
+      await saveAppearanceFields('household', fields);
+      const newHousehold = { ...household, ...fields };
+      const keepDimming = device.dimming ? { dimming: device.dimming } : {};
+      await axios.patch(`${apiDeviceUrl}/settings`, { appearance: keepDimming });
       const thisDevice = getDeviceName();
       const { data: devices } = await axios.get(`${API_BASE_URL}/api/devices`);
       for (const { name } of Array.isArray(devices) ? devices : []) {
@@ -222,7 +221,8 @@ const AppearanceSettings = () => {
         const base = `${API_BASE_URL}/api/devices/${encodeURIComponent(name)}`;
         const { data } = await axios.get(`${base}/settings`);
         const current = normalizeDeviceAppearance(data?.appearance);
-        const pruned = pruneMatchingOverrides(current, nextHousehold);
+        const pruned = pruneMatchingOverrides(current, newHousehold);
+        if (current.dimming) pruned.dimming = current.dimming;
         if (JSON.stringify(pruned) !== JSON.stringify(current)) {
           await axios.patch(`${base}/settings`, { appearance: pruned });
         }
@@ -422,91 +422,6 @@ const AppearanceSettings = () => {
         inheritSwitch={inheritSwitch}
         onError={(text) => flash('error', text)}
       />
-
-      {/* Idle dimming: a CSS brightness filter for wall panels whose
-          backlight floor is still too bright. Levels are percentages of
-          full brightness; the night level applies inside the night window. */}
-      <Typography variant="subtitle2">{t('admin:appearance.dimming.heading')}</Typography>
-      {inheritSwitch('dimming')}
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
-        {t('admin:appearance.dimming.help')}
-      </Typography>
-      <FormControlLabel
-        control={(
-          <Switch
-            checked={draft.dimming?.enabled ?? DEFAULT_DIMMING.enabled}
-            disabled={locked('dimming')}
-            onChange={(e) => updateDraft('dimming', { ...(draft.dimming ?? DEFAULT_DIMMING), enabled: e.target.checked })}
-          />
-        )}
-        label={t('admin:appearance.dimming.enabled')}
-        sx={{ mb: 2, display: 'block' }}
-      />
-      <Typography variant="body2" sx={{ fontWeight: 600 }}>{t('admin:appearance.dimming.day')} — {Math.round((draft.dimming?.day ?? DEFAULT_DIMMING.day) * 100)}%</Typography>
-      <Box sx={{ px: 3, maxWidth: 460 }}>
-        <Slider
-          value={Math.round((draft.dimming?.day ?? DEFAULT_DIMMING.day) * 100)}
-          min={0}
-          max={100}
-          step={5}
-          disabled={locked('dimming')}
-          valueLabelDisplay="auto"
-          valueLabelFormat={(v) => `${v}%`}
-          onChange={(_, v) => updateDraft('dimming', { ...(draft.dimming ?? DEFAULT_DIMMING), day: v / 100 })}
-          aria-label={t('admin:appearance.dimming.day')}
-        />
-      </Box>
-      <Typography variant="body2" sx={{ fontWeight: 600 }}>{t('admin:appearance.dimming.night')} — {Math.round((draft.dimming?.night ?? DEFAULT_DIMMING.night) * 100)}%</Typography>
-      <Box sx={{ px: 3, maxWidth: 460, mb: 2 }}>
-        <Slider
-          value={Math.round((draft.dimming?.night ?? DEFAULT_DIMMING.night) * 100)}
-          min={0}
-          max={100}
-          step={5}
-          disabled={locked('dimming')}
-          valueLabelDisplay="auto"
-          valueLabelFormat={(v) => `${v}%`}
-          onChange={(_, v) => updateDraft('dimming', { ...(draft.dimming ?? DEFAULT_DIMMING), night: v / 100 })}
-          aria-label={t('admin:appearance.dimming.night')}
-        />
-      </Box>
-      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 1 }}>
-        <TextField
-          type="number"
-          size="small"
-          label={t('admin:appearance.dimming.after')}
-          value={draft.dimming?.after ?? DEFAULT_DIMMING.after}
-          disabled={locked('dimming')}
-          slotProps={{ htmlInput: { min: 0, step: 1 } }}
-          onChange={(e) => updateDraft('dimming', { ...(draft.dimming ?? DEFAULT_DIMMING), after: e.target.value })}
-          sx={{ width: 200 }}
-        />
-        <TextField
-          type="number"
-          size="small"
-          label={t('admin:appearance.dimming.nightStart')}
-          value={draft.dimming?.nightStart ?? DEFAULT_DIMMING.nightStart}
-          disabled={locked('dimming')}
-          helperText={formatHourOfDay(draft.dimming?.nightStart ?? DEFAULT_DIMMING.nightStart)}
-          slotProps={{ htmlInput: { min: 0, max: 23, step: 1 } }}
-          onChange={(e) => updateDraft('dimming', { ...(draft.dimming ?? DEFAULT_DIMMING), nightStart: e.target.value })}
-          sx={{ width: 200 }}
-        />
-        <TextField
-          type="number"
-          size="small"
-          label={t('admin:appearance.dimming.nightEnd')}
-          value={draft.dimming?.nightEnd ?? DEFAULT_DIMMING.nightEnd}
-          disabled={locked('dimming')}
-          helperText={formatHourOfDay(draft.dimming?.nightEnd ?? DEFAULT_DIMMING.nightEnd)}
-          slotProps={{ htmlInput: { min: 0, max: 23, step: 1 } }}
-          onChange={(e) => updateDraft('dimming', { ...(draft.dimming ?? DEFAULT_DIMMING), nightEnd: e.target.value })}
-          sx={{ width: 200 }}
-        />
-      </Box>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 3 }}>
-        {t('admin:appearance.dimming.nightHelp')}
-      </Typography>
 
       <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
         <Button variant="contained" startIcon={<Save />} onClick={save} disabled={saving}>
