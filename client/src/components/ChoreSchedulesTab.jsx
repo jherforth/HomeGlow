@@ -877,7 +877,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
                       : <Typography variant="caption" color="text.secondary">—</Typography>}
                   </TableCell>
                   <TableCell data-label={t('chores:schedules.schedulesColumn')}>
-                    <Tooltip title={getScheduleCountForChore(c.id) === 0 ? t('chores:schedules.addScheduleForChore') : t('chores:schedules.viewSchedules')}>
+                    <Tooltip describeChild title={getScheduleCountForChore(c.id) === 0 ? t('chores:schedules.addScheduleForChore') : t('chores:schedules.viewSchedules')}>
                       <Chip
                         label={`${getScheduleCountForChore(c.id)} schedule${getScheduleCountForChore(c.id) !== 1 ? 's' : ''}`}
                         size="small"
@@ -910,7 +910,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
       {/* ── SCHEDULES ────────────────────────────────────── */}
       <Box ref={schedulesSectionRef} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5, scrollMarginTop: 8 }}>
         <Typography variant="h6">{t('chores:schedules.schedulesColumn')}</Typography>
-        <Button startIcon={<Add />} onClick={openCreateSchedule} variant="contained" size="small">
+        <Button startIcon={<Add />} onClick={() => openCreateSchedule()} variant="contained" size="small">
           {t('chores:schedules.newSchedule')}
         </Button>
       </Box>
