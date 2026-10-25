@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -361,11 +361,27 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
     });
   };
 
-  const openCreateSchedule = () => {
+  const openCreateSchedule = (choreId) => {
     setEditingSchedule(null);
-    setScheduleForm(defaultScheduleForm);
+    setScheduleForm(choreId ? { ...defaultScheduleForm, chore_id: choreId } : defaultScheduleForm);
     setCrontabError(null);
     setScheduleDialogOpen(true);
+  };
+
+  // The schedules count chip in each definition row is a shortcut, not a
+  // statistic: with schedules it filters the schedules table below to that
+  // chore (clearing the user filter, which could otherwise hide them) and
+  // scrolls it into view; with none it opens the new-schedule dialog with
+  // the chore already picked, since there is nothing to scroll to.
+  const schedulesSectionRef = useRef(null);
+  const handleScheduleCountClick = (chore) => {
+    if (getScheduleCountForChore(chore.id) === 0) {
+      openCreateSchedule(chore.id);
+      return;
+    }
+    setFilterUser('');
+    setFilterChore(chore.id);
+    schedulesSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const openEditSchedule = (schedule) => {
@@ -864,11 +880,14 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
                       : <Typography variant="caption" color="text.secondary">—</Typography>}
                   </TableCell>
                   <TableCell data-label={t('chores:schedules.schedulesColumn')}>
-                    <Chip
-                      label={`${getScheduleCountForChore(c.id)} schedule${getScheduleCountForChore(c.id) !== 1 ? 's' : ''}`}
-                      size="small"
-                      variant="outlined"
-                    />
+                    <Tooltip describeChild title={getScheduleCountForChore(c.id) === 0 ? t('chores:schedules.addScheduleForChore') : t('chores:schedules.viewSchedules')}>
+                      <Chip
+                        label={`${getScheduleCountForChore(c.id)} schedule${getScheduleCountForChore(c.id) !== 1 ? 's' : ''}`}
+                        size="small"
+                        variant="outlined"
+                        onClick={() => handleScheduleCountClick(c)}
+                      />
+                    </Tooltip>
                   </TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', gap: 0.5 }}>
@@ -892,9 +911,9 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
       </TableContainer>
 
       {/* ── SCHEDULES ────────────────────────────────────── */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+      <Box ref={schedulesSectionRef} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5, scrollMarginTop: 8 }}>
         <Typography variant="h6">{t('chores:schedules.schedulesColumn')}</Typography>
-        <Button startIcon={<Add />} onClick={openCreateSchedule} variant="contained" size="small">
+        <Button startIcon={<Add />} onClick={() => openCreateSchedule()} variant="contained" size="small">
           {t('chores:schedules.newSchedule')}
         </Button>
       </Box>

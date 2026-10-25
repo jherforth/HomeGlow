@@ -184,6 +184,8 @@
     "editChore": "Editar tarea",
     "deleteChoreAndSchedules": "Eliminar la tarea y todas sus programaciones",
     "newSchedule": "Nueva programación",
+    "viewSchedules": "Ver las programaciones de esta tarea",
+    "addScheduleForChore": "Añadir una programación para esta tarea",
     "schedulesHelp": "Las programaciones vinculan tareas con personas e indican cuándo se repiten. Una tarea puede tener varias programaciones para distintas personas o frecuencias.",
     "filterByUser": "Filtrar por persona",
     "allUsers": "Todas las personas",
