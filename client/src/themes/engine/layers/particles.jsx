@@ -22,10 +22,14 @@ function Particles({ options, assets, random, mode }) {
         seconds,
         delay: -random() * (motion === 'twinkle' ? 6 : seconds),
         drift: (random() - 0.5) * 2 * draw(random, options.drift ?? 40),
-        sway: draw(random, options.sway ?? 0),
-        swaySeconds: draw(random, options.swaySeconds ?? [3, 6]),
-        blur: draw(random, options.blur ?? 0),
         color: options.colors ? pick(random, options.colors) : '#ffffff',
+        // Drawn after color, and only when the theme sets them: a range
+        // default here would consume a draw and reshuffle every existing
+        // particle layer's seeded layout, which the per-layer seeds exist
+        // to keep stable.
+        sway: options.sway === undefined ? 0 : draw(random, options.sway),
+        swaySeconds: options.sway === undefined ? 0 : draw(random, options.swaySeconds ?? [3, 6]),
+        blur: options.blur === undefined ? 0 : draw(random, options.blur),
       };
     });
   }, [options, random, motion]);
@@ -40,22 +44,20 @@ function Particles({ options, assets, random, mode }) {
       : motion === 'fall' ? { top: -item.size - 10 } : { bottom: -item.size - 10 };
     const keyframes = motion === 'twinkle' ? twinkle : motion === 'fall' ? fall : rise;
     const fallAnimation = `${keyframes} ${item.seconds.toFixed(2)}s ${motion === 'twinkle' ? 'ease-in-out' : 'linear'} ${item.delay.toFixed(2)}s infinite${motion === 'twinkle' ? ' alternate' : ''}`;
-    const inner = (
-      <Box
-        sx={{
-          width: item.sway > 0 ? '100%' : item.size,
-          height: item.sway > 0 ? '100%' : item.size,
-          ...look,
-          opacity: motion === 'twinkle' ? undefined : options.opacity ?? 1,
-          ...(item.blur > 0 ? { filter: `blur(${item.blur.toFixed(1)}px)` } : {}),
-          '--drift': `${Math.round(item.drift)}px`,
-          animation: fallAnimation,
-          willChange: 'transform, opacity',
-          ...reducedMotion,
-        }}
-      />
-    );
+    const innerSx = {
+      width: item.sway > 0 ? '100%' : item.size,
+      height: item.sway > 0 ? '100%' : item.size,
+      ...look,
+      opacity: motion === 'twinkle' ? undefined : options.opacity ?? 1,
+      ...(item.blur > 0 ? { filter: `blur(${item.blur.toFixed(1)}px)` } : {}),
+      '--drift': `${Math.round(item.drift)}px`,
+      animation: fallAnimation,
+      willChange: 'transform, opacity',
+      ...reducedMotion,
+    };
+    const inner = <Box sx={innerSx} />;
     if (item.sway <= 0) {
+      // No sway wrapper: the item itself carries the inner look, positioned.
       return (
         <Box
           key={i}
@@ -63,15 +65,7 @@ function Particles({ options, assets, random, mode }) {
             position: 'absolute',
             left: `${item.left}%`,
             ...where,
-            width: item.size,
-            height: item.size,
-            ...look,
-            opacity: motion === 'twinkle' ? undefined : options.opacity ?? 1,
-            ...(item.blur > 0 ? { filter: `blur(${item.blur.toFixed(1)}px)` } : {}),
-            '--drift': `${Math.round(item.drift)}px`,
-            animation: fallAnimation,
-            willChange: 'transform, opacity',
-            ...reducedMotion,
+            ...innerSx,
           }}
         />
       );
