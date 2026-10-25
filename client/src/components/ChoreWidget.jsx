@@ -37,6 +37,7 @@ import { useTranslation } from 'react-i18next';
 import LoadingBackdrop from './LoadingBackdrop';
 import PinModal from './PinModal';
 import { API_BASE_URL } from '../utils/apiConfig.js';
+import { editWholeNumber, savedWholeNumber } from '../utils/wholeNumberField.js';
 import { pinErrorText } from '../utils/pinErrors.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
 import { fetchPinRemembered, setPinRemembered, shouldPromptForPin } from '../utils/adminPinDevice.js';
@@ -965,7 +966,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
       const choreResponse = await axios.post(`${API_BASE_URL}/api/chores`, {
         title: newChore.title,
         description: newChore.description,
-        clam_value: newChore.clam_value,
+        clam_value: savedWholeNumber(newChore.clam_value),
         icon: newChore.icon
       });
 
@@ -1942,7 +1943,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
               type="number"
               label={t('chores:add.clamValue')}
               value={newChore.clam_value}
-              onChange={(e) => setNewChore({ ...newChore, clam_value: parseInt(e.target.value) || 0 })}
+              onChange={(e) => setNewChore({ ...newChore, clam_value: editWholeNumber(e.target.value) })}
             />
           </DialogContent>
           <DialogActions>

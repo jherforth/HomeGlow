@@ -80,6 +80,7 @@ import HomeAssistantPanels from './HomeAssistantPanels';
 import ThemeLibrary from './ThemeLibrary';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
+import { editWholeNumber, savedWholeNumber } from '../utils/wholeNumberField.js';
 import { pinErrorText } from '../utils/pinErrors.js';
 import { revealTabPicker } from '../utils/revealTabPicker.js';
 import { getDeviceApiBase, getDeviceName, setDeviceName, isValidDeviceName } from '../utils/deviceName.js';
@@ -1565,9 +1566,9 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
       setIsLoading(true);
       if (editingPrize) {
         // repeatable is stored as 0/1; the API expects a boolean.
-        await axios.patch(`${API_BASE_URL}/api/prizes/${editingPrize.id}`, { ...editingPrize, repeatable: !!editingPrize.repeatable });
+        await axios.patch(`${API_BASE_URL}/api/prizes/${editingPrize.id}`, { ...editingPrize, clam_cost: savedWholeNumber(editingPrize.clam_cost), repeatable: !!editingPrize.repeatable });
       } else {
-        await axios.post(`${API_BASE_URL}/api/prizes`, { ...newPrize, repeatable: !!newPrize.repeatable });
+        await axios.post(`${API_BASE_URL}/api/prizes`, { ...newPrize, clam_cost: savedWholeNumber(newPrize.clam_cost), repeatable: !!newPrize.repeatable });
         setNewPrize({ name: '', clam_cost: 0, repeatable: false, description: '' });
       }
       setEditingPrize(null);
@@ -3759,7 +3760,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                       label={t('admin:prizes.cost')}
                       type="number"
                       value={newPrize.clam_cost}
-                      onChange={(e) => setNewPrize({ ...newPrize, clam_cost: parseInt(e.target.value) || 0 })}
+                      onChange={(e) => setNewPrize({ ...newPrize, clam_cost: editWholeNumber(e.target.value) })}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 3 }}>
@@ -3817,7 +3818,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                           label={t('admin:prizes.cost')}
                           type="number"
                           value={editingPrize.clam_cost}
-                          onChange={(e) => setEditingPrize({ ...editingPrize, clam_cost: parseInt(e.target.value) || 0 })}
+                          onChange={(e) => setEditingPrize({ ...editingPrize, clam_cost: editWholeNumber(e.target.value) })}
                           sx={{ width: { xs: '100%', sm: 120 } }}
                         />
                         <Tooltip title={t('admin:prizes.repeatableShortTooltip')}>

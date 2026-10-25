@@ -47,6 +47,7 @@ import {
 } from '@mui/icons-material';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
+import { editWholeNumber, savedWholeNumber } from '../utils/wholeNumberField.js';
 import { CronExpressionParser } from 'cron-parser';
 import { getServerTimezoneSync } from '../utils/timezone.js';
 import SoundPicker from './SoundPicker.jsx';
@@ -568,16 +569,18 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
     const formError = followupFormError();
     if (formError) { setFollowupError(formError); return; }
     setSavingChore(true);
+    // A cleared clam field edits as ''; the server gets 0 for it, as before.
+    const chorePayload = { ...choreForm, clam_value: savedWholeNumber(choreForm.clam_value) };
     let choreId = editingChore?.id;
     try {
       if (editingChore) {
-        await axios.patch(`${API_BASE_URL}/api/chores/${editingChore.id}`, choreForm);
+        await axios.patch(`${API_BASE_URL}/api/chores/${editingChore.id}`, chorePayload);
       } else {
-        const res = await axios.post(`${API_BASE_URL}/api/chores`, choreForm);
+        const res = await axios.post(`${API_BASE_URL}/api/chores`, chorePayload);
         choreId = res.data?.id;
         // Saved: from here on this dialog is editing it, so a follow-up
         // problem below can be fixed and saved again without a duplicate.
-        if (choreId) setEditingChore({ id: choreId, ...choreForm });
+        if (choreId) setEditingChore({ id: choreId, ...chorePayload });
       }
     } catch (err) {
       showMessage('error', err.response?.data?.error || 'Failed to save chore.');
@@ -1085,7 +1088,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
               label={t('chores:schedules.clamValue')}
               type="number"
               value={choreForm.clam_value}
-              onChange={(e) => setChoreForm(f => ({ ...f, clam_value: parseInt(e.target.value) || 0 }))}
+              onChange={(e) => setChoreForm(f => ({ ...f, clam_value: editWholeNumber(e.target.value) }))}
               slotProps={{ htmlInput: { min: 0 } }}
               sx={{ width: { xs: '100%', sm: 140 } }}
             />
