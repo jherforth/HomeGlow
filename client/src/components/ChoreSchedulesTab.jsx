@@ -47,6 +47,7 @@ import {
 } from '@mui/icons-material';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
+import { editWholeNumber, savedWholeNumber } from '../utils/wholeNumberField.js';
 import { CronExpressionParser } from 'cron-parser';
 import { getServerTimezoneSync } from '../utils/timezone.js';
 import SoundPicker from './SoundPicker.jsx';
@@ -568,9 +569,8 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
     const formError = followupFormError();
     if (formError) { setFollowupError(formError); return; }
     setSavingChore(true);
-    // A cleared clam field edits as '' (see the input above); the server
-    // gets 0 for it, as before.
-    const chorePayload = { ...choreForm, clam_value: Number(choreForm.clam_value) || 0 };
+    // A cleared clam field edits as ''; the server gets 0 for it, as before.
+    const chorePayload = { ...choreForm, clam_value: savedWholeNumber(choreForm.clam_value) };
     let choreId = editingChore?.id;
     try {
       if (editingChore) {
@@ -1088,10 +1088,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
               label={t('chores:schedules.clamValue')}
               type="number"
               value={choreForm.clam_value}
-              // Keep the raw empty string while editing: parseInt('') is NaN,
-              // so `|| 0` snapped a cleared field straight back to 0 and the
-              // zero could never be backspaced. Coerced to 0 on save below.
-              onChange={(e) => setChoreForm(f => ({ ...f, clam_value: e.target.value === '' ? '' : (parseInt(e.target.value) || 0) }))}
+              onChange={(e) => setChoreForm(f => ({ ...f, clam_value: editWholeNumber(e.target.value) }))}
               slotProps={{ htmlInput: { min: 0 } }}
               sx={{ width: { xs: '100%', sm: 140 } }}
             />
