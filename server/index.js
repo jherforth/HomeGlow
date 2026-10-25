@@ -697,18 +697,6 @@ fastify.register(require('@fastify/static'), {
   decorateReply: false
 });
 
-// Inter, bundled for plugins: a plugin frame loads /index.css, whose
-// @font-face points at these files. The frontend image serves the same
-// files from client/public/fonts/ (containers), but the backend image
-// never contains client/ files, so dev frames - which load from the
-// backend origin - need this copy. Same bytes, same license; see
-// server/fonts/README.md.
-fastify.register(require('@fastify/static'), {
-  root: path.join(__dirname, 'fonts'),
-  prefix: '/fonts/',
-  decorateReply: false
-});
-
 // Widget filenames are restricted to this charset at upload/install time; the
 // serve route enforces the same rule so encoded ../ segments can never reach
 // the disk-fallback path.join below (path traversal guard).

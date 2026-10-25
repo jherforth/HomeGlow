@@ -67,13 +67,10 @@ const PLUGIN_POSTS = [
 const READ_METHODS = new Set(['GET', 'HEAD']);
 
 // Public files a plugin frame fetches in CORS mode without being able to add
-// a header: a theme's fonts, which the SDK registers with FontFace, and the
-// bundled Inter files /index.css points at (a sandboxed frame has an opaque
-// origin since #320, so a font fetch is always CORS mode). GET only, and no
-// token needed.
+// a header: a theme's fonts, which the SDK registers with FontFace. GET only,
+// and no token needed.
 const PUBLIC_ROUTES = [
   /^\/api\/themes\/[^/]+\/[^/]+\/[^/]+$/,
-  /^\/fonts\/[^/]+$/,
 ];
 
 const sign = (secret, subject) => crypto.createHmac('sha256', secret).update(subject).digest('base64url');

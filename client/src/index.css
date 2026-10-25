@@ -1,26 +1,10 @@
 @import './themes/classic.css';
 
-/* Inter, bundled with the app (public/fonts/, SIL Open Font License).
-   The dashboard theme and the Date & Clock widget both name Inter, but
-   nothing shipped it, so a display without Inter installed fell back to
-   whatever its system sans was. These faces load from the app itself, so
-   every client renders the same font with no host install and no
-   third-party request. Plugins get them too: they link this sheet as
-   /index.css. Variable fonts: one file covers every weight. */
-@font-face {
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url('/fonts/inter-roman.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Inter';
-  font-style: italic;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url('/fonts/inter-italic.woff2') format('woff2');
-}
+/* No @font-face here, deliberately: plugin frames link this sheet as
+   /index.css, and a frame's opaque origin (since #320) cannot share the
+   dashboard's font cache, so any face declared here would be
+   re-downloaded on every plugin load. The dashboard's Inter lives in
+   fonts.css, imported by main.jsx and bundled into hashed assets. */
 :root {
   --primary: #9E7FFF;
   --secondary: #38bdf8;

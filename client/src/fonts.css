@@ -1,0 +1,27 @@
+/* Inter, bundled with the app (SIL Open Font License, see assets/fonts/OFL.txt).
+   The dashboard theme and the Date & Clock widget both name Inter, but
+   nothing shipped it, so a display without Inter installed fell back to
+   whatever its system sans was. These faces load from the app itself, so
+   every dashboard renders the same font with no host install and no
+   third-party request. Variable fonts: one file covers every weight.
+
+   Dashboard only, deliberately: this sheet is imported by main.jsx, so
+   Vite bundles the files below into hashed assets the dashboard fetches
+   once and serves from cache on reload. Plugin frames never load this
+   sheet — they link /index.css, which carries no @font-face — because a
+   frame's opaque origin (since #320) cannot share the dashboard's font
+   cache and re-downloaded the files on every load. */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./assets/fonts/inter-roman.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./assets/fonts/inter-italic.woff2') format('woff2');
+}

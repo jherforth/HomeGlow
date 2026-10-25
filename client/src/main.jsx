@@ -2,6 +2,7 @@ import React, { lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
 import axios from 'axios';
 import './index.css';
+import './fonts.css';
 import { initTimezone, watchServerTimezone } from './utils/timezone.js';
 import { initI18n, getStoredLanguage } from './i18n/index.js';
 import { API_BASE_URL } from './utils/apiConfig.js';

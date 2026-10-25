@@ -1,5 +1,9 @@
 # HomeGlow v 1.10 Changelog
 
+## Unreleased
+
+- **Dashboard font:** the dashboard now renders in Inter, bundled with the app, instead of each display's system sans — so every household sees the intended type with no host install. Plugin frames no longer load the font: their opaque origins can't share the dashboard's font cache and re-downloaded it on every load.
+
 ## 🎉 Recent Updates
 
 The biggest HomeGlow release yet: 87 changes from four contributors.
