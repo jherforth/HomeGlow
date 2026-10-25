@@ -8,6 +8,7 @@ import {
   FormControlLabel,
   MenuItem,
   Select,
+  Slider,
   Switch,
   TextField,
   ToggleButton,
@@ -24,6 +25,7 @@ import { getDeviceApiBase, getDeviceName } from '../utils/deviceName.js';
 import {
   APPEARANCE_FIELDS,
   APPEARANCE_SETTING_KEY,
+  DEFAULT_DIMMING,
   MODES,
   normalizeDeviceAppearance,
   normalizeHouseholdAppearance,
@@ -419,6 +421,89 @@ const AppearanceSettings = () => {
         inheritSwitch={inheritSwitch}
         onError={(text) => flash('error', text)}
       />
+
+      {/* Idle dimming: a CSS brightness filter for wall panels whose
+          backlight floor is still too bright. Levels are percentages of
+          full brightness; the night level applies inside the night window. */}
+      <Typography variant="subtitle2">{t('admin:appearance.dimming.heading')}</Typography>
+      {inheritSwitch('dimming')}
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+        {t('admin:appearance.dimming.help')}
+      </Typography>
+      <FormControlLabel
+        control={(
+          <Switch
+            checked={draft.dimming?.enabled ?? DEFAULT_DIMMING.enabled}
+            disabled={locked('dimming')}
+            onChange={(e) => updateDraft('dimming', { ...(draft.dimming ?? DEFAULT_DIMMING), enabled: e.target.checked })}
+          />
+        )}
+        label={t('admin:appearance.dimming.enabled')}
+        sx={{ mb: 2, display: 'block' }}
+      />
+      <Typography variant="body2" sx={{ fontWeight: 600 }}>{t('admin:appearance.dimming.day')}</Typography>
+      <Box sx={{ px: 3, maxWidth: 460 }}>
+        <Slider
+          value={Math.round((draft.dimming?.day ?? DEFAULT_DIMMING.day) * 100)}
+          min={0}
+          max={100}
+          step={5}
+          disabled={locked('dimming')}
+          valueLabelDisplay="auto"
+          valueLabelFormat={(v) => `${v}%`}
+          onChange={(_, v) => updateDraft('dimming', { ...(draft.dimming ?? DEFAULT_DIMMING), day: v / 100 })}
+          aria-label={t('admin:appearance.dimming.day')}
+        />
+      </Box>
+      <Typography variant="body2" sx={{ fontWeight: 600 }}>{t('admin:appearance.dimming.night')}</Typography>
+      <Box sx={{ px: 3, maxWidth: 460, mb: 2 }}>
+        <Slider
+          value={Math.round((draft.dimming?.night ?? DEFAULT_DIMMING.night) * 100)}
+          min={0}
+          max={100}
+          step={5}
+          disabled={locked('dimming')}
+          valueLabelDisplay="auto"
+          valueLabelFormat={(v) => `${v}%`}
+          onChange={(_, v) => updateDraft('dimming', { ...(draft.dimming ?? DEFAULT_DIMMING), night: v / 100 })}
+          aria-label={t('admin:appearance.dimming.night')}
+        />
+      </Box>
+      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 1 }}>
+        <TextField
+          type="number"
+          size="small"
+          label={t('admin:appearance.dimming.after')}
+          value={draft.dimming?.after ?? DEFAULT_DIMMING.after}
+          disabled={locked('dimming')}
+          slotProps={{ htmlInput: { min: 0, step: 1 } }}
+          onChange={(e) => updateDraft('dimming', { ...(draft.dimming ?? DEFAULT_DIMMING), after: e.target.value })}
+          sx={{ width: 200 }}
+        />
+        <TextField
+          type="number"
+          size="small"
+          label={t('admin:appearance.dimming.nightStart')}
+          value={draft.dimming?.nightStart ?? DEFAULT_DIMMING.nightStart}
+          disabled={locked('dimming')}
+          slotProps={{ htmlInput: { min: 0, max: 23, step: 1 } }}
+          onChange={(e) => updateDraft('dimming', { ...(draft.dimming ?? DEFAULT_DIMMING), nightStart: e.target.value })}
+          sx={{ width: 200 }}
+        />
+        <TextField
+          type="number"
+          size="small"
+          label={t('admin:appearance.dimming.nightEnd')}
+          value={draft.dimming?.nightEnd ?? DEFAULT_DIMMING.nightEnd}
+          disabled={locked('dimming')}
+          slotProps={{ htmlInput: { min: 0, max: 23, step: 1 } }}
+          onChange={(e) => updateDraft('dimming', { ...(draft.dimming ?? DEFAULT_DIMMING), nightEnd: e.target.value })}
+          sx={{ width: 200 }}
+        />
+      </Box>
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 3 }}>
+        {t('admin:appearance.dimming.nightHelp')}
+      </Typography>
 
       <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
         <Button variant="contained" startIcon={<Save />} onClick={save} disabled={saving}>

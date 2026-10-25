@@ -609,6 +609,17 @@
       "accent": "Color de acento"
     },
     "autoDark": "Ubicación del modo automático",
+    "dimming": {
+      "heading": "Atenuación de la pantalla",
+      "help": "Atenúa el propio panel tras un periodo sin interacción, para pantallas de pared cuyo brillo mínimo sigue siendo demasiado alto. La pantalla sigue activa, solo más oscura.",
+      "enabled": "Atenuar la pantalla cuando no se usa",
+      "day": "Brillo diurno",
+      "night": "Brillo nocturno",
+      "after": "Segundos sin actividad antes de atenuar",
+      "nightStart": "La noche empieza (hora)",
+      "nightEnd": "La noche termina (hora)",
+      "nightHelp": "El nivel nocturno se aplica desde la hora de inicio hasta la hora de fin (la propia hora de fin ya es diurna, y el intervalo puede cruzar la medianoche). Pon ambas horas iguales para mantener el nivel diurno todo el día."
+    },
     "resolvedLocation": "Usando {{name}}",
     "locationNotFound": "No se encontró la ubicación. Prueba con una ciudad, ciudad y estado, ciudad y país, o un código postal.",
     "saveDevice": "Guardar para esta pantalla",

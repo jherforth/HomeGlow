@@ -19,8 +19,20 @@ import { DEFAULT_THEME_ID } from './themes.js';
 import { normalizeBackground, normalizeCardOpacity } from './personalize.js';
 
 export const APPEARANCE_SETTING_KEY = 'appearance';
-export const APPEARANCE_FIELDS = ['theme', 'mode', 'colors', 'autoDark', 'background', 'cardOpacity'];
+export const APPEARANCE_FIELDS = ['theme', 'mode', 'colors', 'autoDark', 'background', 'cardOpacity', 'dimming'];
 export const MODES = ['light', 'dark', 'auto'];
+
+// Display dimming (see utils/displayDim.js): idle dimming via a CSS brightness
+// filter, for wall panels whose backlight floor is still too bright. Off by
+// default: a display only dims when its household or its own override says so.
+export const DEFAULT_DIMMING = {
+  enabled: false,
+  day: 0.7,
+  night: 0.03,
+  after: 20,
+  nightStart: 0,
+  nightEnd: 6,
+};
 
 export const DEFAULT_APPEARANCE = {
   theme: DEFAULT_THEME_ID,
@@ -30,6 +42,7 @@ export const DEFAULT_APPEARANCE = {
   // Personalization at its defaults leaves the theme as it is.
   background: { kind: 'none' },
   cardOpacity: 1,
+  dimming: { ...DEFAULT_DIMMING },
 };
 
 // Pre-cascade localStorage keys, and the marker set once they are uploaded.
@@ -38,6 +51,13 @@ export const LEGACY_THEME_MODE_KEY = 'themeMode';
 export const LEGACY_COLORS_KEY = 'interfaceColors';
 export const LEGACY_AUTO_DARK_KEY = 'autoDarkModeSettings';
 export const LEGACY_MIGRATED_KEY = 'appearanceMigrated';
+// The pre-settings kiosk dimming keys (see utils/displayDim.js). Dimming has
+// its own marker because a display may have migrated its theme long before
+// dimming became a setting, and the theme marker must not block the dim seed.
+export const LEGACY_DIM_KEY = 'hg-dim';
+export const LEGACY_DIM_NIGHT_KEY = 'hg-dim-night';
+export const LEGACY_DIM_AFTER_KEY = 'hg-dim-after';
+export const LEGACY_DIMMING_MIGRATED_KEY = 'dimmingMigrated';
 export const APPEARANCE_CACHE_KEY = 'appearanceCache';
 
 const isObject = (value) => !!value && typeof value === 'object' && !Array.isArray(value);
@@ -55,12 +75,32 @@ const parseMaybeJson = (raw) => {
 // server after this runs, and an id that isn't installed resolves to Classic.
 const THEME_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
+const clampNumber = (value, min, max, fallback) => {
+  const v = typeof value === 'number' ? value : parseFloat(value);
+  if (!Number.isFinite(v)) return fallback;
+  return Math.min(max, Math.max(min, v));
+};
+
+/** Dimming, normalized: levels clamp to 0..1, delay to >= 0s, hours to 0..23. */
+export function normalizeDimming(raw) {
+  if (!isObject(raw)) return { ...DEFAULT_DIMMING };
+  return {
+    enabled: Boolean(raw.enabled),
+    day: clampNumber(raw.day, 0, 1, DEFAULT_DIMMING.day),
+    night: clampNumber(raw.night, 0, 1, DEFAULT_DIMMING.night),
+    after: clampNumber(raw.after, 0, Number.POSITIVE_INFINITY, DEFAULT_DIMMING.after),
+    nightStart: Math.trunc(clampNumber(raw.nightStart, 0, 23, DEFAULT_DIMMING.nightStart)),
+    nightEnd: Math.trunc(clampNumber(raw.nightEnd, 0, 23, DEFAULT_DIMMING.nightEnd)),
+  };
+}
+
 const normalizeField = (field, value) => {
   if (field === 'theme') return typeof value === 'string' && THEME_ID.test(value) ? value : undefined;
   if (field === 'mode') return MODES.includes(value) ? value : undefined;
   if (field === 'background') return normalizeBackground(value);
   if (field === 'cardOpacity') return normalizeCardOpacity(value);
   if (!isObject(value)) return undefined;
+  if (field === 'dimming') return normalizeDimming(value);
   return field === 'colors' ? normalizeInterfaceColors(value) : normalizeAutoDarkModeSettings(value);
 };
 
@@ -124,6 +164,8 @@ export function overridesFrom(appearance, household) {
 /**
  * This browser's pre-cascade appearance, or null when there is nothing to
  * upload: already migrated, or a browser that never stored any of it.
+ * Theme and dimming migrate independently: each has its own marker, so a
+ * display that migrated its theme long ago still seeds its kiosk dimming.
  */
 export function legacyLocalAppearance(storage) {
   const read = (key) => {
@@ -133,23 +175,43 @@ export function legacyLocalAppearance(storage) {
       return null;
     }
   };
-  if (read(LEGACY_MIGRATED_KEY)) return null;
+  const out = {};
+
   // Not LEGACY_THEME_KEY: this app still writes it as its render cache, so a
   // new browser has it too. The old app only wrote it alongside themeMode.
-  const keys = [LEGACY_THEME_MODE_KEY, LEGACY_COLORS_KEY, LEGACY_AUTO_DARK_KEY];
-  if (!keys.some((key) => read(key) !== null)) return null;
+  if (!read(LEGACY_MIGRATED_KEY)) {
+    const keys = [LEGACY_THEME_MODE_KEY, LEGACY_COLORS_KEY, LEGACY_AUTO_DARK_KEY];
+    if (keys.some((key) => read(key) !== null)) {
+      // Same fallbacks the pre-cascade app used: no stored mode means the stored
+      // theme, and no stored theme means light. Mode and colors always shaped the
+      // look; the auto-dark location only did if this browser stored one.
+      const theme = read(LEGACY_THEME_KEY) === 'dark' ? 'dark' : 'light';
+      const storedMode = read(LEGACY_THEME_MODE_KEY);
+      const storedAutoDark = parseMaybeJson(read(LEGACY_AUTO_DARK_KEY));
+      out.mode = MODES.includes(storedMode) ? storedMode : theme;
+      out.colors = normalizeInterfaceColors(parseMaybeJson(read(LEGACY_COLORS_KEY)) || {});
+      if (isObject(storedAutoDark)) out.autoDark = normalizeAutoDarkModeSettings(storedAutoDark);
+    }
+  }
 
-  // Same fallbacks the pre-cascade app used: no stored mode means the stored
-  // theme, and no stored theme means light. Mode and colors always shaped the
-  // look; the auto-dark location only did if this browser stored one.
-  const theme = read(LEGACY_THEME_KEY) === 'dark' ? 'dark' : 'light';
-  const storedMode = read(LEGACY_THEME_MODE_KEY);
-  const storedAutoDark = parseMaybeJson(read(LEGACY_AUTO_DARK_KEY));
-  return {
-    mode: MODES.includes(storedMode) ? storedMode : theme,
-    colors: normalizeInterfaceColors(parseMaybeJson(read(LEGACY_COLORS_KEY)) || {}),
-    ...(isObject(storedAutoDark) ? { autoDark: normalizeAutoDarkModeSettings(storedAutoDark) } : {}),
-  };
+  // A stored dim level meant dimming was on: the kiosk wrote a level only
+  // when it dimmed. The idle delay seeds too; the night window was URL-only
+  // before settings, so it takes the defaults.
+  if (!read(LEGACY_DIMMING_MIGRATED_KEY)) {
+    const day = parseFloat(read(LEGACY_DIM_KEY));
+    const night = parseFloat(read(LEGACY_DIM_NIGHT_KEY));
+    if (Number.isFinite(day) || Number.isFinite(night)) {
+      const after = parseFloat(read(LEGACY_DIM_AFTER_KEY));
+      out.dimming = normalizeDimming({
+        enabled: true,
+        day: Number.isFinite(day) ? day : night,
+        night: Number.isFinite(night) ? night : day,
+        ...(Number.isFinite(after) ? { after } : {}),
+      });
+    }
+  }
+
+  return Object.keys(out).length ? out : null;
 }
 
 /** Drop a display's overrides that equal the household's, so it follows the household again. */

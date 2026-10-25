@@ -38,6 +38,7 @@ import {
 } from './utils/interfaceSettings.js';
 import {
   APPEARANCE_SETTING_KEY,
+  LEGACY_DIMMING_MIGRATED_KEY,
   LEGACY_MIGRATED_KEY,
   activeTemporaryTheme,
   dockToggleAction,
@@ -58,6 +59,7 @@ import {
   themeTokens,
 } from './utils/themes.js';
 import { personalizationTokens } from './utils/personalize.js';
+import { updateDisplayDimming } from './utils/displayDim.js';
 import { THEME_TOKENS_APPLIED_EVENT } from './utils/pluginThemeBridge.js';
 import { loadInstalledThemes, useThemeRegistry } from './utils/installedThemes.js';
 import { useWeatherCondition, useWeatherScenePreview } from './utils/useWeatherCondition.js';
@@ -868,6 +870,14 @@ const App = () => {
     }
   }, [appearanceReady, appearance]);
 
+  // Dimming follows the resolved appearance live: saving in Admin refetches
+  // both settings levels (see the interface-settings-updated listener), the
+  // appearance memo recomputes, and this applies the new dimming without a
+  // reload. URL parameters still win per-field inside updateDisplayDimming.
+  useEffect(() => {
+    if (appearanceReady) updateDisplayDimming(appearance.dimming);
+  }, [appearanceReady, appearance.dimming]);
+
   // One-time upload of this browser's pre-cascade appearance as the display's
   // overrides: only the fields that differ from the household, so the display
   // looks exactly as it did. A display that already has overrides keeps them.
@@ -887,8 +897,14 @@ const App = () => {
           hydrateFromDeviceSettings(response.data || {});
         }
         // The old keys stay, so rolling back to a pre-cascade build still
-        // finds this display's look; the marker stops a second upload.
-        localStorage.setItem(LEGACY_MIGRATED_KEY, '1');
+        // finds this display's look; each part sets only its own marker, so
+        // a theme migrated long ago does not block the dimming seed.
+        if (local.mode !== undefined || local.colors !== undefined || local.autoDark !== undefined) {
+          localStorage.setItem(LEGACY_MIGRATED_KEY, '1');
+        }
+        if (local.dimming !== undefined) {
+          localStorage.setItem(LEGACY_DIMMING_MIGRATED_KEY, '1');
+        }
       } catch (error) {
         // Left in place; the next load tries again.
         console.error('Error uploading appearance settings:', error);

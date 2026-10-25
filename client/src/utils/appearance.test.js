@@ -1,11 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_APPEARANCE,
+  DEFAULT_DIMMING,
   activeTemporaryTheme,
   dockToggleAction,
   legacyLocalAppearance,
   nextSunTransition,
   normalizeDeviceAppearance,
+  normalizeDimming,
   normalizeHouseholdAppearance,
   overridesFrom,
   pruneMatchingOverrides,
@@ -57,7 +59,7 @@ describe('resolveAppearance', () => {
     expect(resolved.colors).toEqual(BERRY);
     expect(resolved.source).toEqual({
       theme: 'household', mode: 'device', colors: 'household', autoDark: 'household',
-      background: 'household', cardOpacity: 'household',
+      background: 'household', cardOpacity: 'household', dimming: 'household',
     });
   });
 
@@ -228,5 +230,60 @@ describe('appearance cache', () => {
     const blocked = { getItem: () => { throw new Error('denied'); }, setItem: () => { throw new Error('denied'); } };
     expect(readAppearanceCache(blocked)).toEqual(DEFAULT_APPEARANCE);
     expect(() => writeAppearanceCache(blocked, DEFAULT_APPEARANCE)).not.toThrow();
+  });
+});
+
+describe('normalizeDimming', () => {
+  it('defaults everything when nothing is stored', () => {
+    expect(normalizeDimming(undefined)).toEqual(DEFAULT_DIMMING);
+    expect(normalizeHouseholdAppearance(undefined).dimming).toEqual(DEFAULT_DIMMING);
+  });
+
+  it('keeps valid values', () => {
+    expect(normalizeDimming({ enabled: true, day: 0.5, night: 0.1, after: 30, nightStart: 22, nightEnd: 7 }))
+      .toEqual({ enabled: true, day: 0.5, night: 0.1, after: 30, nightStart: 22, nightEnd: 7 });
+  });
+
+  it('clamps levels to 0..1, delay to >= 0, and hours to 0..23', () => {
+    expect(normalizeDimming({ day: 1.5, night: -0.2, after: -5, nightStart: 25, nightEnd: -1 }))
+      .toEqual({ ...DEFAULT_DIMMING, day: 1, night: 0, after: 0, nightStart: 23, nightEnd: 0 });
+  });
+
+  it('falls back to defaults for non-numeric values and coerces enabled', () => {
+    expect(normalizeDimming({ enabled: 'yes', day: 'bright', night: null, after: 'soon', nightStart: 'ten' }))
+      .toEqual({ ...DEFAULT_DIMMING, enabled: true });
+  });
+
+  it('is a device override only when the display sets it', () => {
+    expect(normalizeDeviceAppearance({})).toEqual({});
+    expect(normalizeDeviceAppearance({ dimming: { enabled: true } }).dimming.enabled).toBe(true);
+  });
+
+  it('resolves from the household unless the display overrides', () => {
+    const resolved = resolveAppearance({ dimming: { enabled: true, day: 0.5 } }, {});
+    expect(resolved.dimming).toEqual({ ...DEFAULT_DIMMING, enabled: true, day: 0.5 });
+    expect(resolved.source.dimming).toBe('household');
+  });
+});
+
+describe('legacyLocalAppearance dimming seed', () => {
+  it('seeds dimming from the old kiosk keys, enabled when a level was stored', () => {
+    const local = legacyLocalAppearance(storage({ 'hg-dim': '0.7', 'hg-dim-night': '0.03', 'hg-dim-after': '20' }));
+    expect(local).toEqual({ dimming: { ...DEFAULT_DIMMING, enabled: true, day: 0.7, night: 0.03, after: 20 } });
+  });
+
+  it('seeds dimming even after the theme already migrated', () => {
+    const local = legacyLocalAppearance(storage({ appearanceMigrated: '1', 'hg-dim': '0.6' }));
+    expect(local).toEqual({ dimming: { ...DEFAULT_DIMMING, enabled: true, day: 0.6, night: 0.6 } });
+  });
+
+  it('does not seed from the delay alone, and stops after the dim marker', () => {
+    expect(legacyLocalAppearance(storage({ 'hg-dim-after': '20' }))).toBeNull();
+    expect(legacyLocalAppearance(storage({ dimmingMigrated: '1', 'hg-dim': '0.6' }))).toBeNull();
+  });
+
+  it('uploads only the dimming override when the household already matches the rest', () => {
+    const local = legacyLocalAppearance(storage({ 'hg-dim': '0.6' }));
+    expect(overridesFrom(local, {})).toEqual({ dimming: { ...DEFAULT_DIMMING, enabled: true, day: 0.6, night: 0.6 } });
   });
 });
