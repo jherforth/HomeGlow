@@ -32,6 +32,13 @@
 // zoom. Thresholds mirror DOUBLE_TAP_MS, DOUBLE_TAP_SLOP and
 // INTERACTIVE_SELECTOR there.
 //
+// Separately from all of that, any use inside the frame — pointer, key or
+// wheel — is reported (at most once a second) as `homeglow:activity`, and
+// that reporting is always on, not gated on the settings message: the
+// dashboard's idle dimming (client/src/utils/displayDim.js) listens for it
+// so using a plugin counts as use and holds the dim off. It has no UI
+// effect of its own, unlike `homeglow:frame-activity`.
+//
 // Plain ES5 in an IIFE, inlined into <head>: it must run in any plugin, old or
 // new, with or without the SDK, and leave no globals behind.
 
@@ -66,6 +73,11 @@ function touchAction(mode){var s=document.documentElement.style;if(mode===touchM
 if(!touchMode)before=s.touchAction;s.touchAction=mode||before;touchMode=mode;}
 function tell(type){try{window.parent.postMessage({type:type},"*");}catch(x){}}
 function onDown(){var now=Date.now();if(now-lastActivity<1000)return;lastActivity=now;tell("homeglow:frame-activity");}
+var lastActivityPing=0;
+function onActivity(){var now=Date.now();if(now-lastActivityPing<1000)return;lastActivityPing=now;tell("homeglow:activity");}
+window.addEventListener("pointerdown",onActivity,{capture:true,passive:true});
+window.addEventListener("keydown",onActivity,{capture:true,passive:true});
+window.addEventListener("wheel",onActivity,{capture:true,passive:true});
 function dropHeld(){if(held){clearTimeout(held.timer);held=null;}}
 function replay(h){if(!h.t.isConnected)return;var r=new MouseEvent("click",{bubbles:true,cancelable:true,composed:true,clientX:h.x,clientY:h.y,detail:1,view:window});r[REPLAY]=true;h.t.dispatchEvent(r);}
 function flushHeld(){var h=held;dropHeld();if(h)replay(h);}

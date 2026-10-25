@@ -30,6 +30,7 @@ import {
   pruneMatchingOverrides,
   resolveAppearance,
 } from '../utils/appearance.js';
+import { saveAppearanceFields } from '../utils/appearanceSave.js';
 import { resolveTheme } from '../utils/themes.js';
 import { useThemeRegistry } from '../utils/installedThemes.js';
 import { pickWeatherScene, weatherScenesOf } from '../utils/weatherScenes.js';
@@ -157,13 +158,6 @@ const AppearanceSettings = () => {
     return { ...autoDark, enabled: true, locationQuery: query, lat: data.lat, lon: data.lon, resolvedName: data.resolvedName || query };
   };
 
-  const saveHousehold = (appearance) => axios.post(`${API_BASE_URL}/api/settings`, {
-    key: APPEARANCE_SETTING_KEY,
-    value: JSON.stringify(appearance),
-  });
-
-  const saveDevice = (overrides) => axios.patch(`${apiDeviceUrl}/settings`, { appearance: overrides });
-
   const finish = async (text) => {
     window.dispatchEvent(new Event(INTERFACE_SETTINGS_UPDATED_EVENT));
     await load();
@@ -172,11 +166,15 @@ const AppearanceSettings = () => {
 
   // A location that cannot be looked up must not cost the rest of the save:
   // theme, mode and colors are saved, and the auto-mode location stays as it
-  // was, with the reason shown.
+  // was, with the reason shown. Dimming is not written here at all: it has
+  // its own card (DisplayDimmingSettings), and saves go through
+  // saveAppearanceFields, which re-reads the stored appearance first — so
+  // saving dimming, then saving here without reloading, leaves the dimming
+  // setting exactly as saved.
   const save = async () => {
     setSaving(true);
     try {
-      let fields = APPEARANCE_FIELDS.filter((field) => scope === 'household' || !inherit[field]);
+      let fields = APPEARANCE_FIELDS.filter((field) => field !== 'dimming' && (scope === 'household' || !inherit[field]));
       let next = { ...draft };
       let locationProblem = null;
       if (fields.includes('autoDark')) {
@@ -189,11 +187,9 @@ const AppearanceSettings = () => {
           else fields = fields.filter((field) => field !== 'autoDark');
         }
       }
-      if (scope === 'household') {
-        await saveHousehold(next);
-      } else {
-        await saveDevice(Object.fromEntries(fields.map((field) => [field, next[field]])));
-      }
+      await saveAppearanceFields(scope, Object.fromEntries(fields.map((field) => [field, next[field]])), {
+        useHousehold: scope === 'device' ? APPEARANCE_FIELDS.filter((field) => field !== 'dimming' && inherit[field]) : [],
+      });
       await finish(t('admin:appearance.saved'));
       if (locationProblem) flash('warning', t('admin:appearance.savedButLocation', { reason: locationProblem }));
     } catch (error) {
@@ -206,12 +202,18 @@ const AppearanceSettings = () => {
 
   // This display's look becomes the household's; other displays drop the
   // overrides that now match it, so they follow the household from here on.
+  // Dimming is not part of this: it has its own card, so the household's
+  // dimming and every display's dimming override are left exactly as they
+  // are, and only this card's fields move.
   const makeHouseholdDefault = async () => {
     setSaving(true);
     try {
-      const nextHousehold = pickFields(resolveAppearance(household, device));
-      await saveHousehold(nextHousehold);
-      await saveDevice({});
+      const fields = pickFields(resolveAppearance(household, device));
+      delete fields.dimming;
+      await saveAppearanceFields('household', fields);
+      const newHousehold = { ...household, ...fields };
+      const keepDimming = device.dimming ? { dimming: device.dimming } : {};
+      await axios.patch(`${apiDeviceUrl}/settings`, { appearance: keepDimming });
       const thisDevice = getDeviceName();
       const { data: devices } = await axios.get(`${API_BASE_URL}/api/devices`);
       for (const { name } of Array.isArray(devices) ? devices : []) {
@@ -219,7 +221,8 @@ const AppearanceSettings = () => {
         const base = `${API_BASE_URL}/api/devices/${encodeURIComponent(name)}`;
         const { data } = await axios.get(`${base}/settings`);
         const current = normalizeDeviceAppearance(data?.appearance);
-        const pruned = pruneMatchingOverrides(current, nextHousehold);
+        const pruned = pruneMatchingOverrides(current, newHousehold);
+        if (current.dimming) pruned.dimming = current.dimming;
         if (JSON.stringify(pruned) !== JSON.stringify(current)) {
           await axios.patch(`${base}/settings`, { appearance: pruned });
         }

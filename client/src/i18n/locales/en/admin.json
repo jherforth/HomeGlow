@@ -617,6 +617,18 @@
       "accent": "Accent color"
     },
     "autoDark": "Auto mode location",
+    "dimming": {
+      "heading": "Display dimming",
+      "help": "Dims the dashboard itself after a period without interaction, for wall panels whose backlight is still too bright at its lowest setting. The screen stays live, just darker.",
+      "enabled": "Dim the display when idle",
+      "day": "Daytime brightness",
+      "night": "Nighttime brightness",
+      "after": "Idle seconds before dimming",
+      "nightHours": "Night hours",
+      "nightStart": "Night starts (hour)",
+      "nightEnd": "Night ends (hour)",
+      "nightHelp": "The nighttime level applies from the start hour until the end hour (the end hour itself is daytime again, and the window may cross midnight). Set both hours the same to keep the daytime level all day."
+    },
     "resolvedLocation": "Using {{name}}",
     "locationNotFound": "Location not found. Try a city, city and state, city and country, or ZIP code.",
     "saveDevice": "Save for this display",

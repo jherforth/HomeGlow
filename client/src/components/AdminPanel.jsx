@@ -76,6 +76,7 @@ import {
   ExpandMore
 } from '@mui/icons-material';
 import AppearanceSettings from './AppearanceSettings';
+import DisplayDimmingSettings from './DisplayDimmingSettings';
 import HomeAssistantPanels from './HomeAssistantPanels';
 import ThemeLibrary from './ThemeLibrary';
 import axios from 'axios';
@@ -2859,6 +2860,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
         <Card>
           <CardContent>
             <AppearanceSettings />
+
+            <DisplayDimmingSettings />
 
             <ThemeLibrary />
           </CardContent>

@@ -65,6 +65,14 @@ const formatWith = (options, value) => {
 /** "3:30 PM", or "15:30" where that is the convention. */
 export const formatTime = (value) => formatWith({ hour: 'numeric', minute: '2-digit' }, value);
 
+/** "12:00 AM" (or "00:00" where that is the convention) for an hour of day. */
+export const formatHourOfDay = (hour) => {
+  if (hour === '' || hour == null) return '';
+  const h = Number(hour);
+  if (!Number.isFinite(h)) return '';
+  return formatTime(new Date(2000, 0, 1, Math.trunc(h), 0));
+};
+
 /** "Aug 13" — short date without year, for dense views. */
 export const formatShortDate = (value) => formatWith({ month: 'short', day: 'numeric' }, value);
 

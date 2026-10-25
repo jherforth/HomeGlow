@@ -59,6 +59,8 @@ import {
 } from './utils/themes.js';
 import { personalizationTokens } from './utils/personalize.js';
 import SaveLayoutButton from './components/SaveLayoutButton.jsx';
+import { updateDisplayDimming, setDimmingPaused } from './utils/displayDim.js';
+import { getServerTimezoneSync } from './utils/timezone.js';
 import { THEME_TOKENS_APPLIED_EVENT } from './utils/pluginThemeBridge.js';
 import { loadInstalledThemes, useThemeRegistry } from './utils/installedThemes.js';
 import { useWeatherCondition, useWeatherScenePreview } from './utils/useWeatherCondition.js';
@@ -869,6 +871,14 @@ const App = () => {
     }
   }, [appearanceReady, appearance]);
 
+  // Dimming follows the resolved appearance live: saving in Admin refetches
+  // both settings levels (see the interface-settings-updated listener), the
+  // appearance memo recomputes, and this applies the new dimming without a
+  // reload. The night window is read in the household timezone.
+  useEffect(() => {
+    if (appearanceReady) updateDisplayDimming(appearance.dimming, getServerTimezoneSync());
+  }, [appearanceReady, appearance.dimming]);
+
   // One-time upload of this browser's pre-cascade appearance as the display's
   // overrides: only the fields that differ from the household, so the display
   // looks exactly as it did. A display that already has overrides keeps them.
@@ -888,8 +898,11 @@ const App = () => {
           hydrateFromDeviceSettings(response.data || {});
         }
         // The old keys stay, so rolling back to a pre-cascade build still
-        // finds this display's look; the marker stops a second upload.
-        localStorage.setItem(LEGACY_MIGRATED_KEY, '1');
+        // finds this display's look; the theme marker is set once the
+        // theme fields upload.
+        if (local.mode !== undefined || local.colors !== undefined || local.autoDark !== undefined) {
+          localStorage.setItem(LEGACY_MIGRATED_KEY, '1');
+        }
       } catch (error) {
         // Left in place; the next load tries again.
         console.error('Error uploading appearance settings:', error);
@@ -987,6 +1000,12 @@ const App = () => {
 
   useEffect(() => {
     dockIdleRef.current?.setSuspended(showAdminPanel);
+  }, [showAdminPanel]);
+
+  // Dimming pauses while Admin is open, like the dock idle timer above:
+  // Admin must stay readable, and the idle clock restarts from closing.
+  useEffect(() => {
+    setDimmingPaused(showAdminPanel);
   }, [showAdminPanel]);
 
   // Two fingers swiped sideways change the tab, and pinch zoom can be blocked

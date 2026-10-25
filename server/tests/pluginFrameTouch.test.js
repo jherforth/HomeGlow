@@ -57,16 +57,30 @@ const touchEvent = (...points) => {
     return event;
 };
 
-test('does nothing until the dashboard turns it on', () => {
+test('before settings, only activity reporting is on (swipe/expand stay off)', () => {
     const f = frame();
-    assert.deepEqual([...f.listeners.keys()], ['message']);
+    // Use reporting is always on; the swipe/expand listeners still wait
+    // for the dashboard's settings message.
+    assert.deepEqual([...f.listeners.keys()].sort(), ['keydown', 'message', 'pointerdown', 'wheel']);
     assert.equal(f.document.documentElement.style.touchAction, '');
+});
+
+test('reports use inside the frame as homeglow:activity, throttled to once a second', () => {
+    const f = frame();
+    f.fire('pointerdown', {});
+    f.fire('keydown', {});
+    f.fire('wheel', {});
+    assert.deepEqual(f.posted.map(({ data }) => data.type), ['homeglow:activity']);
+    f.tick(1100);
+    f.fire('keydown', {});
+    assert.deepEqual(f.posted.map(({ data }) => data.type), ['homeglow:activity', 'homeglow:activity']);
 });
 
 test('ignores settings from anyone but its parent', () => {
     const f = frame();
     f.settings({ swipe: true, blockPinchZoom: true }, {});
-    assert.deepEqual([...f.listeners.keys()], ['message']);
+    // Only the always-on activity reporting is present; no swipe listeners.
+    assert.deepEqual([...f.listeners.keys()].sort(), ['keydown', 'message', 'pointerdown', 'wheel']);
     assert.equal(f.document.documentElement.style.touchAction, '');
 });
 
@@ -139,7 +153,9 @@ test('removes its touch listeners when swiping is turned off', () => {
     f.settings({ swipe: true });
     assert.ok(f.listeners.has('touchstart'));
     f.settings({ swipe: false });
-    assert.deepEqual([...f.listeners.keys()], ['message']);
+    // Only the always-on activity reporting remains alongside the settings
+    // listener; the swipe listeners are gone.
+    assert.deepEqual([...f.listeners.keys()].sort(), ['keydown', 'message', 'pointerdown', 'wheel']);
 });
 
 test("a second finger landing later says where and when the first landed, and the first finger's travel counts", () => {
@@ -182,10 +198,10 @@ function clickOn(f, { x = 50, y = 50, interactive = false, detail = 1 } = {}) {
     return { event, target };
 }
 
-test('expanding off: no click or touch listeners at all', () => {
+test('expanding off: no click or swipe listeners, only activity reporting', () => {
     const f = frame();
     f.settings({ swipe: false, expand: false });
-    assert.deepEqual([...f.listeners.keys()], ['message']);
+    assert.deepEqual([...f.listeners.keys()].sort(), ['keydown', 'message', 'pointerdown', 'wheel']);
     assert.equal(f.document.documentElement.style.touchAction, '');
 });
 
@@ -277,7 +293,13 @@ test('turning expanding off removes its listeners and gives back the touch-actio
     f.settings({ expand: 'doubleTap' });
     assert.equal(f.document.documentElement.style.touchAction, 'manipulation');
     f.settings({ expand: false });
-    assert.deepEqual([...f.listeners.keys()], ['message']);
+    // The expand listeners are gone; activity reporting stays. (This
+    // harness stores one listener per type, so the always-on pointerdown
+    // entry is shadowed here; in a real browser it survives, because it
+    // is a different function from the expand handler.)
+    assert.equal(f.listeners.has('click'), false);
+    assert.equal(f.listeners.has('keydown'), true);
+    assert.equal(f.listeners.has('wheel'), true);
     assert.equal(f.document.documentElement.style.touchAction, 'auto');
 });
 
