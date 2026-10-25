@@ -19,7 +19,7 @@ HomeGlow is built with a focus on modern aesthetics, user experience, and practi
 -   **Dynamic Theming**: Seamlessly toggle between beautiful Light and Dark modes, with your preference intelligently saved in local storage.
 -   **Touch-Friendly Interface**: Designed from the ground up for touchscreens, allowing intuitive interaction with all widgets and controls.
 -   **Customizable Widget Layout**:
-    -   **Drag-and-Drop Positioning**: Unlock layout mode to freely arrange widgets on your dashboard
+    -   **Drag-and-Drop Positioning**: Choose **Move/Resize** in the dock to arrange widgets freely, then tap **Save layout** in the bottom-right corner when you're done
     -   **Flexible Resizing**: Click or tap widgets to select, then use +/- buttons on each edge to resize
     -   **Grid-Based System**: Responsive 12-column grid that adapts to mobile, tablet, and desktop screens
     -   **Persistent Layouts**: Your custom arrangement is automatically saved and restored

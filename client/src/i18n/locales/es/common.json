@@ -48,6 +48,9 @@
     "householdDefault": "Idioma predeterminado del hogar",
     "householdDefaultHelper": "Las pantallas nuevas empiezan en este idioma hasta que elijan el suyo."
   },
+  "layout": {
+    "save": "Guardar diseño"
+  },
   "screensaverOverlay": {
     "today": "Hoy",
     "tomorrow": "Mañana",

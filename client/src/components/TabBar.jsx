@@ -269,10 +269,12 @@ const TabBar = ({
   const menuItems = [
     { id: 'refresh', icon: 'refresh', label: 'Refresh', action: onRefresh },
     { id: 'settings', icon: 'settings', label: 'Settings', action: onOpenSettings },
-    // On mobile there is no grid to rearrange (issue #118), so no lock toggle.
-    ...(isMobile
+    // On mobile there is no grid to rearrange (issue #118), so no Move/Resize.
+    // While the layout is unlocked the Save Layout button ends it, not the
+    // dock (issue #333), so the dock offers it only while locked.
+    ...(isMobile || !widgetsLocked
       ? []
-      : [{ id: 'lock', icon: 'move', label: widgetsLocked ? 'Move/Resize' : 'Lock Layout', action: onToggleLock }]),
+      : [{ id: 'lock', icon: 'move', label: 'Move/Resize', action: onToggleLock }]),
     { id: 'theme', icon: getThemeIconName(), label: getThemeLabel(), action: onToggleTheme },
   ];
 

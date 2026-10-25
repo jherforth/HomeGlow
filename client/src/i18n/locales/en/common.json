@@ -48,6 +48,9 @@
     "householdDefault": "Household default",
     "householdDefaultHelper": "New displays start in this language until they choose their own."
   },
+  "layout": {
+    "save": "Save layout"
+  },
   "screensaverOverlay": {
     "today": "Today",
     "tomorrow": "Tomorrow",

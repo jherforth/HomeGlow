@@ -984,8 +984,9 @@ your plugin can subscribe to (§5) and drive [reactions](#6-reactions--server-si
 To reach an external service that lacks CORS headers, route the request through
 `GET /api/proxy?targetUrl=<encoded-url>`. Two constraints:
 
-- The target host must be in the `PROXY_WHITELIST` setting (an admin adds it) —
-  otherwise `403`. A redirect is followed only to another whitelisted host, so
+- The target host must be in the `PROXY_WHITELIST` setting — otherwise `403`.
+  The household adds it in Admin → System → Connections → Proxy whitelist, so
+  say in your plugin which host it needs. A redirect is followed only to another whitelisted host, so
   a whitelisted site can't send the proxy somewhere else on the household's
   network; one that leads off the list answers `403`.
 - Only `http://` and `https://` addresses (`400` otherwise).

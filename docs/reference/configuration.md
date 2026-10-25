@@ -128,6 +128,7 @@ Open with the gear (⚙️) icon. These persist server-side (global settings in 
 | **Family → Vacation** | Vacation mode for the household: dates, chime mute (switching it on asks for the admin PIN) | `settings` (`vacation_mode`, household) |
 | **Security** | Admin PIN, controls on displays | `admin_pin`, `device_settings_json` |
 | **System → Language & time** | Language for this display; the household time zone | `localStorage` (language); `settings` (`APP_TIMEZONE`) |
+| **System → Connections → Proxy whitelist** | The hosts plugins may fetch through `/api/proxy` (`PROXY_WHITELIST`, comma-separated hostnames). Added as chips: a full address is cut to its host, a pasted list adds several, and each change saves at once | `settings` (global) |
 | **System → Connections → Weather** | Provider choice (`WEATHER_PROVIDER`: `openweathermap` \| `homeassistant`), OpenWeatherMap key (`WEATHER_API_KEY`, write-only) | `settings` (global) |
 | **System → Connections → Home Assistant** | Base URL (`HOME_ASSISTANT_URL`), long-lived token (`HOME_ASSISTANT_TOKEN_ENC`, encrypted + write-only), weather entity (`HOME_ASSISTANT_WEATHER_ENTITY`) | `settings` (global) |
 | **System → Connections → Google** | Google OAuth linking | `google_accounts` |
