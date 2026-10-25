@@ -33,6 +33,7 @@ import {
   resolveAppearance,
 } from '../utils/appearance.js';
 import { resolveTheme } from '../utils/themes.js';
+import { formatHourOfDay } from '../utils/dateUtils.js';
 import { useThemeRegistry } from '../utils/installedThemes.js';
 import { pickWeatherScene, weatherScenesOf } from '../utils/weatherScenes.js';
 import { PREVIEW_MS, setWeatherScenePreview, useWeatherScenePreview } from '../utils/useWeatherCondition.js';
@@ -441,7 +442,7 @@ const AppearanceSettings = () => {
         label={t('admin:appearance.dimming.enabled')}
         sx={{ mb: 2, display: 'block' }}
       />
-      <Typography variant="body2" sx={{ fontWeight: 600 }}>{t('admin:appearance.dimming.day')}</Typography>
+      <Typography variant="body2" sx={{ fontWeight: 600 }}>{t('admin:appearance.dimming.day')} — {Math.round((draft.dimming?.day ?? DEFAULT_DIMMING.day) * 100)}%</Typography>
       <Box sx={{ px: 3, maxWidth: 460 }}>
         <Slider
           value={Math.round((draft.dimming?.day ?? DEFAULT_DIMMING.day) * 100)}
@@ -455,7 +456,7 @@ const AppearanceSettings = () => {
           aria-label={t('admin:appearance.dimming.day')}
         />
       </Box>
-      <Typography variant="body2" sx={{ fontWeight: 600 }}>{t('admin:appearance.dimming.night')}</Typography>
+      <Typography variant="body2" sx={{ fontWeight: 600 }}>{t('admin:appearance.dimming.night')} — {Math.round((draft.dimming?.night ?? DEFAULT_DIMMING.night) * 100)}%</Typography>
       <Box sx={{ px: 3, maxWidth: 460, mb: 2 }}>
         <Slider
           value={Math.round((draft.dimming?.night ?? DEFAULT_DIMMING.night) * 100)}
@@ -486,6 +487,7 @@ const AppearanceSettings = () => {
           label={t('admin:appearance.dimming.nightStart')}
           value={draft.dimming?.nightStart ?? DEFAULT_DIMMING.nightStart}
           disabled={locked('dimming')}
+          helperText={formatHourOfDay(draft.dimming?.nightStart ?? DEFAULT_DIMMING.nightStart)}
           slotProps={{ htmlInput: { min: 0, max: 23, step: 1 } }}
           onChange={(e) => updateDraft('dimming', { ...(draft.dimming ?? DEFAULT_DIMMING), nightStart: e.target.value })}
           sx={{ width: 200 }}
@@ -496,6 +498,7 @@ const AppearanceSettings = () => {
           label={t('admin:appearance.dimming.nightEnd')}
           value={draft.dimming?.nightEnd ?? DEFAULT_DIMMING.nightEnd}
           disabled={locked('dimming')}
+          helperText={formatHourOfDay(draft.dimming?.nightEnd ?? DEFAULT_DIMMING.nightEnd)}
           slotProps={{ htmlInput: { min: 0, max: 23, step: 1 } }}
           onChange={(e) => updateDraft('dimming', { ...(draft.dimming ?? DEFAULT_DIMMING), nightEnd: e.target.value })}
           sx={{ width: 200 }}
