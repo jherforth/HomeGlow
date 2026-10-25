@@ -54,6 +54,25 @@ describe('eventDayKeys', () => {
     expect(eventDayKeys(trip, NY)).toEqual(['2026-09-05', '2026-09-06', '2026-09-07']);
   });
 
+  // mrramam/HomeGlow#69: the server's all-day events name their days.
+  it('puts an all-day event on its household date, in any display zone', () => {
+    // Cached by a New York server; read on a display in Los Angeles.
+    const thanksgiving = {
+      start: '2026-11-26T05:00:00.000Z', end: '2026-11-26T05:00:00.000Z', all_day: true,
+      start_date: '2026-11-26', end_date: '2026-11-26',
+    };
+    expect(eventDayKeys(thanksgiving, 'America/Los_Angeles')).toEqual(['2026-11-26']);
+    expect(eventDayKeys(thanksgiving, 'Pacific/Honolulu')).toEqual(['2026-11-26']);
+  });
+
+  it('includes the last day of a dated all-day event, across a month end', () => {
+    const trip = {
+      start: '2026-11-30T05:00:00.000Z', end: '2026-12-02T05:00:00.000Z', all_day: true,
+      start_date: '2026-11-30', end_date: '2026-12-02',
+    };
+    expect(eventDayKeys(trip, NY)).toEqual(['2026-11-30', '2026-12-01', '2026-12-02']);
+  });
+
   it('treats an end before the start as a single day rather than looping', () => {
     // A real row from the seeded town feed.
     const malformed = { start: '2026-09-07T04:00:00Z', end: '2026-09-06T04:00:00Z', all_day: true };

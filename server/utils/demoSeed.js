@@ -183,9 +183,11 @@ function seedCalendar(db) {
     ['demo-soccer', 'Soccer practice', atHour(day(0), 17), atHour(day(0), 18, 30), 'Bring water bottle', 'City fields', 0],
     ['demo-pizza', 'Pizza night', atHour(day(1), 18), atHour(day(1), 19, 30), '', 'Home', 0],
     ['demo-dentist', 'Dentist — Liam', atHour(day(2), 9, 30), atHour(day(2), 10, 15), '', 'Main St Dental', 0],
-    ['demo-grandma', 'Visit Grandma', atHour(day(3), 12), atHour(day(4), 15), 'Overnight trip', '', 1],
+    // All-day rows hold the household's midnights, start and inclusive end,
+    // as a sync writes them.
+    ['demo-grandma', 'Visit Grandma', atHour(day(3), 0), atHour(day(4), 0), 'Overnight trip', '', 1],
     ['demo-recital', 'Piano recital', atHour(day(5), 15), atHour(day(5), 16), '', 'Community hall', 0],
-    ['demo-library', 'Library books due', atHour(day(6), 9), atHour(day(6), 9, 30), '', '', 1],
+    ['demo-library', 'Library books due', atHour(day(6), 0), atHour(day(6), 0), '', '', 1],
   ];
   for (const [uid, title, start, end, description, location, allDay] of events) {
     insertEvent.run(sourceId, uid, title, start.toISOString(), end.toISOString(), description, location, allDay);

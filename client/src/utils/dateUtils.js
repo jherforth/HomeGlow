@@ -125,6 +125,15 @@ export const getWeekdayOptions = () => {
 /** "2026-08-13" — the canonical date key used across the app and API. */
 export const toDateKey = (value) => moment(value).format('YYYY-MM-DD');
 
+/**
+ * Local midnight of a "2026-08-13" key. `new Date(key)` parses it as UTC
+ * midnight, which west of UTC is the evening before.
+ */
+export const fromDateKey = (key) => {
+  const [y, m, d] = String(key).split('-').map(Number);
+  return new Date(y, m - 1, d);
+};
+
 /** "2026-08-13T15:30" — datetime-local input value. */
 export const toDateTimeInputValue = (value) => moment(value).format('YYYY-MM-DDTHH:mm');
 
