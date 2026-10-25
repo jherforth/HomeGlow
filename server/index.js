@@ -698,20 +698,14 @@ fastify.register(require('@fastify/static'), {
   maxAge: 86400000, // 1 day cache
 });
 
-// Serve static files for widgets
-fastify.register(require('@fastify/static'), {
-  root: path.join(__dirname, 'widgets'),
-  prefix: '/widgets/',
-  decorateReply: false
-});
-
 // Widget filenames are restricted to this charset at upload/install time; the
-// serve route enforces the same rule so encoded ../ segments can never reach
-// the disk-fallback path.join below (path traversal guard).
+// serve route enforces the same rule.
 const WIDGET_FILENAME_REGEX = /^[a-zA-Z0-9-._]+$/;
 
-// Serve widget HTML from the DB-backed plugin store (issue #105 Phase 0), with
-// a read-only disk fallback for files that predate the plugins table.
+// Serve widget HTML from the DB-backed plugin store (issue #105 Phase 0), and
+// nothing else: every page gets its token and frame scripts injected here.
+// Files that predate the plugins table were imported by migration 18, so
+// server/widgets/ is never served (mrramam/HomeGlow#60).
 fastify.get('/widgets/:filename', async (request, reply) => {
   const { filename } = request.params;
 
@@ -720,18 +714,14 @@ fastify.get('/widgets/:filename', async (request, reply) => {
   }
 
   try {
-    let content;
-    let pluginId = null;
     const row = db.prepare('SELECT id, content, plugin_id, source FROM plugins WHERE filename = ?').get(filename);
-    if (row) {
-      // A Home Assistant panel is drawn by the built-in template from its
-      // recipe (issue #252), so every panel gets the current template.
-      content = row.source === 'builder' ? haPanels.renderPanel(row.id, row.plugin_id) : row.content;
-      pluginId = row.plugin_id;
-    } else {
-      const filePath = path.join(__dirname, 'widgets', filename);
-      content = await fs.readFile(filePath, 'utf-8');
+    if (!row) {
+      return reply.status(404).send(`Widget file not found: ${filename}`);
     }
+    // A Home Assistant panel is drawn by the built-in template from its
+    // recipe (issue #252), so every panel gets the current template.
+    let content = row.source === 'builder' ? haPanels.renderPanel(row.id, row.plugin_id) : row.content;
+    const pluginId = row.plugin_id;
 
     content = content.replace(/window\.location\.origin\.replace\(['"`]:\d+['"`],\s*['"`]:\d+['"`]\)/g, 'window.location.origin');
     content = content.replace(/\$\{window\.location\.protocol\}\/\/\$\{window\.location\.hostname\}:\d+/g, '${window.location.origin}');
@@ -1354,16 +1344,7 @@ fastify.delete('/api/widgets/:filename', async (request, reply) => {
       }
     }
 
-    // Best-effort cleanup of a pre-migration file on disk.
-    let removedFromDisk = false;
-    try {
-      await fs.unlink(path.join(__dirname, 'widgets', filename));
-      removedFromDisk = true;
-    } catch {
-      // Nothing on disk — expected for DB-backed plugins.
-    }
-
-    if (result.changes === 0 && !removedFromDisk) {
+    if (result.changes === 0) {
       return reply.status(404).send({ error: 'Widget not found.' });
     }
 
