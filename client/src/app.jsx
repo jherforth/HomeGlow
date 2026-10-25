@@ -58,6 +58,7 @@ import {
   themeTokens,
 } from './utils/themes.js';
 import { personalizationTokens } from './utils/personalize.js';
+import SaveLayoutButton from './components/SaveLayoutButton.jsx';
 import { THEME_TOKENS_APPLIED_EVENT } from './utils/pluginThemeBridge.js';
 import { loadInstalledThemes, useThemeRegistry } from './utils/installedThemes.js';
 import { useWeatherCondition, useWeatherScenePreview } from './utils/useWeatherCondition.js';
@@ -1471,7 +1472,13 @@ const App = () => {
             🏖️ Vacation Mode
           </Box>
         )}
-        <UpdateIndicator />
+        {/* Its corner is the Save Layout button's while the layout is
+            unlocked, which is never for long. */}
+        {widgetsLocked && <UpdateIndicator />}
+        {/* Move/Resize ends here, not back in the dock (issue #333). */}
+        {!isMobile && !widgetsLocked && !showAdminPanel && !screensaverActive && (
+          <SaveLayoutButton onSave={toggleWidgetsLock} />
+        )}
         {/* The one mobile/kiosk fork (issue #118): below 600px the grid —
             react-grid-layout, drag/resize, lock — never mounts. */}
         {isMobile && mobileWidgets.length > 0 && (

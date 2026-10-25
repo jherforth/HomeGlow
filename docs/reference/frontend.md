@@ -47,7 +47,8 @@ custom properties.
 | --- | --- |
 | `WidgetContainer.jsx` | The responsive 12-column grid (`react-grid-layout`); drag/resize, layout persistence to the backend, lock/unlock. |
 | `DraggableWidget.jsx` | Individual widget frame with edge +/- resize controls and touch/mouse support. |
-| `TabBar.jsx` | Floating bottom dock: tab switching, add/delete tab, theme toggle, lock toggle, settings, refresh. |
+| `TabBar.jsx` | Floating bottom dock: tab switching, add/delete tab, theme toggle, Move/Resize (only while the layout is locked), settings, refresh. |
+| `SaveLayoutButton.jsx` | The pulsing **Save layout** button in the bottom-right corner while the layout is unlocked; it locks the layout again (issue #333). |
 | `TabIconModal.jsx` | Modal for creating/labelling a tab and picking its icon. |
 | `ScreenSaver.jsx` / `ScreensaverCountdown.jsx` | Burn-in-prevention overlay and its countdown indicator. |
 
