@@ -100,7 +100,10 @@ body {
   border-radius: var(--hg-radius-xl);
   padding: var(--dynamic-card-padding);
   box-shadow: var(--shadow);
-  transition: all 0.3s ease;
+  /* Only what :hover animates. `all` made the browser track every
+     property change on every card (and cards are everywhere), which
+     costs frames on weak GPUs whenever any card state changes. */
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
   backdrop-filter: var(--backdrop-blur);
 }
 
