@@ -184,6 +184,8 @@
     "editChore": "Edit chore",
     "deleteChoreAndSchedules": "Delete chore and all its schedules",
     "newSchedule": "New Schedule",
+    "viewSchedules": "View this chore's schedules",
+    "addScheduleForChore": "Add a schedule for this chore",
     "schedulesHelp": "Schedules link chores to users and specify when they recur. A chore can have multiple schedules for different users or frequencies.",
     "filterByUser": "Filter by User",
     "allUsers": "All Users",
