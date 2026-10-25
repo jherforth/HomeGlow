@@ -138,10 +138,13 @@ function poke() {
 }
 
 // A plugin frame reporting use (see server/utils/pluginFrameTouch.js).
-// The message carries nothing sensitive, and plugins are household
-// installed, so the type alone is enough to count it as activity.
+// Only from a frame on this page, like every other plugin message since
+// #320: the worst another window could do is keep the screen bright, but
+// there's no reason to let it.
 function onPluginActivity(event) {
-  if (event?.data?.type === 'homeglow:activity') poke();
+  if (event?.data?.type !== 'homeglow:activity') return;
+  const fromFrame = [...document.querySelectorAll('iframe')].some((frame) => frame.contentWindow === event.source);
+  if (fromFrame) poke();
 }
 
 // Apply the resolved appearance dimming, live. `timeZone` is the household

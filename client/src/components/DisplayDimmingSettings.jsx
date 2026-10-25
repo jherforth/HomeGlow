@@ -27,6 +27,7 @@ import {
 } from '../utils/appearance.js';
 import { saveAppearanceFields } from '../utils/appearanceSave.js';
 import { formatHourOfDay } from '../utils/dateUtils.js';
+import { editWholeNumber } from '../utils/wholeNumberField.js';
 
 const INTERFACE_SETTINGS_UPDATED_EVENT = 'homeglow:interface-settings-updated';
 
@@ -161,6 +162,17 @@ const DisplayDimmingSettings = () => {
         sx={{ mb: 2, display: 'block' }}
       />
 
+      <TextField
+        type="number"
+        size="small"
+        label={t('admin:appearance.dimming.after')}
+        value={dimming.after ?? DEFAULT_DIMMING.after}
+        disabled={locked}
+        slotProps={{ htmlInput: { min: 0, step: 1 } }}
+        onChange={(e) => updateDimming({ after: editWholeNumber(e.target.value) })}
+        sx={{ width: 200, mb: 3, display: 'flex' }}
+      />
+
       <Typography variant="subtitle2">{t('admin:appearance.dimming.day')} — {dayPct}%</Typography>
       <Box sx={{ px: 3, maxWidth: 460 }}>
         <Slider
@@ -190,18 +202,8 @@ const DisplayDimmingSettings = () => {
         />
       </Box>
 
-      <Typography variant="subtitle2">{t('admin:appearance.dimming.nightHours')}</Typography>
+      <Typography variant="subtitle2" sx={{ mb: 1.5 }}>{t('admin:appearance.dimming.nightHours')}</Typography>
       <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 1 }}>
-        <TextField
-          type="number"
-          size="small"
-          label={t('admin:appearance.dimming.after')}
-          value={dimming.after ?? DEFAULT_DIMMING.after}
-          disabled={locked}
-          slotProps={{ htmlInput: { min: 0, step: 1 } }}
-          onChange={(e) => updateDimming({ after: e.target.value })}
-          sx={{ width: 200 }}
-        />
         <TextField
           select
           size="small"

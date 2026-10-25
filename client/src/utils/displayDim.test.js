@@ -69,7 +69,9 @@ describe('live dimming with a stubbed DOM', () => {
     const el = { style: {}, classList: { toggle() {} } };
     const listeners = {};
     let tick;
+    const pluginWindow = {};
     globalThis.document = {
+      querySelectorAll: (selector) => (selector === 'iframe' ? [{ contentWindow: pluginWindow }] : []),
       documentElement: el,
       body: { style: {}, appendChild() {} },
       head: { appendChild() {} },
@@ -102,13 +104,16 @@ describe('live dimming with a stubbed DOM', () => {
     tick();
     expect(el.style.filter).toBe('brightness(0.7)');
 
-    // A plugin frame reporting use wakes the panel; any other message type
-    // does not.
-    listeners.message({ data: { type: 'homeglow:activity' } });
+    // A plugin frame reporting use wakes the panel. The same message from a
+    // window that isn't a frame on this page, or another message type from
+    // the frame, does not.
+    listeners.message({ data: { type: 'homeglow:activity' }, source: {} });
+    expect(el.style.filter).toBe('brightness(0.7)');
+    listeners.message({ data: { type: 'homeglow:frame-activity' }, source: pluginWindow });
+    expect(el.style.filter).toBe('brightness(0.7)');
+    listeners.message({ data: { type: 'homeglow:activity' }, source: pluginWindow });
     expect(el.style.filter).toBe('');
     updateDisplayDimming(immediate);
-    expect(el.style.filter).toBe('brightness(0.7)');
-    listeners.message({ data: { type: 'homeglow:frame-activity' } });
     expect(el.style.filter).toBe('brightness(0.7)');
 
     // Disabling clears the filter without a reload.
