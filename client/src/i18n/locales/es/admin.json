@@ -821,6 +821,8 @@
     "exported": "Copia descargada.",
     "exportFailed": "No se pudo descargar la copia.",
     "pinTitle": "Introduce el PIN de administrador para descargar una copia",
+    "pinTitleImport": "Introduce el PIN de administrador para restaurar una copia",
+    "pinTitleRollback": "Introduce el PIN de administrador para deshacer la restauración",
     "wrongPin": "PIN incorrecto. Inténtalo de nuevo.",
     "importHeading": "Restaurar desde una copia",
     "importHelp": "Elige un archivo de copia (.tar.gz) hecho aquí o con la copia de Google Drive. Primero se comprueba, tus datos actuales se guardan para poder deshacerlo y nada cambia hasta que HomeGlow se reinicie.",

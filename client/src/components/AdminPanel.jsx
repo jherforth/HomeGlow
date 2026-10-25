@@ -80,6 +80,7 @@ import HomeAssistantPanels from './HomeAssistantPanels';
 import ThemeLibrary from './ThemeLibrary';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
+import { pinErrorText } from '../utils/pinErrors.js';
 import { revealTabPicker } from '../utils/revealTabPicker.js';
 import { getDeviceApiBase, getDeviceName, setDeviceName, isValidDeviceName } from '../utils/deviceName.js';
 import { fetchPinRemembered, setPinRemembered, forgetPinOnAllDevices, shouldPromptForPin } from '../utils/adminPinDevice.js';
@@ -1443,7 +1444,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
       const response = await axios.post(`${API_BASE_URL}/api/admin-pin/verify`, { pin });
       valid = response.data?.valid === true;
     } catch (error) {
-      throw new Error(error.response?.data?.error || t('admin:vacation.pinWrong'));
+      throw new Error(pinErrorText(error, t, t('admin:vacation.pinWrong')));
     }
     if (!valid) throw new Error(t('admin:vacation.pinWrong'));
     setVacationPinOpen(false);
@@ -1847,7 +1848,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
         }
       }
     } catch (error) {
-      throw new Error(error.response?.data?.error || 'Invalid PIN. Please try again.');
+      throw new Error(pinErrorText(error, t, 'Invalid PIN. Please try again.'));
     }
   };
 

@@ -39,7 +39,8 @@
   },
   "pin": {
     "confirmWithAdminPin": "Confirm with Admin PIN",
-    "statusCheckFailed": "Could not confirm admin PIN status. Please try again."
+    "statusCheckFailed": "Could not confirm admin PIN status. Please try again.",
+    "tooManyTries": "Too many wrong PINs. Try again in {{seconds}} seconds."
   },
   "language": {
     "label": "Language",

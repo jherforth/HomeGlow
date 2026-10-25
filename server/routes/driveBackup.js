@@ -2,7 +2,7 @@ const path = require('path');
 const googleConnection = require('../services/googleConnection');
 const driveBackup = require('../services/googleDriveBackup');
 const driveRestore = require('../services/driveRestore');
-const { adminPinMatches } = require('../utils/adminPin');
+const { checkAdminPin, refusePin } = require('../utils/adminPin');
 
 module.exports = async function (fastify, opts) {
   const db = opts.db;
@@ -84,11 +84,17 @@ module.exports = async function (fastify, opts) {
   // services/driveRestore.js). Staging validates the backup end-to-end and
   // snapshots the current data set so the restore can be rolled back.
 
+  // Staging a restore or a rollback replaces the household's data at the
+  // next start, so both ask for the admin PIN when one is set (the body's
+  // `pin`). Cancel and restart don't: one drops a staged restore, the other
+  // applies only one the PIN already allowed.
   fastify.post('/api/backup/drive/restore/stage', async (request, reply) => {
-    const { fileId } = request.body || {};
+    const { fileId, pin } = request.body || {};
     if (!fileId || typeof fileId !== 'string') {
       return reply.code(400).send({ error: 'A backup fileId is required.' });
     }
+    const pinCheck = await checkAdminPin(db, pin);
+    if (!pinCheck.ok) return refusePin(reply, pinCheck, 'The admin PIN is needed to restore a backup.');
     try {
       const account = googleConnection.getConnectedAccount(db);
       if (!account) return reply.status(404).send({ error: 'No Google account connected.' });
@@ -119,9 +125,8 @@ module.exports = async function (fastify, opts) {
     if (!fileId || typeof fileId !== 'string') {
       return reply.code(400).send({ error: 'A backup fileId is required.' });
     }
-    if (!adminPinMatches(db, pin)) {
-      return reply.code(403).send({ error: 'The admin PIN is needed to download an encryption key.' });
-    }
+    const pinCheck = await checkAdminPin(db, pin);
+    if (!pinCheck.ok) return refusePin(reply, pinCheck, 'The admin PIN is needed to download an encryption key.');
     try {
       const account = googleConnection.getConnectedAccount(db);
       if (!account) return reply.status(404).send({ error: 'No Google account connected.' });
@@ -140,6 +145,8 @@ module.exports = async function (fastify, opts) {
   });
 
   fastify.post('/api/backup/drive/restore/rollback', async (request, reply) => {
+    const pinCheck = await checkAdminPin(db, request.body?.pin);
+    if (!pinCheck.ok) return refusePin(reply, pinCheck, 'The admin PIN is needed to roll back a restore.');
     try {
       const staged = driveRestore.stageRollback(db, dbPath, uploadsDir);
       return { success: true, staged };

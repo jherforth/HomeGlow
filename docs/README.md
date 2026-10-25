@@ -74,8 +74,12 @@ HomeGlow/
 - **Two deployable units**: `homeglow-frontend` (Nginx serving the built SPA and
   proxying `/api`) and `homeglow-backend` (Fastify). They talk over a Docker
   network; the browser only ever talks to the frontend.
-- **No user accounts / auth**: the app has no login. The only access control is an
-  optional PIN on the Admin Panel. Do not expose it to the public internet.
+- **No user accounts / auth**: the app has no login and is built for a trusted home
+  network only. The optional Admin PIN is tamper resistance: it keeps household
+  members out of the Admin Panel on a shared display, and the server checks it for
+  backups and restores, but it doesn't protect the API from another device on the
+  network. Do not expose HomeGlow to the internet. See the
+  [security note](../README.md#-security).
 - **Per-device configuration**: each browser generates a random device name
   (stored in `localStorage`) and its own tabs, layout, and widget settings live
   server-side keyed by that device name.

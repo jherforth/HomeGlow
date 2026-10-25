@@ -37,6 +37,7 @@ import { useTranslation } from 'react-i18next';
 import LoadingBackdrop from './LoadingBackdrop';
 import PinModal from './PinModal';
 import { API_BASE_URL } from '../utils/apiConfig.js';
+import { pinErrorText } from '../utils/pinErrors.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
 import { fetchPinRemembered, setPinRemembered, shouldPromptForPin } from '../utils/adminPinDevice.js';
 import { shouldShowChoreToday, getTodayDateString, convertDaysToCrontab, getDueDateStatus, formatDueDate, hasOutstandingBonusChore, countsTowardDailyBonus } from '../utils/choreHelpers.js';
@@ -850,7 +851,12 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
   };
 
   const handlePinVerify = async (pin, remember) => {
-    const response = await axios.post(`${API_BASE_URL}/api/admin-pin/verify`, { pin });
+    let response;
+    try {
+      response = await axios.post(`${API_BASE_URL}/api/admin-pin/verify`, { pin });
+    } catch (error) {
+      throw new Error(pinErrorText(error, t, 'Incorrect PIN. Please try again.'));
+    }
     if (!response.data?.valid) {
       throw new Error('Incorrect PIN. Please try again.');
     }

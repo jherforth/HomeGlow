@@ -39,7 +39,8 @@
   },
   "pin": {
     "confirmWithAdminPin": "Confirmar con el PIN de administrador",
-    "statusCheckFailed": "No se pudo comprobar el estado del PIN. Inténtalo de nuevo."
+    "statusCheckFailed": "No se pudo comprobar el estado del PIN. Inténtalo de nuevo.",
+    "tooManyTries": "Demasiados PIN incorrectos. Inténtalo de nuevo en {{seconds}} segundos."
   },
   "language": {
     "label": "Idioma",
