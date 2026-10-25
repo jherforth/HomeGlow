@@ -689,7 +689,7 @@ New/changed persistence, all additive:
 | Area | File(s) | Change |
 | --- | --- | --- |
 | DB-backed plugin store ✅ | [`server/migrations/schema18-pluginsTable.js`](../../server/migrations/schema18-pluginsTable.js) | Create `plugins`; import any on-disk `widgets/*.html` + registry. **Implemented.** |
-| Widget serving ✅ | `server/index.js` `/widgets/:filename` + upload/install/delete/debug routes | Serve HTML from the `plugins` table; writes are row upserts (§10.2); read-only disk fallback for pre-migration files. **Implemented**, tested in [`server/tests/pluginStore.test.js`](../../server/tests/pluginStore.test.js). |
+| Widget serving ✅ | `server/index.js` `/widgets/:filename` + upload/install/delete/debug routes | Serve HTML from the `plugins` table; writes are row upserts (§10.2). Only installed plugins are served: pre-migration files were imported by migration 18, and `server/widgets/` itself is never served. **Implemented**, tested in [`server/tests/pluginStore.test.js`](../../server/tests/pluginStore.test.js). |
 | Storage table ✅ | [`server/migrations/schema19-pluginStorage.js`](../../server/migrations/schema19-pluginStorage.js) | Create `plugin_storage`. **Implemented.** |
 | Storage API ✅ | `server/index.js` `/api/plugin/v1/storage/...` routes | CRUD + atomic increment, caps, `storage: true` guard. **Implemented**, tested in [`pluginPlatform.test.js`](../../server/tests/pluginPlatform.test.js). |
 | Manifest handling ✅ | `server/index.js` `installPluginRow` / `extractPluginManifest` | Parse + validate embedded manifest, store in `plugins.manifest_json`. **Implemented.** |

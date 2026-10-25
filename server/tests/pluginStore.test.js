@@ -137,6 +137,26 @@ test('migration imports pre-existing on-disk widgets into the plugin store', asy
     assert.equal(imported.name, legacyFilename.replace('.html', ''));
 });
 
+// mrramam/HomeGlow#60: only the plugins table is served, so every page gets
+// its token and frame scripts. A file on disk that isn't installed isn't.
+test('/widgets/ never serves a file from disk that is not an installed plugin', async () => {
+    const strayFilename = `stray-${process.pid}.html`;
+    const strayDir = path.join(widgetsDir, `stray-${process.pid}`);
+    fs.writeFileSync(path.join(widgetsDir, strayFilename), '<html><body>not-installed-content</body></html>', 'utf-8');
+    fs.mkdirSync(strayDir, { recursive: true });
+    fs.writeFileSync(path.join(strayDir, 'page.html'), '<html><body>not-installed-content</body></html>', 'utf-8');
+    try {
+        for (const url of [`/widgets/${strayFilename}`, `/widgets/stray-${process.pid}/page.html`, '/widgets/README.md']) {
+            const res = await api(url);
+            assert.equal(res.status, 404, url);
+            assert.ok(!String(res.body).includes('not-installed-content'), url);
+        }
+    } finally {
+        fs.rmSync(path.join(widgetsDir, strayFilename), { force: true });
+        fs.rmSync(strayDir, { recursive: true, force: true });
+    }
+});
+
 test('POST /api/widgets/upload stores a widget in the DB and serves it', async () => {
     const form = new FormData();
     form.append('file', new Blob([uploadedHtml], { type: 'text/html' }), uploadedFilename);
