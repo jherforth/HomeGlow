@@ -124,9 +124,9 @@ describe('validateThemePackage', () => {
     expect(validateThemePackage({ ...base, manifestVersion: 9, ambience }, { assets: ['assets/hole.svg'] })).toEqual([]);
   });
 
-  it('needs manifest version 10 for particle sway and blur', () => {
-    const ambience = [{ layer: 'particles', src: 'assets/leaf.svg', motion: 'fall', count: 5, sway: 40, swaySeconds: 5, blur: 1.2 }];
-    expect(validateThemePackage({ ...base, manifestVersion: 9, ambience }, { assets: ['assets/leaf.svg'] })).toEqual(['particle sway, particle blur need manifestVersion 10']);
+  it('needs manifest version 10 for particle swing and blur', () => {
+    const ambience = [{ layer: 'particles', src: 'assets/leaf.svg', motion: 'fall', count: 5, swing: 40, swingSeconds: 5, blur: 1.2 }];
+    expect(validateThemePackage({ ...base, manifestVersion: 9, ambience }, { assets: ['assets/leaf.svg'] })).toEqual(['particle swing, particle blur need manifestVersion 10']);
     expect(validateThemePackage({ ...base, manifestVersion: 10, ambience }, { assets: ['assets/leaf.svg'] })).toEqual([]);
   });
 

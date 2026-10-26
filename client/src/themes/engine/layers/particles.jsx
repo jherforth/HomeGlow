@@ -1,12 +1,12 @@
 import React, { useMemo } from 'react';
 import { Box } from '@mui/material';
-import { draw, fall, forMode, pick, reducedMotion, rise, swayX, twinkle } from '../motion.js';
+import { draw, fall, forMode, pick, reducedMotion, rise, swingX, twinkle } from '../motion.js';
 
 // Many small things: a picture from the theme's folder, or plain glowing dots
 // in the theme's colors. They rise (bubbles), fall (snow, leaves) or twinkle
-// in place (stars). A falling or rising item can also sway side to side
-// (sway, in px, over swaySeconds) and be softly blurred (blur, in px): the
-// sway runs on a wrapper so it never fights the vertical fall/rise transform.
+// in place (stars). A falling or rising item can also swing side to side
+// (swing, in px, over swingSeconds) and be softly blurred (blur, in px): the
+// swing runs on a wrapper so it never fights the vertical fall/rise transform.
 function Particles({ options, assets, random, mode }) {
   const url = options.src ? assets[forMode(options.src, mode)] : null;
   const motion = options.motion || 'rise';
@@ -27,8 +27,8 @@ function Particles({ options, assets, random, mode }) {
         // default here would consume a draw and reshuffle every existing
         // particle layer's seeded layout, which the per-layer seeds exist
         // to keep stable.
-        sway: options.sway === undefined ? 0 : draw(random, options.sway),
-        swaySeconds: options.sway === undefined ? 0 : draw(random, options.swaySeconds ?? [3, 6]),
+        swing: options.swing === undefined ? 0 : draw(random, options.swing),
+        swingSeconds: options.swing === undefined ? 0 : draw(random, options.swingSeconds ?? [3, 6]),
         blur: options.blur === undefined ? 0 : draw(random, options.blur),
       };
     });
@@ -45,8 +45,8 @@ function Particles({ options, assets, random, mode }) {
     const keyframes = motion === 'twinkle' ? twinkle : motion === 'fall' ? fall : rise;
     const fallAnimation = `${keyframes} ${item.seconds.toFixed(2)}s ${motion === 'twinkle' ? 'ease-in-out' : 'linear'} ${item.delay.toFixed(2)}s infinite${motion === 'twinkle' ? ' alternate' : ''}`;
     const innerSx = {
-      width: item.sway > 0 ? '100%' : item.size,
-      height: item.sway > 0 ? '100%' : item.size,
+      width: item.swing > 0 ? '100%' : item.size,
+      height: item.swing > 0 ? '100%' : item.size,
       ...look,
       opacity: motion === 'twinkle' ? undefined : options.opacity ?? 1,
       ...(item.blur > 0 ? { filter: `blur(${item.blur.toFixed(1)}px)` } : {}),
@@ -56,8 +56,8 @@ function Particles({ options, assets, random, mode }) {
       ...reducedMotion,
     };
     const inner = <Box sx={innerSx} />;
-    if (item.sway <= 0) {
-      // No sway wrapper: the item itself carries the inner look, positioned.
+    if (item.swing <= 0) {
+      // No swing wrapper: the item itself carries the inner look, positioned.
       return (
         <Box
           key={i}
@@ -79,8 +79,8 @@ function Particles({ options, assets, random, mode }) {
           ...where,
           width: item.size,
           height: item.size,
-          '--sway': `${Math.round(item.sway)}px`,
-          animation: `${swayX} ${item.swaySeconds.toFixed(2)}s ease-in-out infinite alternate`,
+          '--swing': `${Math.round(item.swing)}px`,
+          animation: `${swingX} ${item.swingSeconds.toFixed(2)}s ease-in-out infinite alternate`,
           willChange: 'transform',
           ...reducedMotion,
         }}

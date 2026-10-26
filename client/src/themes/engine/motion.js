@@ -112,13 +112,13 @@ export const sway = keyframes`
   to { transform: rotate(var(--angle-to)); }
 `;
 
-// A particle swaying side to side while it falls or rises: a horizontal
+// A particle swinging side to side while it falls or rises: a horizontal
 // oscillation around its path, run as a second animation alongside the
 // vertical one (particles.jsx wraps the falling item in this when a theme
-// sets sway, so the two transforms never fight over one element).
-export const swayX = keyframes`
-  from { transform: translateX(calc(-1 * var(--sway))); }
-  to { transform: translateX(var(--sway)); }
+// sets swing, so the two transforms never fight over one element).
+export const swingX = keyframes`
+  from { transform: translateX(calc(-1 * var(--swing))); }
+  to { transform: translateX(var(--swing)); }
 `;
 
 // A bending picture's slices (flex.jsx): each narrows toward its joint.
