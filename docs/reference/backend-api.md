@@ -371,7 +371,7 @@ draws (`server/ha-panels/template.html`); each is also a plugin row
 | DELETE | `/api/photo-sources/:sourceId/picked/:mediaRowId` | Delete picked media. |
 | POST/GET/DELETE | `/api/photo-sources/:sourceId/picker-session` | Manage a Google Photos Picker session. |
 | POST | `/api/photo-sources/:sourceId/picker-session/ingest` | Download picked items locally. |
-| GET | `/api/photo-items` | Aggregated photo feed for the widget. |
+| GET | `/api/photo-items` | Aggregated photo feed for the widget and the screensaver. An item may carry `takenOn` (`YYYY-MM-DD`), `people` (names) and `place` (`City, State`) when its source knows them (`utils/photoDetails.js`): Immich all three, asked for with `withExif` and `withPeople` (and without them from an Immich too old to know them), Google Photos only `takenOn`. |
 
 ### Admin PIN
 | Method | Path | Purpose |

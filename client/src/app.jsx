@@ -1683,6 +1683,8 @@ const App = () => {
               onTabChange={handleScreensaverTabChange}
               keepScreenAwake={screensaverSettings.keepScreenAwake}
               photoLayout={screensaverSettings.photoLayout}
+              coffeeTableSeconds={screensaverSettings.coffeeTableSeconds}
+              photoDetails={screensaverSettings.photoDetails}
               overlay={{
                 calendar: screensaverSettings.overlayCalendar,
                 calendarDays: screensaverSettings.overlayCalendarDays,

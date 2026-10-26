@@ -3193,7 +3193,24 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                     sx={{ mb: 4 }}
                   />
 
-                  {screensaverSettings.mode === 'photos' && (
+                  {/* Coffee Table drops prints at its own, quicker pace. */}
+                  {screensaverSettings.mode === 'photos' && screensaverSettings.photoLayout === 'coffeeTable' && (
+                    <ScreensaverIntervalSlider
+                      label={t('admin:screensaver.coffeeTableRate')}
+                      value={screensaverSettings.coffeeTableSeconds ?? 4}
+                      onChange={(value) => setScreensaverSettings(prev => ({ ...prev, coffeeTableSeconds: value }))}
+                      min={1}
+                      max={20}
+                      marks={[
+                        { value: 1, label: '1s' },
+                        { value: 5, label: '5s' },
+                        { value: 10, label: '10s' },
+                        { value: 20, label: '20s' }
+                      ]}
+                    />
+                  )}
+
+                  {screensaverSettings.mode === 'photos' && screensaverSettings.photoLayout !== 'coffeeTable' && (
                     <ScreensaverIntervalSlider
                       label={t('admin:screensaver.photoInterval')}
                       value={screensaverSettings.slideshowInterval}
@@ -3221,7 +3238,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                         value={screensaverSettings.photoLayout || 'fit'}
                         onChange={(e) => setScreensaverSettings(prev => ({ ...prev, photoLayout: e.target.value }))}
                       >
-                        {['fit', 'ambient', 'collage'].map((layout) => (
+                        {['fit', 'ambient', 'collage', 'coffeeTable'].map((layout) => (
                           <FormControlLabel
                             key={layout}
                             value={layout}
@@ -3240,6 +3257,25 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                           />
                         ))}
                       </RadioGroup>
+
+                      {/* When, who and where on each photo, for the layouts
+                          that show several at once. */}
+                      {['collage', 'coffeeTable'].includes(screensaverSettings.photoLayout) && (
+                        <Box sx={{ mt: 1 }}>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={screensaverSettings.photoDetails === true}
+                                onChange={(e) => setScreensaverSettings(prev => ({ ...prev, photoDetails: e.target.checked }))}
+                              />
+                            }
+                            label={t('admin:screensaver.photoDetails')}
+                          />
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 6 }}>
+                            {t('admin:screensaver.photoDetailsHelp')}
+                          </Typography>
+                        </Box>
+                      )}
                     </Box>
                   )}
 
