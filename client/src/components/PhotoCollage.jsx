@@ -11,6 +11,7 @@ import {
   shuffled,
   templatesForScreen,
 } from '../utils/photoCollage.js';
+import PhotoDetails from './PhotoDetails.jsx';
 
 // The photo list carries no dimensions, so each photo's shape is read by
 // loading its thumbnail. Only a window of photos ahead of the wall is measured
@@ -71,7 +72,7 @@ const tileImageSx = {
  * Calls `onUnavailable` if fewer than MIN_COLLAGE_PHOTOS photos can be loaded,
  * so the caller can fall back to a single photo.
  */
-const PhotoCollage = ({ photos, step, onUnavailable }) => {
+const PhotoCollage = ({ photos, step, onUnavailable, showDetails = false }) => {
   const [portraitScreen, setPortraitScreen] = useState(isPortraitScreen);
   const [view, setView] = useState(null); // { layout, previousLayout }
 
@@ -329,6 +330,12 @@ const PhotoCollage = ({ photos, step, onUnavailable }) => {
                 alt=""
                 sx={{ ...tileImageSx, ...(tile.previous ? fadeIn : {}) }}
               />
+              {/* When, who and where, fading in with its photo. */}
+              {showDetails && (
+                <Box key={`details-${tile.photo.id}`} sx={tile.previous ? fadeIn : {}}>
+                  <PhotoDetails photo={tile.photo} />
+                </Box>
+              )}
             </Box>
           </Box>
         );

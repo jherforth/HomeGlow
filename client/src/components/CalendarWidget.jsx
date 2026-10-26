@@ -39,6 +39,7 @@ import {
   getWeekdayOptions,
   fromDateKey,
 } from '../utils/dateUtils.js';
+import { subscribeHouseholdChanges } from '../utils/householdChanges.js';
 
 // Stored values for the week/month start settings. Display names come from
 // getWeekdayOptions() so they localize; these keys never change.
@@ -348,6 +349,14 @@ const CalendarWidget = ({
     fetchCalendarSources();
     fetchCalendarEvents();
   }, [refreshNonce]);
+
+  // An event added, edited or synced anywhere (issue #325): reload what's on
+  // screen. Through a ref, so it fetches the month showing now.
+  const fetchEventsRef = useRef(null);
+  fetchEventsRef.current = () => fetchCalendarEvents();
+  useEffect(() => subscribeHouseholdChanges(['calendar'], () => {
+    fetchEventsRef.current();
+  }), []);
 
   // Refetch only when the visible month (or view mode) changes to keep the fetch small.
   const eventsRangeKey = `${viewMode}:${moment(currentDate).format('YYYY-MM')}`;

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceName } from '../utils/deviceName.js';
 import { subscribePluginEvents } from '../utils/pluginEventBridge.js';
+import { HOUSEHOLD_DOMAINS, knownHouseholdRevisions, subscribeHouseholdChanges } from '../utils/householdChanges.js';
 import { acceptPluginDataMessage, emitPluginDataChanged } from '../utils/pluginDataBridge.js';
 import { acceptPluginCelebrateMessage, requestCelebration } from '../utils/celebrations.js';
 import { THEME_TOKENS_APPLIED_EVENT, buildPluginThemeMessage, readRoleTokens } from '../utils/pluginThemeBridge.js';
@@ -70,11 +71,34 @@ const PluginWidgetWrapper = ({
     if (!eventsKey) return undefined;
     const declared = new Set(eventsKey.split(','));
     return subscribePluginEvents((message) => {
+      // Delivered below, from the same source as the dashboard's own
+      // widgets, so it arrives once and where the stream doesn't reach.
+      if (message.event === 'household.changed') return;
       if (!declared.has(message.event)) return;
       const target = iframeRef.current?.contentWindow;
       if (!target) return;
       target.postMessage(
         { type: 'homeglow:event', event: message.event, payload: message.payload, emittedAt: message.emittedAt },
+        TO_FRAME
+      );
+    });
+  }, [eventsKey]);
+
+  // household.changed (issue #325), for a plugin that declared it: the kinds
+  // of household data that changed, from the 15-second checks or the stream,
+  // whichever saw it first.
+  useEffect(() => {
+    if (!eventsKey.split(',').includes('household.changed')) return undefined;
+    return subscribeHouseholdChanges(HOUSEHOLD_DOMAINS, (domains) => {
+      const target = iframeRef.current?.contentWindow;
+      if (!target) return;
+      target.postMessage(
+        {
+          type: 'homeglow:event',
+          event: 'household.changed',
+          payload: { domains, revisions: knownHouseholdRevisions() },
+          emittedAt: new Date().toISOString(),
+        },
         TO_FRAME
       );
     });

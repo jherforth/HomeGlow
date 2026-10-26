@@ -280,8 +280,13 @@
       "ambient": "Ambiente",
       "ambientHelp": "Una foto a la vez, con una copia suave y difuminada que llena el espacio a su alrededor.",
       "collage": "Collage",
-      "collageHelp": "Varias fotos en mosaico que llenan la pantalla, cada una en un espacio de su misma forma. Cambia una foto en cada intervalo y la disposición cambia cada pocas rondas. Necesita al menos 3 fotos."
+      "collageHelp": "Varias fotos en mosaico que llenan la pantalla, cada una en un espacio de su misma forma. Cambia una foto en cada intervalo y la disposición cambia cada pocas rondas. Necesita al menos 3 fotos.",
+      "coffeeTable": "Mesa de centro",
+      "coffeeTableHelp": "Las fotos caen en la pantalla una a una, como copias lanzadas sobre una mesa, quedan algo inclinadas y se amontonan hasta cubrir la pantalla. Las más antiguas se desvanecen debajo."
     },
+    "coffeeTableRate": "Segundos entre fotos",
+    "photoDetails": "Mostrar detalles de las fotos",
+    "photoDetailsHelp": "Cuándo se tomó, quién aparece y dónde, en cada foto, en la medida en que la foto lo indique. Las fotos de Immich pueden mostrar las tres cosas; las de Google Fotos, solo la fecha.",
     "expand": {
       "heading": "Ampliar widgets",
       "enable": "Permitir ampliar widgets",

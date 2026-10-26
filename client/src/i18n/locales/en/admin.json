@@ -280,8 +280,13 @@
       "ambient": "Ambient",
       "ambientHelp": "One photo at a time, with a soft blurred copy of it filling the space around it.",
       "collage": "Collage",
-      "collageHelp": "Several photos tiled to fill the screen, matched to spaces of their own shape. One photo changes each interval, and the arrangement changes every few rounds. Needs at least 3 photos."
+      "collageHelp": "Several photos tiled to fill the screen, matched to spaces of their own shape. One photo changes each interval, and the arrangement changes every few rounds. Needs at least 3 photos.",
+      "coffeeTable": "Coffee Table",
+      "coffeeTableHelp": "Photos drop onto the screen one at a time, like prints tossed on a table, landing at a slight angle and piling up until the screen is covered. The oldest fade away underneath."
     },
+    "coffeeTableRate": "Seconds between photos",
+    "photoDetails": "Show photo details",
+    "photoDetailsHelp": "When it was taken, who is in it and where, on each photo, as far as the photo says. Immich photos can show all three, Google Photos only the date.",
     "expand": {
       "heading": "Expand widgets",
       "enable": "Let widgets expand",

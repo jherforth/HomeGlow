@@ -16,9 +16,9 @@
 // failure that made the issue #140 celebration invisible. Two frames on one
 // page need no network at all, so this works wherever the page itself works.
 //
-// The tradeoff that buys: this refreshes only the display that was tapped.
-// A second wall display still waits for its own timer. Fixing that genuinely
-// does need the event stream.
+// This refreshes the display that was tapped at once. Every other display
+// learns of the write from the server's change counters within seconds
+// (utils/householdChanges.js, issue #325).
 
 /** postMessage `type` a plugin sends to window.parent. */
 export const PLUGIN_DATA_MESSAGE_TYPE = 'homeglow:data-changed';
