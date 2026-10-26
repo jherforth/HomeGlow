@@ -22,6 +22,9 @@ function registerRoutineRoutes(fastify, deps) {
     timezone, today, calendarEvents = () => [], isVacation = () => false,
     // A routine deleted can leave its person's day done (issue #298).
     awardDailyBonusesAfterRemoval = () => {},
+    // Days added, retimed or removed by the calendar, not by a request, so
+    // the displays are told (issue #325).
+    householdChanged = () => {},
   } = deps;
 
   // (scheduleId|date) pairs this module is itself uncompleting, so the chore
@@ -292,6 +295,9 @@ function registerRoutineRoutes(fastify, deps) {
       for (const { scheduleId } of plan.hide) db.prepare('UPDATE chore_schedules SET visible = 0 WHERE id = ?').run(scheduleId);
       applyExpiry(r.id);
     })();
+    if (plan.forget.length || plan.create.length || plan.retime.length || plan.remove.length || plan.hide.length) {
+      householdChanged();
+    }
   }
 
   function upcomingEvents() {

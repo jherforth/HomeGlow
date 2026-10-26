@@ -46,6 +46,7 @@ import { filterVisibleUsers, toggleHiddenUserId, pruneHiddenUserIds } from '../u
 import { isControlHidden } from '../utils/displayControls.js';
 import { subscribePluginEvents } from '../utils/pluginEventBridge.js';
 import { subscribePluginDataChanged } from '../utils/pluginDataBridge.js';
+import { subscribeHouseholdChanges } from '../utils/householdChanges.js';
 import { playSound, soundUrl } from '../utils/choreSound.js';
 import { formatTime } from '../utils/dateUtils.js';
 import PrizeCelebration from './PrizeCelebration.jsx';
@@ -305,6 +306,15 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
       fetchData();
     });
   }, []);
+
+  // Another display, a phone or the nightly job changed something this widget
+  // shows (issue #325): reload all of it, one batched load. The guard in
+  // fetchData keeps a reload that lands mid-tap from flickering the row.
+  const fetchDataRef = useRef(null);
+  fetchDataRef.current = () => fetchData();
+  useEffect(() => subscribeHouseholdChanges(['chores', 'users', 'prizes', 'settings'], () => {
+    fetchDataRef.current();
+  }), []);
 
   // Prize redemptions celebrate on every display showing the chore widget:
   // the approval emits prize.redeemed on the server bus, delivered over the

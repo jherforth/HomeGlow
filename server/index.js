@@ -225,6 +225,14 @@ axios.interceptors.request.use((config) => {
 let calendarSyncService = null;
 
 const pluginEvents = require('./services/pluginEvents');
+const { DOMAINS: HOUSEHOLD_DOMAINS, createHouseholdChanges, domainsForRequest } = require('./utils/householdChanges');
+// A revision counter for each kind of household data, so every display can
+// tell what changed and reload it (issue #325, utils/householdChanges.js).
+// Each burst of changes also goes out on the event stream, the fast path
+// where it reaches the browser.
+const householdChanges = createHouseholdChanges({
+  onBump: (domains, revisions) => pluginEvents.emit('household.changed', { domains, revisions }),
+});
 const haPanelRules = require('./services/haPanels');
 const { HaLive } = require('./services/haLive');
 const { registerHaPanelRoutes, lazyDb } = require('./routes/haPanels');
@@ -610,7 +618,9 @@ function getPluginTokenSecret() {
   return pluginTokenSecret;
 }
 const CORS_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'];
-const CORS_HEADERS = ['Content-Type', 'Authorization'];
+// If-None-Match: a display's change checks (GET /api/changes) from the Vite
+// dev server or a CORS_ORIGINS frontend, which are cross-origin.
+const CORS_HEADERS = ['Content-Type', 'Authorization', 'If-None-Match'];
 fastify.register(require('@fastify/cors'), {
   delegator: (request, callback) => {
     const origin = request.headers.origin;
@@ -654,6 +664,13 @@ fastify.addHook('onRequest', async (request, reply) => {
 fastify.addHook('onRequest', async (request, reply) => {
   if (!isCrossSiteWrite(request, isAllowedApiOrigin)) return undefined;
   return reply.status(403).send({ error: 'HomeGlow accepts changes only from its own pages.' });
+});
+
+// Every successful write to household data moves its counters, here rather
+// than in each route, so a new route can't forget to.
+fastify.addHook('onResponse', async (request, reply) => {
+  const domains = domainsForRequest(request.method, request.routeOptions?.url, reply.statusCode);
+  if (domains.length) householdChanges.bump(domains);
 });
 
 fastify.register(multipart, {
@@ -805,6 +822,21 @@ fastify.get('/plugin-sdk/v1.js', async (request, reply) => {
 });
 
 // Add a simple test endpoint
+// What changed (issue #325): a display checks this every 15 seconds and
+// reloads the kinds of data whose counters moved. A handful of bytes, and
+// 304 when nothing changed since the display last asked.
+fastify.get('/api/changes', async (request, reply) => {
+  const tag = householdChanges.etag();
+  reply.header('ETag', tag).header('Cache-Control', 'no-cache')
+    // A cross-origin frontend (dev, CORS_ORIGINS) reads the tag only when told it may.
+    .header('Access-Control-Expose-Headers', 'ETag');
+  const ifNoneMatch = request.headers['if-none-match'];
+  if (ifNoneMatch && ifNoneMatch.split(',').some((value) => value.trim().replace(/^W\//, '') === tag)) {
+    return reply.code(304).send();
+  }
+  return householdChanges.snapshot();
+});
+
 fastify.get('/api/test', async (request, reply) => {
   return {
     message: 'Server is working!',
@@ -1201,6 +1233,8 @@ const routines = registerRoutineRoutes(fastify, {
   calendarEvents: (from, to) => (calendarSyncService || new CalendarSyncService(db, decryptPassword)).getCachedEvents(from, to),
   isVacation: isVacationActiveOn,
   awardDailyBonusesAfterRemoval: (userIds) => awardDailyBonusesAfterRemoval(userIds),
+  // A calendar routine's days, changed by the calendar rather than a request.
+  householdChanged: () => householdChanges.bump('chores', 'users'),
 });
 
 // Notifications, from the chore events and plugins (services/notifications.js
@@ -2491,6 +2525,8 @@ async function dailyBackgroundProcessing() {
       console.error('Routines nightly tidy failed:', error);
     }
     console.log(`Total: ${prunedScheduleCount + prunedChoreCount + resetScheduleCount} operations performed`);
+    // Written without a request, so the displays are told here.
+    householdChanges.bump('chores', 'users');
     return results;
   } catch (error) {
     console.error('Error during daily background processing:', error);
@@ -7335,6 +7371,7 @@ const start = async () => {
       setInterval(() => {
         try {
           resetDemoData(db);
+          householdChanges.bump(HOUSEHOLD_DOMAINS);
           // Reseeding assigns new source ids, so the running sync jobs point
           // at rows that no longer exist. Restart them (this also kicks off an
           // immediate syncAllSources to refill the wiped event cache).
@@ -7373,7 +7410,9 @@ const start = async () => {
     // fetched (SSRF guard). The seeded "Family Calendar" placeholder
     // (.invalid host) is skipped by the service itself.
     if (DEMO_MODE) {
-      calendarSyncService = new CalendarSyncService(db, decryptPassword, fastify.log);
+      calendarSyncService = new CalendarSyncService(db, decryptPassword, fastify.log, {
+        onEventsChanged: () => householdChanges.bump('calendar'),
+      });
       if (process.env.HOMEGLOW_DISABLE_CALENDAR_SYNC !== '1') {
         calendarSyncService.initialize();
         console.log('Calendar sync enabled in demo mode (seeded demo feeds only; source management is demo-blocked)');
@@ -7381,7 +7420,9 @@ const start = async () => {
         console.log('Calendar sync jobs disabled in demo mode by HOMEGLOW_DISABLE_CALENDAR_SYNC=1 (cached events only)');
       }
     } else if (process.env.HOMEGLOW_DISABLE_CALENDAR_SYNC !== '1') {
-      calendarSyncService = new CalendarSyncService(db, decryptPassword, fastify.log);
+      calendarSyncService = new CalendarSyncService(db, decryptPassword, fastify.log, {
+        onEventsChanged: () => householdChanges.bump('calendar'),
+      });
       calendarSyncService.initialize();
       console.log('Calendar sync service started');
     } else {
