@@ -44,10 +44,13 @@ function householdDateKey(value) {
 const ALL_DAY_RANGE_SLACK_MS = 2 * 24 * 60 * 60 * 1000;
 
 class CalendarSyncService {
-  constructor(db, decryptPassword, logger = CONSOLE_LOGGER) {
+  constructor(db, decryptPassword, logger = CONSOLE_LOGGER, { onEventsChanged = () => {} } = {}) {
     this.db = db;
     this.decryptPassword = decryptPassword;
     this.log = logger;
+    // Called when a sync rewrote a source's cached events, so the displays
+    // reload the calendar (issue #325). Not for a sync that found no change.
+    this.onEventsChanged = onEventsChanged;
     this.syncIntervals = new Map();
     this.isSyncing = new Map();
     // sha256 of the rows last written per source (see syncSource).
@@ -157,6 +160,7 @@ class CalendarSyncService {
         });
         replaceCache();
         this.cacheHashes.set(sourceId, hash);
+        this.onEventsChanged();
       }
 
       const duration = Date.now() - startTime;

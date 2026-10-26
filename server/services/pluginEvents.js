@@ -16,6 +16,7 @@ const PLUGIN_EVENT_CATALOG = Object.freeze([
     'chore.allCompleted',// { userId, username, date, reward } — every regular chore done for the day (issue #140)
     'prize.redeemed',    // { userId, prizeId, offerId, prizeName, cost, newTotal }
     'ha.state',          // { entityIds } — Home Assistant entities changed (issue #252); a nudge to read state, never the state itself
+    'household.changed', // { domains, revisions } — household data changed (issue #325): chores, users, prizes, settings or calendar; reload what you show
 ]);
 
 const catalogSet = new Set(PLUGIN_EVENT_CATALOG);

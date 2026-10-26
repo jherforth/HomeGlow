@@ -390,6 +390,7 @@ const off = HomeGlow.on('clam.withdrawn', (payload, meta) => {
 | `chore.allCompleted` | a user's last **regular** chore for the day is done | `{ userId, username, date, reward }` |
 | `prize.redeemed` | a prize-store request is approved | `{ userId, prizeId, offerId, prizeName, cost, newTotal }` |
 | `ha.state` | Home Assistant entities changed | `{ entityIds }`: a nudge to read state again (§5a), never the state itself |
+| `household.changed` | household data changed, on any display or by the server | `{ domains, revisions }`: which kinds changed (`chores`, `users`, `prizes`, `settings`, `calendar`). Reload what you show; it never says what changed. Delivered within a second where the event stream works, and within 15 seconds where it doesn't |
 
 Declaring an event not in the catalog rejects the install — typos fail loudly.
 Only declared events are ever delivered to your iframe.

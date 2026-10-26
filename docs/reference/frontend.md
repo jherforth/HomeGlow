@@ -39,6 +39,12 @@ custom properties.
   a `ScreenSaver` overlay (tab-cycling or photo slideshow), optionally full-screen.
 - **Settings changes** propagate through custom window events
   (`homeglow:device-settings-updated`, `homeglow:interface-settings-updated`).
+- **Other displays' changes** arrive through `utils/householdChanges.js` (issue
+  #325): a display checks `GET /api/changes` every 15 seconds while visible (a
+  phone only when it becomes visible), takes the same counters from the event
+  stream where it reaches the browser, and tells subscribers which kinds of data
+  moved. The Chores widget, the calendar, the screensaver agenda, household
+  settings and plugins that declare `household.changed` reload on it.
 
 ## Component map (`client/src/components/`)
 
@@ -92,6 +98,7 @@ custom properties.
 | --- | --- |
 | `apiConfig.js` | Resolves `API_BASE_URL` (dev: `VITE_REACT_APP_API_URL` or `localhost:5001`; prod: same-origin). |
 | `deviceName.js` | Generate/read/persist the per-device UUID and build the device API base. |
+| `householdChanges.js` | `subscribeHouseholdChanges(domains, handler)`: the 15-second checks of `GET /api/changes` and the `household.changed` stream event, deduplicated; `setHouseholdChangesMode('interval' \| 'visible')`. |
 | `timezone.js` | Fetch and cache the server timezone (`initTimezone`, `getServerTimezoneSync`) so client date math matches the backend. |
 | `choreHelpers.js` | Cron/day-of-week helpers, "should this chore show today", today's date string in server TZ. |
 | `colorContrast.js` | Contrast calculations for readable text on colored backgrounds. |

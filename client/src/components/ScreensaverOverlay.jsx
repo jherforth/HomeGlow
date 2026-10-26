@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { formatTime, getDateLocale } from '../utils/dateUtils.js';
 import { usePageVisibility } from '../hooks/useScreenActivity.js';
+import { subscribeHouseholdChanges } from '../utils/householdChanges.js';
 import {
   addDaysToKey,
   buildAgenda,
@@ -124,6 +125,11 @@ const ScreensaverOverlay = ({ showCalendar, calendarDays, showWeather, tabs, dri
     const timer = setInterval(load, REFRESH_MS);
     return () => clearInterval(timer);
   }, [load, pageVisible]);
+
+  // The agenda in the corner follows calendar changes too (issue #325).
+  useEffect(() => subscribeHouseholdChanges(['calendar'], () => {
+    void load();
+  }), [load]);
 
   const agenda = useMemo(() => {
     if (!showCalendar || !events) return null;

@@ -139,3 +139,24 @@ test('an ICS feed is fetched with a timeout', async () => {
     }
     assert.ok(options?.signal instanceof AbortSignal);
 });
+
+// Issue #325: the displays reload the calendar when a sync changed it, and
+// only then.
+test('a sync tells the displays only when it changed the cached events', async () => {
+    const db = freshDb();
+    const same = [event('a', '02')];
+    let told = 0;
+    const service = new CalendarSyncService(db, () => null, SILENT, { onEventsChanged: () => { told += 1; } });
+    const feeds = [same, same, [event('a', '02'), event('b', '03')], [event('c', '04'), event('d', '05', { start: new Date('not a date') })]];
+    let call = 0;
+    service.fetchICSEvents = async () => feeds[Math.min(call++, feeds.length - 1)];
+
+    await service.syncSource(1);
+    assert.equal(told, 1, 'first sync');
+    await service.syncSource(1);
+    assert.equal(told, 1, 'unchanged feed');
+    await service.syncSource(1);
+    assert.equal(told, 2, 'changed feed');
+    await service.syncSource(1);
+    assert.equal(told, 2, 'a failed sync changed nothing');
+});

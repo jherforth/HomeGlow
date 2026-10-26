@@ -96,6 +96,7 @@ segment (the browser's `localStorage` UUID).
 | GET | `/api/update-status` | Running version vs the latest GitHub release, checked at most every 6 hours. `HOMEGLOW_DISABLE_UPDATE_CHECK=1` turns it off. |
 | GET | `/api/timezone` | Server timezone. |
 | GET | `/api/system/backgroundTasks` | Manually trigger nightly processing. |
+| GET | `/api/changes` | A revision counter for each kind of household data, `{ chores, users, prizes, settings, calendar }`, with an `ETag`; `304` for a matching `If-None-Match`. Displays check it to reload what changed (issue #325). Every successful write under the household routes moves its counters (`utils/householdChanges.js`); a chore or prize write also moves `users`, for clam totals. The nightly job, calendar sync and calendar routines move them too. The counters start from a random base on each start, so a restart reads as everything changed. |
 | GET | `/index.css` | Serves the app CSS for custom widgets (with fallback). |
 
 ### Custom widgets / plugins
@@ -142,7 +143,7 @@ for the developer-facing detail and the `HomeGlow.*` SDK wrappers.
 | POST | `/api/plugin/v1/storage/:pluginId/:key/increment` | Atomic `{ path, delta }` numeric increment. |
 | GET | `/api/plugin/v1/settings/:pluginId` | Effective declared settings (`?device=` for device scope). |
 | PUT | `/api/plugin/v1/settings/:pluginId` | Write declared settings (validated against the manifest). |
-| GET | `/api/plugin/v1/events/stream` | SSE stream of core events (`clam.*`, `chore.*`, `ha.state`). |
+| GET | `/api/plugin/v1/events/stream` | SSE stream of core events (`clam.*`, `chore.*`, `ha.state`, `household.changed`). |
 | GET | `/api/plugin/v1/ha/:pluginId/state` | A Home Assistant panel's (or a plugin's declared) entities, filtered attributes, which it may operate, where each comes from (`sources`: its integration and a device tag, from Home Assistant's entity registry), and whether the live link is up. A domain grant leaves out entities hidden or disabled in Home Assistant. Answered from memory. |
 | POST | `/api/plugin/v1/ha/:pluginId/action` | `{ entity` or `entities, action, value, pin, device }`, checked against the panel's recipe or the plugin's manifest and turned into one service call each. Media actions: `play_media` (a key from browse or search), `play_url` (an address on the media server the plugin's `playUrlsFrom` setting names), `seek`, `shuffle`, `join` (other speakers the panel may operate, up to 8) and `unjoin`; slow ones answer `pending: true` after 1.5 seconds. 401 `needsPin` for unlocking, disarming or opening a garage door under PIN protection (not from a display that remembers the PIN); 429 over 10 a second. |
 | GET | `/api/plugin/v1/ha/:pluginId/camera/:entityId` | A camera snapshot, only for a camera on the panel. |
