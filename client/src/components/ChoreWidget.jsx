@@ -48,6 +48,7 @@ import { subscribePluginEvents } from '../utils/pluginEventBridge.js';
 import { subscribePluginDataChanged } from '../utils/pluginDataBridge.js';
 import { subscribeHouseholdChanges } from '../utils/householdChanges.js';
 import { playSound, soundUrl } from '../utils/choreSound.js';
+import { useEdgeFade } from '../hooks/useEdgeFade.js';
 import { formatTime } from '../utils/dateUtils.js';
 import PrizeCelebration from './PrizeCelebration.jsx';
 import { requestCelebration } from '../utils/celebrations.js';
@@ -146,6 +147,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
   // Long-press / right-click chore menu and its follow-up dialogs (issue #122).
   const [choreMenu, setChoreMenu] = useState({ position: null, schedule: null });
   const [transferDialog, setTransferDialog] = useState({ open: false, schedule: null, targetUserId: null, mode: 'keep', bonus: 1 });
+  const [columnsRef, columnsFadeSx] = useEdgeFade();
   const [snoozeDialog, setSnoozeDialog] = useState({ open: false, schedule: null, until: '' });
   const [historyDialog, setHistoryDialog] = useState({ open: false, schedule: null });
   const [pinGate, setPinGate] = useState({ open: false, onSuccess: null });
@@ -1287,18 +1289,6 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
               />
             )}
           </Typography>
-          {schedule.followup_of && (
-            // Why it appeared: handed on when someone finished another chore (#241).
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.72rem' }}>
-              {t('chores:widget.followupOf', { title: schedule.followup_of })}
-            </Typography>
-          )}
-          {schedule.description && !routineDay && (
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-              {schedule.description}
-            </Typography>
-          )}
-          {routineDay && <RoutineSteps day={routineDay} onToggle={tickRoutineStep} expired={expired} />}
         </Box>
         <Box sx={{ display: 'flex', gap: 0.5 }}>
           {/* The chore's icon takes the place of the checkmark while the chore
@@ -1354,6 +1344,24 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                 : <Check fontSize="small" />)}
           </IconButton>
         </Box>
+          {/* Everything under the title spans the whole card: beside the
+              button, a description in a narrow column wrapped a word a line. */}
+          {schedule.followup_of && (
+            // Why it appeared: handed on when someone finished another chore (#241).
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', flexBasis: '100%', fontSize: '0.72rem' }}>
+              {t('chores:widget.followupOf', { title: schedule.followup_of })}
+            </Typography>
+          )}
+          {schedule.description && !routineDay && (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', flexBasis: '100%', fontSize: '0.75rem' }}>
+              {schedule.description}
+            </Typography>
+          )}
+          {routineDay && (
+            <Box sx={{ flexBasis: '100%' }}>
+              <RoutineSteps day={routineDay} onToggle={tickRoutineStep} expired={expired} />
+            </Box>
+          )}
           {/* Its own line under the title and the button: beside the button,
               seven marks don't fit a narrow column and push the button out. */}
           {showWeek && schedule.user_id ? (
@@ -1468,7 +1476,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
           </Box>
         </Box>
 
-        <Box sx={{ display: 'flex', gap: 2, overflowX: 'auto', pb: 2 }}>
+        <Box ref={columnsRef} sx={{ display: 'flex', gap: 2, overflowX: 'auto', pb: 2, ...columnsFadeSx }}>
           <Box sx={{
             display: 'flex',
             gap: 2,
