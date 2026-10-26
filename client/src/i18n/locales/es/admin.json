@@ -627,7 +627,7 @@
       "help": "Atenúa el propio panel tras un periodo sin interacción, para pantallas de pared cuyo brillo mínimo sigue siendo demasiado alto. La pantalla sigue activa, solo más oscura.",
       "enabled": "Atenuar la pantalla cuando no se usa",
       "pixelShift": "Desplazamiento de píxeles",
-      "pixelShiftHelp": "Desplaza toda la imagen unos píxeles cada pocos minutos para que los elementos estáticos del panel nunca permanezcan sobre los mismos píxeles. Ayuda a prevenir la persistencia de imagen en pantallas siempre encendidas.",
+      "pixelShiftHelp": "Desplaza toda la imagen unos píxeles cada pocos minutos para que los elementos estáticos del panel nunca permanezcan sobre los mismos píxeles. Ayuda a prevenir la persistencia de imagen en pantallas siempre encendidas. Funciona tanto si la atenuación está activada como si no.",
       "day": "Brillo diurno",
       "night": "Brillo nocturno",
       "after": "Segundos sin actividad antes de atenuar",

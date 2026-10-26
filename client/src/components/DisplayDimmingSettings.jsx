@@ -162,21 +162,6 @@ const DisplayDimmingSettings = () => {
         sx={{ mb: 2, display: 'block' }}
       />
 
-      <FormControlLabel
-        control={(
-          <Switch
-            checked={dimming.pixelShift ?? DEFAULT_DIMMING.pixelShift}
-            disabled={locked}
-            onChange={(e) => updateDimming({ pixelShift: e.target.checked })}
-          />
-        )}
-        label={t('admin:appearance.dimming.pixelShift')}
-        sx={{ mb: 1, display: 'block' }}
-      />
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
-        {t('admin:appearance.dimming.pixelShiftHelp')}
-      </Typography>
-
       <TextField
         type="number"
         size="small"
@@ -248,6 +233,22 @@ const DisplayDimmingSettings = () => {
       </Box>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 3 }}>
         {t('admin:appearance.dimming.nightHelp')}
+      </Typography>
+
+      {/* Independent of dimming, so after all of its settings. */}
+      <FormControlLabel
+        control={(
+          <Switch
+            checked={dimming.pixelShift ?? DEFAULT_DIMMING.pixelShift}
+            disabled={locked}
+            onChange={(e) => updateDimming({ pixelShift: e.target.checked })}
+          />
+        )}
+        label={t('admin:appearance.dimming.pixelShift')}
+        sx={{ mb: 1, display: 'block' }}
+      />
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+        {t('admin:appearance.dimming.pixelShiftHelp')}
       </Typography>
 
       <Button variant="contained" startIcon={<Save />} onClick={save} disabled={saving}>

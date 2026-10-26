@@ -284,7 +284,10 @@ const TabBar = ({
         position: 'fixed',
         bottom: 16,
         left: '50%',
-        transform: hidden ? 'translate(-50%, 24px)' : 'translateX(-50%)',
+        // Pixel shift (utils/displayDim.js) nudges the dock with the page.
+        transform: hidden
+          ? 'translate(calc(-50% + var(--pixel-shift-x, 0px)), calc(24px + var(--pixel-shift-y, 0px)))'
+          : 'translate(calc(-50% + var(--pixel-shift-x, 0px)), var(--pixel-shift-y, 0px))',
         zIndex: 9999,
         // Idle hide (issue #77): fade and sink slowly, return quickly. Hidden
         // means invisible too, so nothing in it can be tapped or tabbed to.
@@ -294,7 +297,7 @@ const TabBar = ({
           ? 'opacity 600ms ease, transform 600ms ease, visibility 0s linear 600ms'
           : 'opacity 200ms ease, transform 200ms ease',
         '@media (prefers-reduced-motion: reduce)': {
-          transform: 'translateX(-50%)',
+          transform: 'translate(calc(-50% + var(--pixel-shift-x, 0px)), var(--pixel-shift-y, 0px))',
         },
         display: 'flex',
         alignItems: 'center',

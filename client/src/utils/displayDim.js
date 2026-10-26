@@ -110,6 +110,10 @@ function applyPixelShift() {
   root.style.transition = 'left 1.5s ease, top 1.5s ease';
   root.style.left = `${x}px`;
   root.style.top = `${y}px`;
+  // The dock is fixed, so #root's offset doesn't move it, yet it's the most
+  // static thing on a wall display. It reads the same offset from these.
+  document.documentElement?.style?.setProperty?.('--pixel-shift-x', `${x}px`);
+  document.documentElement?.style?.setProperty?.('--pixel-shift-y', `${y}px`);
   if (root.dataset) root.dataset.pixelShift = 'on';
   if (document.body) document.body.style.overflowX = 'hidden';
 }
@@ -127,6 +131,8 @@ function resetPixelShift() {
     root.style.top = '';
     if (root.dataset) delete root.dataset.pixelShift;
   }
+  document.documentElement?.style?.removeProperty?.('--pixel-shift-x');
+  document.documentElement?.style?.removeProperty?.('--pixel-shift-y');
   if (document.body) document.body.style.overflowX = '';
 }
 
