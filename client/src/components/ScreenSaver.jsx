@@ -6,9 +6,13 @@ import { API_BASE_URL } from '../utils/apiConfig.js';
 import { usePageVisibility } from '../hooks/useScreenActivity.js';
 import ScreensaverOverlay from './ScreensaverOverlay.jsx';
 import PhotoCollage from './PhotoCollage.jsx';
+import CoffeeTable from './CoffeeTable.jsx';
 import { MIN_COLLAGE_PHOTOS } from '../utils/photoCollage.js';
 
-const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange, keepScreenAwake, overlay, photoLayout = 'fit' }) => {
+const ScreenSaver = ({
+  mode, slideshowInterval, tabs, onExit, onTabChange, keepScreenAwake, overlay,
+  photoLayout = 'fit', coffeeTableSeconds = 4, photoDetails = false,
+}) => {
   const pageVisible = usePageVisibility();
   const [photos, setPhotos] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -212,6 +216,7 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange, keepS
   // Too few photos for a collage falls back to the ambient single photo, which
   // still fills the bars.
   const collage = photoLayout === 'collage' && !collageUnavailable && photos.length >= MIN_COLLAGE_PHOTOS;
+  const coffeeTable = photoLayout === 'coffeeTable';
   const ambient = photoLayout === 'ambient' || (photoLayout === 'collage' && !collage);
 
   return (
@@ -235,11 +240,14 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange, keepS
       }}
       onClick={handleExit}
     >
-      {collage ? (
+      {coffeeTable ? (
+        <CoffeeTable photos={photos} seconds={coffeeTableSeconds} showDetails={photoDetails} />
+      ) : collage ? (
         <PhotoCollage
           photos={photos}
           step={step}
           onUnavailable={() => setCollageUnavailable(true)}
+          showDetails={photoDetails}
         />
       ) : (
         <>
@@ -296,7 +304,7 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange, keepS
           calendarDays={overlay.calendarDays}
           showWeather={!!overlay.weather}
           tabs={tabs}
-          driftStep={collage ? step : currentIndex}
+          driftStep={collage || coffeeTable ? step : currentIndex}
         />
       )}
 
@@ -336,7 +344,7 @@ const ScreenSaver = ({ mode, slideshowInterval, tabs, onExit, onTabChange, keepS
         </IconButton>
 
         {/* Stepping one photo back or forward means nothing on a wall of them. */}
-        {!collage && (
+        {!collage && !coffeeTable && (
           <>
             <IconButton
               onClick={(e) => {

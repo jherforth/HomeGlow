@@ -44,8 +44,14 @@ export const DEFAULT_SCREENSAVER_SETTINGS = {
   overlayWeather: false,
   // How the photo slideshow uses the screen: 'fit' shows each photo whole on
   // black (the original look), 'ambient' fills the bars with a blurred copy of
-  // the photo, 'collage' tiles several photos across the screen.
+  // the photo, 'collage' tiles several photos across the screen, 'coffeeTable'
+  // drops prints onto a table one at a time.
   photoLayout: 'fit',
+  // Coffee Table: seconds between prints landing.
+  coffeeTableSeconds: 4,
+  // The date, people and place on each photo, in Collage and Coffee Table,
+  // as far as the photo carries them. Off by default.
+  photoDetails: false,
   // Minutes without interaction before the dock fades out; 0 keeps it shown
   // (issue #77). Off by default so no display changes on upgrade.
   dockHideMinutes: 0,
@@ -62,7 +68,15 @@ export const DEFAULT_SCREENSAVER_SETTINGS = {
   expandOff: [],
 };
 
-export const PHOTO_LAYOUTS = ['fit', 'ambient', 'collage'];
+export const PHOTO_LAYOUTS = ['fit', 'ambient', 'collage', 'coffeeTable'];
+export const MIN_COFFEE_TABLE_SECONDS = 1;
+export const MAX_COFFEE_TABLE_SECONDS = 20;
+
+const normalizeCoffeeTableSeconds = (value) => {
+  const seconds = Math.round(Number(value));
+  if (!Number.isFinite(seconds)) return DEFAULT_SCREENSAVER_SETTINGS.coffeeTableSeconds;
+  return Math.min(MAX_COFFEE_TABLE_SECONDS, Math.max(MIN_COFFEE_TABLE_SECONDS, seconds));
+};
 
 export const DEFAULT_AUTO_DARK_MODE_SETTINGS = {
   enabled: false,
@@ -137,6 +151,8 @@ export const normalizeScreensaverSettings = (raw) => {
     overlayWeather: merged.overlayWeather === true,
     overlayCalendarDays: Number.isFinite(days) ? Math.min(7, Math.max(1, days)) : 1,
     photoLayout: PHOTO_LAYOUTS.includes(merged.photoLayout) ? merged.photoLayout : 'fit',
+    coffeeTableSeconds: normalizeCoffeeTableSeconds(merged.coffeeTableSeconds),
+    photoDetails: merged.photoDetails === true,
     dockHideMinutes: normalizeDockHideMinutes(merged.dockHideMinutes),
     twoFingerSwipe: merged.twoFingerSwipe === true,
     blockPinchZoom: merged.blockPinchZoom === true,

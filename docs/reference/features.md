@@ -403,6 +403,21 @@ calculation); `server/services/homeAssistant.js` for the connection.
 
 - After a configurable idle timeout, an overlay activates in one of two modes:
   cycling through tabs, or a photo slideshow. Optionally goes full-screen.
+- The photo slideshow has four layouts:
+  - **Fit:** one photo at a time on black.
+  - **Ambient:** one photo, with a blurred copy filling the bars.
+  - **Collage:** photos tiled to fill the screen.
+  - **Coffee Table:** prints dropped onto a table one at a time, every 1 to 20
+    seconds (default 4), landing at an angle where the table was covered longest
+    ago, so the pile keeps the whole screen covered. At most 22 prints stay;
+    the oldest fade away underneath (`CoffeeTable.jsx`, `utils/coffeeTable.js`).
+- **Show photo details** (Collage and Coffee Table): when each photo was taken,
+  who is in it and where, as far as its source says.
+  - **Immich:** gives all three.
+  - **Google Photos:** only the date, because its Picker API shares no people
+    or places.
+  - **Uploaded photos:** none, because they're resized in the browser before
+    upload, which drops the camera's data.
 - Not mounted on mobile (phones lock themselves; see
   [Mobile Experience](../architecture/mobile-experience.md)).
 

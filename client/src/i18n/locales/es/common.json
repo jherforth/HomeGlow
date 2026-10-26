@@ -51,6 +51,10 @@
   "layout": {
     "save": "Guardar diseño"
   },
+  "photoDetails": {
+    "morePeople_one": "{{count}} más",
+    "morePeople_other": "{{count}} más"
+  },
   "screensaverOverlay": {
     "today": "Hoy",
     "tomorrow": "Mañana",

@@ -185,6 +185,7 @@ const {
 const { httpsAgentFor, isCertificateVerificationSkipped } = require('./utils/outboundTls');
 const { createUpdateChecker } = require('./services/updateCheck');
 const immichPhotos = require('./services/immichPhotos');
+const { immichPhotoDetails, takenOnFromInstant } = require('./utils/photoDetails');
 const { PLUGIN_AUTHOR_MAX_LENGTH, resolvePluginAuthor } = require('./utils/pluginAuthor');
 const { listPluginsFromTree } = require('./utils/pluginStoreListing');
 const { PLUGIN_FRAME_TOUCH_SCRIPT } = require('./utils/pluginFrameTouch');
@@ -7177,7 +7178,7 @@ fastify.get('/api/photo-items', async (request, reply) => {
             shuffleInPlace(assets);
             assets = assets.slice(0, 100);
           } else {
-            const response = await axios.post(`${apiBase}/search/random`,
+            const response = await immichPhotos.postWithDetails(axios.post, `${apiBase}/search/random`,
               { size: 100 },
               {
                 headers: immichHeaders,
@@ -7194,13 +7195,17 @@ fastify.get('/api/photo-items', async (request, reply) => {
             type: asset.type,
             source_id: source.id,
             source_name: source.name,
-            source_type: 'Immich'
+            source_type: 'Immich',
+            // When it was taken, who is in it, where (utils/photoDetails.js).
+            ...immichPhotoDetails(asset),
           }));
         } else if (source.type === 'GooglePhotos') {
           const rows = db.prepare(
-            'SELECT id, google_media_id FROM google_picked_media WHERE source_id = ?'
+            'SELECT id, google_media_id, created_time FROM google_picked_media WHERE source_id = ?'
           ).all(source.id);
           const photos = rows.map((r) => ({
+            // Google shares only the date: no people, no place.
+            ...(takenOnFromInstant(r.created_time) ? { takenOn: takenOnFromInstant(r.created_time) } : {}),
             id: r.google_media_id,
             url: `/api/photo-sources/${source.id}/picked/${r.id}`,
             thumbnail: `/api/photo-sources/${source.id}/picked/${r.id}`,
