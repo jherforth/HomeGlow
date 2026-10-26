@@ -240,8 +240,8 @@ describe('normalizeDimming', () => {
   });
 
   it('keeps valid values', () => {
-    expect(normalizeDimming({ enabled: true, day: 0.5, night: 0.1, after: 30, nightStart: 22, nightEnd: 7 }))
-      .toEqual({ enabled: true, day: 0.5, night: 0.1, after: 30, nightStart: 22, nightEnd: 7 });
+    expect(normalizeDimming({ enabled: true, day: 0.5, night: 0.1, after: 30, nightStart: 22, nightEnd: 7, pixelShift: true }))
+      .toEqual({ enabled: true, day: 0.5, night: 0.1, after: 30, nightStart: 22, nightEnd: 7, pixelShift: true });
   });
 
   it('clamps levels to 0..1, delay to >= 0, and hours to 0..23', () => {

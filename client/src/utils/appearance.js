@@ -32,6 +32,7 @@ export const DEFAULT_DIMMING = {
   after: 20,
   nightStart: 0,
   nightEnd: 6,
+  pixelShift: false,
 };
 
 export const DEFAULT_APPEARANCE = {
@@ -84,6 +85,7 @@ export function normalizeDimming(raw) {
     after: clampNumber(raw.after, 0, Number.POSITIVE_INFINITY, DEFAULT_DIMMING.after),
     nightStart: Math.trunc(clampNumber(raw.nightStart, 0, 23, DEFAULT_DIMMING.nightStart)),
     nightEnd: Math.trunc(clampNumber(raw.nightEnd, 0, 23, DEFAULT_DIMMING.nightEnd)),
+    pixelShift: Boolean(raw.pixelShift),
   };
 }
 
