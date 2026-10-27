@@ -21,9 +21,15 @@ const Slot = ({ name, children }) => {
 export const AdminHeaderActions = ({ children }) => <Slot name="header">{children}</Slot>;
 export const AdminFooter = ({ children }) => <Slot name="footer">{children}</Slot>;
 
-// A heading, then the group's rows in one bordered block.
-// `action` sits at the right end of the heading, for an Add button and such.
-export const AdminGroup = ({ title, action, children, sx }) => (
+// The accent's edge and tint, for a group whose first row is a header band.
+const accentEdge = 'rgba(var(--accent-rgb), 0.35)';
+
+// A heading, then the group's rows in one bordered block, with the same
+// corners as the fields inside it. `action` sits at the right end of the
+// heading, for an Add button and such. `accent` draws the block's edge in the
+// accent and its first row as a tinted band, so a run of like groups (one per
+// installed plugin) don't read as one.
+export const AdminGroup = ({ title, action, accent = false, children, sx }) => (
   <Box component="section" sx={{ mb: 3, ...sx }}>
     {(title || action) && (
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, minHeight: 32, mb: 1, px: 0.5 }}>
@@ -44,8 +50,14 @@ export const AdminGroup = ({ title, action, children, sx }) => (
         bgcolor: 'background.paper',
         border: 1,
         borderColor: 'divider',
-        borderRadius: 3,
+        borderRadius: 1,
         '& > * + *': { borderTop: 1, borderColor: 'divider' },
+        ...(accent && {
+          borderColor: accentEdge,
+          overflow: 'hidden',
+          '& > :first-child': { bgcolor: 'rgba(var(--accent-rgb), 0.10)' },
+          '& > :first-child + *': { borderColor: accentEdge },
+        }),
       }}
     >
       {children}

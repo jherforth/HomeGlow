@@ -115,7 +115,7 @@ const ExpandWidgetsSettings = ({ settings, onChange, widgets = [] }) => {
           )}
           extra={(
             <Collapse in={listOpen}>
-              <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 2 }}>
+              <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1 }}>
                 {widgets.map((widget, index) => (
                   <Box
                     key={widget.name}
