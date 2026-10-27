@@ -515,7 +515,7 @@ const ControlsOnDisplay = ({
       : (state.inheriting ? 'householdDefault' : state.preset);
 
     return (
-      <Paper key={deviceName} variant="outlined" aria-busy={busy} sx={{ p: 2, mb: 2, borderRadius: 3 }}>
+      <Paper key={deviceName} variant="outlined" aria-busy={busy} sx={{ p: 2, mb: 2, borderRadius: 1 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 1 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{deviceName}</Typography>
           {isCurrent && <Chip size="small" color="primary" label={t('admin:devices.current')} />}
@@ -659,7 +659,7 @@ const ControlsOnDisplay = ({
       </Typography>
 
       {/* Household default */}
-      <Paper variant="outlined" aria-busy={householdBusy} sx={{ p: 2, mb: 3, borderRadius: 3 }}>
+      <Paper variant="outlined" aria-busy={householdBusy} sx={{ p: 2, mb: 3, borderRadius: 1 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
             {t('admin:controls.defaultHeading')}

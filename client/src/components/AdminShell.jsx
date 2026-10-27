@@ -297,7 +297,7 @@ const listCardSx = {
   bgcolor: 'background.paper',
   border: 1,
   borderColor: 'divider',
-  borderRadius: 3,
+  borderRadius: 1,
   overflow: 'hidden',
   '& > .MuiListItemButton-root + .MuiListItemButton-root': { borderTop: 1, borderColor: 'divider' },
 };

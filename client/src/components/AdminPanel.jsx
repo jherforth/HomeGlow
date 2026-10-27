@@ -2281,45 +2281,43 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                         [plugin.filename]: { ...prev[plugin.filename], [field]: value }
                       }));
                       return (
-                        <AdminGroup
-                          key={plugin.filename}
-                          title={plugin.name}
-                          action={(
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                              {updatable && (
-                                <Button size="small" variant="outlined" startIcon={<CloudDownload />} onClick={() => installGithubWidget(storeEntry)}>
-                                  {t('admin:plugins.update')}
-                                </Button>
-                              )}
-                              {/* An installed plugin is already served at
-                                  /widgets/<file>, so it can preview itself. On
-                                  demand rather than always: these are real plugins
-                                  that make real API calls. */}
-                              <Button
-                                size="small"
-                                onClick={() => setPreviewPlugin((current) => current === plugin.filename ? null : plugin.filename)}
-                              >
-                                {previewPlugin === plugin.filename
-                                  ? t('admin:plugins.hidePreview')
-                                  : t('admin:plugins.showPreview')}
-                              </Button>
-                              <Tooltip title={t('common:actions.delete')}>
-                                <IconButton onClick={() => deleteWidget(plugin.filename)} color="error" size="small" aria-label={t('common:actions.delete')}>
-                                  <Delete fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                            </Box>
-                          )}
-                        >
+                        <AdminGroup key={plugin.filename} accent>
+                          {/* The header band (AdminGroup's accent), so one
+                              plugin's settings don't run into the next. */}
                           <AdminRow
-                            label={(
-                              <Typography variant="body2" component="span" color="text.secondary">
-                                {[plugin.filename, plugin.version, plugin.author && t('admin:plugins.byAuthor', { author: plugin.author })]
-                                  .filter(Boolean).join(' · ')}
-                              </Typography>
+                            label={<Box component="span" sx={{ fontWeight: 600 }}>{plugin.name}</Box>}
+                            control={(
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                {updatable && (
+                                  <Button size="small" variant="outlined" startIcon={<CloudDownload />} onClick={() => installGithubWidget(storeEntry)}>
+                                    {t('admin:plugins.update')}
+                                  </Button>
+                                )}
+                                {/* An installed plugin is already served at
+                                    /widgets/<file>, so it can preview itself. On
+                                    demand rather than always: these are real plugins
+                                    that make real API calls. */}
+                                <Button
+                                  size="small"
+                                  onClick={() => setPreviewPlugin((current) => current === plugin.filename ? null : plugin.filename)}
+                                >
+                                  {previewPlugin === plugin.filename
+                                    ? t('admin:plugins.hidePreview')
+                                    : t('admin:plugins.showPreview')}
+                                </Button>
+                                <Tooltip title={t('common:actions.delete')}>
+                                  <IconButton onClick={() => deleteWidget(plugin.filename)} color="error" size="small" aria-label={t('common:actions.delete')}>
+                                    <Delete fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
                             )}
                             hint={(
                               <>
+                                <Box component="span" sx={{ display: 'block' }}>
+                                  {[plugin.filename, plugin.version, plugin.author && t('admin:plugins.byAuthor', { author: plugin.author })]
+                                    .filter(Boolean).join(' · ')}
+                                </Box>
                                 {updatable && (
                                   <Box component="span" sx={{ display: 'block', color: 'var(--accent)', fontWeight: 600 }}>
                                     {storeEntry.version
@@ -2329,13 +2327,15 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                                 )}
                                 {/* Straight from the plugin's own manifest (issue
                                     #147). A legacy widget has none, and says so. */}
-                                <Box component="span" sx={{ display: 'block', color: plugin.manifest?.description ? 'text.primary' : 'text.secondary', fontStyle: plugin.manifest?.description ? 'normal' : 'italic' }}>
+                                <Box component="span" sx={{ display: 'block', mt: 0.5, color: plugin.manifest?.description ? 'text.primary' : 'text.secondary', fontStyle: plugin.manifest?.description ? 'normal' : 'italic' }}>
                                   {plugin.manifest?.description || t('admin:plugins.noDescription')}
                                 </Box>
                               </>
                             )}
-                            extra={previewPlugin === plugin.filename && (
-                              <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 2, overflow: 'hidden', height: 220 }}>
+                          />
+                          {previewPlugin === plugin.filename && (
+                            <Box sx={{ px: 2, py: 1.5 }}>
+                              <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden', height: 220 }}>
                                 <iframe
                                   title={t('admin:plugins.previewTitle', { name: plugin.name })}
                                   // Same channel PluginWidgetWrapper uses, read from the
@@ -2354,8 +2354,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                                   style={{ width: '100%', height: '100%', border: 0, display: 'block', backgroundColor: 'var(--card-bg)' }}
                                 />
                               </Box>
-                            )}
-                          />
+                            </Box>
+                          )}
                           <AdminRow
                             label={t('common:labels.enabled')}
                             control={(

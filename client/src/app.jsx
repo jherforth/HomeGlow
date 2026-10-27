@@ -1591,8 +1591,8 @@ const App = () => {
         // An edge for the floating panel, which can sink into a page background
         // of a similar solid color (#230). Full screen on a phone needs none.
         // The panel sets its own size (AdminShell), so it doesn't change from
-        // section to section.
-        slotProps={{ paper: { sx: isMobile ? {} : { border: '1px solid var(--card-border)', borderRadius: 4 } } }}
+        // section to section. Its corners stay MUI's own, like the fields in it.
+        slotProps={{ paper: { sx: isMobile ? {} : { border: '1px solid var(--card-border)' } } }}
       >
         <DialogContent sx={{ p: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <Suspense fallback={<Typography sx={{ p: 3 }}>Loading settings...</Typography>}>
