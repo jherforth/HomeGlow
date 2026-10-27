@@ -344,13 +344,13 @@ draws (`server/ha-panels/template.html`); each is also a plugin row
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/api/ha-panels` | Panels, whether Home Assistant is connected, PIN protection, the live link's state, the icon names. |
+| GET | `/api/ha-panels?device=` | Panels, whether Home Assistant is connected, PIN protection, the live link's state, the icon names. Each panel's `placed` is its size on `device`'s tabs (else on any display's), or null. |
 | GET | `/api/ha-panels/entities` | What the picker offers: supported entities (hidden and disabled ones left out), with areas from the registries. |
 | GET | `/api/ha-panels/preview-state?entities=` | Filtered states for the builder's live preview (read only). |
 | GET | `/api/ha-panels/history?limit=` | What panels did, newest first (the last 1000 are kept). |
 | PUT | `/api/ha-panels/settings` | `{ pinProtection }`. |
 | POST | `/api/ha-panels` | `{ recipe }` → a new panel and its plugin (`ha-<name>.html`). 400 with `errors` for a recipe it can't accept. |
-| PUT | `/api/ha-panels/:id` | `{ recipe }`. The plugin id and file stay the same. |
+| PUT | `/api/ha-panels/:id` | `{ recipe, resize }`. The plugin id and file stay the same. With `resize: true` and a `recipe.widget` size, the panel is resized on every tab it is placed on; `resized` in the answer says whether any layout changed, and when one did the household `settings` counter moves so displays reload their layouts. |
 | POST | `/api/ha-panels/:id/duplicate` | A copy, named "… copy". |
 | POST | `/api/ha-panels/import` | `{ recipe, replacements: { old: new } }` → the panel and the entity ids still `missing`. |
 | DELETE | `/api/ha-panels/:id` | Delete the panel and its plugin. Deleting the plugin from the Plugins list does the same. |
