@@ -48,7 +48,7 @@ folder name must match the manifest's `id`.
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `manifestVersion` | yes | `1`; `2` for a theme that uses `ornaments`, the meter tokens or `clumps`; `3` for one that uses the button tokens or curved flybys; `4` for one with `weather` scenes or a `flash` layer; `5` for one that uses orbits; `6` for one with a confetti `cast`; `7` for one with pictures that bend (`flex`); `8` for one whose frames saturate what is behind them (`saturate()` in `--hg-frame-backdrop`); `9` for one with a flyby `lens`. A HomeGlow older than the version refuses the theme. |
+| `manifestVersion` | yes | `1`; `2` for a theme that uses `ornaments`, the meter tokens or `clumps`; `3` for one that uses the button tokens or curved flybys; `4` for one with `weather` scenes or a `flash` layer; `5` for one that uses orbits; `6` for one with a confetti `cast`; `7` for one with pictures that bend (`flex`); `8` for one whose frames saturate what is behind them (`saturate()` in `--hg-frame-backdrop`); `9` for one with a flyby `lens`; `10` for one whose particles `swing` or `blur`. A HomeGlow older than the version refuses the theme. |
 | `id` | yes | Lowercase slug (a-z, 0-9, hyphens), the same as the folder name. |
 | `name` | yes | Shown in the theme picker. |
 | `version`, `author`, `description` | | As in a plugin manifest. The author shows as "by ...". |
