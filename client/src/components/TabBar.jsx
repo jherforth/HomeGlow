@@ -232,6 +232,7 @@ const TabBar = ({
   onOpenSettings,
   onRefresh,
   hidden = false,
+  underDialogs = false,
   theme,
   themeMode,
   screensaverCountdown,
@@ -288,7 +289,10 @@ const TabBar = ({
         transform: hidden
           ? 'translate(calc(-50% + var(--pixel-shift-x, 0px)), calc(24px + var(--pixel-shift-y, 0px)))'
           : 'translate(calc(-50% + var(--pixel-shift-x, 0px)), var(--pixel-shift-y, 0px))',
-        zIndex: 9999,
+        // Above everything, except while a panel that reaches the bottom of
+        // the screen is open (the Admin Panel, whose save buttons are there):
+        // then under the dialog layer (MUI's modal is 1300), still in view.
+        zIndex: underDialogs ? 1250 : 9999,
         // Idle hide (issue #77): fade and sink slowly, return quickly. Hidden
         // means invisible too, so nothing in it can be tapped or tabbed to.
         opacity: hidden ? 0 : 1,

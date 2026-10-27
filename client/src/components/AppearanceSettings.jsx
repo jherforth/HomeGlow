@@ -18,7 +18,7 @@ import { Save } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import ColorPickerPopover from './ColorPickerPopover';
 import PersonalizeFields from './PersonalizeFields';
-import AdminFormSection from './AdminFormSection';
+import { AdminFooter, AdminGroup, AdminHeaderActions, AdminRow } from './AdminRows.jsx';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase, getDeviceName } from '../utils/deviceName.js';
 import {
@@ -238,181 +238,206 @@ const AppearanceSettings = () => {
 
   if (!draft) return null;
 
+  // On this display, each setting can follow the household or set its own.
   const inheritSwitch = (field) => scope === 'device' && (
     <FormControlLabel
-      control={<Switch checked={inherit[field]} onChange={(e) => setInheritField(field, e.target.checked)} />}
-      label={t('admin:appearance.useHousehold')}
-      sx={{ mb: 1, display: 'block' }}
+      control={<Switch size="small" checked={inherit[field]} onChange={(e) => setInheritField(field, e.target.checked)} />}
+      label={<Typography variant="body2" color="text.secondary">{t('admin:appearance.useHousehold')}</Typography>}
+      sx={{ display: 'flex', mt: 0.5, ml: -0.5, mr: 0 }}
     />
   );
 
-  const colorPicker = (key) => (
-    <Box key={key} sx={{ mb: 2 }}>
-      <Typography variant="body1" sx={{ mb: 1, fontWeight: 600 }}>
-        {t(`admin:appearance.colorLabels.${key}`)}
-      </Typography>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-        <Box
-          role="button"
-          aria-label={t(`admin:appearance.colorLabels.${key}`)}
-          onClick={(e) => {
-            if (locked('colors')) return;
-            setPickerAnchor(pickerAnchor.key === key ? { key: null, el: null } : { key, el: e.currentTarget });
-          }}
-          sx={{
-            width: 60,
-            height: 60,
-            backgroundColor: draft.colors[key],
-            border: '3px solid var(--card-border)',
-            borderRadius: 'var(--hg-radius-md)',
-            cursor: locked('colors') ? 'default' : 'pointer',
-            opacity: locked('colors') ? 0.6 : 1,
-          }}
-        />
-        <TextField
-          value={draft.colors[key]}
-          disabled={locked('colors')}
-          onChange={(e) => updateDraft('colors', { ...draft.colors, [key]: e.target.value })}
-          sx={{ flex: 1 }}
-          placeholder="#000000"
-        />
-      </Box>
-      <ColorPickerPopover
-        anchorEl={pickerAnchor.key === key ? pickerAnchor.el : null}
-        color={draft.colors[key]}
-        onChange={(color) => updateDraft('colors', { ...draft.colors, [key]: color.hex })}
-        onClose={() => setPickerAnchor({ key: null, el: null })}
-      />
-    </Box>
+  const colorRow = (key) => (
+    <AdminRow
+      key={key}
+      label={t(`admin:appearance.colorLabels.${key}`)}
+      disabled={locked('colors')}
+      control={(
+        <>
+          <Box
+            role="button"
+            aria-label={t(`admin:appearance.colorLabels.${key}`)}
+            onClick={(e) => {
+              if (locked('colors')) return;
+              setPickerAnchor(pickerAnchor.key === key ? { key: null, el: null } : { key, el: e.currentTarget });
+            }}
+            sx={{
+              width: 36,
+              height: 36,
+              flex: 'none',
+              backgroundColor: draft.colors[key],
+              border: '1px solid var(--card-border)',
+              borderRadius: 'var(--hg-radius-md)',
+              cursor: locked('colors') ? 'default' : 'pointer',
+              opacity: locked('colors') ? 0.6 : 1,
+            }}
+          />
+          <TextField
+            size="small"
+            value={draft.colors[key]}
+            disabled={locked('colors')}
+            onChange={(e) => updateDraft('colors', { ...draft.colors, [key]: e.target.value })}
+            sx={{ width: 120 }}
+            placeholder="#000000"
+            slotProps={{ htmlInput: { 'aria-label': t(`admin:appearance.colorLabels.${key}`) } }}
+          />
+          <ColorPickerPopover
+            anchorEl={pickerAnchor.key === key ? pickerAnchor.el : null}
+            color={draft.colors[key]}
+            onChange={(color) => updateDraft('colors', { ...draft.colors, [key]: color.hex })}
+            onClose={() => setPickerAnchor({ key: null, el: null })}
+          />
+        </>
+      )}
+    />
   );
 
   const resolvedTheme = resolveTheme(draft.theme, themes, assets);
   const sceneLabel = (key) => (key === 'default'
     ? t('admin:appearance.weather.defaultScene')
     : capitalize(t(`weather:conditions.${key}`)));
+  const locationLabel = t(draftWeather ? 'admin:appearance.weather.location' : 'admin:appearance.autoDark');
 
   return (
-    <AdminFormSection title={t('admin:appearance.heading')} subtitle={t('admin:appearance.subtitle')}>
-      <ToggleButtonGroup
-        exclusive
-        size="small"
-        value={scope}
-        onChange={(_, value) => value && setScope(value)}
-        sx={{ mb: 2 }}
-      >
-        <ToggleButton value="device">{t('admin:appearance.scopeDevice')}</ToggleButton>
-        <ToggleButton value="household">{t('admin:appearance.scopeHousehold')}</ToggleButton>
-      </ToggleButtonGroup>
+    <>
+      <AdminHeaderActions>
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          value={scope}
+          onChange={(_, value) => value && setScope(value)}
+          sx={{ '& .MuiToggleButton-root': { textTransform: 'none', px: 1.75, py: 0.5 } }}
+        >
+          <ToggleButton value="device">{t('admin:appearance.scopeDevice')}</ToggleButton>
+          <ToggleButton value="household">{t('admin:appearance.scopeHousehold')}</ToggleButton>
+        </ToggleButtonGroup>
+      </AdminHeaderActions>
 
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2, px: 0.5 }}>
+        {t('admin:appearance.subtitle')}
+      </Typography>
 
       {message && <Alert severity={message.type} onClose={() => setMessage(null)} sx={{ mb: 2 }}>{message.text}</Alert>}
 
-      <Typography variant="subtitle2" sx={{ mt: 1 }}>{t('admin:appearance.theme')}</Typography>
-      {inheritSwitch('theme')}
-      <FormControl fullWidth sx={{ mb: 1 }} disabled={locked('theme')}>
-        <Select value={draft.theme} inputProps={{ 'aria-label': t('admin:appearance.theme') }} onChange={(e) => updateDraft('theme', e.target.value)}>
-          {missingTheme && (
-            <MenuItem value={missingTheme} disabled>
-              {t('admin:themes.notInstalled', { id: missingTheme })}
-            </MenuItem>
+      <AdminGroup title={t('admin:appearance.heading')}>
+        <AdminRow
+          label={t('admin:appearance.theme')}
+          hint={t(`admin:appearance.themeDescriptions.${draft.theme}`, { defaultValue: chosenTheme?.description || '' })}
+          under={inheritSwitch('theme')}
+          fill
+          control={(
+            <FormControl size="small" sx={{ minWidth: 200 }} disabled={locked('theme')}>
+              <Select value={draft.theme} inputProps={{ 'aria-label': t('admin:appearance.theme') }} onChange={(e) => updateDraft('theme', e.target.value)}>
+                {missingTheme && (
+                  <MenuItem value={missingTheme} disabled>
+                    {t('admin:themes.notInstalled', { id: missingTheme })}
+                  </MenuItem>
+                )}
+                {themes.map((theme) => (
+                  <MenuItem key={theme.id} value={theme.id}>
+                    {theme.name}
+                    {theme.author && (
+                      <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                        {t('admin:plugins.byAuthor', { author: theme.author })}
+                      </Typography>
+                    )}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           )}
-          {themes.map((theme) => (
-            <MenuItem key={theme.id} value={theme.id}>
-              {theme.name}
-              {theme.author && (
-                <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                  {t('admin:plugins.byAuthor', { author: theme.author })}
-                </Typography>
-              )}
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 3 }}>
-        {t(`admin:appearance.themeDescriptions.${draft.theme}`, { defaultValue: chosenTheme?.description || '' })}
-      </Typography>
-
-      <Typography variant="subtitle2">{t('admin:appearance.mode')}</Typography>
-      {inheritSwitch('mode')}
-      <FormControl fullWidth sx={{ mb: 3 }} disabled={locked('mode')}>
-        <Select value={draft.mode} inputProps={{ 'aria-label': t('admin:appearance.mode') }} onChange={(e) => updateDraft('mode', e.target.value)}>
-          {MODES.map((mode) => (
-            <MenuItem key={mode} value={mode}>{t(`admin:appearance.modes.${mode}`)}</MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-
-      {(draft.mode === 'auto' || draftWeather) && (
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="subtitle2">{t(draftWeather ? 'admin:appearance.weather.location' : 'admin:appearance.autoDark')}</Typography>
-          {inheritSwitch('autoDark')}
-          <TextField
-            fullWidth
-            required={draft.mode === 'auto'}
-            disabled={locked('autoDark')}
-            slotProps={{ htmlInput: { 'aria-label': t(draftWeather ? 'admin:appearance.weather.location' : 'admin:appearance.autoDark') } }}
-            value={draft.autoDark.locationQuery}
-            onChange={(e) => updateDraft('autoDark', { ...draft.autoDark, locationQuery: e.target.value })}
-            helperText={draft.autoDark.resolvedName
+        />
+        <AdminRow
+          label={t('admin:appearance.mode')}
+          under={inheritSwitch('mode')}
+          fill
+          control={(
+            <FormControl size="small" sx={{ minWidth: 200 }} disabled={locked('mode')}>
+              <Select value={draft.mode} inputProps={{ 'aria-label': t('admin:appearance.mode') }} onChange={(e) => updateDraft('mode', e.target.value)}>
+                {MODES.map((mode) => (
+                  <MenuItem key={mode} value={mode}>{t(`admin:appearance.modes.${mode}`)}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+        />
+        {(draft.mode === 'auto' || draftWeather) && (
+          <AdminRow
+            label={locationLabel}
+            hint={draft.autoDark.resolvedName
               ? t('admin:appearance.resolvedLocation', { name: draft.autoDark.resolvedName })
               : t('admin:autoDark.locationHelp')}
+            under={inheritSwitch('autoDark')}
+            wide
+            control={(
+              <TextField
+                fullWidth
+                size="small"
+                required={draft.mode === 'auto'}
+                disabled={locked('autoDark')}
+                slotProps={{ htmlInput: { 'aria-label': locationLabel } }}
+                value={draft.autoDark.locationQuery}
+                onChange={(e) => updateDraft('autoDark', { ...draft.autoDark, locationQuery: e.target.value })}
+              />
+            )}
           />
-        </Box>
-      )}
+        )}
+      </AdminGroup>
 
       {draftWeather && (
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="subtitle2">{t('admin:appearance.weather.heading')}</Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-            {t('admin:appearance.weather.help')}
-          </Typography>
-          {weatherStatus?.condition && (
-            <Typography variant="body2" sx={{ mb: 1 }}>
-              {t('admin:appearance.weather.now', {
-                condition: capitalize(t(`weather:conditions.${weatherStatus.condition}`)),
-                scene: sceneLabel(pickWeatherScene(draftWeather, weatherStatus.condition)),
-              })}
-            </Typography>
-          )}
-          {weatherStatus?.error && (
-            <Alert severity="warning" sx={{ mb: 1 }}>
-              {t('admin:appearance.weather.unavailable', { reason: weatherStatus.error })}
-            </Alert>
-          )}
-          {draft.mode !== 'auto' && (
-            <Alert severity="info" sx={{ mb: 1 }}>{t('admin:appearance.weather.nightHint')}</Alert>
-          )}
-          <Typography variant="body2" sx={{ mt: 2, mb: 0.5, fontWeight: 600 }}>{t('admin:appearance.weather.preview')}</Typography>
-          <FormControl fullWidth size="small">
-            <Select
-              value={previewScene || ''}
-              displayEmpty
-              inputProps={{ 'aria-label': t('admin:appearance.weather.preview') }}
-              onChange={(e) => setWeatherScenePreview(e.target.value || null)}
-            >
-              <MenuItem value="">{t('admin:appearance.weather.live')}</MenuItem>
-              {weatherScenesOf(draftWeather).map((key) => (
-                <MenuItem key={key} value={key}>{sceneLabel(key)}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-            {t('admin:appearance.weather.previewHelp', { minutes: PREVIEW_MS / 60000 })}
-          </Typography>
-        </Box>
+        <AdminGroup title={t('admin:appearance.weather.heading')}>
+          <AdminRow
+            label={t('admin:appearance.weather.preview')}
+            hint={t('admin:appearance.weather.help')}
+            fill
+            control={(
+              <FormControl size="small" sx={{ minWidth: 200 }}>
+                <Select
+                  value={previewScene || ''}
+                  displayEmpty
+                  inputProps={{ 'aria-label': t('admin:appearance.weather.preview') }}
+                  onChange={(e) => setWeatherScenePreview(e.target.value || null)}
+                >
+                  <MenuItem value="">{t('admin:appearance.weather.live')}</MenuItem>
+                  {weatherScenesOf(draftWeather).map((key) => (
+                    <MenuItem key={key} value={key}>{sceneLabel(key)}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+            extra={(
+              <>
+                {weatherStatus?.condition && (
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    {t('admin:appearance.weather.now', {
+                      condition: capitalize(t(`weather:conditions.${weatherStatus.condition}`)),
+                      scene: sceneLabel(pickWeatherScene(draftWeather, weatherStatus.condition)),
+                    })}
+                  </Typography>
+                )}
+                {weatherStatus?.error && (
+                  <Alert severity="warning" sx={{ mb: 1 }}>
+                    {t('admin:appearance.weather.unavailable', { reason: weatherStatus.error })}
+                  </Alert>
+                )}
+                {draft.mode !== 'auto' && (
+                  <Alert severity="info" sx={{ mb: 1 }}>{t('admin:appearance.weather.nightHint')}</Alert>
+                )}
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  {t('admin:appearance.weather.previewHelp', { minutes: PREVIEW_MS / 60000 })}
+                </Typography>
+              </>
+            )}
+          />
+        </AdminGroup>
       )}
-
 
       {/* A theme with colors of its own replaces these, so they show only for
           one that uses them (Classic). The stored values are kept. */}
       {!resolvedTheme.colors && (
-        <>
-          <Typography variant="subtitle2">{t('admin:appearance.colors')}</Typography>
-          {inheritSwitch('colors')}
-          <Box sx={{ maxWidth: 600, mb: 2 }}>
-            {COLOR_KEYS.map(colorPicker)}
-          </Box>
-        </>
+        <AdminGroup title={t('admin:appearance.colors')} action={inheritSwitch('colors')}>
+          {COLOR_KEYS.map(colorRow)}
+        </AdminGroup>
       )}
 
       <PersonalizeFields
@@ -423,17 +448,17 @@ const AppearanceSettings = () => {
         onError={(text) => flash('error', text)}
       />
 
-      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-        <Button variant="contained" startIcon={<Save />} onClick={save} disabled={saving}>
-          {scope === 'household' ? t('admin:appearance.saveHousehold') : t('admin:appearance.saveDevice')}
-        </Button>
+      <AdminFooter>
         {scope === 'device' && (
           <Button variant="outlined" onClick={makeHouseholdDefault} disabled={saving}>
             {t('admin:appearance.makeHouseholdDefault')}
           </Button>
         )}
-      </Box>
-    </AdminFormSection>
+        <Button variant="contained" startIcon={<Save />} onClick={save} disabled={saving}>
+          {scope === 'household' ? t('admin:appearance.saveHousehold') : t('admin:appearance.saveDevice')}
+        </Button>
+      </AdminFooter>
+    </>
   );
 };
 

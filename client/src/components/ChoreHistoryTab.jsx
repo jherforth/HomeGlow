@@ -10,7 +10,6 @@ import {
   TableHead,
   TableRow,
   TableSortLabel,
-  Paper,
   IconButton,
   CircularProgress,
   Alert,
@@ -23,6 +22,7 @@ import {
 import { Delete, Refresh } from '@mui/icons-material';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
+import { AdminGroup, AdminNote } from './AdminRows.jsx';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { compactStackedTableSx } from '../utils/responsiveTable.js';
 import { formatLoggedAt } from '../utils/choreHelpers.js';
@@ -238,72 +238,67 @@ export default function ChoreHistoryTab() {
   const filterSx = { minWidth: 150 };
 
   return (
-    <Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-        <Typography variant="h6">{t('admin:chores.historyView.title')}</Typography>
-        <Button
-          variant="outlined"
-          size="small"
-          startIcon={<Refresh />}
-          onClick={fetchHistory}
-          disabled={loading}
-        >
+    <AdminGroup
+      title={t('admin:chores.historyView.title')}
+      action={(
+        <Button size="small" startIcon={<Refresh />} onClick={fetchHistory} disabled={loading}>
           {t('admin:chores.historyView.refresh')}
         </Button>
-      </Box>
+      )}
+    >
+      <AdminNote>{t('admin:chores.historyView.help')}</AdminNote>
 
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        {t('admin:chores.historyView.help')}
-      </Typography>
+      <Box sx={{ px: 2, py: 1.5 }}>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mb: 1.5 }}>
+          <TextField select size="small" sx={filterSx} label={t('admin:chores.historyView.range')} value={range} onChange={(e) => setRange(e.target.value)}>
+            {['7', '30', '90', 'all'].map(value => (
+              <MenuItem key={value} value={value}>{t(`admin:chores.historyView.ranges.${value}`)}</MenuItem>
+            ))}
+          </TextField>
+          <TextField select size="small" sx={filterSx} label={t('admin:chores.historyView.person')} value={person} onChange={(e) => setPerson(e.target.value)}>
+            <MenuItem value="">{t('admin:chores.historyView.everyone')}</MenuItem>
+            {options.people.map(option => (
+              <MenuItem key={option.key} value={option.key}>{option.label || t('admin:chores.historyView.unknown')}</MenuItem>
+            ))}
+          </TextField>
+          <TextField select size="small" sx={filterSx} label={t('admin:chores.historyView.chore')} value={chore} onChange={(e) => setChore(e.target.value)}>
+            <MenuItem value="">{t('admin:chores.historyView.allChores')}</MenuItem>
+            {options.chores.map(option => (
+              <MenuItem key={option.key} value={option.key}>{option.label || t('admin:chores.historyView.unknown')}</MenuItem>
+            ))}
+          </TextField>
+          <TextField select size="small" sx={filterSx} label={t('admin:chores.historyView.groupBy')} value={groupBy} onChange={(e) => setGroupBy(e.target.value)}>
+            {['none', 'person', 'chore', 'personChore'].map(value => (
+              <MenuItem key={value} value={value}>{t(`admin:chores.historyView.groupings.${value}`)}</MenuItem>
+            ))}
+          </TextField>
+        </Box>
 
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mb: 1.5 }}>
-        <TextField select size="small" sx={filterSx} label={t('admin:chores.historyView.range')} value={range} onChange={(e) => setRange(e.target.value)}>
-          {['7', '30', '90', 'all'].map(value => (
-            <MenuItem key={value} value={value}>{t(`admin:chores.historyView.ranges.${value}`)}</MenuItem>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
+          {HISTORY_CATEGORIES.map(category => (
+            <Chip
+              key={category}
+              label={t(`admin:chores.historyView.categories.${category}`)}
+              color={categories.includes(category) ? KIND_COLOR[category] : 'default'}
+              variant={categories.includes(category) ? 'filled' : 'outlined'}
+              onClick={() => toggleCategory(category)}
+              aria-pressed={categories.includes(category)}
+            />
           ))}
-        </TextField>
-        <TextField select size="small" sx={filterSx} label={t('admin:chores.historyView.person')} value={person} onChange={(e) => setPerson(e.target.value)}>
-          <MenuItem value="">{t('admin:chores.historyView.everyone')}</MenuItem>
-          {options.people.map(option => (
-            <MenuItem key={option.key} value={option.key}>{option.label || t('admin:chores.historyView.unknown')}</MenuItem>
-          ))}
-        </TextField>
-        <TextField select size="small" sx={filterSx} label={t('admin:chores.historyView.chore')} value={chore} onChange={(e) => setChore(e.target.value)}>
-          <MenuItem value="">{t('admin:chores.historyView.allChores')}</MenuItem>
-          {options.chores.map(option => (
-            <MenuItem key={option.key} value={option.key}>{option.label || t('admin:chores.historyView.unknown')}</MenuItem>
-          ))}
-        </TextField>
-        <TextField select size="small" sx={filterSx} label={t('admin:chores.historyView.groupBy')} value={groupBy} onChange={(e) => setGroupBy(e.target.value)}>
-          {['none', 'person', 'chore', 'personChore'].map(value => (
-            <MenuItem key={value} value={value}>{t(`admin:chores.historyView.groupings.${value}`)}</MenuItem>
-          ))}
-        </TextField>
-      </Box>
-
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, mb: 2 }}>
-        {HISTORY_CATEGORIES.map(category => (
-          <Chip
-            key={category}
-            label={t(`admin:chores.historyView.categories.${category}`)}
-            color={categories.includes(category) ? KIND_COLOR[category] : 'default'}
-            variant={categories.includes(category) ? 'filled' : 'outlined'}
-            onClick={() => toggleCategory(category)}
-            aria-pressed={categories.includes(category)}
+          <FormControlLabel
+            sx={{ ml: 0.5 }}
+            control={<Checkbox size="small" checked={showMissed} onChange={(e) => setShowMissed(e.target.checked)} />}
+            label={t('admin:chores.historyView.showMissed')}
           />
-        ))}
-        <FormControlLabel
-          sx={{ ml: 0.5 }}
-          control={<Checkbox size="small" checked={showMissed} onChange={(e) => setShowMissed(e.target.checked)} />}
-          label={t('admin:chores.historyView.showMissed')}
-        />
-        <Typography variant="body2" color="text.secondary" sx={{ ml: 'auto' }}>
-          {t('admin:chores.historyView.entries', { count: rows.length })}
-        </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ ml: 'auto' }}>
+            {t('admin:chores.historyView.entries', { count: rows.length })}
+          </Typography>
+        </Box>
       </Box>
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      {deleteError && <Alert severity="error" sx={{ mb: 2 }}>{deleteError}</Alert>}
+      <Box>
+        {error && <Alert severity="error" sx={{ m: 2 }}>{error}</Alert>}
+        {deleteError && <Alert severity="error" sx={{ m: 2 }}>{deleteError}</Alert>}
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
@@ -314,7 +309,7 @@ export default function ChoreHistoryTab() {
           <Typography color="text.secondary">{t('admin:chores.historyView.empty')}</Typography>
         </Box>
       ) : (
-        <TableContainer component={Paper} variant="outlined">
+        <TableContainer>
           <Table size="small" sx={compactStackedTableSx}>
             <TableHead>
               <TableRow>
@@ -333,6 +328,7 @@ export default function ChoreHistoryTab() {
           </Table>
         </TableContainer>
       )}
-    </Box>
+      </Box>
+    </AdminGroup>
   );
 }

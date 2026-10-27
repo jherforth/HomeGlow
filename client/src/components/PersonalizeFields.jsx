@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import {
-  Alert,
   Box,
   Button,
   IconButton,
@@ -14,6 +13,7 @@ import {
 import { Delete, Upload } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import ColorPickerPopover from './ColorPickerPopover';
+import { AdminGroup, AdminRow } from './AdminRows.jsx';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { GRADIENT_PRESETS, OPACITY_MIN, backgroundImageUrl } from '../utils/personalize.js';
 import { resizeForBackground } from '../utils/resizeImage.js';
@@ -98,40 +98,37 @@ const PersonalizeFields = ({ draft, updateDraft, locked, inheritSwitch, onError 
     </>
   );
 
-  return (
-    <Box sx={{ mb: 3 }}>
-      <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>{t('admin:personalize.heading')}</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{t('admin:personalize.help')}</Typography>
+  const kindPicker = (
+    <ToggleButtonGroup
+      exclusive
+      size="small"
+      value={background.kind}
+      disabled={backgroundLocked}
+      onChange={(_, kind) => {
+        if (!kind) return;
+        if (kind === 'none') updateDraft('background', { kind: 'none' });
+        if (kind === 'color') updateDraft('background', { kind: 'color', color: '#1f2a44' });
+        if (kind === 'gradient') updateDraft('background', { kind: 'gradient', preset: 'ocean' });
+        if (kind === 'image') updateDraft('background', gallery[0] ? { kind: 'image', file: gallery[0].file } : { kind: 'image', file: null });
+      }}
+      sx={{ '& .MuiToggleButton-root': { textTransform: 'none', px: 1.5, py: 0.5 } }}
+    >
+      {['none', 'color', 'gradient', 'image'].map((kind) => (
+        <ToggleButton key={kind} value={kind}>{t(`admin:personalize.kinds.${kind}`)}</ToggleButton>
+      ))}
+    </ToggleButtonGroup>
+  );
 
-      <Typography variant="subtitle2">{t('admin:personalize.background')}</Typography>
-      {inheritSwitch('background')}
-      <ToggleButtonGroup
-        exclusive
-        size="small"
-        value={background.kind}
-        disabled={backgroundLocked}
-        onChange={(_, kind) => {
-          if (!kind) return;
-          if (kind === 'none') updateDraft('background', { kind: 'none' });
-          if (kind === 'color') updateDraft('background', { kind: 'color', color: '#1f2a44' });
-          if (kind === 'gradient') updateDraft('background', { kind: 'gradient', preset: 'ocean' });
-          if (kind === 'image') updateDraft('background', gallery[0] ? { kind: 'image', file: gallery[0].file } : { kind: 'image', file: null });
-        }}
-        sx={{ mb: 2 }}
-      >
-        {['none', 'color', 'gradient', 'image'].map((kind) => (
-          <ToggleButton key={kind} value={kind}>{t(`admin:personalize.kinds.${kind}`)}</ToggleButton>
-        ))}
-      </ToggleButtonGroup>
-
+  const backgroundChoice = (
+    <>
       {background.kind === 'color' && (
-        <Box sx={{ mb: 3 }}>
+        <Box sx={{ display: 'flex' }}>
           {colorBox('backgroundColor', background.color, (hex) => updateDraft('background', { kind: 'color', color: hex }), backgroundLocked)}
         </Box>
       )}
 
       {background.kind === 'gradient' && (
-        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mb: 3 }}>
+        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
           {Object.entries(GRADIENT_PRESETS).map(([id, css]) => (
             <Tooltip key={id} title={t(`admin:personalize.gradients.${id}`)}>
               <Box
@@ -146,7 +143,7 @@ const PersonalizeFields = ({ draft, updateDraft, locked, inheritSwitch, onError 
       )}
 
       {background.kind === 'image' && (
-        <Box sx={{ mb: 3 }}>
+        <Box>
           <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mb: 1.5 }}>
             {gallery.map((entry) => (
               <Box key={entry.file} sx={{ position: 'relative' }}>
@@ -169,35 +166,53 @@ const PersonalizeFields = ({ draft, updateDraft, locked, inheritSwitch, onError 
               </Box>
             ))}
           </Box>
-          {!gallery.length && <Alert severity="info" sx={{ mb: 1.5 }}>{t('admin:personalize.noImages')}</Alert>}
+          {!gallery.length && (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>{t('admin:personalize.noImages')}</Typography>
+          )}
           <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => upload(e.target.files?.[0])} />
-          <Button variant="outlined" startIcon={<Upload />} disabled={backgroundLocked || uploading} onClick={() => fileInput.current?.click()}>
+          <Button variant="outlined" size="small" startIcon={<Upload />} disabled={backgroundLocked || uploading} onClick={() => fileInput.current?.click()}>
             {uploading ? t('admin:personalize.uploading') : t('admin:personalize.uploadImage')}
           </Button>
         </Box>
       )}
+    </>
+  );
 
-      <Typography variant="subtitle2">{t('admin:personalize.cardOpacity')}</Typography>
-      {inheritSwitch('cardOpacity')}
-      <Box sx={{ px: 3, maxWidth: 460 }}>
-        <Slider
-          value={Math.round((draft.cardOpacity ?? 1) * 100)}
-          min={Math.round(OPACITY_MIN * 100)}
-          max={100}
-          step={5}
-          disabled={locked('cardOpacity')}
-          valueLabelDisplay="auto"
-          valueLabelFormat={(v) => `${v}%`}
-          // Say which end is which: the number alone doesn't.
-          marks={[
-            { value: Math.round(OPACITY_MIN * 100), label: t('admin:personalize.seeThrough') },
-            { value: 100, label: t('admin:personalize.solid') },
-          ]}
-          onChange={(_, v) => updateDraft('cardOpacity', v / 100)}
-          aria-label={t('admin:personalize.cardOpacity')}
-        />
-      </Box>
-    </Box>
+  return (
+    <AdminGroup title={t('admin:personalize.heading')}>
+      <AdminRow
+        label={t('admin:personalize.background')}
+        hint={t('admin:personalize.help')}
+        under={inheritSwitch('background')}
+        fill
+        control={kindPicker}
+        extra={background.kind !== 'none' ? backgroundChoice : null}
+      />
+      <AdminRow
+        label={t('admin:personalize.cardOpacity')}
+        under={inheritSwitch('cardOpacity')}
+        disabled={locked('cardOpacity')}
+        fill
+        control={(
+          <>
+            <Typography variant="caption" color="text.secondary">{t('admin:personalize.seeThrough')}</Typography>
+            <Slider
+              value={Math.round((draft.cardOpacity ?? 1) * 100)}
+              min={Math.round(OPACITY_MIN * 100)}
+              max={100}
+              step={5}
+              disabled={locked('cardOpacity')}
+              valueLabelDisplay="auto"
+              valueLabelFormat={(v) => `${v}%`}
+              onChange={(_, v) => updateDraft('cardOpacity', v / 100)}
+              aria-label={t('admin:personalize.cardOpacity')}
+              sx={{ width: { xs: 'auto', sm: 200 }, flex: { xs: 1, sm: 'none' }, mx: 1 }}
+            />
+            <Typography variant="caption" color="text.secondary">{t('admin:personalize.solid')}</Typography>
+          </>
+        )}
+      />
+    </AdminGroup>
   );
 };
 

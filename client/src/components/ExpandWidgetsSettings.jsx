@@ -1,20 +1,19 @@
 import React, { useState } from 'react';
 import {
   Box,
-  Button,
   Collapse,
   FormControl,
-  FormControlLabel,
-  InputLabel,
+  IconButton,
   MenuItem,
-  Radio,
-  RadioGroup,
   Select,
   Switch,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from '@mui/material';
 import { ExpandMore } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
+import { AdminGroup, AdminRow } from './AdminRows.jsx';
 import {
   EXPAND_IDLE_CHOICES,
   EXPAND_METHODS,
@@ -42,138 +41,120 @@ const ExpandWidgetsSettings = ({ settings, onChange, widgets = [] }) => {
   const leftOut = widgets.filter((widget) => widget.manifestBlocks || off.includes(widget.name)).length;
 
   return (
-    <Box sx={{ mt: 1, mb: 2 }}>
-      <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-        {t('screensaver.expand.heading')}
-      </Typography>
-      <FormControlLabel
+    <AdminGroup title={t('screensaver.expand.heading')}>
+      <AdminRow
+        label={t('screensaver.expand.enable')}
+        hint={t('screensaver.expand.enableHelp')}
         control={(
           <Switch
             checked={enabled}
             onChange={(e) => onChange({ expandWidgets: e.target.checked })}
+            slotProps={{ input: { 'aria-label': t('screensaver.expand.enable') } }}
           />
         )}
-        label={t('screensaver.expand.enable')}
       />
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, ml: 6 }}>
-        {t('screensaver.expand.enableHelp')}
-      </Typography>
-
       {enabled && (
-        <Box sx={{ ml: { xs: 0, sm: 6 } }}>
-          <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-            {t('screensaver.expand.method')}
-          </Typography>
-          <RadioGroup
-            value={settings.expandMethod}
-            onChange={(e) => onChange({ expandMethod: e.target.value })}
-            sx={{ mb: 2 }}
-          >
-            {EXPAND_METHODS.map((method) => (
-              <FormControlLabel
-                key={method}
-                value={method}
-                control={<Radio />}
-                sx={{ alignItems: 'flex-start', mb: 1, '& .MuiRadio-root': { pt: 0.25 } }}
-                label={(
-                  <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                      {t(`screensaver.expand.methods.${method}`)}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {t(`screensaver.expand.methods.${method}Help`)}
-                    </Typography>
-                  </Box>
-                )}
-              />
-            ))}
-          </RadioGroup>
-
-          <FormControl size="small" sx={{ mb: 0.5, minWidth: 240 }}>
-            <InputLabel id="expand-idle-label">{t('screensaver.expand.idle')}</InputLabel>
-            <Select
-              labelId="expand-idle-label"
-              value={settings.expandIdleMinutes}
-              label={t('screensaver.expand.idle')}
-              onChange={(e) => onChange({ expandIdleMinutes: Number(e.target.value) })}
+        <AdminRow
+          label={t('screensaver.expand.method')}
+          hint={t(`screensaver.expand.methods.${settings.expandMethod}Help`, { defaultValue: '' })}
+          fill
+          control={(
+            <ToggleButtonGroup
+              exclusive
+              size="small"
+              value={settings.expandMethod}
+              onChange={(_, method) => method && onChange({ expandMethod: method })}
+              sx={{ '& .MuiToggleButton-root': { textTransform: 'none', px: 1.75, py: 0.5 } }}
             >
-              {EXPAND_IDLE_CHOICES.map((minutes) => (
-                <MenuItem key={minutes} value={minutes}>
-                  {minutes === 0
-                    ? t('screensaver.expand.idleOff')
-                    : t('screensaver.expand.idleMinutes', { count: minutes })}
-                </MenuItem>
+              {EXPAND_METHODS.map((method) => (
+                <ToggleButton key={method} value={method}>{t(`screensaver.expand.methods.${method}`)}</ToggleButton>
               ))}
-            </Select>
-          </FormControl>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {t('screensaver.expand.idleHelp')}
-          </Typography>
-
-          {widgets.length > 0 && (
-            <>
-              <Button
-                size="small"
-                onClick={() => setListOpen((open) => !open)}
-                endIcon={(
-                  <ExpandMore
-                    sx={{ transform: listOpen ? 'rotate(180deg)' : 'none', transition: 'transform 150ms ease' }}
-                  />
-                )}
-                aria-expanded={listOpen}
-                sx={{ textTransform: 'none', px: 0 }}
-              >
-                {leftOut > 0
-                  ? t('screensaver.expand.chooseSome', { count: leftOut })
-                  : t('screensaver.expand.chooseAll')}
-              </Button>
-              <Collapse in={listOpen}>
-                <Box
-                  sx={{
-                    mt: 1,
-                    border: '1px solid var(--card-border)',
-                    borderRadius: 'var(--hg-radius-sm)',
-                  }}
-                >
-                  {widgets.map((widget, index) => (
-                    <Box
-                      key={widget.name}
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: 1,
-                        px: 1.5,
-                        py: 0.5,
-                        minHeight: 48,
-                        borderTop: index === 0 ? 'none' : '1px solid var(--card-border)',
-                      }}
-                    >
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography variant="body2" noWrap>{widget.label}</Typography>
-                        {widget.manifestBlocks && (
-                          <Typography variant="caption" color="text.secondary">
-                            {t('screensaver.expand.pluginBlocks')}
-                          </Typography>
-                        )}
-                      </Box>
-                      <Switch
-                        slotProps={{ input: { 'aria-label': widget.label } }}
-                        checked={!widget.manifestBlocks && !off.includes(widget.name)}
-                        disabled={widget.manifestBlocks}
-                        onChange={(e) => onChange({
-                          expandOff: setWidgetExpandAllowed(off, widget.name, e.target.checked),
-                        })}
-                      />
-                    </Box>
-                  ))}
-                </Box>
-              </Collapse>
-            </>
+            </ToggleButtonGroup>
           )}
-        </Box>
+        />
       )}
-    </Box>
+      {enabled && (
+        <AdminRow
+          label={t('screensaver.expand.idle')}
+          hint={t('screensaver.expand.idleHelp')}
+          fill
+          control={(
+            <FormControl size="small" sx={{ minWidth: 220 }}>
+              <Select
+                value={settings.expandIdleMinutes}
+                inputProps={{ 'aria-label': t('screensaver.expand.idle') }}
+                onChange={(e) => onChange({ expandIdleMinutes: Number(e.target.value) })}
+              >
+                {EXPAND_IDLE_CHOICES.map((minutes) => (
+                  <MenuItem key={minutes} value={minutes}>
+                    {minutes === 0
+                      ? t('screensaver.expand.idleOff')
+                      : t('screensaver.expand.idleMinutes', { count: minutes })}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+        />
+      )}
+      {enabled && widgets.length > 0 && (
+        <AdminRow
+          label={leftOut > 0
+            ? t('screensaver.expand.chooseSome', { count: leftOut })
+            : t('screensaver.expand.chooseAll')}
+          control={(
+            <IconButton
+              onClick={() => setListOpen((open) => !open)}
+              aria-expanded={listOpen}
+              aria-label={leftOut > 0
+                ? t('screensaver.expand.chooseSome', { count: leftOut })
+                : t('screensaver.expand.chooseAll')}
+            >
+              <ExpandMore sx={{ transform: listOpen ? 'rotate(180deg)' : 'none', transition: 'transform 150ms ease' }} />
+            </IconButton>
+          )}
+          extra={(
+            <Collapse in={listOpen}>
+              <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 2 }}>
+                {widgets.map((widget, index) => (
+                  <Box
+                    key={widget.name}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 1,
+                      px: 1.5,
+                      py: 0.5,
+                      minHeight: 48,
+                      borderTop: index === 0 ? 'none' : 1,
+                      borderColor: 'divider',
+                    }}
+                  >
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="body2" noWrap>{widget.label}</Typography>
+                      {widget.manifestBlocks && (
+                        <Typography variant="caption" color="text.secondary">
+                          {t('screensaver.expand.pluginBlocks')}
+                        </Typography>
+                      )}
+                    </Box>
+                    <Switch
+                      slotProps={{ input: { 'aria-label': widget.label } }}
+                      checked={!widget.manifestBlocks && !off.includes(widget.name)}
+                      disabled={widget.manifestBlocks}
+                      onChange={(e) => onChange({
+                        expandOff: setWidgetExpandAllowed(off, widget.name, e.target.checked),
+                      })}
+                    />
+                  </Box>
+                ))}
+              </Box>
+            </Collapse>
+          )}
+        />
+      )}
+    </AdminGroup>
   );
 };
 

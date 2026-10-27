@@ -1,20 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Typography,
-  Tabs,
-  Tab,
   TextField,
   Button,
   Switch,
   FormControlLabel,
-  Card,
-  CardContent,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
-  ListSubheader,
   Collapse,
   ButtonBase,
   InputAdornment,
@@ -26,11 +17,9 @@ import {
   Select,
   MenuItem,
   FormControl,
-  InputLabel,
   Chip,
   Avatar,
   Grid,
-  Divider,
   Alert,
   CircularProgress,
   Table,
@@ -40,16 +29,17 @@ import {
   TableHead,
   TableRow,
   Paper,
-  RadioGroup,
-  Radio,
   Autocomplete,
   Tooltip,
   Slider,
-  Link
+  Link,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material';
 import {
   Delete,
   ContentCopy,
+  Tv,
   Edit,
   Save,
   Cancel,
@@ -59,13 +49,8 @@ import {
   CloudDownload,
   Refresh,
   Warning,
-  Timer,
   Lock,
-  Nightlight,
-  Tv,
-  BeachAccess,
   Tab as TabIcon,
-  DragIndicator,
   PhotoLibrary,
   Info,
   OpenInNew,
@@ -103,7 +88,9 @@ import RefreshIntervalSelect from './RefreshIntervalSelect';
 import ScreensaverIntervalSlider from './ScreensaverIntervalSlider';
 import GoogleAccountConnection from './GoogleAccountConnection';
 import ClamValueModal from './ClamValueModal';
-import { ADMIN_LAYOUT, ADMIN_TABS, normalizeAdminLocation, parseAdminHash, setAdminHash } from '../utils/adminNavigation.js';
+import { normalizeAdminLocation, parseAdminHash, setAdminHash } from '../utils/adminNavigation.js';
+import AdminShell, { ADMIN_PANEL_SIZE } from './AdminShell.jsx';
+import { AdminFooter, AdminGroup, AdminNote, AdminRow } from './AdminRows.jsx';
 import SoundPicker from './SoundPicker';
 import ControlsOnDisplay from './ControlsOnDisplay';
 import ExpandWidgetsSettings from './ExpandWidgetsSettings';
@@ -185,6 +172,9 @@ const buildTagUrl = (repository, tagName) => {
 // 200, so a network outage is indistinguishable from an empty library at the client.
 const DB_BACKED_PHOTO_TYPES = ['GooglePhotos', 'HomeGlowPhotos'];
 
+// A form inside a group: its rows are divided like the group's own.
+const formRowsSx = { '& > * + *': { borderTop: 1, borderColor: 'divider' } };
+
 const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequestClose }) => {
   const { t, i18n } = useTranslation(['admin', 'common']);
   const isMobile = useIsMobile();
@@ -199,9 +189,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   // Where the panel is: { tab, section, subsection }, named as in the URL hash
   // (utils/adminNavigation.js). Tabs group what you're managing (issue #230).
   const [location, setLocation] = useState(() => parseAdminHash() || normalizeAdminLocation());
-  const sections = ADMIN_LAYOUT.find((entry) => entry.tab === location.tab)?.sections || [];
-  const choresSubsections = ADMIN_LAYOUT.find((entry) => entry.tab === 'family').subsections.chores;
-  const routinesSubsections = ADMIN_LAYOUT.find((entry) => entry.tab === 'family').subsections.routines;
+  // Displays → This display saves dimming with its other settings.
+  const saveDimming = useRef(null);
+  // On a phone the panel opens on its list of sections, unless a link named one.
+  const [startOnList] = useState(() => !/^#\/admin\/[^/]/.test(window.location.hash));
 
   // Every move goes through here, so the hash always names where the panel is.
   const navigate = useCallback((next) => {
@@ -740,7 +731,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
 
   // The celebration fires at exactly the moment the daily reward is earned, so
   // the two save together rather than needing their own button (issue #140).
-  const saveDailyClamReward = async () => {
+  // Family → Chores → Settings saves rewards, celebrations and sounds together.
+  const saveChoreSettings = async () => {
     setIsLoading(true);
     try {
       await Promise.all([
@@ -754,31 +746,15 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
             ? 'false'
             : 'true',
         }),
-      ]);
-      setSaveMessage({ show: true, type: 'success', text: t('admin:messages.clamRewardSaved') });
-      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
-    } catch (error) {
-      console.error('Error saving clam reward:', error);
-      setSaveMessage({ show: true, type: 'error', text: t('admin:messages.clamRewardFailed') });
-      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const saveChoreSoundSettings = async () => {
-    setIsLoading(true);
-    try {
-      await Promise.all([
         axios.post(`${API_BASE_URL}/api/settings`, { key: 'CHORE_SOUND_ENABLED', value: settings.CHORE_SOUND_ENABLED || 'false' }),
         axios.post(`${API_BASE_URL}/api/settings`, { key: 'CHORE_SOUND_DEFAULT', value: settings.CHORE_SOUND_DEFAULT || '' }),
         axios.post(`${API_BASE_URL}/api/settings`, { key: 'CHORE_SOUND_VOLUME', value: String(settings.CHORE_SOUND_VOLUME ?? '100') }),
       ]);
-      setSaveMessage({ show: true, type: 'success', text: t('admin:messages.choreSoundsSaved') });
+      setSaveMessage({ show: true, type: 'success', text: t('admin:messages.choreSettingsSaved') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } catch (error) {
-      console.error('Error saving chore sound settings:', error);
-      setSaveMessage({ show: true, type: 'error', text: t('admin:messages.choreSoundsFailed') });
+      console.error('Error saving chore settings:', error);
+      setSaveMessage({ show: true, type: 'error', text: t('admin:messages.choreSettingsFailed') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
     } finally {
       setIsLoading(false);
@@ -1932,7 +1908,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
 
   if (checkingPin) {
     return (
-      <Box sx={{ width: '100%', maxWidth: 1200, mx: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+      <Box sx={{ ...(isMobile ? { height: '100%' } : ADMIN_PANEL_SIZE), display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
         <CircularProgress size={60} />
       </Box>
     );
@@ -1940,7 +1916,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
 
   if (!isAuthenticated) {
     return (
-      <Box sx={{ width: '100%', maxWidth: 1200, mx: 'auto' }}>
+      <Box sx={isMobile ? { height: '100%' } : ADMIN_PANEL_SIZE}>
         <PinModal
           open={pinModal.open}
           onClose={handlePinModalClose}
@@ -1954,41 +1930,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   }
 
   return (
-    <Box sx={{ width: '100%', maxWidth: 1200, mx: 'auto' }}>
-      <Typography variant="h4" gutterBottom sx={{ pr: { xs: 5, sm: 0 } }}>
-        ⚙️ {t('admin:panelTitle')}
-      </Typography>
-
-      <Tabs
-        value={ADMIN_TABS.indexOf(location.tab)}
-        onChange={(e, index) => navigate({ tab: ADMIN_TABS[index] })}
-        variant="scrollable"
-        scrollButtons="auto"
-        allowScrollButtonsMobile
-        sx={{ mb: 3 }}
-      >
-        {ADMIN_TABS.map((name) => (
-          <Tab key={name} label={t(`admin:panelTabs.${name}`)} />
-        ))}
-      </Tabs>
-
-      {sections.length > 0 && (
-        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-          <Tabs
-            value={Math.max(0, sections.indexOf(location.section))}
-            onChange={(_, index) => navigate({ tab: location.tab, section: sections[index] })}
-            size="small"
-            variant="scrollable"
-            scrollButtons="auto"
-            allowScrollButtonsMobile
-          >
-            {sections.map((name) => (
-              <Tab key={name} label={t(`admin:sections.${name}`)} />
-            ))}
-          </Tabs>
-        </Box>
-      )}
-
+    <AdminShell location={location} navigate={navigate} onClose={onRequestClose} startOnList={startOnList}>
       {/* One place for every tab, rather than a copy per tab that most
           tabs lacked (screensaver and vacation saves showed nothing). */}
       {saveMessage.show && (
@@ -1999,175 +1941,98 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
 
       {/* Dashboard: what is on the screens */}
       {location.tab === 'dashboard' && (
-        <Card>
-          <CardContent>
+        <>
             {location.section === 'widgets' && (
-              <Box
-                component="form"
-                noValidate
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  saveWidgetSettings();
-                }}
-              >
-                <Alert severity="info" sx={{ mb: 2 }}>
+              <>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2, px: 0.5 }}>
                   {t('admin:widgets.help')}
-                </Alert>
+                </Typography>
 
-                {Object.entries(widgetSettings).filter(([key]) =>
-                  ['chores', 'calendar', 'photos'].includes(key)
-                ).map(([widget, config]) => {
+                {['chores', 'calendar', 'photos', 'weather'].filter((widget) => widgetSettings[widget]).map((widget) => {
+                  const config = widgetSettings[widget];
                   const hasRequiredTabsError = Boolean(config.enabled) && (!Array.isArray(widgetAssignments[widget]) || widgetAssignments[widget].length === 0);
-
                   return (
-                  <Box key={widget} sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)' }}>
-                    <Typography variant="subtitle1" sx={{ mb: 2, textTransform: 'capitalize', fontWeight: 'bold' }}>
-                      {widget} Widget
-                    </Typography>
-
-                    <Grid container spacing={2} sx={{ alignItems: 'center' }}>
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <FormControlLabel
-                          control={
-                            <Switch
-                              checked={config.enabled}
-                              onChange={() => handleWidgetToggle(widget, 'enabled')}
-                            />
-                          }
-                          label={t('common:labels.enabled')}
-                        />
-                        <FormControlLabel
-                          control={
-                            <Switch
-                              checked={Boolean(config.transparent)}
-                              onChange={() => handleWidgetToggle(widget, 'transparent')}
-                            />
-                          }
-                          label={t('admin:widgets.transparentBackground')}
-                          sx={{ ml: 2 }}
-                        />
-                      </Grid>
-
-                      <Grid size={{ xs: 12, sm: 6 }}>
-                        <RefreshIntervalSelect
-                          labelId={`${widget}-refresh-label`}
-                          value={config.refreshInterval}
-                          onChange={(value) => handleRefreshIntervalChange(widget, value)}
-                          options={refreshIntervalOptions}
-                        />
-                      </Grid>
-                    </Grid>
-
-                    <Box sx={{ mt: 2 }} data-tab-picker={widget}>
-                      <Autocomplete
-                        multiple
-                        options={tabs}
-                        getOptionLabel={(option) => option.label}
-                        value={tabs.filter(tab => widgetAssignments[widget]?.includes(tab.number))}
-                        onChange={(e, newValue) => {
-                          handleWidgetAssignmentChange(widget, newValue.map(tab => tab.number));
-                        }}
-                        renderInput={(params) => (
-                          <TextField
-                            {...params}
-                            label={t('admin:widgets.showOnTabs')}
-                            required={Boolean(config.enabled)}
-                            error={hasRequiredTabsError}
-                            placeholder={t('admin:widgets.selectTabs')}
-                            helperText={
-                              hasRequiredTabsError
-                                ? 'Required: select at least one tab when this widget is enabled.'
-                                : 'Select which tabs this widget should appear on.'
-                            }
+                    <AdminGroup
+                      key={widget}
+                      title={widget === 'weather' ? t('admin:widgets.weatherWidget') : `${widget.charAt(0).toUpperCase()}${widget.slice(1)} Widget`}
+                    >
+                      <AdminRow
+                        label={t('common:labels.enabled')}
+                        control={(
+                          <Switch
+                            checked={Boolean(config.enabled)}
+                            onChange={() => handleWidgetToggle(widget, 'enabled')}
+                            slotProps={{ input: { 'aria-label': t('common:labels.enabled') } }}
                           />
                         )}
                       />
-                    </Box>
-
-                    {config.refreshInterval > 0 && (
-                      <Alert severity="info" sx={{ mt: 2 }} icon={<Timer />}>
-                        This widget will automatically refresh every {getRefreshIntervalLabel(config.refreshInterval).toLowerCase()}
-                      </Alert>
-                    )}
-                  </Box>
+                      <AdminRow
+                        label={t('admin:widgets.transparentBackground')}
+                        control={(
+                          <Switch
+                            checked={Boolean(config.transparent)}
+                            onChange={() => handleWidgetToggle(widget, 'transparent')}
+                            slotProps={{ input: { 'aria-label': t('admin:widgets.transparentBackground') } }}
+                          />
+                        )}
+                      />
+                      <AdminRow
+                        label="Auto-Refresh Interval"
+                        fill
+                        control={(
+                          <FormControl size="small" sx={{ minWidth: 200 }}>
+                            <Select
+                              value={config.refreshInterval || 0}
+                              inputProps={{ 'aria-label': 'Auto-Refresh Interval' }}
+                              onChange={(e) => handleRefreshIntervalChange(widget, e.target.value)}
+                            >
+                              {refreshIntervalOptions.map((option) => (
+                                <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        )}
+                      />
+                      <AdminRow
+                        label={t('admin:widgets.showOnTabs')}
+                        hint={hasRequiredTabsError
+                          ? <Box component="span" sx={{ color: 'error.main' }}>Required: select at least one tab when this widget is enabled.</Box>
+                          : 'Select which tabs this widget should appear on.'}
+                        wide
+                        control={(
+                          <Box sx={{ width: '100%' }} data-tab-picker={widget}>
+                            <Autocomplete
+                              multiple
+                              size="small"
+                              options={tabs}
+                              getOptionLabel={(option) => option.label}
+                              value={tabs.filter(tab => widgetAssignments[widget]?.includes(tab.number))}
+                              onChange={(e, newValue) => {
+                                handleWidgetAssignmentChange(widget, newValue.map(tab => tab.number));
+                              }}
+                              renderInput={(params) => (
+                                <TextField
+                                  {...params}
+                                  required={Boolean(config.enabled)}
+                                  error={hasRequiredTabsError}
+                                  placeholder={t('admin:widgets.selectTabs')}
+                                  slotProps={{ ...params.slotProps, htmlInput: { ...params.slotProps?.htmlInput, 'aria-label': t('admin:widgets.showOnTabs') } }}
+                                />
+                              )}
+                            />
+                          </Box>
+                        )}
+                      />
+                    </AdminGroup>
                   );
                 })}
 
-                <Box sx={{ mb: 3, p: 2, border: '2px solid var(--accent)', borderRadius: 'var(--hg-radius-sm)', backgroundColor: 'rgba(var(--accent-rgb), 0.05)' }}>
-                  <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>
-                    {t('admin:widgets.weatherWidget')}
-                  </Typography>
-
-                  <Grid container spacing={2} sx={{ alignItems: 'center' }}>
-                    <Grid size={{ xs: 12, sm: 6 }}>
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={widgetSettings.weather?.enabled || false}
-                            onChange={() => handleWidgetToggle('weather', 'enabled')}
-                          />
-                        }
-                        label={t('common:labels.enabled')}
-                      />
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={Boolean(widgetSettings.weather?.transparent)}
-                            onChange={() => handleWidgetToggle('weather', 'transparent')}
-                          />
-                        }
-                        label={t('admin:widgets.transparentBackground')}
-                        sx={{ ml: 2 }}
-                      />
-                    </Grid>
-
-                    <Grid size={{ xs: 12, sm: 6 }}>
-                      <RefreshIntervalSelect
-                        labelId="weather-refresh-label"
-                        value={widgetSettings.weather?.refreshInterval}
-                        onChange={(value) => handleRefreshIntervalChange('weather', value)}
-                        options={refreshIntervalOptions}
-                      />
-                    </Grid>
-                  </Grid>
-
-                  <Box sx={{ mt: 2 }} data-tab-picker="weather">
-                    <Autocomplete
-                      multiple
-                      options={tabs}
-                      getOptionLabel={(option) => option.label}
-                      value={tabs.filter(tab => widgetAssignments['weather']?.includes(tab.number))}
-                      onChange={(e, newValue) => {
-                        handleWidgetAssignmentChange('weather', newValue.map(tab => tab.number));
-                      }}
-                      renderInput={(params) => (
-                        <TextField
-                          {...params}
-                          label={t('admin:widgets.showOnTabs')}
-                          required={Boolean(widgetSettings.weather?.enabled)}
-                          error={weatherHasRequiredTabsError}
-                          placeholder={t('admin:widgets.selectTabs')}
-                          helperText={
-                            weatherHasRequiredTabsError
-                              ? 'Required: select at least one tab when this widget is enabled.'
-                              : 'Select which tabs this widget should appear on.'
-                          }
-                        />
-                      )}
-                    />
-                  </Box>
-
-                  {widgetSettings.weather?.refreshInterval > 0 && (
-                    <Alert severity="info" sx={{ mt: 2 }} icon={<Timer />}>
-                      Weather widget will automatically refresh every {getRefreshIntervalLabel(widgetSettings.weather.refreshInterval).toLowerCase()}
-                    </Alert>
-                  )}
-                </Box>
-
-                <Button type="submit" variant="contained" sx={{ mt: 2 }} startIcon={<Save />}>
-                  {t('admin:widgets.saveSettings')}
-                </Button>
-              </Box>
+                <AdminFooter>
+                  <Button variant="contained" onClick={() => saveWidgetSettings()} startIcon={<Save />}>
+                    {t('admin:widgets.saveSettings')}
+                  </Button>
+                </AdminFooter>
+              </>
             )}
 
             {location.section === 'plugins' && (
@@ -2177,63 +2042,51 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                     below already renders — and that one carries the delete
                     button, the description and the preview. Removing it lets
                     the repository span the width it needs (issue #162). */}
-                <Box>
-                  <Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                      <Typography variant="subtitle1">{t('admin:widgets.githubRepo')}</Typography>
-                      <Button
-                        onClick={() => fetchGithubWidgets(true)}
-                        startIcon={loadingGithub ? <CircularProgress size={16} /> : <Refresh />}
-                        disabled={loadingGithub}
-                        variant="contained"
-                        color="primary"
-                      >
-                        {t('admin:widgets.refreshAvailable')}
-                      </Button>
+                <AdminGroup
+                  title={t('admin:widgets.githubRepo')}
+                  action={(
+                    <Button
+                      size="small"
+                      onClick={() => fetchGithubWidgets(true)}
+                      startIcon={loadingGithub ? <CircularProgress size={14} /> : <Refresh />}
+                      disabled={loadingGithub}
+                    >
+                      {t('admin:widgets.refreshAvailable')}
+                    </Button>
+                  )}
+                >
+                  <AdminNote>
+                    Browse and contribute plugins at{' '}
+                    <a
+                      href="https://github.com/jherforth/HomeGlowPlugins"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ fontWeight: 'bold', color: 'inherit' }}
+                    >
+                      github.com/jherforth/HomeGlowPlugins
+                      <OpenInNew sx={{ fontSize: '0.875rem', ml: 0.25, verticalAlign: 'middle' }} />
+                    </a>
+                  </AdminNote>
+                  {githubWidgets.length === 0 && loadingGithub && (
+                    <AdminNote>{t('admin:plugins.storeLoading')}</AdminNote>
+                  )}
+                  {githubError && !loadingGithub && (
+                    <Box sx={{ px: 2, py: 1.5 }}>
+                      <Alert severity="warning">{t('admin:plugins.storeFailed')}</Alert>
                     </Box>
+                  )}
 
-                    <Alert severity="info" sx={{ mb: 2 }}>
-                      Browse and contribute plugins at{' '}
-                      <a
-                        href="https://github.com/jherforth/HomeGlowPlugins"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ fontWeight: 'bold' }}
-                      >
-                        github.com/jherforth/HomeGlowPlugins
-                        <OpenInNew sx={{ fontSize: '0.875rem', ml: 0.25, verticalAlign: 'middle' }} />
-                      </a>
-                    </Alert>
-
-                    {githubWidgets.length === 0 && loadingGithub && (
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        {t('admin:plugins.storeLoading')}
-                      </Typography>
-                    )}
-                    {githubError && !loadingGithub && (
-                      <Alert severity="warning" sx={{ mb: 2 }}>
-                        {t('admin:plugins.storeFailed')}
-                      </Alert>
-                    )}
-
-                    {/* Rows run about 86px, so the old 400px cut off mid-row and
-                        showed under five of the 23 plugins. Still capped rather
-                        than unbounded: letting the full list run would push the
-                        upload button and the settings below it off the page.
-                        Relative to the viewport rather than a fixed height, so a
-                        tall wall display shows more while a laptop does not end
-                        up scrolling the list inside a scrolling dialog. */}
-                    {/* Quick find for someone who knows the name, rather than
-                        scrolling the categories below. Matches the listed name or
-                        the manifest's; see utils/pluginCatalog.js. */}
-                    {githubWidgets.length > 0 && (
+                  {/* Quick find for someone who knows the name, rather than
+                      scrolling the categories below. Matches the listed name or
+                      the manifest's; see utils/pluginCatalog.js. */}
+                  {githubWidgets.length > 0 && (
+                    <Box sx={{ px: 2, py: 1.5 }}>
                       <TextField
                         fullWidth
                         size="small"
                         value={pluginSearch}
                         onChange={(event) => setPluginSearch(event.target.value)}
                         placeholder={t('admin:plugins.search')}
-                        sx={{ mb: 1 }}
                         slotProps={{
                           htmlInput: { 'aria-label': t('admin:plugins.search') },
                           input: {
@@ -2257,14 +2110,16 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                           },
                         }}
                       />
-                    )}
-                    {githubWidgets.length > 0 && groupPluginsByCategory(githubWidgets, pluginSearch).length === 0 && (
-                      <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
-                        {t('admin:plugins.noMatches', { search: pluginSearch.trim() })}
-                      </Typography>
-                    )}
+                    </Box>
+                  )}
+                  {githubWidgets.length > 0 && groupPluginsByCategory(githubWidgets, pluginSearch).length === 0 && (
+                    <AdminNote>{t('admin:plugins.noMatches', { search: pluginSearch.trim() })}</AdminNote>
+                  )}
 
-                    <List sx={{ maxHeight: { xs: 360, md: '50vh' }, overflowY: 'auto', pt: 0 }}>
+                  {/* Capped, relative to the viewport, so a tall wall display
+                      shows more while the rest of the section stays in reach. */}
+                  {githubWidgets.length > 0 && (
+                    <Box sx={{ maxHeight: { xs: 360, md: '50vh' }, overflowY: 'auto' }}>
                       {groupPluginsByCategory(githubWidgets, pluginSearch).map(({ category, plugins }) => {
                         // Collapsed until opened. A search opens every group with
                         // a match, since a closed heading would hide the result;
@@ -2272,83 +2127,78 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                         const isOpen = pluginSearch.trim() !== '' || expandedPluginCategories.has(category);
                         const groupId = `plugin-category-${category}`;
                         return (
-                          <React.Fragment key={category}>
+                          <Box key={category} sx={{ '& + &': { borderTop: 1, borderColor: 'divider' } }}>
                             {/* Sticky, so the heading of the group being scrolled
                                 stays in view inside the capped list. */}
-                            <ListSubheader
-                              disableGutters
-                              sx={{ backgroundColor: 'var(--card-bg)', color: 'var(--text)', lineHeight: '36px', mb: 1 }}
+                            <ButtonBase
+                              onClick={() => togglePluginCategory(category)}
+                              disabled={pluginSearch.trim() !== ''}
+                              aria-expanded={isOpen}
+                              aria-controls={groupId}
+                              sx={{
+                                position: 'sticky',
+                                top: 0,
+                                zIndex: 1,
+                                bgcolor: 'background.paper',
+                                width: '100%',
+                                justifyContent: 'flex-start',
+                                gap: 1,
+                                px: 2,
+                                py: 1.25,
+                                font: 'inherit',
+                                fontWeight: 600,
+                                color: 'inherit',
+                                '&:hover': { backgroundColor: 'action.hover' },
+                                '&.Mui-disabled': { color: 'inherit' },
+                                '&:focus-visible': { outline: '2px solid var(--accent)', outlineOffset: -2 },
+                              }}
                             >
-                              <ButtonBase
-                                onClick={() => togglePluginCategory(category)}
-                                disabled={pluginSearch.trim() !== ''}
-                                aria-expanded={isOpen}
-                                aria-controls={groupId}
-                                sx={{
-                                  width: '100%',
-                                  justifyContent: 'flex-start',
-                                  gap: 1,
-                                  px: 1,
-                                  font: 'inherit',
-                                  fontWeight: 600,
-                                  color: 'inherit',
-                                  borderRadius: 'var(--hg-radius-sm)',
-                                  '&:hover': { backgroundColor: 'action.hover' },
-                                  '&.Mui-disabled': { color: 'inherit' },
-                                  '&:focus-visible': { outline: '2px solid var(--accent)', outlineOffset: -2 },
-                                }}
-                              >
-                                <ExpandMore
-                                  fontSize="small"
-                                  sx={{ transition: 'transform 150ms', transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)' }}
-                                />
-                                {t(`admin:plugins.categories.${category}`)}
-                                <Box component="span" sx={{ color: 'text.secondary', fontWeight: 400 }}>
-                                  ({plugins.length})
-                                </Box>
-                              </ButtonBase>
-                            </ListSubheader>
-                            <Collapse component="li" in={isOpen} timeout="auto" unmountOnExit id={groupId}>
-                              <List disablePadding>
+                              <ExpandMore
+                                fontSize="small"
+                                sx={{ transition: 'transform 150ms', transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)' }}
+                              />
+                              {t(`admin:plugins.categories.${category}`)}
+                              <Box component="span" sx={{ color: 'text.secondary', fontWeight: 400 }}>
+                                ({plugins.length})
+                              </Box>
+                            </ButtonBase>
+                            <Collapse in={isOpen} timeout="auto" unmountOnExit id={groupId}>
+                              <Box sx={{ '& > *': { borderTop: 1, borderColor: 'divider' } }}>
                                 {plugins.map((widget) => {
                                   const status = pluginStoreStatus(widget, uploadedWidgets);
                                   return (
-                                  <ListItem key={widget.path} sx={{ border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)', mb: 1 }}>
-                                    {/* Sibling image in the plugins repo (chore-metrics.png next to
-                                        chore-metrics.html). Deliberately not carried in the manifest:
-                                        older HomeGlow versions return the whole manifest in
-                                        GET /api/widgets, which every dashboard fetches on boot. */}
-                                    {widget.previewUrl && (
-                                      // A button rather than a bare image, so the enlarged
-                                      // view is reachable from a keyboard as well as a tap.
-                                      <Box
-                                        component="button"
-                                        type="button"
-                                        onClick={() => setEnlargedPreview({ url: widget.previewUrl, name: widget.name })}
-                                        aria-label={t('admin:plugins.enlargePreview', { name: widget.name })}
-                                        sx={{
-                                          p: 0,
-                                          mr: 2,
-                                          border: 'none',
-                                          background: 'none',
-                                          cursor: 'zoom-in',
-                                          flexShrink: 0,
-                                          lineHeight: 0,
-                                          borderRadius: 'var(--hg-radius-sm)',
-                                          '&:focus-visible': { outline: '2px solid var(--accent)', outlineOffset: 2 }
-                                        }}
-                                      >
+                                    <AdminRow
+                                      key={widget.path}
+                                      leading={widget.previewUrl && (
+                                        // Sibling image in the plugins repo (chore-metrics.png
+                                        // next to chore-metrics.html), not carried in the
+                                        // manifest. A button, so the enlarged view is reachable
+                                        // from a keyboard as well as a tap.
                                         <Box
-                                          component="img"
-                                          src={widget.previewUrl}
-                                          alt=""
-                                          loading="lazy"
-                                          sx={{ width: 96, height: 60, objectFit: 'cover', borderRadius: 'var(--hg-radius-sm)', display: 'block' }}
-                                        />
-                                      </Box>
-                                    )}
-                                    <ListItemText
-                                      primary={(
+                                          component="button"
+                                          type="button"
+                                          onClick={() => setEnlargedPreview({ url: widget.previewUrl, name: widget.name })}
+                                          aria-label={t('admin:plugins.enlargePreview', { name: widget.name })}
+                                          sx={{
+                                            p: 0,
+                                            border: 'none',
+                                            background: 'none',
+                                            cursor: 'zoom-in',
+                                            lineHeight: 0,
+                                            borderRadius: 1,
+                                            '&:focus-visible': { outline: '2px solid var(--accent)', outlineOffset: 2 }
+                                          }}
+                                        >
+                                          <Box
+                                            component="img"
+                                            src={widget.previewUrl}
+                                            alt=""
+                                            loading="lazy"
+                                            sx={{ width: 80, height: 50, objectFit: 'cover', borderRadius: 1, display: 'block' }}
+                                          />
+                                        </Box>
+                                      )}
+                                      label={(
                                         <>
                                           {widget.name}
                                           {widget.version && (
@@ -2364,85 +2214,61 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                                           )}
                                         </>
                                       )}
-                                      secondary={widget.description || t('admin:plugins.noDescription')}
-                                      slotProps={{ secondary: { sx: { fontStyle: widget.description ? 'normal' : 'italic' } } }}
+                                      hint={widget.description || <em>{t('admin:plugins.noDescription')}</em>}
+                                      control={(
+                                        // As themes: Install, Update (to the store's version),
+                                        // or Up to date when the installed copy is the very same
+                                        // file (issue #273).
+                                        <Button
+                                          onClick={() => installGithubWidget(widget)}
+                                          startIcon={status === 'current' ? <CheckCircle /> : <CloudDownload />}
+                                          size="small"
+                                          variant={status === 'install' ? 'outlined' : 'text'}
+                                          disabled={status === 'current'}
+                                        >
+                                          {status === 'install'
+                                            ? t('admin:widgets.install')
+                                            : status === 'current'
+                                              ? t('admin:plugins.upToDate')
+                                              : widget.version
+                                                ? t('admin:plugins.updateTo', { version: widget.version })
+                                                : t('admin:plugins.update')}
+                                        </Button>
+                                      )}
                                     />
-                                    {/* Normal flow, not ListItemSecondaryAction: that is absolutely
-                                        positioned and reserves only an icon-sized gap, so a wrapped
-                                        description runs underneath the button (#147 follow-up). */}
-                                    <Box sx={{ flexShrink: 0, ml: 2, alignSelf: 'center' }}>
-                                      {/* As themes: Install, Update (to the store's
-                                          version), or Up to date when the installed
-                                          copy is the very same file (issue #273). */}
-                                      <Button
-                                        onClick={() => installGithubWidget(widget)}
-                                        startIcon={status === 'current' ? <CheckCircle /> : <CloudDownload />}
-                                        size="small"
-                                        variant={status === 'install' ? 'outlined' : 'text'}
-                                        disabled={status === 'current'}
-                                      >
-                                        {status === 'install'
-                                          ? t('admin:widgets.install')
-                                          : status === 'current'
-                                            ? t('admin:plugins.upToDate')
-                                            : widget.version
-                                              ? t('admin:plugins.updateTo', { version: widget.version })
-                                              : t('admin:plugins.update')}
-                                      </Button>
-                                    </Box>
-                                  </ListItem>
                                   );
                                 })}
-                              </List>
+                              </Box>
                             </Collapse>
-                          </React.Fragment>
+                          </Box>
                         );
                       })}
-                    </List>
-                  </Box>
-                </Box>
+                    </Box>
+                  )}
+                </AdminGroup>
 
-                <Divider sx={{ my: 3 }} />
-
-                <Typography variant="subtitle1" gutterBottom>{t('admin:widgets.uploadCustom')}</Typography>
-                <Button
-                  variant="contained"
-                  component="label"
-                  startIcon={<Upload />}
-                  sx={{ mb: 1 }}
-                >
-                  {t('admin:widgets.uploadHtml')}
-                  <input
-                    type="file"
-                    hidden
-                    accept=".html"
-                    onChange={handleWidgetUpload}
+                <AdminGroup title={t('admin:widgets.uploadCustom')}>
+                  <AdminRow
+                    hint={uploadedWidgets.length === 0 ? t('admin:plugins.noneInstalled') : null}
+                    control={(
+                      <Button variant="outlined" component="label" startIcon={<Upload />}>
+                        {t('admin:widgets.uploadHtml')}
+                        <input
+                          type="file"
+                          hidden
+                          accept=".html"
+                          onChange={handleWidgetUpload}
+                        />
+                      </Button>
+                    )}
                   />
-                </Button>
-
-                {/* Without this the page would end at the upload button on a
-                    fresh install, with nothing saying why the settings section
-                    below is missing. */}
-                {uploadedWidgets.length === 0 && (
-                  <Alert severity="info" sx={{ mt: 2 }}>
-                    {t('admin:plugins.noneInstalled')}
-                  </Alert>
-                )}
+                </AdminGroup>
 
                 {uploadedWidgets.length > 0 && (
-                  <Box
-                    component="form"
-                    noValidate
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      savePluginSettings();
-                    }}
-                  >
-                    <Divider sx={{ my: 3 }} />
-                    <Typography variant="h6" gutterBottom>{t('admin:plugins.settings')}</Typography>
-                    <Alert severity="info" sx={{ mb: 2 }}>
+                  <>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2, px: 0.5 }}>
                       {t('admin:plugins.settingsHelp')}
-                    </Alert>
+                    </Typography>
 
                     {uploadedWidgets.map((plugin) => {
                       const pSettings = pluginSettings[plugin.filename] || {};
@@ -2450,73 +2276,25 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                       const updatable = storeEntry && pluginStoreStatus(storeEntry, [plugin]) === 'update';
                       const pluginWidgetName = `plugin:${plugin.filename}`;
                       const hasRequiredTabsError = Boolean(pSettings.enabled) && (!Array.isArray(pluginAssignments[pluginWidgetName]) || pluginAssignments[pluginWidgetName].length === 0);
+                      const setPluginField = (field, value) => setPluginSettings(prev => ({
+                        ...prev,
+                        [plugin.filename]: { ...prev[plugin.filename], [field]: value }
+                      }));
                       return (
-                        <Box
+                        <AdminGroup
                           key={plugin.filename}
-                          sx={{
-                            mb: 3,
-                            p: 2,
-                            border: '1px solid rgba(var(--accent-rgb), 0.35)',
-                            borderRadius: 'var(--hg-radius-sm)',
-                            overflow: 'hidden',
-                          }}
-                        >
-                          {/* The heading is a full-width band in the accent's tint, so one
-                              plugin's settings don't run into the next. */}
-                          <Box
-                            sx={{
-                              display: 'flex',
-                              flexWrap: 'wrap',
-                              gap: 1,
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              mx: -2,
-                              mt: -2,
-                              mb: 2,
-                              px: 2,
-                              py: 1.5,
-                              bgcolor: 'rgba(var(--accent-rgb), 0.10)',
-                              borderBottom: '1px solid rgba(var(--accent-rgb), 0.35)',
-                            }}
-                          >
-                            {/* Wide enough for the name and description; on a phone the
-                                buttons wrap below rather than squeezing them. */}
-                            <Box sx={{ pr: 1, flex: '1 1 240px', minWidth: 0 }}>
-                              <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                                {plugin.name}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                {[plugin.filename, plugin.version, plugin.author && t('admin:plugins.byAuthor', { author: plugin.author })]
-                                  .filter(Boolean).join(' · ')}
-                              </Typography>
-                              {updatable && (
-                                <Typography variant="caption" sx={{ display: 'block', color: 'var(--accent)', fontWeight: 600 }}>
-                                  {storeEntry.version
-                                    ? t('admin:plugins.updateAvailable', { version: storeEntry.version })
-                                    : t('admin:plugins.updateAvailableNoVersion')}
-                                </Typography>
-                              )}
-                              {/* Straight from the plugin's own manifest (issue #147). A
-                                  legacy widget has none, and says so rather than showing
-                                  a made-up line. */}
-                              <Typography
-                                variant="body2"
-                                sx={{ mt: 0.5, color: plugin.manifest?.description ? 'text.primary' : 'text.secondary',
-                                      fontStyle: plugin.manifest?.description ? 'normal' : 'italic' }}
-                              >
-                                {plugin.manifest?.description || t('admin:plugins.noDescription')}
-                              </Typography>
-                            </Box>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
-                              {/* An installed plugin is already served at /widgets/<file>,
-                                  so it can preview itself. On demand rather than always:
-                                  these are real plugins that make real API calls, and a
-                                  list of live iframes would run all of them at once. */}
+                          title={plugin.name}
+                          action={(
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                               {updatable && (
                                 <Button size="small" variant="outlined" startIcon={<CloudDownload />} onClick={() => installGithubWidget(storeEntry)}>
                                   {t('admin:plugins.update')}
                                 </Button>
                               )}
+                              {/* An installed plugin is already served at
+                                  /widgets/<file>, so it can preview itself. On
+                                  demand rather than always: these are real plugins
+                                  that make real API calls. */}
                               <Button
                                 size="small"
                                 onClick={() => setPreviewPlugin((current) => current === plugin.filename ? null : plugin.filename)}
@@ -2525,197 +2303,204 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                                   ? t('admin:plugins.hidePreview')
                                   : t('admin:plugins.showPreview')}
                               </Button>
-                              <IconButton onClick={() => deleteWidget(plugin.filename)} color="error" size="small">
-                                <Delete />
-                              </IconButton>
-                            </Box>
-                          </Box>
-
-                          {previewPlugin === plugin.filename && (
-                            <Box sx={{ mb: 2, border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)', overflow: 'hidden', height: 220 }}>
-                              <iframe
-                                title={t('admin:plugins.previewTitle', { name: plugin.name })}
-                                // Same channel PluginWidgetWrapper uses, read from the root
-                                // element because the Admin Panel has no theme prop.
-                                //
-                                // device is carried too, and is not cosmetic: the plugin
-                                // platform refuses to WRITE a device-scoped setting without
-                                // it, so a plugin whose own UI saves one would fail here
-                                // while working fine on the dashboard.
-                                src={`${API_BASE_URL}/widgets/${encodeURIComponent(plugin.filename)}?theme=${document.documentElement.getAttribute('data-theme') || 'light'}&device=${encodeURIComponent(currentDeviceName)}&lang=${i18n.language || 'en'}`}
-                                // Opaque, like the dashboard's frames (PluginWidgetWrapper):
-                                // a plugin can't act as HomeGlow from here either.
-                                sandbox="allow-scripts allow-forms"
-                                allow="geolocation"
-                                name={frameNameFor(plugin.filename)}
-                                style={{ width: '100%', height: '100%', border: 0, display: 'block', backgroundColor: 'var(--card-bg)' }}
-                              />
+                              <Tooltip title={t('common:actions.delete')}>
+                                <IconButton onClick={() => deleteWidget(plugin.filename)} color="error" size="small" aria-label={t('common:actions.delete')}>
+                                  <Delete fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
                             </Box>
                           )}
-
-                          <Grid container spacing={2} sx={{ alignItems: 'center' }}>
-                            <Grid size={{ xs: 12, sm: 6 }}>
-                              <FormControlLabel
-                                control={
-                                  <Switch
-                                    checked={pSettings.enabled || false}
-                                    onChange={() => {
-                                      setPluginSettings(prev => ({
-                                        ...prev,
-                                        [plugin.filename]: { ...prev[plugin.filename], enabled: !(prev[plugin.filename]?.enabled) }
-                                      }));
-                                    }}
-                                  />
-                                }
-                                label={t('common:labels.enabled')}
-                              />
-                              <FormControlLabel
-                                control={
-                                  <Switch
-                                    checked={pSettings.transparent || false}
-                                    onChange={() => {
-                                      setPluginSettings(prev => ({
-                                        ...prev,
-                                        [plugin.filename]: { ...prev[plugin.filename], transparent: !(prev[plugin.filename]?.transparent) }
-                                      }));
-                                    }}
-                                  />
-                                }
-                                label={t('admin:plugins.transparentBackground')}
-                                sx={{ ml: 2 }}
-                              />
-                            </Grid>
-
-                            <Grid size={{ xs: 12, sm: 6 }}>
-                              <RefreshIntervalSelect
-                                labelId={`plugin-${plugin.filename}-refresh-label`}
-                                value={pSettings.refreshInterval}
-                                onChange={(value) => {
-                                  setPluginSettings(prev => ({
-                                    ...prev,
-                                    [plugin.filename]: { ...prev[plugin.filename], refreshInterval: value }
-                                  }));
-                                }}
-                                options={refreshIntervalOptions}
-                              />
-                            </Grid>
-                          </Grid>
-
-                          {plugin.pluginId && Array.isArray(plugin.manifest?.settings) && plugin.manifest.settings.length > 0 && (
-                            <Box sx={{ mt: 2 }}>
-                              <Typography variant="subtitle2" sx={{ mb: 1 }}>{t('admin:plugins.options')}</Typography>
-                              <Grid container spacing={2}>
-                                {plugin.manifest.settings.map((setting) => {
-                                  const declaredValues = pluginDeclaredValues[plugin.pluginId] || {};
-                                  const value = declaredValues[setting.key];
-                                  const setValue = (next) => {
-                                    setPluginDeclaredValues((prev) => ({
-                                      ...prev,
-                                      [plugin.pluginId]: { ...prev[plugin.pluginId], [setting.key]: next },
-                                    }));
-                                    setPluginDeclaredDirty((prev) => ({
-                                      ...prev,
-                                      [plugin.pluginId]: { ...prev[plugin.pluginId], [setting.key]: true },
-                                    }));
-                                  };
-                                  const label = setting.label || setting.key;
-                                  const controlId = `plugin-${plugin.pluginId}-${setting.key}`;
-                                  return (
-                                    <Grid size={{ xs: 12, sm: 6 }} key={setting.key}>
-                                      {setting.type === 'boolean' ? (
-                                        <FormControlLabel
-                                          control={
-                                            <Switch
-                                              checked={Boolean(value)}
-                                              onChange={() => setValue(!value)}
-                                            />
-                                          }
-                                          label={label}
-                                        />
-                                      ) : setting.type === 'select' ? (
-                                        <FormControl fullWidth size="small">
-                                          <InputLabel id={`${controlId}-label`}>{label}</InputLabel>
-                                          <Select
-                                            labelId={`${controlId}-label`}
-                                            label={label}
-                                            value={value ?? ''}
-                                            onChange={(event) => setValue(event.target.value)}
-                                          >
-                                            {(setting.options || []).map((option) => (
-                                              <MenuItem key={option} value={option}>{option}</MenuItem>
-                                            ))}
-                                          </Select>
-                                        </FormControl>
-                                      ) : setting.type === 'number' ? (
-                                        <TextField
-                                          fullWidth
-                                          size="small"
-                                          type="number"
-                                          label={label}
-                                          value={value ?? ''}
-                                          slotProps={{ htmlInput: { min: setting.min, max: setting.max } }}
-                                          onChange={(event) => {
-                                            const parsed = Number(event.target.value);
-                                            setValue(event.target.value === '' || Number.isNaN(parsed) ? '' : parsed);
-                                          }}
-                                        />
-                                      ) : (
-                                        <TextField
-                                          fullWidth
-                                          size="small"
-                                          label={label}
-                                          value={value ?? ''}
-                                          onChange={(event) => setValue(event.target.value)}
-                                        />
-                                      )}
-                                      {setting.scope === 'device' && (
-                                        <Typography variant="caption" color="text.secondary">
-                                          {t('admin:plugins.perDevice')}
-                                        </Typography>
-                                      )}
-                                    </Grid>
-                                  );
-                                })}
-                              </Grid>
-                            </Box>
-                          )}
-
-                          <Box sx={{ mt: 2 }} data-tab-picker={pluginWidgetName}>
-                            <Autocomplete
-                              multiple
-                              options={tabs}
-                              getOptionLabel={(option) => option.label}
-                              value={tabs.filter(tab => pluginAssignments[pluginWidgetName]?.includes(tab.number))}
-                              onChange={(e, newValue) => {
-                                setPluginAssignments(prev => ({
-                                  ...prev,
-                                  [pluginWidgetName]: newValue.map(tab => tab.number)
-                                }));
-                              }}
-                              renderInput={(params) => (
-                                <TextField
-                                  {...params}
-                                  label={t('admin:widgets.showOnTabs')}
-                                  required={Boolean(pSettings.enabled)}
-                                  error={hasRequiredTabsError}
-                                  placeholder={t('admin:widgets.selectTabs')}
-                                  helperText={
-                                    hasRequiredTabsError
-                                      ? 'Required: select at least one tab when this plugin is enabled.'
-                                      : 'Select which tabs this plugin should appear on.'
-                                  }
+                        >
+                          <AdminRow
+                            label={(
+                              <Typography variant="body2" component="span" color="text.secondary">
+                                {[plugin.filename, plugin.version, plugin.author && t('admin:plugins.byAuthor', { author: plugin.author })]
+                                  .filter(Boolean).join(' · ')}
+                              </Typography>
+                            )}
+                            hint={(
+                              <>
+                                {updatable && (
+                                  <Box component="span" sx={{ display: 'block', color: 'var(--accent)', fontWeight: 600 }}>
+                                    {storeEntry.version
+                                      ? t('admin:plugins.updateAvailable', { version: storeEntry.version })
+                                      : t('admin:plugins.updateAvailableNoVersion')}
+                                  </Box>
+                                )}
+                                {/* Straight from the plugin's own manifest (issue
+                                    #147). A legacy widget has none, and says so. */}
+                                <Box component="span" sx={{ display: 'block', color: plugin.manifest?.description ? 'text.primary' : 'text.secondary', fontStyle: plugin.manifest?.description ? 'normal' : 'italic' }}>
+                                  {plugin.manifest?.description || t('admin:plugins.noDescription')}
+                                </Box>
+                              </>
+                            )}
+                            extra={previewPlugin === plugin.filename && (
+                              <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 2, overflow: 'hidden', height: 220 }}>
+                                <iframe
+                                  title={t('admin:plugins.previewTitle', { name: plugin.name })}
+                                  // Same channel PluginWidgetWrapper uses, read from the
+                                  // root element because the Admin Panel has no theme prop.
+                                  //
+                                  // device is carried too, and is not cosmetic: the plugin
+                                  // platform refuses to WRITE a device-scoped setting
+                                  // without it, so a plugin whose own UI saves one would
+                                  // fail here while working fine on the dashboard.
+                                  src={`${API_BASE_URL}/widgets/${encodeURIComponent(plugin.filename)}?theme=${document.documentElement.getAttribute('data-theme') || 'light'}&device=${encodeURIComponent(currentDeviceName)}&lang=${i18n.language || 'en'}`}
+                                  // Opaque, like the dashboard's frames (PluginWidgetWrapper):
+                                  // a plugin can't act as HomeGlow from here either.
+                                  sandbox="allow-scripts allow-forms"
+                                  allow="geolocation"
+                                  name={frameNameFor(plugin.filename)}
+                                  style={{ width: '100%', height: '100%', border: 0, display: 'block', backgroundColor: 'var(--card-bg)' }}
                                 />
-                              )}
-                            />
-                          </Box>
-                        </Box>
+                              </Box>
+                            )}
+                          />
+                          <AdminRow
+                            label={t('common:labels.enabled')}
+                            control={(
+                              <Switch
+                                checked={pSettings.enabled || false}
+                                onChange={() => setPluginField('enabled', !pSettings.enabled)}
+                                slotProps={{ input: { 'aria-label': t('common:labels.enabled') } }}
+                              />
+                            )}
+                          />
+                          <AdminRow
+                            label={t('admin:plugins.transparentBackground')}
+                            control={(
+                              <Switch
+                                checked={pSettings.transparent || false}
+                                onChange={() => setPluginField('transparent', !pSettings.transparent)}
+                                slotProps={{ input: { 'aria-label': t('admin:plugins.transparentBackground') } }}
+                              />
+                            )}
+                          />
+                          <AdminRow
+                            label="Auto-Refresh Interval"
+                            fill
+                            control={(
+                              <FormControl size="small" sx={{ minWidth: 200 }}>
+                                <Select
+                                  value={pSettings.refreshInterval || 0}
+                                  inputProps={{ 'aria-label': 'Auto-Refresh Interval' }}
+                                  onChange={(e) => setPluginField('refreshInterval', e.target.value)}
+                                >
+                                  {refreshIntervalOptions.map((option) => (
+                                    <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
+                            )}
+                          />
+
+                          {plugin.pluginId && Array.isArray(plugin.manifest?.settings) && plugin.manifest.settings.map((setting) => {
+                            const declaredValues = pluginDeclaredValues[plugin.pluginId] || {};
+                            const value = declaredValues[setting.key];
+                            const setValue = (next) => {
+                              setPluginDeclaredValues((prev) => ({
+                                ...prev,
+                                [plugin.pluginId]: { ...prev[plugin.pluginId], [setting.key]: next },
+                              }));
+                              setPluginDeclaredDirty((prev) => ({
+                                ...prev,
+                                [plugin.pluginId]: { ...prev[plugin.pluginId], [setting.key]: true },
+                              }));
+                            };
+                            const label = setting.label || setting.key;
+                            return (
+                              <AdminRow
+                                key={setting.key}
+                                label={label}
+                                hint={setting.scope === 'device' ? t('admin:plugins.perDevice') : null}
+                                fill={setting.type === 'select' || setting.type === 'number'}
+                                wide={setting.type !== 'boolean' && setting.type !== 'select' && setting.type !== 'number'}
+                                control={setting.type === 'boolean' ? (
+                                  <Switch
+                                    checked={Boolean(value)}
+                                    onChange={() => setValue(!value)}
+                                    slotProps={{ input: { 'aria-label': label } }}
+                                  />
+                                ) : setting.type === 'select' ? (
+                                  <FormControl size="small" sx={{ minWidth: 200 }}>
+                                    <Select
+                                      value={value ?? ''}
+                                      inputProps={{ 'aria-label': label }}
+                                      onChange={(event) => setValue(event.target.value)}
+                                    >
+                                      {(setting.options || []).map((option) => (
+                                        <MenuItem key={option} value={option}>{option}</MenuItem>
+                                      ))}
+                                    </Select>
+                                  </FormControl>
+                                ) : setting.type === 'number' ? (
+                                  <TextField
+                                    size="small"
+                                    type="number"
+                                    value={value ?? ''}
+                                    slotProps={{ htmlInput: { min: setting.min, max: setting.max, 'aria-label': label } }}
+                                    onChange={(event) => {
+                                      const parsed = Number(event.target.value);
+                                      setValue(event.target.value === '' || Number.isNaN(parsed) ? '' : parsed);
+                                    }}
+                                    sx={{ width: 120 }}
+                                  />
+                                ) : (
+                                  <TextField
+                                    fullWidth
+                                    size="small"
+                                    value={value ?? ''}
+                                    onChange={(event) => setValue(event.target.value)}
+                                    slotProps={{ htmlInput: { 'aria-label': label } }}
+                                  />
+                                )}
+                              />
+                            );
+                          })}
+
+                          <AdminRow
+                            label={t('admin:widgets.showOnTabs')}
+                            hint={hasRequiredTabsError
+                              ? <Box component="span" sx={{ color: 'error.main' }}>Required: select at least one tab when this plugin is enabled.</Box>
+                              : 'Select which tabs this plugin should appear on.'}
+                            wide
+                            control={(
+                              <Box sx={{ width: '100%' }} data-tab-picker={pluginWidgetName}>
+                                <Autocomplete
+                                  multiple
+                                  size="small"
+                                  options={tabs}
+                                  getOptionLabel={(option) => option.label}
+                                  value={tabs.filter(tab => pluginAssignments[pluginWidgetName]?.includes(tab.number))}
+                                  onChange={(e, newValue) => {
+                                    setPluginAssignments(prev => ({
+                                      ...prev,
+                                      [pluginWidgetName]: newValue.map(tab => tab.number)
+                                    }));
+                                  }}
+                                  renderInput={(params) => (
+                                    <TextField
+                                      {...params}
+                                      required={Boolean(pSettings.enabled)}
+                                      error={hasRequiredTabsError}
+                                      placeholder={t('admin:widgets.selectTabs')}
+                                      slotProps={{ ...params.slotProps, htmlInput: { ...params.slotProps?.htmlInput, 'aria-label': t('admin:widgets.showOnTabs') } }}
+                                    />
+                                  )}
+                                />
+                              </Box>
+                            )}
+                          />
+                        </AdminGroup>
                       );
                     })}
 
-                    <Button type="submit" variant="contained" sx={{ mt: 2 }} startIcon={<Save />}>
-                      {t('admin:plugins.saveSettings')}
-                    </Button>
-                  </Box>
+                    <AdminFooter>
+                      <Button variant="contained" onClick={() => savePluginSettings()} startIcon={<Save />}>
+                        {t('admin:plugins.saveSettings')}
+                      </Button>
+                    </AdminFooter>
+                  </>
                 )}
               </>
             )}
@@ -2725,234 +2510,195 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
             )}
 
             {location.section === 'tabs' && (
-              <>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Alert severity="info" sx={{ mb: 0, flex: 1, mr: 2 }}>
-                    {t('admin:tabs.manageHelp')}
-                  </Alert>
-                  <Button variant="contained" startIcon={<Add />} onClick={openCreateTabDialog}>
+              <AdminGroup
+                title={t('admin:sections.tabs')}
+                action={(
+                  <Button variant="contained" size="small" startIcon={<Add />} onClick={openCreateTabDialog}>
                     {t('admin:tabs.addTab')}
                   </Button>
-                </Box>
-
-                <TableContainer component={Paper}>
-                  <Table sx={stackableTableSx}>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell width={150}>{t('admin:tabs.order')}</TableCell>
-                        <TableCell>{t('admin:tabs.label')}</TableCell>
-                        <TableCell>{t('admin:tabs.icon')}</TableCell>
-                        <TableCell>{t('admin:tabs.showLabel')}</TableCell>
-                        <TableCell width={120}>{t('common:labels.actions')}</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {[...tabs].sort((a, b) => a.number - b.number).map((tab) => {
-                        const isHome = tab.number === 1;
-                        const orderIndex = draggableTabsInOrder().findIndex((t) => t.number === tab.number);
-                        const lastOrderIndex = draggableTabsInOrder().length - 1;
-                        return (
-                          <TableRow
-                            key={tab.id}
-                            draggable={!isHome}
-                            onDragStart={() => handleTabDragStart(tab.number)}
-                            onDragOver={(e) => {
-                              if (!isHome) {
-                                e.preventDefault();
-                              }
-                            }}
-                            onDrop={() => {
-                              if (!isHome) {
-                                handleTabDrop(tab.number);
-                              }
-                            }}
-                            sx={{
-                              cursor: isHome ? 'default' : 'grab',
-                              opacity: draggingTabNumber === tab.number ? 0.65 : 1,
-                            }}
-                          >
-                            <TableCell data-label={t('admin:tabs.order')}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                {!isHome && (
-                                  <DragIndicator fontSize="small" sx={{ opacity: 0.5, display: { xs: 'none', sm: 'block' } }} />
-                                )}
-                                <Chip label={tab.number} size="small" sx={{ mr: 0.5 }} />
-                                {!isHome && (
-                                  <>
-                                    <Tooltip title={t('admin:tabs.moveUpNamed', { name: tab.label || t('admin:tabs.label') })}>
-                                      <span>
-                                        <IconButton
-                                          size="small"
-                                          aria-label={t('admin:tabs.moveTabUp')}
-                                          disabled={orderIndex <= 0}
-                                          onClick={() => moveTab(tab.number, -1)}
-                                        >
-                                          <ArrowUpward fontSize="small" />
-                                        </IconButton>
-                                      </span>
-                                    </Tooltip>
-                                    <Tooltip title={t('admin:tabs.moveDownNamed', { name: tab.label || t('admin:tabs.label') })}>
-                                      <span>
-                                        <IconButton
-                                          size="small"
-                                          aria-label={t('admin:tabs.moveTabDown')}
-                                          disabled={orderIndex === -1 || orderIndex >= lastOrderIndex}
-                                          onClick={() => moveTab(tab.number, 1)}
-                                        >
-                                          <ArrowDownward fontSize="small" />
-                                        </IconButton>
-                                      </span>
-                                    </Tooltip>
-                                  </>
-                                )}
-                              </Box>
-                            </TableCell>
-                            <TableCell data-label={t('admin:tabs.label')}>
-                              {tab.label}
-                              {isHome && (
-                                <Chip size="small" label={t('admin:tabs.home')} color="primary" sx={{ ml: 1 }} />
-                              )}
-                            </TableCell>
-                            <TableCell data-label={t('admin:tabs.icon')}>
-                              <Chip size="small" label={tab.icon} />
-                            </TableCell>
-                            <TableCell data-label={t('admin:tabs.showLabel')}>
-                              <Switch
-                                checked={Boolean(tab.show_label)}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={() => toggleTabShowLabel(tab)}
-                                disabled={isLoading}
-                                slotProps={{ input: { 'aria-label': t('admin:tabs.toggleShowLabel', { name: tab.label }) } }}
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <IconButton
-                                onClick={() => openEditTabDialog(tab)}
-                                color="primary"
-                                size="small"
-                                disabled={isHome}
-                              >
-                                <Edit />
-                              </IconButton>
-                              <IconButton
-                                onClick={() => requestDeleteTab(tab)}
-                                color="error"
-                                size="small"
-                                disabled={isHome}
-                              >
-                                <Delete />
-                              </IconButton>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </>
+                )}
+              >
+                <AdminNote>{t('admin:tabs.manageHelp')}</AdminNote>
+                {[...tabs].sort((a, b) => a.number - b.number).map((tab) => {
+                  const isHome = tab.number === 1;
+                  const orderIndex = draggableTabsInOrder().findIndex((t) => t.number === tab.number);
+                  const lastOrderIndex = draggableTabsInOrder().length - 1;
+                  return (
+                    <Box
+                      key={tab.id}
+                      draggable={!isHome}
+                      onDragStart={() => handleTabDragStart(tab.number)}
+                      onDragOver={(e) => {
+                        if (!isHome) {
+                          e.preventDefault();
+                        }
+                      }}
+                      onDrop={() => {
+                        if (!isHome) {
+                          handleTabDrop(tab.number);
+                        }
+                      }}
+                      sx={{
+                        cursor: isHome ? 'default' : 'grab',
+                        opacity: draggingTabNumber === tab.number ? 0.65 : 1,
+                      }}
+                    >
+                      <AdminRow
+                        leading={(
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, width: 104 }}>
+                            <Chip label={tab.number} size="small" />
+                            {!isHome && (
+                              <>
+                                <Tooltip title={t('admin:tabs.moveUpNamed', { name: tab.label || t('admin:tabs.label') })}>
+                                  <span>
+                                    <IconButton
+                                      size="small"
+                                      aria-label={t('admin:tabs.moveTabUp')}
+                                      disabled={orderIndex <= 0}
+                                      onClick={() => moveTab(tab.number, -1)}
+                                    >
+                                      <ArrowUpward fontSize="small" />
+                                    </IconButton>
+                                  </span>
+                                </Tooltip>
+                                <Tooltip title={t('admin:tabs.moveDownNamed', { name: tab.label || t('admin:tabs.label') })}>
+                                  <span>
+                                    <IconButton
+                                      size="small"
+                                      aria-label={t('admin:tabs.moveTabDown')}
+                                      disabled={orderIndex === -1 || orderIndex >= lastOrderIndex}
+                                      onClick={() => moveTab(tab.number, 1)}
+                                    >
+                                      <ArrowDownward fontSize="small" />
+                                    </IconButton>
+                                  </span>
+                                </Tooltip>
+                              </>
+                            )}
+                          </Box>
+                        )}
+                        label={(
+                          <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                            {tab.label}
+                            {isHome && <Chip size="small" label={t('admin:tabs.home')} color="primary" />}
+                          </Box>
+                        )}
+                        hint={`${t('admin:tabs.icon')}: ${tab.icon}`}
+                        control={(
+                          <>
+                            <Typography variant="caption" color="text.secondary">{t('admin:tabs.showLabel')}</Typography>
+                            <Switch
+                              checked={Boolean(tab.show_label)}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={() => toggleTabShowLabel(tab)}
+                              disabled={isLoading}
+                              slotProps={{ input: { 'aria-label': t('admin:tabs.toggleShowLabel', { name: tab.label }) } }}
+                            />
+                            <Tooltip title={t('common:actions.edit')}>
+                              <span>
+                                <IconButton onClick={() => openEditTabDialog(tab)} size="small" disabled={isHome} aria-label={t('common:actions.edit')}>
+                                  <Edit fontSize="small" />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                            <Tooltip title={t('common:actions.delete')}>
+                              <span>
+                                <IconButton onClick={() => requestDeleteTab(tab)} color="error" size="small" disabled={isHome} aria-label={t('common:actions.delete')}>
+                                  <Delete fontSize="small" />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          </>
+                        )}
+                      />
+                    </Box>
+                  );
+                })}
+              </AdminGroup>
             )}
-          </CardContent>
-        </Card>
+        </>
       )}
 
       {/* Look */}
       {location.tab === 'look' && (
-        <Card>
-          <CardContent>
-            <AppearanceSettings />
-
-            <ThemeLibrary />
-          </CardContent>
-        </Card>
+        <>
+          <AppearanceSettings />
+          <ThemeLibrary />
+        </>
       )}
 
       {/* Displays: each display, and this display's screensaver */}
       {location.tab === 'displays' && (
-        <Card>
-          <CardContent>
+        <>
             {location.section === 'devices' && (
               <>
-                <Alert severity="info" sx={{ mb: 2 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2, px: 0.5 }}>
                   {t('admin:devices.manageHelp')}
-                </Alert>
+                </Typography>
 
-                <Box sx={{ mb: 2, p: 2, border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)' }}>
-                  <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
-                    {t('admin:devices.currentName')}
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                    <Chip label={t('admin:devices.current')} color="primary" size="small" />
-                    <Typography variant="body2" sx={{ fontFamily: 'var(--hg-font-mono)' }}>
-                      {currentDeviceName}
-                    </Typography>
-                  </Box>
-                </Box>
+                <AdminGroup>
+                  <AdminRow
+                    label={t('admin:devices.currentName')}
+                    hint={<Box component="span" sx={{ fontFamily: 'var(--hg-font-mono)' }}>{currentDeviceName}</Box>}
+                    control={(
+                      <Button size="small" variant="outlined" startIcon={<Edit />} onClick={openRenameDeviceDialog}>
+                        {t('admin:devices.renameCurrent')}
+                      </Button>
+                    )}
+                  />
+                </AdminGroup>
 
-                <TableContainer component={Paper}>
-                  <Table sx={stackableTableSx}>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>{t('common:labels.name')}</TableCell>
-                        <TableCell>{t('admin:devices.lastUpdated')}</TableCell>
-                        <TableCell>{t('admin:subTabs.widgets')}</TableCell>
-                        <TableCell width={120}>{t('common:labels.actions')}</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {devices.map((device) => {
-                        const isCurrent = device.name === currentDeviceName;
-                        return (
-                          <TableRow key={device.name}>
-                            <TableCell data-label={t('common:labels.name')}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                                {isCurrent && <Chip label={t('admin:devices.current')} color="primary" size="small" />}
-                                <Typography variant="body2" sx={{ fontFamily: 'var(--hg-font-mono)' }}>
-                                  {device.name}
-                                </Typography>
-                              </Box>
-                            </TableCell>
-                            <TableCell data-label={t('admin:devices.lastUpdated')}>
-                              {device.updateTime ? new Date(device.updateTime).toLocaleString() : 'Unknown'}
-                            </TableCell>
-                            <TableCell data-label={t('admin:subTabs.widgets')}>
-                              <Chip label={Number(device.widgets) || 0} size="small" />
-                            </TableCell>
-                            <TableCell>
-                              {isCurrent ? (
-                                <IconButton
-                                  onClick={openRenameDeviceDialog}
-                                  color="primary"
-                                  size="small"
-                                  title={t('admin:devices.renameCurrent')}
-                                >
-                                  <Edit />
+                <AdminGroup title={t('admin:sections.devices')}>
+                  {devices.map((device) => {
+                    const isCurrent = device.name === currentDeviceName;
+                    return (
+                      <AdminRow
+                        key={device.name}
+                        leading={<Tv sx={{ color: 'text.secondary' }} />}
+                        label={(
+                          <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                            <Box component="span" sx={{ fontFamily: 'var(--hg-font-mono)', fontSize: '0.9375rem' }}>{device.name}</Box>
+                            {isCurrent && <Chip label={t('admin:devices.current')} color="primary" size="small" />}
+                          </Box>
+                        )}
+                        hint={[
+                          `${t('admin:devices.lastUpdated')}: ${device.updateTime ? new Date(device.updateTime).toLocaleString() : 'Unknown'}`,
+                          `${t('admin:subTabs.widgets')}: ${Number(device.widgets) || 0}`,
+                        ].join(' · ')}
+                        control={(
+                          <>
+                            {isCurrent ? (
+                              <Tooltip title={t('admin:devices.renameCurrent')}>
+                                <IconButton onClick={openRenameDeviceDialog} size="small" aria-label={t('admin:devices.renameCurrent')}>
+                                  <Edit fontSize="small" />
                                 </IconButton>
-                              ) : (
-                                <IconButton
-                                  onClick={() => openCopyDeviceDialog(device)}
-                                  color="primary"
-                                  size="small"
-                                  title={t('admin:devices.copyToCurrent')}
-                                >
-                                  <ContentCopy />
+                              </Tooltip>
+                            ) : (
+                              <Tooltip title={t('admin:devices.copyToCurrent')}>
+                                <IconButton onClick={() => openCopyDeviceDialog(device)} size="small" aria-label={t('admin:devices.copyToCurrent')}>
+                                  <ContentCopy fontSize="small" />
                                 </IconButton>
-                              )}
-                              <IconButton
-                                onClick={() => openDeleteDeviceDialog(device)}
-                                color="error"
-                                size="small"
-                                title={t('admin:devices.deleteDevice')}
-                                disabled={isCurrent}
-                              >
-                                <Delete />
-                              </IconButton>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                              </Tooltip>
+                            )}
+                            <Tooltip title={t('admin:devices.deleteDevice')}>
+                              <span>
+                                <IconButton
+                                  onClick={() => openDeleteDeviceDialog(device)}
+                                  color="error"
+                                  size="small"
+                                  aria-label={t('admin:devices.deleteDevice')}
+                                  disabled={isCurrent}
+                                >
+                                  <Delete fontSize="small" />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          </>
+                        )}
+                      />
+                    );
+                  })}
+                </AdminGroup>
               </>
             )}
 
@@ -2961,235 +2707,151 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                 storage, so they are saved together. */}
             {location.section === 'thisdisplay' && (
               <>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-                  <Tv />
-                  <Typography variant="h6">{t('admin:thisDisplay.heading')}</Typography>
-                </Box>
-
-                <Alert severity="info" sx={{ mb: 3 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2, px: 0.5 }}>
                   {t('admin:thisDisplay.help')}
-                </Alert>
+                </Typography>
 
-                <Box sx={{ maxWidth: 600, mx: 'auto' }}>
-                  {/* Dock idle hide (issue #77). Saved with the screensaver settings. */}
-                  <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                    {t('admin:screensaver.dockHideHeading')}
-                  </Typography>
-                  <TextField
-                    type="number"
-                    size="small"
-                    label={t('admin:screensaver.dockHideLabel')}
-                    value={screensaverSettings.dockHideMinutes}
-                    onChange={(e) => setScreensaverSettings(prev => ({ ...prev, dockHideMinutes: e.target.value }))}
-                    slotProps={{ htmlInput: { min: 0, max: MAX_DOCK_HIDE_MINUTES, step: 1 } }}
-                    sx={{ mb: 1, width: 200 }}
+                {/* Dock idle hide (issue #77) and touch gestures
+                    (utils/twoFingerSwipe.js), saved with the screensaver
+                    settings. */}
+                <AdminGroup>
+                  <AdminRow
+                    label={t('admin:screensaver.dockHideHeading')}
+                    hint={t('admin:screensaver.dockHideHelp')}
+                    control={(
+                      <TextField
+                        type="number"
+                        size="small"
+                        label={t('admin:screensaver.dockHideLabel')}
+                        value={screensaverSettings.dockHideMinutes}
+                        onChange={(e) => setScreensaverSettings(prev => ({ ...prev, dockHideMinutes: e.target.value }))}
+                        slotProps={{ htmlInput: { min: 0, max: MAX_DOCK_HIDE_MINUTES, step: 1 } }}
+                        sx={{ width: 170 }}
+                      />
+                    )}
+                    extra={screensaverPreemptsDock({
+                      screensaverEnabled: screensaverSettings.enabled,
+                      screensaverMinutes: screensaverSettings.timeout,
+                      dockHideMinutes: screensaverSettings.dockHideMinutes,
+                    }) && (
+                      <Alert severity="info">
+                        {t('admin:screensaver.dockHidePreempted', { count: screensaverSettings.timeout })}
+                      </Alert>
+                    )}
                   />
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    {t('admin:screensaver.dockHideHelp')}
-                  </Typography>
-                  {screensaverPreemptsDock({
-                    screensaverEnabled: screensaverSettings.enabled,
-                    screensaverMinutes: screensaverSettings.timeout,
-                    dockHideMinutes: screensaverSettings.dockHideMinutes,
-                  }) && (
-                    <Alert severity="info" sx={{ mb: 2 }}>
-                      {t('admin:screensaver.dockHidePreempted', { count: screensaverSettings.timeout })}
-                    </Alert>
-                  )}
+                </AdminGroup>
 
-                  <Divider sx={{ my: 3 }} />
-
-                  {/* Touch gestures (utils/twoFingerSwipe.js). Saved with the
-                      screensaver settings. */}
-                  <Typography variant="subtitle2" sx={{ mt: 1, mb: 1, fontWeight: 'bold' }}>
-                    {t('admin:screensaver.touchHeading')}
-                  </Typography>
-                  <FormControlLabel
-                    control={
+                <AdminGroup title={t('admin:screensaver.touchHeading')}>
+                  <AdminRow
+                    label={t('admin:screensaver.twoFingerSwipe')}
+                    hint={t('admin:screensaver.twoFingerSwipeHelp')}
+                    control={(
                       <Switch
                         checked={screensaverSettings.twoFingerSwipe === true}
                         onChange={(e) => setScreensaverSettings(prev => ({ ...prev, twoFingerSwipe: e.target.checked }))}
+                        slotProps={{ input: { 'aria-label': t('admin:screensaver.twoFingerSwipe') } }}
                       />
-                    }
-                    label={t('admin:screensaver.twoFingerSwipe')}
+                    )}
                   />
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, ml: 6 }}>
-                    {t('admin:screensaver.twoFingerSwipeHelp')}
-                  </Typography>
-                  <FormControlLabel
-                    control={
+                  <AdminRow
+                    label={t('admin:screensaver.blockPinchZoom')}
+                    hint={t('admin:screensaver.blockPinchZoomHelp')}
+                    control={(
                       <Switch
                         checked={screensaverSettings.blockPinchZoom === true}
                         onChange={(e) => setScreensaverSettings(prev => ({ ...prev, blockPinchZoom: e.target.checked }))}
+                        slotProps={{ input: { 'aria-label': t('admin:screensaver.blockPinchZoom') } }}
                       />
-                    }
-                    label={t('admin:screensaver.blockPinchZoom')}
+                    )}
                   />
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2, ml: 6 }}>
-                    {t('admin:screensaver.blockPinchZoomHelp')}
-                  </Typography>
+                </AdminGroup>
 
-                  <Divider sx={{ my: 3 }} />
+                {/* Expanding widgets (utils/widgetExpand.js). Saved with the
+                    screensaver settings. The list offers the widgets turned
+                    on here. */}
+                <ExpandWidgetsSettings
+                  settings={screensaverSettings}
+                  onChange={(patch) => setScreensaverSettings(prev => ({ ...prev, ...patch }))}
+                  widgets={[
+                    ...['calendar', 'weather', 'chores', 'photos']
+                      .filter((key) => widgetSettings[key]?.enabled)
+                      .map((key) => ({ name: key, label: t(`admin:screensaver.expand.widgetNames.${key}`) })),
+                    ...uploadedWidgets
+                      .filter((plugin) => pluginSettings[plugin.filename]?.enabled)
+                      .map((plugin) => ({
+                        name: `plugin:${plugin.filename}`,
+                        label: plugin.name || plugin.filename,
+                        manifestBlocks: plugin.manifest?.expand === false,
+                      })),
+                  ]}
+                />
 
-                  {/* Expanding widgets (utils/widgetExpand.js). Saved with the
-                      screensaver settings. The list offers the widgets turned
-                      on here. */}
-                  <ExpandWidgetsSettings
-                    settings={screensaverSettings}
-                    onChange={(patch) => setScreensaverSettings(prev => ({ ...prev, ...patch }))}
-                    widgets={[
-                      ...['calendar', 'weather', 'chores', 'photos']
-                        .filter((key) => widgetSettings[key]?.enabled)
-                        .map((key) => ({ name: key, label: t(`admin:screensaver.expand.widgetNames.${key}`) })),
-                      ...uploadedWidgets
-                        .filter((plugin) => pluginSettings[plugin.filename]?.enabled)
-                        .map((plugin) => ({
-                          name: `plugin:${plugin.filename}`,
-                          label: plugin.name || plugin.filename,
-                          manifestBlocks: plugin.manifest?.expand === false,
-                        })),
-                    ]}
-                  />
+                {/* Display dimming (DisplayDimmingSettings) saves only its own
+                    field, so the one Save button below saves it alongside. */}
+                <DisplayDimmingSettings saveRef={saveDimming} />
 
+                <AdminFooter>
                   <Button
                     variant="contained"
-                    onClick={() => saveScreensaverSettings('admin:messages.displaySaved')}
+                    onClick={async () => {
+                      await saveScreensaverSettings('admin:messages.displaySaved');
+                      await saveDimming.current?.();
+                    }}
                     startIcon={<Save />}
-                    fullWidth
-                    sx={{ mt: 2 }}
                   >
                     {t('admin:thisDisplay.save')}
                   </Button>
-
-                  <Divider sx={{ my: 3 }} />
-
-                  {/* Display dimming (DisplayDimmingSettings), moved here whole
-                      from the Look tab: it saves only its own field, through
-                      its own save button, so it keeps working unchanged. */}
-                  <DisplayDimmingSettings />
-                </Box>
+                </AdminFooter>
               </>
             )}
 
             {location.section === 'screensaver' && (
               <>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-                  <Nightlight />
-                  <Typography variant="h6">{t('admin:screensaver.heading')}</Typography>
-                </Box>
-
-                <Alert severity="info" sx={{ mb: 3 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2, px: 0.5 }}>
                   {t('admin:screensaver.help')}
-                </Alert>
+                </Typography>
 
-                <Box sx={{ maxWidth: 600, mx: 'auto' }}>
-                  <FormControlLabel
-                    control={
+                <AdminGroup>
+                  <AdminRow
+                    label={t('admin:screensaver.enable')}
+                    control={(
                       <Switch
                         checked={screensaverSettings.enabled}
                         onChange={(e) => setScreensaverSettings(prev => ({ ...prev, enabled: e.target.checked }))}
+                        slotProps={{ input: { 'aria-label': t('admin:screensaver.enable') } }}
                       />
-                    }
-                    label={t('admin:screensaver.enable')}
-                    sx={{ mb: 3 }}
+                    )}
                   />
-
-                  <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold' }}>
-                    {t('admin:screensaver.mode')}
-                  </Typography>
-
-                  <RadioGroup
-                    value={screensaverSettings.mode}
-                    onChange={(e) => setScreensaverSettings(prev => ({ ...prev, mode: e.target.value }))}
-                    sx={{ mb: 3 }}
-                  >
-                    <Tooltip
-                      title={!hasTabsCreated ? "Create tabs in the dashboard to use this mode" : ""}
-                      placement="right"
-                    >
-                      <FormControlLabel
-                        value="tabs"
-                        control={<Radio disabled={!hasTabsCreated} />}
-                        label={
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <TabIcon fontSize="small" />
-                            <Box>
-                              <Typography
-                                variant="body2"
-                                sx={{
-                                  fontWeight: 'bold',
-                                  color: !hasTabsCreated ? 'text.disabled' : 'inherit'
-                                }}
-                              >
-                                {t('admin:screensaver.cycleTabs')}
-                              </Typography>
-                              <Typography
-                                variant="caption"
-                                color={!hasTabsCreated ? 'text.disabled' : 'text.secondary'}
-                              >
-                                {hasTabsCreated
-                                  ? t('admin:screensaver.cycleTabsHelp', { count: tabs.length })
-                                  : 'No tabs created yet'}
-                              </Typography>
-                            </Box>
-                            {!hasTabsCreated && (
-                              <Tooltip title={t('admin:screensaver.cycleTabsDisabled')}>
-                                <Info fontSize="small" color="disabled" />
-                              </Tooltip>
-                            )}
-                          </Box>
-                        }
-                        sx={{ opacity: !hasTabsCreated ? 0.6 : 1 }}
-                      />
-                    </Tooltip>
-
-                    <Tooltip
-                      title={!canUsePhotoSlideshow ? (photoDisabledReason || '') : ""}
-                      placement="right"
-                    >
-                      <FormControlLabel
-                        value="photos"
-                        control={<Radio disabled={!canUsePhotoSlideshow} />}
-                        label={
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <PhotoLibrary fontSize="small" />
-                            <Box>
-                              <Typography
-                                variant="body2"
-                                sx={{
-                                  fontWeight: 'bold',
-                                  color: !canUsePhotoSlideshow ? 'text.disabled' : 'inherit'
-                                }}
-                              >
-                                {t('admin:screensaver.photoSlideshow')}
-                              </Typography>
-                              <Typography
-                                variant="caption"
-                                color={!canUsePhotoSlideshow ? 'text.disabled' : 'text.secondary'}
-                              >
-                                {canUsePhotoSlideshow
-                                  ? t('admin:screensaver.photoSlideshowHelp')
-                                  : (photoDisabledReason || '')}
-                              </Typography>
-                            </Box>
-                            {!canUsePhotoSlideshow && photoDisabledReason && (
-                              <Tooltip title={photoDisabledReason}>
-                                <Info fontSize="small" color="disabled" />
-                              </Tooltip>
-                            )}
-                          </Box>
-                        }
-                        sx={{ opacity: !canUsePhotoSlideshow ? 0.6 : 1 }}
-                      />
-                    </Tooltip>
-                  </RadioGroup>
-
-                  <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                    Inactivity Timeout: {screensaverSettings.timeout} minute{screensaverSettings.timeout !== 1 ? 's' : ''}
-                  </Typography>
-                  <Slider
+                  <AdminRow
+                    label={t('admin:screensaver.mode')}
+                    hint={screensaverSettings.mode === 'photos'
+                      ? (canUsePhotoSlideshow ? t('admin:screensaver.photoSlideshowHelp') : (photoDisabledReason || ''))
+                      : (hasTabsCreated ? t('admin:screensaver.cycleTabsHelp', { count: tabs.length }) : t('admin:screensaver.cycleTabsDisabled'))}
+                    fill
+                    control={(
+                      <ToggleButtonGroup
+                        exclusive
+                        size="small"
+                        value={screensaverSettings.mode}
+                        onChange={(_, mode) => mode && setScreensaverSettings(prev => ({ ...prev, mode }))}
+                        sx={{ '& .MuiToggleButton-root': { textTransform: 'none', px: 1.5, py: 0.5, gap: 0.75 } }}
+                      >
+                        <ToggleButton value="tabs" disabled={!hasTabsCreated}>
+                          <TabIcon fontSize="small" />
+                          {t('admin:screensaver.cycleTabs')}
+                        </ToggleButton>
+                        <ToggleButton value="photos" disabled={!canUsePhotoSlideshow}>
+                          <PhotoLibrary fontSize="small" />
+                          {t('admin:screensaver.photoSlideshow')}
+                        </ToggleButton>
+                      </ToggleButtonGroup>
+                    )}
+                  />
+                  <ScreensaverIntervalSlider
+                    label="Inactivity Timeout"
+                    unit="minute"
                     value={screensaverSettings.timeout}
-                    onChange={(e, value) => setScreensaverSettings(prev => ({ ...prev, timeout: value }))}
+                    onChange={(value) => setScreensaverSettings(prev => ({ ...prev, timeout: value }))}
                     min={1}
                     max={30}
                     marks={[
@@ -3199,152 +2861,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                       { value: 15, label: '15m' },
                       { value: 30, label: '30m' }
                     ]}
-                    sx={{ mb: 4 }}
                   />
-
-                  {/* Coffee Table drops prints at its own, quicker pace. */}
-                  {screensaverSettings.mode === 'photos' && screensaverSettings.photoLayout === 'coffeeTable' && (
-                    <ScreensaverIntervalSlider
-                      label={t('admin:screensaver.coffeeTableRate')}
-                      value={screensaverSettings.coffeeTableSeconds ?? 4}
-                      onChange={(value) => setScreensaverSettings(prev => ({ ...prev, coffeeTableSeconds: value }))}
-                      min={1}
-                      max={20}
-                      marks={[
-                        { value: 1, label: '1s' },
-                        { value: 5, label: '5s' },
-                        { value: 10, label: '10s' },
-                        { value: 20, label: '20s' }
-                      ]}
-                    />
-                  )}
-
-                  {screensaverSettings.mode === 'photos' && screensaverSettings.photoLayout !== 'coffeeTable' && (
-                    <ScreensaverIntervalSlider
-                      label={t('admin:screensaver.photoInterval')}
-                      value={screensaverSettings.slideshowInterval}
-                      onChange={(value) => setScreensaverSettings(prev => ({ ...prev, slideshowInterval: value }))}
-                      min={3}
-                      max={60}
-                      marks={[
-                        { value: 3, label: '3s' },
-                        { value: 10, label: '10s' },
-                        { value: 30, label: '30s' },
-                        { value: 60, label: '60s' }
-                      ]}
-                    />
-                  )}
-
-                  {/* How each photo uses the screen. Fit is the original look;
-                      the other two fill the bars a photo of a different shape
-                      leaves. */}
-                  {screensaverSettings.mode === 'photos' && (
-                    <Box sx={{ mb: 3 }}>
-                      <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                        {t('admin:screensaver.layoutHeading')}
-                      </Typography>
-                      <RadioGroup
-                        value={screensaverSettings.photoLayout || 'fit'}
-                        onChange={(e) => setScreensaverSettings(prev => ({ ...prev, photoLayout: e.target.value }))}
-                      >
-                        {['fit', 'ambient', 'collage', 'coffeeTable'].map((layout) => (
-                          <FormControlLabel
-                            key={layout}
-                            value={layout}
-                            control={<Radio />}
-                            sx={{ alignItems: 'flex-start', mb: 1, '& .MuiRadio-root': { pt: 0.25 } }}
-                            label={
-                              <Box>
-                                <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                                  {t(`admin:screensaver.layout.${layout}`)}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  {t(`admin:screensaver.layout.${layout}Help`)}
-                                </Typography>
-                              </Box>
-                            }
-                          />
-                        ))}
-                      </RadioGroup>
-
-                      {/* When, who and where on each photo, for the layouts
-                          that show several at once. */}
-                      {['collage', 'coffeeTable'].includes(screensaverSettings.photoLayout) && (
-                        <Box sx={{ mt: 1 }}>
-                          <FormControlLabel
-                            control={
-                              <Switch
-                                checked={screensaverSettings.photoDetails === true}
-                                onChange={(e) => setScreensaverSettings(prev => ({ ...prev, photoDetails: e.target.checked }))}
-                              />
-                            }
-                            label={t('admin:screensaver.photoDetails')}
-                          />
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 6 }}>
-                            {t('admin:screensaver.photoDetailsHelp')}
-                          </Typography>
-                        </Box>
-                      )}
-                    </Box>
-                  )}
-
-                  {/* Corner overlay (issue #190). Photo mode only: in tab mode the
-                      dashboard itself is on screen, so there is nothing to overlay. */}
-                  {screensaverSettings.mode === 'photos' && (
-                    <Box sx={{ mb: 3 }}>
-                      <Typography variant="subtitle2" sx={{ mb: 0.5, fontWeight: 'bold' }}>
-                        {t('admin:screensaver.overlayHeading')}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                        {t('admin:screensaver.overlayHelp')}
-                      </Typography>
-
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={screensaverSettings.overlayCalendar === true}
-                            onChange={(e) => setScreensaverSettings(prev => ({ ...prev, overlayCalendar: e.target.checked }))}
-                          />
-                        }
-                        label={t('admin:screensaver.overlayCalendar')}
-                      />
-                      {screensaverSettings.overlayCalendar === true && (
-                        <FormControl size="small" sx={{ display: 'flex', ml: 6, mt: 1, mb: 1.5, maxWidth: 320 }}>
-                          <InputLabel id="screensaver-overlay-days-label">{t('admin:screensaver.overlayDays')}</InputLabel>
-                          <Select
-                            labelId="screensaver-overlay-days-label"
-                            value={screensaverSettings.overlayCalendarDays || 1}
-                            label={t('admin:screensaver.overlayDays')}
-                            onChange={(e) => setScreensaverSettings(prev => ({ ...prev, overlayCalendarDays: Number(e.target.value) }))}
-                          >
-                            {[1, 2, 3, 4, 5, 6, 7].map((days) => (
-                              <MenuItem key={days} value={days}>
-                                {days === 1
-                                  ? t('admin:screensaver.overlayDaysToday')
-                                  : t('admin:screensaver.overlayDaysPlus', { count: days - 1 })}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
-                      )}
-
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={screensaverSettings.overlayWeather === true}
-                            onChange={(e) => setScreensaverSettings(prev => ({ ...prev, overlayWeather: e.target.checked }))}
-                          />
-                        }
-                        label={t('admin:screensaver.overlayWeather')}
-                      />
-                      {screensaverSettings.overlayWeather === true && (
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 6 }}>
-                          {t('admin:screensaver.overlayWeatherHelp')}
-                        </Typography>
-                      )}
-                    </Box>
-                  )}
-
                   {screensaverSettings.mode === 'tabs' && (
                     <ScreensaverIntervalSlider
                       label={t('admin:screensaver.tabInterval')}
@@ -3360,143 +2877,231 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                       ]}
                     />
                   )}
-
-                  <FormControlLabel
-                    control={
+                  <AdminRow
+                    label={t('admin:screensaver.keepScreenAwake')}
+                    hint={t('admin:screensaver.keepScreenAwakeHelp')}
+                    control={(
                       <Switch
                         checked={screensaverSettings.keepScreenAwake}
                         onChange={(e) => setScreensaverSettings(prev => ({ ...prev, keepScreenAwake: e.target.checked }))}
+                        slotProps={{ input: { 'aria-label': t('admin:screensaver.keepScreenAwake') } }}
                       />
-                    }
-                    label={t('admin:screensaver.keepScreenAwake')}
-                    sx={{ mb: 1 }}
+                    )}
                   />
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                    {t('admin:screensaver.keepScreenAwakeHelp')}
-                  </Typography>
+                </AdminGroup>
 
-                  <Button
-                    variant="contained"
-                    onClick={() => saveScreensaverSettings()}
-                    startIcon={<Save />}
-                    fullWidth
-                    sx={{ mt: 2 }}
-                  >
+                {/* How each photo uses the screen. Fit is the original look;
+                    the other layouts fill the bars a photo of a different
+                    shape leaves. */}
+                {screensaverSettings.mode === 'photos' && (
+                  <AdminGroup title={t('admin:screensaver.layoutHeading')}>
+                    <AdminRow
+                      hint={t(`admin:screensaver.layout.${screensaverSettings.photoLayout || 'fit'}Help`)}
+                      wide
+                      control={(
+                        <ToggleButtonGroup
+                          exclusive
+                          size="small"
+                          value={screensaverSettings.photoLayout || 'fit'}
+                          onChange={(_, layout) => layout && setScreensaverSettings(prev => ({ ...prev, photoLayout: layout }))}
+                          sx={{ width: '100%', '& .MuiToggleButton-root': { flex: 1, textTransform: 'none', py: 0.5 } }}
+                        >
+                          {['fit', 'ambient', 'collage', 'coffeeTable'].map((layout) => (
+                            <ToggleButton key={layout} value={layout}>{t(`admin:screensaver.layout.${layout}`)}</ToggleButton>
+                          ))}
+                        </ToggleButtonGroup>
+                      )}
+                    />
+                    {/* Coffee Table drops prints at its own, quicker pace. */}
+                    {screensaverSettings.photoLayout === 'coffeeTable' ? (
+                      <ScreensaverIntervalSlider
+                        label={t('admin:screensaver.coffeeTableRate')}
+                        value={screensaverSettings.coffeeTableSeconds ?? 4}
+                        onChange={(value) => setScreensaverSettings(prev => ({ ...prev, coffeeTableSeconds: value }))}
+                        min={1}
+                        max={20}
+                        marks={[
+                          { value: 1, label: '1s' },
+                          { value: 5, label: '5s' },
+                          { value: 10, label: '10s' },
+                          { value: 20, label: '20s' }
+                        ]}
+                      />
+                    ) : (
+                      <ScreensaverIntervalSlider
+                        label={t('admin:screensaver.photoInterval')}
+                        value={screensaverSettings.slideshowInterval}
+                        onChange={(value) => setScreensaverSettings(prev => ({ ...prev, slideshowInterval: value }))}
+                        min={3}
+                        max={60}
+                        marks={[
+                          { value: 3, label: '3s' },
+                          { value: 10, label: '10s' },
+                          { value: 30, label: '30s' },
+                          { value: 60, label: '60s' }
+                        ]}
+                      />
+                    )}
+                    {/* When, who and where on each photo, for the layouts
+                        that show several at once. */}
+                    {['collage', 'coffeeTable'].includes(screensaverSettings.photoLayout) && (
+                      <AdminRow
+                        label={t('admin:screensaver.photoDetails')}
+                        hint={t('admin:screensaver.photoDetailsHelp')}
+                        control={(
+                          <Switch
+                            checked={screensaverSettings.photoDetails === true}
+                            onChange={(e) => setScreensaverSettings(prev => ({ ...prev, photoDetails: e.target.checked }))}
+                            slotProps={{ input: { 'aria-label': t('admin:screensaver.photoDetails') } }}
+                          />
+                        )}
+                      />
+                    )}
+                  </AdminGroup>
+                )}
+
+                {/* Corner overlay (issue #190). Photo mode only: in tab mode the
+                    dashboard itself is on screen, so there is nothing to overlay. */}
+                {screensaverSettings.mode === 'photos' && (
+                  <AdminGroup title={t('admin:screensaver.overlayHeading')}>
+                    <AdminRow
+                      label={t('admin:screensaver.overlayCalendar')}
+                      hint={t('admin:screensaver.overlayHelp')}
+                      control={(
+                        <Switch
+                          checked={screensaverSettings.overlayCalendar === true}
+                          onChange={(e) => setScreensaverSettings(prev => ({ ...prev, overlayCalendar: e.target.checked }))}
+                          slotProps={{ input: { 'aria-label': t('admin:screensaver.overlayCalendar') } }}
+                        />
+                      )}
+                    />
+                    {screensaverSettings.overlayCalendar === true && (
+                      <AdminRow
+                        label={t('admin:screensaver.overlayDays')}
+                        fill
+                        control={(
+                          <FormControl size="small" sx={{ minWidth: 200 }}>
+                            <Select
+                              value={screensaverSettings.overlayCalendarDays || 1}
+                              inputProps={{ 'aria-label': t('admin:screensaver.overlayDays') }}
+                              onChange={(e) => setScreensaverSettings(prev => ({ ...prev, overlayCalendarDays: Number(e.target.value) }))}
+                            >
+                              {[1, 2, 3, 4, 5, 6, 7].map((days) => (
+                                <MenuItem key={days} value={days}>
+                                  {days === 1
+                                    ? t('admin:screensaver.overlayDaysToday')
+                                    : t('admin:screensaver.overlayDaysPlus', { count: days - 1 })}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        )}
+                      />
+                    )}
+                    <AdminRow
+                      label={t('admin:screensaver.overlayWeather')}
+                      hint={screensaverSettings.overlayWeather === true ? t('admin:screensaver.overlayWeatherHelp') : null}
+                      control={(
+                        <Switch
+                          checked={screensaverSettings.overlayWeather === true}
+                          onChange={(e) => setScreensaverSettings(prev => ({ ...prev, overlayWeather: e.target.checked }))}
+                          slotProps={{ input: { 'aria-label': t('admin:screensaver.overlayWeather') } }}
+                        />
+                      )}
+                    />
+                  </AdminGroup>
+                )}
+
+                <AdminFooter>
+                  <Button variant="contained" onClick={() => saveScreensaverSettings()} startIcon={<Save />}>
                     {t('admin:screensaver.save')}
                   </Button>
-                </Box>
+                </AdminFooter>
               </>
             )}
-          </CardContent>
-        </Card>
+        </>
       )}
 
       {/* Family: users, chores, prizes and vacation */}
       {location.section === 'users' && (
-        <Card>
-          <CardContent>
-            <AdminFormSection title={t('admin:users.management')} subtitle={t('admin:users.addNew')}>
-              <Box
-                component="form"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  saveUser();
-                }}
-              >
-                <Grid container spacing={2}>
-                  <Grid size={{ xs: 12, sm: 4 }}>
-                    <TextField
-                      fullWidth
-                      label={t('admin:users.username')}
-                      value={newUser.username}
-                      onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
-                    />
-                  </Grid>
-                  <Grid size={{ xs: 12, sm: 4 }}>
-                    <TextField
-                      fullWidth
-                      label={t('admin:users.email')}
-                      type="email"
-                      value={newUser.email}
-                      onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                    />
-                  </Grid>
-                  <Grid size={{ xs: 12, sm: 4 }}>
-                    <Button
-                      type="submit"
-                      variant="contained"
-                      disabled={!newUser.username || !newUser.email}
-                      fullWidth
-                      sx={{ height: '56px' }}
-                    >
-                      {t('admin:users.addUser')}
-                    </Button>
-                  </Grid>
-                  <Grid size={12}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      {newUser.profile_picture ? (
-                        <img
-                          src={`${API_BASE_URL}/Uploads/users/${newUser.profile_picture}`}
-                          alt={t('admin:users.chosenAvatar')}
-                          style={{ width: 40, height: 40, borderRadius: '50%', border: '2px solid var(--accent)' }}
-                        />
-                      ) : (
-                        <Avatar sx={{ width: 40, height: 40, bgcolor: 'var(--card-border)' }}>?</Avatar>
-                      )}
-                      <Button size="small" variant="outlined" onClick={() => setAvatarPicker({ open: true, userId: null })}>
-                        {t('admin:users.chooseAvatar')}
-                      </Button>
-                      <Typography variant="caption" color="text.secondary">
-                        {t('admin:users.avatarHelp')}
-                      </Typography>
-                    </Box>
-                  </Grid>
-                </Grid>
+        <>
+          <AdminGroup title={t('admin:users.addNew')}>
+            <Box
+              component="form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                saveUser();
+              }}
+              sx={{ px: 2, py: 1.5 }}
+            >
+              <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
+                <TextField
+                  size="small"
+                  label={t('admin:users.username')}
+                  value={newUser.username}
+                  onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+                  sx={{ flex: '1 1 180px' }}
+                />
+                <TextField
+                  size="small"
+                  label={t('admin:users.email')}
+                  type="email"
+                  value={newUser.email}
+                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                  sx={{ flex: '1 1 220px' }}
+                />
+                <Button type="submit" variant="contained" disabled={!newUser.username || !newUser.email} sx={{ flex: { xs: '1 1 100%', sm: 'none' } }}>
+                  {t('admin:users.addUser')}
+                </Button>
               </Box>
-            </AdminFormSection>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1.5, flexWrap: 'wrap' }}>
+                {newUser.profile_picture ? (
+                  <img
+                    src={`${API_BASE_URL}/Uploads/users/${newUser.profile_picture}`}
+                    alt={t('admin:users.chosenAvatar')}
+                    style={{ width: 36, height: 36, borderRadius: '50%', border: '2px solid var(--accent)' }}
+                  />
+                ) : (
+                  <Avatar sx={{ width: 36, height: 36, bgcolor: 'var(--card-border)' }}>?</Avatar>
+                )}
+                <Button size="small" onClick={() => setAvatarPicker({ open: true, userId: null })}>
+                  {t('admin:users.chooseAvatar')}
+                </Button>
+                <Typography variant="caption" color="text.secondary">
+                  {t('admin:users.avatarHelp')}
+                </Typography>
+              </Box>
+            </Box>
+          </AdminGroup>
 
-            <TableContainer component={Paper}>
-              <Table sx={stackableTableSx}>
-                <TableHead>
-                  <TableRow>
-                    <TableCell width={110}>{t('admin:tabs.order')}</TableCell>
-                    <TableCell>{t('admin:users.avatar')}</TableCell>
-                    <TableCell>{t('admin:users.username')}</TableCell>
-                    <TableCell>{t('admin:users.email')}</TableCell>
-                    <TableCell>{t('admin:users.clamTotal')}</TableCell>
-                    <TableCell>{t('admin:users.chores')}</TableCell>
-                    <TableCell>{t('common:labels.actions')}</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {users.map((user) => {
-                    // Display order (issue #134). Drag works on desktop only —
-                    // HTML5 drag events never fire on touch — so the arrows
-                    // carry the feature on phones and the wall tablet.
-                    const isBonus = user.id === 0;
-                    const orderIndex = reorderableUsers.findIndex((u) => u.id === user.id);
-                    return (
-                    <TableRow
-                      key={user.id}
-                      draggable={!isBonus}
-                      onDragStart={() => handleUserDragStart(user.id)}
-                      onDragOver={(e) => {
-                        if (!isBonus) e.preventDefault();
-                      }}
-                      onDrop={() => {
-                        if (!isBonus) handleUserDrop(user.id);
-                      }}
-                      sx={{
-                        cursor: isBonus ? 'default' : 'grab',
-                        opacity: draggingUserId === user.id ? 0.65 : 1,
-                      }}
-                    >
-                      <TableCell data-label={t('admin:tabs.order')}>
+          <AdminGroup title={t('admin:users.management')}>
+            {users.map((user) => {
+              // Display order (issue #134). Drag works on desktop only —
+              // HTML5 drag events never fire on touch — so the arrows
+              // carry the feature on phones and the wall tablet.
+              const isBonus = user.id === 0;
+              const orderIndex = reorderableUsers.findIndex((u) => u.id === user.id);
+              const editing = editingUser?.id === user.id;
+              return (
+                <Box
+                  key={user.id}
+                  draggable={!isBonus && !editing}
+                  onDragStart={() => handleUserDragStart(user.id)}
+                  onDragOver={(e) => {
+                    if (!isBonus) e.preventDefault();
+                  }}
+                  onDrop={() => {
+                    if (!isBonus) handleUserDrop(user.id);
+                  }}
+                  sx={{ cursor: isBonus || editing ? 'default' : 'grab', opacity: draggingUserId === user.id ? 0.65 : 1 }}
+                >
+                  <AdminRow
+                    leading={(
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                         {isBonus ? (
-                          <Chip size="small" label={t('admin:users.pinned')} />
+                          <Chip size="small" label={t('admin:users.pinned')} sx={{ width: 68 }} />
                         ) : (
-                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            <DragIndicator fontSize="small" sx={{ opacity: 0.5, display: { xs: 'none', sm: 'block' } }} />
+                          <Box sx={{ display: 'flex', alignItems: 'center', width: 68, ml: -0.75 }}>
                             {/* The span is required so the tooltip still works
                                 on a disabled button; the aria-label has to go
                                 on the button itself, since the wrapper would
@@ -3527,248 +3132,188 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                             </Tooltip>
                           </Box>
                         )}
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <UserAvatar key={`${user.id}-${user.profile_picture}`} user={user} />
-                          <Button
-                            component="label"
-                            size="small"
-                            variant="outlined"
-                          >
-                            {t('common:actions.upload')}
-                            <input
-                              type="file"
-                              hidden
-                              accept="image/*"
-                              onChange={(e) => handleProfilePictureUpload(user.id, e)}
-                            />
+                        <UserAvatar key={`${user.id}-${user.profile_picture}`} user={user} />
+                      </Box>
+                    )}
+                    label={editing ? (
+                      <TextField
+                        size="small"
+                        label={t('admin:users.username')}
+                        value={editingUser.username}
+                        onChange={(e) => setEditingUser({ ...editingUser, username: e.target.value })}
+                        sx={{ mb: 1, width: '100%', maxWidth: 280 }}
+                      />
+                    ) : user.username}
+                    hint={editing ? (
+                      <TextField
+                        size="small"
+                        label={t('admin:users.email')}
+                        value={editingUser.email}
+                        onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
+                        sx={{ width: '100%', maxWidth: 280 }}
+                      />
+                    ) : (
+                      <Box component="span" sx={{ wordBreak: 'break-all' }}>{user.email}</Box>
+                    )}
+                    extra={editing && (
+                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', pl: { xs: 0, sm: 13 } }}>
+                        <Typography variant="body2" color="text.secondary">{t('admin:users.avatar')}</Typography>
+                        <Button component="label" size="small" variant="outlined">
+                          {t('common:actions.upload')}
+                          <input type="file" hidden accept="image/*" onChange={(e) => handleProfilePictureUpload(user.id, e)} />
+                        </Button>
+                        <Tooltip title={t('admin:users.pickBuiltIn')}>
+                          <Button size="small" variant="outlined" onClick={() => setAvatarPicker({ open: true, userId: user.id })}>
+                            {t('common:actions.choose')}
                           </Button>
-                          <Tooltip title={t('admin:users.pickBuiltIn')}>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              onClick={() => setAvatarPicker({ open: true, userId: user.id })}
-                            >
-                              {t('common:actions.choose')}
-                            </Button>
-                          </Tooltip>
-                        </Box>
-                      </TableCell>
-                      <TableCell data-label={t('admin:users.username')}>
-                        {editingUser?.id === user.id ? (
-                          <TextField
-                            value={editingUser.username}
-                            onChange={(e) => setEditingUser({ ...editingUser, username: e.target.value })}
-                            size="small"
-                          />
-                        ) : (
-                          user.username
-                        )}
-                      </TableCell>
-                      <TableCell data-label={t('admin:users.email')} sx={{ '@media (max-width:599.95px)': { wordBreak: 'break-all' } }}>
-                        {editingUser?.id === user.id ? (
-                          <TextField
-                            value={editingUser.email}
-                            onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
-                            size="small"
-                          />
-                        ) : (
-                          user.email
-                        )}
-                      </TableCell>
-                      <TableCell data-label={t('admin:users.clamTotal')}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        </Tooltip>
+                      </Box>
+                    )}
+                    control={(
+                      <>
+                        <Tooltip title={t('admin:users.editClams')}>
                           <Chip
                             label={`${user.clam_total || 0} 🥟`}
                             color="primary"
                             size="small"
+                            onClick={() => setClamModalUser(user)}
                           />
-                          <Tooltip title={t('admin:users.editClams')}>
-                            <IconButton
-                              onClick={() => setClamModalUser(user)}
-                              color="primary"
-                              size="small"
-                            >
-                              <Edit />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                      </TableCell>
-                      <TableCell data-label={t('admin:users.chores')}>
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          onClick={() => openChoreModal(user)}
-                          sx={{ minWidth: 'auto' }}
-                        >
+                        </Tooltip>
+                        <Button variant="outlined" size="small" onClick={() => openChoreModal(user)} sx={{ minWidth: 'auto' }}>
                           {getUserChoreCount(user.id)} chores
                         </Button>
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                          {editingUser?.id === user.id ? (
-                            <>
-                              <IconButton onClick={saveUser} color="primary" size="small">
-                                <Save />
+                        {editing ? (
+                          <>
+                            <Tooltip title={t('common:actions.save')}>
+                              <IconButton onClick={saveUser} color="primary" size="small" aria-label={t('common:actions.save')}>
+                                <Save fontSize="small" />
                               </IconButton>
-                              <IconButton onClick={() => setEditingUser(null)} size="small">
-                                <Cancel />
+                            </Tooltip>
+                            <Tooltip title={t('common:actions.cancel')}>
+                              <IconButton onClick={() => setEditingUser(null)} size="small" aria-label={t('common:actions.cancel')}>
+                                <Cancel fontSize="small" />
                               </IconButton>
-                            </>
-                          ) : (
-                            <>
-                              <IconButton
-                                onClick={() => setEditingUser({ ...user })}
-                                color="primary"
-                                size="small"
-                              >
-                                <Edit />
+                            </Tooltip>
+                          </>
+                        ) : (
+                          <>
+                            <Tooltip title={t('common:actions.edit')}>
+                              <IconButton onClick={() => setEditingUser({ ...user })} size="small" aria-label={t('common:actions.edit')}>
+                                <Edit fontSize="small" />
                               </IconButton>
-                              <IconButton
-                                onClick={() => handleUserDelete(user)}
-                                color="error"
-                                size="small"
-                              >
-                                <Delete />
+                            </Tooltip>
+                            <Tooltip title={t('common:actions.delete')}>
+                              <IconButton onClick={() => handleUserDelete(user)} color="error" size="small" aria-label={t('common:actions.delete')}>
+                                <Delete fontSize="small" />
                               </IconButton>
-                            </>
-                          )}
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
+                            </Tooltip>
+                          </>
+                        )}
+                      </>
+                    )}
+                  />
+                </Box>
+              );
+            })}
+          </AdminGroup>
+        </>
       )}
 
       {location.section === 'chores' && (
-        <Card>
-          <CardContent>
-            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-              <Tabs
-                value={Math.max(0, choresSubsections.indexOf(location.subsection))}
-                onChange={(_, v) => navigate({ tab: 'family', section: 'chores', subsection: choresSubsections[v] })}
-                size="small"
-                variant="scrollable"
-                scrollButtons="auto"
-                allowScrollButtonsMobile
-              >
-                <Tab label={t('admin:users.chores')} />
-                <Tab label={t('admin:chores.history')} />
-                <Tab label={t('admin:chores.settings')} />
-              </Tabs>
-            </Box>
-            {location.subsection === 'definitions' && (
-              <ChoreSchedulesTab setSaveMessage={setSaveMessage} />
-            )}
-            {location.subsection === 'history' && (
-              <ChoreHistoryTab />
-            )}
-            {location.subsection === 'settings' && (
-              <>
-            <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)' }}>
-              <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600 }}>
-                {t('admin:chores.rewards')}
-              </Typography>
-              <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, alignItems: { sm: 'flex-start' } }}>
-                <TextField
+        <>
+          {location.subsection === 'definitions' && (
+            <ChoreSchedulesTab setSaveMessage={setSaveMessage} />
+          )}
+          {location.subsection === 'history' && (
+            <ChoreHistoryTab />
+          )}
+          {location.subsection === 'settings' && (
+            <>
+              <AdminGroup title={t('admin:chores.rewards')}>
+                <AdminRow
                   label={t('admin:chores.dailyReward')}
-                  type="number"
-                  value={settings.daily_completion_clam_reward || '2'}
-                  onChange={(e) => setSettings(prev => ({ ...prev, daily_completion_clam_reward: e.target.value }))}
-                  helperText={t('admin:chores.dailyRewardHelp')}
-                  slotProps={{ htmlInput: { min: 0, max: 100 } }}
-                  sx={{ maxWidth: 340, flex: 1 }}
+                  hint={t('admin:chores.dailyRewardHelp')}
+                  control={(
+                    <TextField
+                      type="number"
+                      size="small"
+                      value={settings.daily_completion_clam_reward || '2'}
+                      onChange={(e) => setSettings(prev => ({ ...prev, daily_completion_clam_reward: e.target.value }))}
+                      slotProps={{ htmlInput: { min: 0, max: 100, 'aria-label': t('admin:chores.dailyReward') } }}
+                      sx={{ width: 96 }}
+                    />
+                  )}
                 />
-                <Button
-                  variant="contained"
-                  onClick={saveDailyClamReward}
-                  disabled={isLoading}
-                  startIcon={<Save />}
-                  sx={{ alignSelf: { xs: 'stretch', sm: 'center' }, mt: { xs: 0, sm: 1 } }}
-                >
+                <AdminRow
+                  label={t('admin:chores.celebrationEnable')}
+                  hint={t('admin:chores.celebrationHelp')}
+                  control={(
+                    <Switch
+                      checked={settings.CHORE_CELEBRATION_ENABLED !== 'false' && settings.CHORE_CELEBRATION_ENABLED !== false}
+                      onChange={(e) => setSettings(prev => ({
+                        ...prev,
+                        CHORE_CELEBRATION_ENABLED: e.target.checked ? 'true' : 'false',
+                      }))}
+                      slotProps={{ input: { 'aria-label': t('admin:chores.celebrationEnable') } }}
+                    />
+                  )}
+                />
+              </AdminGroup>
+
+              <AdminGroup title={t('admin:chores.soundsHeading')}>
+                <AdminRow
+                  label={t('admin:chores.soundsEnable')}
+                  control={(
+                    <Switch
+                      checked={settings.CHORE_SOUND_ENABLED === 'true' || settings.CHORE_SOUND_ENABLED === true}
+                      onChange={(e) => setSettings(prev => ({ ...prev, CHORE_SOUND_ENABLED: e.target.checked ? 'true' : 'false' }))}
+                      slotProps={{ input: { 'aria-label': t('admin:chores.soundsEnable') } }}
+                    />
+                  )}
+                />
+                <AdminRow
+                  label={t('admin:chores.defaultSound')}
+                  hint={t('admin:chores.defaultSoundHelp')}
+                  wide
+                  control={(
+                    <Box sx={{ width: '100%' }}>
+                      <SoundPicker
+                        label={t('admin:chores.defaultSound')}
+                        value={settings.CHORE_SOUND_DEFAULT || ''}
+                        onChange={(sound) => setSettings(prev => ({ ...prev, CHORE_SOUND_DEFAULT: sound }))}
+                        volume={(Number(settings.CHORE_SOUND_VOLUME) || 100) / 100}
+                        includeNoneOption
+                        noneLabel="(none)"
+                        allowDelete
+                      />
+                    </Box>
+                  )}
+                />
+                <AdminRow
+                  label={`Volume: ${Number(settings.CHORE_SOUND_VOLUME) || 0}%`}
+                  fill
+                  control={(
+                    <Slider
+                      value={Number(settings.CHORE_SOUND_VOLUME) || 0}
+                      onChange={(_, v) => setSettings(prev => ({ ...prev, CHORE_SOUND_VOLUME: String(v) }))}
+                      min={0}
+                      max={100}
+                      valueLabelDisplay="auto"
+                      aria-label="Volume"
+                      sx={{ width: { xs: 'auto', sm: 220 }, flex: { xs: 1, sm: 'none' }, mx: 1 }}
+                    />
+                  )}
+                />
+              </AdminGroup>
+
+              <AdminFooter>
+                <Button variant="contained" onClick={saveChoreSettings} disabled={isLoading} startIcon={<Save />}>
                   {isLoading ? t('common:state.saving') : t('common:actions.save')}
                 </Button>
-              </Box>
-
-              <FormControlLabel
-                sx={{ mt: 1 }}
-                control={
-                  <Switch
-                    checked={settings.CHORE_CELEBRATION_ENABLED !== 'false' && settings.CHORE_CELEBRATION_ENABLED !== false}
-                    onChange={(e) => setSettings(prev => ({
-                      ...prev,
-                      CHORE_CELEBRATION_ENABLED: e.target.checked ? 'true' : 'false',
-                    }))}
-                  />
-                }
-                label={t('admin:chores.celebrationEnable')}
-              />
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                {t('admin:chores.celebrationHelp')}
-              </Typography>
-            </Box>
-
-            <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)' }}>
-              <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600 }}>
-                {t('admin:chores.soundsHeading')}
-              </Typography>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={settings.CHORE_SOUND_ENABLED === 'true' || settings.CHORE_SOUND_ENABLED === true}
-                    onChange={(e) => setSettings(prev => ({ ...prev, CHORE_SOUND_ENABLED: e.target.checked ? 'true' : 'false' }))}
-                  />
-                }
-                label={t('admin:chores.soundsEnable')}
-              />
-              <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 3, alignItems: { sm: 'flex-start' }, mt: 1 }}>
-                <Box sx={{ flex: 1, minWidth: 240 }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                    {t('admin:chores.defaultSoundHelp')}
-                  </Typography>
-                  <SoundPicker
-                    label={t('admin:chores.defaultSound')}
-                    value={settings.CHORE_SOUND_DEFAULT || ''}
-                    onChange={(sound) => setSettings(prev => ({ ...prev, CHORE_SOUND_DEFAULT: sound }))}
-                    volume={(Number(settings.CHORE_SOUND_VOLUME) || 100) / 100}
-                    includeNoneOption
-                    noneLabel="(none)"
-                    allowDelete
-                  />
-                </Box>
-                <Box sx={{ width: 200 }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                    Volume: {Number(settings.CHORE_SOUND_VOLUME) || 0}%
-                  </Typography>
-                  <Slider
-                    value={Number(settings.CHORE_SOUND_VOLUME) || 0}
-                    onChange={(_, v) => setSettings(prev => ({ ...prev, CHORE_SOUND_VOLUME: String(v) }))}
-                    min={0}
-                    max={100}
-                    valueLabelDisplay="auto"
-                  />
-                </Box>
-                <Button
-                  variant="contained"
-                  onClick={saveChoreSoundSettings}
-                  disabled={isLoading}
-                  startIcon={<Save />}
-                  sx={{ alignSelf: { xs: 'stretch', sm: 'center' } }}
-                >
-                  {isLoading ? 'Saving...' : 'Save'}
-                </Button>
-              </Box>
-            </Box>
-              </>
-            )}
-          </CardContent>
-        </Card>
+              </AdminFooter>
+            </>
+          )}
+        </>
       )}
 
       {/* Routines: steps a child ticks off, each routine one chore (its own
@@ -3776,379 +3321,299 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
       {location.section === 'routines' && (
         <RoutinesTab
           subsection={location.subsection}
-          subsections={routinesSubsections}
-          onSubsection={(subsection) => navigate({ tab: 'family', section: 'routines', subsection })}
           setSaveMessage={setSaveMessage}
         />
       )}
 
       {location.section === 'prizes' && (
-        <Card>
-          <CardContent>
-            <AdminFormSection title={t('admin:prizes.management')} subtitle={t('admin:prizes.addNew')}>
-              <Box
-                component="form"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  savePrize();
-                }}
-              >
-                <Grid container spacing={2}>
-                  <Grid size={{ xs: 12, sm: 6 }}>
-                    <TextField
-                      fullWidth
-                      label={t('admin:prizes.name')}
-                      value={newPrize.name}
-                      onChange={(e) => setNewPrize({ ...newPrize, name: e.target.value })}
-                    />
-                  </Grid>
-                  <Grid size={{ xs: 12, sm: 3 }}>
-                    <TextField
-                      fullWidth
-                      label={t('admin:prizes.cost')}
-                      type="number"
-                      value={newPrize.clam_cost}
-                      onChange={(e) => setNewPrize({ ...newPrize, clam_cost: editWholeNumber(e.target.value) })}
-                    />
-                  </Grid>
-                  <Grid size={{ xs: 12, sm: 3 }}>
-                    <Button
-                      type="submit"
-                      variant="contained"
-                      disabled={!newPrize.name || newPrize.clam_cost <= 0}
-                      fullWidth
-                      sx={{ height: '56px' }}
-                    >
-                      {t('admin:prizes.add')}
-                    </Button>
-                  </Grid>
-                  <Grid size={12}>
-                    <TextField
-                      fullWidth
-                      multiline
-                      minRows={2}
-                      label={t('admin:prizes.description')}
-                      value={newPrize.description}
-                      onChange={(e) => setNewPrize({ ...newPrize, description: e.target.value })}
-                      slotProps={{ htmlInput: { maxLength: 500 } }}
-                    />
-                  </Grid>
-                  <Grid size={12}>
-                    <Tooltip title={t('admin:prizes.repeatableTooltip')}>
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={!!newPrize.repeatable}
-                            onChange={(e) => setNewPrize({ ...newPrize, repeatable: e.target.checked })}
-                          />
-                        }
-                        label={t('admin:prizes.repeatableLabel')}
-                      />
-                    </Tooltip>
-                  </Grid>
-                </Grid>
-              </Box>
-            </AdminFormSection>
-
-            <List>
-              {prizes.map((prize) => (
-                <ListItem key={prize.id} sx={{ border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)', mb: 1 }}>
-                  {editingPrize?.id === prize.id ? (
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%' }}>
-                      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, width: '100%', alignItems: { xs: 'stretch', sm: 'center' } }}>
-                        <TextField
-                          label={t('admin:prizes.name')}
-                          value={editingPrize.name}
-                          onChange={(e) => setEditingPrize({ ...editingPrize, name: e.target.value })}
-                          sx={{ flex: 1 }}
-                        />
-                        <TextField
-                          label={t('admin:prizes.cost')}
-                          type="number"
-                          value={editingPrize.clam_cost}
-                          onChange={(e) => setEditingPrize({ ...editingPrize, clam_cost: editWholeNumber(e.target.value) })}
-                          sx={{ width: { xs: '100%', sm: 120 } }}
-                        />
-                        <Tooltip title={t('admin:prizes.repeatableShortTooltip')}>
-                          <FormControlLabel
-                            control={
-                              <Switch
-                                checked={!!editingPrize.repeatable}
-                                onChange={(e) => setEditingPrize({ ...editingPrize, repeatable: e.target.checked })}
-                              />
-                            }
-                            label={t('admin:prizes.repeatableShort')}
-                            sx={{ mr: 0 }}
-                          />
-                        </Tooltip>
-                        <IconButton onClick={savePrize} color="primary">
-                          <Save />
-                        </IconButton>
-                        <IconButton onClick={() => setEditingPrize(null)}>
-                          <Cancel />
-                        </IconButton>
-                      </Box>
-                      <TextField
-                        fullWidth
-                        multiline
-                        minRows={2}
-                        label={t('admin:prizes.description')}
-                        value={editingPrize.description || ''}
-                        onChange={(e) => setEditingPrize({ ...editingPrize, description: e.target.value })}
-                        slotProps={{ htmlInput: { maxLength: 500 } }}
-                      />
-                    </Box>
-                  ) : (
-                    <>
-                      <ListItemText
-                        primary={prize.name}
-                        secondary={
-                          <>
-                            {prize.description && (
-                              <Box component="span" sx={{ display: 'block', whiteSpace: 'pre-line' }}>{prize.description}</Box>
-                            )}
-                            {prize.repeatable
-                              ? t('admin:prizes.costLineRepeatable', { cost: prize.clam_cost })
-                              : t('admin:prizes.costLine', { cost: prize.clam_cost })}
-                          </>
-                        }
-                      />
-                      <ListItemSecondaryAction>
-                        <Tooltip title={prize.repeatable ? 'Add to store (stays on the shelf after each redemption)' : 'Add to store (one-time redeemable offer)'}>
-                          <IconButton onClick={() => addPrizeToStore(prize.id)} color="primary">
-                            <Add />
-                          </IconButton>
-                        </Tooltip>
-                        <IconButton onClick={() => setEditingPrize({ ...prize })} color="primary">
-                          <Edit />
-                        </IconButton>
-                        <IconButton onClick={() => deletePrize(prize.id)} color="error">
-                          <Delete />
-                        </IconButton>
-                      </ListItemSecondaryAction>
-                    </>
-                  )}
-                </ListItem>
-              ))}
-            </List>
-
-            <AdminFormSection
-              title={t('admin:prizes.store')}
-              subtitle={t('admin:prizes.storeHelp')}
+        <>
+          <AdminGroup title={t('admin:prizes.addNew')}>
+            <Box
+              component="form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                savePrize();
+              }}
+              sx={{ px: 2, py: 1.5, display: 'flex', flexDirection: 'column', gap: 1.5 }}
             >
-              {prizeOffers.length === 0 ? (
-                <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
-                  {t('admin:prizes.storeEmpty')}
-                </Typography>
-              ) : (
-                <List>
-                  {prizeOffers.map((offer) => (
-                    <ListItem key={offer.id} sx={{ border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)', mb: 1 }}>
-                      <ListItemText
-                        primary={`${offer.name} — ${offer.clam_cost} 🥟${offer.repeatable ? ' · 🔁' : ''}`}
-                        secondary={
-                          offer.status === 'requested'
-                            ? t('admin:prizes.requestedBy', { name: offer.requested_by_name || t('common:state.none') })
-                            : 'On the shelf'
-                        }
+              <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
+                <TextField
+                  size="small"
+                  label={t('admin:prizes.name')}
+                  value={newPrize.name}
+                  onChange={(e) => setNewPrize({ ...newPrize, name: e.target.value })}
+                  sx={{ flex: '1 1 220px' }}
+                />
+                <TextField
+                  size="small"
+                  label={t('admin:prizes.cost')}
+                  type="number"
+                  value={newPrize.clam_cost}
+                  onChange={(e) => setNewPrize({ ...newPrize, clam_cost: editWholeNumber(e.target.value) })}
+                  sx={{ width: 120 }}
+                />
+                <Tooltip title={t('admin:prizes.repeatableTooltip')}>
+                  <FormControlLabel
+                    control={(
+                      <Switch
+                        checked={!!newPrize.repeatable}
+                        onChange={(e) => setNewPrize({ ...newPrize, repeatable: e.target.checked })}
                       />
-                      <ListItemSecondaryAction>
-                        <Tooltip title={offer.status === 'requested' ? 'Decline request and remove from store' : 'Remove from store'}>
-                          <IconButton onClick={() => removePrizeOffer(offer.id)} color="error">
-                            <Delete />
-                          </IconButton>
-                        </Tooltip>
-                      </ListItemSecondaryAction>
-                    </ListItem>
-                  ))}
-                </List>
-              )}
-            </AdminFormSection>
-          </CardContent>
-        </Card>
+                    )}
+                    label={t('admin:prizes.repeatableLabel')}
+                    sx={{ mr: 0 }}
+                  />
+                </Tooltip>
+              </Box>
+              <TextField
+                fullWidth
+                multiline
+                size="small"
+                minRows={2}
+                label={t('admin:prizes.description')}
+                value={newPrize.description}
+                onChange={(e) => setNewPrize({ ...newPrize, description: e.target.value })}
+                slotProps={{ htmlInput: { maxLength: 500 } }}
+              />
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <Button type="submit" variant="contained" disabled={!newPrize.name || newPrize.clam_cost <= 0} sx={{ flex: { xs: 1, sm: 'none' } }}>
+                  {t('admin:prizes.add')}
+                </Button>
+              </Box>
+            </Box>
+          </AdminGroup>
+
+          <AdminGroup title={t('admin:prizes.management')}>
+            {prizes.map((prize) => (editingPrize?.id === prize.id ? (
+              <Box key={prize.id} sx={{ px: 2, py: 1.5, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <TextField
+                    size="small"
+                    label={t('admin:prizes.name')}
+                    value={editingPrize.name}
+                    onChange={(e) => setEditingPrize({ ...editingPrize, name: e.target.value })}
+                    sx={{ flex: '1 1 220px' }}
+                  />
+                  <TextField
+                    size="small"
+                    label={t('admin:prizes.cost')}
+                    type="number"
+                    value={editingPrize.clam_cost}
+                    onChange={(e) => setEditingPrize({ ...editingPrize, clam_cost: editWholeNumber(e.target.value) })}
+                    sx={{ width: 120 }}
+                  />
+                  <Tooltip title={t('admin:prizes.repeatableShortTooltip')}>
+                    <FormControlLabel
+                      control={(
+                        <Switch
+                          checked={!!editingPrize.repeatable}
+                          onChange={(e) => setEditingPrize({ ...editingPrize, repeatable: e.target.checked })}
+                        />
+                      )}
+                      label={t('admin:prizes.repeatableShort')}
+                      sx={{ mr: 0 }}
+                    />
+                  </Tooltip>
+                  <Box sx={{ ml: 'auto', display: 'flex' }}>
+                    <Tooltip title={t('common:actions.save')}>
+                      <IconButton onClick={savePrize} color="primary" aria-label={t('common:actions.save')}>
+                        <Save />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title={t('common:actions.cancel')}>
+                      <IconButton onClick={() => setEditingPrize(null)} aria-label={t('common:actions.cancel')}>
+                        <Cancel />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                </Box>
+                <TextField
+                  fullWidth
+                  multiline
+                  size="small"
+                  minRows={2}
+                  label={t('admin:prizes.description')}
+                  value={editingPrize.description || ''}
+                  onChange={(e) => setEditingPrize({ ...editingPrize, description: e.target.value })}
+                  slotProps={{ htmlInput: { maxLength: 500 } }}
+                />
+              </Box>
+            ) : (
+              <AdminRow
+                key={prize.id}
+                label={prize.name}
+                hint={(
+                  <>
+                    {prize.description && (
+                      <Box component="span" sx={{ display: 'block', whiteSpace: 'pre-line' }}>{prize.description}</Box>
+                    )}
+                    {prize.repeatable
+                      ? t('admin:prizes.costLineRepeatable', { cost: prize.clam_cost })
+                      : t('admin:prizes.costLine', { cost: prize.clam_cost })}
+                  </>
+                )}
+                control={(
+                  <>
+                    <Tooltip title={prize.repeatable ? 'Add to store (stays on the shelf after each redemption)' : 'Add to store (one-time redeemable offer)'}>
+                      <IconButton onClick={() => addPrizeToStore(prize.id)} color="primary" size="small" aria-label="Add to store">
+                        <Add fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title={t('common:actions.edit')}>
+                      <IconButton onClick={() => setEditingPrize({ ...prize })} size="small" aria-label={t('common:actions.edit')}>
+                        <Edit fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title={t('common:actions.delete')}>
+                      <IconButton onClick={() => deletePrize(prize.id)} color="error" size="small" aria-label={t('common:actions.delete')}>
+                        <Delete fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </>
+                )}
+              />
+            )))}
+          </AdminGroup>
+
+          <AdminGroup title={t('admin:prizes.store')}>
+            <AdminNote>{t('admin:prizes.storeHelp')}</AdminNote>
+            {prizeOffers.length === 0 ? (
+              <AdminNote>{t('admin:prizes.storeEmpty')}</AdminNote>
+            ) : prizeOffers.map((offer) => (
+              <AdminRow
+                key={offer.id}
+                label={`${offer.name} — ${offer.clam_cost} 🥟${offer.repeatable ? ' · 🔁' : ''}`}
+                hint={offer.status === 'requested'
+                  ? t('admin:prizes.requestedBy', { name: offer.requested_by_name || t('common:state.none') })
+                  : 'On the shelf'}
+                control={(
+                  <Tooltip title={offer.status === 'requested' ? 'Decline request and remove from store' : 'Remove from store'}>
+                    <IconButton onClick={() => removePrizeOffer(offer.id)} color="error" size="small" aria-label={offer.status === 'requested' ? 'Decline request and remove from store' : 'Remove from store'}>
+                      <Delete fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                )}
+              />
+            ))}
+          </AdminGroup>
+        </>
       )}
 
       {location.section === 'vacation' && (
-        <Card>
-          <CardContent>
-            <Box sx={{ maxWidth: 600, mx: 'auto' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                <BeachAccess />
-                <Typography variant="h6">{t('admin:vacation.heading')}</Typography>
-              </Box>
-
-              <Alert severity="info" sx={{ mb: 2 }}>
-                {t('admin:vacation.help')}
-              </Alert>
-
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={vacationModeSettings.enabled}
-                    onChange={(e) => setVacationModeSettings(prev => ({ ...prev, enabled: e.target.checked }))}
-                  />
-                }
-                label={t('admin:vacation.enable')}
-                sx={{ mb: 1, display: 'block' }}
-              />
-
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={vacationModeSettings.muteSounds}
-                    disabled={!vacationModeSettings.enabled}
-                    onChange={(e) => setVacationModeSettings(prev => ({ ...prev, muteSounds: e.target.checked }))}
-                  />
-                }
-                label={t('admin:vacation.muteSounds')}
-                sx={{ mb: 1, display: 'block' }}
-              />
-
-              {vacationModeSettings.enabled && (
-                <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
-                  <TextField
-                    size="small"
-                    type="date"
-                    label={t('admin:vacation.startDate')}
-                    value={vacationModeSettings.startDate || ''}
-                    onChange={(e) => setVacationModeSettings(prev => ({ ...prev, startDate: e.target.value }))}
-                    slotProps={{ inputLabel: { shrink: true } }}
-                    sx={{ flex: 1 }}
-                  />
-                  <TextField
-                    size="small"
-                    type="date"
-                    label={t('admin:vacation.endDate')}
-                    value={vacationModeSettings.endDate || ''}
-                    onChange={(e) => setVacationModeSettings(prev => ({ ...prev, endDate: e.target.value }))}
-                    slotProps={{ inputLabel: { shrink: true } }}
-                    sx={{ flex: 1 }}
-                  />
-                </Box>
+        <>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, px: 0.5 }}>
+            {t('admin:vacation.help')}
+          </Typography>
+          <AdminGroup>
+            <AdminRow
+              label={t('admin:vacation.enable')}
+              control={(
+                <Switch
+                  checked={vacationModeSettings.enabled}
+                  onChange={(e) => setVacationModeSettings(prev => ({ ...prev, enabled: e.target.checked }))}
+                  slotProps={{ input: { 'aria-label': t('admin:vacation.enable') } }}
+                />
               )}
-              {vacationModeSettings.enabled && (
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                  {t('admin:vacation.dateHelp')}
-                </Typography>
+            />
+            <AdminRow
+              label={t('admin:vacation.muteSounds')}
+              disabled={!vacationModeSettings.enabled}
+              control={(
+                <Switch
+                  checked={vacationModeSettings.muteSounds}
+                  disabled={!vacationModeSettings.enabled}
+                  onChange={(e) => setVacationModeSettings(prev => ({ ...prev, muteSounds: e.target.checked }))}
+                  slotProps={{ input: { 'aria-label': t('admin:vacation.muteSounds') } }}
+                />
               )}
-
-              <Button
-                variant="contained"
-                onClick={saveVacationModeSettings}
-                startIcon={<Save />}
-                fullWidth
-                sx={{ mt: 2 }}
-              >
-                {t('admin:vacation.save')}
-              </Button>
-            </Box>
-          </CardContent>
-        </Card>
+            />
+            {vacationModeSettings.enabled && (
+              <AdminRow
+                label={`${t('admin:vacation.startDate')} – ${t('admin:vacation.endDate')}`}
+                hint={t('admin:vacation.dateHelp')}
+                fill
+                control={(
+                  <>
+                    <TextField
+                      size="small"
+                      type="date"
+                      label={t('admin:vacation.startDate')}
+                      value={vacationModeSettings.startDate || ''}
+                      onChange={(e) => setVacationModeSettings(prev => ({ ...prev, startDate: e.target.value }))}
+                      slotProps={{ inputLabel: { shrink: true } }}
+                      sx={{ flex: { xs: 1, sm: 'none' }, width: { sm: 160 } }}
+                    />
+                    <TextField
+                      size="small"
+                      type="date"
+                      label={t('admin:vacation.endDate')}
+                      value={vacationModeSettings.endDate || ''}
+                      onChange={(e) => setVacationModeSettings(prev => ({ ...prev, endDate: e.target.value }))}
+                      slotProps={{ inputLabel: { shrink: true } }}
+                      sx={{ flex: { xs: 1, sm: 'none' }, width: { sm: 160 } }}
+                    />
+                  </>
+                )}
+              />
+            )}
+          </AdminGroup>
+          <AdminFooter>
+            <Button variant="contained" onClick={saveVacationModeSettings} startIcon={<Save />}>
+              {t('admin:vacation.save')}
+            </Button>
+          </AdminFooter>
+        </>
       )}
 
       {/* Security */}
       {location.tab === 'security' && (
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>{t('admin:security.heading')}</Typography>
-
-            <Alert severity="info" sx={{ mb: 3 }}>
+        <>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2, px: 0.5 }}>
               {t('admin:security.help')}
-            </Alert>
+            </Typography>
 
-            <Box sx={{ p: 3, border: '2px solid var(--accent)', borderRadius: 'var(--hg-radius-md)', backgroundColor: 'rgba(var(--accent-rgb), 0.05)' }}>
-              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Lock />
-                {t('admin:security.pinProtection')}
-              </Typography>
-
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                {pinExists
+            <AdminGroup title={t('admin:security.pinProtection')}>
+              <AdminRow
+                label={t('admin:security.currentStatus').replace(/:\s*$/, '')}
+                hint={pinExists
                   ? 'Your admin panel is protected with a PIN. You can update your PIN below.'
                   : 'Set up a PIN to secure your admin panel access.'}
-              </Typography>
-
-              <Grid container spacing={2}>
-                <Grid size={{ xs: 12, sm: 6 }}>
-                  <Paper elevation={0} sx={{ p: 2, backgroundColor: 'var(--hg-black-10)' }}>
-                    <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                      {t('admin:security.requirements')}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      • 4-8 numeric digits
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      • Numbers only (0-9)
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      • Required for admin access
-                    </Typography>
-                  </Paper>
-                </Grid>
-
-                <Grid size={{ xs: 12, sm: 6 }}>
-                  <Paper elevation={0} sx={{ p: 2, backgroundColor: 'var(--hg-black-10)' }}>
-                    <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                      {t('admin:security.currentStatus')}
-                    </Typography>
-                    <Chip
-                      label={pinExists ? 'PIN Configured' : 'No PIN Set'}
-                      color={pinExists ? 'success' : 'warning'}
-                      sx={{ mb: 2 }}
-                    />
-                    <Typography variant="body2" color="text.secondary">
-                      {pinExists
-                        ? 'Your admin panel is secured with a PIN.'
-                        : 'Please set a PIN to secure your admin panel.'}
-                    </Typography>
-                  </Paper>
-                </Grid>
-              </Grid>
-
-              <Box sx={{ mt: 3, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                <Button
-                  variant="contained"
-                  onClick={handleUpdatePin}
-                  startIcon={<Lock />}
-                  fullWidth
-                  sx={{
-                    py: 1.5,
-                    background: 'linear-gradient(135deg, var(--accent) 0%, var(--secondary) 100%)',
-                    fontWeight: 'bold',
-                    fontSize: '1rem'
-                  }}
-                >
-                  {pinExists ? t('admin:pin.update') : t('admin:pin.setPin')}
-                </Button>
-                {pinExists && (
-                  <Button
-                    variant="outlined"
-                    onClick={handleForgetPinDevices}
-                    fullWidth
-                    sx={{ py: 1, fontWeight: 'bold' }}
-                  >
-                    {t('admin:pin.forgetDevices')}
+                control={(
+                  <Chip
+                    label={pinExists ? 'PIN Configured' : 'No PIN Set'}
+                    color={pinExists ? 'success' : 'warning'}
+                    size="small"
+                  />
+                )}
+              />
+              <AdminRow
+                label={pinExists ? t('admin:pin.update') : t('admin:pin.setPin')}
+                hint={`${t('admin:security.requirements')} 4-8 numeric digits · Numbers only (0-9) · Required for admin access`}
+                extra={pinExists && (
+                  <Typography variant="body2" color="text.secondary">{t('admin:security.changeNote')}</Typography>
+                )}
+                control={(
+                  <Button variant="contained" onClick={handleUpdatePin} startIcon={<Lock />}>
+                    {pinExists ? t('admin:pin.update') : t('admin:pin.setPin')}
                   </Button>
                 )}
-                {pinExists && (
-                  <Button
-                    variant="outlined"
-                    onClick={handleClearPin}
-                    color="error"
-                    fullWidth
-                    sx={{ py: 1, fontWeight: 'bold' }}
-                  >
-                    {t('admin:security.removePin')}
-                  </Button>
-                )}
-              </Box>
-
+              />
               {pinExists && (
-                <Alert severity="warning" sx={{ mt: 2 }}>
-                  {t('admin:security.changeNote')}
-                </Alert>
+                <AdminRow
+                  control={(
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', width: '100%', justifyContent: 'flex-end' }}>
+                      <Button variant="outlined" onClick={handleForgetPinDevices}>
+                        {t('admin:pin.forgetDevices')}
+                      </Button>
+                      <Button variant="outlined" color="error" onClick={handleClearPin}>
+                        {t('admin:security.removePin')}
+                      </Button>
+                    </Box>
+                  )}
+                  wide
+                />
               )}
-            </Box>
+            </AdminGroup>
 
             <ControlsOnDisplay
               apiBaseUrl={API_BASE_URL}
@@ -4160,192 +3625,185 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
               onHouseholdDefaultSaved={handleHouseholdControlLimitsSaved}
               onDisplayLimitsSaved={handleDisplayControlLimitsSaved}
             />
-          </CardContent>
-        </Card>
+        </>
       )}
 
       {/* System: language and time, connections, notifications, about */}
       {location.section === 'region' && (
-        <Card>
-          <CardContent>
-            {/* Language (issue #137), per display like the other interface
-                settings. Week start deliberately lives in the calendar
-                widget's own settings, which has had per-tab week/month start
-                controls since #127 — a second global control would fight it. */}
-            <AdminFormSection
-              title={t('admin:interface.languageSection')}
-              subtitle={t('admin:interface.languageSubtitle')}
-            >
-              <Grid container spacing={2}>
-                <Grid size={{ xs: 12, sm: 6 }}>
-                  <FormControl fullWidth>
-                    <InputLabel>{t('common:language.label')}</InputLabel>
-                    <Select
-                      value={i18n.language?.split('-')[0] || 'en'}
-                      label={t('common:language.label')}
-                      onChange={(e) => handleLanguageChange(e.target.value)}
-                    >
-                      {SUPPORTED_LANGUAGES.map((lang) => (
-                        <MenuItem key={lang.code} value={lang.code}>
-                          {lang.endonym}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
-                      {t('common:language.helper')}
-                    </Typography>
-                  </FormControl>
-                </Grid>
-              </Grid>
-            </AdminFormSection>
+        <>
+          {/* Language (issue #137), per display like the other interface
+              settings. Week start deliberately lives in the calendar
+              widget's own settings, which has had per-tab week/month start
+              controls since #127 — a second global control would fight it. */}
+          <AdminGroup title={t('admin:interface.languageSection')}>
+            <AdminRow
+              label={t('common:language.label')}
+              hint={t('admin:interface.languageSubtitle')}
+              under={(
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                  {t('common:language.helper')}
+                </Typography>
+              )}
+              fill
+              control={(
+                <FormControl size="small" sx={{ minWidth: 200 }}>
+                  <Select
+                    value={i18n.language?.split('-')[0] || 'en'}
+                    inputProps={{ 'aria-label': t('common:language.label') }}
+                    onChange={(e) => handleLanguageChange(e.target.value)}
+                  >
+                    {SUPPORTED_LANGUAGES.map((lang) => (
+                      <MenuItem key={lang.code} value={lang.code}>
+                        {lang.endonym}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              )}
+            />
+          </AdminGroup>
 
-            {/* Household-wide, unlike the rest of this tab (issue #193). */}
-            <AdminFormSection
-              title={t('admin:timezone.heading')}
-              subtitle={t('admin:timezone.subtitle')}
-            >
+          {/* Household-wide, unlike the rest of this tab (issue #193). */}
+          <AdminGroup title={t('admin:timezone.heading')}>
+            <AdminNote>{t('admin:timezone.subtitle')}</AdminNote>
+            <Box sx={{ px: 2, py: 1.5 }}>
               <TimezoneSettings />
-            </AdminFormSection>
-          </CardContent>
-        </Card>
+            </Box>
+          </AdminGroup>
+        </>
       )}
 
       {location.section === 'connections' && (
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>{t('admin:connections.heading')}</Typography>
-
-            <Box sx={{ maxWidth: 700 }}>
-              {/* Not weather's: any plugin fetching another site uses it
-                  (issue #328). Saves on each change. */}
-              <Typography variant="subtitle1" sx={{ mt: 1, mb: 1.5, fontWeight: 600 }}>
-                {t('admin:connections.proxyHeading')}
-              </Typography>
+        <>
+          {/* Not weather's: any plugin fetching another site uses it
+              (issue #328). Saves on each change. */}
+          <AdminGroup title={t('admin:connections.proxyHeading')}>
+            <Box sx={{ px: 2, py: 1.5 }}>
               <ProxyWhitelistSettings
                 value={settings.PROXY_WHITELIST || ''}
                 onSaved={(value) => setSettings((prev) => ({ ...prev, PROXY_WHITELIST: value }))}
               />
+            </Box>
+          </AdminGroup>
 
-              <Divider sx={{ my: 3 }} />
-
-              <Typography variant="subtitle1" sx={{ mt: 2, mb: 1.5, fontWeight: 600 }}>
-                {t('admin:connections.weatherHeading')}
-              </Typography>
-
-              <Box
-                component="form"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  saveAllApiSettings();
-                }}
-              >
-                <FormControl fullWidth sx={{ mb: 2 }}>
-                  <InputLabel id="weather-provider-label">{t('admin:connections.weatherProvider')}</InputLabel>
-                  <Select
-                    labelId="weather-provider-label"
-                    label={t('admin:connections.weatherProvider')}
-                    value={settings.WEATHER_PROVIDER || 'openweathermap'}
-                    onChange={(e) => setSettings(prev => ({ ...prev, WEATHER_PROVIDER: e.target.value }))}
-                  >
-                    <MenuItem value="openweathermap">{t('admin:connections.providerOpenWeather')}</MenuItem>
-                    <MenuItem value="homeassistant">{t('admin:connections.providerHomeAssistant')}</MenuItem>
-                  </Select>
-                </FormControl>
-
-                {weatherProviderStatus && !weatherProviderStatus.configured && (
-                  <Alert severity="warning" sx={{ mb: 2 }}>
-                    {weatherProviderStatus.reason}
-                  </Alert>
+          <AdminGroup title={t('admin:connections.weatherHeading')}>
+            <Box
+              component="form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                saveAllApiSettings();
+              }}
+              sx={formRowsSx}
+            >
+              <AdminRow
+                label={t('admin:connections.weatherProvider')}
+                fill
+                extra={weatherProviderStatus && !weatherProviderStatus.configured && (
+                  <Alert severity="warning">{weatherProviderStatus.reason}</Alert>
                 )}
-
-                {/* The key field is write-only: the server redacts it, so this
-                    shows whether one is stored and accepts a replacement. */}
-                {settings.WEATHER_PROVIDER !== 'homeassistant' && (
-                  <TextField
-                    fullWidth
-                    label={t('admin:connections.openWeatherKey')}
-                    type="password"
-                    value={settings.WEATHER_API_KEY || ''}
-                    onChange={(e) => setSettings(prev => ({ ...prev, WEATHER_API_KEY: e.target.value }))}
-                    sx={{ mb: 2 }}
-                    placeholder={weatherProviderStatus?.has_api_key ? t('admin:connections.keyStored') : ''}
-                    helperText={
-                      weatherProviderStatus?.has_api_key
-                        ? t('admin:connections.openWeatherStoredHelp')
-                        : t('admin:connections.openWeatherHelp')
-                    }
-                  />
+                control={(
+                  <FormControl size="small" sx={{ minWidth: 240 }}>
+                    <Select
+                      value={settings.WEATHER_PROVIDER || 'openweathermap'}
+                      inputProps={{ 'aria-label': t('admin:connections.weatherProvider') }}
+                      onChange={(e) => setSettings(prev => ({ ...prev, WEATHER_PROVIDER: e.target.value }))}
+                    >
+                      <MenuItem value="openweathermap">{t('admin:connections.providerOpenWeather')}</MenuItem>
+                      <MenuItem value="homeassistant">{t('admin:connections.providerHomeAssistant')}</MenuItem>
+                    </Select>
+                  </FormControl>
                 )}
-
-                <Button
-                  type="submit"
-                  variant="contained"
-                  disabled={isLoading}
-                  startIcon={<Save />}
-                  sx={{ mt: 1, mb: 4 }}
-                >
+              />
+              {/* The key field is write-only: the server redacts it, so this
+                  shows whether one is stored and accepts a replacement. */}
+              {settings.WEATHER_PROVIDER !== 'homeassistant' && (
+                <AdminRow
+                  label={t('admin:connections.openWeatherKey')}
+                  hint={weatherProviderStatus?.has_api_key
+                    ? t('admin:connections.openWeatherStoredHelp')
+                    : t('admin:connections.openWeatherHelp')}
+                  wide
+                  control={(
+                    <TextField
+                      fullWidth
+                      size="small"
+                      type="password"
+                      value={settings.WEATHER_API_KEY || ''}
+                      onChange={(e) => setSettings(prev => ({ ...prev, WEATHER_API_KEY: e.target.value }))}
+                      placeholder={weatherProviderStatus?.has_api_key ? t('admin:connections.keyStored') : ''}
+                      slotProps={{ htmlInput: { 'aria-label': t('admin:connections.openWeatherKey') } }}
+                    />
+                  )}
+                />
+              )}
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', px: 2, py: 1.5 }}>
+                <Button type="submit" variant="contained" disabled={isLoading} startIcon={<Save />}>
                   {isLoading ? t('common:state.saving') : t('admin:connections.saveApiKeys')}
                 </Button>
               </Box>
+            </Box>
+          </AdminGroup>
 
-              <Divider sx={{ my: 2 }} />
-
-              {/* Home Assistant (issue #57) */}
-              <Typography variant="subtitle1" sx={{ mt: 2, mb: 1.5, fontWeight: 600 }}>
-                {t('admin:connections.homeAssistantHeading')}
-              </Typography>
-
-              <Alert severity="info" sx={{ mb: 2 }}>
-                {t('admin:connections.homeAssistantHelp')}
-              </Alert>
-
-              {homeAssistantStatus && !homeAssistantStatus.encryption?.configured && (
-                <Alert severity="warning" sx={{ mb: 2 }}>
-                  {t('admin:connections.encryptionRequired')}
-                </Alert>
-              )}
-
-              <Box
-                component="form"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  saveHomeAssistantConnection();
-                }}
-              >
-                <TextField
-                  fullWidth
-                  label={t('admin:connections.homeAssistantUrl')}
-                  value={homeAssistantDraft.url}
-                  onChange={(e) => setHomeAssistantDraft(prev => ({ ...prev, url: e.target.value }))}
-                  sx={{ mb: 2 }}
-                  placeholder="http://homeassistant.local:8123"
-                  helperText={t('admin:connections.homeAssistantUrlHelp')}
-                />
-
-                <TextField
-                  fullWidth
-                  label={t('admin:connections.homeAssistantToken')}
-                  type="password"
-                  value={homeAssistantDraft.token}
-                  onChange={(e) => setHomeAssistantDraft(prev => ({ ...prev, token: e.target.value }))}
-                  sx={{ mb: 2 }}
-                  placeholder={homeAssistantStatus?.has_token ? t('admin:connections.tokenStored') : ''}
-                  helperText={
-                    homeAssistantStatus?.has_token
-                      ? t('admin:connections.homeAssistantTokenStoredHelp')
-                      : t('admin:connections.homeAssistantTokenHelp')
-                  }
-                />
-
-                {/* Populated by Test Connection, so the entity id can be picked
-                    rather than remembered. */}
-                {homeAssistantEntities.length > 0 ? (
-                  <FormControl fullWidth sx={{ mb: 2 }}>
-                    <InputLabel id="ha-weather-entity-label">{t('admin:connections.homeAssistantEntity')}</InputLabel>
+          {/* Home Assistant (issue #57) */}
+          <AdminGroup title={t('admin:connections.homeAssistantHeading')}>
+            <AdminNote>{t('admin:connections.homeAssistantHelp')}</AdminNote>
+            {homeAssistantStatus && !homeAssistantStatus.encryption?.configured && (
+              <Box sx={{ px: 2, py: 1.5 }}>
+                <Alert severity="warning">{t('admin:connections.encryptionRequired')}</Alert>
+              </Box>
+            )}
+            <Box
+              component="form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                saveHomeAssistantConnection();
+              }}
+              sx={formRowsSx}
+            >
+              <AdminRow
+                label={t('admin:connections.homeAssistantUrl')}
+                hint={t('admin:connections.homeAssistantUrlHelp')}
+                wide
+                control={(
+                  <TextField
+                    fullWidth
+                    size="small"
+                    value={homeAssistantDraft.url}
+                    onChange={(e) => setHomeAssistantDraft(prev => ({ ...prev, url: e.target.value }))}
+                    placeholder="http://homeassistant.local:8123"
+                    slotProps={{ htmlInput: { 'aria-label': t('admin:connections.homeAssistantUrl') } }}
+                  />
+                )}
+              />
+              <AdminRow
+                label={t('admin:connections.homeAssistantToken')}
+                hint={homeAssistantStatus?.has_token
+                  ? t('admin:connections.homeAssistantTokenStoredHelp')
+                  : t('admin:connections.homeAssistantTokenHelp')}
+                wide
+                control={(
+                  <TextField
+                    fullWidth
+                    size="small"
+                    type="password"
+                    value={homeAssistantDraft.token}
+                    onChange={(e) => setHomeAssistantDraft(prev => ({ ...prev, token: e.target.value }))}
+                    placeholder={homeAssistantStatus?.has_token ? t('admin:connections.tokenStored') : ''}
+                    slotProps={{ htmlInput: { 'aria-label': t('admin:connections.homeAssistantToken') } }}
+                  />
+                )}
+              />
+              {/* Populated by Test Connection, so the entity id can be picked
+                  rather than remembered. */}
+              <AdminRow
+                label={t('admin:connections.homeAssistantEntity')}
+                hint={homeAssistantEntities.length > 0 ? null : t('admin:connections.homeAssistantEntityHelp')}
+                wide
+                control={homeAssistantEntities.length > 0 ? (
+                  <FormControl fullWidth size="small">
                     <Select
-                      labelId="ha-weather-entity-label"
-                      label={t('admin:connections.homeAssistantEntity')}
                       value={homeAssistantDraft.weather_entity || ''}
+                      inputProps={{ 'aria-label': t('admin:connections.homeAssistantEntity') }}
                       onChange={(e) => setHomeAssistantDraft(prev => ({ ...prev, weather_entity: e.target.value }))}
                     >
                       {homeAssistantEntities.map((entity) => (
@@ -4358,31 +3816,22 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                 ) : (
                   <TextField
                     fullWidth
-                    label={t('admin:connections.homeAssistantEntity')}
+                    size="small"
                     value={homeAssistantDraft.weather_entity}
                     onChange={(e) => setHomeAssistantDraft(prev => ({ ...prev, weather_entity: e.target.value }))}
-                    sx={{ mb: 2 }}
                     placeholder="weather.home"
-                    helperText={t('admin:connections.homeAssistantEntityHelp')}
+                    slotProps={{ htmlInput: { 'aria-label': t('admin:connections.homeAssistantEntity') } }}
                   />
                 )}
-
+              />
+              <Box sx={{ px: 2, py: 1.5 }}>
                 {homeAssistantTestResult && (
-                  <Alert severity={homeAssistantTestResult.ok ? 'success' : 'error'} sx={{ mb: 2 }}>
+                  <Alert severity={homeAssistantTestResult.ok ? 'success' : 'error'} sx={{ mb: 1.5 }}>
                     {homeAssistantTestResult.message}
                     {homeAssistantTestResult.version ? ` (${homeAssistantTestResult.version})` : ''}
                   </Alert>
                 )}
-
-                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1, mb: 2 }}>
-                  <Button
-                    type="submit"
-                    variant="contained"
-                    disabled={isLoading}
-                    startIcon={<Save />}
-                  >
-                    {isLoading ? t('common:state.saving') : t('admin:connections.saveHomeAssistant')}
-                  </Button>
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                   <Button
                     type="button"
                     variant="outlined"
@@ -4393,20 +3842,21 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                       ? t('admin:connections.testing')
                       : t('admin:connections.testConnection')}
                   </Button>
+                  <Button type="submit" variant="contained" disabled={isLoading} startIcon={<Save />}>
+                    {isLoading ? t('common:state.saving') : t('admin:connections.saveHomeAssistant')}
+                  </Button>
                 </Box>
               </Box>
-
-              <Divider sx={{ my: 2 }} />
-
-              <GoogleAccountConnection
-                onMessage={({ type, text }) => {
-                  setSaveMessage({ show: true, type, text });
-                  setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
-                }}
-              />
             </Box>
-          </CardContent>
-        </Card>
+          </AdminGroup>
+
+          <GoogleAccountConnection
+            onMessage={({ type, text }) => {
+              setSaveMessage({ show: true, type, text });
+              setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+            }}
+          />
+        </>
       )}
 
       {location.section === 'notifications' && (
@@ -4417,80 +3867,72 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
       )}
 
       {location.section === 'about' && (
-        <Card>
-          <CardContent>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6">{t('admin:about.heading')}</Typography>
-              <Button
-                variant="outlined"
-                startIcon={<Refresh />}
-                onClick={refreshAboutData}
-                disabled={aboutLoading}
-              >
+        <>
+          {updateStatus?.updateAvailable && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              {t('admin:about.updateAvailable', { latest: updateStatus.latest, current: updateStatus.current })}
+              {updateStatus.releaseUrl && (
+                <>
+                  {' '}
+                  <Link href={updateStatus.releaseUrl} target="_blank" rel="noopener noreferrer">
+                    {t('admin:about.releaseNotes')}
+                  </Link>
+                </>
+              )}
+            </Alert>
+          )}
+          {updateStatus?.latest && !updateStatus.updateAvailable && (
+            <Alert severity="success" sx={{ mb: 2 }}>
+              {updateStatus.isRelease
+                ? t('admin:about.upToDate', { current: updateStatus.current })
+                : t('admin:about.testBuild', { latest: updateStatus.latest })}
+            </Alert>
+          )}
+          {aboutError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {aboutError}
+            </Alert>
+          )}
+
+          <AdminGroup
+            title={t('admin:about.heading')}
+            action={(
+              <Button size="small" startIcon={<Refresh />} onClick={refreshAboutData} disabled={aboutLoading}>
                 {aboutLoading ? 'Refreshing...' : 'Refresh Version Info'}
               </Button>
+            )}
+          >
+            <AdminNote>{t('admin:about.help')}</AdminNote>
+            <Box sx={{ p: 2 }}>
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <VersionInfoCard
+                    label={t('admin:about.frontend')}
+                    version={FRONTEND_VERSION}
+                    commitUrl={frontendCommitUrl}
+                    commitHash={FRONTEND_GIT_COMMIT}
+                    repository={frontendRepository}
+                    tags={frontendCommitTags}
+                    tagsLoading={aboutTagsLoading}
+                    buildTagUrl={buildTagUrl}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <VersionInfoCard
+                    label={t('admin:about.backend')}
+                    version={backendStats?.version}
+                    commitUrl={backendCommitUrl}
+                    commitHash={backendStats?.commit}
+                    repository={backendRepository}
+                    tags={backendCommitTags}
+                    tagsLoading={aboutTagsLoading}
+                    buildTagUrl={buildTagUrl}
+                  />
+                </Grid>
+              </Grid>
             </Box>
-
-            {updateStatus?.updateAvailable && (
-              <Alert severity="warning" sx={{ mb: 2 }}>
-                {t('admin:about.updateAvailable', { latest: updateStatus.latest, current: updateStatus.current })}
-                {updateStatus.releaseUrl && (
-                  <>
-                    {' '}
-                    <Link href={updateStatus.releaseUrl} target="_blank" rel="noopener noreferrer">
-                      {t('admin:about.releaseNotes')}
-                    </Link>
-                  </>
-                )}
-              </Alert>
-            )}
-            {updateStatus?.latest && !updateStatus.updateAvailable && (
-              <Alert severity="success" sx={{ mb: 2 }}>
-                {updateStatus.isRelease
-                  ? t('admin:about.upToDate', { current: updateStatus.current })
-                  : t('admin:about.testBuild', { latest: updateStatus.latest })}
-              </Alert>
-            )}
-
-            <Alert severity="info" sx={{ mb: 2 }}>
-              {t('admin:about.help')}
-            </Alert>
-
-            {aboutError && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {aboutError}
-              </Alert>
-            )}
-
-            <Grid container spacing={2}>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <VersionInfoCard
-                  label={t('admin:about.frontend')}
-                  version={FRONTEND_VERSION}
-                  commitUrl={frontendCommitUrl}
-                  commitHash={FRONTEND_GIT_COMMIT}
-                  repository={frontendRepository}
-                  tags={frontendCommitTags}
-                  tagsLoading={aboutTagsLoading}
-                  buildTagUrl={buildTagUrl}
-                />
-              </Grid>
-
-              <Grid size={{ xs: 12, md: 6 }}>
-                <VersionInfoCard
-                  label={t('admin:about.backend')}
-                  version={backendStats?.version}
-                  commitUrl={backendCommitUrl}
-                  commitHash={backendStats?.commit}
-                  repository={backendRepository}
-                  tags={backendCommitTags}
-                  tagsLoading={aboutTagsLoading}
-                  buildTagUrl={buildTagUrl}
-                />
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
+          </AdminGroup>
+        </>
       )}
 
       {/* User Delete Confirmation Dialog */}
@@ -4835,7 +4277,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
           <Button onClick={() => setAvatarPicker({ open: false, userId: null })}>{t('common:actions.cancel')}</Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </AdminShell>
   );
 };
 

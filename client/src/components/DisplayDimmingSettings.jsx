@@ -2,8 +2,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import {
   Alert,
-  Box,
-  Button,
   FormControlLabel,
   MenuItem,
   Slider,
@@ -13,9 +11,8 @@ import {
   ToggleButtonGroup,
   Typography,
 } from '@mui/material';
-import { Save } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
-import AdminFormSection from './AdminFormSection';
+import { AdminGroup, AdminRow } from './AdminRows.jsx';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
 import {
@@ -38,7 +35,10 @@ const INTERFACE_SETTINGS_UPDATED_EVENT = 'homeglow:interface-settings-updated';
 // go through saveAppearanceFields, which re-reads the stored appearance
 // first — saving here, then saving Appearance without reloading, leaves
 // each card's fields exactly as saved.
-const DisplayDimmingSettings = () => {
+//
+// It has no save button of its own: `saveRef` is pointed at its save, which
+// the section's one Save button calls along with the section's own.
+const DisplayDimmingSettings = ({ saveRef }) => {
   const { t } = useTranslation(['admin']);
   const apiDeviceUrl = getDeviceApiBase(API_BASE_URL);
   const [household, setHousehold] = useState(null);
@@ -120,6 +120,12 @@ const DisplayDimmingSettings = () => {
     }
   };
 
+  useEffect(() => {
+    if (!saveRef) return undefined;
+    saveRef.current = draft ? save : null;
+    return () => { saveRef.current = null; };
+  });
+
   if (!draft) return null;
 
   const dimming = draft ?? DEFAULT_DIMMING;
@@ -127,134 +133,128 @@ const DisplayDimmingSettings = () => {
   const nightPct = Math.round((dimming.night ?? DEFAULT_DIMMING.night) * 100);
   const hours = Array.from({ length: 24 }, (_, hour) => hour);
 
-  return (
-    <AdminFormSection title={t('admin:appearance.dimming.heading')} subtitle={t('admin:appearance.dimming.help')}>
-      <ToggleButtonGroup
-        exclusive
-        size="small"
-        value={scope}
-        onChange={(_, value) => value && setScope(value)}
-        sx={{ mb: 2 }}
-      >
-        <ToggleButton value="device">{t('admin:appearance.scopeDevice')}</ToggleButton>
-        <ToggleButton value="household">{t('admin:appearance.scopeHousehold')}</ToggleButton>
-      </ToggleButtonGroup>
+  const hourPicker = (field, label) => (
+    <TextField
+      select
+      size="small"
+      label={label}
+      value={dimming[field] ?? DEFAULT_DIMMING[field]}
+      disabled={locked}
+      onChange={(e) => updateDimming({ [field]: parseInt(e.target.value, 10) })}
+      sx={{ minWidth: 150, flex: { xs: 1, sm: 'none' } }}
+    >
+      {hours.map((hour) => (
+        <MenuItem key={hour} value={hour}>{formatHourOfDay(hour)}</MenuItem>
+      ))}
+    </TextField>
+  );
 
-      {message && <Alert severity={message.type} onClose={() => setMessage(null)} sx={{ mb: 2 }}>{message.text}</Alert>}
-
-      {scope === 'device' && (
-        <FormControlLabel
-          control={<Switch checked={useHousehold} onChange={(e) => setUseHouseholdField(e.target.checked)} />}
-          label={t('admin:appearance.useHousehold')}
-          sx={{ mb: 1, display: 'block' }}
-        />
+  const brightness = (field, label, pct) => (
+    <AdminRow
+      label={label}
+      disabled={locked}
+      fill
+      control={(
+        <>
+          <Slider
+            value={pct}
+            min={0}
+            max={100}
+            step={5}
+            disabled={locked}
+            valueLabelDisplay="auto"
+            valueLabelFormat={(v) => `${v}%`}
+            onChange={(_, v) => updateDimming({ [field]: v / 100 })}
+            aria-label={label}
+            sx={{ width: { xs: 'auto', sm: 200 }, flex: { xs: 1, sm: 'none' }, mx: 1 }}
+          />
+          <Typography variant="body2" sx={{ width: 40, textAlign: 'right' }}>{pct}%</Typography>
+        </>
       )}
+    />
+  );
 
-      <FormControlLabel
-        control={(
-          <Switch
-            checked={dimming.enabled ?? DEFAULT_DIMMING.enabled}
-            disabled={locked}
-            onChange={(e) => updateDimming({ enabled: e.target.checked })}
-          />
+  return (
+    <>
+      {message && <Alert severity={message.type} onClose={() => setMessage(null)} sx={{ mb: 2 }}>{message.text}</Alert>}
+      <AdminGroup
+        title={t('admin:appearance.dimming.heading')}
+        action={(
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            value={scope}
+            onChange={(_, value) => value && setScope(value)}
+            sx={{ '& .MuiToggleButton-root': { textTransform: 'none', px: 1.25, py: 0.25 } }}
+          >
+            <ToggleButton value="device">{t('admin:appearance.scopeDevice')}</ToggleButton>
+            <ToggleButton value="household">{t('admin:appearance.scopeHousehold')}</ToggleButton>
+          </ToggleButtonGroup>
         )}
-        label={t('admin:appearance.dimming.enabled')}
-        sx={{ mb: 2, display: 'block' }}
-      />
-
-      <TextField
-        type="number"
-        size="small"
-        label={t('admin:appearance.dimming.after')}
-        value={dimming.after ?? DEFAULT_DIMMING.after}
-        disabled={locked}
-        slotProps={{ htmlInput: { min: 0, step: 1 } }}
-        onChange={(e) => updateDimming({ after: editWholeNumber(e.target.value) })}
-        sx={{ width: 200, mb: 3, display: 'flex' }}
-      />
-
-      <Typography variant="subtitle2">{t('admin:appearance.dimming.day')} — {dayPct}%</Typography>
-      <Box sx={{ px: 3, maxWidth: 460 }}>
-        <Slider
-          value={dayPct}
-          min={0}
-          max={100}
-          step={5}
-          disabled={locked}
-          valueLabelDisplay="auto"
-          valueLabelFormat={(v) => `${v}%`}
-          onChange={(_, v) => updateDimming({ day: v / 100 })}
-          aria-label={t('admin:appearance.dimming.day')}
+      >
+        <AdminRow
+          label={t('admin:appearance.dimming.enabled')}
+          hint={t('admin:appearance.dimming.help')}
+          under={scope === 'device' && (
+            <FormControlLabel
+              control={<Switch size="small" checked={useHousehold} onChange={(e) => setUseHouseholdField(e.target.checked)} />}
+              label={<Typography variant="body2" color="text.secondary">{t('admin:appearance.useHousehold')}</Typography>}
+              sx={{ display: 'flex', mt: 0.5, ml: -0.5, mr: 0 }}
+            />
+          )}
+          control={(
+            <Switch
+              checked={dimming.enabled ?? DEFAULT_DIMMING.enabled}
+              disabled={locked}
+              onChange={(e) => updateDimming({ enabled: e.target.checked })}
+              slotProps={{ input: { 'aria-label': t('admin:appearance.dimming.enabled') } }}
+            />
+          )}
         />
-      </Box>
-      <Typography variant="subtitle2">{t('admin:appearance.dimming.night')} — {nightPct}%</Typography>
-      <Box sx={{ px: 3, maxWidth: 460, mb: 2 }}>
-        <Slider
-          value={nightPct}
-          min={0}
-          max={100}
-          step={5}
+        <AdminRow
+          label={t('admin:appearance.dimming.after')}
           disabled={locked}
-          valueLabelDisplay="auto"
-          valueLabelFormat={(v) => `${v}%`}
-          onChange={(_, v) => updateDimming({ night: v / 100 })}
-          aria-label={t('admin:appearance.dimming.night')}
+          control={(
+            <TextField
+              type="number"
+              size="small"
+              value={dimming.after ?? DEFAULT_DIMMING.after}
+              disabled={locked}
+              slotProps={{ htmlInput: { min: 0, step: 1, 'aria-label': t('admin:appearance.dimming.after') } }}
+              onChange={(e) => updateDimming({ after: editWholeNumber(e.target.value) })}
+              sx={{ width: 96 }}
+            />
+          )}
         />
-      </Box>
-
-      <Typography variant="subtitle2" sx={{ mb: 1.5 }}>{t('admin:appearance.dimming.nightHours')}</Typography>
-      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 1 }}>
-        <TextField
-          select
-          size="small"
-          label={t('admin:appearance.dimming.nightStart')}
-          value={dimming.nightStart ?? DEFAULT_DIMMING.nightStart}
+        {brightness('day', t('admin:appearance.dimming.day'), dayPct)}
+        {brightness('night', t('admin:appearance.dimming.night'), nightPct)}
+        <AdminRow
+          label={t('admin:appearance.dimming.nightHours')}
+          hint={t('admin:appearance.dimming.nightHelp')}
           disabled={locked}
-          onChange={(e) => updateDimming({ nightStart: parseInt(e.target.value, 10) })}
-          sx={{ width: 200 }}
-        >
-          {hours.map((hour) => (
-            <MenuItem key={hour} value={hour}>{formatHourOfDay(hour)}</MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          select
-          size="small"
-          label={t('admin:appearance.dimming.nightEnd')}
-          value={dimming.nightEnd ?? DEFAULT_DIMMING.nightEnd}
-          disabled={locked}
-          onChange={(e) => updateDimming({ nightEnd: parseInt(e.target.value, 10) })}
-          sx={{ width: 200 }}
-        >
-          {hours.map((hour) => (
-            <MenuItem key={hour} value={hour}>{formatHourOfDay(hour)}</MenuItem>
-          ))}
-        </TextField>
-      </Box>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 3 }}>
-        {t('admin:appearance.dimming.nightHelp')}
-      </Typography>
-
-      {/* Independent of dimming, so after all of its settings. */}
-      <FormControlLabel
-        control={(
-          <Switch
-            checked={dimming.pixelShift ?? DEFAULT_DIMMING.pixelShift}
-            disabled={locked}
-            onChange={(e) => updateDimming({ pixelShift: e.target.checked })}
-          />
-        )}
-        label={t('admin:appearance.dimming.pixelShift')}
-        sx={{ mb: 1, display: 'block' }}
-      />
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
-        {t('admin:appearance.dimming.pixelShiftHelp')}
-      </Typography>
-
-      <Button variant="contained" startIcon={<Save />} onClick={save} disabled={saving}>
-        {scope === 'household' ? t('admin:appearance.saveHousehold') : t('admin:appearance.saveDevice')}
-      </Button>
-    </AdminFormSection>
+          fill
+          control={(
+            <>
+              {hourPicker('nightStart', t('admin:appearance.dimming.nightStart'))}
+              {hourPicker('nightEnd', t('admin:appearance.dimming.nightEnd'))}
+            </>
+          )}
+        />
+        {/* Independent of dimming, so after all of its settings. */}
+        <AdminRow
+          label={t('admin:appearance.dimming.pixelShift')}
+          hint={t('admin:appearance.dimming.pixelShiftHelp')}
+          control={(
+            <Switch
+              checked={dimming.pixelShift ?? DEFAULT_DIMMING.pixelShift}
+              disabled={locked}
+              onChange={(e) => updateDimming({ pixelShift: e.target.checked })}
+              slotProps={{ input: { 'aria-label': t('admin:appearance.dimming.pixelShift') } }}
+            />
+          )}
+        />
+      </AdminGroup>
+    </>
   );
 };
 

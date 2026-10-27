@@ -30,7 +30,10 @@
     "order": "Order",
     "actions": "Actions",
     "enabled": "Enabled",
-    "language": "Language"
+    "language": "Language",
+    "sortBy": "Sort by",
+    "ascending": "Ascending",
+    "descending": "Descending"
   },
   "errors": {
     "generic": "Something went wrong. Please try again.",

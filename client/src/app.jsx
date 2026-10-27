@@ -1,7 +1,6 @@
 // client/src/app.jsx
 import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
-import { IconButton, Box, Dialog, DialogContent, Typography, ThemeProvider, createTheme } from '@mui/material';
-import { Close } from '@mui/icons-material';
+import { Box, Dialog, DialogContent, Typography, ThemeProvider, createTheme } from '@mui/material';
 
 import axios from 'axios';
 import PluginWidgetWrapper from './components/PluginWidgetWrapper.jsx';
@@ -1587,29 +1586,16 @@ const App = () => {
       <Dialog
         open={showAdminPanel}
         onClose={toggleAdminPanel}
-        maxWidth="lg"
+        maxWidth={false}
         fullScreen={isMobile}
         // An edge for the floating panel, which can sink into a page background
         // of a similar solid color (#230). Full screen on a phone needs none.
-        slotProps={{ paper: { sx: isMobile ? {} : { border: '1px solid var(--card-border)' } } }}
+        // The panel sets its own size (AdminShell), so it doesn't change from
+        // section to section.
+        slotProps={{ paper: { sx: isMobile ? {} : { border: '1px solid var(--card-border)', borderRadius: 4 } } }}
       >
-        <DialogContent sx={{ position: 'relative', '@media (max-width:599.95px)': { p: 1.5 } }}>
-          <IconButton
-            onClick={toggleAdminPanel}
-            sx={{
-              position: 'absolute',
-              right: 8,
-              top: 8,
-              color: 'text.secondary',
-              zIndex: 1,
-              '&:hover': {
-                color: 'error.main',
-              },
-            }}
-          >
-            <Close />
-          </IconButton>
-          <Suspense fallback={<Typography sx={{ py: 2 }}>Loading settings...</Typography>}>
+        <DialogContent sx={{ p: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <Suspense fallback={<Typography sx={{ p: 3 }}>Loading settings...</Typography>}>
             <AdminPanel
               setWidgetSettings={setWidgetSettings}
               onRequestClose={toggleAdminPanel}
@@ -1640,6 +1626,7 @@ const App = () => {
         onRefresh={handlePageRefresh}
         // A widget filling the whole page covers the dock too.
         hidden={dockHidden || expandedWidgetSize === 'full'}
+        underDialogs={showAdminPanel}
         theme={displayTheme}
         themeMode={themeMode}
         screensaverCountdown={

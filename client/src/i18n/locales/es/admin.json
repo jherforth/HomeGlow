@@ -67,6 +67,8 @@
     "clamRewardFailed": "No se pudo guardar la recompensa. Inténtalo de nuevo.",
     "choreSoundsSaved": "Ajustes de sonido de tareas guardados.",
     "choreSoundsFailed": "No se pudieron guardar los ajustes de sonido.",
+    "choreSettingsSaved": "Ajustes de tareas guardados.",
+    "choreSettingsFailed": "No se pudieron guardar los ajustes de tareas.",
     "widgetNeedsTab": "Cada widget activado debe tener al menos una pestaña seleccionada.",
     "widgetSettingsSaved": "Ajustes de widgets guardados correctamente.",
     "widgetSettingsFailed": "No se pudieron guardar los ajustes de widgets. Inténtalo de nuevo.",
