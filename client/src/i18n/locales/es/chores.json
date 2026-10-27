@@ -76,7 +76,10 @@
     "rugby": "Balón de rugby"
   },
   "widget": {
-    "title": "🥟 Tareas del día",
+    "muteSounds": "Silenciar los sonidos de tareas en esta pantalla",
+    "playSounds": "Reproducir los sonidos de tareas en esta pantalla",
+    "openPrizes": "Tienda de premios",
+    "title": "Tareas del día",
     "loading": "Cargando tareas...",
     "addChore": "Añadir tarea",
     "noChoresToday": "No hay tareas para hoy",

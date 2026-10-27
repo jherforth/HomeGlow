@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Card, Typography, Box, List, ListItem, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, Button, ButtonBase, IconButton, Popover, ToggleButton, ToggleButtonGroup, TextField, Switch, Checkbox, FormControlLabel, Select, MenuItem, FormControl, InputLabel, Chip, Divider, CircularProgress, LinearProgress, Alert, Tooltip } from '@mui/material';
-import { Settings, ViewModule, ViewWeek, ChevronLeft, ChevronRight, Add, Delete, Edit, Refresh, Remove, Sync, Schedule, Today } from '@mui/icons-material';
+import { Card, Typography, Box, List, ListItem, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, Button, ButtonBase, IconButton, Popover, TextField, Switch, Checkbox, FormControlLabel, Select, MenuItem, FormControl, InputLabel, Chip, Divider, CircularProgress, LinearProgress, Alert, Tooltip } from '@mui/material';
+import { ChevronLeft, ChevronRight, Add, Delete, Edit, Refresh, Remove, Sync, Schedule, CalendarMonthOutlined, ViewModuleOutlined, ViewWeekOutlined, SettingsOutlined, TodayOutlined } from '@mui/icons-material';
+import WidgetHeader, { widgetHeaderTitleSx, headerIconButtonSx } from './WidgetHeader.jsx';
 import moment from 'moment';
 import { SketchPicker } from 'react-color';
 import axios from 'axios';
@@ -1329,89 +1330,94 @@ const CalendarWidget = ({
           sx={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2 }}
         />
       )}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <IconButton
-            onClick={handlePreviousPeriod}
-            size="small"
-            sx={{ color: 'var(--text)' }}
-            aria-label={t('calendar:widget.previousPeriod')}
-          >
-            <ChevronLeft />
-          </IconButton>
-          {/* The period label doubles as the go-to-today control: on a phone this is the only Today affordance, and on
-              desktop the icon button below keeps it discoverable. */}
+      <WidgetHeader
+        icon={<CalendarMonthOutlined />}
+        title={(
+          /* The period label doubles as the go-to-today control: on a phone this is the only Today affordance, and on
+              desktop the icon button below keeps it discoverable. */
           <Tooltip title={t('calendar:widget.goToToday')}>
             <ButtonBase
               onClick={goToToday}
               aria-label={t('calendar:widget.goToToday')}
               sx={{
-                minWidth: { xs: 0, sm: '200px' },
                 borderRadius: 'var(--hg-radius-sm)',
-                px: 1,
-                py: 0.5,
+                px: 0.5,
+                py: 0.25,
                 color: 'var(--text)',
                 '&:hover': {
                   backgroundColor: 'rgba(var(--accent-rgb), 0.08)',
                 },
               }}
             >
-              <Typography variant="h6" component="span" sx={{ textAlign: 'center' }}>
-                {isMobile ? '' : '📅 '}{getCurrentPeriodLabel()}
+              <Typography variant="h6" component="h2" sx={{ ...widgetHeaderTitleSx, fontVariantNumeric: 'tabular-nums' }}>
+                {getCurrentPeriodLabel()}
               </Typography>
             </ButtonBase>
           </Tooltip>
+        )}
+        afterTitle={(
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <IconButton
+              onClick={handlePreviousPeriod}
+              size="small"
+              sx={headerIconButtonSx}
+              aria-label={t('calendar:widget.previousPeriod')}
+            >
+              <ChevronLeft />
+            </IconButton>
+            <IconButton
+              onClick={handleNextPeriod}
+              size="small"
+              sx={headerIconButtonSx}
+              aria-label={t('calendar:widget.nextPeriod')}
+            >
+              <ChevronRight />
+            </IconButton>
+            <Tooltip title={t('calendar:widget.goToToday')}>
+              {/* Desktop-only redundant affordance: on phones the label above is
+                  the control, but a tappable heading isn't self-evidently
+                  tappable, so keep the icon visible from `sm` up. */}
+              <IconButton
+                onClick={goToToday}
+                size="small"
+                sx={{ ...headerIconButtonSx, display: { xs: 'none', sm: 'inline-flex' } }}
+                aria-label={t('calendar:widget.goToToday')}
+              >
+                <TodayOutlined />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        )}
+      >
+        <IconButton
+          onClick={() => handleViewModeChange(null, 'month')}
+          size="small"
+          sx={headerIconButtonSx}
+          aria-label={t('calendar:widget.monthView')}
+          aria-pressed={viewMode === 'month'}
+        >
+          <ViewModuleOutlined />
+        </IconButton>
+        <IconButton
+          onClick={() => handleViewModeChange(null, 'week')}
+          size="small"
+          sx={headerIconButtonSx}
+          aria-label={t('calendar:widget.weekView')}
+          aria-pressed={viewMode === 'week'}
+        >
+          <ViewWeekOutlined />
+        </IconButton>
+        {!hideCalendarSettings && (
           <IconButton
-            onClick={handleNextPeriod}
+            onClick={handleSettingsClick}
             size="small"
-            sx={{ color: 'var(--text)' }}
-            aria-label={t('calendar:widget.nextPeriod')}
+            sx={headerIconButtonSx}
+            aria-label={t('calendar:widget.openSettings')}
           >
-            <ChevronRight />
+            <SettingsOutlined />
           </IconButton>
-          <Tooltip title={t('calendar:widget.goToToday')}>
-            {/* Desktop-only redundant affordance: on phones the label above is
-                the control, but a tappable heading isn't self-evidently
-                tappable, so keep the icon visible from `sm` up. */}
-            <IconButton
-              onClick={goToToday}
-              size="small"
-              sx={{ display: { xs: 'none', sm: 'inline-flex' }, color: 'var(--text)' }}
-              aria-label={t('calendar:widget.goToToday')}
-            >
-              <Today />
-            </IconButton>
-          </Tooltip>
-        </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <ToggleButtonGroup
-            value={viewMode}
-            exclusive
-            onChange={handleViewModeChange}
-            size="small"
-            sx={{
-              '& .MuiToggleButton-root': { color: 'var(--text)', borderColor: 'var(--card-border)' },
-              '& .MuiToggleButton-root.Mui-selected': { color: 'var(--text)', backgroundColor: 'rgba(var(--accent-rgb), 0.15)' },
-            }}
-          >
-            <ToggleButton value="month" aria-label={t('calendar:widget.monthView')}>
-              <ViewModule />
-            </ToggleButton>
-            <ToggleButton value="week" aria-label={t('calendar:widget.weekView')}>
-              <ViewWeek />
-            </ToggleButton>
-          </ToggleButtonGroup>
-          {!hideCalendarSettings && (
-            <IconButton
-              onClick={handleSettingsClick}
-              size="small"
-              sx={{ color: 'var(--text)' }}
-            >
-              <Settings />
-            </IconButton>
-          )}
-        </Box>
-      </Box>
+        )}
+      </WidgetHeader>
 
       {error && (
         <Box sx={{ mb: 2, p: 2, bgcolor: 'var(--hg-error-surface)', borderRadius: 'var(--hg-radius-sm)' }}>
