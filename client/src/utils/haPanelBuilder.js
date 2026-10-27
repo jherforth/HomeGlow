@@ -8,6 +8,13 @@ export const COLUMN_CHOICES = ['auto', 1, 2, 3, 4, 5, 6];
 export const MAX_TILES = 48;
 export const EXPORT_FORMAT = 'homeglow-ha-panel';
 
+// The preview's sizes stand in for the widget's own size on a dashboard, so
+// the preview is drawn at that size in px, not stretched to its space.
+export const PREVIEW_SIZES = { small: [300, 220], medium: [460, 340], large: [720, 480] };
+// The narrowest the tile editors beside a preview may get.
+export const EDITOR_MIN_WIDTH = 420;
+export const PREVIEW_GAP = 16;
+
 // The order a panel from an area lists things in: what people reach for most.
 const DOMAIN_ORDER = [
   'light', 'switch', 'fan', 'cover', 'climate', 'media_player', 'scene', 'script', 'button', 'input_button',
@@ -121,4 +128,16 @@ export function suggestedStates(domain) {
     case 'sun': return ['above_horizon', 'below_horizon'];
     default: return [];
   }
+}
+
+/**
+ * Where the preview goes in a builder `width` px wide: beside the tile
+ * editors when both fit, else above them. Above, it keeps its own size
+ * unless the builder is narrower still (a phone), where it scales down to
+ * fit rather than overflow. The editors never give up room to it.
+ */
+export function previewLayout(width, [previewWidth]) {
+  if (!(width > 0)) return { beside: false, scale: 1 };
+  if (width >= EDITOR_MIN_WIDTH + PREVIEW_GAP + previewWidth) return { beside: true, scale: 1 };
+  return { beside: false, scale: Math.min(1, width / previewWidth) };
 }

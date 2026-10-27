@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  addTiles, blankRecipe, exportRecipe, moveTile, newTileId, parseImport, recipeEntities, recipeFromArea, unknownEntities,
+  PREVIEW_SIZES, addTiles, blankRecipe, exportRecipe, moveTile, newTileId, parseImport, previewLayout, recipeEntities,
+  recipeFromArea, unknownEntities,
 } from './haPanelBuilder.js';
 
 const entity = (entity_id, areaId, name = entity_id) => ({ entity_id, areaId, name, domain: entity_id.split('.')[0] });
@@ -65,5 +66,24 @@ describe('sharing', () => {
     const recipe = { name: 'X', tiles: [{ id: 'a', entities: ['light.a'], when: { entity: 'person.kim', states: ['home'] } }, { id: 'b', entities: ['light.b'] }] };
     expect(recipeEntities(recipe)).toEqual(['light.a', 'person.kim', 'light.b']);
     expect(unknownEntities(recipe, ['light.a'])).toEqual(['person.kim', 'light.b']);
+  });
+});
+
+describe('the preview', () => {
+  it('sits beside the tile editors only when both fit', () => {
+    // The Admin Panel's builder is about 745px wide on a display.
+    expect(previewLayout(745, PREVIEW_SIZES.small)).toEqual({ beside: true, scale: 1 });
+    expect(previewLayout(745, PREVIEW_SIZES.medium)).toEqual({ beside: false, scale: 1 });
+    expect(previewLayout(745, PREVIEW_SIZES.large)).toEqual({ beside: false, scale: 1 });
+    expect(previewLayout(1400, PREVIEW_SIZES.large)).toEqual({ beside: true, scale: 1 });
+  });
+
+  it('scales down above the editors only when the builder is narrower than it', () => {
+    expect(previewLayout(360, PREVIEW_SIZES.large)).toEqual({ beside: false, scale: 0.5 });
+    expect(previewLayout(360, PREVIEW_SIZES.small)).toEqual({ beside: false, scale: 1 });
+  });
+
+  it('waits for a width before scaling anything', () => {
+    expect(previewLayout(0, PREVIEW_SIZES.large)).toEqual({ beside: false, scale: 1 });
   });
 });

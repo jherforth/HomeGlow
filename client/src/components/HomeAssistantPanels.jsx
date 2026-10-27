@@ -14,12 +14,25 @@ import { API_BASE_URL } from '../utils/apiConfig.js';
 import { ThemeContext } from '../themes/engine/ThemeContext.js';
 import { buildPluginThemeMessage, readRoleTokens } from '../utils/pluginThemeBridge.js';
 import {
-  COLUMN_CHOICES, MAX_TILES, TILE_SIZES, addTiles, blankRecipe, domainOf, exportRecipe, moveTile, parseImport,
-  recipeFromArea, suggestedStates, tileTitle, unknownEntities,
+  COLUMN_CHOICES, MAX_TILES, PREVIEW_GAP, PREVIEW_SIZES, TILE_SIZES, addTiles, blankRecipe, domainOf, exportRecipe,
+  moveTile, parseImport, previewLayout, recipeFromArea, suggestedStates, tileTitle, unknownEntities,
 } from '../utils/haPanelBuilder.js';
 
-const PREVIEW_SIZES = { small: [300, 220], medium: [460, 340], large: [720, 480] };
-const previewOrigin = () => new URL(API_BASE_URL || '/', window.location.href).origin;
+// A tile editor's rows by the editors' own width (a container query on the
+// column around them), since beside a preview they are far narrower than
+// the screen. Label, icon and size: one column, then the label over the
+// other two, then all three on a line.
+const tileFieldColumns = {
+  gridTemplateColumns: '1fr',
+  '@container (min-width: 380px)': { gridTemplateColumns: '1fr 1fr', '& > :first-of-type': { gridColumn: '1 / -1' } },
+  '@container (min-width: 600px)': { gridTemplateColumns: '2fr 1fr 1fr', '& > :first-of-type': { gridColumn: 'auto' } },
+};
+// "Show only when": the entity, its states and Not.
+const conditionColumns = {
+  gridTemplateColumns: '1fr',
+  '@container (min-width: 600px)': { gridTemplateColumns: '1fr 1fr auto' },
+};
+const previewOrigin = () =>new URL(API_BASE_URL || '/', window.location.href).origin;
 const readColor = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
 // Admin → Dashboard → Home Assistant (issue #252): build panels of Home
@@ -43,6 +56,17 @@ const HomeAssistantPanels = ({ onNavigate }) => {
   const [showHistory, setShowHistory] = useState(false);
   const [previewSize, setPreviewSize] = useState('medium');
   const frameRef = useRef(null);
+  // The builder's own width, not the screen's: inside the Admin Panel it is
+  // far narrower than the screen, so a screen breakpoint put a large preview
+  // beside the tile editors and left them no room (previewLayout).
+  const [builderEl, setBuilderEl] = useState(null);
+  const [builderWidth, setBuilderWidth] = useState(0);
+  useEffect(() => {
+    if (!builderEl) return undefined;
+    const observer = new ResizeObserver(([entry]) => setBuilderWidth(Math.floor(entry.contentRect.width)));
+    observer.observe(builderEl);
+    return () => observer.disconnect();
+  }, [builderEl]);
 
   const entitiesById = useMemo(() => new Map(entities.map((entity) => [entity.entity_id, entity])), [entities]);
 
@@ -262,7 +286,7 @@ const HomeAssistantPanels = ({ onNavigate }) => {
           <Tooltip title={t('admin:haPanels.moveDown')}><span><IconButton size="small" disabled={index === draft.recipe.tiles.length - 1} onClick={() => updateRecipe({ tiles: moveTile(draft.recipe.tiles, index, index + 1) })} aria-label={t('admin:haPanels.moveDown')}><ArrowDownward fontSize="small" /></IconButton></span></Tooltip>
           <Tooltip title={t('admin:haPanels.remove')}><IconButton size="small" onClick={() => removeTile(index)} aria-label={t('admin:haPanels.remove')}><Delete fontSize="small" /></IconButton></Tooltip>
         </Box>
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr' }, gap: 1, mt: 1 }}>
+        <Box sx={{ display: 'grid', ...tileFieldColumns, gap: 1, mt: 1 }}>
           <TextField
             size="small"
             label={t('admin:haPanels.label')}
@@ -310,7 +334,7 @@ const HomeAssistantPanels = ({ onNavigate }) => {
           />
         </Box>
         {tile.when && (
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr auto' }, gap: 1, mt: 1, alignItems: 'center' }}>
+          <Box sx={{ display: 'grid', ...conditionColumns, gap: 1, mt: 1, alignItems: 'center' }}>
             <Autocomplete
               size="small"
               options={sortedOptions.map((entity) => entity.entity_id)}
@@ -336,6 +360,7 @@ const HomeAssistantPanels = ({ onNavigate }) => {
   };
 
   const [previewWidth, previewHeight] = PREVIEW_SIZES[previewSize];
+  const preview = previewLayout(builderWidth, PREVIEW_SIZES[previewSize]);
 
   return (
     <AdminFormSection title={t('admin:haPanels.title')} subtitle={t('admin:haPanels.subtitle')}>
@@ -476,28 +501,55 @@ const HomeAssistantPanels = ({ onNavigate }) => {
             sx={{ mb: 2 }}
           />
 
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1fr) auto' }, gap: 2, alignItems: 'start' }}>
-            <Box>
+          {/* The preview beside the tile editors when both fit, else above
+              them; the editors keep their room either way. */}
+          <Box
+            ref={setBuilderEl}
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: preview.beside ? `minmax(0, 1fr) ${previewWidth}px` : 'minmax(0, 1fr)',
+              gap: `${PREVIEW_GAP}px`,
+              alignItems: 'start',
+            }}
+          >
+            {/* A container, so a tile editor lays out by its own width. */}
+            <Box sx={{ order: preview.beside ? 0 : 1, minWidth: 0, containerType: 'inline-size' }}>
               {draft.recipe.tiles.length === 0 && <Typography color="text.secondary">{t('admin:haPanels.noTiles')}</Typography>}
               {draft.recipe.tiles.map(renderTileEditor)}
             </Box>
-            <Box sx={{ position: { lg: 'sticky' }, top: 8 }}>
+            <Box sx={{ minWidth: 0, ...(preview.beside && { position: 'sticky', top: 8 }) }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                 <Typography variant="subtitle2" sx={{ flex: 1 }}>{t('admin:haPanels.preview')}</Typography>
                 <ToggleButtonGroup size="small" exclusive value={previewSize} onChange={(_, value) => value && setPreviewSize(value)}>
                   {Object.keys(PREVIEW_SIZES).map((size) => <ToggleButton key={size} value={size}>{t(`admin:haPanels.previewSizes.${size}`)}</ToggleButton>)}
                 </ToggleButtonGroup>
               </Box>
-              <Box sx={{ width: previewWidth, maxWidth: '100%', height: previewHeight, border: '1px solid var(--card-border)', borderRadius: 'var(--hg-frame-radius, 16px)', background: 'var(--hg-frame-bg, var(--card-bg))', overflow: 'hidden' }}>
-                <iframe
-                  ref={frameRef}
-                  title={t('admin:haPanels.preview')}
-                  src={`${API_BASE_URL}/ha-panels/preview?lang=${encodeURIComponent(i18n.language || 'en')}`}
-                  onLoad={postPreview}
-                  style={{ width: '100%', height: '100%', border: 0, display: 'block' }}
-                />
+              {/* Drawn at the widget's size and scaled as a whole when the
+                  builder is narrower, so the tiles wrap as they would on
+                  the dashboard. */}
+              <Box sx={{ width: previewWidth * preview.scale, height: previewHeight * preview.scale }}>
+                <Box
+                  sx={{
+                    width: previewWidth,
+                    height: previewHeight,
+                    transform: preview.scale < 1 ? `scale(${preview.scale})` : 'none',
+                    transformOrigin: 'top left',
+                    border: '1px solid var(--card-border)',
+                    borderRadius: 'var(--hg-frame-radius, 16px)',
+                    background: 'var(--hg-frame-bg, var(--card-bg))',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <iframe
+                    ref={frameRef}
+                    title={t('admin:haPanels.preview')}
+                    src={`${API_BASE_URL}/ha-panels/preview?lang=${encodeURIComponent(i18n.language || 'en')}`}
+                    onLoad={postPreview}
+                    style={{ width: '100%', height: '100%', border: 0, display: 'block' }}
+                  />
+                </Box>
               </Box>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, maxWidth: previewWidth }}>{t('admin:haPanels.previewHelp')}</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, maxWidth: previewWidth * preview.scale }}>{t('admin:haPanels.previewHelp')}</Typography>
             </Box>
           </Box>
 
