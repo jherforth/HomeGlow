@@ -2,10 +2,24 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Box } from '@mui/material';
 import AutorenewIcon from '@mui/icons-material/Autorenew';
 
+// How the ring sits between refreshes, and how long it shows after one.
+const IDLE_OPACITY = 0.3;
+const FLASH_MS = 1500;
+
 const CountdownCircle = ({ refreshInterval, onRefresh, isActive = true }) => {
   const [progress, setProgress] = useState(0);
   const [cycleKey, setCycleKey] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
+  // Shown at full strength for a moment when a refresh fires; faint the rest
+  // of the time, so a board of widgets isn't a row of ticking rings.
+  const [justRefreshed, setJustRefreshed] = useState(false);
+  const flashTimerRef = useRef(null);
+  const flash = () => {
+    setJustRefreshed(true);
+    clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = setTimeout(() => setJustRefreshed(false), FLASH_MS);
+  };
+  useEffect(() => () => clearTimeout(flashTimerRef.current), []);
 
   // The cycle clock lives in refs so pausing (isActive false) stops the
   // ticking without resetting elapsed time — wall-clock time keeps counting,
@@ -34,6 +48,7 @@ const CountdownCircle = ({ refreshInterval, onRefresh, isActive = true }) => {
         if (onRefreshRef.current) {
           onRefreshRef.current();
         }
+        flash();
         setCycleKey(prev => prev + 1);
       }
     };
@@ -67,6 +82,7 @@ const CountdownCircle = ({ refreshInterval, onRefresh, isActive = true }) => {
     if (onRefresh) {
       onRefresh();
     }
+    flash();
 
     // Restart the countdown immediately after manual refresh.
     setCycleKey(prev => prev + 1);
@@ -97,6 +113,9 @@ const CountdownCircle = ({ refreshInterval, onRefresh, isActive = true }) => {
         border: 'none',
         padding: 0,
         margin: 0,
+        opacity: isHovered || justRefreshed ? 1 : IDLE_OPACITY,
+        transition: 'opacity 0.3s ease',
+        '&:focus-visible': { opacity: 1 },
       }}
     >
       <svg
@@ -126,7 +145,7 @@ const CountdownCircle = ({ refreshInterval, onRefresh, isActive = true }) => {
             strokeWidth: 'var(--hg-meter-thickness)',
             strokeLinecap: 'var(--hg-meter-cap)',
             transition: 'stroke-dashoffset 0.1s linear',
-            filter: 'drop-shadow(0 0 4px rgba(var(--accent-rgb), 0.5))',
+            filter: isHovered || justRefreshed ? 'drop-shadow(0 0 4px rgba(var(--accent-rgb), 0.5))' : 'none',
           }}
         />
       </svg>

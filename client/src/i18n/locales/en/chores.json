@@ -76,9 +76,12 @@
     "rugby": "Rugby ball"
   },
   "widget": {
-    "title": "🥟 Daily Chores",
+    "muteSounds": "Mute chore sounds on this display",
+    "playSounds": "Play chore sounds on this display",
+    "openPrizes": "Prize store",
+    "title": "Daily chores",
     "loading": "Loading chores...",
-    "addChore": "Add Chore",
+    "addChore": "Add chore",
     "noChoresToday": "No chores for today",
     "allDone": "All Done! +{{count}} 🥟",
     "completeAria": "Mark \"{{title}}\" complete",

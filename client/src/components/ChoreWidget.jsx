@@ -31,7 +31,8 @@ import {
   Popover,
   Switch
 } from '@mui/material';
-import { Edit, Save, Cancel, Add, Delete, Check, Close, Undo, SwapHoriz, Snooze, History, Backspace, Settings as SettingsIcon, AccessTime, NotificationsNoneOutlined } from '@mui/icons-material';
+import { Edit, Save, Cancel, Add, Delete, Check, Close, Undo, SwapHoriz, Snooze, History, Backspace, ChecklistOutlined, TollOutlined, VolumeUpOutlined, VolumeOffOutlined, Star, StarBorder, RedeemOutlined, SettingsOutlined, AccessTime, NotificationsNoneOutlined } from '@mui/icons-material';
+import WidgetHeader, { headerIconButtonSx, headerMainButtonSx } from './WidgetHeader.jsx';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import LoadingBackdrop from './LoadingBackdrop';
@@ -1422,67 +1423,65 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
         overflow: 'hidden',
         p: 2
       }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6">{t('chores:widget.title')}</Typography>
-          <Box sx={{ display: 'flex', gap: 1 }}>
+        <WidgetHeader icon={<ChecklistOutlined />} title={t('chores:widget.title')}>
+          <IconButton
+            onClick={() => setShowBonusChores(!showBonusChores)}
+            size="small"
+            sx={headerIconButtonSx}
+            title={showBonusChores ? t('chores:bonus.hide') : t('chores:bonus.show')}
+            aria-label={showBonusChores ? t('chores:bonus.hide') : t('chores:bonus.show')}
+            aria-pressed={showBonusChores}
+          >
+            <TollOutlined fontSize="small" />
+          </IconButton>
+          <IconButton
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            size="small"
+            sx={headerIconButtonSx}
+            title={soundEnabled ? t('chores:widget.muteSounds') : t('chores:widget.playSounds')}
+            aria-label={soundEnabled ? t('chores:widget.muteSounds') : t('chores:widget.playSounds')}
+          >
+            {soundEnabled ? <VolumeUpOutlined fontSize="small" /> : <VolumeOffOutlined fontSize="small" />}
+          </IconButton>
+          <IconButton
+            onClick={() => setShowWeek(!showWeek)}
+            size="small"
+            sx={headerIconButtonSx}
+            title={showWeek ? t('chores:history.hideWeek') : t('chores:history.showWeek')}
+            aria-label={showWeek ? t('chores:history.hideWeek') : t('chores:history.showWeek')}
+            aria-pressed={showWeek}
+          >
+            {showWeek ? <Star fontSize="small" /> : <StarBorder fontSize="small" />}
+          </IconButton>
+          <IconButton
+            onClick={() => setShowPrizesModal(true)}
+            size="small"
+            sx={headerIconButtonSx}
+            title={t('chores:widget.openPrizes')}
+            aria-label={t('chores:widget.openPrizes')}
+          >
+            <RedeemOutlined fontSize="small" />
+          </IconButton>
+          <IconButton
+            onClick={(event) => setSettingsAnchor(event.currentTarget)}
+            size="small"
+            aria-label={t('chores:visibility.openSettings')}
+            title={t('chores:visibility.openSettings')}
+            sx={headerIconButtonSx}
+          >
+            <SettingsOutlined fontSize="small" />
+          </IconButton>
+          {!hideAddChore && (
             <Button
-              onClick={() => setShowBonusChores(!showBonusChores)}
-              variant={showBonusChores ? "contained" : "outlined"}
+              startIcon={<Add />}
+              onClick={() => setShowAddDialog(true)}
               size="small"
-              sx={{ minWidth: 'auto', px: 1 }}
-              title={showBonusChores ? t('chores:bonus.hide') : t('chores:bonus.show')}
+              sx={{ ...headerMainButtonSx, ml: 0.5 }}
             >
-              🥟
+              {t('chores:widget.addChore')}
             </Button>
-            <Button
-              onClick={() => setSoundEnabled(!soundEnabled)}
-              variant={soundEnabled ? "contained" : "outlined"}
-              size="small"
-              sx={{ minWidth: 'auto', px: 1 }}
-              title={soundEnabled ? "Mute chore sounds on this display" : "Enable chore sounds on this display"}
-            >
-              {soundEnabled ? '🔔' : '🔕'}
-            </Button>
-            <Button
-              onClick={() => setShowWeek(!showWeek)}
-              variant={showWeek ? "contained" : "outlined"}
-              size="small"
-              sx={{ minWidth: 'auto', px: 1 }}
-              title={showWeek ? t('chores:history.hideWeek') : t('chores:history.showWeek')}
-              aria-label={showWeek ? t('chores:history.hideWeek') : t('chores:history.showWeek')}
-              aria-pressed={showWeek}
-            >
-              ⭐
-            </Button>
-            <Button
-              onClick={() => setShowPrizesModal(true)}
-              variant="outlined"
-              size="small"
-              sx={{ minWidth: 'auto', px: 1 }}
-            >
-              🛍️
-            </Button>
-            <IconButton
-              onClick={(event) => setSettingsAnchor(event.currentTarget)}
-              size="small"
-              aria-label={t('chores:visibility.openSettings')}
-              title={t('chores:visibility.openSettings')}
-              sx={{ color: 'var(--text)' }}
-            >
-              <SettingsIcon fontSize="small" />
-            </IconButton>
-            {!hideAddChore && (
-              <Button
-                startIcon={<Add />}
-                onClick={() => setShowAddDialog(true)}
-                variant="contained"
-                size="small"
-              >
-                {t('chores:widget.addChore')}
-              </Button>
-            )}
-          </Box>
-        </Box>
+          )}
+        </WidgetHeader>
 
         <Box ref={columnsRef} sx={{ display: 'flex', gap: 2, overflowX: 'auto', pb: 2, ...columnsFadeSx }}>
           <Box sx={{
