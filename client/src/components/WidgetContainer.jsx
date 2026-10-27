@@ -195,7 +195,10 @@ const WidgetContainer = ({
   }, [locked]);
 
   useEffect(() => {
-    const currentCacheKey = `${activeTab}:${widgets.map(w => w.id).sort().join(',')}`;
+    // Saved layouts are part of the key, so one changed elsewhere (a Home
+    // Assistant panel resized in the builder) is drawn without a tab change.
+    const savedKey = (w) => (w.savedLayout ? `@${w.savedLayout.x},${w.savedLayout.y},${w.savedLayout.w},${w.savedLayout.h}` : '');
+    const currentCacheKey = `${activeTab}:${widgets.map(w => w.id + savedKey(w)).sort().join(',')}`;
     const widgetsChanged = currentCacheKey !== prevWidgetIdsRef.current;
     const prevCols = prevGridColsRef.current;
     const colsChanged = prevCols != null && prevCols !== gridCols;

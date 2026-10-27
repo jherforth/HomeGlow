@@ -44,6 +44,14 @@ const EMOJI_ICON = /^[^\s<>&"'`=;{}\\a-zA-Z0-9]{1,8}$/u;
 // Supported-feature bits, from Home Assistant's constants.
 const COVER = { OPEN: 1, CLOSE: 2, SET_POSITION: 4, STOP: 8 };
 const FAN = { SET_SPEED: 1 };
+// A fan with up to this many speeds is tapped through them; one with more,
+// or one that doesn't say (Home Assistant's own default is 100), gets a
+// slider. The template has the same rule (fanSpeedCount in template.html).
+const MAX_STEPPED_SPEEDS = 6;
+const fanSpeedCount = (state) => {
+  const step = Number(state?.attributes?.percentage_step);
+  return step > 0 ? Math.max(1, Math.round(100 / step)) : 100;
+};
 const CLIMATE = { TARGET_TEMPERATURE: 1 };
 const MEDIA = { PAUSE: 1, SEEK: 2, VOLUME_SET: 4, PREVIOUS_TRACK: 16, NEXT_TRACK: 32, PLAY_MEDIA: 512, STOP: 4096, PLAY: 16384, SHUFFLE_SET: 32768, GROUPING: 524288, MEDIA_ENQUEUE: 2097152 };
 const VACUUM = { PAUSE: 4, RETURN_HOME: 16, START: 8192 };
@@ -399,7 +407,8 @@ function defaultControl(entityId, state) {
     case 'input_boolean':
       return { kind: 'toggle' };
     case 'fan':
-      return { kind: has(state, FAN.SET_SPEED) ? 'fan' : 'toggle' };
+      if (!has(state, FAN.SET_SPEED)) return { kind: 'toggle' };
+      return { kind: fanSpeedCount(state) <= MAX_STEPPED_SPEEDS ? 'fan' : 'dimmer' };
     case 'cover':
       return { kind: has(state, COVER.SET_POSITION) ? 'cover-slider' : 'cover' };
     case 'scene':

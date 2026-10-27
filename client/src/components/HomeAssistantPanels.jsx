@@ -14,6 +14,8 @@ import { API_BASE_URL } from '../utils/apiConfig.js';
 import { ThemeContext } from '../themes/engine/ThemeContext.js';
 import { buildPluginThemeMessage, readRoleTokens } from '../utils/pluginThemeBridge.js';
 import { readGridMetrics } from '../utils/gridMetrics.js';
+import { getDeviceName } from '../utils/deviceName.js';
+import { checkHouseholdChanges } from '../utils/householdChanges.js';
 import {
   COLUMN_CHOICES, MAX_TILES, PREVIEW_GAP, STYLE_CHOICES, TILE_SIZES, WIDGET_MAX_H, WIDGET_MAX_W, addTiles, blankRecipe, domainOf,
   exportRecipe, moveTile, parseImport, previewLayout, recipeFromArea, suggestedStates, suggestedWidgetSize, tileTitle, unknownEntities,
@@ -79,7 +81,8 @@ const HomeAssistantPanels = ({ onNavigate }) => {
 
   const load = useCallback(async () => {
     try {
-      const { data } = await axios.get(`${API_BASE_URL}/api/ha-panels`);
+      // This display's name: a panel's size picker starts from its size here.
+      const { data } = await axios.get(`${API_BASE_URL}/api/ha-panels`, { params: { device: getDeviceName() || undefined } });
       setInfo(data);
       return data;
     } catch (error) {
@@ -171,6 +174,9 @@ const HomeAssistantPanels = ({ onNavigate }) => {
         : await axios.post(`${API_BASE_URL}/api/ha-panels`, payload);
       const isNew = !draft.id;
       setDraft(null);
+      // Resized where it is placed: redraw this display now rather than at
+      // the next check (every display gets it from household sync).
+      if (data.resized) void checkHouseholdChanges();
       await load();
       setMessage({ type: 'success', text: isNew ? t('admin:haPanels.savedNew', { name: data.panel.name }) : t('admin:haPanels.saved'), placeIt: isNew });
     } catch (error) {

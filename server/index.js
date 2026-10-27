@@ -1226,6 +1226,8 @@ const haPanels = registerHaPanelRoutes(fastify, {
   ha: homeAssistant,
   demoMode: DEMO_MODE,
   installPluginRow,
+  // A panel resized where it is placed: every display reloads its layouts.
+  householdChanged: () => householdChanges.bump('settings'),
   // A plugin's household setting: play_url checks addresses against the
   // media server one of them names (manifest homeAssistant.playUrlsFrom).
   readPluginSetting: (pluginId, key) => {

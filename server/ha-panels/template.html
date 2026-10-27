@@ -324,7 +324,7 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
       previewNoActions: 'Save the panel to try its controls.',
       pinTitle: 'Enter the household PIN', pinWrong: 'That PIN is not right.', cancel: 'Cancel', ok: 'OK', clearKey: 'Clear',
       failed: 'That didn\'t work', choose: 'Choose', empty: 'This panel has no tiles yet.', loading: 'Loading…',
-      fanLow: 'Low', fanMedium: 'Medium', fanHigh: 'High',
+      fanLow: 'Low', fanMedium: 'Medium', fanHigh: 'High', fanSpeed: 'Speed {n}',
       camera: 'Camera', heat: 'Heat', cool: 'Cool', heat_cool: 'Auto', auto: 'Auto', dry_mode: 'Dry', fan_only: 'Fan', off_mode: 'Off'
     },
     es: {
@@ -348,7 +348,7 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
       previewNoActions: 'Guarda el panel para probar sus controles.',
       pinTitle: 'Escribe el PIN de la casa', pinWrong: 'Ese PIN no es correcto.', cancel: 'Cancelar', ok: 'Aceptar', clearKey: 'Borrar',
       failed: 'No ha funcionado', choose: 'Elegir', empty: 'Este panel aún no tiene mosaicos.', loading: 'Cargando…',
-      fanLow: 'Baja', fanMedium: 'Media', fanHigh: 'Alta',
+      fanLow: 'Baja', fanMedium: 'Media', fanHigh: 'Alta', fanSpeed: 'Velocidad {n}',
       camera: 'Cámara', heat: 'Calor', cool: 'Frío', heat_cool: 'Auto', auto: 'Auto', dry_mode: 'Seco', fan_only: 'Ventilador', off_mode: 'Apagado'
     }
   };
@@ -652,13 +652,21 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
   // Which kind of tile an entity becomes: the same rule as defaultControl in
   // server/services/haPanels.js.
   var COLOR_DIM = ['brightness', 'color_temp', 'hs', 'xy', 'rgb', 'rgbw', 'rgbww', 'white'];
+  // A fan with up to this many speeds is tapped through them; one with more,
+  // or one that doesn't say (Home Assistant's own default is 100), gets a
+  // slider. The same rule as fanSpeedCount in server/services/haPanels.js.
+  var MAX_STEPPED_SPEEDS = 6;
+  function fanSpeedCount(st) {
+    var step = Number(st && st.attributes && st.attributes.percentage_step);
+    return step > 0 ? Math.max(1, Math.round(100 / step)) : 100;
+  }
   function kindOf(id, st) {
     var domain = domainOf(id);
     var a = (st && st.attributes) || {};
     switch (domain) {
       case 'light': return (a.supported_color_modes || []).some(function (m) { return COLOR_DIM.indexOf(m) !== -1; }) ? 'dimmer' : 'toggle';
       case 'switch': case 'input_boolean': return 'toggle';
-      case 'fan': return has(st, 1) ? 'fan' : 'toggle';
+      case 'fan': return has(st, 1) ? (fanSpeedCount(st) <= MAX_STEPPED_SPEEDS ? 'fan' : 'dimmer') : 'toggle';
       case 'cover': return st && st.sensitive ? 'garage' : (has(st, 4) ? 'cover-slider' : 'cover');
       case 'scene': case 'script': case 'button': case 'input_button': return 'run';
       case 'climate': return 'climate';
@@ -828,17 +836,20 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
     return best;
   }
 
-  // A fan with speeds: Low, Medium and High, whatever percentages its own
-  // speeds are. Home Assistant gives a fan's speeds as a step (33.33 for a
-  // three-speed fan); Low is its first speed, High full, Medium the one in
-  // the middle. A fan with one or two speeds gets just those.
+  // Every speed a fan has, as Home Assistant gives them: a step of 33.33 is
+  // three speeds, at 33, 67 and 100%. Two or three are named Low (Medium)
+  // High; more are numbered. Only fans kindOf steps (MAX_STEPPED_SPEEDS).
   function fanLevels(st) {
-    var step = Number(st.attributes.percentage_step) || 100 / 3;
-    var count = Math.max(1, Math.round(100 / step));
-    var at = function (n) { return Math.min(100, Math.round(n * step)); };
-    if (count === 1) return [{ pct: 100, name: T.on }];
-    if (count === 2) return [{ pct: at(1), name: T.fanLow }, { pct: 100, name: T.fanHigh }];
-    return [{ pct: at(1), name: T.fanLow }, { pct: at(Math.round(count / 2)), name: T.fanMedium }, { pct: 100, name: T.fanHigh }];
+    var count = fanSpeedCount(st);
+    var step = 100 / count;
+    var names = count === 1 ? [T.on]
+      : count === 2 ? [T.fanLow, T.fanHigh]
+        : count === 3 ? [T.fanLow, T.fanMedium, T.fanHigh] : null;
+    var levels = [];
+    for (var n = 1; n <= count; n += 1) {
+      levels.push({ pct: n === count ? 100 : Math.round(n * step), name: names ? names[n - 1] : T.fanSpeed.replace('{n}', n) });
+    }
+    return levels;
   }
   // Which of those the fan is at: the nearest; -1 when off.
   function fanLevelIndex(st, levels) {

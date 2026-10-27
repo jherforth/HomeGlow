@@ -141,7 +141,12 @@ test('a panel reads only the attributes its tiles use', () => {
 test('the default tile follows what the entity supports', () => {
   assert.equal(rules.defaultControl('light.kitchen', light).kind, 'dimmer');
   assert.equal(rules.defaultControl('light.porch', onOffLight).kind, 'toggle');
-  assert.equal(rules.defaultControl('fan.hall', st('fan.hall', 'on', { percentage: 33, supported_features: 1 })).kind, 'fan', 'a fan with speeds steps through them');
+  const fan = (step) => st('fan.hall', 'on', { percentage: 33, supported_features: 1, ...(step ? { percentage_step: step } : {}) });
+  assert.equal(rules.defaultControl('fan.hall', fan(100 / 3)).kind, 'fan', 'a fan with a few speeds steps through them');
+  assert.equal(rules.defaultControl('fan.hall', fan(100 / 6)).kind, 'fan');
+  assert.equal(rules.defaultControl('fan.hall', fan(100 / 8)).kind, 'dimmer', 'one with many speeds keeps the slider');
+  assert.equal(rules.defaultControl('fan.hall', fan(1)).kind, 'dimmer');
+  assert.equal(rules.defaultControl('fan.hall', fan()).kind, 'dimmer', 'and so does one that does not say');
   assert.equal(rules.defaultControl('cover.shade', shade).kind, 'cover-slider');
   assert.equal(rules.defaultControl('cover.garage', garage).kind, 'cover');
   assert.equal(rules.defaultControl('sensor.temp', st('sensor.temp', '20')).kind, 'sensor');

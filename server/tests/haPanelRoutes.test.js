@@ -672,3 +672,45 @@ test('play_url carries what is playing, with a cover from the same server only',
   assert.equal(fake.calls.length, before);
   await del('/api/widgets/music-meta.html');
 });
+
+test('a panel resized in the builder is resized where it is placed, and every display hears of it', async () => {
+  const created = await post('/api/ha-panels', { recipe: { name: 'Sized', tiles: [{ id: 'a', entities: ['light.kitchen'] }] } });
+  assert.equal(created.status, 200, JSON.stringify(created.body));
+  const { id, filename } = created.body.panel;
+  const widget = `plugin:${filename}`;
+  // On a tab on two displays, at different sizes.
+  const place = async (device, w, h) => {
+    const base = `/api/devices/${device}`;
+    assert.equal((await post(`${base}/tabs`, { label: 'Home', icon: 'home', show_label: true })).status, 200);
+    assert.equal((await post(`${base}/widget-assignments`, { widget_name: widget, tabNumber: 1 })).status, 200);
+    const saved = await patch(`${base}/widget-assignments/layout/bulk`, { layouts: [{ widget_name: widget, tabNumber: 1, layout_x: 0, layout_y: 0, layout_w: w, layout_h: h }] });
+    assert.equal(saved.status, 200, JSON.stringify(saved.body));
+  };
+  await place('sized-hall', 4, 3);
+  await place('sized-kitchen', 2, 2);
+  const placed = async (device) => (await api(`/api/ha-panels?device=${device}`)).body.panels.find((p) => p.id === id).placed;
+  assert.deepEqual(await placed('sized-kitchen'), { w: 2, h: 2 }, "the size picker starts from this display's placement");
+  assert.deepEqual(await placed('sized-hall'), { w: 4, h: 3 });
+
+  const etag = async () => { await delay(150); return (await api('/api/changes')).headers.get('etag'); };
+  const before = await etag();
+  const recipe = { name: 'Sized', widget: { w: 3, h: 2 }, tiles: [{ id: 'a', entities: ['light.kitchen'] }] };
+  // Without resize, only the panel's own size changes.
+  const kept = await put(`/api/ha-panels/${id}`, { recipe });
+  assert.equal(kept.body.resized, false);
+  assert.equal(await etag(), before, 'no layout changed, so no display reloads');
+  assert.deepEqual(await placed('sized-kitchen'), { w: 2, h: 2 });
+
+  const resized = await put(`/api/ha-panels/${id}`, { recipe, resize: true });
+  assert.equal(resized.body.resized, true);
+  for (const device of ['sized-hall', 'sized-kitchen']) {
+    const layout = (await api(`/api/devices/${device}/widget-assignments`)).body.find((a) => a.widget_name === widget);
+    assert.deepEqual([layout.layout_w, layout.layout_h], [3, 2], device);
+  }
+  assert.notEqual(await etag(), before, 'displays hear a layout changed');
+  // Saved again at the size it already has: nothing to tell anyone.
+  const after = await etag();
+  assert.equal((await put(`/api/ha-panels/${id}`, { recipe, resize: true })).body.resized, false);
+  assert.equal(await etag(), after);
+  await del(`/api/ha-panels/${id}`);
+});
