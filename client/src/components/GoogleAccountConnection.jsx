@@ -16,7 +16,6 @@ import {
 } from '@mui/material';
 import {
   ContentCopy,
-  Google as GoogleIcon,
   LinkOff,
   Login,
   Save,
@@ -26,6 +25,7 @@ import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { acceptGoogleOAuthMessage, originOf } from '../utils/googleOAuth.js';
 import BackupRestoreSection from './BackupRestoreSection.jsx';
+import { AdminGroup } from './AdminRows.jsx';
 
 const initialDraft = { client_id: '', client_secret: '', redirect_uri: '' };
 
@@ -173,13 +173,8 @@ const GoogleAccountConnection = ({ onMessage }) => {
   }
 
   return (
-    <Box>
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1.5 }}>
-        <GoogleIcon fontSize="small" />
-        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-          Google Account
-        </Typography>
-      </Stack>
+    <AdminGroup title="Google Account">
+    <Box sx={{ px: 2, py: 1.5 }}>
 
       {!encryptionReady && (
         <Alert severity="warning" icon={<Security />} sx={{ mb: 2 }}>
@@ -359,6 +354,7 @@ const GoogleAccountConnection = ({ onMessage }) => {
 
       <BackupRestoreSection googleConnected={Boolean(account)} />
     </Box>
+    </AdminGroup>
   );
 };
 

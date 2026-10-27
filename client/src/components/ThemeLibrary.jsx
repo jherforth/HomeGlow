@@ -6,14 +6,11 @@ import {
   Button,
   Chip,
   CircularProgress,
-  List,
-  ListItem,
-  ListItemText,
   Typography,
 } from '@mui/material';
 import { Delete, Download, DriveFolderUpload, Refresh } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
-import AdminFormSection from './AdminFormSection';
+import { AdminGroup, AdminNote, AdminRow } from './AdminRows.jsx';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { BUILT_IN_THEMES, NEEDS_NEWER_HOMEGLOW } from '../utils/themes.js';
 import { checkThemeFolder, loadInstalledThemes, themeFolderFiles, useThemeRegistry } from '../utils/installedThemes.js';
@@ -109,95 +106,89 @@ export default function ThemeLibrary() {
   const installedById = new Map(installed.map((entry) => [entry.id, entry]));
   const rejectedById = new Map(registry.rejected.map((entry) => [entry.id, entry]));
 
+  const nameWithVersion = (name, version, chip) => (
+    <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+      {name}
+      {version && <Typography component="span" variant="caption" color="text.secondary">{version}</Typography>}
+      {chip}
+    </Box>
+  );
+
   return (
-    <AdminFormSection
-      title={t('admin:themes.heading')}
-      subtitle={t('admin:themes.subtitle')}
-    >
+    <>
       {message && <Alert severity={message.type} onClose={() => setMessage(null)} sx={{ mb: 2 }}>{message.text}</Alert>}
 
-      <Typography variant="subtitle2">{t('admin:themes.onThisHomeGlow')}</Typography>
-      <List dense sx={{ mb: 2 }}>
+      <AdminGroup title={t('admin:themes.onThisHomeGlow')}>
         {registry.themes.map((theme) => {
           const entry = installedById.get(theme.id);
           return (
-            <ListItem
+            <AdminRow
               key={theme.id}
-              secondaryAction={entry && (
+              label={nameWithVersion(theme.name, theme.version, !entry && BUILT_IN_IDS.has(theme.id) && <Chip size="small" label={t('admin:themes.builtIn')} />)}
+              hint={theme.author ? t('admin:plugins.byAuthor', { author: theme.author }) : null}
+              control={entry && (
                 <Button size="small" color="error" startIcon={<Delete />} disabled={busy !== null} onClick={() => remove(theme.id, theme.name)}>
                   {t('admin:themes.remove')}
                 </Button>
               )}
-            >
-              <ListItemText
-                primary={(
-                  <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                    {theme.name}
-                    {theme.version && <Typography component="span" variant="caption" color="text.secondary">{theme.version}</Typography>}
-                    {!entry && BUILT_IN_IDS.has(theme.id) && <Chip size="small" label={t('admin:themes.builtIn')} />}
-                  </Box>
-                )}
-                secondary={theme.author ? t('admin:plugins.byAuthor', { author: theme.author }) : null}
-              />
-            </ListItem>
+            />
           );
         })}
         {[...rejectedById.values()].map((entry) => (
-          <ListItem
+          <AdminRow
             key={`rejected-${entry.id}`}
-            secondaryAction={(
+            label={entry.name}
+            hint={(
+              <Box component="span" sx={{ color: 'error.main' }}>
+                {entry.needsNewer ? t('admin:themes.needsNewer', { name: entry.name }) : t('admin:themes.cannotUse', { problem: entry.errors[0] })}
+              </Box>
+            )}
+            control={(
               <Button size="small" color="error" startIcon={<Delete />} disabled={busy !== null} onClick={() => remove(entry.id, entry.name)}>
                 {t('admin:themes.remove')}
               </Button>
             )}
-          >
-            <ListItemText
-              primary={entry.name}
-              secondary={entry.needsNewer ? t('admin:themes.needsNewer', { name: entry.name }) : t('admin:themes.cannotUse', { problem: entry.errors[0] })}
-              slotProps={{ secondary: { color: 'error' } }}
-            />
-          </ListItem>
+          />
         ))}
-      </List>
+      </AdminGroup>
 
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Typography variant="subtitle2">{t('admin:themes.getMore')}</Typography>
-        <Button size="small" startIcon={<Refresh />} onClick={refreshStore} disabled={store.loading}>
-          {t('admin:themes.refresh')}
-        </Button>
-      </Box>
-      {store.repository && (
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-          {t('admin:themes.fromRepository', { repository: store.repository })}
-        </Typography>
-      )}
-      {store.loading && <CircularProgress size={20} sx={{ my: 1 }} />}
-      {store.error && <Alert severity="warning" sx={{ my: 1 }}>{store.error}</Alert>}
-      {!store.loading && !store.error && store.themes.length === 0 && store.unsupported.length === 0 && (
-        <Typography variant="body2" color="text.secondary" sx={{ my: 1 }}>{t('admin:themes.storeEmpty')}</Typography>
-      )}
-      <List dense sx={{ mb: 2 }}>
+      <AdminGroup
+        title={t('admin:themes.getMore')}
+        action={(
+          <Button size="small" startIcon={<Refresh />} onClick={refreshStore} disabled={store.loading}>
+            {t('admin:themes.refresh')}
+          </Button>
+        )}
+      >
+        <AdminNote>
+          {t('admin:themes.subtitle')}
+          {store.repository && <><br />{t('admin:themes.fromRepository', { repository: store.repository })}</>}
+        </AdminNote>
+        {store.loading && <Box sx={{ px: 2, py: 1.5 }}><CircularProgress size={20} /></Box>}
+        {store.error && <Box sx={{ px: 2, py: 1.5 }}><Alert severity="warning">{store.error}</Alert></Box>}
+        {!store.loading && !store.error && store.themes.length === 0 && store.unsupported.length === 0 && (
+          <AdminNote>{t('admin:themes.storeEmpty')}</AdminNote>
+        )}
         {store.unsupported.map((theme) => (
-          <ListItem key={`newer-${theme.id}`}>
-            <ListItemText
-              primary={(
-                <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                  {theme.name}
-                  {theme.version && <Typography component="span" variant="caption" color="text.secondary">{theme.version}</Typography>}
-                </Box>
-              )}
-              secondary={t('admin:themes.needsNewer', { name: theme.name })}
-            />
-          </ListItem>
+          <AdminRow
+            key={`newer-${theme.id}`}
+            label={nameWithVersion(theme.name, theme.version)}
+            hint={t('admin:themes.needsNewer', { name: theme.name })}
+          />
         ))}
         {store.themes.map((theme) => {
           const entry = installedById.get(theme.id);
           const current = entry && entry.source === 'store' && entry.ref === theme.ref;
           const label = !entry ? t('admin:themes.install') : current ? t('admin:themes.upToDate') : t('admin:themes.update');
           return (
-            <ListItem
+            <AdminRow
               key={theme.id}
-              secondaryAction={(
+              leading={theme.previewUrl && (
+                <Box component="img" src={theme.previewUrl} alt="" sx={{ width: 72, height: 45, objectFit: 'cover', borderRadius: 1 }} />
+              )}
+              label={nameWithVersion(theme.name, theme.version)}
+              hint={[theme.author && t('admin:plugins.byAuthor', { author: theme.author }), theme.description].filter(Boolean).join(' · ') || null}
+              control={(
                 <Button
                   size="small"
                   variant={entry ? 'text' : 'outlined'}
@@ -208,46 +199,35 @@ export default function ThemeLibrary() {
                   {label}
                 </Button>
               )}
-            >
-              {theme.previewUrl && (
-                <Box component="img" src={theme.previewUrl} alt="" sx={{ width: 72, height: 45, objectFit: 'cover', borderRadius: 1, mr: 2, flexShrink: 0 }} />
-              )}
-              <ListItemText
-                primary={(
-                  <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                    {theme.name}
-                    {theme.version && <Typography component="span" variant="caption" color="text.secondary">{theme.version}</Typography>}
-                  </Box>
-                )}
-                secondary={[theme.author && t('admin:plugins.byAuthor', { author: theme.author }), theme.description].filter(Boolean).join(' · ') || null}
-                sx={{ pr: 12 }}
-              />
-            </ListItem>
+            />
           );
         })}
-      </List>
-
-
-      <input
-        ref={folderInput}
-        type="file"
-        hidden
-        multiple
-        webkitdirectory=""
-        directory=""
-        onChange={(event) => uploadFolder(event.target.files)}
-      />
-      <Button
-        variant="outlined"
-        startIcon={busy === 'upload' ? <CircularProgress size={14} /> : <DriveFolderUpload />}
-        disabled={busy !== null}
-        onClick={() => folderInput.current?.click()}
-      >
-        {t('admin:themes.addFolder')}
-      </Button>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-        {t('admin:themes.addFolderHelp')}
-      </Typography>
-    </AdminFormSection>
+        <AdminRow
+          hint={t('admin:themes.addFolderHelp')}
+          control={(
+            <>
+              <input
+                ref={folderInput}
+                type="file"
+                hidden
+                multiple
+                webkitdirectory=""
+                directory=""
+                onChange={(event) => uploadFolder(event.target.files)}
+              />
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={busy === 'upload' ? <CircularProgress size={14} /> : <DriveFolderUpload />}
+                disabled={busy !== null}
+                onClick={() => folderInput.current?.click()}
+              >
+                {t('admin:themes.addFolder')}
+              </Button>
+            </>
+          )}
+        />
+      </AdminGroup>
+    </>
   );
 }

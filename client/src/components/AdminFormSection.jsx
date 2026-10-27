@@ -1,16 +1,14 @@
 import React from 'react';
-import { Box, Typography } from '@mui/material';
+import { Box } from '@mui/material';
+import { AdminGroup, AdminNote } from './AdminRows.jsx';
 
-const AdminFormSection = ({ title, subtitle, children }) => {
-  return (
-    <>
-      <Typography variant="h6" gutterBottom>{title}</Typography>
-      <Box sx={{ mb: 3, p: 2, border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)' }}>
-        <Typography variant="subtitle1" sx={{ mb: 2 }}>{subtitle}</Typography>
-        {children}
-      </Box>
-    </>
-  );
-};
+// A titled block of the Admin Panel that isn't built from rows: a group, its
+// subtitle as the group's first line, then the content as it is.
+const AdminFormSection = ({ title, subtitle, children }) => (
+  <AdminGroup title={title}>
+    {subtitle && <AdminNote>{subtitle}</AdminNote>}
+    <Box sx={{ px: 2, py: 1.5 }}>{children}</Box>
+  </AdminGroup>
+);
 
 export default AdminFormSection;

@@ -67,6 +67,8 @@
     "clamRewardFailed": "Failed to save clam reward. Please try again.",
     "choreSoundsSaved": "Chore sound settings saved.",
     "choreSoundsFailed": "Failed to save chore sound settings.",
+    "choreSettingsSaved": "Chore settings saved.",
+    "choreSettingsFailed": "Could not save the chore settings.",
     "widgetNeedsTab": "Each enabled widget must have at least one tab selected.",
     "widgetSettingsSaved": "Widget settings saved successfully.",
     "widgetSettingsFailed": "Failed to save widget settings. Please try again.",

@@ -515,7 +515,7 @@ const ControlsOnDisplay = ({
       : (state.inheriting ? 'householdDefault' : state.preset);
 
     return (
-      <Paper key={deviceName} variant="outlined" aria-busy={busy} sx={{ p: 2, mb: 2 }}>
+      <Paper key={deviceName} variant="outlined" aria-busy={busy} sx={{ p: 2, mb: 2, borderRadius: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 1 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{deviceName}</Typography>
           {isCurrent && <Chip size="small" color="primary" label={t('admin:devices.current')} />}
@@ -646,16 +646,20 @@ const ControlsOnDisplay = ({
   };
 
   return (
-    <Box sx={{ mt: 3, p: 3, border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-md)' }}>
-      <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'bold' }}>
+    <Box component="section" sx={{ mb: 3 }}>
+      <Typography
+        variant="overline"
+        component="h3"
+        sx={{ display: 'block', color: 'text.secondary', fontWeight: 600, lineHeight: 1.6, letterSpacing: '0.06em', px: 0.5, mb: 0.5 }}
+      >
         {t('admin:controls.heading')}
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, px: 0.5 }}>
         {t('admin:controls.help')}
       </Typography>
 
       {/* Household default */}
-      <Paper variant="outlined" aria-busy={householdBusy} sx={{ p: 2, mb: 3 }}>
+      <Paper variant="outlined" aria-busy={householdBusy} sx={{ p: 2, mb: 3, borderRadius: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
             {t('admin:controls.defaultHeading')}
