@@ -1,5 +1,10 @@
 {
   "widget": {
+    "title": "Photos",
+    "play": "Play slideshow",
+    "pause": "Pause slideshow",
+    "reload": "Reload photos",
+    "openSettings": "Photo settings",
     "noPhotos": "No photos available. Add a photo source in settings.",
     "photoAlt": "Photo"
   },

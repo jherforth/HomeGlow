@@ -213,6 +213,13 @@ const WidgetLoadingFallback = ({ label }) => (
   </Box>
 );
 
+// Buttons in sentence case, like the rest of HomeGlow's text. A theme that
+// sets headingTransform still gets its own: its button options win.
+const withSentenceCaseButtons = (options) => ({
+  ...options,
+  typography: { ...options.typography, button: { textTransform: 'none', ...options.typography?.button } },
+});
+
 const App = () => {
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const isMobile = useIsMobile();
@@ -325,7 +332,7 @@ const App = () => {
   // Always a provider, so switching between Classic and a themed look never
   // changes the tree's shape (which would remount everything, Admin included).
   // Classic gets MUI's default theme, which is what MUI uses with no provider.
-  const muiTheme = useMemo(() => createTheme(muiThemeOptions(activeTheme, displayTheme) || {}), [activeTheme, displayTheme]);
+  const muiTheme = useMemo(() => createTheme(withSentenceCaseButtons(muiThemeOptions(activeTheme, displayTheme) || {})), [activeTheme, displayTheme]);
   const themeTokenNamesRef = useRef([]);
 
   const fetchInstalledPlugins = async () => {

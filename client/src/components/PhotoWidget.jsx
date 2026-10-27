@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Typography, Box, IconButton, Popover, Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Switch, FormControlLabel, Select, MenuItem, FormControl, InputLabel, List, ListItem, ListItemText, ListItemSecondaryAction, CircularProgress, Alert, Chip } from '@mui/material';
-import { Settings, Add, Delete, Edit, Refresh, ChevronLeft, ChevronRight, PlayArrow, Pause, CloudUpload } from '@mui/icons-material';
+import { Add, Delete, Edit, Refresh, ChevronLeft, ChevronRight, PlayArrow, Pause, CloudUpload, PhotoLibraryOutlined, SettingsOutlined } from '@mui/icons-material';
+import WidgetHeader, { headerIconButtonSx } from './WidgetHeader.jsx';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../utils/apiConfig.js';
@@ -440,22 +441,35 @@ const PhotoWidget = ({ refreshNonce = 0, isActive = true, hiddenControls = [] })
       overflow: 'hidden',
       p: 2
     }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h6">📷 Photos</Typography>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <IconButton onClick={handleTogglePlayback} size="small" sx={{ color: 'var(--text)' }}>
-            {isPlaying ? <Pause /> : <PlayArrow />}
+      <WidgetHeader icon={<PhotoLibraryOutlined />} title={t('photos:widget.title')}>
+        <IconButton
+          onClick={handleTogglePlayback}
+          size="small"
+          sx={headerIconButtonSx}
+          aria-label={isPlaying ? t('photos:widget.pause') : t('photos:widget.play')}
+        >
+          {isPlaying ? <Pause /> : <PlayArrow />}
+        </IconButton>
+        <IconButton
+          onClick={fetchPhotos}
+          size="small"
+          disabled={loading}
+          sx={headerIconButtonSx}
+          aria-label={t('photos:widget.reload')}
+        >
+          <Refresh />
+        </IconButton>
+        {!hidePhotoSettings && (
+          <IconButton
+            onClick={handleSettingsClick}
+            size="small"
+            sx={headerIconButtonSx}
+            aria-label={t('photos:widget.openSettings')}
+          >
+            <SettingsOutlined />
           </IconButton>
-          <IconButton onClick={fetchPhotos} size="small" disabled={loading} sx={{ color: 'var(--text)' }}>
-            <Refresh />
-          </IconButton>
-          {!hidePhotoSettings && (
-            <IconButton onClick={handleSettingsClick} size="small" sx={{ color: 'var(--text)' }}>
-              <Settings />
-            </IconButton>
-          )}
-        </Box>
-      </Box>
+        )}
+      </WidgetHeader>
 
       {loading && (
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 300 }}>

@@ -15,7 +15,8 @@ import {
   Select,
   MenuItem,
 } from '@mui/material';
-import { Settings } from '@mui/icons-material';
+import { SettingsOutlined, WbSunnyOutlined } from '@mui/icons-material';
+import WidgetHeader, { headerIconButtonSx } from './WidgetHeader.jsx';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
@@ -1049,6 +1050,18 @@ const WeatherWidget = ({
     </Dialog>
   );
 
+  const settingsButton = !hideWeatherSettings && (
+    <IconButton
+      size="small"
+      onClick={handleOpenSettingsModal}
+      aria-label={t('weather:widget.openSettingsAria')}
+      sx={headerIconButtonSx}
+    >
+      <SettingsOutlined />
+    </IconButton>
+  );
+  const inHeader = settingsLoaded && !loading && !error && Boolean(weatherData) && layoutType !== 'compact';
+
   let content = null;
 
   if (!settingsLoaded || loading) {
@@ -1061,7 +1074,7 @@ const WeatherWidget = ({
         alignItems: 'center',
         p: 2
       }}>
-        <Typography variant="h6">🌤️ {t('weather:widget.title')}</Typography>
+        <Typography variant="h6">{t('weather:widget.title')}</Typography>
         <Typography>{settingsLoaded ? t('weather:widget.loadingData') : t('weather:widget.loadingSettings')}</Typography>
       </Box>
     );
@@ -1075,7 +1088,7 @@ const WeatherWidget = ({
         alignItems: 'center',
         p: 2
       }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>🌤️ Weather</Typography>
+        <Typography variant="h6" sx={{ mb: 2 }}>{t('weather:widget.title')}</Typography>
         <Box sx={{ p: 2, bgcolor: 'var(--hg-error-surface)', borderRadius: 'var(--hg-radius-sm)', mb: 2 }}>
           <Typography color="error" variant="body2">
             {error}
@@ -1098,7 +1111,7 @@ const WeatherWidget = ({
         alignItems: 'center',
         p: 2
       }}>
-        <Typography variant="h6">🌤️ {t('weather:widget.title')}</Typography>
+        <Typography variant="h6">{t('weather:widget.title')}</Typography>
         <Typography>{t('weather:widget.noData')}</Typography>
       </Box>
     );
@@ -1107,7 +1120,9 @@ const WeatherWidget = ({
       <>
         {layoutType !== 'compact' && (
           <Box sx={{ p: 2, pb: 0 }}>
-            <Typography variant="h6">🌤️ {t('weather:widget.title')}</Typography>
+            <WidgetHeader icon={<WbSunnyOutlined />} title={t('weather:widget.title')} sx={{ mb: 0 }}>
+              {settingsButton}
+            </WidgetHeader>
           </Box>
         )}
 
@@ -1129,21 +1144,10 @@ const WeatherWidget = ({
       overflow: 'hidden',
       position: 'relative'
     }}>
-      {!hideWeatherSettings && (
-        <IconButton
-          size="small"
-          onClick={handleOpenSettingsModal}
-          aria-label={t('weather:widget.openSettingsAria')}
-          sx={{
-            position: 'absolute',
-            top: 8,
-            right: 8,
-            zIndex: 10,
-            color: 'var(--text)',
-          }}
-        >
-          <Settings />
-        </IconButton>
+      {/* With a header, the gear sits in it; without one (compact, or still
+          loading), it floats in the corner. */}
+      {!inHeader && settingsButton && (
+        <Box sx={{ position: 'absolute', top: 8, right: 8, zIndex: 10 }}>{settingsButton}</Box>
       )}
 
       {content}

@@ -1,5 +1,10 @@
 {
   "widget": {
+    "title": "Fotos",
+    "play": "Reproducir presentación",
+    "pause": "Pausar presentación",
+    "reload": "Recargar fotos",
+    "openSettings": "Ajustes de fotos",
     "noPhotos": "No hay fotos disponibles. Añade una fuente de fotos en los ajustes.",
     "photoAlt": "Foto"
   },

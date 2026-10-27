@@ -167,6 +167,32 @@ body { color: var(--text); font-family: var(--hg-font-body, system-ui); }
   for dashboards older than version 2. `HomeGlow.theme.tokens` has the values in
   JavaScript.
 
+### The widget header
+
+Core widgets open with the same header row: an icon in the accent, the title,
+then the widget's actions at the right end as quiet icon buttons. `/index.css`
+has the same row for plugins, so a plugin can sit beside them without looking
+out of place:
+
+```html
+<header class="hg-widget-header">
+  <span class="hg-widget-icon"><svg viewBox="0 0 24 24">…</svg></span>
+  <h2 class="hg-widget-title">Family poll</h2>
+  <div class="hg-widget-actions">
+    <button class="hg-widget-action" aria-label="Settings">…</button>
+    <button class="hg-widget-main">+ Create poll</button>
+  </div>
+</header>
+```
+
+- Keep the title short and in sentence case. It follows the theme's heading
+  font and transform.
+- Use `.hg-widget-action` for icon buttons, with an `aria-label`. A toggle sets
+  `aria-pressed="true"` while it's on, and turns the accent.
+- Use `.hg-widget-main` for at most one labeled action, the widget's main one.
+- Use an SVG for the icon, sized by the class (22px). Emoji render differently
+  on every device.
+
 ## 2. Becoming a platform plugin: the manifest
 
 Embed a manifest as a JSON script block anywhere in your HTML (conventionally in
