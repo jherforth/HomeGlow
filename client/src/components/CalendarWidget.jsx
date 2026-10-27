@@ -101,16 +101,19 @@ const compareByDurationThenStart = (a, b) => {
 
 // Greedy first-fit lane packing: each event drops into the first lane whose
 // events it doesn't overlap; otherwise a new lane opens. Returns the number of
-// lanes used and a lookup from an event to its lane index.
-const packEventsIntoLanes = (events) => {
+// lanes used and a lookup from an event to its lane index. `range` gives the
+// span to compare; the default is the event's own start and end.
+const eventTimes = (event) => [moment(event.start), moment(event.end)];
+const packEventsIntoLanes = (events, range = eventTimes) => {
   const lanes = [];
   events.forEach((event) => {
     let placed = false;
+    const [start, end] = range(event);
     for (let s = 0; s < lanes.length; s++) {
-      const overlaps = lanes[s].some((laneEvent) =>
-        moment(event.start).isBefore(moment(laneEvent.end)) &&
-        moment(event.end).isAfter(moment(laneEvent.start))
-      );
+      const overlaps = lanes[s].some((laneEvent) => {
+        const [laneStart, laneEnd] = range(laneEvent);
+        return start.isBefore(laneEnd) && end.isAfter(laneStart);
+      });
       if (!overlaps) {
         lanes[s].push(event);
         placed = true;
@@ -1142,20 +1145,20 @@ const CalendarWidget = ({
       return eventStart.isSameOrBefore(weekEnd) && eventEnd.isSameOrAfter(weekStart);
     });
 
-    const multiDayEvents = weekEvents
-      .filter(e => isMultiDaySpanning(e))
-      .sort(compareByDurationThenStart);
+    // Multi-day bars first, longest first, then single-day all-day events in
+    // the gaps they leave, so a week with one of each needs one row, not two.
+    // Lanes are compared by whole days: two events that only touch on a day
+    // would otherwise share a lane and draw over each other in that column.
+    const laneEvents = [
+      ...weekEvents.filter(e => isMultiDaySpanning(e)).sort(compareByDurationThenStart),
+      ...weekEvents.filter(e => e.all_day && !isMultiDaySpanning(e)).sort((a, b) => moment(a.start) - moment(b.start)),
+    ];
+    const wholeDays = (e) => [moment(e.start).startOf('day'), moment(e.end).endOf('day')];
 
-    const { laneCount: multiDaySlotCount, getLane: getMultiDaySlot } = packEventsIntoLanes(multiDayEvents);
+    const { laneCount: multiDaySlotCount, getLane: getMultiDaySlot } = packEventsIntoLanes(laneEvents, wholeDays);
 
     return dates.map(date => {
-      const dayMultiDay = multiDayEvents.filter(e => eventSpansDay(e, date));
-      const dayAllDaySingle = weekEvents.filter(e => {
-        if (!isMultiDaySpanning(e)) {
-          return e.all_day && eventSpansDay(e, date);
-        }
-        return false;
-      });
+      const dayMultiDay = laneEvents.filter(e => eventSpansDay(e, date));
       const dayTimed = weekEvents.filter(e => {
         return !e.all_day && !isMultiDaySpanning(e) && eventSpansDay(e, date);
       }).sort((a, b) => a.start - b.start);
@@ -1173,7 +1176,6 @@ const CalendarWidget = ({
         isToday: moment(date).isSame(moment(new Date()), 'day'),
         multiDaySlottedRows,
         multiDaySlotCount,
-        allDaySingleEvents: dayAllDaySingle,
         timedEvents: dayTimed,
       };
     });
@@ -1681,7 +1683,7 @@ const CalendarWidget = ({
                 );
               };
 
-              const hasAnyEvents = day.multiDaySlotCount > 0 || day.allDaySingleEvents.length > 0 || day.timedEvents.length > 0;
+              const hasAnyEvents = day.multiDaySlotCount > 0 || day.timedEvents.length > 0;
 
               return (
                 <Box
@@ -1697,15 +1699,33 @@ const CalendarWidget = ({
                     flexDirection: 'column'
                   }}
                 >
-                  <Box sx={{ textAlign: 'center', mb: 1, borderBottom: '1px solid var(--card-border)', pb: 1 }}>
-                    <Typography variant="caption" sx={{ fontWeight: 'bold', color: day.isToday ? 'var(--accent)' : 'inherit' }}>
+                  {/* One line: the weekday, then the date, in the accent's
+                      circle today. The month is in the widget's title, so a
+                      day names it only when a new month starts. */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75, minHeight: 36, mb: 1, borderBottom: '1px solid var(--card-border)', pb: 0.75 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 600, color: day.isToday ? 'var(--accent)' : 'var(--text)', opacity: day.isToday ? 1 : 0.7 }}>
                       {day.dayName}
                     </Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 'bold', color: day.isToday ? 'var(--accent)' : 'inherit' }}>
-                      {day.dayNumber}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: 'var(--text)', opacity: 0.6 }}>
-                      {day.monthName}
+                    <Typography
+                      component="span"
+                      sx={{
+                        fontWeight: 700,
+                        fontSize: '1.125rem',
+                        lineHeight: 1,
+                        fontVariantNumeric: 'tabular-nums',
+                        ...(day.isToday && {
+                          color: 'white',
+                          backgroundColor: 'var(--accent)',
+                          borderRadius: '999px',
+                          minWidth: 30,
+                          height: 30,
+                          px: 0.75,
+                          display: 'inline-grid',
+                          placeItems: 'center',
+                        }),
+                      }}
+                    >
+                      {day.date.getDate() === 1 ? `${day.monthName} ${day.dayNumber}` : day.dayNumber}
                     </Typography>
                   </Box>
 
@@ -1714,52 +1734,7 @@ const CalendarWidget = ({
                       renderPill(event, `multi-${slotIdx}`)
                     )}
 
-                    {day.allDaySingleEvents.map((event, evIdx) => {
-                      const palette = getPillPalette(event);
-                      return (
-                        <Box
-                          key={`allday-${evIdx}`}
-                          onClick={() => handleSelectEvent(event)}
-                          sx={{
-                            mb: 0.5,
-                            cursor: 'pointer',
-                            height: `${displaySettings.textSize * 2.4}px`,
-                            minHeight: `${displaySettings.textSize * 2.4}px`,
-                            display: 'flex',
-                            alignItems: 'stretch',
-                          }}
-                        >
-                          <Box
-                            sx={{
-                              flex: 1,
-                              display: 'flex',
-                              alignItems: 'center',
-                              backgroundColor: palette.backgroundColor,
-                              borderRadius: 'var(--hg-radius-lg)',
-                              px: 1,
-                              py: 0.125,
-                              border: `1px solid ${palette.borderColor}`,
-                              overflow: 'hidden',
-                              '&:hover': { filter: 'brightness(1.1)' }
-                            }}
-                          >
-                            <Typography variant="caption" sx={{
-                              fontSize: `${displaySettings.textSize}px`,
-                              color: palette.textColor,
-                              fontWeight: 500,
-                              fontStyle: 'italic',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap'
-                            }}>
-                              {event.title}
-                            </Typography>
-                          </Box>
-                        </Box>
-                      );
-                    })}
-
-                    {(day.multiDaySlotCount > 0 || day.allDaySingleEvents.length > 0) && day.timedEvents.length > 0 && (
+                    {day.multiDaySlotCount > 0 && day.timedEvents.length > 0 && (
                       <Box sx={{ borderTop: '1px solid var(--card-border)', mt: 0.5, mb: 0.5 }} />
                     )}
 
