@@ -865,16 +865,16 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
           <AdminNote>{t('chores:schedules.schedulesHelp')}</AdminNote>
           <Box sx={{ display: 'flex', gap: 1.5, px: 2, py: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
             <FormControl size="small" sx={{ minWidth: 150, flex: { xs: 1, sm: 'none' } }}>
-              <InputLabel>{t('chores:schedules.filterByUser')}</InputLabel>
-              <Select value={filterUser} label={t('chores:schedules.filterByUser')} onChange={(e) => setFilterUser(e.target.value)}>
+              <InputLabel id="schedule-filter-by-user-label">{t('chores:schedules.filterByUser')}</InputLabel>
+              <Select labelId="schedule-filter-by-user-label" value={filterUser} label={t('chores:schedules.filterByUser')} onChange={(e) => setFilterUser(e.target.value)}>
                 <MenuItem value="">{t('chores:schedules.allUsers')}</MenuItem>
                 <MenuItem value="0">{t('chores:schedules.unassignedBonus')}</MenuItem>
                 {users.map(u => <MenuItem key={u.id} value={u.id}>{u.username}</MenuItem>)}
               </Select>
             </FormControl>
             <FormControl size="small" sx={{ minWidth: 170, flex: { xs: 1, sm: 'none' } }}>
-              <InputLabel>{t('chores:schedules.filterByChore')}</InputLabel>
-              <Select value={filterChore} label={t('chores:schedules.filterByChore')} onChange={(e) => setFilterChore(e.target.value)}>
+              <InputLabel id="schedule-filter-by-chore-label">{t('chores:schedules.filterByChore')}</InputLabel>
+              <Select labelId="schedule-filter-by-chore-label" value={filterChore} label={t('chores:schedules.filterByChore')} onChange={(e) => setFilterChore(e.target.value)}>
                 <MenuItem value="">{t('chores:schedules.allChores')}</MenuItem>
                 {choresByTitle.map(c => <MenuItem key={c.id} value={c.id}>{c.title}</MenuItem>)}
               </Select>
@@ -990,7 +990,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
           }
         }}
       >
-        <DialogTitle>{editingChore ? 'Edit Chore' : 'New Chore'}</DialogTitle>
+        <DialogTitle>{editingChore ? t('chores:schedules.editChore') : t('chores:schedules.newChore')}</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
             <TextField
@@ -1046,8 +1046,9 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
                   >
                     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                       <FormControl fullWidth size="small">
-                        <InputLabel>{t('chores:followups.give')}</InputLabel>
+                        <InputLabel id={`followup-${index}-give-label`}>{t('chores:followups.give')}</InputLabel>
                         <Select
+                          labelId={`followup-${index}-give-label`}
                           value={row.followup_chore_id}
                           label={t('chores:followups.give')}
                           onChange={(e) => updateFollowupRow(index, { followup_chore_id: e.target.value })}
@@ -1069,8 +1070,9 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
                       </Tooltip>
                     </Box>
                     <FormControl fullWidth size="small">
-                      <InputLabel>{t('chores:followups.to')}</InputLabel>
+                      <InputLabel id={`followup-${index}-to-label`}>{t('chores:followups.to')}</InputLabel>
                       <Select
+                        labelId={`followup-${index}-to-label`}
                         multiple
                         value={row.user_ids}
                         label={t('chores:followups.to')}
@@ -1087,8 +1089,9 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
                     </FormControl>
                     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
                       <FormControl size="small" sx={{ minWidth: 150 }}>
-                        <InputLabel>{t('chores:followups.when')}</InputLabel>
+                        <InputLabel id={`followup-${index}-when-label`}>{t('chores:followups.when')}</InputLabel>
                         <Select
+                          labelId={`followup-${index}-when-label`}
                           value={row.timing}
                           label={t('chores:followups.when')}
                           onChange={(e) => updateFollowupRow(index, { timing: e.target.value })}
@@ -1217,12 +1220,13 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
           }
         }}
       >
-        <DialogTitle>{editingSchedule ? 'Edit Schedule' : 'New Schedule'}</DialogTitle>
+        <DialogTitle>{editingSchedule ? t('chores:schedules.editSchedule') : t('chores:schedules.newSchedule')}</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
             <FormControl fullWidth size="small" required>
-              <InputLabel>{t('chores:schedules.chore')}</InputLabel>
+              <InputLabel id="schedule-chore-label">{t('chores:schedules.chore')}</InputLabel>
               <Select
+                labelId="schedule-chore-label"
                 value={scheduleForm.chore_id}
                 label={t('chores:schedules.chore')}
                 onChange={(e) => updateScheduleForm({ chore_id: e.target.value })}
@@ -1240,8 +1244,9 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
 
             {editingSchedule ? (
               <FormControl fullWidth size="small">
-                <InputLabel>{t('chores:schedules.assignedTo')}</InputLabel>
+                <InputLabel id="schedule-assigned-to-label">{t('chores:schedules.assignedTo')}</InputLabel>
                 <Select
+                  labelId="schedule-assigned-to-label"
                   value={scheduleForm.user_id}
                   label={t('chores:schedules.assignedTo')}
                   onChange={(e) => updateScheduleForm({ user_id: e.target.value })}
@@ -1255,8 +1260,9 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
               // each, exactly as if added one at a time. None picked is an
               // unassigned bonus chore, as before.
               <FormControl fullWidth size="small">
-                <InputLabel shrink>{t('chores:schedules.assignedTo')}</InputLabel>
+                <InputLabel shrink id="schedule-assigned-to-label">{t('chores:schedules.assignedTo')}</InputLabel>
                 <Select
+                  labelId="schedule-assigned-to-label"
                   multiple
                   displayEmpty
                   notched
@@ -1323,8 +1329,9 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
                 </RadioGroup>
 
                 <FormControl fullWidth size="small">
-                  <InputLabel>{t('chores:schedules.duration')}</InputLabel>
+                  <InputLabel id="schedule-duration-label">{t('chores:schedules.duration')}</InputLabel>
                   <Select
+                    labelId="schedule-duration-label"
                     value={scheduleForm.duration}
                     label={t('chores:schedules.duration')}
                     onChange={(e) => updateScheduleForm({ duration: e.target.value })}
@@ -1361,8 +1368,9 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
                     </Grid>
                     <Grid size={6}>
                       <FormControl fullWidth size="small">
-                        <InputLabel>{t('chores:schedules.sleepUnit')}</InputLabel>
+                        <InputLabel id="schedule-sleep-unit-label">{t('chores:schedules.sleepUnit')}</InputLabel>
                         <Select
+                          labelId="schedule-sleep-unit-label"
                           value={scheduleForm.sleepUnit}
                           label={t('chores:schedules.sleepUnit')}
                           onChange={(e) => updateScheduleForm({ sleepUnit: e.target.value })}
@@ -1379,8 +1387,9 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
 
                 {scheduleForm.scheduleMode === 'preset' && (
                   <FormControl fullWidth size="small">
-                    <InputLabel>{t('chores:schedules.schedulePreset')}</InputLabel>
+                    <InputLabel id="schedule-schedule-preset-label">{t('chores:schedules.schedulePreset')}</InputLabel>
                     <Select
+                      labelId="schedule-schedule-preset-label"
                       value={scheduleForm.selectedPreset}
                       label={t('chores:schedules.schedulePreset')}
                       onChange={(e) => updateScheduleForm({ selectedPreset: e.target.value })}

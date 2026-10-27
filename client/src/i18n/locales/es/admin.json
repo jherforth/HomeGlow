@@ -94,7 +94,7 @@
     "deviceDeleteFailed": "No se pudo eliminar el dispositivo. Inténtalo de nuevo.",
     "screensaverSaved": "Ajustes del salvapantallas guardados para esta pantalla.",
     "screensaverFailed": "No se pudieron guardar los ajustes del salvapantallas. Inténtalo de nuevo.",
-    "vacationSaved": "Ajustes del modo vacaciones guardados para esta pantalla.",
+    "vacationSaved": "Modo vacaciones guardado para todo el hogar.",
     "vacationFailed": "No se pudieron guardar los ajustes del modo vacaciones. Inténtalo de nuevo.",
     "autoDarkNeedsLocation": "El modo automático necesita una ubicación para calcular el amanecer y el atardecer.",
     "userDeleteFailed": "No se pudo eliminar a la persona. Inténtalo de nuevo.",

@@ -110,10 +110,12 @@ const TabIconModal = ({
       return;
     }
 
+    // The dialog only edits the label and icon; whether the label shows is the
+    // tab list's switch, so an edit keeps it and a new tab starts without.
     onSave({
       label: label.trim(),
       icon: selectedIcon,
-      show_label: false,
+      show_label: Boolean(initialData?.show_label),
     });
 
     setLabel('');
