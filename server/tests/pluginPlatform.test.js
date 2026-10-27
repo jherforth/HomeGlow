@@ -205,6 +205,16 @@ test('"expand" in a manifest must be true or false', async () => {
     assert.equal(ok.status, 200);
 });
 
+test('"size" in a manifest is whole grid squares, never below its own minimum', async () => {
+    for (const [file, size] of [['size-bad-1.html', { minWidth: 0 }], ['size-bad-2.html', { width: 13 }], ['size-bad-3.html', { minHeight: 3, height: 2 }], ['size-bad-4.html', 'big']]) {
+        const upload = await uploadWidget(file, widgetHtml({ ...validManifest, id: 'size-check', size }));
+        assert.equal(upload.status, 400, JSON.stringify(size));
+        assert.match(upload.body.error, /size/);
+    }
+    const ok = await uploadWidget('size-good.html', widgetHtml({ ...validManifest, id: 'size-check', size: { minWidth: 1, minHeight: 1, width: 2, height: 2 } }));
+    assert.equal(ok.status, 200);
+});
+
 test('"notify" in a manifest must be true or false, and lets the plugin send', async () => {
     const bad = { ...validManifest, id: 'notify-check', notify: 'yes' };
     const upload = await uploadWidget('notify-bad.html', widgetHtml(bad));

@@ -619,15 +619,26 @@ gates in `app.jsx` (sound scheduler + screensaver render), UI in `AdminPanel.jsx
 - **Admin → Dashboard → Home Assistant** builds panels of tiles for Home
   Assistant devices, with no code: pick devices (searchable, grouped by area),
   or start a panel from an area in one click; set each tile's label, icon, size
-  (1×1 to 2×2), "view only", "press and hold", whether it shows its state, and
-  "show only when…" another entity is in a given state. Several entities of
-  one kind on one tile work together. A live preview shows the panel in the
-  current theme at three widget sizes.
+  (1×1 to 2×2, or a long tile across the panel's whole width), "view only",
+  "press and hold", whether it shows its state, and "show only when…" another
+  entity is in a given state. Several entities of one kind on one tile work
+  together.
+- **Size on the dashboard.** The builder picks the panel's size in grid squares
+  (1–12 × 1–12, down to a single button), with a "fits best" suggestion, and a
+  live preview draws it at that size in the current theme. A new panel starts
+  at that size; changing it on a panel already placed resizes it on every
+  display it is on (unless turned off), and each display redraws within seconds
+  (household sync, #325). Tiles fill the card at any size.
+- **Look.** Classic, or Bold: big centered icons, solid "on" tiles, fills for
+  dimmers and shades, and icons that move while on (a switch turns the motion
+  off; reduced-motion settings always do).
 - Each panel is a plugin (`ha-<name>.html`), placed on tabs like any other, and
   stored in the database (`ha_panels`), so it survives upgrades. One template
   (`server/ha-panels/template.html`) draws every panel from its recipe, so a
   HomeGlow update improves them all.
-- Tiles by kind: lights (tap; drag to dim), switches, fans (speed), shades
+- Tiles by kind: lights (tap; drag to dim), switches, fans (a fan with up to
+  six speeds steps through each one per tap and then off; one with more, or
+  with smooth speed control, gets a slider), shades
   (top half opens, bottom closes, drag for position), scenes and scripts, a
   thermostat (− / + and mode), media players, locks, alarms, vacuums, selects,
   numbers, camera snapshots, and read-only sensors, people and the sun. The

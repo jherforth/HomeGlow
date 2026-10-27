@@ -28,6 +28,7 @@ test('a well-formed recipe passes and is normalized', () => {
   assert.equal(n.tiles[0].label, 'Lights');
   assert.equal(n.tiles[1].showState, false);
   assert.equal(n.tiles[2].size, '1x1');
+  assert.deepEqual(rules.validateRecipe(recipe([tile('a', ['media_player.k'], { size: 'fx1' }), tile('b', ['climate.h'], { size: 'fx2' })])), [], 'long tiles take the whole width');
 });
 
 test('recipes that could do harm or break the template are refused', () => {
@@ -43,6 +44,31 @@ test('recipes that could do harm or break the template are refused', () => {
   assert.ok(errorsFor(recipe([tile('a', ['light.a'], { size: '3x3' })])).length);
   assert.ok(errorsFor(recipe([tile('a', ['light.a'], { when: { entity: 'person.sam', states: [] } })])).length);
   assert.ok(errorsFor(recipe(Array.from({ length: 49 }, (_, i) => tile(`t${i}`, ['light.a'])))).some((e) => /at most 48/.test(e)));
+});
+
+test('a panel keeps the size picked for it, down to one grid square', () => {
+  const base = [tile('a', ['light.kitchen'])];
+  assert.deepEqual(rules.validateRecipe({ ...recipe(base), widget: { w: 1, h: 1 } }), []);
+  assert.deepEqual(rules.normalizeRecipe({ ...recipe(base), widget: { w: 3, h: 2 } }).widget, { w: 3, h: 2 });
+  assert.equal(rules.normalizeRecipe(recipe(base)).widget, undefined, 'no size unless one was picked');
+  for (const widget of [{ w: 0, h: 1 }, { w: 13, h: 1 }, { w: 1, h: 13 }, { w: 1.5, h: 2 }, { w: '2', h: 2 }, [2, 2]]) {
+    assert.ok(rules.validateRecipe({ ...recipe(base), widget }).some((e) => /widget/.test(e)), JSON.stringify(widget));
+  }
+  const manifest = rules.panelManifest('ha-kitchen', rules.normalizeRecipe({ ...recipe(base), widget: { w: 2, h: 3 } }));
+  assert.deepEqual(manifest.size, { minWidth: 1, minHeight: 1, width: 2, height: 3 });
+  assert.deepEqual(rules.panelManifest('ha-kitchen', rules.normalizeRecipe(recipe(base))).size, { minWidth: 1, minHeight: 1 });
+});
+
+test('a panel may pick the bold look and turn its moving icons off', () => {
+  const base = [tile('a', ['light.kitchen'])];
+  assert.equal(rules.normalizeRecipe(recipe(base)).style, 'classic', 'classic unless asked');
+  assert.equal(rules.normalizeRecipe(recipe(base)).animate, true, 'icons move unless turned off');
+  const bold = { ...recipe(base), style: 'bold', animate: false };
+  assert.deepEqual(rules.validateRecipe(bold), []);
+  assert.equal(rules.normalizeRecipe(bold).style, 'bold');
+  assert.equal(rules.normalizeRecipe(bold).animate, false);
+  assert.ok(rules.validateRecipe({ ...recipe(base), style: 'neon' }).some((e) => /style/.test(e)));
+  assert.ok(rules.validateRecipe({ ...recipe(base), animate: 'yes' }).some((e) => /animate/.test(e)));
 });
 
 test('access follows the recipe: view-only tiles and conditions are read, not operated', () => {
@@ -115,6 +141,12 @@ test('a panel reads only the attributes its tiles use', () => {
 test('the default tile follows what the entity supports', () => {
   assert.equal(rules.defaultControl('light.kitchen', light).kind, 'dimmer');
   assert.equal(rules.defaultControl('light.porch', onOffLight).kind, 'toggle');
+  const fan = (step) => st('fan.hall', 'on', { percentage: 33, supported_features: 1, ...(step ? { percentage_step: step } : {}) });
+  assert.equal(rules.defaultControl('fan.hall', fan(100 / 3)).kind, 'fan', 'a fan with a few speeds steps through them');
+  assert.equal(rules.defaultControl('fan.hall', fan(100 / 6)).kind, 'fan');
+  assert.equal(rules.defaultControl('fan.hall', fan(100 / 8)).kind, 'dimmer', 'one with many speeds keeps the slider');
+  assert.equal(rules.defaultControl('fan.hall', fan(1)).kind, 'dimmer');
+  assert.equal(rules.defaultControl('fan.hall', fan()).kind, 'dimmer', 'and so does one that does not say');
   assert.equal(rules.defaultControl('cover.shade', shade).kind, 'cover-slider');
   assert.equal(rules.defaultControl('cover.garage', garage).kind, 'cover');
   assert.equal(rules.defaultControl('sensor.temp', st('sensor.temp', '20')).kind, 'sensor');

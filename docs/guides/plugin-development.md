@@ -218,6 +218,7 @@ serving your widget, and the SDK picks it up — you never pass your own id.
 | `reactions` | — | Server-side increments run on events (see §6). Requires `storage: true`. |
 | `hideableControls` | — | Controls a display may be configured to hide (see §4). |
 | `expand` | — | `false` keeps the plugin from being expanded to half or the whole page on a display that expands widgets, for a plugin whose own double-tap or drag would fight with it. Leave it out otherwise (see "Being expanded" in §5). |
+| `size` | — | `{ "width", "height", "minWidth", "minHeight" }` in dashboard grid squares (12 columns across): the size the plugin starts at when placed (otherwise 6 × 4) and the smallest it may be resized to (otherwise 2 × 2). Each is optional; widths 1–12, heights 1–24, and a size no smaller than its minimum. |
 | `homeAssistant` | — | `{ "entities": [...], "control": true }`: the Home Assistant entities the plugin may read and operate (see §5a). |
 | `notify` | — | `true` to send notifications to the household's phones with `HomeGlow.notify` (see "Sending a notification" in §5). Without it, sends are 403. |
 

@@ -1043,6 +1043,20 @@ function extractPluginManifest(htmlContent) {
   if (manifest.expand !== undefined && typeof manifest.expand !== 'boolean') {
     errors.push('expand must be a boolean.');
   }
+  // Its size on the dashboard, in grid squares (12 columns across): the
+  // smallest it may be resized to (otherwise 2 by 2) and the size it starts
+  // at (otherwise 6 by 4).
+  if (manifest.size !== undefined) {
+    const size = manifest.size;
+    const square = (value, max) => value === undefined || (Number.isInteger(value) && value >= 1 && value <= max);
+    if (!size || typeof size !== 'object' || Array.isArray(size)
+      || !square(size.minWidth, 12) || !square(size.minHeight, 24) || !square(size.width, 12) || !square(size.height, 24)) {
+      errors.push('size must be an object of whole grid squares: minWidth and width 1 to 12, minHeight and height 1 to 24.');
+    } else if ((size.width !== undefined && size.minWidth !== undefined && size.width < size.minWidth)
+      || (size.height !== undefined && size.minHeight !== undefined && size.height < size.minHeight)) {
+      errors.push('size: width and height must not be smaller than minWidth and minHeight.');
+    }
+  }
   // Home Assistant entities the plugin may read and operate through
   // /api/plugin/v1/ha (issue #252), under the same rules as a built panel.
   if (manifest.homeAssistant !== undefined) {
@@ -1212,6 +1226,8 @@ const haPanels = registerHaPanelRoutes(fastify, {
   ha: homeAssistant,
   demoMode: DEMO_MODE,
   installPluginRow,
+  // A panel resized where it is placed: every display reloads its layouts.
+  householdChanged: () => householdChanges.bump('settings'),
   // A plugin's household setting: play_url checks addresses against the
   // media server one of them names (manifest homeAssistant.playUrlsFrom).
   readPluginSetting: (pluginId, key) => {

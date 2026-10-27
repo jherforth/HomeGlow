@@ -18,6 +18,7 @@ import CountdownCircle from './CountdownCircle';
 import { canCommitResize } from '../utils/resizeGuard';
 import { shouldAcceptLayoutChange } from '../utils/layoutSync';
 import { buildLayout, savedSourcesById } from '../utils/gridPlacement';
+import { resizeButtonMetrics, widgetPixelSize } from '../utils/resizeButtons.js';
 import { readGridMetrics } from '../utils/gridMetrics';
 import { frameDecoration } from '../utils/widgetFrame';
 import FrameOrnaments from './FrameOrnaments';
@@ -194,7 +195,10 @@ const WidgetContainer = ({
   }, [locked]);
 
   useEffect(() => {
-    const currentCacheKey = `${activeTab}:${widgets.map(w => w.id).sort().join(',')}`;
+    // Saved layouts are part of the key, so one changed elsewhere (a Home
+    // Assistant panel resized in the builder) is drawn without a tab change.
+    const savedKey = (w) => (w.savedLayout ? `@${w.savedLayout.x},${w.savedLayout.y},${w.savedLayout.w},${w.savedLayout.h}` : '');
+    const currentCacheKey = `${activeTab}:${widgets.map(w => w.id + savedKey(w)).sort().join(',')}`;
     const widgetsChanged = currentCacheKey !== prevWidgetIdsRef.current;
     const prevCols = prevGridColsRef.current;
     const colsChanged = prevCols != null && prevCols !== gridCols;
@@ -966,6 +970,10 @@ const WidgetContainer = ({
               static: locked,
             };
             const effectiveLayout = currentLayout || fallbackLayout;
+            // The ➖/➕ buttons shrink on a small widget so they never pile up.
+            const rb = resizeButtonMetrics(widgetPixelSize(effectiveLayout, {
+              containerWidth, cols: gridCols, rowHeight: gridMetrics.rowHeight, gap: gridMetrics.gap,
+            }));
             const canDecreaseWidth = currentLayout && currentLayout.w > currentLayout.minW;
             const canDecreaseHeight = currentLayout && currentLayout.h > currentLayout.minH;
             const canIncreaseWidth = currentLayout && (currentLayout.x + currentLayout.w < gridCols);
@@ -981,6 +989,14 @@ const WidgetContainer = ({
                 onPointerDown={handleResizePointerDown(widget.id, direction, decrement)}
                 sx={{
                   ...resizeButtonBaseStyle,
+                  width: rb.box,
+                  height: rb.box,
+                  fontSize: rb.font,
+                  padding: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  lineHeight: 1,
                   cursor: enabled ? 'pointer' : 'not-allowed',
                   opacity: enabled ? 1 : 0.3,
                   '&:hover': {
@@ -1141,11 +1157,11 @@ const WidgetContainer = ({
                     <Box
                       sx={{
                         position: 'absolute',
-                        top: 8,
+                        top: rb.inset,
                         left: '50%',
                         transform: 'translateX(-50%)',
                         display: 'flex',
-                        gap: 1,
+                        gap: `${rb.gap}px`,
                         zIndex: 1003,
                         pointerEvents: 'auto',
                       }}
@@ -1158,12 +1174,12 @@ const WidgetContainer = ({
                     <Box
                       sx={{
                         position: 'absolute',
-                        right: 8,
+                        right: rb.inset,
                         top: '50%',
                         transform: 'translateY(-50%)',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: 1,
+                        gap: `${rb.gap}px`,
                         zIndex: 1003,
                         pointerEvents: 'auto',
                       }}
@@ -1176,11 +1192,11 @@ const WidgetContainer = ({
                     <Box
                       sx={{
                         position: 'absolute',
-                        bottom: 8,
+                        bottom: rb.inset,
                         left: '50%',
                         transform: 'translateX(-50%)',
                         display: 'flex',
-                        gap: 1,
+                        gap: `${rb.gap}px`,
                         zIndex: 1003,
                         pointerEvents: 'auto',
                       }}
@@ -1193,12 +1209,12 @@ const WidgetContainer = ({
                     <Box
                       sx={{
                         position: 'absolute',
-                        left: 8,
+                        left: rb.inset,
                         top: '50%',
                         transform: 'translateY(-50%)',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: 1,
+                        gap: `${rb.gap}px`,
                         zIndex: 1003,
                         pointerEvents: 'auto',
                       }}
