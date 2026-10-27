@@ -31,7 +31,7 @@ import {
   Popover,
   Switch
 } from '@mui/material';
-import { Edit, Save, Cancel, Add, Delete, Check, Close, Undo, SwapHoriz, Snooze, History, Backspace, ChecklistOutlined, TollOutlined, VolumeUpOutlined, VolumeOffOutlined, Star, StarBorder, RedeemOutlined, SettingsOutlined } from '@mui/icons-material';
+import { Edit, Save, Cancel, Add, Delete, Check, Close, Undo, SwapHoriz, Snooze, History, Backspace, ChecklistOutlined, TollOutlined, VolumeUpOutlined, VolumeOffOutlined, Star, StarBorder, RedeemOutlined, SettingsOutlined, AccessTime, NotificationsNoneOutlined } from '@mui/icons-material';
 import WidgetHeader, { headerIconButtonSx, headerMainButtonSx } from './WidgetHeader.jsx';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
@@ -1104,7 +1104,9 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
     return getBonusChores().filter(schedule => schedule.user_id === null || schedule.user_id === 0);
   };
 
-  const renderUserAvatar = (user) => {
+  // `size` and `badge`: the column header draws a smaller avatar and shows the
+  // clam total beside the name instead of on the picture.
+  const renderUserAvatar = (user, { size = 60, badge = true } = {}) => {
     const handleImageError = (e) => {
       e.target.style.display = 'none';
       e.target.nextSibling.style.display = 'flex';
@@ -1134,8 +1136,8 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
               src={imageUrl}
               alt={user.username}
               style={{
-                width: 60,
-                height: 60,
+                width: size,
+                height: size,
                 borderRadius: '50%',
                 objectFit: 'cover',
                 border: '3px solid var(--accent)',
@@ -1145,11 +1147,11 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
             />
             <Avatar
               sx={{
-                width: 60,
-                height: 60,
+                width: size,
+                height: size,
                 bgcolor: 'var(--accent)',
                 border: '3px solid var(--accent)',
-                fontSize: '1.5rem',
+                fontSize: size / 40 + 'rem',
                 fontWeight: 'bold',
                 display: 'none'
               }}
@@ -1160,11 +1162,11 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
         ) : (
           <Avatar
             sx={{
-              width: 60,
-              height: 60,
+              width: size,
+              height: size,
               bgcolor: 'var(--accent)',
               border: '3px solid var(--accent)',
-              fontSize: '1.5rem',
+              fontSize: size / 40 + 'rem',
               fontWeight: 'bold'
             }}
           >
@@ -1172,7 +1174,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
           </Avatar>
         )}
 
-        <Chip
+        {badge && <Chip
           label={`${user.clam_total || 0} 🥟`}
           size="small"
           sx={{
@@ -1187,7 +1189,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
               px: 1
             }
           }}
-        />
+        />}
       </Box>
     );
   };
@@ -1243,10 +1245,13 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
         onPointerCancel={handleCardPointerEnd}
         onClickCapture={handleCardClickCapture}
         sx={{
-          p: 1.5,
-          border: expired ? '1px solid var(--hg-error)' : '1px solid var(--card-border)',
-          borderRadius: 'var(--hg-radius-md)',
-          mb: 1,
+          // A row in the child's list: a rule above every row but the first,
+          // and a red edge, not a red border, when it's too late.
+          px: 1.5,
+          py: 1.25,
+          minHeight: 56,
+          '& + .chore-card': { borderTop: '1px solid var(--card-border)' },
+          boxShadow: expired ? 'inset 3px 0 0 var(--hg-error)' : 'none',
           bgcolor: rowBgColor,
           display: 'flex',
           flexWrap: 'wrap',
@@ -1259,24 +1264,25 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
         }}
       >
         <Box sx={{ flex: 1 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: schedule.completed ? 'normal' : 'bold', fontSize: '0.85rem' }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: schedule.completed ? 'normal' : 600, fontSize: '0.95rem', lineHeight: 1.3 }}>
             {schedule.title}
+            {/* The reward and the time read inline, as text, where they were
+                chips: the title stays the loudest thing in the row. */}
             {schedule.clam_value > 0 && (
-              <Chip
-                label={`${schedule.clam_value} 🥟`}
-                size="small"
-                sx={{ ml: 1, bgcolor: 'var(--accent)', color: 'white' }}
-              />
+              <Box component="span" sx={{ ml: 0.75, fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent)', whiteSpace: 'nowrap' }}>
+                {`+${schedule.clam_value} 🥟`}
+              </Box>
             )}
             {schedule.due_time && (expired ? (
               <Chip label={t('chores:expiry.expired')} size="small" color="error" sx={{ ml: 1, fontSize: '0.7rem' }} />
             ) : (
-              <Chip
-                label={`${schedule.sound_enabled ? '🔔 ' : '🕑 '}${formatDueTime(schedule.due_time)}`}
-                size="small"
-                variant="outlined"
-                sx={{ ml: 1, fontSize: '0.7rem' }}
-              />
+              <Box
+                component="span"
+                sx={{ ml: 0.75, display: 'inline-flex', alignItems: 'center', gap: 0.25, verticalAlign: 'middle', fontSize: '0.78rem', fontWeight: 500, color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}
+              >
+                {schedule.sound_enabled ? <NotificationsNoneOutlined sx={{ fontSize: 15 }} /> : <AccessTime sx={{ fontSize: 15 }} />}
+                {formatDueTime(schedule.due_time)}
+              </Box>
             ))}
             {schedule.due_date && (
               <Chip
@@ -1293,12 +1299,10 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
         </Box>
         <Box sx={{ display: 'flex', gap: 0.5 }}>
           {/* The chore's icon takes the place of the checkmark while the chore
-              is pending (issue #141). The per-user column is only 180-250px
-              wide, so a separate icon slot would cost 25-35% of the title area;
-              reusing this button costs nothing. The filled accent circle still
-              carries the "tap me" affordance, and completion still flips to an
-              outlined undo, so done-vs-todo reads the same as before. Chores
-              with no icon keep the checkmark. */}
+              is pending (issue #141): a separate icon slot would cost a narrow
+              column a quarter of its title area; reusing this button costs
+              nothing. Completion still flips to the undo arrow, so done-vs-todo
+              reads the same as before. Chores with no icon keep the checkmark. */}
           <IconButton
             color={schedule.completed ? "secondary" : "primary"}
             disabled={schedule.pending}
@@ -1310,14 +1314,18 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                 ? t('chores:expiry.markExpired', { name: schedule.title })
                 : t('chores:widget.completeAria', { title: schedule.title })}
             sx={{
+              // Pending: a ring in the accent, or a tint behind the chore's own
+              // icon. Too late: solid red. Done: the undo arrow alone.
               minWidth: 'auto',
-              width: 32,
-              height: 32,
-              bgcolor: schedule.completed ? 'transparent' : expired ? 'var(--hg-error)' : 'var(--accent)',
-              color: schedule.completed ? 'var(--accent)' : 'white',
+              width: 36,
+              height: 36,
+              border: !schedule.completed && !expired && !schedule.icon ? '2px solid rgba(var(--accent-rgb), 0.6)' : '2px solid transparent',
+              bgcolor: schedule.completed
+                ? 'transparent'
+                : expired ? 'var(--hg-error)' : schedule.icon ? 'rgba(var(--accent-rgb), 0.16)' : 'transparent',
+              color: expired ? 'white' : 'var(--accent)',
               '&:hover': {
-                bgcolor: schedule.completed ? 'rgba(var(--accent-rgb), 0.1)' : expired ? 'var(--hg-error)' : 'var(--accent)',
-                filter: 'brightness(1.1)'
+                bgcolor: expired ? 'var(--hg-error)' : 'rgba(var(--accent-rgb), 0.22)',
               }
             }}
           >
@@ -1514,32 +1522,51 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                   key={user.id}
                   data-chore-user-id={user.id}
                   sx={{
+                    // Columns share the widget's width, so titles fit on a line;
+                    // past a readable width, extra room goes between them.
                     flex: '1 1 0',
-                    minWidth: '180px',
-                    maxWidth: '250px',
-                    border: '2px solid var(--card-border)',
+                    minWidth: '200px',
+                    maxWidth: '420px',
                     borderRadius: 'var(--hg-radius-md)',
-                    p: 2,
+                    p: 0.5,
                     bgcolor: allRegularChoresCompleted ? 'rgba(0, 255, 0, 0.05)' : 'transparent',
                     display: 'flex',
                     flexDirection: 'column',
-                    alignItems: 'center'
                   }}
                 >
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 2 }}>
-                    {renderUserAvatar(user)}
-                    <Typography variant="subtitle1" sx={{ mt: 1, fontSize: '0.9rem', fontWeight: 'bold' }}>
+                  {/* One row: the picture, the name, and the clam total beside
+                      it, where the column used to stack them. */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, px: 0.5, pb: 1.25 }}>
+                    {renderUserAvatar(user, { size: 44, badge: false })}
+                    <Typography variant="subtitle1" sx={{ fontSize: '1.0625rem', fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {user.username}
                     </Typography>
-                    {allRegularChoresCompleted && (
-                      <Chip
-                        label={t('chores:widget.allDone', { count: dailyClamReward })}
-                        color="success"
-                        size="small"
-                        sx={{ mt: 1 }}
-                      />
-                    )}
+                    <Box
+                      component="span"
+                      sx={{
+                        ml: 'auto',
+                        flex: 'none',
+                        fontSize: '0.85rem',
+                        fontWeight: 600,
+                        fontVariantNumeric: 'tabular-nums',
+                        color: 'var(--text-secondary)',
+                        bgcolor: 'rgba(var(--accent-rgb), 0.12)',
+                        borderRadius: '999px',
+                        px: 1.25,
+                        py: 0.25,
+                      }}
+                    >
+                      {`${user.clam_total || 0} 🥟`}
+                    </Box>
                   </Box>
+                  {allRegularChoresCompleted && (
+                    <Chip
+                      label={t('chores:widget.allDone', { count: dailyClamReward })}
+                      color="success"
+                      size="small"
+                      sx={{ alignSelf: 'flex-start', ml: 0.5, mb: 1 }}
+                    />
+                  )}
 
                   <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, width: '100%' }}>
                     {userChores.length === 0 ? (
@@ -1547,7 +1574,11 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                         {t('chores:widget.noChoresToday')}
                       </Typography>
                     ) : (
-                      userChores.map(schedule => renderChoreItem(schedule))
+                      // One list per child, rows split by a rule, where each
+                      // chore used to be a card of its own.
+                      <Box sx={{ border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-md)', overflow: 'hidden' }}>
+                        {userChores.map(schedule => renderChoreItem(schedule))}
+                      </Box>
                     )}
                   </Box>
                 </Box>
