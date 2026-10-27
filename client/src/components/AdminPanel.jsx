@@ -2648,7 +2648,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                   />
                 </AdminGroup>
 
-                <AdminGroup title={t('admin:sections.devices')}>
+                {/* No heading: the section's own title already says Devices. */}
+                <AdminGroup>
                   {devices.map((device) => {
                     const isCurrent = device.name === currentDeviceName;
                     return (
@@ -2667,13 +2668,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                         ].join(' · ')}
                         control={(
                           <>
-                            {isCurrent ? (
-                              <Tooltip title={t('admin:devices.renameCurrent')}>
-                                <IconButton onClick={openRenameDeviceDialog} size="small" aria-label={t('admin:devices.renameCurrent')}>
-                                  <Edit fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                            ) : (
+                            {/* This display is renamed from the row above. */}
+                            {!isCurrent && (
                               <Tooltip title={t('admin:devices.copyToCurrent')}>
                                 <IconButton onClick={() => openCopyDeviceDialog(device)} size="small" aria-label={t('admin:devices.copyToCurrent')}>
                                   <ContentCopy fontSize="small" />

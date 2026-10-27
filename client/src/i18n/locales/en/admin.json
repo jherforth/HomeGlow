@@ -94,7 +94,7 @@
     "deviceDeleteFailed": "Failed to delete device. Please try again.",
     "screensaverSaved": "Screensaver settings saved for this display.",
     "screensaverFailed": "Failed to save screensaver settings. Please try again.",
-    "vacationSaved": "Vacation mode settings saved for this display.",
+    "vacationSaved": "Vacation mode saved for the whole household.",
     "vacationFailed": "Failed to save vacation mode settings. Please try again.",
     "autoDarkNeedsLocation": "Auto mode needs a location to work out sunrise and sunset.",
     "userDeleteFailed": "Failed to delete user. Please try again.",

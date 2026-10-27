@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Box,
+  GlobalStyles,
   Typography,
   IconButton,
   List,
@@ -46,6 +47,13 @@ const TAB_ICONS = {
 
 // Labels for the third level, the ones that used to be a row of tabs inside
 // their section. They now sit in the header as one segmented control.
+// Buttons in sentence case, like the labels: in the panel and in every dialog
+// it opens (add, edit, delete, PIN), which MUI draws outside the panel. Only
+// while the panel is open, so the rest of HomeGlow is untouched.
+const sentenceCase = (
+  <GlobalStyles styles={{ '.MuiDialog-root :is(.MuiButton-root, .MuiToggleButton-root)': { textTransform: 'none' } }} />
+);
+
 const SUBSECTION_LABELS = {
   chores: { definitions: 'admin:users.chores', history: 'admin:chores.history', settings: 'admin:chores.settings' },
   routines: { routines: 'chores:routines.heading', steps: 'chores:routines.stepsHeading' },
@@ -101,7 +109,7 @@ export default function AdminShell({ location, navigate, onClose, startOnList = 
       onChange={(_, value) => value && navigate({ ...location, subsection: value })}
       sx={{
         width: { xs: '100%', sm: 'auto' },
-        '& .MuiToggleButton-root': { flex: { xs: 1, sm: 'none' }, textTransform: 'none', px: 1.75, py: 0.5 },
+        '& .MuiToggleButton-root': { flex: { xs: 1, sm: 'none' }, px: 1.75, py: 0.5 },
       }}
     >
       {subsections.map((name) => (
@@ -116,7 +124,7 @@ export default function AdminShell({ location, navigate, onClose, startOnList = 
 
   const body = (
     <>
-      <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', px: { xs: 2, sm: 3.5 }, py: { xs: 2, sm: 3 }, '& .MuiButton-root': { textTransform: 'none' } }}>
+      <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', px: { xs: 2, sm: 3.5 }, py: { xs: 2, sm: 3 } }}>
         <AdminSlotsContext.Provider value={{ header: headerSlot, footer: footerSlot }}>
           {children}
         </AdminSlotsContext.Provider>
@@ -133,8 +141,7 @@ export default function AdminShell({ location, navigate, onClose, startOnList = 
           borderTop: 1,
           borderColor: 'divider',
           '&:empty': { display: 'none' },
-          '& .MuiButton-root': { textTransform: 'none' },
-        // On a phone the buttons stack, the main one (last) on top.
+          // On a phone the buttons stack, the main one (last) on top.
         '@media (max-width:599.95px)': { flexDirection: 'column-reverse', '& > .MuiButton-root': { width: '100%' } },
         }}
       />
@@ -145,6 +152,7 @@ export default function AdminShell({ location, navigate, onClose, startOnList = 
     if (onList) {
       return (
         <Box sx={{ height: '100%', overflowY: 'auto', px: 2, pb: 3, bgcolor: (theme) => alpha(theme.palette.text.primary, 0.03) }}>
+          {sentenceCase}
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', pt: 1 }}>{closeButton}</Box>
           <Typography variant="h4" component="h2" sx={{ fontWeight: 700, mb: 2, px: 0.5 }}>
             {t('admin:panelTitle')}
@@ -171,6 +179,7 @@ export default function AdminShell({ location, navigate, onClose, startOnList = 
     }
     return (
       <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        {sentenceCase}
         <Box sx={{ px: 2, pt: 1, pb: 1.5, borderBottom: 1, borderColor: 'divider' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <ButtonBack label={t('admin:panelTitle')} onClick={() => setOnList(true)} />
@@ -197,6 +206,7 @@ export default function AdminShell({ location, navigate, onClose, startOnList = 
         ...ADMIN_PANEL_SIZE,
       }}
     >
+      {sentenceCase}
       <Box
         component="nav"
         aria-label={t('admin:panelTitle')}
