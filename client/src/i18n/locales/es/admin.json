@@ -781,6 +781,9 @@
     "layoutList": "Lista",
     "columns": "Mosaicos por fila",
     "columnsAuto": "Ajustar al widget",
+    "style": "Aspecto",
+    "styles": { "classic": "Clásico", "bold": "Destacado" },
+    "animate": "Animar los iconos cuando estén encendidos",
     "addEntities": "Añadir dispositivos",
     "addEntitiesHelp": "Busca por nombre o explora por zonas. Cada uno se convierte en un mosaico.",
     "noArea": "Sin zona",
@@ -807,12 +810,21 @@
     "moveDown": "Bajar",
     "remove": "Quitar",
     "preview": "Vista previa",
-    "previewSizes": {
-      "small": "Pequeño",
-      "medium": "Mediano",
-      "large": "Grande"
+    "tileSizes": { "fx1": "Ancho completo", "fx2": "Ancho completo × 2" },
+    "widgetSize": {
+      "title": "Tamaño en el panel",
+      "width": "Ancho",
+      "height": "Alto",
+      "columns_one": "{{count}} columna",
+      "columns_other": "{{count}} columnas",
+      "rows_one": "{{count}} fila",
+      "rows_other": "{{count}} filas",
+      "best_one": "{{count}} mosaico cabe mejor en {{w}} × {{h}}",
+      "best_other": "{{count}} mosaicos caben mejor en {{w}} × {{h}}",
+      "resizePlaced": "Cambiar también su tamaño donde ya está en el panel",
+      "help": "Cuadros de la cuadrícula, 12 columnas de ancho. Unos {{width}} × {{height}} píxeles en esta pantalla. Un panel nuevo empieza con este tamaño. Sus controles funcionan una vez guardado.",
+      "shrunk": "Mostrado al {{percent}} %."
     },
-    "previewHelp": "El panel tal como se ve ahora, en tres tamaños de widget. Sus controles funcionan una vez guardado.",
     "save": "Guardar panel",
     "history": {
       "title": "Lo que hicieron los paneles",

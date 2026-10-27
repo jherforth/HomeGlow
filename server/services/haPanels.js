@@ -18,9 +18,17 @@ const MAX_TILES = 48;
 const MAX_TILE_ENTITIES = 8;
 const MAX_MANIFEST_ENTITIES = 64;
 const MAX_LABEL = 40;
-const TILE_SIZES = ['1x1', '2x1', '1x2', '2x2'];
+// Columns by rows; 'f' is the panel's whole width (a long tile).
+const TILE_SIZES = ['1x1', '2x1', '1x2', '2x2', 'fx1', 'fx2'];
 const LAYOUTS = ['grid', 'list'];
 const COLUMNS = ['auto', 1, 2, 3, 4, 5, 6];
+const STYLES = ['classic', 'bold'];
+// A panel's size on the dashboard, in grid squares (12 columns across).
+const WIDGET_MAX_W = 12;
+const WIDGET_MAX_H = 12;
+const isWidgetSize = (size) => isObject(size)
+  && Number.isInteger(size.w) && size.w >= 1 && size.w <= WIDGET_MAX_W
+  && Number.isInteger(size.h) && size.h >= 1 && size.h <= WIDGET_MAX_H;
 
 // The icons the template draws (server/ha-panels/template.html, ICONS).
 const ICON_NAMES = [
@@ -391,7 +399,7 @@ function defaultControl(entityId, state) {
     case 'input_boolean':
       return { kind: 'toggle' };
     case 'fan':
-      return { kind: has(state, FAN.SET_SPEED) ? 'dimmer' : 'toggle' };
+      return { kind: has(state, FAN.SET_SPEED) ? 'fan' : 'toggle' };
     case 'cover':
       return { kind: has(state, COVER.SET_POSITION) ? 'cover-slider' : 'cover' };
     case 'scene':
@@ -468,6 +476,8 @@ const cleanText = (value) => (typeof value === 'string' ? value.trim() : value);
  * Problems with a recipe, as readable strings; empty when it is valid.
  * {
  *   name, layout: 'grid'|'list', columns: 'auto'|1..6, transparent,
+ *   style: 'classic'|'bold', animate,
+ *   widget: { w: 1..12, h: 1..12 } (its size on the dashboard),
  *   tiles: [{ id, entities: [entity_id, ...], label, icon, size, view, hold,
  *             showState, when: { entity, states: [...], not } }]
  * }
@@ -480,6 +490,11 @@ function validateRecipe(recipe) {
   if (recipe.layout !== undefined && !LAYOUTS.includes(recipe.layout)) errors.push('layout must be grid or list.');
   if (recipe.columns !== undefined && !COLUMNS.includes(recipe.columns)) errors.push('columns must be auto or 1 to 6.');
   if (recipe.transparent !== undefined && typeof recipe.transparent !== 'boolean') errors.push('transparent must be true or false.');
+  if (recipe.style !== undefined && !STYLES.includes(recipe.style)) errors.push('style must be classic or bold.');
+  if (recipe.animate !== undefined && typeof recipe.animate !== 'boolean') errors.push('animate must be true or false.');
+  if (recipe.widget !== undefined && recipe.widget !== null && !isWidgetSize(recipe.widget)) {
+    errors.push(`widget must be { w: 1 to ${WIDGET_MAX_W}, h: 1 to ${WIDGET_MAX_H} } grid squares.`);
+  }
   if (!Array.isArray(recipe.tiles)) return [...errors, 'tiles must be a list.'];
   if (recipe.tiles.length === 0) errors.push('A panel needs at least one tile.');
   if (recipe.tiles.length > MAX_TILES) errors.push(`A panel may have at most ${MAX_TILES} tiles.`);
@@ -530,6 +545,9 @@ function normalizeRecipe(recipe) {
     layout: recipe.layout || 'grid',
     columns: recipe.columns ?? 'auto',
     transparent: recipe.transparent === true,
+    style: recipe.style === 'bold' ? 'bold' : 'classic',
+    animate: recipe.animate !== false,
+    ...(isWidgetSize(recipe.widget) ? { widget: { w: recipe.widget.w, h: recipe.widget.h } } : {}),
     tiles: recipe.tiles.map((tile) => ({
       id: tile.id,
       entities: [...new Set(tile.entities)],
@@ -674,6 +692,13 @@ function panelManifest(pluginId, recipe) {
     events: ['ha.state'],
     // A display can show a panel without operating it (Control Limits).
     hideableControls: [{ id: 'operate', label: 'Operate Home Assistant devices' }],
+    // A panel can be as small as one grid square (one button), and starts at
+    // the size picked in the builder.
+    size: {
+      minWidth: 1,
+      minHeight: 1,
+      ...(isWidgetSize(recipe.widget) ? { width: recipe.widget.w, height: recipe.widget.h } : {}),
+    },
   };
 }
 

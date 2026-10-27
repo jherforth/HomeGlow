@@ -11,6 +11,7 @@ import ScreensaverCountdown from './components/ScreensaverCountdown.jsx';
 import UpdateIndicator from './components/UpdateIndicator.jsx';
 import { API_BASE_URL } from './utils/apiConfig.js';
 import { migrateLegacyPluginStorage } from './utils/pluginLocalStore.js';
+import { pluginGridSize } from './utils/pluginGridSize.js';
 import { getDeviceApiBase, getDeviceName } from './utils/deviceName.js';
 import { refreshSubscription } from './utils/pushNotifications.js';
 import { unlockAudio } from './utils/choreSound.js';
@@ -1391,9 +1392,7 @@ const App = () => {
         // "expand": false in the manifest keeps it from being expanded.
         expandable: plugin.manifest?.expand !== false,
         defaultPosition: { x: 0, y: 0 },
-        defaultSize: { width: 6, height: 4 },
-        minWidth: 2,
-        minHeight: 2,
+        ...pluginGridSize(plugin),
         savedLayout: dbLayout,
         content: <PluginWidgetWrapper
           filename={plugin.filename}

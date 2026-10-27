@@ -113,8 +113,24 @@ function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginR
     ORDER BY plugins.name COLLATE NOCASE
   `).all();
 
+  /**
+   * The size a panel has on the dashboard (12-column grid squares): the first
+   * tab that has it placed with a size, or null when it isn't on one.
+   */
+  const placedSizeOf = (filename) => {
+    const key = `plugin:${filename}`;
+    for (const tab of db.prepare('SELECT config_json FROM tabs ORDER BY id').all()) {
+      const layout = parseJson(tab.config_json || '{}', {})?.[key];
+      if (isObject(layout) && Number.isInteger(layout.layout_w) && Number.isInteger(layout.layout_h)) {
+        return { w: layout.layout_w, h: layout.layout_h };
+      }
+    }
+    return null;
+  };
+
   const toPanel = (row) => ({
     id: row.id,
+    placed: placedSizeOf(row.filename),
     pluginId: row.plugin_id,
     filename: row.filename,
     name: row.name,
@@ -194,7 +210,22 @@ function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginR
   const stubContent = (manifest) => `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${manifest.name.replace(/[<&>"]/g, '')}</title>
 <script type="application/json" id="homeglow-manifest">${scriptJson(manifest)}</script></head><body></body></html>`;
 
-  function savePanel({ id, recipe }) {
+  /**
+   * Put a panel at its new size on every tab it is on (sizes are stored in
+   * 12-column units, like the dashboard keeps them). One that no longer fits
+   * where it is moves to the next open space when a display draws the tab.
+   */
+  function resizePlaced(filename, size) {
+    const key = `plugin:${filename}`;
+    for (const tab of db.prepare('SELECT id, config_json FROM tabs').all()) {
+      const layouts = parseJson(tab.config_json || '{}', {});
+      if (!isObject(layouts) || !isObject(layouts[key])) continue;
+      layouts[key] = { ...layouts[key], layout_w: size.w, layout_h: size.h };
+      db.prepare('UPDATE tabs SET config_json = ? WHERE id = ?').run(JSON.stringify(layouts), tab.id);
+    }
+  }
+
+  function savePanel({ id, recipe, resize = false }) {
     const normalized = rules.normalizeRecipe(recipe);
     return db.transaction(() => {
       if (id) {
@@ -207,6 +238,7 @@ function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginR
         if (installed.error) return installed;
         db.prepare('UPDATE ha_panels SET recipe_json = ?, template_ver = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
           .run(JSON.stringify(normalized), TEMPLATE_VERSION, id);
+        if (resize && normalized.widget) resizePlaced(existing.filename, normalized.widget);
         return { id };
       }
       const taken = new Set(db.prepare('SELECT plugin_id FROM plugins WHERE plugin_id IS NOT NULL').all().map((row) => row.plugin_id));
@@ -351,7 +383,8 @@ function registerHaPanelRoutes(fastify, { db, live, ha, demoMode, installPluginR
     const recipe = request.body?.recipe;
     const errors = rules.validateRecipe(recipe);
     if (errors.length) return reply.status(400).send({ error: errors.join(' '), errors });
-    const saved = savePanel({ id, recipe });
+    // resize: also put it at its picked size where it is already on the dashboard.
+    const saved = savePanel({ id, recipe, resize: request.body?.resize === true });
     if (saved.error) return reply.status(saved.status || 400).send({ error: saved.error });
     refreshWatched();
     return { panel: getPanel(saved.id) };

@@ -781,6 +781,9 @@
     "layoutList": "List",
     "columns": "Tiles across",
     "columnsAuto": "Fit the widget",
+    "style": "Look",
+    "styles": { "classic": "Classic", "bold": "Bold" },
+    "animate": "Animate icons when on",
     "addEntities": "Add devices",
     "addEntitiesHelp": "Search by name, or browse by area. Each one becomes a tile.",
     "noArea": "No area",
@@ -807,12 +810,21 @@
     "moveDown": "Move down",
     "remove": "Remove",
     "preview": "Preview",
-    "previewSizes": {
-      "small": "Small",
-      "medium": "Medium",
-      "large": "Large"
+    "tileSizes": { "fx1": "Full width", "fx2": "Full width × 2" },
+    "widgetSize": {
+      "title": "Size on the dashboard",
+      "width": "Width",
+      "height": "Height",
+      "columns_one": "{{count}} column",
+      "columns_other": "{{count}} columns",
+      "rows_one": "{{count}} row",
+      "rows_other": "{{count}} rows",
+      "best_one": "{{count}} tile fits best at {{w}} × {{h}}",
+      "best_other": "{{count}} tiles fit best at {{w}} × {{h}}",
+      "resizePlaced": "Also resize it where it is on the dashboard now",
+      "help": "Grid squares, 12 columns across. About {{width}} × {{height}} pixels on this screen. A new panel starts at this size. Its controls work once it is saved.",
+      "shrunk": "Shown at {{percent}}%."
     },
-    "previewHelp": "The panel as it looks now, at three widget sizes. Its controls work once it is saved.",
     "save": "Save panel",
     "history": {
       "title": "What panels did",
