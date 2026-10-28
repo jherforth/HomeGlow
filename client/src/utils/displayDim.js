@@ -20,6 +20,8 @@
 // While dimmed, the page background is forced black (unpainted canvas
 // would otherwise show as a bright edge) and scrollbars are hidden
 // (Chrome composites them outside the filtered layer, full-brightness).
+// The page keeps its scrollbar's space (scrollbar-gutter), so the dock and
+// anything else centered doesn't move on every dim and wake.
 // Wake detection uses a transparent full-screen shield while dimmed:
 // plugin widgets render in iframes whose pointer events never reach this
 // document, but the shield sits above them and catches the first tap.
@@ -169,8 +171,9 @@ function ensureStyle() {
   const style = document.createElement('style');
   style.id = 'hg-dim-style';
   style.textContent =
-    'html.hg-dimmed, html.hg-dimmed * { scrollbar-width: none !important; }' +
-    'html.hg-dimmed::-webkit-scrollbar, html.hg-dimmed *::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }';
+    'html.hg-dimmed { overflow: hidden !important; scrollbar-gutter: stable; }' +
+    'html.hg-dimmed * { scrollbar-width: none !important; }' +
+    'html.hg-dimmed *::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }';
   document.head.appendChild(style);
 }
 
