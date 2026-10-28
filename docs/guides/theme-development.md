@@ -83,6 +83,7 @@ the most useful:
 | `--hg-frame-backdrop` | `none`, `blur(0-24px)`, `saturate(0-300%)`, or a blur and a saturate | What a frame does to the page behind it: frosted glass. Only over a still scene (§5). `saturate()` needs manifest version 8 |
 | `--dock-bg`, `--dock-active-bg`, `--dock-active-image` | color, gradient | The dock |
 | `--hg-font-body`, `--hg-font-heading` | font list | Type |
+| `--hg-heading-transform`, `--hg-heading-letter-spacing` | `none`, `uppercase`, `capitalize` or `lowercase`; length | Plugin headings and the plugin widget header, its main button included. See [Headings in capitals](#headings-in-capitals) |
 | `--hg-grid-gap` | `0`, `8px`, `16px` or `24px` | The gap between widgets; rows keep their pitch |
 | `--hg-meter-track`, `--hg-meter-fill` | color | The empty and filled parts of anything showing a level or progress |
 | `--hg-meter-thickness`, `--hg-meter-cap` | `1px` to `12px`; `round`, `square` or `butt` | A meter's line and its ends |
@@ -92,6 +93,19 @@ the most useful:
 
 Themes never change spacing, font size or line height: widget heights are
 fixed, and content must still fit.
+
+### Headings in capitals
+
+HomeGlow's headings and buttons are in sentence case. Core widgets are drawn
+with MUI and plugins with CSS, so a theme that wants capitals sets two things
+to the same value:
+
+- `mui.headingTransform`: core headings, widget titles and every button.
+- `--hg-heading-transform`, with `--hg-heading-letter-spacing`: plugin
+  headings and the plugin widget header, its title and main button.
+
+With only one set, core widgets and plugins won't match. Starship sets both to
+`uppercase`.
 
 ## 4. Ambience: a scene behind the widgets
 
