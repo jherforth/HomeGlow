@@ -17,8 +17,9 @@ import useIsMobile from '../hooks/useIsMobile.js';
 
 // allowRemember offers "remember on this device" alongside verification. The
 // choice is handed to onVerify rather than acted on here — this component knows
-// about PINs, not about where a device stores its settings.
-const PinModal = ({ open, onClose, onVerify, mode = 'verify', title, allowRemember = false }) => {
+// about PINs, not about where a device stores its settings. hint is a line of
+// small print under the keypad.
+const PinModal = ({ open, onClose, onVerify, mode = 'verify', title, hint, allowRemember = false }) => {
   const isMobile = useIsMobile();
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
@@ -394,6 +395,15 @@ const PinModal = ({ open, onClose, onVerify, mode = 'verify', title, allowRememb
               </Button>
             </Box>
           </Paper>
+
+          {hint && (
+            <Typography
+              variant="caption"
+              sx={{ display: 'block', textAlign: 'center', color: 'var(--text-secondary)', mt: 2 }}
+            >
+              {hint}
+            </Typography>
+          )}
         </Box>
       </DialogContent>
     </Dialog>

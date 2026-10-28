@@ -284,6 +284,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   const [saveMessage, setSaveMessage] = useState({ show: false, type: '', text: '' });
   const [pinExists, setPinExists] = useState(false);
   const [pinModal, setPinModal] = useState({ open: false, mode: 'verify', title: '' });
+  // Changing or removing the PIN asks for the current one first, even on a
+  // display that remembers it; the server checks it again. 'change' | 'remove'.
+  const [currentPinFor, setCurrentPinFor] = useState(null);
+  const currentPin = useRef('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [checkingPin, setCheckingPin] = useState(true);
   const { tabs, fetchTabs } = useFetchTabs(API_DEVICE_URL);
@@ -1780,7 +1784,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     try {
       if (pinModal.mode === 'set') {
         const wasExisting = pinExists;
-        await axios.post(`${API_BASE_URL}/api/admin-pin/set`, { pin });
+        await axios.post(`${API_BASE_URL}/api/admin-pin/set`, { pin, currentPin: currentPin.current || undefined });
+        currentPin.current = '';
         setPinExists(true);
         setIsAuthenticated(true);
         setPinModal({ open: false, mode: 'verify', title: '' });
@@ -1839,6 +1844,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
       onRequestClose?.();
       return;
     }
+    currentPin.current = '';
     setPinModal({ open: false, mode: 'verify', title: '' });
   };
 
@@ -1867,16 +1873,44 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   };
 
   const handleUpdatePin = () => {
-    setPinModal({ open: true, mode: 'set', title: t('admin:pin.update') });
+    if (pinExists) {
+      setCurrentPinFor('change');
+      return;
+    }
+    setPinModal({ open: true, mode: 'set', title: t('admin:pin.setPin') });
   };
 
-  const handleClearPin = async () => {
+  const handleClearPin = () => {
     if (!window.confirm(t('admin:confirm.removePin'))) {
       return;
     }
+    setCurrentPinFor('remove');
+  };
+
+  // Checked here first so a wrong PIN is caught before the new one is typed.
+  const handleCurrentPinVerify = async (pin) => {
+    let valid = false;
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/admin-pin/verify`, { pin });
+      valid = response.data?.valid === true;
+    } catch (error) {
+      throw new Error(pinErrorText(error, t, t('admin:pin.currentWrong')));
+    }
+    if (!valid) throw new Error(t('admin:pin.currentWrong'));
+    const purpose = currentPinFor;
+    setCurrentPinFor(null);
+    if (purpose === 'remove') {
+      await removePin(pin);
+      return;
+    }
+    currentPin.current = pin;
+    setPinModal({ open: true, mode: 'set', title: t('admin:pin.update') });
+  };
+
+  const removePin = async (pin) => {
     try {
       setIsLoading(true);
-      await axios.delete(`${API_BASE_URL}/api/admin-pin`);
+      await axios.delete(`${API_BASE_URL}/api/admin-pin`, { data: { pin } });
       setPinExists(false);
       setSaveMessage({ show: true, type: 'success', text: t('admin:messages.pinRemoved') });
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 4000);
@@ -1923,6 +1957,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
           onVerify={handlePinVerify}
           mode={pinModal.mode}
           title={pinModal.title}
+          hint={pinModal.mode === 'verify' ? t('admin:security.forgotPin') : undefined}
           allowRemember
         />
       </Box>
@@ -3586,7 +3621,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                 label={pinExists ? t('admin:pin.update') : t('admin:pin.setPin')}
                 hint={`${t('admin:security.requirements')} 4-8 numeric digits · Numbers only (0-9) · Required for admin access`}
                 extra={pinExists && (
-                  <Typography variant="body2" color="text.secondary">{t('admin:security.changeNote')}</Typography>
+                  <>
+                    <Typography variant="body2" color="text.secondary">{t('admin:security.changeNote')}</Typography>
+                    <Typography variant="body2" color="text.secondary">{t('admin:security.forgotPin')}</Typography>
+                  </>
                 )}
                 control={(
                   <Button variant="contained" onClick={handleUpdatePin} startIcon={<Lock />}>
@@ -4179,6 +4217,15 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
         onVerify={handleVacationPinVerify}
         mode="verify"
         title={t('admin:vacation.pinTitle')}
+      />
+
+      <PinModal
+        open={currentPinFor !== null}
+        onClose={() => setCurrentPinFor(null)}
+        onVerify={handleCurrentPinVerify}
+        mode="verify"
+        title={t(currentPinFor === 'remove' ? 'admin:pin.currentForRemove' : 'admin:pin.currentForChange')}
+        hint={t('admin:security.forgotPin')}
       />
 
       {/* Enlarged plugin preview (issue #162). The list thumbnails are cropped

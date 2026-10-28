@@ -127,7 +127,10 @@
     "enter": "Enter Admin PIN",
     "update": "Update Admin PIN",
     "setPin": "Set Admin PIN",
-    "forgetDevices": "Require PIN on all devices again"
+    "forgetDevices": "Require PIN on all devices again",
+    "currentForChange": "Enter the current PIN",
+    "currentForRemove": "Enter the PIN to remove it",
+    "currentWrong": "That isn't the current PIN."
   },
   "refresh": {
     "disabled": "Disabled",
@@ -463,7 +466,8 @@
     "requirements": "PIN Requirements:",
     "currentStatus": "Current Status:",
     "removePin": "Remove PIN",
-    "changeNote": "Changing your PIN will require you to use the new PIN on your next admin panel access."
+    "changeNote": "Changing your PIN will require you to use the new PIN on your next admin panel access.",
+    "forgotPin": "Forgot the PIN? It can only be reset on the server itself: see “Resetting a forgotten admin PIN” in the deployment guide."
   },
   "controls": {
     "heading": "Controls on Displays",

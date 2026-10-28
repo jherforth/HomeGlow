@@ -67,6 +67,29 @@ bash install-homeglow.sh
 See [`proxmox/README.md`](../../proxmox/README.md) for details, updating, and the
 path to the official community-scripts listing.
 
+## Resetting a forgotten admin PIN
+
+Changing or removing the admin PIN in the Admin Panel takes the current PIN. That
+includes displays that remember it. Nothing on the network can remove a PIN
+without it. So a forgotten PIN is reset on the server itself: run the reset
+script where HomeGlow runs, then set a new PIN in Admin → Security.
+
+```bash
+# Docker Compose
+docker exec homeglow-backend node reset-admin-pin.js
+
+# Proxmox LXC, from the Proxmox host (CTID is the container's ID)
+pct exec <CTID> -- docker exec homeglow-backend node reset-admin-pin.js
+
+# Built from source
+cd server && npm run reset-pin
+```
+
+The script is safe to run while HomeGlow is running, and it needs no restart. It
+removes only the PIN. A lockout from wrong guesses goes with it once a new PIN is
+set. The script reads `DB_PATH` like the server does, so set it the same way if
+your database lives elsewhere.
+
 ## Running a public demo instance (demo mode)
 
 > For the full picture — what gets seeded, how the reset works, and every route

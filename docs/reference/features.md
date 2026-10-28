@@ -717,6 +717,11 @@ the foot of the Google account card:
   above.
 - Access can be gated by an optional **PIN** (on-screen pad or keyboard entry),
   hashed in the `admin_pin` table.
+- **Changing or removing the PIN** asks for the current one first, even on a
+  display that remembers it. The server checks it too. A forgotten PIN can only
+  be reset on the server itself, with `reset-admin-pin.js`; see
+  [Deployment](../guides/deployment.md#resetting-a-forgotten-admin-pin). The PIN
+  prompt and Admin → Security both point there.
 - **User display order** (issue #134): Admin → Family → Users controls what order family
   members appear in — drag a row on desktop, or use the up/down arrows, which
   are the primary control on touch screens since HTML5 drag events never fire

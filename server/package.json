@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
+    "reset-pin": "node reset-admin-pin.js",
     "test": "node tests/runServerTests.js",
     "test-debug": "node tests/runServerTests.js --debug",
     "test:coverage": "c8 --reporter=text-summary --reporter=html --reporter=lcov node tests/runServerTests.js"

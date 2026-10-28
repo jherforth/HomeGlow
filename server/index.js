@@ -193,6 +193,7 @@ const { pluginFrameShimScript } = require('./utils/pluginFrameShims');
 const pluginRequestPolicy = require('./utils/pluginRequestPolicy');
 const { isCrossSiteWrite } = require('./utils/crossSiteWrites');
 const adminPin = require('./utils/adminPin');
+const { resolveDbPath } = require('./utils/dbPath');
 const { sqliteUtcToIso, sqliteUtcToMs } = require('./utils/sqliteTime');
 const {
   DEVICE_NAME_RULE_MESSAGE,
@@ -2217,11 +2218,7 @@ fastify.post('/api/widgets/github/install', async (request, reply) => {
 
 // Initialize database. Demo mode uses an in-memory database so all data is
 // discarded when the container stops.
-const dbPath = DEMO_MODE
-  ? ':memory:'
-  : (process.env.DB_PATH
-    ? path.resolve(process.env.DB_PATH)
-    : path.resolve(__dirname, 'data', 'tasks.db'));
+const dbPath = DEMO_MODE ? ':memory:' : resolveDbPath();
 console.log('Database path:', dbPath);
 let db; // Declare db variable outside to hold the single instance
 
@@ -7304,7 +7301,13 @@ fastify.post('/api/admin-pin/set', async (request, reply) => {
   }
 
   try {
+    // Changing the PIN takes the current one; setting the first doesn't. A
+    // forgotten PIN is reset on the server itself (reset-admin-pin.js).
+    const current = await adminPin.checkAdminPin(db, request.body.currentPin);
+    if (!current.ok) return adminPin.refusePin(reply, current, 'Enter the current PIN to change it.');
     await adminPin.setAdminPin(db, pin);
+    // A lockout left from before a server-side reset would refuse the new PIN.
+    adminPin.resetPinAttempts();
     return { success: true, message: 'PIN set successfully' };
   } catch (error) {
     console.error('Error setting PIN:', error);
@@ -7315,7 +7318,10 @@ fastify.post('/api/admin-pin/set', async (request, reply) => {
 fastify.delete('/api/admin-pin', async (request, reply) => {
   if (demoBlocked(reply)) return;
   try {
-    db.prepare('DELETE FROM admin_pin WHERE id = 1').run();
+    // Takes the current PIN, like changing it does.
+    const current = await adminPin.checkAdminPin(db, request.body?.pin);
+    if (!current.ok) return adminPin.refusePin(reply, current, 'Enter the current PIN to remove it.');
+    adminPin.clearAdminPin(db);
     return { success: true, message: 'PIN cleared successfully' };
   } catch (error) {
     console.error('Error clearing PIN:', error);

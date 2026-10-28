@@ -127,7 +127,10 @@
     "enter": "Introduce el PIN de administrador",
     "update": "Cambiar el PIN de administrador",
     "setPin": "Configurar el PIN de administrador",
-    "forgetDevices": "Volver a exigir el PIN en todos los dispositivos"
+    "forgetDevices": "Volver a exigir el PIN en todos los dispositivos",
+    "currentForChange": "Introduce el PIN actual",
+    "currentForRemove": "Introduce el PIN para eliminarlo",
+    "currentWrong": "Ese no es el PIN actual."
   },
   "refresh": {
     "disabled": "Desactivado",
@@ -463,7 +466,8 @@
     "requirements": "Requisitos del PIN:",
     "currentStatus": "Estado actual:",
     "removePin": "Eliminar el PIN",
-    "changeNote": "Si cambias el PIN, tendrás que usar el nuevo la próxima vez que accedas al panel."
+    "changeNote": "Si cambias el PIN, tendrás que usar el nuevo la próxima vez que accedas al panel.",
+    "forgotPin": "¿Has olvidado el PIN? Solo se puede restablecer en el propio servidor: consulta «Restablecer un PIN de administrador olvidado» en la guía de despliegue."
   },
   "controls": {
     "heading": "Controles en las pantallas",
