@@ -1,6 +1,7 @@
 // The admin PIN routes and what they guard, on a real server
 // (mrramam/HomeGlow#62, #73). One server for the file: the limit on wrong
-// guesses is the server's own state, so the test that trips it runs last.
+// guesses is the server's own state, so the test that trips it runs near the
+// end, followed by the server-side reset that gets past it.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
@@ -113,6 +114,23 @@ test('a PIN saved by an older version works and is rehashed', async () => {
   db.close();
   assert.deepEqual((await call('POST', '/api/admin-pin/verify', { pin: '8642' })).body, { valid: true });
   assert.match(storedHash(), /^scrypt\$/);
+  assert.equal((await call('POST', '/api/admin-pin/set', { pin: PIN, currentPin: '8642' })).status, 200);
+});
+
+test('changing or removing the PIN takes the current one', async () => {
+  const noCurrent = await call('POST', '/api/admin-pin/set', { pin: '5555' });
+  assert.equal(noCurrent.status, 403);
+  assert.equal(noCurrent.body.needsPin, true);
+  assert.equal((await call('POST', '/api/admin-pin/set', { pin: '5555', currentPin: '1111' })).status, 403);
+  assert.equal((await call('DELETE', '/api/admin-pin')).status, 403);
+  assert.equal((await call('DELETE', '/api/admin-pin', { pin: '1111' })).status, 403);
+  assert.deepEqual((await call('GET', '/api/admin-pin/exists')).body, { exists: true });
+  assert.deepEqual((await call('POST', '/api/admin-pin/verify', { pin: PIN })).body, { valid: true }, 'still the same PIN');
+
+  assert.equal((await call('POST', '/api/admin-pin/set', { pin: '5555', currentPin: PIN })).status, 200);
+  assert.equal((await call('DELETE', '/api/admin-pin', { pin: '5555' })).status, 200);
+  assert.deepEqual((await call('GET', '/api/admin-pin/exists')).body, { exists: false });
+  // The first PIN needs none.
   assert.equal((await call('POST', '/api/admin-pin/set', { pin: PIN })).status, 200);
 });
 
@@ -158,7 +176,25 @@ test('five wrong guesses make even the right PIN wait, on every route that check
   const exportLocked = await call('POST', '/api/backup/local/export', { pin: PIN });
   assert.equal(exportLocked.status, 429);
 
-  // Clearing the PIN needs no PIN, which is the Admin Panel's job.
-  assert.equal((await call('DELETE', '/api/admin-pin')).status, 200);
+  // Nor can it be changed or removed over the network while locked.
+  assert.equal((await call('DELETE', '/api/admin-pin', { pin: PIN })).status, 429);
+  assert.equal((await call('POST', '/api/admin-pin/set', { pin: '5555', currentPin: PIN })).status, 429);
+});
+
+test('a forgotten PIN is reset on the server, and a new one works at once', async () => {
+  const run = () => new Promise((resolve) => {
+    const reset = spawn(process.execPath, ['reset-admin-pin.js'], { cwd: serverDir, env: { ...process.env, DB_PATH: dbPath } });
+    let out = '';
+    reset.stdout.on('data', (chunk) => { out += chunk; });
+    reset.on('close', (code) => resolve({ code, out }));
+  });
+  const first = await run();
+  assert.equal(first.code, 0);
+  assert.match(first.out, /removed/);
   assert.deepEqual((await call('GET', '/api/admin-pin/exists')).body, { exists: false });
+  assert.match((await run()).out, /No admin PIN was set/);
+
+  // The lockout from the test above doesn't carry over to the new PIN.
+  assert.equal((await call('POST', '/api/admin-pin/set', { pin: '5555' })).status, 200);
+  assert.deepEqual((await call('POST', '/api/admin-pin/verify', { pin: '5555' })).body, { valid: true });
 });

@@ -10,6 +10,9 @@
 // unsalted SHA-256, still works and is rehashed on its next correct entry.
 // Every check shares one limit on wrong guesses: a 4-digit PIN would
 // otherwise fall to 10,000 requests.
+//
+// Changing or removing the PIN takes the current one. A forgotten PIN is
+// reset on the server itself (reset-admin-pin.js), never over the network.
 const crypto = require('crypto');
 
 const SCRYPT_PARAMS = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
@@ -52,6 +55,12 @@ async function setAdminPin(db, pin) {
     INSERT INTO admin_pin (id, pin_hash) VALUES (1, ?)
     ON CONFLICT(id) DO UPDATE SET pin_hash = excluded.pin_hash, updated_at = CURRENT_TIMESTAMP
   `).run(pinHash);
+}
+
+// Removes the PIN. Returns whether there was one. The routes call this only
+// after the current PIN; reset-admin-pin.js calls it for a forgotten one.
+function clearAdminPin(db) {
+  return db.prepare('DELETE FROM admin_pin WHERE id = 1').run().changes > 0;
 }
 
 // One limit for the whole server, not per device: behind the bundled nginx
@@ -110,6 +119,7 @@ module.exports = {
   hashPin,
   pinMatchesHash,
   setAdminPin,
+  clearAdminPin,
   checkAdminPin,
   refusePin,
   resetPinAttempts,

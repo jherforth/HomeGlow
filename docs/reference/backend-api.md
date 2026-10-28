@@ -377,8 +377,8 @@ draws (`server/ha-panels/template.html`); each is also a plugin row
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/api/admin-pin/exists` | Whether a PIN is set. |
-| POST | `/api/admin-pin/set` | Set/replace the PIN (4 to 8 digits), stored as salted scrypt. |
-| DELETE | `/api/admin-pin` | Remove the PIN. |
+| POST | `/api/admin-pin/set` | Set or replace the PIN (4 to 8 digits), stored as salted scrypt. Replacing one takes the current PIN, `{ pin, currentPin }`: 403 without it or with a wrong one, and 429 after too many wrong PINs. |
+| DELETE | `/api/admin-pin` | Remove the PIN. Takes the current PIN, `{ pin }`: 403 or 429 as above. A forgotten PIN is reset on the server instead: `node reset-admin-pin.js` (see the [deployment guide](../guides/deployment.md#resetting-a-forgotten-admin-pin)). |
 | POST | `/api/admin-pin/verify` | Verify an entered PIN → `{ valid }`. After five wrong PINs, 429 with `Retry-After` for 30 seconds, doubling to five minutes, even for the right one; the limit is shared with every route that checks the PIN. |
 
 Any write (`POST`, `PUT`, `PATCH`, `DELETE`) whose `Origin` is another website answers 403 (`server/utils/crossSiteWrites.js`). Requests with no `Origin`, plugin frames, `CORS_ORIGINS` and the dev server are unaffected.
