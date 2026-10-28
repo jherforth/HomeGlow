@@ -112,6 +112,36 @@ The chore system uses a **three-table model** (see [Database](../architecture/da
 `utils/choreHelpers.js`; backend chore routes + `dailyBackgroundProcessing()` in
 `server/index.js`.
 
+### Schedules by person
+
+Admin → Family → Chores opens its schedules **by person** (the full list is one
+tap away, and each display remembers which it last used). Each person has a
+tab, and unassigned bonus chores have one of their own. A tab shows:
+
+- **A week calendar**, Sunday to Saturday with dates, listing the chores that
+  land on each day (hidden schedules left out). Arrows step to other weeks, for
+  every-other-day and monthly chores. Chores with no fixed day (one-time with
+  no date, "again after done") are listed under it.
+- **The person's chores grouped by timing**: "Every day", "Weekdays",
+  "Mon · Wed · Fri", "Every other day", "Monthly · day 1", "One-time · Nov 3",
+  "Again 3 days after done". **Add** offers the person's timings first, then
+  common ones they don't have yet, or any set of days; then a tick list of
+  chores, with **New chore** right there. A group can change its days (with a
+  count of the chores it changes), be copied to other people (chores they
+  already have stay put), or be removed. A chore is dragged (mouse or finger)
+  or moved with **Move to** between groups.
+
+A group is **not stored**: it is the person's schedules whose crontab day
+fields match (`utils/choreScheduleGroups.js`). Each chore keeps its own schedule
+row, so history, routines, follow-ups and per-chore settings (due time, sound,
+expiry, sticky, snooze) work as before, and are set with each chore's settings
+button. Moving a chore or changing a group's days rewrites only the day fields
+of each schedule; its time of day is kept. A chore sits in one group per person:
+adding it to another moves its schedule there. Sticky chores' daily copies
+(`parent_schedule_id`) are left out of the view.
+
+**Code:** `ChoreScheduleBoard.jsx`, `utils/choreScheduleGroups.js`.
+
 ### Chore due-time sounds
 
 A schedule can carry a **due time** (`HH:MM`) and play a **notification sound** on
