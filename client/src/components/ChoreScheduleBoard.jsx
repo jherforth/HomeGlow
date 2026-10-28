@@ -416,7 +416,8 @@ export default function ChoreScheduleBoard({
           aria-label={t('chores:board.calendarAria', { name: personName })}
           sx={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(7, minmax(104px, 1fr))',
+            // The week fits the panel; only a phone scrolls it sideways.
+            gridTemplateColumns: isMobile ? 'repeat(7, minmax(104px, 1fr))' : 'repeat(7, minmax(0, 1fr))',
             border: 1,
             borderColor: 'divider',
             borderRadius: 1,
@@ -563,9 +564,12 @@ export default function ChoreScheduleBoard({
             >
               <DragIndicator />
             </Box>
-            <Box sx={{ width: 32, height: 32, borderRadius: 2, bgcolor: s.icon ? 'action.hover' : 'transparent', display: 'grid', placeItems: 'center', fontSize: 18, flex: 'none' }}>
-              {s.icon || ''}
-            </Box>
+            {/* A chore without an icon starts its title right after the grip. */}
+            {s.icon && (
+              <Box sx={{ width: 32, height: 32, borderRadius: 2, bgcolor: 'action.hover', display: 'grid', placeItems: 'center', fontSize: 18, flex: 'none' }}>
+                {s.icon}
+              </Box>
+            )}
             <Box sx={{ flex: 1, minWidth: 0, opacity: s.visible ? 1 : 0.6 }}>
               <Typography variant="body1" sx={{ fontWeight: 500 }}>{s.title}</Typography>
               {choreChips(s)}
