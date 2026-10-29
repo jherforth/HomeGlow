@@ -24,7 +24,9 @@ import {
   Radio,
   Grid,
   Checkbox,
-  ListItemText
+  ListItemText,
+  ToggleButton,
+  ToggleButtonGroup
 } from '@mui/material';
 import {
   Add,
@@ -50,6 +52,14 @@ import { getWeekdayLabels } from '../utils/dateUtils.js';
 import useIsMobile from '../hooks/useIsMobile.js';
 import { compareByKey } from '../utils/choreHelpers.js';
 import ExpiresSelect from './ExpiresSelect.jsx';
+import ChoreScheduleBoard from './ChoreScheduleBoard.jsx';
+
+// Which way the schedules section opens: by person (grouped by timing) or the
+// full list. Remembered per display; storage may be unavailable.
+const SCHEDULE_VIEW_KEY = 'homeglow_choreScheduleView';
+const readScheduleView = () => {
+  try { return localStorage.getItem(SCHEDULE_VIEW_KEY) === 'list' ? 'list' : 'person'; } catch { return 'person'; }
+};
 
 // Day labels come from the locale (index 0 = Sunday, matching crontab).
 const getDayOptions = () => getWeekdayLabels(0).map((label, value) => ({ label, value }));
@@ -283,6 +293,12 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [savingChore, setSavingChore] = useState(false);
 
+  const [scheduleView, setScheduleViewState] = useState(readScheduleView);
+  const setScheduleView = (view) => {
+    setScheduleViewState(view);
+    try { localStorage.setItem(SCHEDULE_VIEW_KEY, view); } catch { /* per-display convenience only */ }
+  };
+
   const [filterUser, setFilterUser] = useState('');
   const [filterChore, setFilterChore] = useState('');
 
@@ -296,8 +312,11 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
     setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3500);
   };
 
+  // The spinner is for the first load only: a reload after a change keeps the
+  // section on screen, so the person tab, week and scroll stay where they were.
+  const loadedOnce = useRef(false);
   const fetchAll = useCallback(async () => {
-    setLoading(true);
+    if (!loadedOnce.current) setLoading(true);
     try {
       const [schedulesRes, choresRes, usersRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/chore-schedules`),
@@ -313,6 +332,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
     } catch (err) {
       console.error('Error loading chore data:', err);
     } finally {
+      loadedOnce.current = true;
       setLoading(false);
     }
   }, []);
@@ -355,6 +375,8 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
     }
     setFilterUser('');
     setFilterChore(chore.id);
+    // The filter belongs to the list view, so the shortcut opens it there.
+    setScheduleView('list');
     schedulesSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
@@ -854,8 +876,35 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
 
       {/* ── SCHEDULES ────────────────────────────────────── */}
       <Box ref={schedulesSectionRef} sx={{ scrollMarginTop: 8 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap', minHeight: 32, mb: 1, px: 0.5 }}>
+          <Typography variant="overline" component="h3" sx={{ color: 'text.secondary', fontWeight: 600, lineHeight: 1.6, letterSpacing: '0.06em' }}>
+            {t('chores:schedules.schedulesColumn')}
+          </Typography>
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={scheduleView}
+            onChange={(_, view) => view && setScheduleView(view)}
+            aria-label={t('chores:board.viewLabel')}
+          >
+            <ToggleButton value="person" sx={{ textTransform: 'none', px: 1.5 }}>{t('chores:board.viewByPerson')}</ToggleButton>
+            <ToggleButton value="list" sx={{ textTransform: 'none', px: 1.5 }}>{t('chores:board.viewList')}</ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+        {scheduleView === 'person' ? (
+          <ChoreScheduleBoard
+            schedules={schedules}
+            chores={chores}
+            users={users}
+            onChanged={fetchAll}
+            onEditSchedule={openEditSchedule}
+            onToggleVisible={handleToggleVisible}
+            onDeleteSchedule={(s) => setDeleteScheduleDialog({ open: true, schedule: s })}
+            onCreateChore={openCreateChore}
+            showMessage={showMessage}
+          />
+        ) : (
         <AdminGroup
-          title={t('chores:schedules.schedulesColumn')}
           action={(
             <Button startIcon={<Add />} onClick={() => openCreateSchedule()} variant="contained" size="small">
               {t('chores:schedules.newSchedule')}
@@ -971,6 +1020,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
             />
           ))}
         </AdminGroup>
+        )}
       </Box>
 
       {/* ── CHORE DIALOG ─────────────────────────────────── */}

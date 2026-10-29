@@ -112,6 +112,48 @@ The chore system uses a **three-table model** (see [Database](../architecture/da
 `utils/choreHelpers.js`; backend chore routes + `dailyBackgroundProcessing()` in
 `server/index.js`.
 
+### Schedules by person
+
+Admin → Family → Chores opens its schedules **by person** (the full list is one
+tap away, and each display remembers which it last used). Each person has a
+tab, and unassigned bonus chores have one of their own. A tab shows:
+
+- **A week calendar**, Sunday to Saturday with dates, listing the chores that
+  land on each day (hidden schedules left out). Past days read the person's
+  chore history: ✓ done (a stays-until-done chore done on a later day shows
+  there, marked late), ✗ missed or not done, ⏳ a stays-until-done chore still
+  waiting (also shown on today, "from Mon", until it's done); vacation days are striped and marked 🏖️, and days before a schedule
+  existed show nothing. An "again after done" chore sits on its next date (the
+  server rewrites its crontab to that date when it's done). Arrows step to other
+  weeks. Chores with no fixed day (one-time with no date) are listed under it.
+- **The person's chores grouped by schedule**: "Every day", "Weekdays",
+  "Mon · Wed · Fri", "Every other day", "Monthly · day 1",
+  "Every 3 months · Jan 15, Apr 15, Jul 15, Oct 15", "Every year · Mar 20",
+  "One-time · Nov 3", "Again 3 days after done". **Add** offers the person's
+  schedules first, then the common ones, **Monthly** (pick the
+  day of the month), **Custom** (every 1, 3, 6 or 9 months or a year, on set
+  dates from a start date or counted from when it's done; 9 months only counts
+  from when it's done), or any set of days; then a tick list of
+  chores, with **New chore** right there. A group can change its days (with a
+  count of the chores it changes), be copied to other people (chores they
+  already have stay put), or be removed. A chore is dragged (mouse or finger)
+  between groups. A row shows a "Stays until done" tag when that is set (in the
+  chore's settings, Day Of ↔ Until Completed). The Add menu lists every common
+  schedule, even ones the person already has (picking one adds to it); its day
+  row and Change days start on Sunday, and Change days has Every day, Weekdays
+  and Weekends quick buttons.
+
+A group is **not stored**: it is the person's schedules whose crontab day
+fields match (`utils/choreScheduleGroups.js`). Each chore keeps its own schedule
+row, so history, routines, follow-ups and per-chore settings (due time, sound,
+expiry, sticky, snooze) work as before, and are set with each chore's settings
+button. Moving a chore or changing a group's days rewrites only the day fields
+of each schedule; its time of day is kept. A chore sits in one group per person:
+adding it to another moves its schedule there. Sticky chores' daily copies
+(`parent_schedule_id`) are left out of the view.
+
+**Code:** `ChoreScheduleBoard.jsx`, `utils/choreScheduleGroups.js`.
+
 ### Chore due-time sounds
 
 A schedule can carry a **due time** (`HH:MM`) and play a **notification sound** on
