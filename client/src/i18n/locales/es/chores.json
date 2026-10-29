@@ -493,6 +493,8 @@
     "added_one": "{{count}} tarea añadida a {{timing}}.",
     "added_other": "{{count}} tareas añadidas a {{timing}}.",
     "addedMoved": "{{timing}}: {{added}} añadidas, {{moved}} movidas.",
+    "movedCount_one": "{{count}} tarea movida a {{timing}}.",
+    "movedCount_other": "{{count}} tareas movidas a {{timing}}.",
     "moved": "{{title}} movida a {{timing}}.",
     "changeDaysTitle": "Cambiar días: {{timing}}",
     "everyHowManyDays": "Cada cuántos días",
@@ -525,6 +527,19 @@
     "unit_m_other": "{{count}} meses",
     "unit_y_one": "{{count}} año",
     "unit_y_other": "{{count}} años",
+    "monthlyChoice": "Mensual",
+    "customChoice": "Personalizado",
+    "dayOfMonth": "Día del mes",
+    "shortMonths": "Los meses con menos de {{day}} días se la saltan.",
+    "every": "Cada",
+    "year": "Año",
+    "countFrom": "Cuenta desde",
+    "fromDates": "Fechas fijas",
+    "fromDone": "Cuando se hace",
+    "startDate": "Empieza",
+    "nineMonthsNote": "Cada 9 meses no encaja en el calendario, así que cuenta desde que se hace.",
+    "fromDoneHelp": "Aparece ahora y vuelve ese tiempo después de marcarla como hecha.",
+    "fromDatesHelp": "Cae en: {{timing}}",
     "timing": {
       "everyDay": "Todos los días",
       "weekdays": "Entre semana",
@@ -537,7 +552,10 @@
       "oneTime": "Una vez",
       "oneTimeOn": "Una vez · {{date}}",
       "againAfter": "De nuevo {{interval}} después de hacerla",
-      "custom": "Personalizado ({{expr}})"
+      "custom": "Personalizado ({{expr}})",
+      "yearly": "Cada año · {{date}}",
+      "everyNMonths_one": "Cada mes · {{dates}}",
+      "everyNMonths_other": "Cada {{count}} meses · {{dates}}"
     }
   }
 }

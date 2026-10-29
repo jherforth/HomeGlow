@@ -8,6 +8,8 @@
 //   week    { days: [0..6] }        days of the week (0 = Sunday, as crontab)
 //   everyN  { n }                   every n days ("*/n" day of month)
 //   monthly { dom: '1' | '1,15' }   days of the month
+//   months  { dom: 15, months: [1,4,7,10], every: 3 }   one day in some
+//           months: every 3 or 6 months, or once a year (every: 12)
 //   custom  { rest: 'dom mon dow' } anything else crontab can say
 //   once    { dueDate: 'YYYY-MM-DD' | null }   no repeat
 //   after   { interval: '3d' }      "once completed": again a while after done
@@ -92,8 +94,50 @@ export function timingOfSchedule(schedule) {
       return { kind: 'monthly', key: `month:${dom}`, dom };
     }
   }
+  if ((f.dow === '*' || f.dow === '?') && /^\d+$/.test(f.dom)) {
+    const months = parseMonths(f.mon);
+    if (months && months.length < 12) return monthsTiming(Number(f.dom), months);
+  }
   const rest = `${f.dom} ${f.mon} ${f.dow}`;
   return { kind: 'custom', key: `custom:${rest}`, rest };
+}
+
+// "1,4,7,10", "3", "1-12/3", "2/6" → sorted month numbers 1..12; null if unreadable.
+function parseMonths(field) {
+  const months = new Set();
+  for (const part of String(field).split(',')) {
+    const [range, stepText] = part.split('/');
+    const step = stepText === undefined ? 1 : Number(stepText);
+    if (!Number.isInteger(step) || step < 1) return null;
+    let from;
+    let to;
+    if (range === '*') { from = 1; to = 12; } else if (range.includes('-')) {
+      [from, to] = range.split('-').map(Number);
+    } else {
+      from = Number(range);
+      to = stepText === undefined ? from : 12;
+    }
+    if (!Number.isInteger(from) || !Number.isInteger(to) || from < 1 || to > 12 || to < from) return null;
+    for (let m = from; m <= to; m += step) months.add(m);
+  }
+  return [...months].sort((a, b) => a - b);
+}
+
+// Evenly spaced months (every 2, 3, 4, 6 or 12) know their step; others don't.
+export function monthsTiming(dom, months) {
+  const sorted = [...new Set(months)].sort((a, b) => a - b);
+  const step = 12 / sorted.length;
+  const even = Number.isInteger(step) && sorted.every((m, i) => i === 0 || m - sorted[i - 1] === step);
+  return { kind: 'months', key: `months:${dom}:${sorted.join(',')}`, dom, months: sorted, every: even ? step : null };
+}
+
+// Every `every` months (3, 6, 12) on the day of `startDate` ('YYYY-MM-DD'),
+// counting from that date's month.
+export function monthsFromStart(startDate, every) {
+  const [, m, d] = startDate.split('-').map(Number);
+  const months = [];
+  for (let i = 0; i < 12; i += every) months.push(((m - 1 + i) % 12) + 1);
+  return monthsTiming(d, months);
 }
 
 // Timings built from scratch (the Add menu's choices).
@@ -118,6 +162,8 @@ function dayFieldsOf(timing) {
       return `*/${timing.n} * *`;
     case 'monthly':
       return `${timing.dom} * *`;
+    case 'months':
+      return `${timing.dom} ${timing.months.join(',')} *`;
     case 'custom':
       return timing.rest;
     default:
@@ -155,7 +201,7 @@ export function scheduleFieldsForTiming(timing, schedule = null) {
 // Group order: every day first, then the other weekly groups (most days
 // first, then by first day), then every-n-days, monthly, again-after-done,
 // custom, and one-time last (by date).
-const KIND_ORDER = { week: 0, everyN: 1, monthly: 2, after: 3, custom: 4, once: 5 };
+const KIND_ORDER = { week: 0, everyN: 1, monthly: 2, months: 3, after: 4, custom: 5, once: 6 };
 export function compareTimings(a, b) {
   if (KIND_ORDER[a.kind] !== KIND_ORDER[b.kind]) return KIND_ORDER[a.kind] - KIND_ORDER[b.kind];
   if (a.kind === 'week') {
@@ -169,6 +215,7 @@ export function compareTimings(a, b) {
     return 0;
   }
   if (a.kind === 'everyN') return a.n - b.n;
+  if (a.kind === 'months') return (a.every || 99) - (b.every || 99) || a.key.localeCompare(b.key);
   if (a.kind === 'once') return String(a.dueDate || '9999').localeCompare(String(b.dueDate || '9999'));
   return a.key.localeCompare(b.key);
 }
@@ -193,6 +240,7 @@ export function groupSchedulesForUser(schedules, userId) {
 }
 
 // The common timings the Add menu offers. Their order is the menu's order.
+// Single days, monthly and longer ones are picked with their own controls.
 export const COMMON_TIMINGS = [
   weekTiming(ALL_DAYS),
   weekTiming([1, 2, 3, 4, 5]),
@@ -200,8 +248,6 @@ export const COMMON_TIMINGS = [
   weekTiming([1, 3, 5]),
   weekTiming([2, 4]),
   everyNTiming(2),
-  ...[1, 2, 3, 4, 5, 6, 0].map((d) => weekTiming([d])),
-  monthlyTiming('1'),
   onceTiming(null),
 ];
 

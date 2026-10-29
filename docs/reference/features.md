@@ -122,10 +122,14 @@ tab, and unassigned bonus chores have one of their own. A tab shows:
   land on each day (hidden schedules left out). Arrows step to other weeks, for
   every-other-day and monthly chores. Chores with no fixed day (one-time with
   no date, "again after done") are listed under it.
-- **The person's chores grouped by timing**: "Every day", "Weekdays",
-  "Mon · Wed · Fri", "Every other day", "Monthly · day 1", "One-time · Nov 3",
-  "Again 3 days after done". **Add** offers the person's timings first, then
-  common ones they don't have yet, or any set of days; then a tick list of
+- **The person's chores grouped by schedule**: "Every day", "Weekdays",
+  "Mon · Wed · Fri", "Every other day", "Monthly · day 1",
+  "Every 3 months · Jan 15, Apr 15, Jul 15, Oct 15", "Every year · Mar 20",
+  "One-time · Nov 3", "Again 3 days after done". **Add** offers the person's
+  schedules first, then common ones they don't have yet, **Monthly** (pick the
+  day of the month), **Custom** (every 1, 3, 6 or 9 months or a year, on set
+  dates from a start date or counted from when it's done; 9 months only counts
+  from when it's done), or any set of days; then a tick list of
   chores, with **New chore** right there. A group can change its days (with a
   count of the chores it changes), be copied to other people (chores they
   already have stay put), or be removed. A chore is dragged (mouse or finger)

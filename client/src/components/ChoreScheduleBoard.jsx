@@ -51,6 +51,7 @@ import {
   everyNTiming,
   groupSchedulesForUser,
   monthlyTiming,
+  monthsFromStart,
   onceTiming,
   scheduleFieldsForTiming,
   timingFallsOn,
@@ -79,6 +80,26 @@ const dateLabel = (key) => {
   const [y, m, d] = key.split('-').map(Number);
   return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 };
+
+// "Mar 15" for month 3, day 15 (no year).
+const monthDayLabel = (month, day) => new Date(2001, month - 1, day).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+// The lengths Custom offers, in months.
+const CUSTOM_EVERY = [1, 3, 6, 9, 12];
+const todayKeyString = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+// Custom's choices → a timing, or null while incomplete. Set dates work for
+// every 1, 3, 6 and 12 months; 9 doesn't divide the year, so it only counts
+// from when the chore is done.
+function customTiming({ every, from, start }) {
+  if (from === 'done') return afterTiming(every === 12 ? '1y' : `${every}m`);
+  if (every === 9 || !/^\d{4}-\d{2}-\d{2}$/.test(start || '')) return null;
+  if (every === 1) return monthlyTiming(String(Number(start.slice(8, 10))));
+  return monthsFromStart(start, every);
+}
 
 const fmtTime = (hhmm) => {
   if (!hhmm) return '';
@@ -155,6 +176,12 @@ export default function ChoreScheduleBoard({
         return timing.n === 2 ? t('chores:board.timing.everyOtherDay') : t('chores:board.timing.everyNDays', { count: timing.n });
       case 'monthly':
         return t('chores:board.timing.monthly', { days: timing.dom.split(',').join(', ') });
+      case 'months': {
+        const dates = timing.months.map((m) => monthDayLabel(m, timing.dom)).join(', ');
+        if (timing.every === 12) return t('chores:board.timing.yearly', { date: dates });
+        if (timing.every) return t('chores:board.timing.everyNMonths', { count: timing.every, dates });
+        return dates;
+      }
       case 'once':
         return timing.dueDate ? t('chores:board.timing.oneTimeOn', { date: dateLabel(timing.dueDate) }) : t('chores:board.timing.oneTime');
       case 'after':
@@ -258,6 +285,9 @@ export default function ChoreScheduleBoard({
     days: [],
     date: timing?.kind === 'once' ? (timing.dueDate || '') : '',
     search: '',
+    panel: null, // 'monthly' | 'custom' while one of those is open
+    dom: '1',
+    custom: { every: 3, from: 'dates', start: todayKeyString() },
   });
   // A chore made with "New chore" while the dialog is open comes back ticked.
   const knownChoreIds = useRef(new Set(chores.map((c) => c.id)));
@@ -297,7 +327,9 @@ export default function ChoreScheduleBoard({
       for (const s of moves) {
         await axios.patch(`${API_BASE_URL}/api/chore-schedules/${s.id}`, scheduleFieldsForTiming(timing, s));
       }
-    }, moves.length
+    }, moves.length && !created
+      ? t('chores:board.movedCount', { count: moves.length, timing: timingLabel(timing) })
+      : moves.length
       ? t('chores:board.addedMoved', { added: created, moved: moves.length, timing: timingLabel(timing) })
       : t('chores:board.added', { count: created, timing: timingLabel(timing) }));
   };
@@ -315,6 +347,9 @@ export default function ChoreScheduleBoard({
       date: tm.dueDate || '',
       count: m ? m[1] : '3',
       unit: m ? m[2].toLowerCase() : 'd',
+      custom: tm.kind === 'months'
+        ? { every: tm.every || 12, from: 'dates', start: `${new Date().getFullYear()}-${String(tm.months[0]).padStart(2, '0')}-${String(tm.dom).padStart(2, '0')}` }
+        : null,
     });
   };
   const editedTiming = (d) => {
@@ -325,6 +360,7 @@ export default function ChoreScheduleBoard({
       case 'monthly': return /^\s*\d{1,2}(\s*,\s*\d{1,2})*\s*$/.test(d.dom) && d.dom.split(',').every((x) => Number(x) >= 1 && Number(x) <= 31)
         ? monthlyTiming(d.dom.replace(/\s+/g, '')) : null;
       case 'once': return onceTiming(d.date || null);
+      case 'months': return customTiming(d.custom);
       case 'after': return Number(d.count) >= 1 ? afterTiming(`${Number(d.count)}${d.unit}`) : null;
       default: return null;
     }
@@ -633,7 +669,20 @@ export default function ChoreScheduleBoard({
             {others.map((tm) => (
               <Chip key={tm.key} label={timingLabel(tm)} onClick={() => pick(tm)} variant="outlined" sx={{ fontSize: '0.875rem', height: 36 }} />
             ))}
+            {['monthly', 'custom'].map((panel) => (
+              <Chip
+                key={panel}
+                label={`${t(`chores:board.${panel}Choice`)} …`}
+                onClick={() => setAddDialog((d) => ({ ...d, panel: d.panel === panel ? null : panel }))}
+                variant={addDialog.panel === panel ? 'filled' : 'outlined'}
+                color={addDialog.panel === panel ? 'primary' : 'default'}
+                aria-expanded={addDialog.panel === panel}
+                sx={{ fontSize: '0.875rem', height: 36 }}
+              />
+            ))}
           </Box>
+          {addDialog.panel === 'monthly' && renderMonthlyPanel()}
+          {addDialog.panel === 'custom' && renderCustomPanel(addDialog.custom, (custom) => setAddDialog((d) => ({ ...d, custom })), (tm) => pick(tm))}
         </Box>
         <Box>
           <Typography variant="overline" color="text.secondary">{t('chores:board.pickDays')}</Typography>
@@ -651,6 +700,86 @@ export default function ChoreScheduleBoard({
             </Button>
           </Box>
         </Box>
+      </Box>
+    );
+  };
+
+  const panelSx = { mt: 1.5, p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1, bgcolor: 'action.hover', display: 'flex', flexDirection: 'column', gap: 1.5 };
+
+  const renderMonthlyPanel = () => {
+    const dom = Number(addDialog.dom);
+    const valid = Number.isInteger(dom) && dom >= 1 && dom <= 31;
+    const pick = () => setAddDialog((d) => ({ ...d, step: 'chores', timing: monthlyTiming(String(dom)) }));
+    return (
+      <Box sx={panelSx}>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+          <TextField
+            size="small"
+            type="number"
+            label={t('chores:board.dayOfMonth')}
+            value={addDialog.dom}
+            onChange={(e) => setAddDialog((d) => ({ ...d, dom: e.target.value }))}
+            slotProps={{ htmlInput: { min: 1, max: 31 } }}
+            sx={{ width: 160 }}
+          />
+          <Button variant="contained" size="small" disabled={!valid} onClick={pick}>{t('chores:board.next')}</Button>
+        </Box>
+        {valid && dom > 28 && <Typography variant="body2" color="text.secondary">{t('chores:board.shortMonths', { day: dom })}</Typography>}
+      </Box>
+    );
+  };
+
+  // Custom: every 1, 3, 6, 9 months or a year, on set dates or counted from
+  // when it's done. Used by the Add dialog and by Change days.
+  const renderCustomPanel = (custom, onChange, onNext) => {
+    const set = (patch) => {
+      const next = { ...custom, ...patch };
+      // 9 months can't land on set dates.
+      if (next.every === 9) next.from = 'done';
+      onChange(next);
+    };
+    const timing = customTiming(custom);
+    return (
+      <Box sx={panelSx}>
+        <Box>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>{t('chores:board.every')}</Typography>
+          <ToggleButtonGroup size="small" exclusive value={custom.every} onChange={(_, v) => v && set({ every: v })} aria-label={t('chores:board.every')} sx={{ flexWrap: 'wrap' }}>
+            {CUSTOM_EVERY.filter((n) => onNext || n !== 9).map((n) => (
+              <ToggleButton key={n} value={n} sx={{ textTransform: 'none', px: 1.5 }}>
+                {n === 12 ? t('chores:board.year') : t('chores:board.unit_m', { count: n })}
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+        </Box>
+        {onNext && (
+          <Box>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>{t('chores:board.countFrom')}</Typography>
+            <ToggleButtonGroup size="small" exclusive value={custom.from} onChange={(_, v) => v && set({ from: v })} aria-label={t('chores:board.countFrom')}>
+              <ToggleButton value="dates" disabled={custom.every === 9} sx={{ textTransform: 'none', px: 1.5 }}>{t('chores:board.fromDates')}</ToggleButton>
+              <ToggleButton value="done" sx={{ textTransform: 'none', px: 1.5 }}>{t('chores:board.fromDone')}</ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+        )}
+        {custom.from === 'dates' && (
+          <TextField
+            size="small"
+            type="date"
+            label={t('chores:board.startDate')}
+            value={custom.start}
+            onChange={(e) => set({ start: e.target.value })}
+            slotProps={{ inputLabel: { shrink: true } }}
+            sx={{ maxWidth: 220 }}
+          />
+        )}
+        <Typography variant="body2" color="text.secondary">
+          {custom.every === 9 ? `${t('chores:board.nineMonthsNote')} ` : ''}
+          {custom.from === 'done' ? t('chores:board.fromDoneHelp') : (timing && t('chores:board.fromDatesHelp', { timing: timingLabel(timing) }))}
+        </Typography>
+        {onNext && (
+          <Box>
+            <Button variant="contained" size="small" disabled={!timing} onClick={() => onNext(timing)}>{t('chores:board.next')}</Button>
+          </Box>
+        )}
       </Box>
     );
   };
@@ -751,6 +880,7 @@ export default function ChoreScheduleBoard({
         {kind === 'once' && (
           <TextField size="small" type="date" label={t('chores:schedules.dueDateOptional')} value={d.date} onChange={(e) => set({ date: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} sx={{ maxWidth: 220 }} />
         )}
+        {kind === 'months' && renderCustomPanel(d.custom, (custom) => set({ custom: { ...custom, from: 'dates' } }), null)}
         {kind === 'after' && (
           <Box sx={{ display: 'flex', gap: 1 }}>
             <TextField size="small" type="number" label={t('chores:board.againAfterCount')} value={d.count} onChange={(e) => set({ count: e.target.value })} slotProps={{ htmlInput: { min: 1 } }} sx={{ width: 120 }} />

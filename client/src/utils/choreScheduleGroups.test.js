@@ -12,6 +12,8 @@ import {
   timingFallsOn,
   weekDates,
   COMMON_TIMINGS,
+  monthsTiming,
+  monthsFromStart,
 } from './choreScheduleGroups.js';
 
 describe('parseDaysOfWeek', () => {
@@ -45,7 +47,8 @@ describe('timingOfSchedule', () => {
   it('knows every-n-days, monthly, custom, one-time and again-after-done', () => {
     expect(timingOfSchedule({ crontab: '0 0 */2 * *' })).toMatchObject({ kind: 'everyN', n: 2 });
     expect(timingOfSchedule({ crontab: '0 0 15,1 * *' })).toMatchObject({ kind: 'monthly', dom: '1,15' });
-    expect(timingOfSchedule({ crontab: '0 0 1 6 *' })).toMatchObject({ kind: 'custom', rest: '1 6 *' });
+    expect(timingOfSchedule({ crontab: '0 0 1 6 *' })).toMatchObject({ kind: 'months', months: [6], every: 12 });
+    expect(timingOfSchedule({ crontab: '0 0 1-7 * 1' })).toMatchObject({ kind: 'custom', rest: '1-7 * 1' });
     expect(timingOfSchedule({ crontab: null, due_date: '2026-11-03' })).toMatchObject({ kind: 'once', dueDate: '2026-11-03' });
     expect(timingOfSchedule({ crontab: null })).toMatchObject({ kind: 'once', dueDate: null });
     expect(timingOfSchedule({ crontab: '0 0 * * *', duration: 'once-completed', interval: '3d' })).toMatchObject({ kind: 'after', interval: '3d' });
@@ -82,7 +85,7 @@ describe('scheduleFieldsForTiming', () => {
   });
 
   it('round-trips: a moved schedule lands in the group it was moved to', () => {
-    for (const timing of COMMON_TIMINGS) {
+    for (const timing of [...COMMON_TIMINGS, monthlyTiming('15'), monthsFromStart('2026-01-15', 3), monthsFromStart('2026-03-02', 12), afterTiming('9m')]) {
       const fields = scheduleFieldsForTiming(timing, { crontab: '15 6 * * 2', duration: 'day-of' });
       expect(timingOfSchedule({ ...fields }).key).toBe(timing.key);
     }
@@ -130,5 +133,26 @@ describe('weekDates', () => {
     const days = weekDates(new Date(2026, 9, 28));
     expect(days.map((d) => d.getDate())).toEqual([25, 26, 27, 28, 29, 30, 31]);
     expect(weekDates(new Date(2026, 9, 28), 1)[0].getDate()).toBe(1);
+  });
+});
+
+describe('every few months and yearly', () => {
+  it('builds the months from a start date', () => {
+    expect(monthsFromStart('2026-02-15', 3)).toMatchObject({ kind: 'months', dom: 15, months: [2, 5, 8, 11], every: 3 });
+    expect(monthsFromStart('2026-11-01', 6)).toMatchObject({ months: [5, 11], every: 6 });
+    expect(monthsFromStart('2026-03-20', 12)).toMatchObject({ months: [3], every: 12 });
+    expect(scheduleFieldsForTiming(monthsFromStart('2026-02-15', 3)).crontab).toBe('0 0 15 2,5,8,11 *');
+  });
+
+  it('reads those crontabs back, however the months are written', () => {
+    expect(timingOfSchedule({ crontab: '0 0 15 2,5,8,11 *' }).key).toBe(monthsFromStart('2026-02-15', 3).key);
+    expect(timingOfSchedule({ crontab: '0 0 15 2/3 *' }).key).toBe(monthsFromStart('2026-02-15', 3).key);
+    expect(timingOfSchedule({ crontab: '0 0 1 1,2,7 *' })).toMatchObject({ kind: 'months', every: null });
+    expect(timingOfSchedule({ crontab: '0 0 1 * *' }).kind).toBe('monthly');
+  });
+
+  it('puts them on the calendar on their days only', () => {
+    expect(timingFallsOn(monthsTiming(28, [1, 4, 7, 10]), new Date(2026, 9, 28))).toBe(true);
+    expect(timingFallsOn(monthsTiming(28, [1, 4, 7, 10]), new Date(2026, 10, 28))).toBe(false);
   });
 });
