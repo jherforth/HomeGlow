@@ -475,8 +475,7 @@
     "addTitle": "Add chores for {{name}}",
     "addToTitle": "{{timing}} · {{name}}",
     "theirTimings": "{{name}}'s schedules",
-    "otherTimings": "Other schedules",
-    "pickDays": "Or pick days",
+    "pickDays": "Pick days",
     "next": "Next",
     "back": "Back",
     "searchChores": "Search chores",
@@ -537,8 +536,6 @@
     "nineMonthsNote": "Every 9 months doesn't line up with the calendar, so it counts from when it's done.",
     "fromDoneHelp": "It shows up now, then comes back that long after it's checked off.",
     "fromDatesHelp": "Lands on: {{timing}}",
-    "nowSticky": "{{title}} now stays until it's done.",
-    "nowDayOf": "{{title}} now shows on its days only.",
     "late": "late",
     "vacation": "Vacation",
     "legend": {
@@ -554,6 +551,7 @@
       "today": "today",
       "planned": "coming up"
     },
+    "fromDay": "from {{day}}",
     "timing": {
       "everyDay": "Every day",
       "weekdays": "Weekdays",

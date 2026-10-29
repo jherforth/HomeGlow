@@ -70,7 +70,8 @@ import {
 // another moves it there.
 
 const BONUS = 'bonus';
-const MON_FIRST = [1, 2, 3, 4, 5, 6, 0];
+// Sunday first, like the week calendar.
+const DAY_ORDER = [0, 1, 2, 3, 4, 5, 6];
 
 // Settings a copied schedule takes from the one it was copied from.
 const COPIED_FIELDS = [
@@ -189,7 +190,7 @@ export default function ChoreScheduleBoard({
         if (d.join() === '1,2,3,4,5') return t('chores:board.timing.weekdays');
         if (d.join() === '0,6') return t('chores:board.timing.weekends');
         if (d.length === 1) return t('chores:board.timing.everyDayName', { day: longDays[d[0]] });
-        return MON_FIRST.filter((x) => d.includes(x)).map((x) => shortDays[x]).join(' · ');
+        return DAY_ORDER.filter((x) => d.includes(x)).map((x) => shortDays[x]).join(' · ');
       }
       case 'everyN':
         return timing.n === 2 ? t('chores:board.timing.everyOtherDay') : t('chores:board.timing.everyNDays', { count: timing.n });
@@ -244,15 +245,6 @@ export default function ChoreScheduleBoard({
     () => axios.patch(`${API_BASE_URL}/api/chore-schedules/${schedule.id}`, scheduleFieldsForTiming(timing, schedule)),
     t('chores:board.moved', { title: schedule.title, timing: timingLabel(timing) }),
   );
-
-  // Day Of ↔ Until Completed, from the chore's row.
-  const toggleSticky = (s) => {
-    const sticky = s.duration !== 'until-completed';
-    run(
-      () => axios.patch(`${API_BASE_URL}/api/chore-schedules/${s.id}`, { duration: sticky ? 'until-completed' : 'day-of' }),
-      t(sticky ? 'chores:board.nowSticky' : 'chores:board.nowDayOf', { title: s.title }),
-    );
-  };
 
   // Pointer-based drag, so it works with a finger on the wall display as well
   // as a mouse. The handle captures the pointer; the group under it is found
@@ -451,6 +443,10 @@ export default function ChoreScheduleBoard({
     <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
       {s.clam_value > 0 && <Chip size="small" color="primary" label={`+${s.clam_value} 🥟`} />}
       {s.due_time && <Chip size="small" variant="outlined" label={`${s.sound_enabled ? '🔔' : '⏰'} ${fmtTime(s.due_time)}`} />}
+      {/* Set in the chore's gear settings; shown here so it's visible at a glance. */}
+      {s.crontab && s.duration === 'until-completed' && (
+        <Chip size="small" color="warning" variant="outlined" icon={<PushPin sx={{ fontSize: 14 }} />} label={t('chores:board.staysUntilDone')} />
+      )}
       {s.triggered_on && <Chip size="small" variant="outlined" label={t('chores:followups.chip')} />}
       {!s.visible && <Chip size="small" label={t('chores:board.hidden')} />}
     </Box>
@@ -535,10 +531,11 @@ export default function ChoreScheduleBoard({
                 <Box sx={{ p: 0.75, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                   {day.items.length === 0 ? (
                     <Typography variant="caption" color="text.disabled" sx={{ px: 0.25 }}>—</Typography>
-                  ) : day.items.map(({ schedule: s, state, late }) => (
+                  ) : day.items.map(({ schedule: s, state, late, carriedFrom }) => (
                     <Box
                       key={s.id}
                       data-state={state}
+                      data-carried={carriedFrom ? 'true' : undefined}
                       title={`${s.title} · ${t(`chores:board.state.${state}`)}${late ? ` (${t('chores:board.late')})` : ''}`}
                       sx={{
                         fontSize: '0.75rem',
@@ -546,17 +543,20 @@ export default function ChoreScheduleBoard({
                         px: 0.75,
                         py: 0.5,
                         borderRadius: 'var(--hg-radius-sm, 6px)',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
                         wordBreak: 'break-word',
                         ...STATE_SX[state],
                       }}
                     >
-                      {STATE_MARK[state] && <Box component="span" aria-hidden sx={{ fontWeight: 800, mr: 0.5 }}>{STATE_MARK[state]}</Box>}
-                      {s.icon ? `${s.icon} ` : ''}{s.title}{late ? ` (${t('chores:board.late')})` : ''}
+                      {/* The title clamps at two lines; the "from Mon" line stays under it. */}
+                      <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                        {STATE_MARK[state] && <Box component="span" aria-hidden sx={{ fontWeight: 800, mr: 0.5 }}>{STATE_MARK[state]}</Box>}
+                        {s.icon ? `${s.icon} ` : ''}{s.title}{late ? ` (${t('chores:board.late')})` : ''}
+                      </Box>
+                      {carriedFrom && (
+                        <Box component="span" sx={{ display: 'block', fontSize: '0.6875rem', opacity: 0.8 }}>
+                          {t('chores:board.fromDay', { day: shortDays[new Date(`${carriedFrom}T12:00:00`).getDay()] })}
+                        </Box>
+                      )}
                     </Box>
                   ))}
                 </Box>
@@ -658,21 +658,6 @@ export default function ChoreScheduleBoard({
             <Tooltip title={s.visible ? t('chores:board.hide') : t('chores:board.show')}>
               <Switch size="small" checked={!!s.visible} onChange={() => onToggleVisible(s)} slotProps={{ input: { 'aria-label': t('chores:schedules.visible') } }} />
             </Tooltip>
-            {/* Stays until done: only for chores that repeat on set days. One-time
-                and again-after-done chores always stay until they're done. */}
-            {s.crontab && s.duration !== 'once-completed' ? (
-              <Chip
-                size="small"
-                icon={<PushPin fontSize="small" />}
-                label={t('chores:board.staysUntilDone')}
-                color={s.duration === 'until-completed' ? 'warning' : 'default'}
-                variant={s.duration === 'until-completed' ? 'filled' : 'outlined'}
-                onClick={() => toggleSticky(s)}
-                disabled={busy}
-                aria-pressed={s.duration === 'until-completed'}
-                sx={{ opacity: s.duration === 'until-completed' ? 1 : 0.7 }}
-              />
-            ) : null}
             <Tooltip title={t('chores:board.choreSettings')}>
               <IconButton size="small" aria-label={t('chores:board.choreSettings')} onClick={() => onEditSchedule(s)}>
                 <Settings fontSize="small" />
@@ -691,8 +676,9 @@ export default function ChoreScheduleBoard({
 
   // ── Add dialog body ───────────────────────────────────────────────
   const renderAddTimingStep = () => {
-    const theirKeys = new Set(groups.map((g) => g.timing.key));
-    const others = COMMON_TIMINGS.filter((tm) => !theirKeys.has(tm.key));
+    // Every common schedule is offered, even ones the person already has:
+    // picking one of those adds to it.
+    const others = COMMON_TIMINGS;
     const pick = (timing) => setAddDialog((d) => ({ ...d, step: 'chores', timing, date: timing.kind === 'once' ? (timing.dueDate || '') : '' }));
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -719,7 +705,6 @@ export default function ChoreScheduleBoard({
           </Box>
         )}
         <Box>
-          <Typography variant="overline" color="text.secondary">{t('chores:board.otherTimings')}</Typography>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
             {others.map((tm) => (
               <Chip key={tm.key} label={timingLabel(tm)} onClick={() => pick(tm)} variant="outlined" sx={{ fontSize: '0.875rem', height: 36 }} />
@@ -740,16 +725,14 @@ export default function ChoreScheduleBoard({
           {addDialog.panel === 'custom' && renderCustomPanel(addDialog.custom, (custom) => setAddDialog((d) => ({ ...d, custom })), (tm) => pick(tm))}
         </Box>
         <Box>
-          <Typography variant="overline" color="text.secondary">{t('chores:board.pickDays')}</Typography>
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-            {quickDays((days) => setAddDialog((d) => ({ ...d, days })))}
             <ToggleButtonGroup
               size="small"
               value={addDialog.days}
               onChange={(_, v) => setAddDialog((d) => ({ ...d, days: v }))}
               aria-label={t('chores:board.pickDays')}
             >
-              {MON_FIRST.map((d) => <ToggleButton key={d} value={d} sx={{ minWidth: 44 }}>{shortDays[d]}</ToggleButton>)}
+              {DAY_ORDER.map((d) => <ToggleButton key={d} value={d} sx={{ minWidth: 44 }}>{shortDays[d]}</ToggleButton>)}
             </ToggleButtonGroup>
             <Button variant="contained" size="small" disabled={!addDialog.days.length} onClick={() => pick(weekTiming(addDialog.days))}>
               {t('chores:board.next')}
@@ -936,7 +919,7 @@ export default function ChoreScheduleBoard({
         {kind === 'week' && quickDays((days) => set({ days }))}
         {kind === 'week' && (
           <ToggleButtonGroup size="small" value={d.days} onChange={(_, v) => set({ days: v })} aria-label={t('chores:board.pickDays')} sx={{ flexWrap: 'wrap' }}>
-            {MON_FIRST.map((x) => <ToggleButton key={x} value={x} sx={{ minWidth: 44 }}>{shortDays[x]}</ToggleButton>)}
+            {DAY_ORDER.map((x) => <ToggleButton key={x} value={x} sx={{ minWidth: 44 }}>{shortDays[x]}</ToggleButton>)}
           </ToggleButtonGroup>
         )}
         {kind === 'everyN' && (

@@ -194,6 +194,22 @@ describe('calendarWeek', () => {
     expect(state(week, '2026-10-27', 1).state).toBe('notDone');
   });
 
+  it('repeats a stays-until-done chore still waiting on today, saying which day it is from', () => {
+    const week = calendarWeek({ groups: [group([S(1, 5, '0 0 * * 1,3', { duration: 'until-completed' })])], dates, today: '2026-10-29' });
+    expect(state(week, '2026-10-26', 5).state).toBe('waiting');
+    expect(state(week, '2026-10-29', 5)).toMatchObject({ state: 'waiting', carriedFrom: '2026-10-26' });
+  });
+
+  it('counts from the last time it was done', () => {
+    const groups = [group([S(1, 5, '0 0 * * 1,3', { duration: 'until-completed' })])];
+    // Done Tuesday, due again Wednesday and not done: today shows it from Wednesday.
+    let week = calendarWeek({ groups, dates, today: '2026-10-29', rows: [{ chore_id: 5, date: '2026-10-27', kind: 'completion' }] });
+    expect(state(week, '2026-10-29', 5)).toMatchObject({ carriedFrom: '2026-10-28' });
+    // Done Wednesday: nothing waiting today.
+    week = calendarWeek({ groups, dates, today: '2026-10-29', rows: [{ chore_id: 5, date: '2026-10-28', kind: 'completion' }] });
+    expect(state(week, '2026-10-29', 5)).toBeUndefined();
+  });
+
   it('shows a stays-until-done chore done late on the day it was done', () => {
     const week = calendarWeek({
       groups: [group([S(1, 5, '0 0 * * 0', { duration: 'until-completed' })])],

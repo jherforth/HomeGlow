@@ -317,7 +317,8 @@ const STICKY = new Set(['until-completed', 'once-completed']);
  *   done     checked off that day (on its day, or late: `late` is true)
  *   missed   the midnight job logged a miss
  *   notDone  a past day it was due, with nothing logged
- *   waiting  a past day a stays-until-done chore was due, not done that day
+ *   waiting  a past day a stays-until-done chore was due, not done that day;
+ *            also on today, with `carriedFrom` (that day), while still not done
  *   today    due today, not done yet
  *   planned  a future day
  * Vacation days are flagged; hidden chores only appear where they were done.
@@ -365,6 +366,18 @@ export function calendarWeek({ groups, dates, today, rows = [], vacation = null 
         else state = s.crontab && STICKY.has(s.duration) ? 'waiting' : 'notDone';
         if (state) {
           day.items.push({ schedule: s, state, late: state === 'done' && !due.has(day.date) });
+          shown = true;
+        }
+      }
+      // A stays-until-done chore still waiting from an earlier day is on the
+      // wall today too, so today's box shows it, saying which day it's from.
+      const todayBox = days.find((d) => d.date === today);
+      if (todayBox && s.visible && !todayBox.items.some((i) => i.schedule === s)) {
+        // The first day it was left waiting after it was last done.
+        const lastDone = days.filter((d) => d.date <= today && done.has(`${s.chore_id}|${d.date}`)).map((d) => d.date).pop() || '';
+        const firstWaiting = days.find((d) => d.date < today && d.date > lastDone && d.items.some((i) => i.schedule === s && i.state === 'waiting'));
+        if (firstWaiting) {
+          todayBox.items.push({ schedule: s, state: 'waiting', late: false, carriedFrom: firstWaiting.date });
           shown = true;
         }
       }

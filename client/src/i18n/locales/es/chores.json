@@ -475,8 +475,7 @@
     "addTitle": "Añadir tareas para {{name}}",
     "addToTitle": "{{timing}} · {{name}}",
     "theirTimings": "Horarios de {{name}}",
-    "otherTimings": "Otros horarios",
-    "pickDays": "O elige los días",
+    "pickDays": "Elige los días",
     "next": "Siguiente",
     "back": "Atrás",
     "searchChores": "Buscar tareas",
@@ -537,8 +536,6 @@
     "nineMonthsNote": "Cada 9 meses no encaja en el calendario, así que cuenta desde que se hace.",
     "fromDoneHelp": "Aparece ahora y vuelve ese tiempo después de marcarla como hecha.",
     "fromDatesHelp": "Cae en: {{timing}}",
-    "nowSticky": "{{title}} ahora queda hasta hacerla.",
-    "nowDayOf": "{{title}} ahora solo aparece en sus días.",
     "late": "tarde",
     "vacation": "Vacaciones",
     "legend": {
@@ -554,6 +551,7 @@
       "today": "hoy",
       "planned": "próxima"
     },
+    "fromDay": "desde el {{day}}",
     "timing": {
       "everyDay": "Todos los días",
       "weekdays": "Entre semana",
