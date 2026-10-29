@@ -480,6 +480,9 @@ export default function ChoreScheduleBoard({
             display: 'grid',
             // The week fits the panel; only a phone scrolls it sideways.
             gridTemplateColumns: isMobile ? 'repeat(7, minmax(104px, 1fr))' : 'repeat(7, minmax(0, 1fr))',
+            // On a phone the grid is as wide as its days, so the box around it
+            // scrolls; otherwise the overflow below clips the days past the panel.
+            minWidth: isMobile ? 7 * 104 : 0,
             border: 1,
             borderColor: 'divider',
             borderRadius: 1,
