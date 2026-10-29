@@ -26,6 +26,7 @@ const PhotosUpload = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [details, setDetails] = useState(null);
   const fileInputRef = useRef(null);
 
   const initialSourceFromUrl = useMemo(() => {
@@ -62,6 +63,7 @@ const PhotosUpload = () => {
   const fetchPhotos = async (sourceId) => {
     if (!sourceId) {
       setPhotos([]);
+      setDetails(null);
       return;
     }
     try {
@@ -70,6 +72,17 @@ const PhotosUpload = () => {
     } catch (err) {
       console.error('Failed to load photos', err);
       setPhotos([]);
+    }
+    fetchDetails(sourceId);
+  };
+
+  // How many photos carry a date and a place (read from the camera's data).
+  const fetchDetails = async (sourceId) => {
+    try {
+      const { data } = await axios.get(`${API_BASE_URL}/api/photo-sources/${sourceId}/uploaded/details`);
+      setDetails(data);
+    } catch {
+      setDetails(null);
     }
   };
 
@@ -84,6 +97,13 @@ const PhotosUpload = () => {
   useEffect(() => {
     if (selectedSourceId) fetchPhotos(selectedSourceId);
   }, [selectedSourceId]);
+
+  // The server reads photos uploaded before it read them once, at startup.
+  useEffect(() => {
+    if (!details?.reading || !selectedSourceId) return undefined;
+    const timer = setTimeout(() => fetchDetails(selectedSourceId), 5000);
+    return () => clearTimeout(timer);
+  }, [details, selectedSourceId]);
 
   const handleFilesSelected = async (event) => {
     const files = Array.from(event.target.files || []);
@@ -279,9 +299,16 @@ const PhotosUpload = () => {
             {notice && <Alert severity="success">{notice}</Alert>}
 
             <Box>
-              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: details?.total ? 0 : 1 }}>
                 Uploaded Photos ({photos.length})
               </Typography>
+              {details?.total > 0 && (
+                <Typography variant="caption" sx={{ display: 'block', mb: 1, opacity: 0.7 }}>
+                  {details.reading
+                    ? 'Reading dates and places…'
+                    : `Dates on ${details.withDate} of ${details.total} · places on ${details.withPlace}`}
+                </Typography>
+              )}
               {photos.length === 0 ? (
                 <Typography variant="body2" sx={{ opacity: 0.7 }}>
                   No photos uploaded yet.

@@ -171,6 +171,8 @@ const { sniffImage, IMAGE_MIMES } = require('./utils/imageType');
 const { inlineCssImports } = require('./utils/inlineCssImports');
 const themeStore = require('./services/themeStore');
 const googlePhotosPicker = require('./services/googlePhotosPicker');
+const photoExif = require('./services/photoExif');
+const { placeName } = require('./services/placeLookup');
 const homeAssistant = require('./services/homeAssistant');
 const weatherService = require('./services/weather');
 const { computeSunTimes } = require('./services/weather/sun');
@@ -6681,6 +6683,29 @@ fastify.get('/api/photo-sources/:sourceId/uploaded', async (request, reply) => {
   }
 });
 
+// HomeGlow Photos - how many of a source's photos carry a date and a place,
+// for the line on the Photos page. `reading` while the startup read of photos
+// uploaded before this version is still under way.
+fastify.get('/api/photo-sources/:sourceId/uploaded/details', async (request, reply) => {
+  const { sourceId } = request.params;
+  try {
+    const source = loadHomeGlowPhotoSourceOr404(sourceId, reply);
+    if (!source) return;
+    const rows = db.prepare(
+      'SELECT taken_on, latitude, longitude, details_read_at FROM homeglow_photos WHERE source_id = ?'
+    ).all(sourceId);
+    return {
+      total: rows.length,
+      withDate: rows.filter((r) => r.taken_on).length,
+      withPlace: rows.filter((r) => r.latitude != null && placeName(r.latitude, r.longitude)).length,
+      reading: photoExif.isReadingPhotoDetails() || rows.some((r) => !r.details_read_at),
+    };
+  } catch (error) {
+    console.error('Error counting photo details:', error);
+    reply.status(500).send({ error: 'Failed to count photo details' });
+  }
+});
+
 // HomeGlow Photos - serve a single uploaded file
 fastify.get('/api/photo-sources/:sourceId/uploaded/:photoId/file', async (request, reply) => {
   const { sourceId, photoId } = request.params;
@@ -6748,9 +6773,12 @@ fastify.post('/api/photo-sources/:sourceId/uploaded', async (request, reply) => 
         const filename = `${crypto.randomBytes(12).toString('hex')}.${sniffed.ext}`;
         const filePath = path.join(uploadDir, filename);
         await fs.writeFile(filePath, buffer);
+        // The day it was taken and where, for the screensaver's photo details.
+        const details = await photoExif.readPhotoDetails(buffer);
         const info = db.prepare(
-          `INSERT INTO homeglow_photos (source_id, filename, original_name, mime_type, size) VALUES (?, ?, ?, ?, ?)`
-        ).run(sourceId, filename, part.filename || null, sniffed.mime, buffer.length);
+          `INSERT INTO homeglow_photos (source_id, filename, original_name, mime_type, size, taken_on, latitude, longitude, details_read_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+        ).run(sourceId, filename, part.filename || null, sniffed.mime, buffer.length, details.takenOn, details.latitude, details.longitude);
         added.push({ id: info.lastInsertRowid, filename, original_name: part.filename });
       } catch (err) {
         console.error('Upload failure for part:', err);
@@ -7231,17 +7259,23 @@ fastify.get('/api/photo-items', async (request, reply) => {
           return photos;
         } else if (source.type === 'HomeGlowPhotos') {
           const rows = db.prepare(
-            'SELECT id, filename FROM homeglow_photos WHERE source_id = ? ORDER BY uploaded_at DESC'
+            'SELECT id, filename, taken_on, latitude, longitude FROM homeglow_photos WHERE source_id = ? ORDER BY uploaded_at DESC'
           ).all(source.id);
-          const photos = rows.map((r) => ({
-            id: `homeglow-${r.id}`,
-            url: `/api/photo-sources/${source.id}/uploaded/${r.id}/file`,
-            thumbnail: `/api/photo-sources/${source.id}/uploaded/${r.id}/file`,
-            type: 'IMAGE',
-            source_id: source.id,
-            source_name: source.name,
-            source_type: 'HomeGlowPhotos',
-          }));
+          const photos = rows.map((r) => {
+            // What the camera recorded: no people (services/photoExif.js).
+            const place = r.latitude != null ? placeName(r.latitude, r.longitude) : null;
+            return {
+              ...(r.taken_on ? { takenOn: r.taken_on } : {}),
+              ...(place ? { place } : {}),
+              id: `homeglow-${r.id}`,
+              url: `/api/photo-sources/${source.id}/uploaded/${r.id}/file`,
+              thumbnail: `/api/photo-sources/${source.id}/uploaded/${r.id}/file`,
+              type: 'IMAGE',
+              source_id: source.id,
+              source_name: source.name,
+              source_type: 'HomeGlowPhotos',
+            };
+          });
           shuffleInPlace(photos);
           return photos;
         }
@@ -7472,6 +7506,10 @@ const start = async () => {
 
     await fastify.listen({ port: process.env.PORT || 5000, host: '0.0.0.0' });
     console.log(`Server running on port ${process.env.PORT || 5000}`);
+    // Dates and places for photos uploaded before the server read them, once.
+    photoExif.readPendingPhotoDetails(db, path.join(UPLOADS_ROOT, 'homeglow-photos'))
+      .then((read) => { if (read) console.log(`Photo details: read ${read} uploaded photo(s)`); })
+      .catch((error) => console.warn('Photo details: could not read uploaded photos:', error.message));
     // Panels on the dashboard: open the live link to Home Assistant.
     try {
       haPanels.refreshWatched();
