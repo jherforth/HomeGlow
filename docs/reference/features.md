@@ -119,9 +119,13 @@ tap away, and each display remembers which it last used). Each person has a
 tab, and unassigned bonus chores have one of their own. A tab shows:
 
 - **A week calendar**, Sunday to Saturday with dates, listing the chores that
-  land on each day (hidden schedules left out). Arrows step to other weeks, for
-  every-other-day and monthly chores. Chores with no fixed day (one-time with
-  no date, "again after done") are listed under it.
+  land on each day (hidden schedules left out). Past days read the person's
+  chore history: ✓ done (a stays-until-done chore done on a later day shows
+  there, marked late), ✗ missed or not done, ⏳ a stays-until-done chore still
+  waiting; vacation days are striped and marked 🏖️, and days before a schedule
+  existed show nothing. An "again after done" chore sits on its next date (the
+  server rewrites its crontab to that date when it's done). Arrows step to other
+  weeks. Chores with no fixed day (one-time with no date) are listed under it.
 - **The person's chores grouped by schedule**: "Every day", "Weekdays",
   "Mon · Wed · Fri", "Every other day", "Monthly · day 1",
   "Every 3 months · Jan 15, Apr 15, Jul 15, Oct 15", "Every year · Mar 20",
@@ -133,7 +137,9 @@ tab, and unassigned bonus chores have one of their own. A tab shows:
   chores, with **New chore** right there. A group can change its days (with a
   count of the chores it changes), be copied to other people (chores they
   already have stay put), or be removed. A chore is dragged (mouse or finger)
-  or moved with **Move to** between groups.
+  between groups. Each repeating chore's row has a **Stays until done** toggle
+  (Day Of ↔ Until Completed); the day pickers have Every day, Weekdays and
+  Weekends quick buttons.
 
 A group is **not stored**: it is the person's schedules whose crontab day
 fields match (`utils/choreScheduleGroups.js`). Each chore keeps its own schedule

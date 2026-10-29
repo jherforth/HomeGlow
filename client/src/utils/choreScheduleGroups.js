@@ -18,6 +18,7 @@
 // each schedule's own, and are kept when its group's days change.
 
 import { CronExpressionParser } from 'cron-parser';
+import { addDays, cronFiresOn } from './choreDays.js';
 
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
 
@@ -287,4 +288,89 @@ export function timingFallsOn(timing, date, { schedule = null, tz } = {}) {
 export function weekDates(date = new Date(), offset = 0) {
   const start = new Date(date.getFullYear(), date.getMonth(), date.getDate() - date.getDay() + offset * 7);
   return Array.from({ length: 7 }, (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
+}
+
+// 'YYYY-MM-DD' of a local Date.
+export const dateKeyOf = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+// The first date on or after `fromKey` that `crontab` fires on, within
+// `limit` days; null if none. An again-after-done schedule's crontab is the
+// date it comes back (the server rewrites it when the chore is done), or its
+// start days before it's ever been done.
+export function nextFireOn(crontab, fromKey, limit = 400) {
+  if (!crontab) return null;
+  for (let i = 0; i <= limit; i += 1) {
+    const key = addDays(fromKey, i);
+    if (cronFiresOn(crontab, key)) return key;
+  }
+  return null;
+}
+
+const inVacation = (vacation, key) => !!vacation && vacation.enabled === true
+  && !(vacation.startDate && key < vacation.startDate) && !(vacation.endDate && key > vacation.endDate);
+
+const STICKY = new Set(['until-completed', 'once-completed']);
+
+/**
+ * The week calendar for one person: for each date key, the chores on it and
+ * how each went. `rows` is chore history for that person and those dates.
+ *   done     checked off that day (on its day, or late: `late` is true)
+ *   missed   the midnight job logged a miss
+ *   notDone  a past day it was due, with nothing logged
+ *   waiting  a past day a stays-until-done chore was due, not done that day
+ *   today    due today, not done yet
+ *   planned  a future day
+ * Vacation days are flagged; hidden chores only appear where they were done.
+ * `noDay` lists chores that can't be placed (one-time with no date, or an
+ * again-after-done one with no next date).
+ */
+export function calendarWeek({ groups, dates, today, rows = [], vacation = null }) {
+  const done = new Map(); // `${chore_id}|${date}` → true
+  const missed = new Set();
+  for (const r of rows) {
+    if (r.chore_id == null) continue;
+    const k = `${r.chore_id}|${r.date}`;
+    if (r.kind === 'missed') missed.add(k);
+    else if (r.kind === 'completion' || r.kind == null) done.set(k, true);
+  }
+  const days = dates.map((date) => ({ date, vacation: inVacation(vacation, date), items: [] }));
+  const noDay = [];
+  for (const g of groups) {
+    for (const s of g.schedules) {
+      let dueKeys = [];
+      let placeable = true;
+      if (g.timing.kind === 'once') {
+        if (g.timing.dueDate) dueKeys = [g.timing.dueDate]; else placeable = false;
+      } else if (g.timing.kind === 'after') {
+        const next = s.visible ? nextFireOn(s.crontab, today) : null;
+        if (next) dueKeys = [next]; else placeable = false;
+      } else if (s.crontab) {
+        dueKeys = dates.filter((d) => cronFiresOn(s.crontab, d));
+      }
+      // Nothing was due before the schedule existed (created_at is UTC; its
+      // date is close enough for marking past days).
+      const since = s.created_at ? String(s.created_at).slice(0, 10) : null;
+      const due = new Set(dueKeys.filter((d) => !since || d >= since || d >= today));
+      let shown = false;
+      for (const day of days) {
+        const k = `${s.chore_id}|${day.date}`;
+        const isDue = due.has(day.date) && (s.visible || day.date < today);
+        let state = null;
+        if (done.has(k)) state = 'done';
+        else if (!isDue || !s.visible && day.date >= today) state = null;
+        else if (missed.has(k)) state = 'missed';
+        else if (day.date > today) state = 'planned';
+        else if (day.date === today) state = 'today';
+        else if (day.vacation) state = 'planned';
+        else state = s.crontab && STICKY.has(s.duration) ? 'waiting' : 'notDone';
+        if (state) {
+          day.items.push({ schedule: s, state, late: state === 'done' && !due.has(day.date) });
+          shown = true;
+        }
+      }
+      if (!placeable && !shown && s.visible) noDay.push({ schedule: s, timing: g.timing });
+    }
+  }
+  for (const day of days) day.items.sort((a, b) => String(a.schedule.title).localeCompare(String(b.schedule.title)));
+  return { days, noDay };
 }

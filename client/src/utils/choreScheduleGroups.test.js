@@ -14,6 +14,8 @@ import {
   COMMON_TIMINGS,
   monthsTiming,
   monthsFromStart,
+  nextFireOn,
+  calendarWeek,
 } from './choreScheduleGroups.js';
 
 describe('parseDaysOfWeek', () => {
@@ -154,5 +156,81 @@ describe('every few months and yearly', () => {
   it('puts them on the calendar on their days only', () => {
     expect(timingFallsOn(monthsTiming(28, [1, 4, 7, 10]), new Date(2026, 9, 28))).toBe(true);
     expect(timingFallsOn(monthsTiming(28, [1, 4, 7, 10]), new Date(2026, 10, 28))).toBe(false);
+  });
+});
+
+describe('nextFireOn', () => {
+  it('finds the next date a crontab fires, including the date the server sets after a chore is done', () => {
+    expect(nextFireOn('0 0 2 2 *', '2026-10-28')).toBe('2027-02-02');
+    expect(nextFireOn('0 0 * * *', '2026-10-28')).toBe('2026-10-28');
+    expect(nextFireOn(null, '2026-10-28')).toBeNull();
+  });
+});
+
+describe('calendarWeek', () => {
+  const dates = ['2026-10-25', '2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31'];
+  const today = '2026-10-28';
+  const S = (id, chore_id, crontab, extra = {}) => ({ id, chore_id, user_id: 1, title: `c${chore_id}`, crontab, visible: 1, duration: 'day-of', ...extra });
+  const group = (schedules) => ({ timing: timingOfSchedule(schedules[0]), schedules });
+  const state = (week, date, choreId) => week.days.find((d) => d.date === date).items.find((i) => i.schedule.chore_id === choreId);
+
+  it('marks done, missed, not done, today and planned', () => {
+    const week = calendarWeek({
+      groups: [group([S(1, 1, '0 0 * * *')])],
+      dates,
+      today,
+      rows: [{ chore_id: 1, date: '2026-10-25', kind: 'completion' }, { chore_id: 1, date: '2026-10-26', kind: 'missed' }],
+    });
+    expect(state(week, '2026-10-25', 1).state).toBe('done');
+    expect(state(week, '2026-10-26', 1).state).toBe('missed');
+    expect(state(week, '2026-10-27', 1).state).toBe('notDone');
+    expect(state(week, '2026-10-28', 1).state).toBe('today');
+    expect(state(week, '2026-10-29', 1).state).toBe('planned');
+  });
+
+  it('marks nothing on days before the schedule existed', () => {
+    const week = calendarWeek({ groups: [group([S(1, 1, '0 0 * * *', { created_at: '2026-10-27 15:00:00' })])], dates, today });
+    expect(state(week, '2026-10-26', 1)).toBeUndefined();
+    expect(state(week, '2026-10-27', 1).state).toBe('notDone');
+  });
+
+  it('shows a stays-until-done chore done late on the day it was done', () => {
+    const week = calendarWeek({
+      groups: [group([S(1, 5, '0 0 * * 0', { duration: 'until-completed' })])],
+      dates,
+      today,
+      rows: [{ chore_id: 5, date: '2026-10-27', kind: 'completion' }],
+    });
+    expect(state(week, '2026-10-25', 5).state).toBe('waiting');
+    expect(state(week, '2026-10-27', 5)).toMatchObject({ state: 'done', late: true });
+  });
+
+  it('puts an again-after-done chore on its next date, and one-time chores on theirs', () => {
+    const week = calendarWeek({
+      groups: [
+        group([S(1, 2, '0 0 30 10 *', { duration: 'once-completed', interval: '3m' })]),
+        group([S(2, 3, null, { due_date: '2026-10-31' })]),
+        group([S(3, 4, null)]),
+      ],
+      dates,
+      today,
+    });
+    expect(state(week, '2026-10-30', 2).state).toBe('planned');
+    expect(state(week, '2026-10-31', 3).state).toBe('planned');
+    expect(week.noDay.map((n) => n.schedule.chore_id)).toEqual([4]);
+  });
+
+  it('treats vacation days as off, and leaves hidden chores off except where done', () => {
+    const week = calendarWeek({
+      groups: [group([S(1, 1, '0 0 * * *', { visible: 0 })]), group([S(2, 6, '0 0 * * 1')])],
+      dates,
+      today,
+      rows: [{ chore_id: 1, date: '2026-10-25', kind: 'completion' }],
+      vacation: { enabled: true, startDate: '2026-10-26', endDate: '2026-10-26' },
+    });
+    expect(state(week, '2026-10-25', 1).state).toBe('done');
+    expect(state(week, '2026-10-29', 1)).toBeUndefined();
+    expect(week.days[1].vacation).toBe(true);
+    expect(state(week, '2026-10-26', 6).state).toBe('planned');
   });
 });

@@ -468,9 +468,6 @@
     "show": "Show on the dashboard",
     "hidden": "Hidden",
     "staysUntilDone": "Stays until done",
-    "moveTo": "Move to another schedule",
-    "moveTitle": "Move {{title}} to…",
-    "noOtherGroups": "No other schedules yet",
     "choreSettings": "Due time, sound and other settings",
     "changeDays": "Change days",
     "copyTo": "Copy to another person",
@@ -540,6 +537,23 @@
     "nineMonthsNote": "Every 9 months doesn't line up with the calendar, so it counts from when it's done.",
     "fromDoneHelp": "It shows up now, then comes back that long after it's checked off.",
     "fromDatesHelp": "Lands on: {{timing}}",
+    "nowSticky": "{{title}} now stays until it's done.",
+    "nowDayOf": "{{title}} now shows on its days only.",
+    "late": "late",
+    "vacation": "Vacation",
+    "legend": {
+      "done": "done",
+      "missed": "missed or not done",
+      "waiting": "waiting (stays until done)"
+    },
+    "state": {
+      "done": "done",
+      "missed": "missed",
+      "notDone": "not done",
+      "waiting": "waiting to be done",
+      "today": "today",
+      "planned": "coming up"
+    },
     "timing": {
       "everyDay": "Every day",
       "weekdays": "Weekdays",
