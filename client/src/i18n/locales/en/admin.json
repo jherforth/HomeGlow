@@ -291,7 +291,7 @@
     },
     "coffeeTableRate": "Seconds between photos",
     "photoDetails": "Show photo details",
-    "photoDetailsHelp": "When it was taken, who is in it and where, on each photo, as far as the photo says. Immich photos can show all three, Google Photos only the date.",
+    "photoDetailsHelp": "When it was taken, who is in it and where, on each photo, as far as the photo says. Immich photos can show all three, uploaded photos the date and place, Google Photos only the date.",
     "expand": {
       "heading": "Expand widgets",
       "enable": "Let widgets expand",

@@ -291,7 +291,7 @@
     },
     "coffeeTableRate": "Segundos entre fotos",
     "photoDetails": "Mostrar detalles de las fotos",
-    "photoDetailsHelp": "Cuándo se tomó, quién aparece y dónde, en cada foto, en la medida en que la foto lo indique. Las fotos de Immich pueden mostrar las tres cosas; las de Google Fotos, solo la fecha.",
+    "photoDetailsHelp": "Cuándo se tomó, quién aparece y dónde, en cada foto, en la medida en que la foto lo indique. Las fotos de Immich pueden mostrar las tres cosas; las subidas, la fecha y el lugar; las de Google Fotos, solo la fecha.",
     "expand": {
       "heading": "Ampliar widgets",
       "enable": "Permitir ampliar widgets",

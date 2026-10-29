@@ -4,8 +4,8 @@
 //
 //   Immich         takenOn, people (the faces it named), place (from GPS)
 //   Google Photos  takenOn only: the Picker API shares no people or places
-//   Uploads        nothing: the browser resizes them first, which drops the
-//                  camera's data
+//   Uploads        takenOn and place, from the camera's EXIF (services/photoExif.js,
+//                  services/placeLookup.js); no people
 
 const DATE_KEY = /^(\d{4}-\d{2}-\d{2})/;
 
