@@ -36,7 +36,27 @@ const writeOpen = (key, open) => {
   try { localStorage.setItem(`homeglow_adminGroupOpen:${key}`, open ? '1' : '0'); } catch { /* per-display convenience only */ }
 };
 
-const headingSx = { color: 'text.secondary', fontWeight: 600, lineHeight: 1.6, letterSpacing: '0.06em' };
+// A section's heading sits on a band: the accent's tint with its edge down
+// the left, the fields' corners, so a long page reads as its parts. Shared
+// with the headings drawn outside an AdminGroup (Chores' Schedules, Controls
+// on displays), which then match.
+export const adminHeadingRowSx = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  flexWrap: 'wrap',
+  gap: 1,
+  minHeight: 44,
+  mb: 1,
+  pl: 1.5,
+  pr: 0.75,
+  py: 0.5,
+  borderRadius: 1,
+  bgcolor: 'rgba(var(--accent-rgb), 0.08)',
+  borderLeft: '3px solid var(--accent)',
+};
+export const adminHeadingTextSx = { color: 'text.primary', fontWeight: 700, lineHeight: 1.6, letterSpacing: '0.08em' };
+const headingSx = adminHeadingTextSx;
 
 // A heading, then the group's rows in one bordered block, with the same
 // corners as the fields inside it. `action` sits at the right end of the
@@ -55,9 +75,9 @@ export const AdminGroup = ({ title, action, accent = false, children, sx, collap
     <ButtonBase
       onClick={toggle}
       aria-expanded={open}
-      sx={{ borderRadius: 1, px: 0.5, mx: -0.5, gap: 0.5, justifyContent: 'flex-start' }}
+      sx={{ borderRadius: 1, px: 0.5, ml: -0.75, gap: 0.5, justifyContent: 'flex-start' }}
     >
-      <ExpandMore fontSize="small" sx={{ color: 'text.secondary', transition: 'transform 150ms', transform: open ? 'none' : 'rotate(-90deg)' }} />
+      <ExpandMore fontSize="small" sx={{ color: 'var(--accent)', transition: 'transform 150ms', transform: open ? 'none' : 'rotate(-90deg)' }} />
       <Typography variant="overline" component="h3" sx={headingSx}>
         {title}{count !== undefined ? ` (${count})` : ''}
       </Typography>
@@ -68,7 +88,8 @@ export const AdminGroup = ({ title, action, accent = false, children, sx, collap
   return (
     <Box component="section" id={id} sx={{ mb: 3, scrollMarginTop: 8, ...sx }}>
       {(title || action) && (
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, minHeight: 32, mb: 1, px: 0.5 }}>
+        // An action with no title (a lone Add button) keeps to the right, unbanded.
+        <Box sx={title ? adminHeadingRowSx : { display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
           {heading}
           {action}
         </Box>

@@ -48,7 +48,7 @@ import { getServerTimezoneSync } from '../utils/timezone.js';
 import SoundPicker from './SoundPicker.jsx';
 import ChoreIconPicker from './ChoreIconPicker.jsx';
 import { useTranslation } from 'react-i18next';
-import { AdminGroup, AdminNote, AdminRow, AdminSortControl } from './AdminRows.jsx';
+import { AdminGroup, AdminNote, AdminRow, AdminSortControl, adminHeadingRowSx, adminHeadingTextSx } from './AdminRows.jsx';
 import { getWeekdayLabels } from '../utils/dateUtils.js';
 import useIsMobile from '../hooks/useIsMobile.js';
 import { compareByKey } from '../utils/choreHelpers.js';
@@ -928,8 +928,8 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
 
       {/* ── SCHEDULES ────────────────────────────────────── */}
       <Box ref={schedulesSectionRef} sx={{ scrollMarginTop: 8 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap', minHeight: 32, mb: 1, px: 0.5 }}>
-          <Typography variant="overline" component="h3" sx={{ color: 'text.secondary', fontWeight: 600, lineHeight: 1.6, letterSpacing: '0.06em' }}>
+        <Box sx={adminHeadingRowSx}>
+          <Typography variant="overline" component="h3" sx={adminHeadingTextSx}>
             {t('chores:schedules.schedulesColumn')}
           </Typography>
           <ToggleButtonGroup

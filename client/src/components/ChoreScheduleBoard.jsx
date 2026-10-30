@@ -42,6 +42,7 @@ import {
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../utils/apiConfig.js';
+import { adminHeadingRowSx, adminHeadingTextSx } from './AdminRows.jsx';
 import { getWeekdayLabels, getWeekdayOptions } from '../utils/dateUtils.js';
 import useIsMobile from '../hooks/useIsMobile.js';
 import { getTodayDateString } from '../utils/choreHelpers.js';
@@ -1044,8 +1045,8 @@ export default function ChoreScheduleBoard({
 
       {renderCalendar()}
 
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-        <Typography variant="overline" component="h3" sx={{ color: 'text.secondary', fontWeight: 600, letterSpacing: '0.06em' }}>
+      <Box sx={{ ...adminHeadingRowSx, justifyContent: 'flex-start', mb: 1.5 }}>
+        <Typography variant="overline" component="h3" sx={adminHeadingTextSx}>
           {t('chores:board.timingsHeading', { name: personName })}
         </Typography>
         {busy && <CircularProgress size={16} />}
