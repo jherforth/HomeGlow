@@ -285,8 +285,13 @@ and set up in **Admin → Family → Routines**, beside Chores.
 - **For several people at once:** a new routine can be for several people; each gets
   their own copy, with their own ticks and streak. Routines can be selected and deleted
   together, as chores can.
-- **Steps** are built once in the Steps tab, with a name and an icon, and used in any
-  routine, in the order chosen there. A step in use can't be deleted.
+- **Steps** are built once, with a name and an icon, and used in any routine, in the
+  order chosen there. A step in use can't be deleted. They're made in the Steps tab, or
+  right from the routine editor: its *Add a step* box lists **＋ New step** first, which
+  opens the step dialog on top of the routine. It also lists steps not yet in the
+  routine, then chores, which become steps when picked. Typing a name that matches
+  nothing offers *Create step "…"* with that name filled in. A step made there joins
+  the routine at once.
 - **Ticked in the Chores widget.** A routine's card shows its steps, an *n/m* chip and a
   progress bar. Ticking the last step completes the chore. Unticking one undoes it and keeps
   the others. The card's own button still completes the whole routine at once (every step
