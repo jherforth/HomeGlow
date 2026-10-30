@@ -56,7 +56,6 @@ const sentenceCase = (
 
 const SUBSECTION_LABELS = {
   chores: { definitions: 'admin:users.chores', history: 'admin:chores.history', settings: 'admin:chores.settings' },
-  routines: { routines: 'chores:routines.heading', steps: 'chores:routines.stepsHeading' },
 };
 
 // The panel's frame: a sidebar on a display, a list you drill into on a
