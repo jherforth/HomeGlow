@@ -15,7 +15,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { Add, Delete, Edit, Refresh, Warning } from '@mui/icons-material';
+import { Add, ContentCopy, Delete, Edit, Refresh, Warning } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { AdminGroup, AdminNote, AdminRow } from './AdminRows.jsx';
 import { API_BASE_URL } from '../utils/apiConfig.js';
@@ -291,6 +291,11 @@ export default function RoutinesTab({ subsection, setSaveMessage }) {
                           <Edit fontSize="small" />
                         </IconButton>
                       </Tooltip>
+                      <Tooltip title={t('chores:routines.copy')}>
+                        <IconButton size="small" onClick={() => setEditor({ open: true, routine: null, copyOf: routine })} aria-label={`${t('chores:routines.copy')}: ${routine.name}`}>
+                          <ContentCopy fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
                       <Tooltip title={t('common:actions.delete')}>
                         <IconButton size="small" color="error" onClick={() => setDeleting(routine)} aria-label={`${t('common:actions.delete')} ${routine.name}`}>
                           <Delete fontSize="small" />
@@ -307,6 +312,7 @@ export default function RoutinesTab({ subsection, setSaveMessage }) {
         <RoutineEditorDialog
           open={editor.open}
           routine={editor.routine}
+          copyOf={editor.copyOf}
           steps={steps}
           users={users}
           sources={sources}

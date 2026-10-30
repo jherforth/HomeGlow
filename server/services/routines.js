@@ -188,8 +188,10 @@ function planCalendarSync({ routine, pinned, schedules, wanted, today, completed
  *              neutral, as for missed chores and Chore Metrics: done, one
  *              counts; not done, it neither extends nor breaks the run.
  */
-function streak(routine, completions, pinned, today, { isVacation = () => false } = {}) {
+function streak(routine, completions, pinned, today, { isVacation = () => false, late = new Set() } = {}) {
     const scheduleId = routine.trigger === 'calendar' ? pinned?.[today]?.scheduleId : routine.schedule_id;
+    // Finished late today: the run is over, not waiting on today.
+    if (scheduleId && late.has(`${scheduleId}|${today}`)) return 0;
     const doneToday = Boolean(scheduleId) && completions.has(`${scheduleId}|${today}`);
     return runThrough(routine, completions, pinned, doneToday ? today : shiftDate(today, -1), isVacation);
 }
@@ -245,10 +247,13 @@ function milestoneDue(routine, run) {
 }
 
 /** Finished by its end time? null when it has none or isn't finished. */
-function onTime(routine, finishedAt, tz) {
+// With `date`, the day the routine was for: finished on a later day is late,
+// whatever the clock said (a parent ticking yesterday's at 06:00).
+function onTime(routine, finishedAt, tz, date = null) {
     if (!routine.end_time || !finishedAt) return null;
     const at = new Date(String(finishedAt).includes('T') ? finishedAt : `${String(finishedAt).replace(' ', 'T')}Z`);
     if (Number.isNaN(at.getTime())) return null;
+    if (date) return `${dateIn(tz, at)} ${timeIn(tz, at)}` <= `${date} ${routine.end_time}`;
     return timeIn(tz, at) <= routine.end_time;
 }
 

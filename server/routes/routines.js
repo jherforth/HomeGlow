@@ -79,16 +79,30 @@ function registerRoutineRoutes(fastify, deps) {
     "SELECT created_at FROM chore_history WHERE chore_schedule_id = ? AND date = ? AND kind = 'completion'",
   ).get(scheduleId, date);
 
-  // 'scheduleId|date' for every completion of the routine's schedules.
-  function completionsOf(r, pinned) {
+  // 'scheduleId|date' for every completion of the routine's schedules, split
+  // by whether it counts toward the streak. With an end time, only one
+  // finished by it counts: a late finish is done, but it breaks the run.
+  function finishesOf(r, pinned) {
     const ids = [r.schedule_id, ...Object.values(pinned).map((p) => p.scheduleId)].filter(Boolean);
-    if (!ids.length) return new Set();
+    const onTime = new Set();
+    const late = new Set();
+    if (!ids.length) return { onTime, late };
     const since = rules.shiftDate(today(), -400);
     const rows = db.prepare(`
-      SELECT chore_schedule_id, date FROM chore_history
+      SELECT chore_schedule_id, date, created_at FROM chore_history
       WHERE kind = 'completion' AND date >= ? AND chore_schedule_id IN (${ids.map(() => '?').join(',')})
     `).all(since, ...ids);
-    return new Set(rows.map((row) => `${row.chore_schedule_id}|${row.date}`));
+    const tz = timezone();
+    for (const row of rows) {
+      const key = `${row.chore_schedule_id}|${row.date}`;
+      (rules.onTime(r, row.created_at, tz, row.date) === false ? late : onTime).add(key);
+    }
+    return { onTime, late };
+  }
+
+  function streakOf(r, pinned, date) {
+    const { onTime, late } = finishesOf(r, pinned);
+    return rules.streak(r, onTime, pinned, date, { isVacation, late });
   }
 
   // What the chore widget needs to draw a routine's card for a date.
@@ -107,10 +121,10 @@ function registerRoutineRoutes(fastify, deps) {
       steps: list.map((s) => ({ id: s.id, label: s.label, icon: s.icon || '' })),
       done: list.filter((s) => ticked.has(s.id)).map((s) => s.id),
       completed: Boolean(completion),
-      streak: rules.streak(r, completionsOf(r, pinned), pinned, date, { isVacation }),
+      streak: streakOf(r, pinned, date),
       startTime: r.trigger === 'calendar' ? (pinned[date]?.dueTime || r.start_time || null) : r.start_time,
       endTime: r.end_time || null,
-      onTime: completion ? rules.onTime(r, completion.created_at, timezone()) : null,
+      onTime: completion ? rules.onTime(r, completion.created_at, timezone(), date) : null,
     };
   }
 
@@ -121,7 +135,7 @@ function registerRoutineRoutes(fastify, deps) {
   // parent's correction.
   function payMilestone(r, date) {
     const pinned = pinnedOf(r.id);
-    const run = rules.streak(r, completionsOf(r, pinned), pinned, date, { isVacation });
+    const run = streakOf(r, pinned, date);
     if (run < r.last_award_streak) {
       // A new run: its milestones are earned again.
       db.prepare('UPDATE routines SET last_award_streak = 0 WHERE id = ?').run(r.id);
@@ -252,7 +266,7 @@ function registerRoutineRoutes(fastify, deps) {
     if (!newPerson && when(r) === when(v)) return;
     const day = today();
     const pinned = pinnedOf(r.id);
-    const base = newPerson ? 0 : rules.streakBefore(r, completionsOf(r, pinned), pinned, day, { isVacation });
+    const base = newPerson ? 0 : rules.streakBefore(r, finishesOf(r, pinned).onTime, pinned, day, { isVacation });
     db.prepare('UPDATE routines SET streak_base = ?, streak_base_date = ? WHERE id = ?').run(base, day, r.id);
     if (newPerson) db.prepare('UPDATE routines SET last_award_streak = 0 WHERE id = ?').run(r.id);
   }
