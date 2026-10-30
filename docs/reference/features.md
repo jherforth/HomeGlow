@@ -275,7 +275,7 @@ widget in step with the server.
 A routine is a checklist of steps a child ticks off: brush teeth, make bed, get dressed.
 It runs on chosen weekdays, or on the days of matching calendar events ("Get ready for
 soccer" on practice and game days). Routines used to be a plugin; they're built in now,
-and set up in **Admin → Family → Chores & routines**. That page lists the chore
+and set up in **Admin → Family → Chores**. That page lists the chore
 definitions (collapsed until opened), the routines, their steps (collapsed), then the
 schedules. An old link to Family → Routines lands there.
 
