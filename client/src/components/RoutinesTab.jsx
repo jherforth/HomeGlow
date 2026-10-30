@@ -12,18 +12,17 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
-  TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
-import { Add, Delete, Edit, Refresh, Save, Warning } from '@mui/icons-material';
+import { Add, Delete, Edit, Refresh, Warning } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { AdminGroup, AdminNote, AdminRow } from './AdminRows.jsx';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getWeekdayLabels } from '../utils/dateUtils.js';
 import useIsMobile from '../hooks/useIsMobile.js';
-import ChoreIconPicker from './ChoreIconPicker.jsx';
 import RoutineEditorDialog from './RoutineEditorDialog.jsx';
+import RoutineStepDialog from './RoutineStepDialog.jsx';
 
 // The import note is shown until dismissed, once per import.
 const IMPORT_SEEN_KEY = 'homeglow.routinesImportSeen';
@@ -47,9 +46,7 @@ export default function RoutinesTab({ subsection, setSaveMessage }) {
   const [selected, setSelected] = useState(new Set());
   const [bulkDialog, setBulkDialog] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
-  const [stepForm, setStepForm] = useState({ id: null, label: '', icon: '' });
-  const [stepDialog, setStepDialog] = useState(false);
-  const [stepError, setStepError] = useState(null);
+  const [stepDialog, setStepDialog] = useState({ open: false, step: null });
 
   // The Admin Panel's one message area, as Chores uses it.
   const flash = useCallback((type, text) => {
@@ -148,20 +145,6 @@ export default function RoutinesTab({ subsection, setSaveMessage }) {
     }
   };
 
-  const saveStep = async () => {
-    setStepError(null);
-    try {
-      const body = { label: stepForm.label, icon: stepForm.icon || null };
-      if (stepForm.id) await axios.patch(`${API_BASE_URL}/api/routine-steps/${stepForm.id}`, body);
-      else await axios.post(`${API_BASE_URL}/api/routine-steps`, body);
-      setStepForm({ id: null, label: '', icon: '' });
-      setStepDialog(false);
-      load();
-    } catch (error) {
-      setStepError(error?.response?.data?.error || t('chores:routines.saveFailed'));
-    }
-  };
-
   const removeStep = async (step) => {
     try {
       await axios.delete(`${API_BASE_URL}/api/routine-steps/${step.id}`);
@@ -172,11 +155,7 @@ export default function RoutinesTab({ subsection, setSaveMessage }) {
     }
   };
 
-  const openStep = (step = null) => {
-    setStepError(null);
-    setStepForm(step ? { id: step.id, label: step.label, icon: step.icon || '' } : { id: null, label: '', icon: '' });
-    setStepDialog(true);
-  };
+  const openStep = (step = null) => setStepDialog({ open: true, step });
 
   const iconBox = (icon) => (
     <Box sx={{ width: 36, height: 36, borderRadius: 2, bgcolor: icon ? 'action.hover' : 'transparent', display: 'grid', placeItems: 'center', fontSize: 18 }}>
@@ -332,6 +311,7 @@ export default function RoutinesTab({ subsection, setSaveMessage }) {
           users={users}
           sources={sources}
           onClose={() => setEditor({ open: false, routine: null })}
+          onStepAdded={(step) => setSteps((current) => [...current, step])}
           onSaved={(saved) => {
             setEditor({ open: false, routine: null });
             flash('success', Array.isArray(saved.routines)
@@ -379,37 +359,12 @@ export default function RoutinesTab({ subsection, setSaveMessage }) {
           </DialogActions>
         </Dialog>
 
-        <Dialog
-          open={stepDialog}
-          onClose={() => setStepDialog(false)}
-          maxWidth="xs"
-          fullWidth
-          fullScreen={isMobile}
-          slotProps={{ paper: { component: 'form', onSubmit: (event) => { event.preventDefault(); saveStep(); } } }}
-        >
-          <DialogTitle>{stepForm.id ? t('chores:routines.editStep') : t('chores:routines.newStep')}</DialogTitle>
-          <DialogContent>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-              {stepError && <Alert severity="error">{stepError}</Alert>}
-              <TextField
-                fullWidth
-                size="small"
-                required
-                autoFocus
-                label={t('chores:routines.stepName')}
-                placeholder={t('chores:routines.stepPlaceholder')}
-                value={stepForm.label}
-                onChange={(event) => setStepForm((form) => ({ ...form, label: event.target.value }))}
-                slotProps={{ htmlInput: { maxLength: 60 } }}
-              />
-              <ChoreIconPicker value={stepForm.icon} onChange={(icon) => setStepForm((form) => ({ ...form, icon }))} />
-            </Box>
-          </DialogContent>
-          <DialogActions>
-            <Button type="button" onClick={() => setStepDialog(false)}>{t('common:actions.cancel')}</Button>
-            <Button type="submit" variant="contained" startIcon={<Save />} disabled={!stepForm.label.trim()}>{t('common:actions.save')}</Button>
-          </DialogActions>
-        </Dialog>
+        <RoutineStepDialog
+          open={stepDialog.open}
+          step={stepDialog.step}
+          onClose={() => setStepDialog({ open: false, step: null })}
+          onSaved={() => { setStepDialog({ open: false, step: null }); load(); }}
+        />
     </Box>
   );
 }

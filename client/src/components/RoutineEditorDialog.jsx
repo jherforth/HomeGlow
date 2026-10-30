@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Checkbox,
@@ -31,6 +32,8 @@ import { getWeekdayLabels } from '../utils/dateUtils.js';
 import useIsMobile from '../hooks/useIsMobile.js';
 import ChoreIconPicker from './ChoreIconPicker.jsx';
 import ExpiresSelect from './ExpiresSelect.jsx';
+import RoutineStepDialog from './RoutineStepDialog.jsx';
+import { routineStepOptions } from '../utils/routineStepOptions.js';
 
 const blank = (users) => ({
   name: '',
@@ -75,22 +78,38 @@ const fromRoutine = (routine) => ({
 // Family → Routines: making or changing one routine. A routine is a set of
 // steps from the library, for one person, on chosen weekdays or on days with
 // a matching calendar event (routes/routines.js keeps its chore in step).
-export default function RoutineEditorDialog({ open, routine, steps, users, sources, onClose, onSaved }) {
+// A step made here (typed, or from a chore) joins the library through
+// onStepAdded as well as this routine.
+export default function RoutineEditorDialog({ open, routine, steps, users, sources, onClose, onSaved, onStepAdded }) {
   const { t } = useTranslation(['chores', 'common']);
   const isMobile = useIsMobile();
   const [form, setForm] = useState(() => blank(users));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [chores, setChores] = useState([]);
+  const [stepInput, setStepInput] = useState('');
+  const [newStep, setNewStep] = useState({ open: false, step: null });
 
   useEffect(() => {
     if (!open) return;
     setForm(routine ? fromRoutine(routine) : blank(users));
     setError(null);
+    setStepInput('');
   }, [open, routine, users]);
+
+  // Chores, to offer as steps. Without them the picker still has the library.
+  useEffect(() => {
+    if (!open) return undefined;
+    let live = true;
+    axios.get(`${API_BASE_URL}/api/chores`)
+      .then((res) => { if (live) setChores(Array.isArray(res.data) ? res.data : []); })
+      .catch(() => { if (live) setChores([]); });
+    return () => { live = false; };
+  }, [open]);
 
   const set = (patch) => setForm((current) => ({ ...current, ...patch }));
   const library = new Map(steps.map((step) => [step.id, step]));
-  const unused = steps.filter((step) => !form.steps.includes(step.id));
+  const stepOptions = routineStepOptions({ steps, used: form.steps, chores, input: stepInput });
   const weekdays = getWeekdayLabels(0);
 
   const move = (index, delta) => {
@@ -99,6 +118,29 @@ export default function RoutineEditorDialog({ open, routine, steps, users, sourc
     next.splice(index + delta, 0, taken);
     set({ steps: next });
   };
+
+  const addStep = (step) => setForm((current) => ({ ...current, steps: [...current.steps, step.id] }));
+
+  const added = (step) => {
+    onStepAdded?.(step);
+    addStep(step);
+  };
+
+  const pickStep = async (option) => {
+    setStepInput('');
+    if (option.kind === 'step') return addStep(option);
+    if (option.kind === 'create') return setNewStep({ open: true, step: { label: option.label, icon: '' } });
+    // A chore becomes a step with its title and icon; nothing else carries over.
+    try {
+      const res = await axios.post(`${API_BASE_URL}/api/routine-steps`, { label: option.label, icon: option.icon || null });
+      added(res.data);
+    } catch (err) {
+      setError(err?.response?.data?.error || t('chores:routines.saveFailed'));
+    }
+    return undefined;
+  };
+
+  const stepGroup = (option) => (option.kind === 'step' ? t('chores:routines.yourSteps') : option.kind === 'chore' ? t('chores:routines.fromChores') : '');
 
   const save = async () => {
     setSaving(true);
@@ -309,21 +351,44 @@ export default function RoutineEditorDialog({ open, routine, steps, users, sourc
                 </Box>
               );
             })}
-            {steps.length === 0 ? (
-              <Typography variant="body2" color="text.secondary">{t('chores:routines.noLibrary')}</Typography>
-            ) : (
-              <FormControl size="small" sx={{ mt: 1, minWidth: 220 }} disabled={unused.length === 0}>
-                <InputLabel id="routine-add-step">{t('chores:routines.addStep')}</InputLabel>
-                <Select
-                  labelId="routine-add-step"
-                  label={t('chores:routines.addStep')}
-                  value=""
-                  onChange={(event) => set({ steps: [...form.steps, Number(event.target.value)] })}
-                >
-                  {unused.map((step) => <MenuItem key={step.id} value={step.id}>{step.icon ? `${step.icon} ` : ''}{step.label}</MenuItem>)}
-                </Select>
-              </FormControl>
-            )}
+            <Autocomplete
+              size="small"
+              sx={{ mt: 1, maxWidth: 360 }}
+              options={stepOptions}
+              value={null}
+              inputValue={stepInput}
+              onInputChange={(_, value, reason) => { if (reason !== 'reset') setStepInput(value); }}
+              onChange={(_, option) => { if (option) pickStep(option); }}
+              filterOptions={(options) => options}
+              autoHighlight
+              groupBy={stepGroup}
+              getOptionLabel={(option) => option.label}
+              getOptionKey={(option) => `${option.kind}:${option.id ?? option.label}`}
+              renderGroup={(params) => (
+                <li key={params.key}>
+                  {params.group && (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', px: 2, pt: 1, pb: 0.5, fontWeight: 600 }}>
+                      {params.group}
+                    </Typography>
+                  )}
+                  <Box component="ul" sx={{ p: 0 }}>{params.children}</Box>
+                </li>
+              )}
+              renderOption={(props, option) => {
+                const { key, ...rest } = props;
+                return (
+                  <li key={key} {...rest}>
+                    {option.kind === 'create'
+                      ? t('chores:routines.createStep', { name: option.label })
+                      : `${option.icon ? `${option.icon} ` : ''}${option.label}`}
+                  </li>
+                );
+              }}
+              noOptionsText={t('chores:routines.typeNewStep')}
+              renderInput={(params) => (
+                <TextField {...params} label={t('chores:routines.addStep')} placeholder={t('chores:routines.addStepPlaceholder')} />
+              )}
+            />
           </Box>
 
           <Box>
@@ -397,6 +462,12 @@ export default function RoutineEditorDialog({ open, routine, steps, users, sourc
           {routine ? t('common:actions.save') : t('chores:routines.create')}
         </Button>
       </DialogActions>
+      <RoutineStepDialog
+        open={newStep.open}
+        step={newStep.step}
+        onClose={() => setNewStep({ open: false, step: null })}
+        onSaved={(step) => { setNewStep({ open: false, step: null }); added(step); }}
+      />
     </Dialog>
   );
 }
