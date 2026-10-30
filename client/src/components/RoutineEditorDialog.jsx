@@ -25,7 +25,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { ArrowDownward, ArrowUpward, Cancel, Close, Save } from '@mui/icons-material';
+import { Add, ArrowDownward, ArrowUpward, Cancel, Close, Save } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getWeekdayLabels } from '../utils/dateUtils.js';
@@ -376,13 +376,15 @@ export default function RoutineEditorDialog({ open, routine, steps, users, sourc
               )}
               renderOption={(props, option) => {
                 const { key, ...rest } = props;
-                return (
-                  <li key={key} {...rest}>
-                    {option.kind === 'create'
-                      ? t('chores:routines.createStep', { name: option.label })
-                      : `${option.icon ? `${option.icon} ` : ''}${option.label}`}
-                  </li>
-                );
+                if (option.kind === 'create') {
+                  return (
+                    <Box component="li" key={key} {...rest} sx={{ gap: 1, color: 'primary.main', fontWeight: 500 }}>
+                      <Add fontSize="small" />
+                      {option.label ? t('chores:routines.createStep', { name: option.label }) : t('chores:routines.newStep')}
+                    </Box>
+                  );
+                }
+                return <li key={key} {...rest}>{`${option.icon ? `${option.icon} ` : ''}${option.label}`}</li>;
               }}
               noOptionsText={t('chores:routines.typeNewStep')}
               renderInput={(params) => (

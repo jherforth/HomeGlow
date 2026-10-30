@@ -1,7 +1,9 @@
 // "Add a step" in the routine editor: what typing `input` offers. Library
 // steps not yet in the routine come first, then chores (a chore picked
 // becomes a new step with its title and icon), then "Create step" when the
-// text names no step and no chore.
+// text names no step and no chore. With nothing typed, "New step" comes
+// first instead (label ''), so a step that isn't listed can be made without
+// knowing to type it.
 const key = (text) => String(text || '').trim().toLocaleLowerCase();
 
 export function routineStepOptions({ steps = [], used = [], chores = [], input = '' }) {
@@ -26,8 +28,10 @@ export function routineStepOptions({ steps = [], used = [], chores = [], input =
   }
   fromChores.sort((a, b) => a.label.localeCompare(b.label));
 
-  const known = query && (stepNames.has(query) || seen.has(query));
-  const create = query && !known ? [{ kind: 'create', label: input.trim().slice(0, 60), icon: '' }] : [];
+  if (!query) return [{ kind: 'create', label: '', icon: '' }, ...fromSteps, ...fromChores];
+
+  const known = stepNames.has(query) || seen.has(query);
+  const create = known ? [] : [{ kind: 'create', label: input.trim().slice(0, 60), icon: '' }];
 
   return [...fromSteps, ...fromChores, ...create];
 }
