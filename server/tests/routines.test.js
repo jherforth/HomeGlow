@@ -152,6 +152,16 @@ test('on time: finished by the end time, in the household time zone', () => {
   assert.equal(rules.onTime(routine, '2026-10-13T12:05:00Z', TZ), false); // 08:05
   assert.equal(rules.onTime({ end_time: null }, '2026-10-13 11:55:00', TZ), null);
   assert.equal(rules.onTime(routine, null, TZ), null);
+  // Given the day it was for, a finish on a later day is late at any hour.
+  assert.equal(rules.onTime(routine, '2026-10-13 11:55:00', TZ, '2026-10-13'), true);
+  assert.equal(rules.onTime(routine, '2026-10-14 10:00:00', TZ, '2026-10-13'), false); // 06:00 the next day
+});
+
+test('a late finish today ends the run; it does not wait on today', () => {
+  const routine = { trigger: 'days', days: '', schedule_id: 9 };
+  const onTime = new Set(['9|2026-10-11', '9|2026-10-12']);
+  assert.equal(rules.streak(routine, onTime, {}, '2026-10-13'), 2, 'open today: the run so far');
+  assert.equal(rules.streak(routine, onTime, {}, '2026-10-13', { late: new Set(['9|2026-10-13']) }), 0);
 });
 
 test('a routine from the Admin Panel is checked and tidied', () => {

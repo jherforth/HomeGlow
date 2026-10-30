@@ -30,6 +30,8 @@ import {
 } from '@mui/material';
 import {
   Add,
+  ArrowDownward,
+  ArrowUpward,
   Edit,
   Delete,
   ContentCopy,
@@ -368,6 +370,21 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
   // scrolls it into view; with none it opens the new-schedule dialog with
   // the chore already picked, since there is nothing to scroll to.
   const schedulesSectionRef = useRef(null);
+  const choresSectionRef = useRef(null);
+  // The two sections' headers link to each other: a long chore list puts the
+  // schedules a long scroll away, and the other way round.
+  const jumpTo = (ref) => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const jumpLink = (ref, label, Icon) => (
+    <Button
+      size="small"
+      endIcon={<Icon fontSize="small" />}
+      onClick={() => jumpTo(ref)}
+      aria-label={t('chores:schedules.goTo', { section: label })}
+      sx={{ color: 'text.secondary', minWidth: 0 }}
+    >
+      {label}
+    </Button>
+  );
   const handleScheduleCountClick = (chore) => {
     if (getScheduleCountForChore(chore.id) === 0) {
       openCreateSchedule(chore.id);
@@ -767,10 +784,12 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
           under its tab bars (#230), so this tab no longer draws its own. */}
 
       {/* ── CHORE DEFINITIONS ────────────────────────────── */}
+      <Box ref={choresSectionRef} sx={{ scrollMarginTop: 8 }}>
       <AdminGroup
         title={t('chores:schedules.definitionsHeading')}
         action={(
-          <Box sx={{ display: 'flex', gap: 1 }}>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            {jumpLink(schedulesSectionRef, t('chores:schedules.jumpSchedules'), ArrowDownward)}
             <Tooltip title={t('common:actions.refresh')}>
               <IconButton size="small" onClick={fetchAll} aria-label={t('common:actions.refresh')}>
                 <Refresh fontSize="small" />
@@ -874,12 +893,16 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
         ))}
       </AdminGroup>
 
+      </Box>
+
       {/* ── SCHEDULES ────────────────────────────────────── */}
       <Box ref={schedulesSectionRef} sx={{ scrollMarginTop: 8 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap', minHeight: 32, mb: 1, px: 0.5 }}>
           <Typography variant="overline" component="h3" sx={{ color: 'text.secondary', fontWeight: 600, lineHeight: 1.6, letterSpacing: '0.06em' }}>
             {t('chores:schedules.schedulesColumn')}
           </Typography>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+          {jumpLink(choresSectionRef, t('chores:schedules.jumpChores'), ArrowUpward)}
           <ToggleButtonGroup
             size="small"
             exclusive
@@ -890,6 +913,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
             <ToggleButton value="person" sx={{ textTransform: 'none', px: 1.5 }}>{t('chores:board.viewByPerson')}</ToggleButton>
             <ToggleButton value="list" sx={{ textTransform: 'none', px: 1.5 }}>{t('chores:board.viewList')}</ToggleButton>
           </ToggleButtonGroup>
+          </Box>
         </Box>
         {scheduleView === 'person' ? (
           <ChoreScheduleBoard
