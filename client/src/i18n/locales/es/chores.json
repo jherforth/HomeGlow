@@ -676,5 +676,24 @@
     "manageSteps": "Gestionar pasos ({{n}})",
     "stepPrefix": "Paso:",
     "noRoutinesHere": "No hay rutinas aquí."
+  },
+  "scheduleFlow": {
+    "scheduleButton": "Programar",
+    "title": "Programar {{chore}}",
+    "titleFor": "Programar {{chore}} para {{name}}",
+    "whoTitle": "¿Para quién es?",
+    "whoInfo": "Elige a una persona, o a varias para darles a todas el mismo horario. Para darle a alguien un horario distinto, elige Siguiente horario al final.",
+    "bonusHint": "Para nadie en concreto: cualquiera puede hacerla",
+    "scheduled": "Programada: {{timing}}",
+    "reviewTitle": "Revisa y guarda",
+    "reviewKeep": "Se queda hasta hacerla.",
+    "reviewDrop": "Desaparece al terminar su día.",
+    "complete": "Terminar",
+    "nextInfo": "Si quieres programar esta tarea también para otra persona, con su propio horario, pulsa Siguiente horario.",
+    "next": "Siguiente horario",
+    "savedSoFar": "Programada hasta ahora:",
+    "savedOne": "Guardado para {{name}}: {{timing}}. ¿Quién sigue?",
+    "done_one": "Se guardó {{count}} horario para {{chore}}.",
+    "done_other": "Se guardaron {{count}} horarios para {{chore}}."
   }
 }

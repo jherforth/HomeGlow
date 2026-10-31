@@ -52,6 +52,7 @@ import useIsMobile from '../hooks/useIsMobile.js';
 import { compareByKey } from '../utils/choreHelpers.js';
 import ExpiresSelect from './ExpiresSelect.jsx';
 import ChoreScheduleBoard from './ChoreScheduleBoard.jsx';
+import ScheduleChoreDialog from './ScheduleChoreDialog.jsx';
 import RoutinesGroup from './RoutinesGroup.jsx';
 import ChoreHistoryTab from './ChoreHistoryTab.jsx';
 import RoutineStepsDialog from './RoutineStepsDialog.jsx';
@@ -311,6 +312,12 @@ export default function ChoreSchedulesTab({ setSaveMessage, section, onSection, 
   const [bulkDeleteDialog, setBulkDeleteDialog] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [savingChore, setSavingChore] = useState(false);
+  // The chore dialog's Schedule button: offered for a new chore, except one
+  // made from the board's Add, which is already scheduling it. It stays if a
+  // follow-up problem keeps the saved chore's dialog open.
+  const [offerSchedule, setOfferSchedule] = useState(false);
+  // The chore the Schedule flow is giving schedules to, or null.
+  const [scheduleChore, setScheduleChore] = useState(null);
 
   const [storedPerson, setStoredPerson] = useState(readPerson);
   const person = validPerson(storedPerson, users);
@@ -578,7 +585,9 @@ export default function ChoreSchedulesTab({ setSaveMessage, section, onSection, 
     }
   };
 
-  const openCreateChore = () => {
+  // `fromBoard` is true only from the board; a click handler passes an event.
+  const openCreateChore = (fromBoard) => {
+    setOfferSchedule(fromBoard !== true);
     setEditingChore(null);
     setChoreForm(defaultChoreForm);
     setFollowupRows([]);
@@ -587,6 +596,7 @@ export default function ChoreSchedulesTab({ setSaveMessage, section, onSection, 
   };
 
   const openEditChore = (chore) => {
+    setOfferSchedule(false);
     setEditingChore(chore);
     setChoreForm({
       title: chore.title,
@@ -620,7 +630,8 @@ export default function ChoreSchedulesTab({ setSaveMessage, section, onSection, 
     return '';
   };
 
-  const handleSaveChore = async () => {
+  // With thenSchedule, a saved chore goes straight on to the Schedule flow.
+  const handleSaveChore = async (thenSchedule = false) => {
     if (!choreForm.title.trim()) return;
     const formError = followupFormError();
     if (formError) { setFollowupError(formError); return; }
@@ -655,6 +666,7 @@ export default function ChoreSchedulesTab({ setSaveMessage, section, onSection, 
       showMessage('success', editingChore ? 'Chore updated.' : 'Chore created.');
       setChoreDialogOpen(false);
       await fetchAll();
+      if (thenSchedule && choreId) setScheduleChore({ id: choreId, ...chorePayload });
     } catch (err) {
       // The chore itself is saved; the dialog stays open on the follow-ups.
       setFollowupError(err.response?.data?.error || t('chores:followups.errorSave'));
@@ -1016,7 +1028,7 @@ export default function ChoreSchedulesTab({ setSaveMessage, section, onSection, 
             onEditSchedule={openEditSchedule}
             onToggleVisible={handleToggleVisible}
             onDeleteSchedule={(s) => setDeleteScheduleDialog({ open: true, schedule: s })}
-            onCreateChore={openCreateChore}
+            onCreateChore={() => openCreateChore(true)}
             showMessage={showMessage}
             routines={routines}
             onEditRoutine={openRoutineById}
@@ -1365,14 +1377,35 @@ export default function ChoreSchedulesTab({ setSaveMessage, section, onSection, 
           <Button type="button" onClick={() => setChoreDialogOpen(false)} startIcon={<Cancel />}>{t('common:actions.cancel')}</Button>
           <Button
             type="submit"
-            variant="contained"
+            variant={offerSchedule ? 'outlined' : 'contained'}
             startIcon={savingChore ? <CircularProgress size={16} /> : <Save />}
             disabled={savingChore || !choreForm.title.trim()}
           >
             {savingChore ? 'Saving...' : editingChore ? 'Update' : 'Create'}
           </Button>
+          {offerSchedule && (
+            <Button
+              type="button"
+              variant="contained"
+              startIcon={<Schedule />}
+              disabled={savingChore || !choreForm.title.trim()}
+              onClick={() => handleSaveChore(true)}
+            >
+              {t('chores:scheduleFlow.scheduleButton')}
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
+
+      {/* ── SCHEDULE A NEW CHORE ─────────────────────────── */}
+      <ScheduleChoreDialog
+        chore={scheduleChore}
+        users={users}
+        schedules={schedules}
+        onClose={() => setScheduleChore(null)}
+        onChanged={fetchAll}
+        showMessage={showMessage}
+      />
 
       {/* ── DELETE CHORE DIALOG ───────────────────────────── */}
       <Dialog open={deleteChoreDialog.open} onClose={() => setDeleteChoreDialog({ open: false, chore: null })} maxWidth="xs" fullWidth fullScreen={isMobile}>

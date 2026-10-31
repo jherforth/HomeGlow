@@ -190,7 +190,8 @@ Unassigned bonus chores have a chip of their own. A person's view shows:
   chore's settings, Day Of ↔ Until Completed). The Add menu lists every common
   schedule, even ones the person already has (picking one adds to it); its day
   row and Change days start on Sunday, and Change days has Every day, Weekdays
-  and Weekends quick buttons.
+  and Weekends quick buttons. The picker's pieces live in
+  `components/SchedulePicker.jsx`, shared with the Schedule flow below.
 
 A group is **not stored**: it is the person's schedules whose crontab day
 fields match (`utils/choreScheduleGroups.js`). Each chore keeps its own schedule
@@ -202,6 +203,24 @@ adding it to another moves its schedule there. Sticky chores' daily copies
 (`parent_schedule_id`) are left out of the view.
 
 **Code:** `ChoreScheduleBoard.jsx`, `utils/choreScheduleGroups.js`.
+
+**Schedule a new chore** (`components/ScheduleChoreDialog.jsx`). The New chore
+dialog has **Cancel**, **Create** and **Schedule**. Schedule saves the chore
+and steps through giving it schedules:
+1. Who it's for: tap to pick one or more people, or **Bonus chores** (no one
+   in particular), then **Next**. Everyone picked gets the same schedule (one
+   schedule row each); an info line says so.
+2. When: the same Picker | Wizard as the board's Add. With one person picked,
+   their own schedules are listed below to join one instead.
+3. A one-line summary, with **Complete**. Under it, an info box offers **Next
+   schedule**: that saves this round and goes back to step 1, for someone
+   else with a different schedule.
+
+Each round is saved as it's confirmed. **Cancel** drops only the one in
+progress; the chore, and any schedules already saved, stay. People already
+scheduled in the flow are marked and can't be picked again. Editing a chore,
+or making one from the board's Add (already scheduling it), shows no Schedule
+button.
 
 ### Chore due-time sounds
 

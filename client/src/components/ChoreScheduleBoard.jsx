@@ -41,17 +41,14 @@ import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { adminHeadingRowSx, adminHeadingTextSx } from './AdminRows.jsx';
-import { getWeekdayLabels, getWeekdayOptions } from '../utils/dateUtils.js';
 import useIsMobile from '../hooks/useIsMobile.js';
 import { getTodayDateString } from '../utils/choreHelpers.js';
 import { parseVacationModeSetting } from '../utils/interfaceSettings.js';
 import {
-  COMMON_TIMINGS,
   afterTiming,
   everyNTiming,
   groupSchedulesForUser,
   monthlyTiming,
-  monthsFromStart,
   onceTiming,
   scheduleFieldsForTiming,
   calendarWeek,
@@ -62,13 +59,17 @@ import {
 import { calendarRoutinesFor } from '../utils/routineSchedules.js';
 import { SearchMark } from './ChoresPageBar.jsx';
 import ScheduleWizard, { WIZARD_START } from './ScheduleWizard.jsx';
-
-// How the Add dialog picks a timing: the picker of chips, or the wizard.
-// Remembered per display; storage may be unavailable.
-const ADD_MODE_KEY = 'homeglow_choreAddMode';
-const readAddMode = () => {
-  try { return localStorage.getItem(ADD_MODE_KEY) === 'wizard' ? 'wizard' : 'picker'; } catch { return 'picker'; }
-};
+import SchedulePicker, {
+  AddModeToggle,
+  CustomPanel,
+  DAY_ORDER,
+  QuickDays,
+  TheirSchedules,
+  customTiming,
+  readAddMode,
+  storeAddMode,
+  useTimingLabel,
+} from './SchedulePicker.jsx';
 
 // "By person" view of Admin → Chores → Schedules: one tab per person (and
 // one for the unassigned bonus chores), a week calendar of what they have on
@@ -79,28 +80,11 @@ const readAddMode = () => {
 // another moves it there.
 
 const BONUS = 'bonus';
-// Sunday first, like the week calendar.
-const DAY_ORDER = [0, 1, 2, 3, 4, 5, 6];
 
 // Settings a copied schedule takes from the one it was copied from.
 const COPIED_FIELDS = [
   'crontab', 'duration', 'interval', 'due_date', 'due_time', 'expire_minutes', 'sound_enabled',
   'sound', 'reminder_interval_minutes', 'transferable', 'can_snooze', 'visible',
-];
-
-const dateLabel = (key) => {
-  const [y, m, d] = key.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-};
-
-// "Mar 15" for month 3, day 15 (no year).
-const monthDayLabel = (month, day) => new Date(2001, month - 1, day).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-
-// Quick fills for the day toggles.
-const QUICK_DAYS = [
-  { key: 'everyDay', days: [0, 1, 2, 3, 4, 5, 6] },
-  { key: 'weekdays', days: [1, 2, 3, 4, 5] },
-  { key: 'weekends', days: [0, 6] },
 ];
 
 // How each calendar entry looks: a mark, and a tint that reads in both themes.
@@ -113,23 +97,6 @@ const STATE_SX = {
   today: { bgcolor: 'action.hover', boxShadow: 'inset 0 0 0 1px var(--accent)' },
   planned: { bgcolor: 'action.hover' },
 };
-
-// The lengths Custom offers, in months.
-const CUSTOM_EVERY = [1, 3, 6, 9, 12];
-const todayKeyString = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
-
-// Custom's choices → a timing, or null while incomplete. Set dates work for
-// every 1, 3, 6 and 12 months; 9 doesn't divide the year, so it only counts
-// from when the chore is done.
-function customTiming({ every, from, start }) {
-  if (from === 'done') return afterTiming(every === 12 ? '1y' : `${every}m`);
-  if (every === 9 || !/^\d{4}-\d{2}-\d{2}$/.test(start || '')) return null;
-  if (every === 1) return monthlyTiming(String(Number(start.slice(8, 10))));
-  return monthsFromStart(start, every);
-}
 
 const fmtTime = (hhmm) => {
   if (!hhmm) return '';
@@ -165,8 +132,7 @@ export default function ChoreScheduleBoard({
 }) {
   const { t } = useTranslation(['chores', 'common']);
   const isMobile = useIsMobile();
-  const shortDays = useMemo(() => getWeekdayLabels(0), []);
-  const longDays = useMemo(() => getWeekdayOptions().map((o) => o.label), []);
+  const { timingLabel, shortDays } = useTimingLabel();
 
   const userId = tab === BONUS ? null : Number(tab);
   const personName = tab === BONUS ? t('chores:board.bonusTab') : (users.find((u) => u.id === userId)?.username || '');
@@ -194,43 +160,6 @@ export default function ChoreScheduleBoard({
     } finally {
       await onChanged();
       setBusy(false);
-    }
-  };
-
-  // ── Names for timings ─────────────────────────────────────────────
-  const intervalText = (interval) => {
-    const m = String(interval || '').match(/^(\d+)([dwmy])$/i);
-    if (!m) return interval || '';
-    return t(`chores:board.unit_${m[2].toLowerCase()}`, { count: Number(m[1]) });
-  };
-  const timingLabel = (timing) => {
-    switch (timing.kind) {
-      case 'week': {
-        const d = timing.days;
-        if (d.length === 7) return t('chores:board.timing.everyDay');
-        if (d.join() === '1,2,3,4,5') return t('chores:board.timing.weekdays');
-        if (d.join() === '0,6') return t('chores:board.timing.weekends');
-        if (d.length === 1) return t('chores:board.timing.everyDayName', { day: longDays[d[0]] });
-        return DAY_ORDER.filter((x) => d.includes(x)).map((x) => shortDays[x]).join(' · ');
-      }
-      case 'everyN':
-        return timing.n === 2 ? t('chores:board.timing.everyOtherDay') : t('chores:board.timing.everyNDays', { count: timing.n });
-      case 'monthly':
-        return t('chores:board.timing.monthly', { days: timing.dom.split(',').join(', ') });
-      case 'months': {
-        const dates = timing.months.map((m) => monthDayLabel(m, timing.dom)).join(', ');
-        if (timing.every === 12) return t('chores:board.timing.yearly', { date: dates });
-        if (timing.every) return t('chores:board.timing.everyNMonths', { count: timing.every, dates });
-        return dates;
-      }
-      case 'once':
-        return timing.dueDate ? t('chores:board.timing.oneTimeOn', { date: dateLabel(timing.dueDate) }) : t('chores:board.timing.oneTime');
-      case 'after':
-        return t('chores:board.timing.againAfter', { interval: intervalText(timing.interval) });
-      case 'anyDay':
-        return t(`chores:board.timing.anyDay.${timing.period}`);
-      default:
-        return t('chores:board.timing.custom', { expr: timing.rest });
     }
   };
 
@@ -330,17 +259,13 @@ export default function ChoreScheduleBoard({
 
   // ── Add chores ────────────────────────────────────────────────────
   // step: 'timing' → 'chores' (→ 'review' from the wizard).
-  const [addDialog, setAddDialog] = useState(null); // { step, timing, picked:Set, days:[], date, wizard, keep, fromWizard }
+  const [addDialog, setAddDialog] = useState(null); // { step, timing, picked:Set, date, wizard, keep, fromWizard }
   const openAdd = (timing = null) => setAddDialog({
     step: timing ? 'chores' : 'timing',
     timing,
     picked: new Set(),
-    days: [],
     date: timing?.kind === 'once' ? (timing.dueDate || '') : '',
     search: '',
-    panel: null, // 'monthly' | 'custom' while one of those is open
-    dom: '1',
-    custom: { every: 3, from: 'dates', start: todayKeyString() },
     wizard: WIZARD_START,
     // From the wizard: true "stays until done", false "goes at day's end",
     // null not asked (the chores keep their own setting).
@@ -350,7 +275,7 @@ export default function ChoreScheduleBoard({
   const [addMode, setAddModeState] = useState(readAddMode);
   const setAddMode = (mode) => {
     setAddModeState(mode);
-    try { localStorage.setItem(ADD_MODE_KEY, mode); } catch { /* per-display convenience only */ }
+    storeAddMode(mode);
   };
   // A chore made with "New chore" while the dialog is open comes back ticked.
   const knownChoreIds = useRef(new Set(chores.map((c) => c.id)));
@@ -793,39 +718,11 @@ export default function ChoreScheduleBoard({
   const renderAddTimingStep = () => {
     // Every common schedule is offered, even ones the person already has:
     // picking one of those adds to it.
-    const others = COMMON_TIMINGS;
     const pick = (timing) => setAddDialog((d) => ({ ...d, step: 'chores', timing, date: timing.kind === 'once' ? (timing.dueDate || '') : '', keep: null, fromWizard: false }));
     const wizardMode = addMode === 'wizard';
-    // The person's own schedules are a shortcut: in the wizard, on its first step only.
-    const showGroups = groups.length > 0 && (!wizardMode || addDialog.wizard.step === 'how');
     const finishWizard = (timing, keep) => setAddDialog((d) => ({
       ...d, step: 'chores', timing, keep, fromWizard: true, date: timing.kind === 'once' ? (timing.dueDate || '') : '',
     }));
-    // Below the picker or wizard: a new timing comes first, the person's own
-    // schedules after it.
-    const theirSchedules = showGroups && (
-      <Box>
-        <Alert severity="info" icon={false} sx={{ mb: 1 }}>{t('chores:board.orTheirTimings')}</Alert>
-        <Typography variant="overline" color="text.secondary">{t('chores:board.theirTimings', { name: personName })}</Typography>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-          {groups.map((g) => (
-            <Paper
-              key={g.timing.key}
-              variant="outlined"
-              component="button"
-              type="button"
-              onClick={() => pick(g.timing)}
-              sx={{ textAlign: 'left', p: 1.5, cursor: 'pointer', bgcolor: 'background.paper', color: 'text.primary', font: 'inherit', '&:hover': { bgcolor: 'action.hover' } }}
-            >
-              <Typography sx={{ fontWeight: 700 }}>{timingLabel(g.timing)}</Typography>
-              <Typography variant="body2" color="text.secondary">
-                {g.schedules.map((s) => `${s.icon ? `${s.icon} ` : ''}${s.title}`).join(', ')}
-              </Typography>
-            </Paper>
-          ))}
-        </Box>
-      </Box>
-    );
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         {wizardMode ? (
@@ -837,45 +734,13 @@ export default function ChoreScheduleBoard({
             shortDays={shortDays}
           />
         ) : (
-        <>
-        <Box>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-            {others.map((tm) => (
-              <Chip key={tm.key} label={timingLabel(tm)} onClick={() => pick(tm)} variant="outlined" sx={{ fontSize: '0.875rem', height: 36 }} />
-            ))}
-            {['monthly', 'custom'].map((panel) => (
-              <Chip
-                key={panel}
-                label={`${t(`chores:board.${panel}Choice`)} …`}
-                onClick={() => setAddDialog((d) => ({ ...d, panel: d.panel === panel ? null : panel }))}
-                variant={addDialog.panel === panel ? 'filled' : 'outlined'}
-                color={addDialog.panel === panel ? 'primary' : 'default'}
-                aria-expanded={addDialog.panel === panel}
-                sx={{ fontSize: '0.875rem', height: 36 }}
-              />
-            ))}
-          </Box>
-          {addDialog.panel === 'monthly' && renderMonthlyPanel()}
-          {addDialog.panel === 'custom' && renderCustomPanel(addDialog.custom, (custom) => setAddDialog((d) => ({ ...d, custom })), (tm) => pick(tm))}
-        </Box>
-        <Box>
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-            <ToggleButtonGroup
-              size="small"
-              value={addDialog.days}
-              onChange={(_, v) => setAddDialog((d) => ({ ...d, days: v }))}
-              aria-label={t('chores:board.pickDays')}
-            >
-              {DAY_ORDER.map((d) => <ToggleButton key={d} value={d} sx={{ minWidth: 44 }}>{shortDays[d]}</ToggleButton>)}
-            </ToggleButtonGroup>
-            <Button variant="contained" size="small" disabled={!addDialog.days.length} onClick={() => pick(weekTiming(addDialog.days))}>
-              {t('chores:board.next')}
-            </Button>
-          </Box>
-        </Box>
-        </>
+          <SchedulePicker onPick={pick} timingLabel={timingLabel} shortDays={shortDays} />
         )}
-        {theirSchedules}
+        {/* Below the picker or wizard, the person's own schedules: in the
+            wizard, on its first step only. */}
+        {(!wizardMode || addDialog.wizard.step === 'how') && (
+          <TheirSchedules groups={groups} personName={personName} timingLabel={timingLabel} onPick={pick} />
+        )}
       </Box>
     );
   };
@@ -904,97 +769,6 @@ export default function ChoreScheduleBoard({
   // How many steps the wizard has for the answers given: how, details,
   // (if missed), chores, review.
   const wizardStepCount = () => (['days', 'everyN', 'monthly'].includes(addDialog?.wizard?.how) ? 5 : 4);
-
-  // Every day / Weekdays / Weekends buttons that fill the day toggles.
-  const quickDays = (onPick) => (
-    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', width: '100%' }}>
-      {QUICK_DAYS.map(({ key, days }) => (
-        <Button key={key} size="small" variant="outlined" onClick={() => onPick(days)} sx={{ textTransform: 'none' }}>
-          {t(`chores:board.timing.${key}`)}
-        </Button>
-      ))}
-    </Box>
-  );
-
-  const panelSx = { mt: 1.5, p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1, bgcolor: 'action.hover', display: 'flex', flexDirection: 'column', gap: 1.5 };
-
-  const renderMonthlyPanel = () => {
-    const dom = Number(addDialog.dom);
-    const valid = Number.isInteger(dom) && dom >= 1 && dom <= 31;
-    const pick = () => setAddDialog((d) => ({ ...d, step: 'chores', timing: monthlyTiming(String(dom)) }));
-    return (
-      <Box sx={panelSx}>
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-          <TextField
-            size="small"
-            type="number"
-            label={t('chores:board.dayOfMonth')}
-            value={addDialog.dom}
-            onChange={(e) => setAddDialog((d) => ({ ...d, dom: e.target.value }))}
-            slotProps={{ htmlInput: { min: 1, max: 31 } }}
-            sx={{ width: 160 }}
-          />
-          <Button variant="contained" size="small" disabled={!valid} onClick={pick}>{t('chores:board.next')}</Button>
-        </Box>
-        {valid && dom > 28 && <Typography variant="body2" color="text.secondary">{t('chores:board.shortMonths', { day: dom })}</Typography>}
-      </Box>
-    );
-  };
-
-  // Custom: every 1, 3, 6, 9 months or a year, on set dates or counted from
-  // when it's done. Used by the Add dialog and by Change days.
-  const renderCustomPanel = (custom, onChange, onNext) => {
-    const set = (patch) => {
-      const next = { ...custom, ...patch };
-      // 9 months can't land on set dates.
-      if (next.every === 9) next.from = 'done';
-      onChange(next);
-    };
-    const timing = customTiming(custom);
-    return (
-      <Box sx={panelSx}>
-        <Box>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>{t('chores:board.every')}</Typography>
-          <ToggleButtonGroup size="small" exclusive value={custom.every} onChange={(_, v) => v && set({ every: v })} aria-label={t('chores:board.every')} sx={{ flexWrap: 'wrap' }}>
-            {CUSTOM_EVERY.filter((n) => onNext || n !== 9).map((n) => (
-              <ToggleButton key={n} value={n} sx={{ textTransform: 'none', px: 1.5 }}>
-                {n === 12 ? t('chores:board.year') : t('chores:board.unit_m', { count: n })}
-              </ToggleButton>
-            ))}
-          </ToggleButtonGroup>
-        </Box>
-        {onNext && (
-          <Box>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>{t('chores:board.countFrom')}</Typography>
-            <ToggleButtonGroup size="small" exclusive value={custom.from} onChange={(_, v) => v && set({ from: v })} aria-label={t('chores:board.countFrom')}>
-              <ToggleButton value="dates" disabled={custom.every === 9} sx={{ textTransform: 'none', px: 1.5 }}>{t('chores:board.fromDates')}</ToggleButton>
-              <ToggleButton value="done" sx={{ textTransform: 'none', px: 1.5 }}>{t('chores:board.fromDone')}</ToggleButton>
-            </ToggleButtonGroup>
-          </Box>
-        )}
-        {custom.from === 'dates' && (
-          <TextField
-            size="small"
-            type="date"
-            label={t('chores:board.startDate')}
-            value={custom.start}
-            onChange={(e) => set({ start: e.target.value })}
-            slotProps={{ inputLabel: { shrink: true } }}
-            sx={{ maxWidth: 220 }}
-          />
-        )}
-        <Typography variant="body2" color="text.secondary">
-          {custom.every === 9 ? `${t('chores:board.nineMonthsNote')} ` : ''}
-          {custom.from === 'done' ? t('chores:board.fromDoneHelp') : (timing && t('chores:board.fromDatesHelp', { timing: timingLabel(timing) }))}
-        </Typography>
-        {onNext && (
-          <Box>
-            <Button variant="contained" size="small" disabled={!timing} onClick={() => onNext(timing)}>{t('chores:board.next')}</Button>
-          </Box>
-        )}
-      </Box>
-    );
-  };
 
   const renderAddChoresStep = () => {
     const search = addDialog.search.trim().toLowerCase();
@@ -1084,7 +858,7 @@ export default function ChoreScheduleBoard({
     const set = (patch) => setEditDialog((x) => ({ ...x, ...patch }));
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-        {kind === 'week' && quickDays((days) => set({ days }))}
+        {kind === 'week' && <QuickDays onPick={(days) => set({ days })} />}
         {kind === 'week' && (
           <ToggleButtonGroup size="small" value={d.days} onChange={(_, v) => set({ days: v })} aria-label={t('chores:board.pickDays')} sx={{ flexWrap: 'wrap' }}>
             {DAY_ORDER.map((x) => <ToggleButton key={x} value={x} sx={{ minWidth: 44 }}>{shortDays[x]}</ToggleButton>)}
@@ -1099,7 +873,7 @@ export default function ChoreScheduleBoard({
         {kind === 'once' && (
           <TextField size="small" type="date" label={t('chores:schedules.dueDateOptional')} value={d.date} onChange={(e) => set({ date: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} sx={{ maxWidth: 220 }} />
         )}
-        {kind === 'months' && renderCustomPanel(d.custom, (custom) => set({ custom: { ...custom, from: 'dates' } }), null)}
+        {kind === 'months' && <CustomPanel custom={d.custom} onChange={(custom) => set({ custom: { ...custom, from: 'dates' } })} timingLabel={timingLabel} />}
         {kind === 'after' && (
           <Box sx={{ display: 'flex', gap: 1 }}>
             <TextField size="small" type="number" label={t('chores:board.againAfterCount')} value={d.count} onChange={(e) => set({ count: e.target.value })} slotProps={{ htmlInput: { min: 1 } }} sx={{ width: 120 }} />
@@ -1205,17 +979,7 @@ export default function ChoreScheduleBoard({
                 : t('chores:board.addTitle', { name: personName })}
           </DialogTitle>
           {addDialog?.step === 'timing' && (
-            <ToggleButtonGroup
-              size="small"
-              exclusive
-              value={addMode}
-              onChange={(_, mode) => mode && setAddMode(mode)}
-              aria-label={t('chores:wizard.modeLabel')}
-              sx={{ ml: { xs: 3, sm: 0 }, mb: { xs: 1.5, sm: 0 } }}
-            >
-              <ToggleButton value="picker" sx={{ textTransform: 'none', px: 2 }}>{t('chores:wizard.picker')}</ToggleButton>
-              <ToggleButton value="wizard" sx={{ textTransform: 'none', px: 2 }}>{t('chores:wizard.wizard')}</ToggleButton>
-            </ToggleButtonGroup>
+            <AddModeToggle value={addMode} onChange={setAddMode} sx={{ ml: { xs: 3, sm: 0 }, mb: { xs: 1.5, sm: 0 } }} />
           )}
         </Box>
         <DialogContent dividers>
