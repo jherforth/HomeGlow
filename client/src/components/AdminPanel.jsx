@@ -58,6 +58,8 @@ import {
   ArrowDownward,
   Close,
   Search as SearchIcon,
+  Pause,
+  PlayArrow,
   ExpandMore
 } from '@mui/icons-material';
 import AppearanceSettings from './AppearanceSettings';
@@ -260,6 +262,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   const [githubWidgets, setGithubWidgets] = useState([]);
   // Quick search over the plugin store, by name.
   const [pluginSearch, setPluginSearch] = useState('');
+  const [prizeSearch, setPrizeSearch] = useState('');
   // Store categories start collapsed; these are the ones opened by hand.
   const [expandedPluginCategories, setExpandedPluginCategories] = useState(() => new Set());
   const togglePluginCategory = (category) => {
@@ -287,6 +290,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   // display that remembers it; the server checks it again. 'change' | 'remove'.
   const [currentPinFor, setCurrentPinFor] = useState(null);
   const currentPin = useRef('');
+  const [pinRememberedHere, setPinRememberedHere] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [checkingPin, setCheckingPin] = useState(true);
   const { tabs, fetchTabs } = useFetchTabs(API_DEVICE_URL);
@@ -440,6 +444,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
       // here as well as in the chore widget. Honouring it in one gate and not
       // the other would read as broken.
       const remembered = exists ? await fetchPinRemembered(API_BASE_URL) : false;
+      setPinRememberedHere(remembered);
 
       if (shouldPromptForPin({ pinExists: exists, remembered })) {
         setPinModal({ open: true, mode: 'verify', title: t('admin:pin.enter') });
@@ -525,6 +530,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
       setChores([]);
     }
   };
+
+  const prizeMatchesSearch = (prize) => `${prize.name} ${prize.description || ''}`.toLowerCase().includes(prizeSearch.trim().toLowerCase());
 
   const fetchPrizes = async () => {
     try {
@@ -1560,6 +1567,17 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     }
   };
 
+  const togglePrizePaused = async (prize) => {
+    try {
+      await axios.patch(`${API_BASE_URL}/api/prizes/${prize.id}`, { paused: !prize.paused });
+      await fetchPrizes();
+    } catch (error) {
+      console.error('Error pausing prize:', error);
+      setSaveMessage({ show: true, type: 'error', text: t('admin:messages.prizePauseFailed') });
+      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+    }
+  };
+
   const deletePrize = async (prizeId) => {
     if (window.confirm(t('admin:confirm.deletePrize'))) {
       try {
@@ -1799,6 +1817,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
         try {
           const { failed } = await forgetPinOnAllDevices(API_BASE_URL);
           forgetFailed = failed > 0;
+          setPinRememberedHere(await fetchPinRemembered(API_BASE_URL));
         } catch (error) {
           console.error('Error clearing remembered PIN devices after a PIN change:', error);
           forgetFailed = true;
@@ -1819,6 +1838,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
             // a failure to record the preference.
             try {
               await setPinRemembered(API_BASE_URL, true);
+              setPinRememberedHere(true);
             } catch (error) {
               console.error('Error remembering PIN on this device:', error);
             }
@@ -1847,10 +1867,25 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     setPinModal({ open: false, mode: 'verify', title: '' });
   };
 
+  // Takes effect the next time the PIN would be asked for; this open panel stays open.
+  const handleForgetPinHere = async () => {
+    try {
+      await setPinRemembered(API_BASE_URL, false);
+      setPinRememberedHere(false);
+      window.dispatchEvent(new Event(DEVICE_SETTINGS_UPDATED_EVENT));
+      setSaveMessage({ show: true, type: 'success', text: t('admin:messages.pinForgottenHere') });
+    } catch (error) {
+      console.error('Error forgetting the PIN on this device:', error);
+      setSaveMessage({ show: true, type: 'error', text: t('admin:messages.pinDevicesForgetFailed') });
+    }
+    setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
+  };
+
   const handleForgetPinDevices = async () => {
     if (!window.confirm(t('admin:confirm.forgetPinDevices'))) return;
     try {
       const { total, failed } = await forgetPinOnAllDevices(API_BASE_URL);
+      setPinRememberedHere(await fetchPinRemembered(API_BASE_URL));
       if (failed > 0) {
         setSaveMessage({
           show: true,
@@ -3405,7 +3440,34 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
           </AdminGroup>
 
           <AdminGroup title={t('admin:prizes.management')}>
-            {prizes.map((prize) => (editingPrize?.id === prize.id ? (
+            <Box sx={{ px: 2, py: 1.5 }}>
+              <TextField
+                fullWidth
+                size="small"
+                value={prizeSearch}
+                onChange={(event) => setPrizeSearch(event.target.value)}
+                placeholder={t('admin:prizes.search')}
+                slotProps={{
+                  htmlInput: { 'aria-label': t('admin:prizes.search') },
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon fontSize="small" />
+                      </InputAdornment>
+                    ),
+                    endAdornment: prizeSearch && (
+                      <InputAdornment position="end">
+                        <IconButton size="small" edge="end" aria-label={t('common:actions.clear')} onClick={() => setPrizeSearch('')}>
+                          <Close fontSize="small" />
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  },
+                }}
+              />
+            </Box>
+            {prizeSearch.trim() && !prizes.some(prizeMatchesSearch) && <AdminNote>{t('admin:prizes.noMatches')}</AdminNote>}
+            {prizes.filter((prize) => editingPrize?.id === prize.id || prizeMatchesSearch(prize)).map((prize) => (editingPrize?.id === prize.id ? (
               <Box key={prize.id} sx={{ px: 2, py: 1.5, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                 <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
                   <TextField
@@ -3471,6 +3533,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                     {prize.repeatable
                       ? t('admin:prizes.costLineRepeatable', { cost: prize.clam_cost })
                       : t('admin:prizes.costLine', { cost: prize.clam_cost })}
+                    {prize.paused ? ` · ${t('admin:prizes.pausedShort')}` : ''}
                   </>
                 )}
                 control={(
@@ -3478,6 +3541,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                     <Tooltip title={prize.repeatable ? 'Add to store (stays on the shelf after each redemption)' : 'Add to store (one-time redeemable offer)'}>
                       <IconButton onClick={() => addPrizeToStore(prize.id)} color="primary" size="small" aria-label="Add to store">
                         <Add fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title={prize.paused ? t('admin:prizes.resume') : t('admin:prizes.pause')}>
+                      <IconButton onClick={() => togglePrizePaused(prize)} size="small" aria-label={`${prize.paused ? t('admin:prizes.resume') : t('admin:prizes.pause')}: ${prize.name}`}>
+                        {prize.paused ? <PlayArrow fontSize="small" /> : <Pause fontSize="small" />}
                       </IconButton>
                     </Tooltip>
                     <Tooltip title={t('common:actions.edit')}>
@@ -3505,8 +3573,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                 key={offer.id}
                 label={`${offer.name} — ${offer.clam_cost} 🥟${offer.repeatable ? ' · 🔁' : ''}`}
                 hint={offer.status === 'requested'
-                  ? t('admin:prizes.requestedBy', { name: offer.requested_by_name || t('common:state.none') })
-                  : 'On the shelf'}
+                  ? `${t('admin:prizes.requestedBy', { name: offer.requested_by_name || t('common:state.none') })}${offer.paused ? ` · ${t('admin:prizes.pausedShort')}` : ''}`
+                  : (offer.paused ? t('admin:prizes.pausedHidden') : t('admin:prizes.onTheShelf'))}
                 control={(
                   <Tooltip title={offer.status === 'requested' ? 'Decline request and remove from store' : 'Remove from store'}>
                     <IconButton onClick={() => removePrizeOffer(offer.id)} color="error" size="small" aria-label={offer.status === 'requested' ? 'Decline request and remove from store' : 'Remove from store'}>
@@ -3626,6 +3694,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                 <AdminRow
                   control={(
                     <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', width: '100%', justifyContent: 'flex-end' }}>
+                      {pinRememberedHere && (
+                        <Button variant="outlined" onClick={handleForgetPinHere}>
+                          {t('admin:pin.forgetHere')}
+                        </Button>
+                      )}
                       <Button variant="outlined" onClick={handleForgetPinDevices}>
                         {t('admin:pin.forgetDevices')}
                       </Button>
@@ -3640,6 +3713,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
             </AdminGroup>
 
             <ControlsOnDisplay
+              key={String(pinRememberedHere)}
               apiBaseUrl={API_BASE_URL}
               devices={devices}
               currentDeviceName={currentDeviceName}

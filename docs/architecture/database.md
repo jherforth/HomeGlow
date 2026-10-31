@@ -119,9 +119,11 @@ id, username, email, profile_picture, sort_order
 
 **`prizes`** — the prize definitions ledger (kept forever in Prize Management).
 `repeatable` prizes stay on the store shelf after each redemption instead of
-being consumed.
+being consumed. A `paused` prize is hidden from kids and can't be requested
+until it's resumed; a request already made still shows, for its kid and for a
+parent to approve or decline.
 ```
-id, name, clam_cost, repeatable (0|1)
+id, name, clam_cost, repeatable (0|1), description, paused (0|1)
 ```
 
 **`prize_offers`** — the prize store: redeemable instances of ledger
