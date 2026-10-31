@@ -103,9 +103,12 @@ function pluginStorageWrite(method, route, statusCode, params) {
  */
 function createHouseholdChanges({ onBump = () => {}, onPluginStorage = () => {}, coalesceMs = 100, base = crypto.randomInt(1e6, 1e9) } = {}) {
   const revisions = Object.fromEntries(DOMAINS.map((domain) => [domain, base]));
-  // One server-wide sequence for plugin counters: a new plugin's counter
-  // starts from here, never from the boot base alone, so a value is never
-  // reused within a boot — even after uninstall-with-purge and a reinstall.
+  // One server-wide sequence for plugin counters: every plugin bump takes
+  // the next value, so a value is never reused within a boot — even after
+  // uninstall-with-purge and a reinstall. Taking the sequence only when a
+  // counter is created is not enough: a plugin's own count could climb
+  // back onto a value it had before the purge (two writes, purge,
+  // reinstall, one write repeats the old counter and ETag).
   let pluginSeq = base;
   let pending = new Set();
   let timer = null;
@@ -147,15 +150,14 @@ function createHouseholdChanges({ onBump = () => {}, onPluginStorage = () => {},
   // A plugin's storage write moves only that plugin's counter, creating it
   // on first use: a display that has never seen the plugin reads the new
   // key as a change, and one that has sees the moved counter. Household
-  // kinds never move here. A new counter starts from the server-wide
-  // sequence, not the boot base: after uninstall-with-purge and a
-  // reinstall, the first write must not repeat the old value, or a display
-  // holding the old ETag would read a 304 and miss it.
+  // kinds never move here. Every bump takes the next server-wide sequence
+  // value, not +1 on the plugin's own counter: after uninstall-with-purge
+  // and a reinstall, the first write must not repeat the old value, or a
+  // display holding the old ETag would read a 304 and miss it.
   function bumpPlugin(pluginId) {
     if (typeof pluginId !== 'string' || pluginId.length === 0) return;
     const domain = pluginDomain(pluginId);
-    if (!Object.prototype.hasOwnProperty.call(revisions, domain)) revisions[domain] = ++pluginSeq;
-    else revisions[domain] += 1;
+    revisions[domain] = ++pluginSeq;
     pending.add(domain);
     scheduleFlush();
   }

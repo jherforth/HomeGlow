@@ -89,7 +89,7 @@ test('a plugin write moves only that plugin counter, in its own message', async 
   changes.bumpPlugin('other');
   changes.bump('chores');
   assert.equal(changes.snapshot()['plugin:lists'], 102);
-  assert.equal(changes.snapshot()['plugin:other'], 102, 'a new plugin starts from the server-wide sequence, not the boot base');
+  assert.equal(changes.snapshot()['plugin:other'], 103, 'every plugin bump takes the next server-wide sequence value');
   assert.equal(changes.snapshot().chores, 101);
   assert.equal(changes.snapshot().users, 100, 'a plugin write moves no household kind');
 
@@ -99,7 +99,7 @@ test('a plugin write moves only that plugin counter, in its own message', async 
   assert.deepEqual(Object.keys(household[0].revisions).sort(), [...DOMAINS].sort(), 'a household message carries household kinds only');
   assert.deepEqual(plugins, [
     { pluginId: 'lists', revision: 102 },
-    { pluginId: 'other', revision: 102 },
+    { pluginId: 'other', revision: 103 },
   ]);
 });
 
@@ -131,14 +131,19 @@ test('removing a plugin drops its counter, and the etag stays deterministic', as
 
 test('a reinstalled plugin never reuses its old counter, so its first write reads as changed', () => {
   const changes = createHouseholdChanges({ base: 100 });
+  // Two writes before the purge: with a create-only sequence, the
+  // reinstall's first write would climb back onto 102 and repeat both the
+  // counter and the ETag. An intervening write to another plugin must not
+  // be what saves this test.
+  changes.bumpPlugin('lists');
   changes.bumpPlugin('lists');
   const oldValue = changes.snapshot()['plugin:lists'];
   const oldEtag = changes.etag();
-  assert.equal(oldValue, 101);
+  assert.equal(oldValue, 102);
 
   changes.removePlugin('lists');
-  changes.bumpPlugin('other');
   changes.bumpPlugin('lists');
+  assert.equal(changes.snapshot()['plugin:lists'], 103);
   assert.notEqual(changes.snapshot()['plugin:lists'], oldValue, 'purge + reinstall must not repeat the counter');
   assert.notEqual(changes.etag(), oldEtag, 'purge + reinstall must not repeat the etag');
 });
