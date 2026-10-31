@@ -197,6 +197,7 @@ const { isCrossSiteWrite } = require('./utils/crossSiteWrites');
 const adminPin = require('./utils/adminPin');
 const { resolveDbPath } = require('./utils/dbPath');
 const { sqliteUtcToIso, sqliteUtcToMs } = require('./utils/sqliteTime');
+const { trimmed } = require('./utils/trimmed');
 const {
   DEVICE_NAME_RULE_MESSAGE,
   isValidDeviceName,
@@ -2966,7 +2967,7 @@ function normalizeChoreIcon(icon) {
 // Chore routes (updated for new schema)
 fastify.get('/api/chores', async (request, reply) => {
   try {
-    // routine_id: a chore a routine owns, which Family → Routines manages.
+    // routine_id: a chore a routine owns, managed with its routine on Family → Chores.
     const rows = db.prepare('SELECT c.*, r.id AS routine_id FROM chores c LEFT JOIN routines r ON r.chore_id = c.id').all();
     // Each chore's follow-ups by title, for the chips in the Admin Panel (#241).
     const followups = db.prepare(`
@@ -3027,7 +3028,9 @@ fastify.put('/api/chores/:id/followups', async (request, reply) => {
 });
 
 fastify.post('/api/chores', async (request, reply) => {
-  const { title, description, clam_value, icon } = request.body;
+  const { clam_value, icon } = request.body;
+  const title = trimmed(request.body.title);
+  const description = trimmed(request.body.description);
   try {
     const stmt = db.prepare('INSERT INTO chores (title, description, clam_value, icon) VALUES (?, ?, ?, ?)');
     // Empty string and undefined both mean "no icon"; store NULL so the widget
@@ -3053,7 +3056,9 @@ const refuseRoutineEdit = (reply, routine) => reply.status(409).send({
 
 fastify.patch('/api/chores/:id', async (request, reply) => {
   const { id } = request.params;
-  const { title, description, clam_value, icon } = request.body;
+  const { clam_value, icon } = request.body;
+  const title = trimmed(request.body.title);
+  const description = trimmed(request.body.description);
   const owner = routineOwning(id);
   if (owner) return refuseRoutineEdit(reply, owner);
   try {
@@ -4249,7 +4254,8 @@ fastify.get('/api/users', async (request, reply) => {
 });
 
 fastify.post('/api/users', async (request, reply) => {
-  const { username, email, profile_picture } = request.body;
+  const { email, profile_picture } = request.body;
+  const username = trimmed(request.body.username);
   try {
     // New users land at the end of the display order.
     const maxOrder = db.prepare('SELECT MAX(sort_order) as max FROM users').get();
@@ -4301,7 +4307,8 @@ fastify.patch('/api/users/reorder', async (request, reply) => {
 // NEW: Endpoint to update user profile
 fastify.patch('/api/users/:id', async (request, reply) => {
   const { id } = request.params;
-  const { username, email, profile_picture } = request.body;
+  const { email, profile_picture } = request.body;
+  const username = trimmed(request.body.username);
   try {
     const stmt = db.prepare('UPDATE users SET username = ?, email = ?, profile_picture = ? WHERE id = ?');
     const info = stmt.run(username, email, profile_picture, id);
@@ -5467,7 +5474,8 @@ const PRIZE_DESCRIPTION_MAX = 500;
 // description is optional: undefined leaves it as it is (PATCH), and an
 // empty string or null clears it.
 const validatePrizeBody = (body) => {
-  const { name, clam_cost, description } = body || {};
+  const { clam_cost, description } = body || {};
+  const name = trimmed(body?.name);
   if (!name || !clam_cost || clam_cost <= 0) {
     return { error: 'Prize name and a positive clam cost are required.' };
   }

@@ -243,6 +243,57 @@ test('a calendar routine gets a schedule pinned to each matching event day, and 
   assert.ok(!(await api('/api/routines')).body.routines.some((r) => r.id === soccer.id));
 });
 
+test('with an end time, a late finish is done but breaks the run, and pays no milestone', async (t) => {
+  const db = new Database(testDbPath);
+  db.pragma('busy_timeout = 5000');
+  t.after(() => db.close());
+  // created_at as SQLite stores it, in UTC; the household is on UTC here.
+  const doneAt = (r, date, time) => db.prepare(
+    "INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind, created_at) VALUES (?, ?, ?, 0, ?, 'completion', ?)",
+  ).run(kid, r.schedule_id, date, r.name, `${date} ${time}:00`);
+  const step = (await post('/api/routine-steps', { label: 'Pack the bag', icon: '🎒' })).body.id;
+  const r = (await post('/api/routines', {
+    name: 'School morning', user_id: kid, trigger: 'days', days: [], steps: [step],
+    end_time: '07:20',
+  })).body;
+
+  doneAt(r, shift(-1), '07:15');
+  doneAt(r, shift(-2), '07:40'); // late
+  doneAt(r, shift(-3), '07:00');
+  let card = (await day())[r.schedule_id];
+  assert.equal(card.streak, 1, 'the late day ends the run behind it');
+
+  // Done the day after, at a time that would be on time: still late.
+  db.prepare('DELETE FROM chore_history WHERE chore_schedule_id = ? AND date = ?').run(r.schedule_id, shift(-2));
+  db.prepare("INSERT INTO chore_history (user_id, chore_schedule_id, date, clam_value, title, kind, created_at) VALUES (?, ?, ?, 0, ?, 'completion', ?)")
+    .run(kid, r.schedule_id, shift(-2), r.name, `${shift(-1)} 06:00:00`);
+  card = (await day())[r.schedule_id];
+  assert.equal(card.streak, 1, 'finished on a later day is late');
+
+  // Finished late today through the step it ticks: the server stamps now, so
+  // an end time of midnight makes any finish today late (but in its first
+  // minute). Yesterday on time and a milestone every 2 days: the old rule
+  // made today's run 2 and paid it.
+  const late = (await post('/api/routines', {
+    name: 'Midnight', user_id: kid, trigger: 'days', days: [], steps: [step],
+    end_time: '00:00', milestone_every: 2, milestone_clams: 5,
+  })).body;
+  doneAt(late, shift(-1), '00:00');
+  assert.equal((await day())[late.schedule_id].streak, 1);
+  if (!new Date().toISOString().slice(11, 16).startsWith('00:00')) {
+    await post(`/api/routines/${late.id}/steps/${step}`, { date: today, done: true });
+    card = (await day())[late.schedule_id];
+    assert.equal(card.completed, true);
+    assert.equal(card.onTime, false);
+    assert.equal(card.streak, 0, 'finished late today, the run is over');
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM chore_history WHERE kind = 'streak' AND title LIKE 'Midnight:%'").get().n, 0, 'a late finish pays no milestone');
+  }
+  await del(`/api/routines/${late.id}`);
+
+  await del(`/api/routines/${r.id}`);
+  await del(`/api/routine-steps/${step}`);
+});
+
 test('a run is kept across vacation days and an edit to the days; another person starts afresh', async (t) => {
   const db = new Database(testDbPath);
   db.pragma('busy_timeout = 5000');

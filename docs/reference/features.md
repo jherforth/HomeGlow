@@ -293,20 +293,24 @@ schedules. An old link to Family → Routines lands there.
   changing the schedule's days, time or person (409). Snoozing, hiding and deleting still
   work.
 - **For several people at once:** a new routine can be for several people; each gets
-  their own copy, with their own ticks and streak. Routines can be selected and deleted
-  together, as chores can.
+  their own copy, with their own ticks and streak. A routine's **Copy** button makes one
+  for someone else later: the editor opens filled in from it, for no one yet. Routines can
+  be selected and deleted together, as chores can.
 - **Steps** are built once, with a name and an icon, and used in any routine, in the
   order chosen there. A step in use can't be deleted. They're made in the Steps list, or
   right from the routine editor: its *Add a step* box lists **＋ New step** first, which
   opens the step dialog on top of the routine. It also lists steps not yet in the
   routine, then chores, which become steps when picked. Typing a name that matches
   nothing offers *Create step "…"* with that name filled in. A step made there joins
-  the routine at once.
+  the routine at once. A step that is also one of the routine's people's weekly chores,
+  on a day the routine runs, gets a quiet note under it (*Currently a chore for Henry,
+  every day*), since it would show on the board twice; nothing has to be dismissed.
 - **Ticked in the Chores widget.** A routine's card shows its steps, an *n/m* chip and a
   progress bar. Ticking the last step completes the chore. Unticking one undoes it and keeps
   the others. The card's own button still completes the whole routine at once (every step
   ticked), and undoing it clears the steps. Finishing a routine, either way, celebrates
-  (when celebrations are on). Once done, the card shows only the streak
+  (when celebrations are on). With an end time, the card shows it (*by 7:20*, or
+  *7:00–7:20* with a start time). Once done, the card shows only the streak
   (*5 🔥*) and, with an end time, *on time* or *late*.
 - **Expiry:** a routine can expire a set time after its end time; then it turns red and
   only a parent can complete it (see *Chores that expire*).
@@ -320,7 +324,8 @@ schedules. An old link to Family → Routines lands there.
 - **Rewards:** steps never pay. *Every N days in a row, M clams* is paid once each time the
   streak reaches a multiple of N, however the routine was finished, as a history row of kind
   `streak` titled "*Morning: 5 in a row*"; a new run earns them again. A streak counts
-  scheduled days only, and vacation days are neutral: done, one counts; not done, it
+  scheduled days only, and with an end time only a day finished by it: a late finish (or
+  one ticked on a later day) is done but breaks the run. Vacation days are neutral: done, one counts; not done, it
   neither extends nor breaks the run. Changing when a routine runs (its days, or days to
   calendar events) keeps the run it had up to yesterday, and the new days count on from
   today; a routine handed to someone else starts a run of theirs.

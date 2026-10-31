@@ -31,6 +31,8 @@ import {
 } from '@mui/material';
 import {
   Add,
+  ArrowDownward,
+  ArrowUpward,
   Edit,
   Delete,
   ContentCopy,
@@ -285,7 +287,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
   // calendar routine once (utils/routineSchedules.js).
   const chores = useMemo(() => allChores.filter((c) => !c.routine_id), [allChores]);
   const schedules = useMemo(() => schedulesWithRoutines(allSchedules, routines), [allSchedules, routines]);
-  const [routineEditor, setRoutineEditor] = useState({ open: false, routine: null });
+  const [routineEditor, setRoutineEditor] = useState({ open: false, routine: null, copyOf: null });
   // The chore dialog's follow-ups, as form rows (issue #241).
   const [followupRows, setFollowupRows] = useState([]);
   const [followupError, setFollowupError] = useState('');
@@ -359,7 +361,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
   // The schedule views name a routine by id.
   const openRoutineById = (id) => {
     const routine = routines.find((r) => r.id === id);
-    if (routine) setRoutineEditor({ open: true, routine });
+    if (routine) setRoutineEditor({ open: true, routine, copyOf: null });
   };
 
   const computeCrontab = (f) => {
@@ -391,6 +393,21 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
   // scrolls it into view; with none it opens the new-schedule dialog with
   // the chore already picked, since there is nothing to scroll to.
   const schedulesSectionRef = useRef(null);
+  const choresSectionRef = useRef(null);
+  // The two sections' headers link to each other: a long chore list puts the
+  // schedules a long scroll away, and the other way round.
+  const jumpTo = (ref) => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const jumpLink = (ref, label, Icon) => (
+    <Button
+      size="small"
+      endIcon={<Icon fontSize="small" />}
+      onClick={() => jumpTo(ref)}
+      aria-label={t('chores:schedules.goTo', { section: label })}
+      sx={{ color: 'text.secondary', minWidth: 0 }}
+    >
+      {label}
+    </Button>
+  );
   const handleScheduleCountClick = (chore) => {
     if (getScheduleCountForChore(chore.id) === 0) {
       openCreateSchedule(chore.id);
@@ -798,13 +815,15 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
           under its tab bars (#230), so this tab no longer draws its own. */}
 
       {/* ── CHORE DEFINITIONS ────────────────────────────── */}
+      <Box ref={choresSectionRef} sx={{ scrollMarginTop: 8 }}>
       <AdminGroup
         title={t('chores:schedules.definitionsHeading')}
         collapseKey="choreDefinitions"
         defaultCollapsed
         count={chores.length}
         action={(
-          <Box sx={{ display: 'flex', gap: 1 }}>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            {jumpLink(schedulesSectionRef, t('chores:schedules.jumpSchedules'), ArrowDownward)}
             <Tooltip title={t('common:actions.refresh')}>
               <IconButton size="small" onClick={reloadRoutines} aria-label={t('common:actions.refresh')}>
                 <Refresh fontSize="small" />
@@ -908,14 +927,17 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
         ))}
       </AdminGroup>
 
+      </Box>
+
       {/* ── ROUTINES AND THEIR STEPS ─────────────────────── */}
       <RoutinesGroup
         routines={routines}
         users={users}
         imported={routineData.imported}
         onDismissImported={routineData.dismissImported}
-        onNew={() => setRoutineEditor({ open: true, routine: null })}
-        onEdit={(routine) => setRoutineEditor({ open: true, routine })}
+        onNew={() => setRoutineEditor({ open: true, routine: null, copyOf: null })}
+        onEdit={(routine) => setRoutineEditor({ open: true, routine, copyOf: null })}
+        onCopy={(routine) => setRoutineEditor({ open: true, routine: null, copyOf: routine })}
         onChanged={reloadRoutines}
         flash={showMessage}
       />
@@ -932,6 +954,8 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
           <Typography variant="overline" component="h3" sx={adminHeadingTextSx}>
             {t('chores:schedules.schedulesColumn')}
           </Typography>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+          {jumpLink(choresSectionRef, t('chores:schedules.jumpChores'), ArrowUpward)}
           <ToggleButtonGroup
             size="small"
             exclusive
@@ -942,6 +966,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
             <ToggleButton value="person" sx={{ textTransform: 'none', px: 1.5 }}>{t('chores:board.viewByPerson')}</ToggleButton>
             <ToggleButton value="list" sx={{ textTransform: 'none', px: 1.5 }}>{t('chores:board.viewList')}</ToggleButton>
           </ToggleButtonGroup>
+          </Box>
         </Box>
         {scheduleView === 'person' ? (
           <ChoreScheduleBoard
@@ -1795,13 +1820,14 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
       <RoutineEditorDialog
         open={routineEditor.open}
         routine={routineEditor.routine}
+        copyOf={routineEditor.copyOf}
         steps={routineData.steps}
         users={users}
         sources={routineData.sources}
-        onClose={() => setRoutineEditor({ open: false, routine: null })}
+        onClose={() => setRoutineEditor({ open: false, routine: null, copyOf: null })}
         onStepAdded={routineData.addStep}
         onSaved={(saved) => {
-          setRoutineEditor({ open: false, routine: null });
+          setRoutineEditor({ open: false, routine: null, copyOf: null });
           showMessage('success', Array.isArray(saved.routines)
             ? t('chores:routines.savedMany', { name: saved.routines[0]?.name || '', count: saved.routines.length })
             : t('chores:routines.saved', { name: saved.name }));

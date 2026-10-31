@@ -128,7 +128,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
   const [showPrizesModal, setShowPrizesModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showBonusChores, setShowBonusChores] = useState(DEFAULT_SHOW_BONUS_CHORES);
-  // A routine's card (Family → Routines) shows its steps; keyed by schedule id.
+  // A routine's card (Admin → Family → Chores) shows its steps; keyed by schedule id.
   const { routines: routineDays, reload: reloadRoutines, toggleStep: toggleRoutineStep } = useRoutinesToday();
   const [soundEnabled, setSoundEnabled] = useState(DEFAULT_SOUND_ENABLED);
   const [showWeek, setShowWeek] = useState(DEFAULT_SHOW_WEEK);
@@ -1224,6 +1224,14 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
     const dueStatus = getDueDateStatus(schedule.due_date, getTodayDateString(), schedule.completed);
     // Too late (issue #279): red, with a ✕ where the tick was.
     const expired = !schedule.completed && isExpired(schedule, getTodayDateString(), now);
+    // A routine with an end time shows it, so a child knows the deadline:
+    // "by 7:20", or "7:00–7:20" with a start time too.
+    const endTime = routineDay?.endTime;
+    const timeText = endTime
+      ? (schedule.due_time
+        ? t('chores:routines.timeRange', { start: formatDueTime(schedule.due_time), end: formatDueTime(endTime) })
+        : t('chores:routines.byTime', { time: formatDueTime(endTime) }))
+      : schedule.due_time ? formatDueTime(schedule.due_time) : '';
     const rowBgColor = schedule.completed
       ? 'rgba(0, 255, 0, 0.1)'
       : expired || dueStatus === 'overdue'
@@ -1273,7 +1281,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                 {`+${schedule.clam_value} 🥟`}
               </Box>
             )}
-            {schedule.due_time && (expired ? (
+            {timeText && (expired ? (
               <Chip label={t('chores:expiry.expired')} size="small" color="error" sx={{ ml: 1, fontSize: '0.7rem' }} />
             ) : (
               <Box
@@ -1281,7 +1289,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                 sx={{ ml: 0.75, display: 'inline-flex', alignItems: 'center', gap: 0.25, verticalAlign: 'middle', fontSize: '0.78rem', fontWeight: 500, color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}
               >
                 {schedule.sound_enabled ? <NotificationsNoneOutlined sx={{ fontSize: 15 }} /> : <AccessTime sx={{ fontSize: 15 }} />}
-                {formatDueTime(schedule.due_time)}
+                {timeText}
               </Box>
             ))}
             {schedule.due_date && (

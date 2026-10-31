@@ -14,7 +14,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { Add, Delete, Edit, Warning } from '@mui/icons-material';
+import { Add, ContentCopy, Delete, Edit, Warning } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { AdminGroup, AdminNote, AdminRow } from './AdminRows.jsx';
 import { API_BASE_URL } from '../utils/apiConfig.js';
@@ -30,8 +30,8 @@ export const routineIconBox = (icon) => (
 // Admin → Family → Chores: the routines, between the chore definitions and
 // the schedules. A routine is a checklist of steps for one person, ticked in
 // its card on the Chores widget. The editor is the page's own (onNew,
-// onEdit), as the schedule views open it too.
-export default function RoutinesGroup({ routines, users, imported, onDismissImported, onNew, onEdit, onChanged, flash }) {
+// onEdit, and onCopy for someone else), as the schedule views open it too.
+export default function RoutinesGroup({ routines, users, imported, onDismissImported, onNew, onEdit, onCopy, onChanged, flash }) {
   const { t } = useTranslation(['chores', 'common']);
   const isMobile = useIsMobile();
   const [deleting, setDeleting] = useState(null);
@@ -181,6 +181,11 @@ export default function RoutinesGroup({ routines, users, imported, onDismissImpo
                 <Tooltip title={t('common:actions.edit')}>
                   <IconButton size="small" onClick={() => onEdit(routine)} aria-label={`${t('common:actions.edit')} ${routine.name}`}>
                     <Edit fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title={t('chores:routines.copy')}>
+                  <IconButton size="small" onClick={() => onCopy(routine)} aria-label={`${t('chores:routines.copy')}: ${routine.name}`}>
+                    <ContentCopy fontSize="small" />
                   </IconButton>
                 </Tooltip>
                 <Tooltip title={t('common:actions.delete')}>

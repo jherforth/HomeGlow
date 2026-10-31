@@ -34,6 +34,7 @@ import ChoreIconPicker from './ChoreIconPicker.jsx';
 import ExpiresSelect from './ExpiresSelect.jsx';
 import RoutineStepDialog from './RoutineStepDialog.jsx';
 import { routineStepOptions } from '../utils/routineStepOptions.js';
+import { routineChoreOverlaps } from '../utils/routineChoreOverlaps.js';
 
 const blank = (users) => ({
   name: '',
@@ -75,41 +76,71 @@ const fromRoutine = (routine) => ({
   milestone_clams: routine.milestone_clams || 0,
 });
 
-// Family → Routines: making or changing one routine. A routine is a set of
+// Family → Chores, Routines: making or changing one routine. A routine is a set of
 // steps from the library, for one person, on chosen weekdays or on days with
 // a matching calendar event (routes/routines.js keeps its chore in step).
 // A step made here (typed, or from a chore) joins the library through
 // onStepAdded as well as this routine.
-export default function RoutineEditorDialog({ open, routine, steps, users, sources, onClose, onSaved, onStepAdded }) {
+// With `copyOf`, a new routine starts as a copy of that one, for no one yet:
+// pick who it's for, as when making one.
+export default function RoutineEditorDialog({ open, routine, copyOf = null, steps, users, sources, onClose, onSaved, onStepAdded }) {
   const { t } = useTranslation(['chores', 'common']);
   const isMobile = useIsMobile();
   const [form, setForm] = useState(() => blank(users));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [chores, setChores] = useState([]);
+  const [choreSchedules, setChoreSchedules] = useState([]);
   const [stepInput, setStepInput] = useState('');
   const [newStep, setNewStep] = useState({ open: false, step: null });
 
   useEffect(() => {
     if (!open) return;
-    setForm(routine ? fromRoutine(routine) : blank(users));
+    if (routine) setForm(fromRoutine(routine));
+    else if (copyOf) setForm({ ...fromRoutine(copyOf), user_id: '', user_ids: [] });
+    else setForm(blank(users));
     setError(null);
     setStepInput('');
-  }, [open, routine, users]);
+  }, [open, routine, copyOf, users]);
 
-  // Chores, to offer as steps. Without them the picker still has the library.
+  // Chores, to offer as steps, and their schedules, to flag a step that is
+  // still someone's chore. Without them the editor works as before.
   useEffect(() => {
     if (!open) return undefined;
     let live = true;
     axios.get(`${API_BASE_URL}/api/chores`)
       .then((res) => { if (live) setChores(Array.isArray(res.data) ? res.data : []); })
       .catch(() => { if (live) setChores([]); });
+    axios.get(`${API_BASE_URL}/api/chore-schedules`)
+      .then((res) => { if (live) setChoreSchedules(Array.isArray(res.data) ? res.data : []); })
+      .catch(() => { if (live) setChoreSchedules([]); });
     return () => { live = false; };
   }, [open]);
 
   const set = (patch) => setForm((current) => ({ ...current, ...patch }));
   const library = new Map(steps.map((step) => [step.id, step]));
   const stepOptions = routineStepOptions({ steps, used: form.steps, chores, input: stepInput });
+  const overlaps = routineChoreOverlaps({
+    steps: form.steps.map((id) => library.get(id)).filter(Boolean),
+    schedules: choreSchedules,
+    userIds: routine ? [form.user_id] : form.user_ids,
+    trigger: form.trigger,
+    days: form.days,
+  });
+  const personName = (id) => users.find((user) => user.id === id)?.username || '?';
+  const daysText = (days) => {
+    if (days.length === 7) return t('chores:routines.onEveryDay');
+    if (days.join() === '1,2,3,4,5') return t('chores:routines.onWeekdays');
+    if (days.join() === '0,6') return t('chores:routines.onWeekends');
+    return days.map((day) => weekdays[day]).join(', ');
+  };
+  const currentlyChore = (stepId) => {
+    const found = overlaps.get(stepId);
+    if (!found) return null;
+    return t('chores:routines.currentlyChore', {
+      who: found.map(({ userId, days }) => t('chores:routines.personDays', { name: personName(userId), days: daysText(days) })).join('; '),
+    });
+  };
   const weekdays = getWeekdayLabels(0);
 
   const move = (index, delta) => {
@@ -188,6 +219,7 @@ export default function RoutineEditorDialog({ open, routine, steps, users, sourc
       <DialogContent>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
           {routine && <Alert severity="info">{t('chores:routines.editHelp')}</Alert>}
+          {!routine && copyOf && <Alert severity="info">{t('chores:routines.copyHelp', { name: copyOf.name })}</Alert>}
           {error && <Alert severity="error">{error}</Alert>}
 
           <TextField
@@ -337,8 +369,14 @@ export default function RoutineEditorDialog({ open, routine, steps, users, sourc
               if (!step) return null;
               return (
                 <Box key={stepId} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.25 }}>
-                  <Typography variant="body2" sx={{ width: 24, color: 'text.secondary' }}>{index + 1}.</Typography>
-                  <Typography variant="body2" sx={{ flex: 1 }}>{step.icon ? `${step.icon} ` : ''}{step.label}</Typography>
+                  <Typography variant="body2" sx={{ width: 24, color: 'text.secondary', alignSelf: 'flex-start' }}>{index + 1}.</Typography>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="body2">{step.icon ? `${step.icon} ` : ''}{step.label}</Typography>
+                    {/* A quiet note, not a warning: the chore may be meant to stay. */}
+                    {currentlyChore(stepId) && (
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{currentlyChore(stepId)}</Typography>
+                    )}
+                  </Box>
                   <Tooltip title={t('common:actions.moveUp')}>
                     <span><IconButton size="small" disabled={index === 0} onClick={() => move(index, -1)} aria-label={t('common:actions.moveUp')}><ArrowUpward fontSize="small" /></IconButton></span>
                   </Tooltip>
