@@ -495,6 +495,7 @@
     "addTitle": "Add chores for {{name}}",
     "addToTitle": "{{timing}} · {{name}}",
     "theirTimings": "{{name}}'s schedules",
+    "orTheirTimings": "Or choose to add chores to one of the established schedules below",
     "pickDays": "Pick days",
     "next": "Next",
     "back": "Back",

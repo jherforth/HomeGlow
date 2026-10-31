@@ -801,42 +801,33 @@ export default function ChoreScheduleBoard({
     const finishWizard = (timing, keep) => setAddDialog((d) => ({
       ...d, step: 'chores', timing, keep, fromWizard: true, date: timing.kind === 'once' ? (timing.dueDate || '') : '',
     }));
+    // Below the picker or wizard: a new timing comes first, the person's own
+    // schedules after it.
+    const theirSchedules = showGroups && (
+      <Box>
+        <Alert severity="info" icon={false} sx={{ mb: 1 }}>{t('chores:board.orTheirTimings')}</Alert>
+        <Typography variant="overline" color="text.secondary">{t('chores:board.theirTimings', { name: personName })}</Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          {groups.map((g) => (
+            <Paper
+              key={g.timing.key}
+              variant="outlined"
+              component="button"
+              type="button"
+              onClick={() => pick(g.timing)}
+              sx={{ textAlign: 'left', p: 1.5, cursor: 'pointer', bgcolor: 'background.paper', color: 'text.primary', font: 'inherit', '&:hover': { bgcolor: 'action.hover' } }}
+            >
+              <Typography sx={{ fontWeight: 700 }}>{timingLabel(g.timing)}</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {g.schedules.map((s) => `${s.icon ? `${s.icon} ` : ''}${s.title}`).join(', ')}
+              </Typography>
+            </Paper>
+          ))}
+        </Box>
+      </Box>
+    );
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {showGroups && (
-          <Box>
-            <Typography variant="overline" color="text.secondary">{t('chores:board.theirTimings', { name: personName })}</Typography>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              {groups.map((g) => (
-                <Paper
-                  key={g.timing.key}
-                  variant="outlined"
-                  component="button"
-                  type="button"
-                  onClick={() => pick(g.timing)}
-                  sx={{ textAlign: 'left', p: 1.5, cursor: 'pointer', bgcolor: 'background.paper', color: 'text.primary', font: 'inherit', '&:hover': { bgcolor: 'action.hover' } }}
-                >
-                  <Typography sx={{ fontWeight: 700 }}>{timingLabel(g.timing)}</Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {g.schedules.map((s) => `${s.icon ? `${s.icon} ` : ''}${s.title}`).join(', ')}
-                  </Typography>
-                </Paper>
-              ))}
-            </Box>
-          </Box>
-        )}
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <ToggleButtonGroup
-            size="small"
-            exclusive
-            value={addMode}
-            onChange={(_, mode) => mode && setAddMode(mode)}
-            aria-label={t('chores:wizard.modeLabel')}
-          >
-            <ToggleButton value="picker" sx={{ textTransform: 'none', px: 2 }}>{t('chores:wizard.picker')}</ToggleButton>
-            <ToggleButton value="wizard" sx={{ textTransform: 'none', px: 2 }}>{t('chores:wizard.wizard')}</ToggleButton>
-          </ToggleButtonGroup>
-        </Box>
         {wizardMode ? (
           <ScheduleWizard
             value={addDialog.wizard}
@@ -884,6 +875,7 @@ export default function ChoreScheduleBoard({
         </Box>
         </>
         )}
+        {theirSchedules}
       </Box>
     );
   };
@@ -1201,13 +1193,31 @@ export default function ChoreScheduleBoard({
 
       {/* Add chores */}
       <Dialog open={!!addDialog} onClose={() => setAddDialog(null)} maxWidth="sm" fullWidth fullScreen={isMobile}>
-        <DialogTitle>
-          {addDialog?.step === 'review'
-            ? t('chores:wizard.reviewTitle')
-            : addDialog?.step === 'chores'
-              ? t('chores:board.addToTitle', { timing: timingLabel(addTiming), name: personName })
-              : t('chores:board.addTitle', { name: personName })}
-        </DialogTitle>
+        {/* Picker | Wizard sits beside the title, not in it, so it stays
+            out of the dialog's name. */}
+        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 1, pr: 3 }}>
+          {/* On a phone the toggle gets its own row under the title. */}
+          <DialogTitle sx={{ flex: { xs: '1 1 100%', sm: 1 } }}>
+            {addDialog?.step === 'review'
+              ? t('chores:wizard.reviewTitle')
+              : addDialog?.step === 'chores'
+                ? t('chores:board.addToTitle', { timing: timingLabel(addTiming), name: personName })
+                : t('chores:board.addTitle', { name: personName })}
+          </DialogTitle>
+          {addDialog?.step === 'timing' && (
+            <ToggleButtonGroup
+              size="small"
+              exclusive
+              value={addMode}
+              onChange={(_, mode) => mode && setAddMode(mode)}
+              aria-label={t('chores:wizard.modeLabel')}
+              sx={{ ml: { xs: 3, sm: 0 }, mb: { xs: 1.5, sm: 0 } }}
+            >
+              <ToggleButton value="picker" sx={{ textTransform: 'none', px: 2 }}>{t('chores:wizard.picker')}</ToggleButton>
+              <ToggleButton value="wizard" sx={{ textTransform: 'none', px: 2 }}>{t('chores:wizard.wizard')}</ToggleButton>
+            </ToggleButtonGroup>
+          )}
+        </Box>
         <DialogContent dividers>
           {addDialog && (addDialog.step === 'timing'
             ? renderAddTimingStep()
