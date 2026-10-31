@@ -208,14 +208,13 @@
     "untilCompleted": "Hasta completarla",
     "onceCompleted": "Una vez completada",
     "dayOf": "El mismo día",
-    "weekly": "Una vez a la semana (cualquier día)",
-    "weeklyChip": "Una vez a la semana",
-    "weeklyNext": "Cualquier día de esta semana; una nueva cada domingo",
+    "anyDay": "De vez en cuando (cualquier día)",
+    "anyDayNext": "Cualquier día de su periodo; una nueva en cada periodo",
     "durationHelp": {
       "dayOf": "Esta tarea solo aparece el día programado",
       "untilCompleted": "Esta tarea aparece cada día hasta completarla",
       "onceCompleted": "Esta tarea vuelve a aparecer un tiempo después de cada vez que se completa",
-      "weekly": "Se hace una vez, cualquier día de domingo a sábado. Solo cuenta para el bono diario el sábado."
+      "anyDay": "Se hace una vez, cualquier día del periodo que elijas. Solo cuenta para el bono diario el último día del periodo."
     },
     "visible": "Visible",
     "duplicate": "Duplicar",
@@ -527,7 +526,6 @@
     "daysOfMonthHelp": "Uno o más, como 1 o 1, 15",
     "againAfterCount": "De nuevo tras",
     "customEdit": "Estas tareas usan un horario personalizado. Cambia cada una con su botón de ajustes.",
-    "weeklyHelp": "Se ve toda la semana, y basta con hacerla una vez, cualquier día. Cada domingo llega una nueva. Solo cuenta para el bono diario el sábado, y una semana sin hacer cuenta como una falta.",
     "changesCount_one": "Esto cambia {{count}} tarea de {{name}}.",
     "changesCount_other": "Esto cambia {{count}} tareas de {{name}}.",
     "daysChanged_one": "{{count}} tarea ahora en {{timing}}.",
@@ -594,11 +592,84 @@
       "oneTime": "Una vez",
       "oneTimeOn": "Una vez · {{date}}",
       "againAfter": "De nuevo {{interval}} después de hacerla",
-      "weeklyAnyDay": "Una vez a la semana, cualquier día",
+      "anyDay": {
+        "1w": "Una vez a la semana, cualquier día",
+        "2w": "Una vez cada 2 semanas, cualquier día",
+        "1m": "Una vez al mes, cualquier día",
+        "3m": "Una vez cada 3 meses, cualquier día",
+        "6m": "Una vez cada 6 meses, cualquier día",
+        "1y": "Una vez al año, cualquier día"
+      },
       "custom": "Personalizado ({{expr}})",
       "yearly": "Cada año · {{date}}",
       "everyNMonths_one": "Cada mes · {{dates}}",
       "everyNMonths_other": "Cada {{count}} meses · {{dates}}"
     }
+  },
+  "wizard": {
+    "modeLabel": "Cómo elegir un horario",
+    "picker": "Selector",
+    "wizard": "Asistente",
+    "stepOf": "Paso {{step}} de {{count}}",
+    "howTitle": "¿Con qué frecuencia?",
+    "how": {
+      "days": {
+        "title": "Ciertos días de la semana",
+        "hint": "Cada día, entre semana o los días que elijas"
+      },
+      "anyDay": {
+        "title": "De vez en cuando, cualquier día",
+        "hint": "Una vez a la semana, al mes, al año… cualquier día cuenta"
+      },
+      "everyN": {
+        "title": "Cada pocos días",
+        "hint": "Cada 2 días, cada 3 días…"
+      },
+      "monthly": {
+        "title": "Una fecha cada mes",
+        "hint": "El día 1, o el 1 y el 15"
+      },
+      "after": {
+        "title": "De nuevo un tiempo después de hacerla",
+        "hint": "Vuelve, por ejemplo, 2 semanas después de la última vez"
+      },
+      "once": {
+        "title": "Solo una vez",
+        "hint": "En una fecha, o cuando sea"
+      }
+    },
+    "details": {
+      "days": "¿Qué días?",
+      "anyDay": "¿Una vez cada cuánto?",
+      "everyN": "¿Cada cuántos días?",
+      "monthly": "¿Qué fechas?",
+      "after": "¿Cuánto tiempo después de hacerla?",
+      "once": "¿Cuándo? (opcional)"
+    },
+    "period": {
+      "1w": "Una semana",
+      "2w": "Dos semanas",
+      "1m": "Un mes",
+      "3m": "Tres meses",
+      "6m": "Seis meses",
+      "1y": "Un año"
+    },
+    "periodLabel": "Frecuencia",
+    "anyDayNote": "Basta con hacerla una vez, cualquier día del periodo. Cuando empieza el siguiente periodo llega una nueva. Solo cuenta para el bono diario el último día del periodo, y un periodo sin hacer cuenta como una falta. Las semanas van de domingo a sábado; los meses, trimestres y años siguen el calendario.",
+    "everyNLabel": "Días",
+    "afterCount": "Cuántos",
+    "soFar": "Por ahora:",
+    "missedTitle": "Si no se hace ese día…",
+    "missedDrop": "Desaparece al terminar el día",
+    "missedDropHint": "La siguiente llega su próximo día; el día sin hacer queda registrado.",
+    "missedKeep": "Se queda hasta hacerla",
+    "missedKeepHint": "Pasa al día siguiente hasta que se marque como hecha.",
+    "choresTitle": "Elige las tareas",
+    "reviewTitle": "Revisa y añade",
+    "reviewSentence": "{{name}}: {{chores}}. {{timing}}.",
+    "reviewKeep": "Cada una se queda hasta hacerla.",
+    "reviewDrop": "Cada una desaparece al terminar su día.",
+    "reviewMoves_one": "{{count}} de estas ya tiene un horario para esta persona: se mueve aquí.",
+    "reviewMoves_other": "{{count}} de estas ya tienen un horario para esta persona: se mueven aquí."
   }
 }

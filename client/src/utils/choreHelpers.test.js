@@ -26,8 +26,8 @@ describe('countsTowardDailyBonus', () => {
         expect(countsTowardDailyBonus({ clam_value: 3, triggered_on: '2026-10-07' }, today)).toBe(false);
     });
 
-    it('counts a once-a-week chore on its Saturday only', () => {
-        const card = { clam_value: 0, parent_duration: 'weekly', due_date: '2026-10-10' };
+    it('counts an any-day chore on its last day only', () => {
+        const card = { clam_value: 0, parent_duration: 'any-day', due_date: '2026-10-10' };
         expect(countsTowardDailyBonus(card, today)).toBe(false);
         expect(countsTowardDailyBonus(card, '2026-10-10')).toBe(true);
         // Another sticky chore's card with a due date still counts every day.

@@ -73,7 +73,7 @@ function cronFields(crontab) {
 // daily copy (parent_schedule_id): the schedule it came from stands for it.
 export function timingOfSchedule(schedule) {
   if (!schedule || schedule.parent_schedule_id) return null;
-  if (schedule.duration === 'weekly') return weeklyTiming();
+  if (schedule.duration === 'any-day') return anyDayTiming(schedule.interval || '1w');
   if (schedule.duration === 'once-completed' && schedule.crontab) {
     const interval = schedule.interval || '';
     return { kind: 'after', key: `after:${interval}`, interval };
@@ -154,10 +154,39 @@ export const monthlyTiming = (dom) => {
 };
 export const onceTiming = (dueDate = null) => ({ kind: 'once', key: `once:${dueDate || ''}`, dueDate: dueDate || null });
 export const afterTiming = (interval) => ({ kind: 'after', key: `after:${interval}`, interval });
-// Once a week, any day (server/services/weeklyChores.js). The server keeps
-// its crontab at the week start; the days mean nothing.
-export const weeklyTiming = () => ({ kind: 'weekly', key: 'weekly' });
-export const WEEKLY_CRONTAB = '0 0 * * 0';
+// Once in a period, any day of it (server/services/anyDayChores.js). The
+// period is the schedule's interval; its crontab means nothing.
+export const ANY_DAY_PERIODS = ['1w', '2w', '1m', '3m', '6m', '1y'];
+export const anyDayTiming = (period = '1w') => ({ kind: 'anyDay', key: `anyDay:${period}`, period });
+export const ANY_DAY_CRONTAB = '0 0 * * *';
+
+/**
+ * The period a date ('YYYY-MM-DD') falls in, as { start, end }, the same as
+ * the server's periodOf: weeks run Sunday to Saturday (two weeks from the
+ * week `anchor`, the schedule's creation, is in), months and longer follow
+ * the calendar (quarters, halves, years).
+ */
+export function anyDayPeriodOf(dateKey, period = '1w', anchor = null) {
+  const m = String(ANY_DAY_PERIODS.includes(period) ? period : '1w').match(/^(\d+)([wmy])$/);
+  const count = Number(m[1]);
+  const weekStart = (key) => addDays(key, -new Date(`${key}T12:00:00Z`).getUTCDay());
+  if (m[2] === 'w') {
+    const start = weekStart(dateKey);
+    if (count === 1) return { start, end: addDays(start, 6) };
+    const from = weekStart(String(anchor || dateKey).slice(0, 10));
+    const weeks = Math.round((Date.parse(`${start}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / (7 * 86400000));
+    const blockStart = addDays(from, Math.floor(weeks / count) * count * 7);
+    return { start: blockStart, end: addDays(blockStart, count * 7 - 1) };
+  }
+  const months = m[2] === 'y' ? count * 12 : count;
+  const [y, mo] = dateKey.split('-').map(Number);
+  const first = Math.floor((y * 12 + mo - 1) / months) * months;
+  const iso = (d) => d.toISOString().slice(0, 10);
+  return {
+    start: iso(new Date(Date.UTC(Math.floor(first / 12), first % 12, 1))),
+    end: iso(new Date(Date.UTC(Math.floor((first + months) / 12), (first + months) % 12, 0))),
+  };
+}
 
 // The day fields a timing writes into a crontab.
 function dayFieldsOf(timing) {
@@ -185,11 +214,11 @@ export function scheduleFieldsForTiming(timing, schedule = null) {
   const time = old ? `${old.minute} ${old.hour}` : '0 0';
   // A schedule leaving "again after done" or "once a week" goes back to
   // showing on its day.
-  const wasAfter = schedule?.duration === 'once-completed' || schedule?.duration === 'weekly';
+  const wasAfter = schedule?.duration === 'once-completed' || schedule?.duration === 'any-day';
   const keepDuration = schedule && !wasAfter ? (schedule.duration || 'day-of') : 'day-of';
   switch (timing.kind) {
-    case 'weekly':
-      return { crontab: WEEKLY_CRONTAB, duration: 'weekly', interval: null };
+    case 'anyDay':
+      return { crontab: ANY_DAY_CRONTAB, duration: 'any-day', interval: timing.period };
     case 'once':
       return { crontab: null, duration: 'day-of', interval: null, due_date: timing.dueDate || null };
     case 'after':
@@ -208,9 +237,10 @@ export function scheduleFieldsForTiming(timing, schedule = null) {
 }
 
 // Group order: every day first, then the other weekly groups (most days
-// first, then by first day), then once a week (any day), every-n-days,
-// monthly, again-after-done, custom, and one-time last (by date).
-const KIND_ORDER = { week: 0, weekly: 1, everyN: 2, monthly: 3, months: 4, after: 5, custom: 6, once: 7 };
+// first, then by first day), then once in a period (any day, shortest
+// first), every-n-days, monthly, again-after-done, custom, and one-time last
+// (by date).
+const KIND_ORDER = { week: 0, anyDay: 1, everyN: 2, monthly: 3, months: 4, after: 5, custom: 6, once: 7 };
 export function compareTimings(a, b) {
   if (KIND_ORDER[a.kind] !== KIND_ORDER[b.kind]) return KIND_ORDER[a.kind] - KIND_ORDER[b.kind];
   if (a.kind === 'week') {
@@ -224,6 +254,7 @@ export function compareTimings(a, b) {
     return 0;
   }
   if (a.kind === 'everyN') return a.n - b.n;
+  if (a.kind === 'anyDay') return ANY_DAY_PERIODS.indexOf(a.period) - ANY_DAY_PERIODS.indexOf(b.period);
   if (a.kind === 'months') return (a.every || 99) - (b.every || 99) || a.key.localeCompare(b.key);
   if (a.kind === 'once') return String(a.dueDate || '9999').localeCompare(String(b.dueDate || '9999'));
   return a.key.localeCompare(b.key);
@@ -256,7 +287,7 @@ export const COMMON_TIMINGS = [
   weekTiming([0, 6]),
   weekTiming([1, 3, 5]),
   weekTiming([2, 4]),
-  weeklyTiming(),
+  anyDayTiming('1w'),
   everyNTiming(2),
   onceTiming(null),
 ];
@@ -275,7 +306,7 @@ export function timingFallsOn(timing, date, { schedule = null, tz } = {}) {
       return timing.dueDate === key;
     }
     case 'after':
-    case 'weekly':
+    case 'anyDay':
       return null;
     default: {
       const expr = schedule?.crontab || `0 0 ${dayFieldsOf(timing)}`;
@@ -322,27 +353,39 @@ const inVacation = (vacation, key) => !!vacation && vacation.enabled === true
 
 const STICKY = new Set(['until-completed', 'once-completed']);
 
-// A once-a-week chore on the week shown (`days`, Sunday to Saturday): on the
-// day it was done; or, not done, on Saturday, its due day (missed if a miss
-// was logged, not done if that day is past, planned if it's ahead); and on
-// today, waiting, while this week is still open.
-function weeklyOnCalendar(s, days, { done, missed, today }) {
-  const saturday = days[days.length - 1];
+// An any-day chore on the week shown (`days`, Sunday to Saturday):
+//   on the day it was done;
+//   on today, waiting (or due today, on its period's last day), while it
+//     still has an open card (`openCards`: the schedules that do; unknown
+//     means it's assumed open);
+//   on its period's last day if that's in this week: missed if a miss was
+//     logged, not done if past (only when the whole period is this week, as
+//     an earlier week may have had it done), planned if ahead.
+function anyDayOnCalendar(s, period, days, { done, missed, today, openCards }) {
   const doneDay = days.find((d) => done.has(`${s.chore_id}|${d.date}`));
   if (doneDay) {
     doneDay.items.push({ schedule: s, state: 'done', late: false });
     return;
   }
   const since = s.created_at ? String(s.created_at).slice(0, 10) : null;
-  if (since && saturday.date < since) return;
-  if (missed.has(`${s.chore_id}|${saturday.date}`)) {
-    saturday.items.push({ schedule: s, state: 'missed', late: false });
-  } else if (saturday.date < today) {
-    if (!saturday.vacation) saturday.items.push({ schedule: s, state: 'notDone', late: false });
+  const periodEnd = days.find((d) => anyDayPeriodOf(d.date, period, s.created_at).end === d.date);
+  if (periodEnd && (!since || periodEnd.date >= since) && missed.has(`${s.chore_id}|${periodEnd.date}`)) {
+    periodEnd.items.push({ schedule: s, state: 'missed', late: false });
+    return;
+  }
+  const todayBox = days.find((d) => d.date === today);
+  if (todayBox) {
+    if (s.visible && (!openCards || openCards.has(s.id))) {
+      todayBox.items.push({ schedule: s, state: todayBox === periodEnd ? 'today' : 'waiting', late: false });
+    }
+    return;
+  }
+  if (!periodEnd || (since && periodEnd.date < since)) return;
+  if (periodEnd.date < today) {
+    const wholeWeek = anyDayPeriodOf(periodEnd.date, period, s.created_at).start >= days[0].date;
+    if (wholeWeek && !periodEnd.vacation) periodEnd.items.push({ schedule: s, state: 'notDone', late: false });
   } else if (s.visible) {
-    const todayBox = days.find((d) => d.date === today);
-    if (todayBox) todayBox.items.push({ schedule: s, state: todayBox === saturday ? 'today' : 'waiting', late: false });
-    else saturday.items.push({ schedule: s, state: 'planned', late: false });
+    periodEnd.items.push({ schedule: s, state: 'planned', late: false });
   }
 }
 
@@ -358,9 +401,10 @@ function weeklyOnCalendar(s, days, { done, missed, today }) {
  *   planned  a future day
  * Vacation days are flagged; hidden chores only appear where they were done.
  * `noDay` lists chores that can't be placed (one-time with no date, or an
- * again-after-done one with no next date).
+ * again-after-done one with no next date). `openCards` is the ids of the
+ * sticky schedules with a card on the wall now (see anyDayOnCalendar).
  */
-export function calendarWeek({ groups, dates, today, rows = [], vacation = null }) {
+export function calendarWeek({ groups, dates, today, rows = [], vacation = null, openCards = null }) {
   const done = new Map(); // `${chore_id}|${date}` → true
   const missed = new Set();
   for (const r of rows) {
@@ -373,8 +417,8 @@ export function calendarWeek({ groups, dates, today, rows = [], vacation = null 
   const noDay = [];
   for (const g of groups) {
     for (const s of g.schedules) {
-      if (g.timing.kind === 'weekly') {
-        weeklyOnCalendar(s, days, { done, missed, today });
+      if (g.timing.kind === 'anyDay') {
+        anyDayOnCalendar(s, g.timing.period, days, { done, missed, today, openCards });
         continue;
       }
       let dueKeys = [];

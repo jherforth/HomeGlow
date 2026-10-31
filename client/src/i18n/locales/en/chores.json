@@ -208,14 +208,13 @@
     "untilCompleted": "Until Completed",
     "onceCompleted": "Once Completed",
     "dayOf": "Day Of",
-    "weekly": "Once a week (any day)",
-    "weeklyChip": "Once a week",
-    "weeklyNext": "Any day this week; a new one each Sunday",
+    "anyDay": "Once in a while (any day)",
+    "anyDayNext": "Any day in its period; a fresh one each new period",
     "durationHelp": {
       "dayOf": "This chore will only appear on the day it is scheduled",
       "untilCompleted": "This chore will appear daily until completed",
       "onceCompleted": "This chore appears after a delay each time it is completed",
-      "weekly": "Done once, on any day from Sunday to Saturday. It only counts toward the daily bonus on Saturday."
+      "anyDay": "Done once, on any day of the period you pick. It only counts toward the daily bonus on the period's last day."
     },
     "visible": "Visible",
     "duplicate": "Duplicate",
@@ -527,7 +526,6 @@
     "daysOfMonthHelp": "One or more, like 1 or 1, 15",
     "againAfterCount": "Again after",
     "customEdit": "These chores use a custom schedule. Change each one with its settings button.",
-    "weeklyHelp": "Shows all week, and done once on any day counts. A fresh one comes each Sunday. It counts toward the daily bonus only on Saturday, and a week not done is one miss.",
     "changesCount_one": "This changes {{count}} chore for {{name}}.",
     "changesCount_other": "This changes {{count}} chores for {{name}}.",
     "daysChanged_one": "{{count}} chore now on {{timing}}.",
@@ -594,11 +592,84 @@
       "oneTime": "One-time",
       "oneTimeOn": "One-time · {{date}}",
       "againAfter": "Again {{interval}} after done",
-      "weeklyAnyDay": "Once a week, any day",
+      "anyDay": {
+        "1w": "Once a week, any day",
+        "2w": "Once every 2 weeks, any day",
+        "1m": "Once a month, any day",
+        "3m": "Once every 3 months, any day",
+        "6m": "Once every 6 months, any day",
+        "1y": "Once a year, any day"
+      },
       "custom": "Custom ({{expr}})",
       "yearly": "Every year · {{date}}",
       "everyNMonths_one": "Every month · {{dates}}",
       "everyNMonths_other": "Every {{count}} months · {{dates}}"
     }
+  },
+  "wizard": {
+    "modeLabel": "How to pick a schedule",
+    "picker": "Picker",
+    "wizard": "Wizard",
+    "stepOf": "Step {{step}} of {{count}}",
+    "howTitle": "How often should it happen?",
+    "how": {
+      "days": {
+        "title": "On certain days of the week",
+        "hint": "Every day, weekdays, or the days you pick"
+      },
+      "anyDay": {
+        "title": "Once in a while, any day",
+        "hint": "Once a week, a month, a year… any day in it counts"
+      },
+      "everyN": {
+        "title": "Every few days",
+        "hint": "Every 2 days, every 3 days…"
+      },
+      "monthly": {
+        "title": "On a date each month",
+        "hint": "The 1st, or the 1st and the 15th"
+      },
+      "after": {
+        "title": "Again a while after it’s done",
+        "hint": "Comes back 2 weeks after the last time, say"
+      },
+      "once": {
+        "title": "Just once",
+        "hint": "On a date, or whenever"
+      }
+    },
+    "details": {
+      "days": "Which days?",
+      "anyDay": "Once in how long?",
+      "everyN": "Every how many days?",
+      "monthly": "Which dates?",
+      "after": "How long after it’s done?",
+      "once": "When? (optional)"
+    },
+    "period": {
+      "1w": "A week",
+      "2w": "Two weeks",
+      "1m": "A month",
+      "3m": "Three months",
+      "6m": "Six months",
+      "1y": "A year"
+    },
+    "periodLabel": "How often",
+    "anyDayNote": "Doing it once, on any day in the period, counts. A fresh one comes when the next period starts. It counts toward the daily bonus only on the period’s last day, and a period not done is one miss. Weeks run Sunday to Saturday; months, quarters and years follow the calendar.",
+    "everyNLabel": "Days",
+    "afterCount": "How many",
+    "soFar": "So far:",
+    "missedTitle": "If it isn’t done that day…",
+    "missedDrop": "It goes away at the end of the day",
+    "missedDropHint": "The next one comes on its next day; a missed day is logged.",
+    "missedKeep": "It stays until it’s done",
+    "missedKeepHint": "It carries over to the next day until it’s checked off.",
+    "choresTitle": "Pick the chores",
+    "reviewTitle": "Check and add",
+    "reviewSentence": "{{name}}: {{chores}}. {{timing}}.",
+    "reviewKeep": "Each one stays until it’s done.",
+    "reviewDrop": "Each one goes away at the end of its day.",
+    "reviewMoves_one": "{{count}} of these already has a schedule for this person: it moves here.",
+    "reviewMoves_other": "{{count}} of these already have a schedule for this person: they move here."
   }
 }

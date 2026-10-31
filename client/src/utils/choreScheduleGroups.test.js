@@ -16,6 +16,8 @@ import {
   monthsFromStart,
   nextFireOn,
   calendarWeek,
+  anyDayTiming,
+  anyDayPeriodOf,
 } from './choreScheduleGroups.js';
 
 describe('parseDaysOfWeek', () => {
@@ -250,52 +252,74 @@ describe('calendarWeek', () => {
     expect(state(week, '2026-10-26', 6).state).toBe('planned');
   });
 
-  describe('a once-a-week chore', () => {
-    const weekly = (extra = {}) => S(9, 9, '0 0 * * 0', { duration: 'weekly', ...extra });
+  describe('an any-day chore', () => {
+    const anyDay = (extra = {}) => S(9, 9, '0 0 * * *', { duration: 'any-day', interval: '1w', ...extra });
     const onDays = (week) => week.days.filter((d) => d.items.some((i) => i.schedule.chore_id === 9)).map((d) => [d.date, state(week, d.date, 9).state]);
+    const run = (schedule, opts = {}) => onDays(calendarWeek({ groups: [group([schedule])], dates, today, ...opts }));
 
     it('sits on the day it was done, once', () => {
-      const week = calendarWeek({ groups: [group([weekly()])], dates, today, rows: [{ chore_id: 9, date: '2026-10-26', kind: 'completion' }] });
+      const week = calendarWeek({ groups: [group([anyDay()])], dates, today, rows: [{ chore_id: 9, date: '2026-10-26', kind: 'completion' }] });
       expect(onDays(week)).toEqual([['2026-10-26', 'done']]);
       expect(state(week, '2026-10-26', 9).late).toBe(false);
     });
 
-    it('waits on today while the week is open, and is due on Saturday', () => {
-      expect(onDays(calendarWeek({ groups: [group([weekly()])], dates, today }))).toEqual([['2026-10-28', 'waiting']]);
-      expect(onDays(calendarWeek({ groups: [group([weekly()])], dates, today: '2026-10-31' }))).toEqual([['2026-10-31', 'today']]);
+    it('waits on today while its card is open, and is due on the last day', () => {
+      expect(run(anyDay())).toEqual([['2026-10-28', 'waiting']]);
+      expect(run(anyDay(), { today: '2026-10-31' })).toEqual([['2026-10-31', 'today']]);
+      // A month's last day isn't this week: still waiting today.
+      expect(run(anyDay({ interval: '1m' }), { today: '2026-10-29' })).toEqual([['2026-10-29', 'waiting']]);
+      expect(run(anyDay({ interval: '1m' }), { today: '2026-10-31' })).toEqual([['2026-10-31', 'today']]);
     });
 
-    it('shows a past week as missed, or not done, on its Saturday', () => {
+    it('done earlier in its period (no open card), it shows nothing this week', () => {
+      expect(run(anyDay({ interval: '1m' }), { openCards: new Set() })).toEqual([]);
+      expect(run(anyDay({ interval: '1m' }), { openCards: new Set([9]) })).toEqual([['2026-10-28', 'waiting']]);
+    });
+
+    it('a past period: missed or not done on its last day, not done only if all of it was this week', () => {
       const later = '2026-11-02';
-      expect(onDays(calendarWeek({ groups: [group([weekly()])], dates, today: later, rows: [{ chore_id: 9, date: '2026-10-31', kind: 'missed' }] })))
-        .toEqual([['2026-10-31', 'missed']]);
-      expect(onDays(calendarWeek({ groups: [group([weekly()])], dates, today: later }))).toEqual([['2026-10-31', 'notDone']]);
+      expect(run(anyDay(), { today: later, rows: [{ chore_id: 9, date: '2026-10-31', kind: 'missed' }] })).toEqual([['2026-10-31', 'missed']]);
+      expect(run(anyDay(), { today: later })).toEqual([['2026-10-31', 'notDone']]);
+      expect(run(anyDay({ interval: '1m' }), { today: later })).toEqual([], 'it may have been done earlier in October');
+      expect(run(anyDay({ interval: '1m' }), { today: later, rows: [{ chore_id: 9, date: '2026-10-31', kind: 'missed' }] })).toEqual([['2026-10-31', 'missed']]);
     });
 
-    it('a week ahead is planned for its Saturday; nothing before it existed', () => {
-      expect(onDays(calendarWeek({ groups: [group([weekly()])], dates, today: '2026-10-20' }))).toEqual([['2026-10-31', 'planned']]);
-      expect(onDays(calendarWeek({ groups: [group([weekly({ created_at: '2026-11-03 10:00:00' })])], dates, today: '2026-11-04' }))).toEqual([]);
+    it('a period ending ahead is planned for its last day; nothing before it existed', () => {
+      expect(run(anyDay(), { today: '2026-10-20' })).toEqual([['2026-10-31', 'planned']]);
+      expect(run(anyDay({ interval: '1m' }), { today: '2026-10-20' })).toEqual([['2026-10-31', 'planned']]);
+      expect(run(anyDay({ interval: '3m' }), { today: '2026-10-20' })).toEqual([]);
+      expect(run(anyDay({ created_at: '2026-11-03 10:00:00' }), { today: '2026-11-04' })).toEqual([]);
     });
   });
 });
 
-describe('once a week, any day', () => {
-  it('is its own timing, offered with the common ones, after the week days', () => {
-    const schedule = { id: 1, crontab: '0 0 * * 0', duration: 'weekly' };
-    expect(timingOfSchedule(schedule)).toEqual({ kind: 'weekly', key: 'weekly' });
-    expect(COMMON_TIMINGS.some((tm) => tm.kind === 'weekly')).toBe(true);
+describe('once in a period, any day', () => {
+  it('is its own timing per period, the week one offered with the common ones', () => {
+    expect(timingOfSchedule({ id: 1, crontab: '0 0 * * *', duration: 'any-day', interval: '3m' })).toEqual({ kind: 'anyDay', key: 'anyDay:3m', period: '3m' });
+    expect(timingOfSchedule({ id: 1, crontab: '0 0 * * *', duration: 'any-day' })).toEqual(anyDayTiming('1w'));
+    expect(COMMON_TIMINGS.some((tm) => tm.key === 'anyDay:1w')).toBe(true);
     const groups = groupSchedulesForUser([
-      { id: 1, user_id: 1, title: 'Practice', crontab: '0 0 * * 0', duration: 'weekly' },
+      { id: 1, user_id: 1, title: 'Filter', crontab: '0 0 * * *', duration: 'any-day', interval: '3m' },
       { id: 2, user_id: 1, title: 'Dishes', crontab: '0 0 * * *', duration: 'day-of' },
       { id: 3, user_id: 1, title: 'Plants', crontab: '0 0 */2 * *', duration: 'day-of' },
+      { id: 4, user_id: 1, title: 'Practice', crontab: '0 0 * * *', duration: 'any-day', interval: '1w' },
     ], 1);
-    expect(groups.map((g) => g.timing.kind)).toEqual(['week', 'weekly', 'everyN']);
+    expect(groups.map((g) => g.timing.key)).toEqual(['week:0,1,2,3,4,5,6', 'anyDay:1w', 'anyDay:3m', 'every:2']);
   });
 
-  it('writes the week start, and moving off it goes back to its day', () => {
-    expect(scheduleFieldsForTiming({ kind: 'weekly', key: 'weekly' })).toEqual({ crontab: '0 0 * * 0', duration: 'weekly', interval: null });
-    const moved = scheduleFieldsForTiming(weekTiming([1, 3]), { crontab: '0 0 * * 0', duration: 'weekly' });
+  it('writes its period, and moving off it goes back to a day', () => {
+    expect(scheduleFieldsForTiming(anyDayTiming('1m'))).toEqual({ crontab: '0 0 * * *', duration: 'any-day', interval: '1m' });
+    const moved = scheduleFieldsForTiming(weekTiming([1, 3]), { crontab: '0 0 * * *', duration: 'any-day', interval: '1w' });
     expect(moved).toEqual({ crontab: '0 0 * * 1,3', duration: 'day-of', interval: null });
-    expect(timingFallsOn({ kind: 'weekly', key: 'weekly' }, new Date(2026, 9, 25))).toBeNull();
+    expect(timingFallsOn(anyDayTiming('1w'), new Date(2026, 9, 25))).toBeNull();
+  });
+
+  it('knows its periods as the server does', () => {
+    expect(anyDayPeriodOf('2026-11-04', '1w')).toEqual({ start: '2026-11-01', end: '2026-11-07' });
+    expect(anyDayPeriodOf('2026-11-15', '2w', '2026-11-04 09:00:00')).toEqual({ start: '2026-11-15', end: '2026-11-28' });
+    expect(anyDayPeriodOf('2028-02-10', '1m')).toEqual({ start: '2028-02-01', end: '2028-02-29' });
+    expect(anyDayPeriodOf('2026-11-30', '3m')).toEqual({ start: '2026-10-01', end: '2026-12-31' });
+    expect(anyDayPeriodOf('2026-07-15', '6m')).toEqual({ start: '2026-07-01', end: '2026-12-31' });
+    expect(anyDayPeriodOf('2026-10-31', '1y')).toEqual({ start: '2026-01-01', end: '2026-12-31' });
   });
 });
