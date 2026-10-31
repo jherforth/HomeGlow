@@ -177,6 +177,27 @@ test('a step in use is kept; a routine is edited in place', async () => {
   assert.equal(bad.status, 400);
 });
 
+test("a routine's chore and schedule are changed through the routine, not around it", async () => {
+  const renamed = await patch(`/api/chores/${morning.chore_id}`, { title: 'Something else', clam_value: 0 });
+  assert.equal(renamed.status, 409);
+  assert.equal(renamed.body.routine_id, morning.id);
+  assert.equal((await post('/api/chore-schedules', { chore_id: morning.chore_id, user_id: kid, crontab: '0 0 * * *' })).status, 409);
+  assert.equal((await post('/api/chore-schedules/bulk', { chore_id: morning.chore_id, user_ids: [kid], crontab: '0 0 * * *' })).status, 409);
+  for (const body of [{ crontab: '0 0 * * 0' }, { user_id: null }, { due_time: '09:00' }]) {
+    assert.equal((await patch(`/api/chore-schedules/${morning.schedule_id}`, body)).status, 409, JSON.stringify(body));
+  }
+  const schedule = (await api('/api/chore-schedules')).body.find((s) => s.id === morning.schedule_id);
+  assert.equal(schedule.crontab, '0 0 * * 1,2,3,4,5');
+  assert.equal((await api('/api/chores')).body.find((c) => c.id === morning.chore_id).title, 'Morning routine');
+
+  // Hiding and snoozing it still work, as on any chore.
+  assert.equal((await patch(`/api/chore-schedules/${morning.schedule_id}`, { visible: 0 })).status, 200);
+  assert.equal((await patch(`/api/chore-schedules/${morning.schedule_id}`, { visible: 1 })).status, 200);
+  const snoozed = await patch(`/api/chore-schedules/${morning.schedule_id}`, { snoozed_until: new Date(Date.now() + 3600000).toISOString() });
+  assert.equal(snoozed.status, 200, JSON.stringify(snoozed.body));
+  assert.equal((await patch(`/api/chore-schedules/${morning.schedule_id}`, { snoozed_until: null })).status, 200);
+});
+
 test('a calendar routine gets a schedule pinned to each matching event day, and follows the calendar', async (t) => {
   const db = new Database(testDbPath);
   db.pragma('busy_timeout = 5000');

@@ -3,7 +3,7 @@ import { Box, ButtonBase, Chip, LinearProgress, Typography } from '@mui/material
 import { Check, Close } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 
-// A routine's steps inside its chore card (Family → Routines). Each step is
+// A routine's steps inside its chore card (set up in Family → Chores). Each step is
 // ticked on its own; the last one completes the chore, and the card's own
 // button still completes the whole routine at once. Once done, only the
 // progress, streak and on-time chips stay, so the card is as small as any.

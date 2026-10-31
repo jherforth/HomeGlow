@@ -45,8 +45,6 @@ describe('adminNavigation', () => {
       expect(parseAdminHash('#/admin/family')).toEqual(at('family', 'users'));
       expect(parseAdminHash('#/admin/family/chores')).toEqual(at('family', 'chores', 'definitions'));
       expect(parseAdminHash('#/admin/family/chores/history')).toEqual(at('family', 'chores', 'history'));
-      expect(parseAdminHash('#/admin/family/routines')).toEqual(at('family', 'routines', 'routines'));
-      expect(parseAdminHash('#/admin/family/routines/steps')).toEqual(at('family', 'routines', 'steps'));
       expect(parseAdminHash('#/admin/Family/Chores/Settings/')).toEqual(at('family', 'chores', 'settings'));
       expect(parseAdminHash('#/admin/system/about')).toEqual(at('system', 'about'));
       expect(parseAdminHash('#/admin/system/notifications')).toEqual(at('system', 'notifications'));
@@ -65,6 +63,11 @@ describe('adminNavigation', () => {
       expect(parseAdminHash('#/admin/security')).toEqual(at('security'));
       expect(parseAdminHash('#/admin/connections')).toEqual(at('system', 'connections'));
       expect(parseAdminHash('#/admin/about')).toEqual(at('system', 'about'));
+    });
+
+    it('sends Routines and its Steps to the Chores page, where they now live', () => {
+      expect(parseAdminHash('#/admin/family/routines')).toEqual(at('family', 'chores', 'definitions'));
+      expect(parseAdminHash('#/admin/family/routines/steps')).toEqual(at('family', 'chores', 'definitions'));
     });
 
     it('falls back to defaults for unknown parts', () => {
@@ -90,7 +93,6 @@ describe('adminNavigation', () => {
       expect(buildAdminHash(at('family', 'users'))).toBe('#/admin/family');
       expect(buildAdminHash(at('family', 'chores', 'definitions'))).toBe('#/admin/family/chores');
       expect(buildAdminHash(at('family', 'chores', 'history'))).toBe('#/admin/family/chores/history');
-      expect(buildAdminHash(at('family', 'routines', 'steps'))).toBe('#/admin/family/routines/steps');
       expect(buildAdminHash(at('system', 'about'))).toBe('#/admin/system/about');
       expect(buildAdminHash(at('system', 'notifications'))).toBe('#/admin/system/notifications');
 

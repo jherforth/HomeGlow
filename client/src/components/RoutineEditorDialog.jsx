@@ -76,7 +76,7 @@ const fromRoutine = (routine) => ({
   milestone_clams: routine.milestone_clams || 0,
 });
 
-// Family → Routines: making or changing one routine. A routine is a set of
+// Family → Chores, Routines: making or changing one routine. A routine is a set of
 // steps from the library, for one person, on chosen weekdays or on days with
 // a matching calendar event (routes/routines.js keeps its chore in step).
 // A step made here (typed, or from a chore) joins the library through

@@ -1,7 +1,7 @@
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Box, IconButton, MenuItem, TextField, Tooltip, Typography } from '@mui/material';
-import { ArrowDownward, ArrowUpward } from '@mui/icons-material';
+import { Box, ButtonBase, IconButton, MenuItem, TextField, Tooltip, Typography } from '@mui/material';
+import { ArrowDownward, ArrowUpward, ExpandMore } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 
 // The parts a section of the Admin Panel is built from: groups of rows, each
@@ -24,46 +24,98 @@ export const AdminFooter = ({ children }) => <Slot name="footer">{children}</Slo
 // The accent's edge and tint, for a group whose first row is a header band.
 const accentEdge = 'rgba(var(--accent-rgb), 0.35)';
 
+// A collapsible group's open state, remembered per display under its
+// `collapseKey`. Storage may be unavailable; the default then applies.
+const readOpen = (key, fallback) => {
+  try {
+    const value = localStorage.getItem(`homeglow_adminGroupOpen:${key}`);
+    return value === null ? fallback : value === '1';
+  } catch { return fallback; }
+};
+const writeOpen = (key, open) => {
+  try { localStorage.setItem(`homeglow_adminGroupOpen:${key}`, open ? '1' : '0'); } catch { /* per-display convenience only */ }
+};
+
+// A section's heading sits on a band: the accent's tint with its edge down
+// the left, the fields' corners, so a long page reads as its parts. Shared
+// with the headings drawn outside an AdminGroup (Chores' Schedules, Controls
+// on displays), which then match.
+export const adminHeadingRowSx = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  flexWrap: 'wrap',
+  gap: 1,
+  minHeight: 44,
+  mb: 1,
+  pl: 1.5,
+  pr: 0.75,
+  py: 0.5,
+  borderRadius: 1,
+  bgcolor: 'rgba(var(--accent-rgb), 0.08)',
+  borderLeft: '3px solid var(--accent)',
+};
+export const adminHeadingTextSx = { color: 'text.primary', fontWeight: 700, lineHeight: 1.6, letterSpacing: '0.08em' };
+const headingSx = adminHeadingTextSx;
+
 // A heading, then the group's rows in one bordered block, with the same
 // corners as the fields inside it. `action` sits at the right end of the
 // heading, for an Add button and such. `accent` draws the block's edge in the
 // accent and its first row as a tinted band, so a run of like groups (one per
-// installed plugin) don't read as one.
-export const AdminGroup = ({ title, action, accent = false, children, sx }) => (
-  <Box component="section" sx={{ mb: 3, ...sx }}>
-    {(title || action) && (
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, minHeight: 32, mb: 1, px: 0.5 }}>
-        {title && (
-          <Typography
-            variant="overline"
-            component="h3"
-            sx={{ color: 'text.secondary', fontWeight: 600, lineHeight: 1.6, letterSpacing: '0.06em' }}
-          >
-            {title}
-          </Typography>
-        )}
-        {action}
-      </Box>
-    )}
-    <Box
-      sx={{
-        bgcolor: 'background.paper',
-        border: 1,
-        borderColor: 'divider',
-        borderRadius: 1,
-        '& > * + *': { borderTop: 1, borderColor: 'divider' },
-        ...(accent && {
-          borderColor: accentEdge,
-          overflow: 'hidden',
-          '& > :first-child': { bgcolor: 'rgba(var(--accent-rgb), 0.10)' },
-          '& > :first-child + *': { borderColor: accentEdge },
-        }),
-      }}
+// installed plugin) don't read as one. With `collapseKey` the heading opens
+// and closes the block (closed at first when `defaultCollapsed`), and `count`
+// says how many rows it holds while closed.
+export const AdminGroup = ({ title, action, accent = false, children, sx, collapseKey, defaultCollapsed = false, count, id }) => {
+  const [open, setOpenState] = useState(() => (collapseKey ? readOpen(collapseKey, !defaultCollapsed) : true));
+  const toggle = () => setOpenState((was) => {
+    writeOpen(collapseKey, !was);
+    return !was;
+  });
+  const heading = title && (collapseKey ? (
+    <ButtonBase
+      onClick={toggle}
+      aria-expanded={open}
+      sx={{ borderRadius: 1, px: 0.5, ml: -0.75, gap: 0.5, justifyContent: 'flex-start' }}
     >
-      {children}
+      <ExpandMore fontSize="small" sx={{ color: 'var(--accent)', transition: 'transform 150ms', transform: open ? 'none' : 'rotate(-90deg)' }} />
+      <Typography variant="overline" component="h3" sx={headingSx}>
+        {title}{count !== undefined ? ` (${count})` : ''}
+      </Typography>
+    </ButtonBase>
+  ) : (
+    <Typography variant="overline" component="h3" sx={headingSx}>{title}</Typography>
+  ));
+  return (
+    <Box component="section" id={id} sx={{ mb: 3, scrollMarginTop: 8, ...sx }}>
+      {(title || action) && (
+        // An action with no title (a lone Add button) keeps to the right, unbanded.
+        <Box sx={title ? adminHeadingRowSx : { display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
+          {heading}
+          {action}
+        </Box>
+      )}
+      {open && (
+        <Box
+          sx={{
+            bgcolor: 'background.paper',
+            border: 1,
+            borderColor: 'divider',
+            borderRadius: 1,
+            '& > * + *': { borderTop: 1, borderColor: 'divider' },
+            ...(accent && {
+              borderColor: accentEdge,
+              overflow: 'hidden',
+              '& > :first-child': { bgcolor: 'rgba(var(--accent-rgb), 0.10)' },
+              '& > :first-child + *': { borderColor: accentEdge },
+            }),
+          }}
+        >
+          {children}
+        </Box>
+      )}
     </Box>
-  </Box>
-);
+  );
+};
 
 // One setting. The control sits on the right; a `wide` one (a text field, a
 // row of swatches) goes under the label instead, as every control does on a

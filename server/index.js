@@ -2967,7 +2967,7 @@ function normalizeChoreIcon(icon) {
 // Chore routes (updated for new schema)
 fastify.get('/api/chores', async (request, reply) => {
   try {
-    // routine_id: a chore a routine owns, which Family → Routines manages.
+    // routine_id: a chore a routine owns, managed with its routine on Family → Chores.
     const rows = db.prepare('SELECT c.*, r.id AS routine_id FROM chores c LEFT JOIN routines r ON r.chore_id = c.id').all();
     // Each chore's follow-ups by title, for the chips in the Admin Panel (#241).
     const followups = db.prepare(`
@@ -3043,11 +3043,24 @@ fastify.post('/api/chores', async (request, reply) => {
   }
 });
 
+// A routine's chore and its schedule follow the routine: routes/routines.js
+// keeps the name, icon, days, time and person in step, and a change made
+// around it would leave them disagreeing. Snoozing, hiding and deleting still
+// go through; Admin → Chores opens the routine editor for the rest.
+const ROUTINE_SCHEDULE_FIELDS = ['chore_id', 'user_id', 'crontab', 'duration', 'interval', 'due_time', 'due_date', 'expire_minutes'];
+const routineOwning = (choreId) => db.prepare('SELECT id, name FROM routines WHERE chore_id = ?').get(choreId);
+const refuseRoutineEdit = (reply, routine) => reply.status(409).send({
+  error: `"${routine.name}" is a routine. Change it in the routine editor.`,
+  routine_id: routine.id,
+});
+
 fastify.patch('/api/chores/:id', async (request, reply) => {
   const { id } = request.params;
   const { clam_value, icon } = request.body;
   const title = trimmed(request.body.title);
   const description = trimmed(request.body.description);
+  const owner = routineOwning(id);
+  if (owner) return refuseRoutineEdit(reply, owner);
   try {
     const stmt = db.prepare('UPDATE chores SET title = ?, description = ?, clam_value = ?, icon = ? WHERE id = ?');
     const info = stmt.run(title, description, clam_value, normalizeChoreIcon(icon), id);
@@ -3208,6 +3221,8 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
     if (!chore_id) {
       return reply.status(400).send({ error: 'chore_id is required' });
     }
+    const owner = routineOwning(chore_id);
+    if (owner) return refuseRoutineEdit(reply, owner);
 
     const dateFields = validateScheduleDateFields(request.body, reply);
     if (!dateFields) return;
@@ -3298,6 +3313,8 @@ fastify.post('/api/chore-schedules/bulk', async (request, reply) => {
     if (!chore_id || !user_ids || !Array.isArray(user_ids)) {
       return reply.status(400).send({ error: 'chore_id and user_ids array are required' });
     }
+    const owner = routineOwning(chore_id);
+    if (owner) return refuseRoutineEdit(reply, owner);
 
     const dateFields = validateScheduleDateFields(request.body, reply);
     if (!dateFields) return;
@@ -3328,6 +3345,9 @@ fastify.post('/api/chore-schedules/bulk', async (request, reply) => {
 
 fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
   const { id } = request.params;
+  const scheduleChore = db.prepare('SELECT chore_id FROM chore_schedules WHERE id = ?').get(id);
+  const owner = scheduleChore && routineOwning(scheduleChore.chore_id);
+  if (owner && ROUTINE_SCHEDULE_FIELDS.some((field) => request.body?.[field] !== undefined)) return refuseRoutineEdit(reply, owner);
   const { chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until, revoke_daily_bonus, transfer_bonus_clams, expire_minutes } = request.body;
   try {
     const dueTimeResult = normalizeDueTime(due_time);

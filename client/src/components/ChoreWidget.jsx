@@ -128,7 +128,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
   const [showPrizesModal, setShowPrizesModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showBonusChores, setShowBonusChores] = useState(DEFAULT_SHOW_BONUS_CHORES);
-  // A routine's card (Family → Routines) shows its steps; keyed by schedule id.
+  // A routine's card (Admin → Family → Chores) shows its steps; keyed by schedule id.
   const { routines: routineDays, reload: reloadRoutines, toggleStep: toggleRoutineStep } = useRoutinesToday();
   const [soundEnabled, setSoundEnabled] = useState(DEFAULT_SOUND_ENABLED);
   const [showWeek, setShowWeek] = useState(DEFAULT_SHOW_WEEK);

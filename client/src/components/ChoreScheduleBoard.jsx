@@ -42,6 +42,7 @@ import {
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../utils/apiConfig.js';
+import { adminHeadingRowSx, adminHeadingTextSx } from './AdminRows.jsx';
 import { getWeekdayLabels, getWeekdayOptions } from '../utils/dateUtils.js';
 import useIsMobile from '../hooks/useIsMobile.js';
 import { getTodayDateString } from '../utils/choreHelpers.js';
@@ -60,6 +61,7 @@ import {
   weekDates,
   weekTiming,
 } from '../utils/choreScheduleGroups.js';
+import { calendarRoutinesFor } from '../utils/routineSchedules.js';
 
 // "By person" view of Admin → Chores → Schedules: one tab per person (and
 // one for the unassigned bonus chores), a week calendar of what they have on
@@ -138,6 +140,10 @@ export default function ChoreScheduleBoard({
   onDeleteSchedule,
   onCreateChore,
   showMessage,
+  // A weekday routine's schedule comes in `schedules`, marked `routine`; a
+  // calendar routine is listed from here. Either opens onEditRoutine(id).
+  routines = [],
+  onEditRoutine,
 }) {
   const { t } = useTranslation(['chores', 'common']);
   const isMobile = useIsMobile();
@@ -160,7 +166,12 @@ export default function ChoreScheduleBoard({
     () => [...chores].sort((a, b) => String(a.title).localeCompare(String(b.title))),
     [chores],
   );
-  const countFor = (id) => groupSchedulesForUser(schedules, id).reduce((n, g) => n + g.schedules.length, 0);
+  const eventRoutines = useMemo(() => (userId === null ? [] : calendarRoutinesFor(routines, userId)), [routines, userId]);
+  const countFor = (id) => groupSchedulesForUser(schedules, id).reduce((n, g) => n + g.schedules.length, 0)
+    + (id === null ? 0 : calendarRoutinesFor(routines, id).length);
+  // A group's own chores: what Change days, Copy to and Remove act on. A
+  // routine's schedule changes only with its routine.
+  const choresOf = (group) => group.schedules.filter((s) => !s.routine);
 
   const [busy, setBusy] = useState(false);
   const run = async (work, successText) => {
@@ -393,11 +404,12 @@ export default function ChoreScheduleBoard({
     const { group } = editDialog;
     setEditDialog(null);
     if (!timing || timing.key === group.timing.key) return;
+    const changed = choresOf(group);
     run(async () => {
-      for (const s of group.schedules) {
+      for (const s of changed) {
         await axios.patch(`${API_BASE_URL}/api/chore-schedules/${s.id}`, scheduleFieldsForTiming(timing, s));
       }
-    }, t('chores:board.daysChanged', { count: group.schedules.length, timing: timingLabel(timing) }));
+    }, t('chores:board.daysChanged', { count: changed.length, timing: timingLabel(timing) }));
   };
 
   // ── Copy a group to other people ──────────────────────────────────
@@ -407,8 +419,9 @@ export default function ChoreScheduleBoard({
     return copyDialog.targets.map((targetId) => {
       const theirs = new Map();
       for (const g of groupSchedulesForUser(schedules, targetId)) for (const s of g.schedules) theirs.set(s.chore_id, g.timing);
-      const add = copyDialog.group.schedules.filter((s) => !theirs.has(s.chore_id));
-      const skip = copyDialog.group.schedules.filter((s) => theirs.has(s.chore_id)).map((s) => ({ s, timing: theirs.get(s.chore_id) }));
+      const own = choresOf(copyDialog.group);
+      const add = own.filter((s) => !theirs.has(s.chore_id));
+      const skip = own.filter((s) => theirs.has(s.chore_id)).map((s) => ({ s, timing: theirs.get(s.chore_id) }));
       return { targetId, add, skip };
     });
   }, [copyDialog, schedules]);
@@ -429,14 +442,15 @@ export default function ChoreScheduleBoard({
   // ── Remove a whole group ──────────────────────────────────────────
   const [removeGroup, setRemoveGroup] = useState(null);
   const saveRemoveGroup = () => {
-    const group = removeGroup;
+    const removed = choresOf(removeGroup);
     setRemoveGroup(null);
     run(async () => {
-      for (const s of group.schedules) await axios.delete(`${API_BASE_URL}/api/chore-schedules/${s.id}`);
-    }, t('chores:board.groupRemoved', { count: group.schedules.length }));
+      for (const s of removed) await axios.delete(`${API_BASE_URL}/api/chore-schedules/${s.id}`);
+    }, t('chores:board.groupRemoved', { count: removed.length }));
   };
 
   const [groupMenu, setGroupMenu] = useState(null); // { anchor, group }
+  const menuEmpty = !!groupMenu && choresOf(groupMenu.group).length === 0;
 
   // ── Pieces ────────────────────────────────────────────────────────
   const choreChips = (s) => (
@@ -449,6 +463,50 @@ export default function ChoreScheduleBoard({
       )}
       {s.triggered_on && <Chip size="small" variant="outlined" label={t('chores:followups.chip')} />}
       {!s.visible && <Chip size="small" label={t('chores:board.hidden')} />}
+    </Box>
+  );
+
+  const iconBox = (icon) => (
+    <Box sx={{ width: 32, height: 32, borderRadius: 2, bgcolor: 'action.hover', display: 'grid', placeItems: 'center', fontSize: 18, flex: 'none' }}>
+      {icon}
+    </Box>
+  );
+  const routineChips = (steps, matchText) => (
+    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
+      <Chip size="small" color="secondary" variant="outlined" label={t('chores:routines.routineChip', { count: steps })} />
+      {matchText !== undefined && <Chip size="small" variant="outlined" label={matchText ? `📅 ${matchText}` : t('chores:routines.needsEvents')} />}
+    </Box>
+  );
+
+  // A person's calendar routines, once each: their one-date schedules come
+  // and go with the calendar, so they aren't grouped by timing.
+  const renderEventRoutines = () => (
+    <Box
+      component="section"
+      aria-label={t('chores:routines.onCalendarGroup')}
+      sx={{ mb: 2, border: 1, borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper', overflow: 'hidden' }}
+    >
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 1, bgcolor: 'rgba(var(--accent-rgb), 0.10)' }}>
+        <Typography variant="subtitle1" component="h4" sx={{ fontWeight: 700 }}>{t('chores:routines.onCalendarGroup')}</Typography>
+        <Typography variant="body2" color="text.secondary">
+          {t('chores:board.choreCount', { count: eventRoutines.length })}
+        </Typography>
+      </Box>
+      {eventRoutines.map((r) => (
+        <Box key={r.id} data-routine-row={r.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1, py: 0.75, borderTop: 1, borderColor: 'divider' }}>
+          <Box aria-hidden sx={{ width: 32, flex: 'none' }} />
+          {r.icon && iconBox(r.icon)}
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography variant="body1" sx={{ fontWeight: 500 }}>{r.name}</Typography>
+            {routineChips(r.steps.length, r.match_text || '')}
+          </Box>
+          <Tooltip title={t('chores:routines.editInRoutine')}>
+            <IconButton size="small" aria-label={`${t('chores:routines.editInRoutine')}: ${r.name}`} onClick={() => onEditRoutine?.(r.id)}>
+              <Settings fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      ))}
     </Box>
   );
 
@@ -639,38 +697,49 @@ export default function ChoreScheduleBoard({
               opacity: drag?.schedule.id === s.id ? 0.35 : 1,
             }}
           >
-            <Box
-              {...dragHandlers(s, key)}
-              aria-label={t('chores:board.dragHandle', { title: s.title })}
-              role="button"
-              tabIndex={-1}
-              sx={{ touchAction: 'none', cursor: drag ? 'grabbing' : 'grab', display: 'grid', placeItems: 'center', width: 32, height: 40, color: 'text.secondary', flex: 'none' }}
-            >
-              <DragIndicator />
-            </Box>
-            {/* A chore without an icon starts its title right after the grip. */}
-            {s.icon && (
-              <Box sx={{ width: 32, height: 32, borderRadius: 2, bgcolor: 'action.hover', display: 'grid', placeItems: 'center', fontSize: 18, flex: 'none' }}>
-                {s.icon}
+            {s.routine ? (
+              // A routine moves with its own days, in the routine editor.
+              <Box aria-hidden sx={{ width: 32, flex: 'none' }} />
+            ) : (
+              <Box
+                {...dragHandlers(s, key)}
+                aria-label={t('chores:board.dragHandle', { title: s.title })}
+                role="button"
+                tabIndex={-1}
+                sx={{ touchAction: 'none', cursor: drag ? 'grabbing' : 'grab', display: 'grid', placeItems: 'center', width: 32, height: 40, color: 'text.secondary', flex: 'none' }}
+              >
+                <DragIndicator />
               </Box>
             )}
+            {/* A chore without an icon starts its title right after the grip. */}
+            {s.icon && iconBox(s.icon)}
             <Box sx={{ flex: 1, minWidth: 0, opacity: s.visible ? 1 : 0.6 }}>
               <Typography variant="body1" sx={{ fontWeight: 500 }}>{s.title}</Typography>
-              {choreChips(s)}
+              {s.routine ? routineChips(s.routine.steps) : choreChips(s)}
             </Box>
-            <Tooltip title={s.visible ? t('chores:board.hide') : t('chores:board.show')}>
-              <Switch size="small" checked={!!s.visible} onChange={() => onToggleVisible(s)} slotProps={{ input: { 'aria-label': t('chores:schedules.visible') } }} />
-            </Tooltip>
-            <Tooltip title={t('chores:board.choreSettings')}>
-              <IconButton size="small" aria-label={t('chores:board.choreSettings')} onClick={() => onEditSchedule(s)}>
-                <Settings fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title={t('common:actions.remove')}>
-              <IconButton size="small" color="error" aria-label={t('common:actions.remove')} onClick={() => onDeleteSchedule(s)}>
-                <Delete fontSize="small" />
-              </IconButton>
-            </Tooltip>
+            {s.routine ? (
+              <Tooltip title={t('chores:routines.editInRoutine')}>
+                <IconButton size="small" aria-label={`${t('chores:routines.editInRoutine')}: ${s.title}`} onClick={() => onEditRoutine?.(s.routine.id)}>
+                  <Settings fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            ) : (
+              <>
+                <Tooltip title={s.visible ? t('chores:board.hide') : t('chores:board.show')}>
+                  <Switch size="small" checked={!!s.visible} onChange={() => onToggleVisible(s)} slotProps={{ input: { 'aria-label': t('chores:schedules.visible') } }} />
+                </Tooltip>
+                <Tooltip title={t('chores:board.choreSettings')}>
+                  <IconButton size="small" aria-label={t('chores:board.choreSettings')} onClick={() => onEditSchedule(s)}>
+                    <Settings fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title={t('common:actions.remove')}>
+                  <IconButton size="small" color="error" aria-label={t('common:actions.remove')} onClick={() => onDeleteSchedule(s)}>
+                    <Delete fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </>
+            )}
           </Box>
         ))}
       </Box>
@@ -949,7 +1018,7 @@ export default function ChoreScheduleBoard({
         {kind === 'custom' && <Alert severity="info">{t('chores:board.customEdit')}</Alert>}
         {kind !== 'custom' && (
           <Alert severity="warning">
-            {t('chores:board.changesCount', { count: d.group.schedules.length, name: personName })}
+            {t('chores:board.changesCount', { count: choresOf(d.group).length, name: personName })}
           </Alert>
         )}
       </Box>
@@ -976,8 +1045,8 @@ export default function ChoreScheduleBoard({
 
       {renderCalendar()}
 
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-        <Typography variant="overline" component="h3" sx={{ color: 'text.secondary', fontWeight: 600, letterSpacing: '0.06em' }}>
+      <Box sx={{ ...adminHeadingRowSx, justifyContent: 'flex-start', mb: 1.5 }}>
+        <Typography variant="overline" component="h3" sx={adminHeadingTextSx}>
           {t('chores:board.timingsHeading', { name: personName })}
         </Typography>
         {busy && <CircularProgress size={16} />}
@@ -986,11 +1055,12 @@ export default function ChoreScheduleBoard({
         </Button>
       </Box>
 
-      {groups.length === 0 ? (
+      {groups.length === 0 && eventRoutines.length === 0 ? (
         <Typography variant="body2" color="text.secondary" sx={{ p: 2, border: 1, borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper' }}>
           {t('chores:board.empty', { name: personName })}
         </Typography>
       ) : groups.map(renderGroup)}
+      {eventRoutines.length > 0 && renderEventRoutines()}
 
       {drag && (
         <Paper
@@ -1020,14 +1090,15 @@ export default function ChoreScheduleBoard({
 
       {/* Group menu */}
       <Menu open={!!groupMenu} anchorEl={groupMenu?.anchor} onClose={() => setGroupMenu(null)}>
-        <MenuItem onClick={() => { const g = groupMenu.group; setGroupMenu(null); openEditDays(g); }} disabled={groupMenu?.group.timing.kind === 'custom'}>
+        {/* A group of routines only has nothing these can change. */}
+        <MenuItem onClick={() => { const g = groupMenu.group; setGroupMenu(null); openEditDays(g); }} disabled={groupMenu?.group.timing.kind === 'custom' || menuEmpty}>
           <EditCalendar fontSize="small" sx={{ mr: 1.5 }} />{t('chores:board.changeDays')}
         </MenuItem>
-        <MenuItem onClick={() => { const g = groupMenu.group; setGroupMenu(null); setCopyDialog({ group: g, targets: [] }); }}>
+        <MenuItem onClick={() => { const g = groupMenu.group; setGroupMenu(null); setCopyDialog({ group: g, targets: [] }); }} disabled={menuEmpty}>
           <ContentCopy fontSize="small" sx={{ mr: 1.5 }} />{t('chores:board.copyTo')}
         </MenuItem>
         <Divider />
-        <MenuItem onClick={() => { const g = groupMenu.group; setGroupMenu(null); setRemoveGroup(g); }} sx={{ color: 'error.main' }}>
+        <MenuItem onClick={() => { const g = groupMenu.group; setGroupMenu(null); setRemoveGroup(g); }} sx={{ color: 'error.main' }} disabled={menuEmpty}>
           <Delete fontSize="small" sx={{ mr: 1.5 }} />{t('chores:board.removeGroup')}
         </MenuItem>
       </Menu>
@@ -1124,7 +1195,7 @@ export default function ChoreScheduleBoard({
         <DialogContent>
           {removeGroup && (
             <Alert severity="warning">
-              {t('chores:board.removeGroupWarning', { count: removeGroup.schedules.length, name: personName })}
+              {t('chores:board.removeGroupWarning', { count: choresOf(removeGroup).length, name: personName })}
             </Alert>
           )}
         </DialogContent>

@@ -20,6 +20,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { adminHeadingRowSx, adminHeadingTextSx } from './AdminRows.jsx';
 import {
   CONTROL_LIMITS_KEY,
   CONTROL_PRESETS,
@@ -647,13 +648,11 @@ const ControlsOnDisplay = ({
 
   return (
     <Box component="section" sx={{ mb: 3 }}>
-      <Typography
-        variant="overline"
-        component="h3"
-        sx={{ display: 'block', color: 'text.secondary', fontWeight: 600, lineHeight: 1.6, letterSpacing: '0.06em', px: 0.5, mb: 0.5 }}
-      >
-        {t('admin:controls.heading')}
-      </Typography>
+      <Box sx={adminHeadingRowSx}>
+        <Typography variant="overline" component="h3" sx={adminHeadingTextSx}>
+          {t('admin:controls.heading')}
+        </Typography>
+      </Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, px: 0.5 }}>
         {t('admin:controls.help')}
       </Typography>

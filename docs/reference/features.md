@@ -275,19 +275,29 @@ widget in step with the server.
 A routine is a checklist of steps a child ticks off: brush teeth, make bed, get dressed.
 It runs on chosen weekdays, or on the days of matching calendar events ("Get ready for
 soccer" on practice and game days). Routines used to be a plugin; they're built in now,
-and set up in **Admin → Family → Routines**, beside Chores.
+and set up in **Admin → Family → Chores**. That page lists the chore
+definitions (collapsed until opened), the routines, their steps (collapsed), then the
+schedules. An old link to Family → Routines lands there.
 
 - **Each routine is one ordinary chore** (worth 0 clams), with its schedules. It counts
   toward the day once, takes part in the daily bonus, is logged as missed, pauses for
   vacation and appears in the chore history like any chore. The routine owns the chore:
-  it's left out of Family → Chores, and deleting the routine deletes it (the history
-  stays).
+  it's listed under Routines rather than with the chore definitions, and deleting the
+  routine deletes it (the history stays).
+- **In the schedule views:** a weekday routine sits in its timing group in *By person*,
+  and in *All schedules*, marked *Routine · n steps*. A calendar routine is listed once,
+  under *On calendar events* (its one-date schedules aren't shown). A routine's row has
+  no drag handle, show/hide switch or remove. Its settings open the routine editor, and a
+  group's Change days, Copy to and Remove leave its routines alone. The server refuses
+  changes made around the routine: renaming its chore, adding a schedule to it, or
+  changing the schedule's days, time or person (409). Snoozing, hiding and deleting still
+  work.
 - **For several people at once:** a new routine can be for several people; each gets
   their own copy, with their own ticks and streak. A routine's **Copy** button makes one
   for someone else later: the editor opens filled in from it, for no one yet. Routines can
   be selected and deleted together, as chores can.
 - **Steps** are built once, with a name and an icon, and used in any routine, in the
-  order chosen there. A step in use can't be deleted. They're made in the Steps tab, or
+  order chosen there. A step in use can't be deleted. They're made in the Steps list, or
   right from the routine editor: its *Add a step* box lists **＋ New step** first, which
   opens the step dialog on top of the routine. It also lists steps not yet in the
   routine, then chores, which become steps when picked. Typing a name that matches
@@ -331,8 +341,9 @@ and set up in **Admin → Family → Routines**, beside Chores.
 **Code:** `server/routes/routines.js` (routes, the calendar sync, the link to chores through
 the chore events and `completeChoreSchedule`), `server/services/routines.js` (the rules,
 pure and tested), migrations `schema29-routines` and `schema30-importRoutinesPlugin`;
-`RoutinesTab.jsx`, `RoutineEditorDialog.jsx`, and in the Chores widget `RoutineSteps.jsx`
-and `utils/useRoutinesToday.js`.
+on Family → Chores `RoutinesGroup.jsx`, `RoutineStepsGroup.jsx`, `RoutineEditorDialog.jsx`,
+`hooks/useRoutines.js` and `utils/routineSchedules.js` (which routine schedules the views
+show); and in the Chores widget `RoutineSteps.jsx` and `utils/useRoutinesToday.js`.
 
 ### Metrics-ready history (issue #72)
 

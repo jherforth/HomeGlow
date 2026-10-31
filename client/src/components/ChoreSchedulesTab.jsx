@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -25,6 +25,7 @@ import {
   Grid,
   Checkbox,
   ListItemText,
+  ListSubheader,
   ToggleButton,
   ToggleButtonGroup
 } from '@mui/material';
@@ -49,12 +50,17 @@ import { getServerTimezoneSync } from '../utils/timezone.js';
 import SoundPicker from './SoundPicker.jsx';
 import ChoreIconPicker from './ChoreIconPicker.jsx';
 import { useTranslation } from 'react-i18next';
-import { AdminGroup, AdminNote, AdminRow, AdminSortControl } from './AdminRows.jsx';
+import { AdminGroup, AdminNote, AdminRow, AdminSortControl, adminHeadingRowSx, adminHeadingTextSx } from './AdminRows.jsx';
 import { getWeekdayLabels } from '../utils/dateUtils.js';
 import useIsMobile from '../hooks/useIsMobile.js';
 import { compareByKey } from '../utils/choreHelpers.js';
 import ExpiresSelect from './ExpiresSelect.jsx';
 import ChoreScheduleBoard from './ChoreScheduleBoard.jsx';
+import RoutinesGroup from './RoutinesGroup.jsx';
+import RoutineStepsGroup from './RoutineStepsGroup.jsx';
+import RoutineEditorDialog from './RoutineEditorDialog.jsx';
+import useRoutines from '../hooks/useRoutines.js';
+import { schedulesWithRoutines } from '../utils/routineSchedules.js';
 
 // Which way the schedules section opens: by person (grouped by timing) or the
 // full list. Remembered per display; storage may be unavailable.
@@ -270,9 +276,18 @@ function nextSort(sort, column) {
 export default function ChoreSchedulesTab({ setSaveMessage }) {
   const { t } = useTranslation(['chores', 'common']);
   const isMobile = useIsMobile();
-  const [schedules, setSchedules] = useState([]);
-  const [chores, setChores] = useState([]);
+  // Every chore and schedule, routines' included (they carry routine_id).
+  const [allSchedules, setAllSchedules] = useState([]);
+  const [allChores, setAllChores] = useState([]);
   const [users, setUsers] = useState([]);
+  const routineData = useRoutines({ onError: () => showMessage('error', t('chores:routines.loadFailed')) });
+  const { routines } = routineData;
+  // The definitions list a routine's chore under Routines, not here. The
+  // schedule views show a weekday routine's own schedule, marked, and a
+  // calendar routine once (utils/routineSchedules.js).
+  const chores = useMemo(() => allChores.filter((c) => !c.routine_id), [allChores]);
+  const schedules = useMemo(() => schedulesWithRoutines(allSchedules, routines), [allSchedules, routines]);
+  const [routineEditor, setRoutineEditor] = useState({ open: false, routine: null, copyOf: null });
   // The chore dialog's follow-ups, as form rows (issue #241).
   const [followupRows, setFollowupRows] = useState([]);
   const [followupError, setFollowupError] = useState('');
@@ -325,11 +340,8 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
         axios.get(`${API_BASE_URL}/api/chores`),
         axios.get(`${API_BASE_URL}/api/users`)
       ]);
-      // A routine's chore and its schedules are managed in Family → Routines,
-      // so they're left out here (routine_id is set on those rows).
-      const notRoutine = (row) => !row.routine_id;
-      setSchedules(Array.isArray(schedulesRes.data) ? schedulesRes.data.filter(notRoutine) : []);
-      setChores(Array.isArray(choresRes.data) ? choresRes.data.filter(notRoutine) : []);
+      setAllSchedules(Array.isArray(schedulesRes.data) ? schedulesRes.data : []);
+      setAllChores(Array.isArray(choresRes.data) ? choresRes.data : []);
       setUsers(Array.isArray(usersRes.data) ? usersRes.data.filter(u => u.id !== 0) : []);
     } catch (err) {
       console.error('Error loading chore data:', err);
@@ -340,6 +352,17 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // A routine's write changes its chore and schedules too.
+  const reloadRoutines = useCallback(
+    () => Promise.all([routineData.reload(), fetchAll()]),
+    [routineData.reload, fetchAll],
+  );
+  // The schedule views name a routine by id.
+  const openRoutineById = (id) => {
+    const routine = routines.find((r) => r.id === id);
+    if (routine) setRoutineEditor({ open: true, routine, copyOf: null });
+  };
 
   const computeCrontab = (f) => {
     if (f.isOneTime) return '';
@@ -749,6 +772,14 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
     return true;
   }), scheduleSortKeys, scheduleSort);
 
+  // Routines in the chore filter, by name and person (each person has their own).
+  const routineFilterOptions = [...routines].sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  // A calendar routine has no schedule of its own to list; it gets one row.
+  const listedCalendarRoutines = routineFilterOptions.filter((r) => r.trigger === 'calendar'
+    && (!filterUser || String(r.user_id) === String(filterUser))
+    && (!filterChore || String(r.chore_id) === String(filterChore)));
+  const listedCount = filteredSchedules.length + listedCalendarRoutines.length;
+
   const currentCrontab = computeCrontab(scheduleForm);
   const nextOccurrence = getNextOccurrence(currentCrontab);
   const isOnceCompletedMissingInterval = !scheduleForm.isOneTime
@@ -787,11 +818,14 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
       <Box ref={choresSectionRef} sx={{ scrollMarginTop: 8 }}>
       <AdminGroup
         title={t('chores:schedules.definitionsHeading')}
+        collapseKey="choreDefinitions"
+        defaultCollapsed
+        count={chores.length}
         action={(
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
             {jumpLink(schedulesSectionRef, t('chores:schedules.jumpSchedules'), ArrowDownward)}
             <Tooltip title={t('common:actions.refresh')}>
-              <IconButton size="small" onClick={fetchAll} aria-label={t('common:actions.refresh')}>
+              <IconButton size="small" onClick={reloadRoutines} aria-label={t('common:actions.refresh')}>
                 <Refresh fontSize="small" />
               </IconButton>
             </Tooltip>
@@ -895,10 +929,29 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
 
       </Box>
 
+      {/* ── ROUTINES AND THEIR STEPS ─────────────────────── */}
+      <RoutinesGroup
+        routines={routines}
+        users={users}
+        imported={routineData.imported}
+        onDismissImported={routineData.dismissImported}
+        onNew={() => setRoutineEditor({ open: true, routine: null, copyOf: null })}
+        onEdit={(routine) => setRoutineEditor({ open: true, routine, copyOf: null })}
+        onCopy={(routine) => setRoutineEditor({ open: true, routine: null, copyOf: routine })}
+        onChanged={reloadRoutines}
+        flash={showMessage}
+      />
+      <RoutineStepsGroup
+        steps={routineData.steps}
+        routines={routines}
+        onChanged={routineData.reload}
+        flash={showMessage}
+      />
+
       {/* ── SCHEDULES ────────────────────────────────────── */}
       <Box ref={schedulesSectionRef} sx={{ scrollMarginTop: 8 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap', minHeight: 32, mb: 1, px: 0.5 }}>
-          <Typography variant="overline" component="h3" sx={{ color: 'text.secondary', fontWeight: 600, lineHeight: 1.6, letterSpacing: '0.06em' }}>
+        <Box sx={adminHeadingRowSx}>
+          <Typography variant="overline" component="h3" sx={adminHeadingTextSx}>
             {t('chores:schedules.schedulesColumn')}
           </Typography>
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -926,6 +979,8 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
             onDeleteSchedule={(s) => setDeleteScheduleDialog({ open: true, schedule: s })}
             onCreateChore={openCreateChore}
             showMessage={showMessage}
+            routines={routines}
+            onEditRoutine={openRoutineById}
           />
         ) : (
         <AdminGroup
@@ -950,6 +1005,10 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
               <Select labelId="schedule-filter-by-chore-label" value={filterChore} label={t('chores:schedules.filterByChore')} onChange={(e) => setFilterChore(e.target.value)}>
                 <MenuItem value="">{t('chores:schedules.allChores')}</MenuItem>
                 {choresByTitle.map(c => <MenuItem key={c.id} value={c.id}>{c.title}</MenuItem>)}
+                {routineFilterOptions.length > 0 && <ListSubheader>{t('chores:routines.heading')}</ListSubheader>}
+                {routineFilterOptions.map(r => (
+                  <MenuItem key={`routine-${r.id}`} value={r.chore_id}>{`${r.icon ? `${r.icon} ` : ''}${r.name} · ${getUserName(r.user_id)}`}</MenuItem>
+                ))}
               </Select>
             </FormControl>
             {(filterUser || filterChore) && (
@@ -959,7 +1018,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
             )}
             <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1.5 }}>
               <Typography variant="body2" color="text.secondary">
-                {filteredSchedules.length} schedule{filteredSchedules.length !== 1 ? 's' : ''}
+                {listedCount} schedule{listedCount !== 1 ? 's' : ''}
               </Typography>
               <AdminSortControl
                 sort={scheduleSort}
@@ -973,15 +1032,16 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
               />
             </Box>
           </Box>
-          {filteredSchedules.length === 0 ? (
+          {listedCount === 0 ? (
             <AdminNote>{t('chores:schedules.noSchedules')}</AdminNote>
-          ) : filteredSchedules.map((s) => (
+          ) : (<>{filteredSchedules.map((s) => (
             <AdminRow
               key={s.id}
               disabled={!s.visible}
               label={(
                 <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                  {s.title}
+                  {s.routine && s.icon ? `${s.icon} ` : ''}{s.title}
+                  {s.routine && <Chip label={t('chores:routines.routineChip', { count: s.routine.steps })} size="small" color="secondary" variant="outlined" />}
                   {s.triggered_on && <Chip label={t('chores:followups.chip')} size="small" variant="outlined" />}
                 </Box>
               )}
@@ -1014,7 +1074,14 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
                   {s.clam_value > 0 && <Chip label={`${s.clam_value} 🥟`} size="small" color="primary" />}
                 </Box>
               )}
-              control={(
+              control={s.routine ? (
+                // A routine's schedule changes with its routine.
+                <Tooltip title={t('chores:routines.editInRoutine')}>
+                  <IconButton size="small" onClick={() => openRoutineById(s.routine.id)} aria-label={`${t('chores:routines.editInRoutine')}: ${s.title}`}>
+                    <Edit fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              ) : (
                 <>
                   <Tooltip title={s.visible ? 'Click to hide' : 'Click to show'}>
                     <Switch
@@ -1043,6 +1110,26 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
               )}
             />
           ))}
+          {listedCalendarRoutines.map((r) => (
+            <AdminRow
+              key={`routine-${r.id}`}
+              label={(
+                <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                  {r.icon ? `${r.icon} ` : ''}{r.name}
+                  <Chip label={t('chores:routines.routineChip', { count: r.steps.length })} size="small" color="secondary" variant="outlined" />
+                </Box>
+              )}
+              hint={r.match_text ? `📅 ${r.match_text}` : t('chores:routines.needsEvents')}
+              extra={<Chip label={getUserName(r.user_id)} size="small" color="primary" />}
+              control={(
+                <Tooltip title={t('chores:routines.editInRoutine')}>
+                  <IconButton size="small" onClick={() => openRoutineById(r.id)} aria-label={`${t('chores:routines.editInRoutine')}: ${r.name}`}>
+                    <Edit fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
+            />
+          ))}</>)}
         </AdminGroup>
         )}
       </Box>
@@ -1728,6 +1815,25 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* ── ROUTINE EDITOR (from Routines and the schedule views) ── */}
+      <RoutineEditorDialog
+        open={routineEditor.open}
+        routine={routineEditor.routine}
+        copyOf={routineEditor.copyOf}
+        steps={routineData.steps}
+        users={users}
+        sources={routineData.sources}
+        onClose={() => setRoutineEditor({ open: false, routine: null, copyOf: null })}
+        onStepAdded={routineData.addStep}
+        onSaved={(saved) => {
+          setRoutineEditor({ open: false, routine: null, copyOf: null });
+          showMessage('success', Array.isArray(saved.routines)
+            ? t('chores:routines.savedMany', { name: saved.routines[0]?.name || '', count: saved.routines.length })
+            : t('chores:routines.saved', { name: saved.name }));
+          reloadRoutines();
+        }}
+      />
     </Box>
   );
 }
