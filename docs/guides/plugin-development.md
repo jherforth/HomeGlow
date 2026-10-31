@@ -418,9 +418,20 @@ const off = HomeGlow.on('clam.withdrawn', (payload, meta) => {
 | `prize.redeemed` | a prize-store request is approved | `{ userId, prizeId, offerId, prizeName, cost, newTotal }` |
 | `ha.state` | Home Assistant entities changed | `{ entityIds }`: a nudge to read state again (§5a), never the state itself |
 | `household.changed` | household data changed, on any display or by the server | `{ domains, revisions }`: which kinds changed (`chores`, `users`, `prizes`, `settings`, `calendar`). Reload what you show; it never says what changed. Delivered within a second where the event stream works, and within 15 seconds where it doesn't |
+| `plugin.storage.changed` | your plugin's storage changed, on any display or by the server | `{ pluginId }`: only your plugin's id — never a key. Reload what you use. Delivered within a second where the event stream works, and within 15 seconds where it doesn't |
 
 Declaring an event not in the catalog rejects the install — typos fail loudly.
 Only declared events are ever delivered to your iframe.
+
+**On `plugin.storage.changed`:** declare it and your widget stops needing to
+poll its own storage: every write — a PUT or DELETE on a key, an increment,
+or a server-side reaction to another event — pushes this event to your frame
+within a second, with the 15-second changes check behind it where the stream
+doesn't reach. Keep polling as a fallback for older servers, which never send
+this event. The event is scoped to your plugin alone: a frame only ever hears
+its own plugin's writes, never another plugin's, and the payload carries no
+key, so don't expect one — reload what you use, and nothing about another
+plugin's storage can reach your frame.
 
 **On `chore.allCompleted`:** it fires alongside the daily-completion bonus, so it
 inherits that behaviour exactly — once per user per day, from whichever route

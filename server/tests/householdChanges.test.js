@@ -56,3 +56,73 @@ test('every server starts from its own base, so a restart reads as "everything c
   const b = createHouseholdChanges().snapshot().chores;
   assert.notEqual(a, b);
 });
+
+// Plugin storage counters (issue #347): one per plugin, in the same map.
+const { pluginStorageWrite } = require('../utils/householdChanges');
+
+test('pluginStorageWrite routes only successful storage writes, by plugin id', () => {
+  const params = { pluginId: 'lists' };
+  assert.equal(pluginStorageWrite('PUT', '/api/plugin/v1/storage/:pluginId/:key', 200, params), 'lists');
+  assert.equal(pluginStorageWrite('DELETE', '/api/plugin/v1/storage/:pluginId/:key', 204, params), 'lists');
+  assert.equal(pluginStorageWrite('POST', '/api/plugin/v1/storage/:pluginId/:key/increment', 200, params), 'lists');
+  assert.equal(pluginStorageWrite('GET', '/api/plugin/v1/storage/:pluginId/:key', 200, params), null, 'reads move nothing');
+  assert.equal(pluginStorageWrite('PUT', '/api/plugin/v1/storage/:pluginId/:key', 400, params), null, 'failed writes move nothing');
+  assert.equal(pluginStorageWrite('PUT', '/api/plugin/v1/settings/:pluginId', 200, params), null, 'settings are not storage');
+  assert.equal(pluginStorageWrite('POST', '/api/plugin/v1/storage/:pluginId/:key', 200, params), null, 'POST on a key is not a write path');
+  assert.equal(pluginStorageWrite('PUT', '/api/plugin/v1/storage/:pluginId/:key', 200, {}), null, 'no plugin id, no counter');
+  assert.equal(pluginStorageWrite('PUT', undefined, 200, params), null, 'no route, no counter');
+});
+
+test('a plugin write moves only that plugin counter, in its own message', async () => {
+  const household = [];
+  const plugins = [];
+  const changes = createHouseholdChanges({
+    base: 100,
+    coalesceMs: 20,
+    onBump: (domains, revisions) => household.push({ domains, revisions }),
+    onPluginStorage: (pluginId, revision) => plugins.push({ pluginId, revision }),
+  });
+  assert.deepEqual(Object.keys(changes.snapshot()).sort(), [...DOMAINS].sort(), 'no plugin counters before any plugin write');
+
+  changes.bumpPlugin('lists');
+  changes.bumpPlugin('lists');
+  changes.bumpPlugin('other');
+  changes.bump('chores');
+  assert.equal(changes.snapshot()['plugin:lists'], 102);
+  assert.equal(changes.snapshot()['plugin:other'], 101);
+  assert.equal(changes.snapshot().chores, 101);
+  assert.equal(changes.snapshot().users, 100, 'a plugin write moves no household kind');
+
+  await new Promise((r) => setTimeout(r, 40));
+  assert.equal(household.length, 1);
+  assert.deepEqual(household[0].domains, ['chores']);
+  assert.deepEqual(Object.keys(household[0].revisions).sort(), [...DOMAINS].sort(), 'a household message carries household kinds only');
+  assert.deepEqual(plugins, [
+    { pluginId: 'lists', revision: 102 },
+    { pluginId: 'other', revision: 101 },
+  ]);
+});
+
+test('removing a plugin drops its counter, and the etag stays deterministic', async () => {
+  const plugins = [];
+  const changes = createHouseholdChanges({ base: 100, coalesceMs: 20, onPluginStorage: (pluginId) => plugins.push(pluginId) });
+  changes.bumpPlugin('lists');
+  changes.bumpPlugin('other');
+  assert.equal(changes.snapshot()['plugin:lists'], 101);
+
+  changes.removePlugin('lists');
+  assert.equal(changes.snapshot()['plugin:lists'], undefined);
+  assert.equal(changes.snapshot()['plugin:other'], 101);
+  await new Promise((r) => setTimeout(r, 40));
+  assert.deepEqual(plugins, ['other'], 'a removed plugin sends no event, even for a pending bump');
+
+  // Same counters in a different insertion order build the same etag.
+  const a = createHouseholdChanges({ base: 100 });
+  a.bumpPlugin('zeta');
+  a.bumpPlugin('alpha');
+  const b = createHouseholdChanges({ base: 100 });
+  b.bumpPlugin('alpha');
+  b.bumpPlugin('zeta');
+  assert.equal(a.etag(), b.etag());
+  assert.equal(a.snapshot()['plugin:alpha'], b.snapshot()['plugin:alpha']);
+});
