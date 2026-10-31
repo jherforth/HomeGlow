@@ -676,5 +676,23 @@
     "manageSteps": "Manage steps ({{n}})",
     "stepPrefix": "Step:",
     "noRoutinesHere": "No routines here."
+  },
+  "scheduleFlow": {
+    "scheduleButton": "Schedule",
+    "title": "Schedule {{chore}}",
+    "titleFor": "Schedule {{chore}} for {{name}}",
+    "whoTitle": "Who is it for?",
+    "bonusHint": "No one in particular: anyone can do it",
+    "scheduled": "Scheduled: {{timing}}",
+    "reviewTitle": "Check and save",
+    "reviewKeep": "It stays until it’s done.",
+    "reviewDrop": "It goes away at the end of its day.",
+    "complete": "Complete",
+    "nextInfo": "If you’d like to schedule this chore for someone else too, with their own schedule, click Next schedule.",
+    "next": "Next schedule",
+    "savedSoFar": "Scheduled so far:",
+    "savedOne": "Saved for {{name}}: {{timing}}. Who’s next?",
+    "done_one": "Saved {{count}} schedule for {{chore}}.",
+    "done_other": "Saved {{count}} schedules for {{chore}}."
   }
 }
