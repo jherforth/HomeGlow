@@ -11,7 +11,7 @@ import { routineIconBox } from './RoutinesGroup.jsx';
 // Admin → Family → Chores: the steps routines are built from, under the
 // routines, closed until opened. A step is a name and an icon; it has no
 // clams or schedule of its own, which is what keeps it apart from a chore.
-export default function RoutineStepsGroup({ steps, routines, onChanged, flash }) {
+export default function RoutineStepsGroup({ steps, routines, onChanged, flash, sx }) {
   const { t } = useTranslation(['chores', 'common']);
   const [stepDialog, setStepDialog] = useState({ open: false, step: null });
 
@@ -32,6 +32,7 @@ export default function RoutineStepsGroup({ steps, routines, onChanged, flash })
     <>
       <AdminGroup
         id="admin-routine-steps"
+        sx={sx}
         title={t('chores:routines.stepsHeading')}
         collapseKey="routineSteps"
         defaultCollapsed

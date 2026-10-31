@@ -177,7 +177,7 @@
     "allHiddenBody": "Open the chore widget settings (gear icon) and turn someone back on."
   },
   "schedules": {
-    "definitionsHeading": "Chore Definitions",
+    "definitionsHeading": "Chores",
     "newChore": "New Chore",
     "definitionsHelp": "Chore definitions hold the title, description, and clam value. Add schedules below to assign them to users with a recurrence pattern.",
     "noChores": "No chores defined yet.",

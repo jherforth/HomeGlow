@@ -50,7 +50,7 @@ import { getServerTimezoneSync } from '../utils/timezone.js';
 import SoundPicker from './SoundPicker.jsx';
 import ChoreIconPicker from './ChoreIconPicker.jsx';
 import { useTranslation } from 'react-i18next';
-import { AdminGroup, AdminNote, AdminRow, AdminSortControl, adminHeadingRowSx, adminHeadingTextSx } from './AdminRows.jsx';
+import { AdminGroup, AdminNote, AdminRow, AdminSortControl, adminHeadingRowSx, adminHeadingTextSx, useAdminGroupOpen } from './AdminRows.jsx';
 import { getWeekdayLabels } from '../utils/dateUtils.js';
 import useIsMobile from '../hooks/useIsMobile.js';
 import { compareByKey } from '../utils/choreHelpers.js';
@@ -288,6 +288,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
   const chores = useMemo(() => allChores.filter((c) => !c.routine_id), [allChores]);
   const schedules = useMemo(() => schedulesWithRoutines(allSchedules, routines), [allSchedules, routines]);
   const [routineEditor, setRoutineEditor] = useState({ open: false, routine: null, copyOf: null });
+  const [routinesOpen, toggleRoutines] = useAdminGroupOpen('routines');
   // The chore dialog's follow-ups, as form rows (issue #241).
   const [followupRows, setFollowupRows] = useState([]);
   const [followupError, setFollowupError] = useState('');
@@ -940,13 +941,20 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
         onCopy={(routine) => setRoutineEditor({ open: true, routine: null, copyOf: routine })}
         onChanged={reloadRoutines}
         flash={showMessage}
+        open={routinesOpen}
+        onToggle={toggleRoutines}
       />
-      <RoutineStepsGroup
-        steps={routineData.steps}
-        routines={routines}
-        onChanged={routineData.reload}
-        flash={showMessage}
-      />
+      {/* The steps belong to the routines: shown, set in under them, only
+          while the routines are open. */}
+      {routinesOpen && (
+        <RoutineStepsGroup
+          steps={routineData.steps}
+          routines={routines}
+          onChanged={routineData.reload}
+          flash={showMessage}
+          sx={{ ml: { xs: 1.5, sm: 3 } }}
+        />
+      )}
 
       {/* ── SCHEDULES ────────────────────────────────────── */}
       <Box ref={schedulesSectionRef} sx={{ scrollMarginTop: 8 }}>

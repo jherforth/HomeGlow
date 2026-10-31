@@ -36,6 +36,17 @@ const writeOpen = (key, open) => {
   try { localStorage.setItem(`homeglow_adminGroupOpen:${key}`, open ? '1' : '0'); } catch { /* per-display convenience only */ }
 };
 
+// A collapsible group's open state, for a page that shows something else
+// only while it's open: pass both to AdminGroup as `open` and `onToggle`.
+export function useAdminGroupOpen(collapseKey, defaultCollapsed = false) {
+  const [open, setOpen] = useState(() => (collapseKey ? readOpen(collapseKey, !defaultCollapsed) : !defaultCollapsed));
+  const toggle = () => setOpen((was) => {
+    if (collapseKey) writeOpen(collapseKey, !was);
+    return !was;
+  });
+  return [open, toggle];
+}
+
 // A section's heading sits on a band: the accent's tint with its edge down
 // the left, the fields' corners, so a long page reads as its parts. Shared
 // with the headings drawn outside an AdminGroup (Chores' Schedules, Controls
@@ -64,13 +75,13 @@ const headingSx = adminHeadingTextSx;
 // accent and its first row as a tinted band, so a run of like groups (one per
 // installed plugin) don't read as one. With `collapseKey` the heading opens
 // and closes the block (closed at first when `defaultCollapsed`), and `count`
-// says how many rows it holds while closed.
-export const AdminGroup = ({ title, action, accent = false, children, sx, collapseKey, defaultCollapsed = false, count, id }) => {
-  const [open, setOpenState] = useState(() => (collapseKey ? readOpen(collapseKey, !defaultCollapsed) : true));
-  const toggle = () => setOpenState((was) => {
-    writeOpen(collapseKey, !was);
-    return !was;
-  });
+// says how many rows it holds while closed. A page that needs the state
+// itself passes `open` and `onToggle` from useAdminGroupOpen.
+export const AdminGroup = ({ title, action, accent = false, children, sx, collapseKey, defaultCollapsed = false, count, id, open: openProp, onToggle }) => {
+  const [ownOpen, toggleOwn] = useAdminGroupOpen(collapseKey, collapseKey ? defaultCollapsed : false);
+  const controlled = openProp !== undefined;
+  const open = !collapseKey || (controlled ? openProp : ownOpen);
+  const toggle = controlled ? onToggle : toggleOwn;
   const heading = title && (collapseKey ? (
     <ButtonBase
       onClick={toggle}

@@ -31,7 +31,9 @@ export const routineIconBox = (icon) => (
 // the schedules. A routine is a checklist of steps for one person, ticked in
 // its card on the Chores widget. The editor is the page's own (onNew,
 // onEdit, and onCopy for someone else), as the schedule views open it too.
-export default function RoutinesGroup({ routines, users, imported, onDismissImported, onNew, onEdit, onCopy, onChanged, flash }) {
+// `open` / `onToggle` come from the page, which shows the steps only while
+// the routines are open.
+export default function RoutinesGroup({ routines, users, imported, onDismissImported, onNew, onEdit, onCopy, onChanged, flash, open, onToggle }) {
   const { t } = useTranslation(['chores', 'common']);
   const isMobile = useIsMobile();
   const [deleting, setDeleting] = useState(null);
@@ -116,6 +118,10 @@ export default function RoutinesGroup({ routines, users, imported, onDismissImpo
       <AdminGroup
         id="admin-routines"
         title={t('chores:routines.heading')}
+        collapseKey="routines"
+        count={routines.length}
+        open={open}
+        onToggle={onToggle}
         action={(
           <Button startIcon={<Add />} onClick={onNew} variant="contained" size="small" disabled={users.length === 0}>
             {t('chores:routines.newRoutine')}

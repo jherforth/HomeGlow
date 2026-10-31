@@ -177,7 +177,7 @@
     "allHiddenBody": "Abre los ajustes del widget de tareas (icono del engranaje) y vuelve a activar a alguien."
   },
   "schedules": {
-    "definitionsHeading": "Definiciones de tareas",
+    "definitionsHeading": "Tareas",
     "newChore": "Nueva tarea",
     "definitionsHelp": "Las definiciones de tareas contienen el título, la descripción y el valor en almejas. Añade programaciones abajo para asignarlas a personas con un patrón de repetición.",
     "noChores": "Aún no hay tareas definidas.",
