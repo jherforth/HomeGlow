@@ -161,8 +161,10 @@ Unassigned bonus chores have a chip of their own. A person's view shows:
   "Mon · Wed · Fri", "Every other day", "Monthly · day 1",
   "Every 3 months · Jan 15, Apr 15, Jul 15, Oct 15", "Every year · Mar 20",
   "One-time · Nov 3", "Again 3 days after done", "Once a month, any day".
-  **Add** has two ways in, a **Picker** and a **Wizard**, and each display
-  remembers which it last used (the picker at first).
+  **Add** has two ways in, a **Picker** and a **Wizard**, switched beside the
+  dialog's title, and each display remembers which it last used (the picker
+  at first). Below either one, the person's own schedules are listed, so a
+  chore can join one of those instead (in the wizard, on its first step).
   - **The wizard** steps through it:
     1. How often: certain days of the week, once in a while any day, every
        few days, a date each month, again a while after it's done, or just
@@ -176,7 +178,7 @@ Unassigned bonus chores have a chip of their own. A person's view shows:
     5. A one-line summary, then Add.
 
     Back keeps the answers given. `components/ScheduleWizard.jsx`.
-  - **The picker** offers the person's schedules first, then the common ones,
+  - **The picker** offers the common timings,
     **Monthly** (pick the
   day of the month), **Custom** (every 1, 3, 6 or 9 months or a year, on set
   dates from a start date or counted from when it's done; 9 months only counts

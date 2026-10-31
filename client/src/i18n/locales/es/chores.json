@@ -495,6 +495,7 @@
     "addTitle": "Añadir tareas para {{name}}",
     "addToTitle": "{{timing}} · {{name}}",
     "theirTimings": "Horarios de {{name}}",
+    "orTheirTimings": "O elige uno de los horarios ya creados, abajo, para añadir las tareas",
     "pickDays": "Elige los días",
     "next": "Siguiente",
     "back": "Atrás",
