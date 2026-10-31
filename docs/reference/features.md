@@ -121,6 +121,10 @@ The chore system uses a **three-table model** (see [Database](../architecture/da
   Approval deducts the cost as a named `spent` ledger row, consumes the offer
   (the definition stays in management), and fires a **full-screen confetti
   celebration + chime** on every display via the `prize.redeemed` event.
+  - **Pausing a prize** (⏸ on its row) hides it from the kids' store and refuses
+    new requests, without taking it off the shelf. A request already made still
+    waits for a parent. The search on Prize Management filters the prize list; the
+    store list below it always shows everything.
   - **Repeatable prizes** (a toggle on the definition, shown as 🔁): approval
     returns the offer to the shelf instead of consuming it, for prizes like
     "movie night" that can be redeemed again and again.

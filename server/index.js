@@ -5609,6 +5609,12 @@ fastify.post('/api/prizes', async (request, reply) => {
 
 fastify.patch('/api/prizes/:id', async (request, reply) => {
   const { id } = request.params;
+  // Pausing alone sends only `paused`, so it can't undo an edit made elsewhere.
+  if (typeof request.body?.paused === 'boolean' && Object.keys(request.body).length === 1) {
+    const paused = db.prepare('UPDATE prizes SET paused = ? WHERE id = ?').run(request.body.paused ? 1 : 0, id);
+    if (paused.changes === 0) return reply.status(404).send({ error: 'Prize not found' });
+    return { success: true };
+  }
   const { name, clam_cost, description, error: validationError } = validatePrizeBody(request.body);
   if (validationError) {
     return reply.status(400).send({ error: validationError });
@@ -5620,6 +5626,7 @@ fastify.patch('/api/prizes/:id', async (request, reply) => {
     const values = [name, clam_cost];
     if (repeatable !== null) { sets.push('repeatable = ?'); values.push(repeatable); }
     if (description !== undefined) { sets.push('description = ?'); values.push(description); }
+    if (request.body.paused === true || request.body.paused === false) { sets.push('paused = ?'); values.push(request.body.paused ? 1 : 0); }
     const info = db.prepare(`UPDATE prizes SET ${sets.join(', ')} WHERE id = ?`).run(...values, id);
     if (info.changes === 0) {
       return reply.status(404).send({ error: 'Prize not found' });
@@ -5660,7 +5667,7 @@ fastify.get('/api/prize-offers', async (request, reply) => {
     return db.prepare(`
       SELECT po.id, po.prize_id, po.status, po.requested_by, po.requested_at, po.created_at,
              po.split_user_ids,
-             p.name, p.clam_cost, p.repeatable, p.description,
+             p.name, p.clam_cost, p.repeatable, p.description, p.paused,
              u.username AS requested_by_name
       FROM prize_offers po
       JOIN prizes p ON po.prize_id = p.id
@@ -5670,6 +5677,7 @@ fastify.get('/api/prize-offers', async (request, reply) => {
     `).all().map((offer) => ({
       ...offer,
       repeatable: offer.repeatable === 1,
+      paused: offer.paused === 1,
       split_user_ids: offer.split_user_ids ? JSON.parse(offer.split_user_ids) : [],
     }));
   } catch (error) {
@@ -5723,6 +5731,11 @@ fastify.post('/api/prize-offers/:id/request', async (request, reply) => {
     const user = db.prepare('SELECT id FROM users WHERE id = ?').get(user_id);
     if (!user) {
       return reply.status(404).send({ error: 'User not found' });
+    }
+
+    const paused = db.prepare('SELECT p.paused FROM prize_offers po JOIN prizes p ON po.prize_id = p.id WHERE po.id = ?').get(id);
+    if (paused?.paused === 1) {
+      return reply.status(409).send({ code: 'PRIZE_PAUSED', error: 'This prize is paused' });
     }
 
     let splitJson = null;

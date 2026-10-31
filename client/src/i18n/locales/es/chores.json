@@ -137,6 +137,7 @@
     "invalidDate": "Introduce una fecha y hora válidas para posponer."
   },
   "prizeStore": {
+    "paused": "Ese premio está en pausa ahora mismo.",
     "title": "🛍️ Tienda de premios",
     "empty": "La tienda está vacía. Los padres pueden llenarla desde Ajustes → Gestión de premios.",
     "waitingForParent": "Esperando a un adulto",

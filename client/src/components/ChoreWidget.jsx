@@ -584,7 +584,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
       setSplitDraft({ offerId: null, userIds: [] });
       await fetchPrizeOffers();
     } catch (error) {
-      alert(error?.response?.data?.error || 'Could not request this prize.');
+      alert(error?.response?.data?.code === 'PRIZE_PAUSED' ? t('chores:prizeStore.paused') : (error?.response?.data?.error || 'Could not request this prize.'));
       await fetchPrizeOffers();
     }
   };
@@ -1686,7 +1686,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
             </Typography>
           </DialogTitle>
           <DialogContent>
-            {prizeOffers.length === 0 ? (
+            {prizeOffers.filter((offer) => offer.status === 'requested' || !offer.paused).length === 0 ? (
               <Typography variant="body1" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
                 {t('chores:prizeStore.empty')}
               </Typography>
@@ -1752,12 +1752,12 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                   </Box>
                 ))}
 
-                {prizeOffers.filter((offer) => offer.status === 'available').length > 0 && (
+                {prizeOffers.filter((offer) => offer.status === 'available' && !offer.paused).length > 0 && (
                   <Typography variant="subtitle2" sx={{ fontWeight: 'bold', opacity: 0.7 }}>
                     {t('chores:prizeStore.onTheShelf')}
                   </Typography>
                 )}
-                {prizeOffers.filter((offer) => offer.status === 'available').map((offer) => (
+                {prizeOffers.filter((offer) => offer.status === 'available' && !offer.paused).map((offer) => (
                   <Box
                     key={offer.id}
                     sx={{

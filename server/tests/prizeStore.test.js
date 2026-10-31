@@ -192,6 +192,38 @@ test('avatar quick-spend: reduce accepts a title note', async () => {
     assert.equal(row.clam_value, -5);
 });
 
+test('a paused prize keeps its offer, and new requests are refused until it resumes', async () => {
+    const kid = (await api('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: `Paused ${Date.now()}`, email: '' }) })).body.id;
+    const prize = (await api('/api/prizes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Pause me', clam_cost: 5 }) })).body.id;
+    const offer = (await api('/api/prize-offers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prize_id: prize }) })).body.id;
+    const patch = (paused) => api(`/api/prizes/${prize}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Pause me', clam_cost: 5, paused }) });
+    const request = () => api(`/api/prize-offers/${offer}/request`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: kid }) });
+    const listed = async () => (await api('/api/prize-offers')).body.find((o) => o.id === offer);
+
+    assert.equal((await patch(true)).status, 200);
+    assert.equal((await listed()).paused, true);
+    assert.equal((await request()).status, 409);
+    assert.equal((await listed()).status, 'available');
+
+    assert.equal((await patch(false)).status, 200);
+    assert.equal((await listed()).paused, false);
+    assert.equal((await request()).status, 200);
+
+    // Editing a prize without naming `paused` leaves it as it was.
+    await patch(true);
+    await api(`/api/prizes/${prize}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Renamed', clam_cost: 6 }) });
+    assert.equal((await listed()).paused, true);
+    // Pausing alone needs no name or cost, and leaves them as they are.
+    const alone = await api(`/api/prizes/${prize}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paused: false }) });
+    assert.equal(alone.status, 200);
+    const kept = (await api('/api/prizes')).body.find((p) => p.id === prize);
+    assert.equal(kept.name, 'Renamed');
+    assert.equal(kept.clam_cost, 6);
+    assert.equal(kept.paused, 0);
+    // A request made before the pause still shows for a parent.
+    assert.equal((await listed()).status, 'requested');
+});
+
 test('prize.redeemed is delivered over the event stream', async () => {
     // Fresh offer + request, stream open during approval.
     const offerId = (await api('/api/prize-offers', { method: 'POST', body: JSON.stringify({ prize_id: prizeId }) })).body.id;

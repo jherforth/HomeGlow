@@ -218,5 +218,5 @@ test('migration 38 turns "weekly" schedules into any-day ones', async () => {
   const row = (await api(`/api/chore-schedules/${id}`)).body;
   assert.equal(row.duration, 'any-day');
   assert.equal(row.interval, '1w');
-  assert.equal(withDb((db) => db.prepare("SELECT value FROM settings WHERE key = 'SYSTEM_SCHEMA_ID'").get().value), '38');
+  assert.ok(Number(withDb((db) => db.prepare("SELECT value FROM settings WHERE key = 'SYSTEM_SCHEMA_ID'").get().value)) >= 38);
 });

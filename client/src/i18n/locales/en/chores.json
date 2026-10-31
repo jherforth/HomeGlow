@@ -137,6 +137,7 @@
     "invalidDate": "Enter a valid date and time to snooze until."
   },
   "prizeStore": {
+    "paused": "That prize is paused right now.",
     "title": "🛍️ Prize Store",
     "empty": "The store is empty right now. Parents can stock it from Settings → Prize Management.",
     "waitingForParent": "Waiting for a parent",
