@@ -249,4 +249,53 @@ describe('calendarWeek', () => {
     expect(week.days[1].vacation).toBe(true);
     expect(state(week, '2026-10-26', 6).state).toBe('planned');
   });
+
+  describe('a once-a-week chore', () => {
+    const weekly = (extra = {}) => S(9, 9, '0 0 * * 0', { duration: 'weekly', ...extra });
+    const onDays = (week) => week.days.filter((d) => d.items.some((i) => i.schedule.chore_id === 9)).map((d) => [d.date, state(week, d.date, 9).state]);
+
+    it('sits on the day it was done, once', () => {
+      const week = calendarWeek({ groups: [group([weekly()])], dates, today, rows: [{ chore_id: 9, date: '2026-10-26', kind: 'completion' }] });
+      expect(onDays(week)).toEqual([['2026-10-26', 'done']]);
+      expect(state(week, '2026-10-26', 9).late).toBe(false);
+    });
+
+    it('waits on today while the week is open, and is due on Saturday', () => {
+      expect(onDays(calendarWeek({ groups: [group([weekly()])], dates, today }))).toEqual([['2026-10-28', 'waiting']]);
+      expect(onDays(calendarWeek({ groups: [group([weekly()])], dates, today: '2026-10-31' }))).toEqual([['2026-10-31', 'today']]);
+    });
+
+    it('shows a past week as missed, or not done, on its Saturday', () => {
+      const later = '2026-11-02';
+      expect(onDays(calendarWeek({ groups: [group([weekly()])], dates, today: later, rows: [{ chore_id: 9, date: '2026-10-31', kind: 'missed' }] })))
+        .toEqual([['2026-10-31', 'missed']]);
+      expect(onDays(calendarWeek({ groups: [group([weekly()])], dates, today: later }))).toEqual([['2026-10-31', 'notDone']]);
+    });
+
+    it('a week ahead is planned for its Saturday; nothing before it existed', () => {
+      expect(onDays(calendarWeek({ groups: [group([weekly()])], dates, today: '2026-10-20' }))).toEqual([['2026-10-31', 'planned']]);
+      expect(onDays(calendarWeek({ groups: [group([weekly({ created_at: '2026-11-03 10:00:00' })])], dates, today: '2026-11-04' }))).toEqual([]);
+    });
+  });
+});
+
+describe('once a week, any day', () => {
+  it('is its own timing, offered with the common ones, after the week days', () => {
+    const schedule = { id: 1, crontab: '0 0 * * 0', duration: 'weekly' };
+    expect(timingOfSchedule(schedule)).toEqual({ kind: 'weekly', key: 'weekly' });
+    expect(COMMON_TIMINGS.some((tm) => tm.kind === 'weekly')).toBe(true);
+    const groups = groupSchedulesForUser([
+      { id: 1, user_id: 1, title: 'Practice', crontab: '0 0 * * 0', duration: 'weekly' },
+      { id: 2, user_id: 1, title: 'Dishes', crontab: '0 0 * * *', duration: 'day-of' },
+      { id: 3, user_id: 1, title: 'Plants', crontab: '0 0 */2 * *', duration: 'day-of' },
+    ], 1);
+    expect(groups.map((g) => g.timing.kind)).toEqual(['week', 'weekly', 'everyN']);
+  });
+
+  it('writes the week start, and moving off it goes back to its day', () => {
+    expect(scheduleFieldsForTiming({ kind: 'weekly', key: 'weekly' })).toEqual({ crontab: '0 0 * * 0', duration: 'weekly', interval: null });
+    const moved = scheduleFieldsForTiming(weekTiming([1, 3]), { crontab: '0 0 * * 0', duration: 'weekly' });
+    expect(moved).toEqual({ crontab: '0 0 * * 1,3', duration: 'day-of', interval: null });
+    expect(timingFallsOn({ kind: 'weekly', key: 'weekly' }, new Date(2026, 9, 25))).toBeNull();
+  });
 });
