@@ -231,13 +231,16 @@ axios.interceptors.request.use((config) => {
 let calendarSyncService = null;
 
 const pluginEvents = require('./services/pluginEvents');
-const { DOMAINS: HOUSEHOLD_DOMAINS, createHouseholdChanges, domainsForRequest } = require('./utils/householdChanges');
+const { DOMAINS: HOUSEHOLD_DOMAINS, createHouseholdChanges, domainsForRequest, pluginStorageWrite } = require('./utils/householdChanges');
 // A revision counter for each kind of household data, so every display can
 // tell what changed and reload it (issue #325, utils/householdChanges.js).
 // Each burst of changes also goes out on the event stream, the fast path
 // where it reaches the browser.
 const householdChanges = createHouseholdChanges({
   onBump: (domains, revisions) => pluginEvents.emit('household.changed', { domains, revisions }),
+  // A plugin's storage write goes out under its own event (issue #347): the
+  // frame learns only that its own plugin's storage changed, never a key.
+  onPluginStorage: (pluginId, revision) => pluginEvents.emit('plugin.storage.changed', { pluginId, revision }),
 });
 const haPanelRules = require('./services/haPanels');
 const { HaLive } = require('./services/haLive');
@@ -678,6 +681,10 @@ fastify.addHook('onRequest', async (request, reply) => {
 fastify.addHook('onResponse', async (request, reply) => {
   const domains = domainsForRequest(request.method, request.routeOptions?.url, reply.statusCode);
   if (domains.length) householdChanges.bump(domains);
+  // A plugin storage write moves only that plugin's counter (issue #347),
+  // never a household kind — and only on success, like the hook above.
+  const pluginId = pluginStorageWrite(request.method, request.routeOptions?.url, reply.statusCode, request.params);
+  if (pluginId) householdChanges.bumpPlugin(pluginId);
 });
 
 fastify.register(multipart, {
@@ -1408,6 +1415,9 @@ fastify.delete('/api/widgets/:filename', async (request, reply) => {
           );
         }
       }
+      // The data is gone, so its counter goes with it (issue #347): the
+      // set shrinks, and a reinstall starts from a fresh counter.
+      householdChanges.removePlugin(pluginId);
     }
 
     if (result.changes === 0) {
@@ -1844,6 +1854,10 @@ function resolveReactionDelta(deltaSpec, manifest, pluginId, payload) {
 }
 
 function runDeclarativeReactions(message) {
+  // A reaction never fires on a storage change itself: the reaction writes
+  // plugin storage, which would emit plugin.storage.changed, which would
+  // fire the reaction again — a self-triggering loop (issue #347).
+  if (message.event === 'plugin.storage.changed') return;
   try {
     const rows = db.prepare(
       'SELECT plugin_id, manifest_json FROM plugins WHERE plugin_id IS NOT NULL AND manifest_json IS NOT NULL'
@@ -1864,6 +1878,9 @@ function runDeclarativeReactions(message) {
             () => incrementPluginStorage(row.plugin_id, reaction.key, pathSegments, delta)
           );
           applyReaction();
+          // A server-side storage write moves the plugin's counter exactly
+          // like a request write does (issue #347).
+          householdChanges.bumpPlugin(row.plugin_id);
         } catch (error) {
           console.error(`Plugin reaction failed (${row.plugin_id} on ${message.event}):`, error.message);
         }

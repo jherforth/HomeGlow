@@ -17,6 +17,10 @@ const PLUGIN_EVENT_CATALOG = Object.freeze([
     'prize.redeemed',    // { userId, prizeId, offerId, prizeName, cost, newTotal }
     'ha.state',          // { entityIds } — Home Assistant entities changed (issue #252); a nudge to read state, never the state itself
     'household.changed', // { domains, revisions } — household data changed (issue #325): chores, users, prizes, settings or calendar; reload what you show
+    // { pluginId, revision } — that plugin's storage changed (issue #347).
+    // No key, ever: the frame reloads what it uses and learns nothing about
+    // any other plugin's storage. Scoped per frame by the dashboard bridge.
+    'plugin.storage.changed',
 ]);
 
 const catalogSet = new Set(PLUGIN_EVENT_CATALOG);
