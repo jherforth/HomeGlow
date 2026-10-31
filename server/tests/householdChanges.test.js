@@ -89,7 +89,7 @@ test('a plugin write moves only that plugin counter, in its own message', async 
   changes.bumpPlugin('other');
   changes.bump('chores');
   assert.equal(changes.snapshot()['plugin:lists'], 102);
-  assert.equal(changes.snapshot()['plugin:other'], 101);
+  assert.equal(changes.snapshot()['plugin:other'], 102, 'a new plugin starts from the server-wide sequence, not the boot base');
   assert.equal(changes.snapshot().chores, 101);
   assert.equal(changes.snapshot().users, 100, 'a plugin write moves no household kind');
 
@@ -99,7 +99,7 @@ test('a plugin write moves only that plugin counter, in its own message', async 
   assert.deepEqual(Object.keys(household[0].revisions).sort(), [...DOMAINS].sort(), 'a household message carries household kinds only');
   assert.deepEqual(plugins, [
     { pluginId: 'lists', revision: 102 },
-    { pluginId: 'other', revision: 101 },
+    { pluginId: 'other', revision: 102 },
   ]);
 });
 
@@ -112,17 +112,33 @@ test('removing a plugin drops its counter, and the etag stays deterministic', as
 
   changes.removePlugin('lists');
   assert.equal(changes.snapshot()['plugin:lists'], undefined);
-  assert.equal(changes.snapshot()['plugin:other'], 101);
+  assert.equal(changes.snapshot()['plugin:other'], 102);
   await new Promise((r) => setTimeout(r, 40));
   assert.deepEqual(plugins, ['other'], 'a removed plugin sends no event, even for a pending bump');
 
-  // Same counters in a different insertion order build the same etag.
+  // The same sequence of operations builds the same etag. (Different
+  // insertion orders no longer do: a new counter starts from the
+  // server-wide sequence, so its value depends on what came before it.)
   const a = createHouseholdChanges({ base: 100 });
   a.bumpPlugin('zeta');
   a.bumpPlugin('alpha');
   const b = createHouseholdChanges({ base: 100 });
-  b.bumpPlugin('alpha');
   b.bumpPlugin('zeta');
+  b.bumpPlugin('alpha');
   assert.equal(a.etag(), b.etag());
   assert.equal(a.snapshot()['plugin:alpha'], b.snapshot()['plugin:alpha']);
+});
+
+test('a reinstalled plugin never reuses its old counter, so its first write reads as changed', () => {
+  const changes = createHouseholdChanges({ base: 100 });
+  changes.bumpPlugin('lists');
+  const oldValue = changes.snapshot()['plugin:lists'];
+  const oldEtag = changes.etag();
+  assert.equal(oldValue, 101);
+
+  changes.removePlugin('lists');
+  changes.bumpPlugin('other');
+  changes.bumpPlugin('lists');
+  assert.notEqual(changes.snapshot()['plugin:lists'], oldValue, 'purge + reinstall must not repeat the counter');
+  assert.notEqual(changes.etag(), oldEtag, 'purge + reinstall must not repeat the etag');
 });

@@ -86,7 +86,9 @@ function notifyPlugins(movedPluginIds) {
 
 // A full snapshot, from GET /api/changes only: household kinds plus plugin
 // counters. Plugin keys that vanished (uninstall with purge) drop out of
-// what this page knows, so they can't linger as stale counters.
+// what this page knows on every 200, not only when something else moved:
+// otherwise the stale key lingers, and a reinstall at the same counter
+// value would read as unchanged and its first write would be lost.
 function applySnapshot(next) {
   if (!next || typeof next !== 'object') return;
   if (!known) {
@@ -95,12 +97,12 @@ function applySnapshot(next) {
   }
   const moved = changedDomains(known, next);
   const movedPlugins = changedPluginIds(known, next);
-  if (!moved.length && !movedPlugins.length) return;
   const pruned = { ...known, ...next };
   for (const key of Object.keys(pruned)) {
     if (key.startsWith(PLUGIN_DOMAIN_PREFIX) && !(key in next)) delete pruned[key];
   }
   known = pruned;
+  if (!moved.length && !movedPlugins.length) return;
   notifyHousehold(moved);
   notifyPlugins(movedPlugins);
 }

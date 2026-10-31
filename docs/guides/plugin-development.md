@@ -427,11 +427,15 @@ Only declared events are ever delivered to your iframe.
 poll its own storage: every write — a PUT or DELETE on a key, an increment,
 or a server-side reaction to another event — pushes this event to your frame
 within a second, with the 15-second changes check behind it where the stream
-doesn't reach. Keep polling as a fallback for older servers, which never send
-this event. The event is scoped to your plugin alone: a frame only ever hears
-its own plugin's writes, never another plugin's, and the payload carries no
-key, so don't expect one — reload what you use, and nothing about another
-plugin's storage can reach your frame.
+doesn't reach. Declaring this event requires a server with this support: an
+older server rejects the install, since the event isn't in its catalog, so
+there is no older-server fallback to keep. The event is scoped to your plugin
+alone: a frame only ever hears its own plugin's writes, never another
+plugin's, and the payload carries no key, so don't expect one — reload what
+you use, and nothing about another plugin's storage can reach your frame.
+A frame hears its own writes too: a widget that writes on load and reloads on
+this event will loop about once a second, on every display, so only reload
+for writes you didn't just make.
 
 **On `chore.allCompleted`:** it fires alongside the daily-completion bonus, so it
 inherits that behaviour exactly — once per user per day, from whichever route

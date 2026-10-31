@@ -237,6 +237,24 @@ describe('plugin storage changes', () => {
     expect(handler).toHaveBeenCalledWith('plug-b');
   });
 
+  it('a reinstall reads as changed even when its counter value repeats the old one', async () => {
+    globalThis.EventSource = function () {};
+    const handler = vi.fn();
+    subscribePluginStorageChanges('plug-b', handler);
+    await flush();
+    axios.get.mockResolvedValueOnce(answer(revisions({ 'plugin:plug-b': 7 })));
+    await checkHouseholdChanges();
+    // The uninstall prune: the next check drops the key, and nothing fires —
+    // but the stale key must not linger, or a reinstall at the same value
+    // would read as unchanged and its first write would be lost.
+    axios.get.mockResolvedValueOnce(answer(revisions()));
+    await checkHouseholdChanges();
+    expect(handler).not.toHaveBeenCalled();
+    axios.get.mockResolvedValueOnce(answer(revisions({ 'plugin:plug-b': 7 })));
+    await checkHouseholdChanges();
+    expect(handler).toHaveBeenCalledWith('plug-b');
+  });
+
   it('a household subscriber never hears plugin counters, and household revisions exclude them', async () => {
     axios.get.mockResolvedValueOnce(answer(revisions({ 'plugin:plug-a': 5 })));
     const handler = vi.fn();

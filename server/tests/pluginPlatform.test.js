@@ -969,6 +969,17 @@ test('reaction declarations are validated at install time', async () => {
     const upload3 = await uploadWidget('reaction-bad-factor.html', widgetHtml(badFactor));
     assert.equal(upload3.status, 400);
     assert.match(upload3.body.error, /factor must be a finite number/);
+
+    // A reaction on plugin.storage.changed would silently never run.
+    const storageReaction = {
+        manifestVersion: 1,
+        id: 'reaction-storage-event',
+        storage: true,
+        reactions: [{ on: 'plugin.storage.changed', action: 'increment', key: 'k', path: 'p', delta: 1 }],
+    };
+    const upload4 = await uploadWidget('reaction-storage-event.html', widgetHtml(storageReaction));
+    assert.equal(upload4.status, 400);
+    assert.match(upload4.body.error, /plugin\.storage\.changed/);
 });
 
 test('a factor:-1 mirror reaction compensates uncomplete, so re-completing does not double-count', async () => {

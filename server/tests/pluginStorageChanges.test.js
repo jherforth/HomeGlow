@@ -147,6 +147,9 @@ test('a server-side reaction moves the plugin counter, and the stream carries th
   const schedule = await api('/api/chore-schedules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chore_id: chore.body.id, user_id: user.body.id, crontab: '0 0 * * *' }) });
   assert.equal(schedule.status, 200, JSON.stringify(schedule.body));
 
+  // Wait out the 100 ms coalescing window before opening the stream, so no
+  // burst from an earlier test is still pending when this stream attaches.
+  await delay(300);
   const before = await changes();
   const messages = [];
   const req = http.get(`${base}/api/plugin/v1/events/stream`, (res) => {
@@ -174,7 +177,9 @@ test('a server-side reaction moves the plugin counter, and the stream carries th
   const stored = await asPlugin('/api/plugin/v1/storage/plug-react/done', await tokenOf('plug-react.html'));
   assert.equal(stored.body.value?.count ?? stored.body.count, 1, JSON.stringify(stored.body));
 
-  const storageEvents = messages.filter((message) => message.event === 'plugin.storage.changed');
+  // Only this test's own plugin: an earlier test's burst must never be
+  // counted here, even if it lands in this stream.
+  const storageEvents = messages.filter((message) => message.event === 'plugin.storage.changed' && message.payload?.pluginId === 'plug-react');
   assert.equal(storageEvents.length, 1, JSON.stringify(messages));
   assert.equal(storageEvents[0].payload.pluginId, 'plug-react');
   assert.equal(typeof storageEvents[0].payload.revision, 'number');

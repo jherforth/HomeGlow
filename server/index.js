@@ -1101,6 +1101,11 @@ function extractPluginManifest(htmlContent) {
         if (typeof reaction.on !== 'string' || !pluginEvents.isKnownEvent(reaction.on)) {
           errors.push(`reactions[${index}].on must be a known event (catalog: ${pluginEvents.PLUGIN_EVENT_CATALOG.join(', ')}).`);
         }
+        // A reaction on a storage change would silently never run (the
+        // loop guard drops it), so fail the install loudly instead.
+        if (reaction.on === 'plugin.storage.changed') {
+          errors.push(`reactions[${index}].on must not be 'plugin.storage.changed' (reactions never run on a storage change).`);
+        }
         if (reaction.action !== 'increment') {
           errors.push(`reactions[${index}].action must be 'increment' (the only supported action).`);
         }
