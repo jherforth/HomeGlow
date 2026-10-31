@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useDeferredValue, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -26,13 +26,9 @@ import {
   Checkbox,
   ListItemText,
   ListSubheader,
-  ToggleButton,
-  ToggleButtonGroup
 } from '@mui/material';
 import {
   Add,
-  ArrowDownward,
-  ArrowUpward,
   Edit,
   Delete,
   ContentCopy,
@@ -50,24 +46,27 @@ import { getServerTimezoneSync } from '../utils/timezone.js';
 import SoundPicker from './SoundPicker.jsx';
 import ChoreIconPicker from './ChoreIconPicker.jsx';
 import { useTranslation } from 'react-i18next';
-import { AdminGroup, AdminNote, AdminRow, AdminSortControl, adminHeadingRowSx, adminHeadingTextSx, useAdminGroupOpen } from './AdminRows.jsx';
+import { AdminGroup, AdminNote, AdminRow, AdminSortControl } from './AdminRows.jsx';
 import { getWeekdayLabels } from '../utils/dateUtils.js';
 import useIsMobile from '../hooks/useIsMobile.js';
 import { compareByKey } from '../utils/choreHelpers.js';
 import ExpiresSelect from './ExpiresSelect.jsx';
 import ChoreScheduleBoard from './ChoreScheduleBoard.jsx';
 import RoutinesGroup from './RoutinesGroup.jsx';
-import RoutineStepsGroup from './RoutineStepsGroup.jsx';
+import ChoreHistoryTab from './ChoreHistoryTab.jsx';
+import RoutineStepsDialog from './RoutineStepsDialog.jsx';
+import { ChoresPageBar, ChoresPersonChips, SearchMark } from './ChoresPageBar.jsx';
 import RoutineEditorDialog from './RoutineEditorDialog.jsx';
 import useRoutines from '../hooks/useRoutines.js';
-import { schedulesWithRoutines } from '../utils/routineSchedules.js';
-import { ANY_DAY_CRONTAB, ANY_DAY_PERIODS } from '../utils/choreScheduleGroups.js';
+import { calendarRoutinesFor, schedulesWithRoutines } from '../utils/routineSchedules.js';
+import { ANY_DAY_CRONTAB, ANY_DAY_PERIODS, groupSchedulesForUser } from '../utils/choreScheduleGroups.js';
+import { choreMatches, routineIsFor, routineMatch, scheduleMatches, validPerson } from '../utils/choresPageSearch.js';
 
-// Which way the schedules section opens: by person (grouped by timing) or the
-// full list. Remembered per display; storage may be unavailable.
-const SCHEDULE_VIEW_KEY = 'homeglow_choreScheduleView';
-const readScheduleView = () => {
-  try { return localStorage.getItem(SCHEDULE_VIEW_KEY) === 'list' ? 'list' : 'person'; } catch { return 'person'; }
+// Whose routines and schedules the page shows: 'all', 'bonus' or a person's id.
+// Remembered per display; storage may be unavailable.
+const PERSON_KEY = 'homeglow_choresPerson';
+const readPerson = () => {
+  try { return localStorage.getItem(PERSON_KEY) || 'all'; } catch { return 'all'; }
 };
 
 // Day labels come from the locale (index 0 = Sunday, matching crontab).
@@ -276,8 +275,8 @@ function nextSort(sort, column) {
   return { column, direction: sort.direction === 'asc' ? 'desc' : 'asc' };
 }
 
-export default function ChoreSchedulesTab({ setSaveMessage }) {
-  const { t } = useTranslation(['chores', 'common']);
+export default function ChoreSchedulesTab({ setSaveMessage, section, onSection, settings }) {
+  const { t } = useTranslation(['chores', 'common', 'admin']);
   const isMobile = useIsMobile();
   // Every chore and schedule, routines' included (they carry routine_id).
   const [allSchedules, setAllSchedules] = useState([]);
@@ -291,7 +290,6 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
   const chores = useMemo(() => allChores.filter((c) => !c.routine_id), [allChores]);
   const schedules = useMemo(() => schedulesWithRoutines(allSchedules, routines), [allSchedules, routines]);
   const [routineEditor, setRoutineEditor] = useState({ open: false, routine: null, copyOf: null });
-  const [routinesOpen, toggleRoutines] = useAdminGroupOpen('routines');
   // The chore dialog's follow-ups, as form rows (issue #241).
   const [followupRows, setFollowupRows] = useState([]);
   const [followupError, setFollowupError] = useState('');
@@ -314,13 +312,24 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [savingChore, setSavingChore] = useState(false);
 
-  const [scheduleView, setScheduleViewState] = useState(readScheduleView);
-  const setScheduleView = (view) => {
-    setScheduleViewState(view);
-    try { localStorage.setItem(SCHEDULE_VIEW_KEY, view); } catch { /* per-display convenience only */ }
+  const [storedPerson, setStoredPerson] = useState(readPerson);
+  const person = validPerson(storedPerson, users);
+  const setPerson = (value) => {
+    setStoredPerson(value);
+    try { localStorage.setItem(PERSON_KEY, value); } catch { /* per-display convenience only */ }
   };
-
-  const [filterUser, setFilterUser] = useState('');
+  const [typed, setQuery] = useState('');
+  // Deferred, so typing stays quick on a low-power wall display.
+  const query = useDeferredValue(typed);
+  const searching = query.trim() !== '';
+  // What a finished import has to say is on the Routines tab, so opening the
+  // page goes there; a link to another tab, or a reload on one, stays put.
+  useEffect(() => { if (routineData.imported && section === 'definitions') onSection('routines'); }, [routineData.imported]);
+  const [stepsDialog, setStepsDialog] = useState(false);
+  useEffect(() => {
+    // A row the search or chips hid isn't one to delete by accident.
+    setSelectedChoreIds(new Set());
+  }, [query, person]);
   const [filterChore, setFilterChore] = useState('');
 
   const [choreSort, setChoreSort] = useState({ column: 'title', direction: 'asc' });
@@ -398,32 +407,17 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
   // chore (clearing the user filter, which could otherwise hide them) and
   // scrolls it into view; with none it opens the new-schedule dialog with
   // the chore already picked, since there is nothing to scroll to.
-  const schedulesSectionRef = useRef(null);
-  const choresSectionRef = useRef(null);
-  // The two sections' headers link to each other: a long chore list puts the
-  // schedules a long scroll away, and the other way round.
-  const jumpTo = (ref) => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  const jumpLink = (ref, label, Icon) => (
-    <Button
-      size="small"
-      endIcon={<Icon fontSize="small" />}
-      onClick={() => jumpTo(ref)}
-      aria-label={t('chores:schedules.goTo', { section: label })}
-      sx={{ color: 'text.secondary', minWidth: 0 }}
-    >
-      {label}
-    </Button>
-  );
   const handleScheduleCountClick = (chore) => {
     if (getScheduleCountForChore(chore.id) === 0) {
       openCreateSchedule(chore.id);
       return;
     }
-    setFilterUser('');
     setFilterChore(chore.id);
-    // The filter belongs to the list view, so the shortcut opens it there.
-    setScheduleView('list');
-    schedulesSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // The filter belongs to the full list, so the shortcut opens it there,
+    // clearing the search, which could otherwise hide them.
+    setPerson('all');
+    setQuery('');
+    onSection('schedules');
   };
 
   const openEditSchedule = (schedule) => {
@@ -643,6 +637,9 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
         // Saved: from here on this dialog is editing it, so a follow-up
         // problem below can be fixed and saved again without a duplicate.
         if (choreId) setEditingChore({ id: choreId, ...chorePayload });
+        // A new chore has no schedule yet, so a chip or search would hide it.
+        setPerson('all');
+        setQuery('');
       }
     } catch (err) {
       showMessage('error', err.response?.data?.error || 'Failed to save chore.');
@@ -697,17 +694,6 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
       setBulkDeleting(false);
     }
   };
-
-  // A chore deleted since it was ticked (here or from another display) leaves
-  // the selection, so the count and "select all" stay true.
-  useEffect(() => {
-    setSelectedChoreIds((prev) => {
-      if (prev.size === 0) return prev;
-      const present = new Set(chores.map((c) => c.id));
-      const kept = [...prev].filter((id) => present.has(id));
-      return kept.length === prev.size ? prev : new Set(kept);
-    });
-  }, [chores]);
 
   const toggleChoreSelection = (id) => {
     setSelectedChoreIds(prev => {
@@ -769,26 +755,61 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
     return [...rows].sort((a, b) => compareByKey(a, b, r => keyed.get(r.id), sort.direction));
   };
 
-  const sortedChores = sortRows(chores, choreSortKeys, choreSort);
-
   // The pickers stay alphabetical whatever the table above is sorted by: a
   // dropdown you hunt through by name should not reorder because someone
   // sorted the definitions table by clam value.
   const choresByTitle = sortRows(chores, choreSortKeys, { column: 'title', direction: 'asc' });
 
+  const steps = routineData.steps;
+  const rowMatches = (s) => scheduleMatches(s, routines, steps, query);
+  const routineRowMatches = (r) => routineMatch(r, steps, query).matches;
   const filteredSchedules = sortRows(schedules.filter(s => {
-    if (filterUser && String(s.user_id) !== String(filterUser)) return false;
     if (filterChore && String(s.chore_id) !== String(filterChore)) return false;
-    return true;
+    return rowMatches(s);
   }), scheduleSortKeys, scheduleSort);
 
   // Routines in the chore filter, by name and person (each person has their own).
   const routineFilterOptions = [...routines].sort((a, b) => String(a.name).localeCompare(String(b.name)));
   // A calendar routine has no schedule of its own to list; it gets one row.
   const listedCalendarRoutines = routineFilterOptions.filter((r) => r.trigger === 'calendar'
-    && (!filterUser || String(r.user_id) === String(filterUser))
-    && (!filterChore || String(r.chore_id) === String(filterChore)));
+    && (!filterChore || String(r.chore_id) === String(filterChore))
+    && routineRowMatches(r));
   const listedCount = filteredSchedules.length + listedCalendarRoutines.length;
+
+  // What each section holds for the person chosen, and what the search leaves.
+  const personRoutines = routines.filter((r) => routineIsFor(r, person));
+  const shownRoutines = personRoutines.filter(routineRowMatches);
+  const boardUser = person === 'bonus' ? null : Number(person);
+  const personSchedules = person === 'all'
+    ? schedules
+    : groupSchedulesForUser(schedules, boardUser).flatMap((g) => g.schedules);
+  const personEventRoutines = person === 'all'
+    ? routines.filter((r) => r.trigger === 'calendar')
+    : (boardUser === null ? [] : calendarRoutinesFor(routines, boardUser));
+  // A chore follows the chips by its schedules, so one with none shows under All.
+  const personChoreIds = new Set(personSchedules.map((s) => s.chore_id));
+  const sortedChores = sortRows(
+    chores.filter((c) => (person === 'all' || personChoreIds.has(c.id)) && choreMatches(c, query)),
+    choreSortKeys,
+    choreSort,
+  );
+  // A chore no longer listed (deleted, or its schedule for this chip removed)
+  // leaves the selection, so the count stays true and Delete hits only what shows.
+  useEffect(() => {
+    setSelectedChoreIds((prev) => {
+      if (prev.size === 0) return prev;
+      const present = new Set(sortedChores.map((c) => c.id));
+      const kept = [...prev].filter((id) => present.has(id));
+      return kept.length === prev.size ? prev : new Set(kept);
+    });
+  }, [chores, person, query, allSchedules]);
+  const scheduleShown = person === 'all'
+    ? listedCount
+    : personSchedules.filter(rowMatches).length + personEventRoutines.filter(routineRowMatches).length;
+  const matchedStep = (routineId) => {
+    const routine = routines.find((r) => r.id === routineId);
+    return routine ? routineMatch(routine, steps, query).step : null;
+  };
 
   const currentCrontab = computeCrontab(scheduleForm);
   const nextOccurrence = getNextOccurrence(currentCrontab);
@@ -824,16 +845,30 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
       {/* Messages from here show in the Admin Panel's one message area
           under its tab bars (#230), so this tab no longer draws its own. */}
 
+      <ChoresPageBar
+        sections={[
+          { key: 'definitions', label: t('chores:schedules.definitionsHeading'), count: sortedChores.length },
+          { key: 'routines', label: t('chores:routines.heading'), count: shownRoutines.length },
+          { key: 'schedules', label: t('chores:schedules.schedulesColumn'), count: scheduleShown },
+          { key: 'history', label: t('admin:chores.history') },
+          { key: 'settings', label: t('admin:chores.settings') },
+        ]}
+        section={section}
+        onSection={onSection}
+        query={typed}
+        onQuery={setQuery}
+        searchable={section !== 'settings'}
+      >
+        {/* Settings are the household's, not anyone's. */}
+        {section !== 'settings' && <ChoresPersonChips users={users} person={person} onPerson={setPerson} />}
+      </ChoresPageBar>
+
       {/* ── CHORE DEFINITIONS ────────────────────────────── */}
-      <Box ref={choresSectionRef} sx={{ scrollMarginTop: 8 }}>
+      {section === 'definitions' && (
+      <Box role="tabpanel" id="chores-panel-definitions" aria-labelledby="chores-tab-definitions">
       <AdminGroup
-        title={t('chores:schedules.definitionsHeading')}
-        collapseKey="choreDefinitions"
-        defaultCollapsed
-        count={chores.length}
         action={(
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-            {jumpLink(schedulesSectionRef, t('chores:schedules.jumpSchedules'), ArrowDownward)}
             <Tooltip title={t('common:actions.refresh')}>
               <IconButton size="small" onClick={reloadRoutines} aria-label={t('common:actions.refresh')}>
                 <Refresh fontSize="small" />
@@ -845,7 +880,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
           </Box>
         )}
       >
-        <AdminNote>{t('chores:schedules.definitionsHelp')}</AdminNote>
+        {!searching && <AdminNote>{t('chores:schedules.definitionsHelp')}</AdminNote>}
         {chores.length > 0 && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', px: 1, py: 1, bgcolor: selectedChoreIds.size > 0 ? 'action.hover' : undefined }}>
             <Checkbox
@@ -882,8 +917,8 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
             )}
           </Box>
         )}
-        {chores.length === 0 ? (
-          <AdminNote>{t('chores:schedules.noChores')}</AdminNote>
+        {sortedChores.length === 0 ? (
+          <AdminNote>{searching || person !== 'all' ? t('chores:page.noMatches') : t('chores:schedules.noChores')}</AdminNote>
         ) : sortedChores.map((c) => (
           <AdminRow
             key={c.id}
@@ -901,7 +936,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
                 </Box>
               </>
             )}
-            label={c.title}
+            label={<SearchMark text={c.title} query={query} />}
             hint={c.description || <em style={{ opacity: 0.7 }}>{t('chores:schedules.noDescription')}</em>}
             extra={c.followups?.length > 0 && (
               <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', pl: { xs: 0, sm: 9 } }}>
@@ -936,12 +971,14 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
           />
         ))}
       </AdminGroup>
-
       </Box>
+      )}
 
-      {/* ── ROUTINES AND THEIR STEPS ─────────────────────── */}
+      {/* ── ROUTINES ─────────────────────────────────────── */}
+      {section === 'routines' && (
+      <Box role="tabpanel" id="chores-panel-routines" aria-labelledby="chores-tab-routines">
       <RoutinesGroup
-        routines={routines}
+        routines={shownRoutines}
         users={users}
         imported={routineData.imported}
         onDismissImported={routineData.dismissImported}
@@ -950,43 +987,28 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
         onCopy={(routine) => setRoutineEditor({ open: true, routine: null, copyOf: routine })}
         onChanged={reloadRoutines}
         flash={showMessage}
-        open={routinesOpen}
-        onToggle={toggleRoutines}
+        query={query}
+        matchedStep={(routine) => routineMatch(routine, steps, query).step}
+        onManageSteps={() => setStepsDialog(true)}
+        stepCount={steps.length}
+        totalRoutines={routines.length}
       />
-      {/* The steps belong to the routines: shown, set in under them, only
-          while the routines are open. */}
-      {routinesOpen && (
-        <RoutineStepsGroup
-          steps={routineData.steps}
-          routines={routines}
-          onChanged={routineData.reload}
-          flash={showMessage}
-          sx={{ ml: { xs: 1.5, sm: 3 } }}
-        />
+      </Box>
       )}
+      <RoutineStepsDialog
+        open={stepsDialog}
+        onClose={() => setStepsDialog(false)}
+        steps={steps}
+        routines={routines}
+        onChanged={routineData.reload}
+      />
 
       {/* ── SCHEDULES ────────────────────────────────────── */}
-      <Box ref={schedulesSectionRef} sx={{ scrollMarginTop: 8 }}>
-        <Box sx={adminHeadingRowSx}>
-          <Typography variant="overline" component="h3" sx={adminHeadingTextSx}>
-            {t('chores:schedules.schedulesColumn')}
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-          {jumpLink(choresSectionRef, t('chores:schedules.jumpChores'), ArrowUpward)}
-          <ToggleButtonGroup
-            size="small"
-            exclusive
-            value={scheduleView}
-            onChange={(_, view) => view && setScheduleView(view)}
-            aria-label={t('chores:board.viewLabel')}
-          >
-            <ToggleButton value="person" sx={{ textTransform: 'none', px: 1.5 }}>{t('chores:board.viewByPerson')}</ToggleButton>
-            <ToggleButton value="list" sx={{ textTransform: 'none', px: 1.5 }}>{t('chores:board.viewList')}</ToggleButton>
-          </ToggleButtonGroup>
-          </Box>
-        </Box>
-        {scheduleView === 'person' ? (
+      {section === 'schedules' && (
+      <Box role="tabpanel" id="chores-panel-schedules" aria-labelledby="chores-tab-schedules">
+        {person !== 'all' ? (
           <ChoreScheduleBoard
+            key={person}
             schedules={schedules}
             chores={chores}
             users={users}
@@ -998,6 +1020,11 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
             showMessage={showMessage}
             routines={routines}
             onEditRoutine={openRoutineById}
+            tab={person}
+            query={query}
+            scheduleMatches={rowMatches}
+            routineMatches={routineRowMatches}
+            matchedStep={matchedStep}
           />
         ) : (
         <AdminGroup
@@ -1007,16 +1034,8 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
             </Button>
           )}
         >
-          <AdminNote>{t('chores:schedules.schedulesHelp')}</AdminNote>
+          {!searching && <AdminNote>{t('chores:schedules.schedulesHelp')}</AdminNote>}
           <Box sx={{ display: 'flex', gap: 1.5, px: 2, py: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
-            <FormControl size="small" sx={{ minWidth: 150, flex: { xs: 1, sm: 'none' } }}>
-              <InputLabel id="schedule-filter-by-user-label">{t('chores:schedules.filterByUser')}</InputLabel>
-              <Select labelId="schedule-filter-by-user-label" value={filterUser} label={t('chores:schedules.filterByUser')} onChange={(e) => setFilterUser(e.target.value)}>
-                <MenuItem value="">{t('chores:schedules.allUsers')}</MenuItem>
-                <MenuItem value="0">{t('chores:schedules.unassignedBonus')}</MenuItem>
-                {users.map(u => <MenuItem key={u.id} value={u.id}>{u.username}</MenuItem>)}
-              </Select>
-            </FormControl>
             <FormControl size="small" sx={{ minWidth: 170, flex: { xs: 1, sm: 'none' } }}>
               <InputLabel id="schedule-filter-by-chore-label">{t('chores:schedules.filterByChore')}</InputLabel>
               <Select labelId="schedule-filter-by-chore-label" value={filterChore} label={t('chores:schedules.filterByChore')} onChange={(e) => setFilterChore(e.target.value)}>
@@ -1028,8 +1047,8 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
                 ))}
               </Select>
             </FormControl>
-            {(filterUser || filterChore) && (
-              <Button size="small" onClick={() => { setFilterUser(''); setFilterChore(''); }}>
+            {filterChore && (
+              <Button size="small" onClick={() => setFilterChore('')}>
                 {t('chores:schedules.clearFilters')}
               </Button>
             )}
@@ -1050,14 +1069,14 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
             </Box>
           </Box>
           {listedCount === 0 ? (
-            <AdminNote>{t('chores:schedules.noSchedules')}</AdminNote>
+            <AdminNote>{searching ? t('chores:page.noMatches') : t('chores:schedules.noSchedules')}</AdminNote>
           ) : (<>{filteredSchedules.map((s) => (
             <AdminRow
               key={s.id}
               disabled={!s.visible}
               label={(
                 <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                  {s.routine && s.icon ? `${s.icon} ` : ''}{s.title}
+                  {s.routine && s.icon ? `${s.icon} ` : ''}<SearchMark text={s.title} query={query} />
                   {s.routine && <Chip label={t('chores:routines.routineChip', { count: s.routine.steps })} size="small" color="secondary" variant="outlined" />}
                   {s.triggered_on && <Chip label={t('chores:followups.chip')} size="small" variant="outlined" />}
                 </Box>
@@ -1066,6 +1085,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
                 <>
                   {s.followup_of && <Box component="span" sx={{ display: 'block' }}>{t('chores:widget.followupOf', { title: s.followup_of })}</Box>}
                   {s.description && <Box component="span" sx={{ display: 'block' }}>{s.description}</Box>}
+                  {s.routine && matchedStep(s.routine.id) && <Box component="span" sx={{ display: 'block' }}>{t('chores:page.stepPrefix')} <SearchMark text={matchedStep(s.routine.id)} query={query} /></Box>}
                   <Box component="span" sx={{ display: 'block' }}>
                     {s.duration === 'any-day'
                       ? t('chores:schedules.anyDayNext')
@@ -1136,11 +1156,16 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
               key={`routine-${r.id}`}
               label={(
                 <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                  {r.icon ? `${r.icon} ` : ''}{r.name}
+                  {r.icon ? `${r.icon} ` : ''}<SearchMark text={r.name} query={query} />
                   <Chip label={t('chores:routines.routineChip', { count: r.steps.length })} size="small" color="secondary" variant="outlined" />
                 </Box>
               )}
-              hint={r.match_text ? `📅 ${r.match_text}` : t('chores:routines.needsEvents')}
+              hint={(
+                <>
+                  {r.match_text ? `📅 ${r.match_text}` : t('chores:routines.needsEvents')}
+                  {matchedStep(r.id) && <Box component="span" sx={{ display: 'block' }}>{t('chores:page.stepPrefix')} <SearchMark text={matchedStep(r.id)} query={query} /></Box>}
+                </>
+              )}
               extra={<Chip label={getUserName(r.user_id)} size="small" color="primary" />}
               control={(
                 <Tooltip title={t('chores:routines.editInRoutine')}>
@@ -1154,6 +1179,19 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
         </AdminGroup>
         )}
       </Box>
+      )}
+
+      {section === 'history' && (
+      <Box role="tabpanel" id="chores-panel-history" aria-labelledby="chores-tab-history">
+        <ChoreHistoryTab person={person} query={query} />
+      </Box>
+      )}
+
+      {section === 'settings' && (
+      <Box role="tabpanel" id="chores-panel-settings" aria-labelledby="chores-tab-settings">
+        {settings}
+      </Box>
+      )}
 
       {/* ── CHORE DIALOG ─────────────────────────────────── */}
       <Dialog

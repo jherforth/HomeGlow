@@ -18,8 +18,6 @@ import {
   MenuItem,
   Paper,
   Switch,
-  Tab,
-  Tabs,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
@@ -62,6 +60,7 @@ import {
   weekTiming,
 } from '../utils/choreScheduleGroups.js';
 import { calendarRoutinesFor } from '../utils/routineSchedules.js';
+import { SearchMark } from './ChoresPageBar.jsx';
 import ScheduleWizard, { WIZARD_START } from './ScheduleWizard.jsx';
 
 // How the Add dialog picks a timing: the picker of chips, or the wizard.
@@ -152,19 +151,23 @@ export default function ChoreScheduleBoard({
   // calendar routine is listed from here. Either opens onEditRoutine(id).
   routines = [],
   onEditRoutine,
+  // Whose chores: a person's id as a string, or 'bonus'. The page's chips pick,
+  // and key the board on it, so another person starts from this week.
+  tab,
+  // The page's search. It filters the rows drawn. A group's Change days, Copy
+  // to and Remove act on all of it, hidden rows too, so they wait until it's
+  // cleared.
+  query = '',
+  scheduleMatches = () => true,
+  routineMatches = () => true,
+  // The step a routine matched on, shown since its row doesn't list them.
+  matchedStep = () => null,
 }) {
   const { t } = useTranslation(['chores', 'common']);
   const isMobile = useIsMobile();
   const shortDays = useMemo(() => getWeekdayLabels(0), []);
   const longDays = useMemo(() => getWeekdayOptions().map((o) => o.label), []);
 
-  const [tab, setTab] = useState(() => (users[0] ? String(users[0].id) : BONUS));
-  // A person removed since the tab was picked falls back to the first one.
-  useEffect(() => {
-    if (tab !== BONUS && !users.some((u) => String(u.id) === tab)) {
-      setTab(users[0] ? String(users[0].id) : BONUS);
-    }
-  }, [users, tab]);
   const userId = tab === BONUS ? null : Number(tab);
   const personName = tab === BONUS ? t('chores:board.bonusTab') : (users.find((u) => u.id === userId)?.username || '');
 
@@ -175,8 +178,7 @@ export default function ChoreScheduleBoard({
     [chores],
   );
   const eventRoutines = useMemo(() => (userId === null ? [] : calendarRoutinesFor(routines, userId)), [routines, userId]);
-  const countFor = (id) => groupSchedulesForUser(schedules, id).reduce((n, g) => n + g.schedules.length, 0)
-    + (id === null ? 0 : calendarRoutinesFor(routines, id).length);
+  const shownEventRoutines = eventRoutines.filter(routineMatches);
   // A group's own chores: what Change days, Copy to and Remove act on. A
   // routine's schedule changes only with its routine.
   const choresOf = (group) => group.schedules.filter((s) => !s.routine);
@@ -520,16 +522,19 @@ export default function ChoreScheduleBoard({
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 1, bgcolor: 'rgba(var(--accent-rgb), 0.10)' }}>
         <Typography variant="subtitle1" component="h4" sx={{ fontWeight: 700 }}>{t('chores:routines.onCalendarGroup')}</Typography>
         <Typography variant="body2" color="text.secondary">
-          {t('chores:board.choreCount', { count: eventRoutines.length })}
+          {t('chores:board.choreCount', { count: shownEventRoutines.length })}
         </Typography>
       </Box>
-      {eventRoutines.map((r) => (
+      {shownEventRoutines.map((r) => (
         <Box key={r.id} data-routine-row={r.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1, py: 0.75, borderTop: 1, borderColor: 'divider' }}>
           <Box aria-hidden sx={{ width: 32, flex: 'none' }} />
           {r.icon && iconBox(r.icon)}
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography variant="body1" sx={{ fontWeight: 500 }}>{r.name}</Typography>
+            <Typography variant="body1" sx={{ fontWeight: 500 }}><SearchMark text={r.name} query={query} /></Typography>
             {routineChips(r.steps.length, r.match_text || '')}
+            {matchedStep(r.id) && (
+              <Typography variant="body2" color="text.secondary">{t('chores:page.stepPrefix')} <SearchMark text={matchedStep(r.id)} query={query} /></Typography>
+            )}
           </Box>
           <Tooltip title={t('chores:routines.editInRoutine')}>
             <IconButton size="small" aria-label={`${t('chores:routines.editInRoutine')}: ${r.name}`} onClick={() => onEditRoutine?.(r.id)}>
@@ -676,6 +681,8 @@ export default function ChoreScheduleBoard({
   );
 
   const renderGroup = (group) => {
+    const shown = group.schedules.filter(scheduleMatches);
+    if (shown.length === 0) return null;
     const key = group.timing.key;
     const isDropTarget = drag && drag.fromKey !== key;
     const isOver = drag && drag.overKey === key && drag.fromKey !== key;
@@ -700,20 +707,22 @@ export default function ChoreScheduleBoard({
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 1, bgcolor: 'rgba(var(--accent-rgb), 0.10)' }}>
           <Typography variant="subtitle1" component="h4" sx={{ fontWeight: 700 }}>{timingLabel(group.timing)}</Typography>
           <Typography variant="body2" color="text.secondary">
-            {t('chores:board.choreCount', { count: group.schedules.length })}
+            {t('chores:board.choreCount', { count: shown.length })}
           </Typography>
           <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 0.5 }}>
             <Button size="small" startIcon={<Add />} onClick={() => openAdd(group.timing)} disabled={busy}>
               {t('chores:board.addChores')}
             </Button>
             <Tooltip title={t('chores:board.groupMenu')}>
-              <IconButton size="small" aria-label={t('chores:board.groupMenu')} onClick={(e) => setGroupMenu({ anchor: e.currentTarget, group })}>
-                <MoreVert fontSize="small" />
-              </IconButton>
+              <span>
+                <IconButton size="small" aria-label={t('chores:board.groupMenu')} disabled={Boolean(query.trim())} onClick={(e) => setGroupMenu({ anchor: e.currentTarget, group })}>
+                  <MoreVert fontSize="small" />
+                </IconButton>
+              </span>
             </Tooltip>
           </Box>
         </Box>
-        {group.schedules.map((s) => (
+        {shown.map((s) => (
           <Box
             key={s.id}
             data-schedule-row={s.id}
@@ -745,8 +754,11 @@ export default function ChoreScheduleBoard({
             {/* A chore without an icon starts its title right after the grip. */}
             {s.icon && iconBox(s.icon)}
             <Box sx={{ flex: 1, minWidth: 0, opacity: s.visible ? 1 : 0.6 }}>
-              <Typography variant="body1" sx={{ fontWeight: 500 }}>{s.title}</Typography>
+              <Typography variant="body1" sx={{ fontWeight: 500 }}><SearchMark text={s.title} query={query} /></Typography>
               {s.routine ? routineChips(s.routine.steps) : choreChips(s)}
+              {s.routine && matchedStep(s.routine.id) && (
+                <Typography variant="body2" color="text.secondary">{t('chores:page.stepPrefix')} <SearchMark text={matchedStep(s.routine.id)} query={query} /></Typography>
+              )}
             </Box>
             {s.routine ? (
               <Tooltip title={t('chores:routines.editInRoutine')}>
@@ -1119,23 +1131,10 @@ export default function ChoreScheduleBoard({
 
   return (
     <Box sx={{ position: 'relative' }}>
-      <Tabs
-        value={tab}
-        onChange={(_, v) => { setTab(v); setWeekOffset(0); }}
-        variant="scrollable"
-        scrollButtons="auto"
-        allowScrollButtonsMobile
-        sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
-      >
-        {users.map((u) => (
-          <Tab key={u.id} value={String(u.id)} label={`${u.username} (${countFor(u.id)})`} sx={{ textTransform: 'none', fontWeight: 600 }} />
-        ))}
-        <Tab value={BONUS} label={`${t('chores:board.bonusTab')} (${countFor(null)})`} sx={{ textTransform: 'none', fontWeight: 600 }} />
-      </Tabs>
-
       {tab === BONUS && <Alert severity="info" sx={{ mb: 2 }}>{t('chores:board.bonusHelp')}</Alert>}
 
-      {renderCalendar()}
+      {/* While searching, the results come first. */}
+      {!query.trim() && renderCalendar()}
 
       <Box sx={{ ...adminHeadingRowSx, justifyContent: 'flex-start', mb: 1.5 }}>
         <Typography variant="overline" component="h3" sx={adminHeadingTextSx}>
@@ -1147,12 +1146,16 @@ export default function ChoreScheduleBoard({
         </Button>
       </Box>
 
-      {groups.length === 0 && eventRoutines.length === 0 ? (
+      {query.trim() && !groups.some((g) => g.schedules.some(scheduleMatches)) && shownEventRoutines.length === 0 ? (
+        <Typography variant="body2" color="text.secondary" sx={{ p: 2, border: 1, borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper' }}>
+          {t('chores:page.noMatches')}
+        </Typography>
+      ) : groups.length === 0 && eventRoutines.length === 0 ? (
         <Typography variant="body2" color="text.secondary" sx={{ p: 2, border: 1, borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper' }}>
           {t('chores:board.empty', { name: personName })}
         </Typography>
       ) : groups.map(renderGroup)}
-      {eventRoutines.length > 0 && renderEventRoutines()}
+      {shownEventRoutines.length > 0 && renderEventRoutines()}
 
       {drag && (
         <Paper

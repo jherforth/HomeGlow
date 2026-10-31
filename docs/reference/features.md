@@ -141,9 +141,9 @@ The chore system uses a **three-table model** (see [Database](../architecture/da
 
 ### Schedules by person
 
-Admin → Family → Chores opens its schedules **by person** (the full list is one
-tap away, and each display remembers which it last used). Each person has a
-tab, and unassigned bonus chores have one of their own. A tab shows:
+Admin → Family → Chores shows a person's schedules when their **chip** is picked
+(**All** is the full list, and each display remembers which it last used).
+Unassigned bonus chores have a chip of their own. A person's view shows:
 
 - **A week calendar**, Sunday to Saturday with dates, listing the chores that
   land on each day (hidden schedules left out). Past days read the person's
@@ -322,10 +322,17 @@ widget in step with the server.
 A routine is a checklist of steps a child ticks off: brush teeth, make bed, get dressed.
 It runs on chosen weekdays, or on the days of matching calendar events ("Get ready for
 soccer" on practice and game days). Routines used to be a plugin; they're built in now,
-and set up in **Admin → Family → Chores**. That page lists the chores (collapsed until
-opened), the routines (collapsible), then the schedules. The steps list sits under the
-routines, set in, and shows only while the routines are open (collapsed itself until
-opened). An old link to Family → Routines lands there.
+and set up in **Admin → Family → Chores**. That page has five tabs: Chores, Routines,
+Schedules, History and Settings. A header that stays in view holds the tabs and the
+search. Chips under them pick whose rows show on every tab but Settings: **All**, a
+person (the chores scheduled for them, their routines, their week, their record), or
+**Bonus** (chores with no one assigned; on History, any chore that paid clams). *Manage steps* on the Routines tab opens the
+steps. An old link to Family → Routines lands on that tab.
+
+**Search** filters each tab's rows, and the tabs that know say how many are left
+(*Routines (2)*).
+A routine also matches on its steps and names the one that did (*Step: Brush Teeth*).
+Rows are filtered, not what's in them: the routine editor still shows every step.
 
 - **Each routine is one ordinary chore** (worth 0 clams), with its schedules. It counts
   toward the day once, takes part in the daily bonus, is logged as missed, pauses for
@@ -389,7 +396,7 @@ opened). An old link to Family → Routines lands there.
 **Code:** `server/routes/routines.js` (routes, the calendar sync, the link to chores through
 the chore events and `completeChoreSchedule`), `server/services/routines.js` (the rules,
 pure and tested), migrations `schema29-routines` and `schema30-importRoutinesPlugin`;
-on Family → Chores `RoutinesGroup.jsx`, `RoutineStepsGroup.jsx`, `RoutineEditorDialog.jsx`,
+on Family → Chores `RoutinesGroup.jsx`, `RoutineStepsDialog.jsx`, `ChoresPageBar.jsx`, `RoutineEditorDialog.jsx`,
 `hooks/useRoutines.js` and `utils/routineSchedules.js` (which routine schedules the views
 show); and in the Chores widget `RoutineSteps.jsx` and `utils/useRoutinesToday.js`.
 
