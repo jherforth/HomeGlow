@@ -65,9 +65,9 @@ describe('adminNavigation', () => {
       expect(parseAdminHash('#/admin/about')).toEqual(at('system', 'about'));
     });
 
-    it('sends Routines and its Steps to the Chores page, where they now live', () => {
-      expect(parseAdminHash('#/admin/family/routines')).toEqual(at('family', 'chores', 'definitions'));
-      expect(parseAdminHash('#/admin/family/routines/steps')).toEqual(at('family', 'chores', 'definitions'));
+    it('sends Routines and its Steps to the Chores page\'s Routines tab', () => {
+      expect(parseAdminHash('#/admin/family/routines')).toEqual(at('family', 'chores', 'routines'));
+      expect(parseAdminHash('#/admin/family/routines/steps')).toEqual(at('family', 'chores', 'routines'));
     });
 
     it('falls back to defaults for unknown parts', () => {

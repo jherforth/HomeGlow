@@ -26,6 +26,8 @@ import { AdminGroup, AdminNote } from './AdminRows.jsx';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { compactStackedTableSx } from '../utils/responsiveTable.js';
 import { formatLoggedAt } from '../utils/choreHelpers.js';
+import { historyRowIsFor, textMatches } from '../utils/choresPageSearch.js';
+import { SearchMark } from './ChoresPageBar.jsx';
 import {
   HISTORY_CATEGORIES,
   categoryOf,
@@ -41,7 +43,9 @@ const GROUP_PREVIEW = 5;
 
 const KIND_COLOR = { done: 'success', missed: 'warning', bonus: 'primary', adjustment: 'default' };
 
-export default function ChoreHistoryTab() {
+// The History tab of Admin → Family → Chores. `person` and `query` are the
+// page's chips and search.
+export default function ChoreHistoryTab({ person = 'all', query = '' }) {
   const { t } = useTranslation(['admin', 'common']);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -49,7 +53,6 @@ export default function ChoreHistoryTab() {
   const [deleteError, setDeleteError] = useState('');
 
   const [range, setRange] = useState('30');
-  const [person, setPerson] = useState('');
   const [chore, setChore] = useState('');
   const [categories, setCategories] = useState(HISTORY_CATEGORIES);
   const [showMissed, setShowMissed] = useState(true);
@@ -89,8 +92,12 @@ export default function ChoreHistoryTab() {
 
   const options = useMemo(() => filterOptions(history), [history]);
   const rows = useMemo(
-    () => sortRows(filterRows(history, { person, chore, categories, showMissed }), sort),
-    [history, person, chore, categories, showMissed, sort],
+    () => sortRows(
+      filterRows(history, { chore, categories, showMissed })
+        .filter((row) => historyRowIsFor(row, person) && textMatches(row.title, query)),
+      sort,
+    ),
+    [history, person, query, chore, categories, showMissed, sort],
   );
   const groups = useMemo(() => groupRows(rows, groupBy), [rows, groupBy]);
   // A grouped view names the person or chore once, in the group's heading.
@@ -148,7 +155,7 @@ export default function ChoreHistoryTab() {
         )}
         {showChore && (
           <TableCell data-label={t('admin:chores.historyView.chore')}>
-            <Typography variant="body2">{entry.title || unknown}</Typography>
+            <Typography variant="body2">{entry.title ? <SearchMark text={entry.title} query={query} /> : unknown}</Typography>
           </TableCell>
         )}
         <TableCell data-label={t('admin:chores.historyView.kind')}>
@@ -239,7 +246,6 @@ export default function ChoreHistoryTab() {
 
   return (
     <AdminGroup
-      title={t('admin:chores.historyView.title')}
       action={(
         <Button size="small" startIcon={<Refresh />} onClick={fetchHistory} disabled={loading}>
           {t('admin:chores.historyView.refresh')}
@@ -253,12 +259,6 @@ export default function ChoreHistoryTab() {
           <TextField select size="small" sx={filterSx} label={t('admin:chores.historyView.range')} value={range} onChange={(e) => setRange(e.target.value)}>
             {['7', '30', '90', 'all'].map(value => (
               <MenuItem key={value} value={value}>{t(`admin:chores.historyView.ranges.${value}`)}</MenuItem>
-            ))}
-          </TextField>
-          <TextField select size="small" sx={filterSx} label={t('admin:chores.historyView.person')} value={person} onChange={(e) => setPerson(e.target.value)}>
-            <MenuItem value="">{t('admin:chores.historyView.everyone')}</MenuItem>
-            {options.people.map(option => (
-              <MenuItem key={option.key} value={option.key}>{option.label || t('admin:chores.historyView.unknown')}</MenuItem>
             ))}
           </TextField>
           <TextField select size="small" sx={filterSx} label={t('admin:chores.historyView.chore')} value={chore} onChange={(e) => setChore(e.target.value)}>

@@ -32,6 +32,7 @@ import {
   Autocomplete,
   Tooltip,
   Slider,
+  Snackbar,
   Link,
   ToggleButton,
   ToggleButtonGroup,
@@ -73,7 +74,6 @@ import { getDeviceApiBase, getDeviceName, setDeviceName, isValidDeviceName } fro
 import { fetchPinRemembered, setPinRemembered, forgetPinOnAllDevices, shouldPromptForPin } from '../utils/adminPinDevice.js';
 import PinModal from './PinModal';
 import ChoreSchedulesTab from './ChoreSchedulesTab';
-import ChoreHistoryTab from './ChoreHistoryTab';
 import NotificationsTab from './NotificationsTab';
 import TabIconModal from './TabIconModal';
 import DeleteConfirmationDialog from './DeleteConfirmationDialog';
@@ -732,35 +732,31 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     }
   };
 
-  // The celebration fires at exactly the moment the daily reward is earned, so
-  // the two save together rather than needing their own button (issue #140).
-  // Family → Chores → Settings saves rewards, celebrations and sounds together.
-  const saveChoreSettings = async () => {
-    setIsLoading(true);
+  // Family → Chores → Settings saves each change as it's made, since the rows sit
+  // mid-page with no place for a button. Word comes in a snackbar, as a message
+  // at the top of the panel would be out of sight and push the page down.
+  const [choreSettingNote, setChoreSettingNote] = useState(null);
+  // `choreSettingBefore` holds a typed or dragged value's last saved one until
+  // it's committed, for going back to, and to know that anything changed at all.
+  const choreSettingBefore = useRef({});
+  const editChoreSetting = (key, value) => {
+    if (!(key in choreSettingBefore.current)) choreSettingBefore.current[key] = settings[key];
+    setSettings((prev) => ({ ...prev, [key]: value }));
+  };
+  const commitChoreSetting = (key, value) => {
+    if (!(key in choreSettingBefore.current)) return;
+    const before = choreSettingBefore.current[key];
+    delete choreSettingBefore.current[key];
+    if (String(before ?? '') !== String(value)) saveChoreSetting(key, value, before);
+  };
+  const saveChoreSetting = async (key, value, revertTo) => {
+    setSettings((prev) => ({ ...prev, [key]: value }));
     try {
-      await Promise.all([
-        axios.post(`${API_BASE_URL}/api/settings`, {
-          key: 'daily_completion_clam_reward',
-          value: settings.daily_completion_clam_reward || '2',
-        }),
-        axios.post(`${API_BASE_URL}/api/settings`, {
-          key: 'CHORE_CELEBRATION_ENABLED',
-          value: settings.CHORE_CELEBRATION_ENABLED === false || settings.CHORE_CELEBRATION_ENABLED === 'false'
-            ? 'false'
-            : 'true',
-        }),
-        axios.post(`${API_BASE_URL}/api/settings`, { key: 'CHORE_SOUND_ENABLED', value: settings.CHORE_SOUND_ENABLED || 'false' }),
-        axios.post(`${API_BASE_URL}/api/settings`, { key: 'CHORE_SOUND_DEFAULT', value: settings.CHORE_SOUND_DEFAULT || '' }),
-        axios.post(`${API_BASE_URL}/api/settings`, { key: 'CHORE_SOUND_VOLUME', value: String(settings.CHORE_SOUND_VOLUME ?? '100') }),
-      ]);
-      setSaveMessage({ show: true, type: 'success', text: t('admin:messages.choreSettingsSaved') });
-      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
-    } catch (error) {
-      console.error('Error saving chore settings:', error);
-      setSaveMessage({ show: true, type: 'error', text: t('admin:messages.choreSettingsFailed') });
-      setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 3000);
-    } finally {
-      setIsLoading(false);
+      await saveSetting(key, value, false);
+      setChoreSettingNote(t('admin:messages.settingSaved'));
+    } catch {
+      setSettings((prev) => ({ ...prev, [key]: revertTo }));
+      setChoreSettingNote(t('admin:messages.settingSaveFailed'));
     }
   };
 
@@ -3251,13 +3247,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
 
       {location.section === 'chores' && (
         <>
-          {location.subsection === 'definitions' && (
-            <ChoreSchedulesTab setSaveMessage={setSaveMessage} />
-          )}
-          {location.subsection === 'history' && (
-            <ChoreHistoryTab />
-          )}
-          {location.subsection === 'settings' && (
+          <ChoreSchedulesTab
+            setSaveMessage={setSaveMessage}
+            section={location.subsection}
+            onSection={(subsection) => navigate({ ...location, subsection })}
+            settings={(
             <>
               <AdminGroup title={t('admin:chores.rewards')}>
                 <AdminRow
@@ -3268,7 +3262,9 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                       type="number"
                       size="small"
                       value={settings.daily_completion_clam_reward || '2'}
-                      onChange={(e) => setSettings(prev => ({ ...prev, daily_completion_clam_reward: e.target.value }))}
+                      onChange={(e) => editChoreSetting('daily_completion_clam_reward', e.target.value)}
+                      onBlur={() => commitChoreSetting('daily_completion_clam_reward', settings.daily_completion_clam_reward || '2')}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') e.target.blur(); }}
                       slotProps={{ htmlInput: { min: 0, max: 100, 'aria-label': t('admin:chores.dailyReward') } }}
                       sx={{ width: 96 }}
                     />
@@ -3280,10 +3276,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                   control={(
                     <Switch
                       checked={settings.CHORE_CELEBRATION_ENABLED !== 'false' && settings.CHORE_CELEBRATION_ENABLED !== false}
-                      onChange={(e) => setSettings(prev => ({
-                        ...prev,
-                        CHORE_CELEBRATION_ENABLED: e.target.checked ? 'true' : 'false',
-                      }))}
+                      onChange={(e) => saveChoreSetting('CHORE_CELEBRATION_ENABLED', e.target.checked ? 'true' : 'false', settings.CHORE_CELEBRATION_ENABLED)}
                       slotProps={{ input: { 'aria-label': t('admin:chores.celebrationEnable') } }}
                     />
                   )}
@@ -3296,7 +3289,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                   control={(
                     <Switch
                       checked={settings.CHORE_SOUND_ENABLED === 'true' || settings.CHORE_SOUND_ENABLED === true}
-                      onChange={(e) => setSettings(prev => ({ ...prev, CHORE_SOUND_ENABLED: e.target.checked ? 'true' : 'false' }))}
+                      onChange={(e) => saveChoreSetting('CHORE_SOUND_ENABLED', e.target.checked ? 'true' : 'false', settings.CHORE_SOUND_ENABLED)}
                       slotProps={{ input: { 'aria-label': t('admin:chores.soundsEnable') } }}
                     />
                   )}
@@ -3310,7 +3303,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                       <SoundPicker
                         label={t('admin:chores.defaultSound')}
                         value={settings.CHORE_SOUND_DEFAULT || ''}
-                        onChange={(sound) => setSettings(prev => ({ ...prev, CHORE_SOUND_DEFAULT: sound }))}
+                        onChange={(sound) => saveChoreSetting('CHORE_SOUND_DEFAULT', sound, settings.CHORE_SOUND_DEFAULT)}
                         volume={(Number(settings.CHORE_SOUND_VOLUME) || 100) / 100}
                         includeNoneOption
                         noneLabel="(none)"
@@ -3325,7 +3318,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                   control={(
                     <Slider
                       value={Number(settings.CHORE_SOUND_VOLUME) || 0}
-                      onChange={(_, v) => setSettings(prev => ({ ...prev, CHORE_SOUND_VOLUME: String(v) }))}
+                      onChange={(_, v) => editChoreSetting('CHORE_SOUND_VOLUME', String(v))}
+                      onChangeCommitted={(_, v) => commitChoreSetting('CHORE_SOUND_VOLUME', String(v))}
                       min={0}
                       max={100}
                       valueLabelDisplay="auto"
@@ -3336,13 +3330,15 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                 />
               </AdminGroup>
 
-              <AdminFooter>
-                <Button variant="contained" onClick={saveChoreSettings} disabled={isLoading} startIcon={<Save />}>
-                  {isLoading ? t('common:state.saving') : t('common:actions.save')}
-                </Button>
-              </AdminFooter>
+              <Snackbar
+                open={Boolean(choreSettingNote)}
+                autoHideDuration={2000}
+                onClose={() => setChoreSettingNote(null)}
+                message={choreSettingNote}
+              />
             </>
-          )}
+            )}
+          />
         </>
       )}
 

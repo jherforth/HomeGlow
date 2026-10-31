@@ -8,8 +8,6 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
-  ToggleButton,
-  ToggleButtonGroup,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import {
@@ -54,10 +52,6 @@ const sentenceCase = (
   <GlobalStyles styles={{ '.MuiDialog-root :is(.MuiButton-root, .MuiToggleButton-root)': { textTransform: 'none' } }} />
 );
 
-const SUBSECTION_LABELS = {
-  chores: { definitions: 'admin:users.chores', history: 'admin:chores.history', settings: 'admin:chores.settings' },
-};
-
 // The panel's frame: a sidebar on a display, a list you drill into on a
 // phone, and a header that names where you are. Neither moves or resizes as
 // you go from section to section, which the old rows of tabs in a dialog
@@ -83,11 +77,9 @@ export default function AdminShell({ location, navigate, onClose, startOnList = 
     setOnList(false);
   }, [placeKey]);
 
-  const layout = ADMIN_LAYOUT.find((entry) => entry.tab === location.tab) || ADMIN_LAYOUT[0];
   const title = location.section
     ? t(`admin:sections.${location.section}`)
     : t(`admin:panelTabs.${location.tab}`);
-  const subsections = (location.section && layout.subsections?.[location.section]) || [];
 
   const go = (next) => {
     navigate(next);
@@ -98,25 +90,6 @@ export default function AdminShell({ location, navigate, onClose, startOnList = 
     <IconButton onClick={onClose} aria-label={t('common:actions.close')} sx={{ color: 'text.secondary' }}>
       <Close />
     </IconButton>
-  );
-
-  const subsectionControl = subsections.length > 0 && (
-    <ToggleButtonGroup
-      exclusive
-      size="small"
-      value={location.subsection}
-      onChange={(_, value) => value && navigate({ ...location, subsection: value })}
-      sx={{
-        width: { xs: '100%', sm: 'auto' },
-        '& .MuiToggleButton-root': { flex: { xs: 1, sm: 'none' }, px: 1.75, py: 0.5 },
-      }}
-    >
-      {subsections.map((name) => (
-        <ToggleButton key={name} value={name}>
-          {t(SUBSECTION_LABELS[location.section]?.[name] || `admin:sections.${name}`)}
-        </ToggleButton>
-      ))}
-    </ToggleButtonGroup>
   );
 
   const headerActions = <Box ref={setHeaderSlot} sx={{ display: 'flex', alignItems: 'center', gap: 1, '&:empty': { display: 'none' } }} />;
@@ -187,9 +160,8 @@ export default function AdminShell({ location, navigate, onClose, startOnList = 
           <Typography variant="h5" component="h2" sx={{ fontWeight: 700 }}>
             {title}
           </Typography>
-          <Box sx={{ '&:has(> *:not(:empty))': { mt: 1.5 }, '& .MuiToggleButtonGroup-root': { width: '100%' }, '& .MuiToggleButton-root': { flex: 1 } }}>
+          <Box sx={{ '&:has(> *:not(:empty))': { mt: 1.5 } }}>
             {headerActions}
-            {subsectionControl}
           </Box>
         </Box>
         {body}
@@ -263,7 +235,6 @@ export default function AdminShell({ location, navigate, onClose, startOnList = 
             {title}
           </Typography>
           {headerActions}
-          {subsectionControl}
           {closeButton}
         </Box>
         {body}

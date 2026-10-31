@@ -20,7 +20,7 @@ export const ADMIN_LAYOUT = [
   {
     tab: 'family',
     sections: ['users', 'chores', 'prizes', 'vacation'],
-    subsections: { chores: ['definitions', 'history', 'settings'] },
+    subsections: { chores: ['definitions', 'routines', 'schedules', 'history', 'settings'] },
   },
   { tab: 'security', sections: [] },
   { tab: 'system', sections: ['region', 'connections', 'notifications', 'about'] },
@@ -41,9 +41,9 @@ const LEGACY_TABS = {
 };
 
 // Sections folded into another, by tab: Family → Routines (and its Steps)
-// now live on Family → Chores, with the chore definitions and schedules.
+// now live on Family → Chores, on its Routines tab.
 const MOVED_SECTIONS = {
-  family: { routines: { section: 'chores' } },
+  family: { routines: { section: 'chores', subsection: 'routines' } },
 };
 
 const layoutFor = (tab) => ADMIN_LAYOUT.find((entry) => entry.tab === tab) || ADMIN_LAYOUT[0];

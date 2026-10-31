@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import { AdminGroup, AdminNote, AdminRow } from './AdminRows.jsx';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getWeekdayLabels } from '../utils/dateUtils.js';
+import { SearchMark } from './ChoresPageBar.jsx';
 import useIsMobile from '../hooks/useIsMobile.js';
 
 export const routineIconBox = (icon) => (
@@ -31,9 +32,9 @@ export const routineIconBox = (icon) => (
 // the schedules. A routine is a checklist of steps for one person, ticked in
 // its card on the Chores widget. The editor is the page's own (onNew,
 // onEdit, and onCopy for someone else), as the schedule views open it too.
-// `open` / `onToggle` come from the page, which shows the steps only while
-// the routines are open.
-export default function RoutinesGroup({ routines, users, imported, onDismissImported, onNew, onEdit, onCopy, onChanged, flash, open, onToggle }) {
+// `routines` is what the page's person chips and search leave, and
+// `matchedStep` names the step a routine matched on.
+export default function RoutinesGroup({ routines, users, imported, onDismissImported, onNew, onEdit, onCopy, onChanged, flash, query = '', matchedStep = () => null, onManageSteps, stepCount = 0, totalRoutines = 0 }) {
   const { t } = useTranslation(['chores', 'common']);
   const isMobile = useIsMobile();
   const [deleting, setDeleting] = useState(null);
@@ -117,18 +118,18 @@ export default function RoutinesGroup({ routines, users, imported, onDismissImpo
       )}
       <AdminGroup
         id="admin-routines"
-        title={t('chores:routines.heading')}
-        collapseKey="routines"
-        count={routines.length}
-        open={open}
-        onToggle={onToggle}
         action={(
-          <Button startIcon={<Add />} onClick={onNew} variant="contained" size="small" disabled={users.length === 0}>
-            {t('chores:routines.newRoutine')}
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <Button onClick={onManageSteps} variant="outlined" size="small">
+              {t('chores:page.manageSteps', { n: stepCount })}
+            </Button>
+            <Button startIcon={<Add />} onClick={onNew} variant="contained" size="small" disabled={users.length === 0}>
+              {t('chores:routines.newRoutine')}
+            </Button>
+          </Box>
         )}
       >
-        <AdminNote>{t('chores:routines.intro')}</AdminNote>
+        {!query.trim() && <AdminNote>{t('chores:routines.intro')}</AdminNote>}
         {routines.length > 0 && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', px: 1, py: 1, bgcolor: selected.size > 0 ? 'action.hover' : undefined }}>
             <Checkbox
@@ -152,7 +153,7 @@ export default function RoutinesGroup({ routines, users, imported, onDismissImpo
           </Box>
         )}
         {routines.length === 0 ? (
-          <AdminNote>{t('chores:routines.noRoutines')}</AdminNote>
+          <AdminNote>{query.trim() ? t('chores:page.noMatches') : totalRoutines > 0 ? t('chores:page.noRoutinesHere') : t('chores:routines.noRoutines')}</AdminNote>
         ) : routines.map((routine) => (
           <AdminRow
             key={routine.id}
@@ -168,11 +169,16 @@ export default function RoutinesGroup({ routines, users, imported, onDismissImpo
                 {routineIconBox(routine.icon)}
               </>
             )}
-            label={routine.name}
+            label={<SearchMark text={routine.name} query={query} />}
             hint={[
               userName(routine.user_id),
               (routine.start_time || routine.end_time) && `🕑 ${routine.start_time || ''}${routine.end_time ? `–${routine.end_time}` : ''}`,
             ].filter(Boolean).join(' · ')}
+            under={matchedStep(routine) && (
+              <Typography variant="body2" color="text.secondary">
+                {t('chores:page.stepPrefix')} <SearchMark text={matchedStep(routine)} query={query} />
+              </Typography>
+            )}
             // when() draws chips (weekdays, or the calendar match), so it
             // gets its own line rather than joining the text above.
             extra={<Box sx={{ pl: { xs: 0, sm: 9 } }}>{when(routine)}</Box>}

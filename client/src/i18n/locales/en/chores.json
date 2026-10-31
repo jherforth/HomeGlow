@@ -179,14 +179,11 @@
   "schedules": {
     "definitionsHeading": "Chores",
     "newChore": "New Chore",
-    "definitionsHelp": "Chore definitions hold the title, description, and clam value. Add schedules below to assign them to users with a recurrence pattern.",
+    "definitionsHelp": "Chore definitions hold the title, description, and clam value. Add schedules on the Schedules tab to assign them to users with a recurrence pattern.",
     "noChores": "No chores defined yet.",
     "noDescription": "No description",
     "clams": "Clams",
     "schedulesColumn": "Schedules",
-    "jumpSchedules": "Schedules",
-    "jumpChores": "Chores",
-    "goTo": "Go to {{section}}",
     "editChore": "Edit chore",
     "deleteChoreAndSchedules": "Delete chore and all its schedules",
     "newSchedule": "New Schedule",
@@ -194,9 +191,6 @@
     "viewSchedules": "View this chore's schedules",
     "addScheduleForChore": "Add a schedule for this chore",
     "schedulesHelp": "Schedules link chores to users and specify when they recur. A chore can have multiple schedules for different users or frequencies.",
-    "filterByUser": "Filter by User",
-    "allUsers": "All Users",
-    "unassignedBonus": "Unassigned (Bonus)",
     "filterByChore": "Filter by Chore",
     "allChores": "All Chores",
     "clearFilters": "Clear Filters",
@@ -473,9 +467,6 @@
     }
   },
   "board": {
-    "viewLabel": "Schedules view",
-    "viewByPerson": "By person",
-    "viewList": "All schedules",
     "bonusTab": "Bonus chores",
     "bonusHelp": "Bonus chores aren't anyone's until someone takes one from the dashboard, and they go back here each night.",
     "weekOf": "Week of {{date}}",
@@ -671,5 +662,17 @@
     "reviewDrop": "Each one goes away at the end of its day.",
     "reviewMoves_one": "{{count}} of these already has a schedule for this person: it moves here.",
     "reviewMoves_other": "{{count}} of these already have a schedule for this person: they move here."
+  },
+  "page": {
+    "search": "Search",
+    "searchAria": "Search chores, routines and schedules",
+    "clearSearch": "Clear search",
+    "all": "All",
+    "bonus": "Bonus",
+    "personAria": "Show routines and schedules for",
+    "noMatches": "No matches here.",
+    "manageSteps": "Manage steps ({{n}})",
+    "stepPrefix": "Step:",
+    "noRoutinesHere": "No routines here."
   }
 }
