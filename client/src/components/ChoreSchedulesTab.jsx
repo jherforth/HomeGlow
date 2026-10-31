@@ -61,7 +61,7 @@ import RoutineStepsGroup from './RoutineStepsGroup.jsx';
 import RoutineEditorDialog from './RoutineEditorDialog.jsx';
 import useRoutines from '../hooks/useRoutines.js';
 import { schedulesWithRoutines } from '../utils/routineSchedules.js';
-import { WEEKLY_CRONTAB } from '../utils/choreScheduleGroups.js';
+import { ANY_DAY_CRONTAB, ANY_DAY_PERIODS } from '../utils/choreScheduleGroups.js';
 
 // Which way the schedules section opens: by person (grouped by timing) or the
 // full list. Remembered per display; storage may be unavailable.
@@ -230,6 +230,8 @@ const defaultScheduleForm = {
   duration: 'day-of',
   sleepCount: '',
   sleepUnit: 'd',
+  // An any-day chore's period (its interval).
+  anyDayPeriod: '1w',
   visible: true,
   due_date: '',
   due_days: '',
@@ -368,8 +370,8 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
 
   const computeCrontab = (f) => {
     if (f.isOneTime) return '';
-    // Once a week, any day: the crontab only marks the week start.
-    if (f.duration === 'weekly') return WEEKLY_CRONTAB;
+    // Once in a period, any day: its days mean nothing.
+    if (f.duration === 'any-day') return ANY_DAY_CRONTAB;
     if (f.scheduleMode === 'preset') return f.selectedPreset;
     if (f.scheduleMode === 'days') return f.selectedDays.length > 0 ? daysToCrontab(f.selectedDays) : '';
     return f.customCrontab;
@@ -463,6 +465,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
       duration: schedule.duration || 'day-of',
       sleepCount: schedule.interval ? (schedule.interval.match(/^(\d+)/)?.[1] || '') : '',
       sleepUnit: schedule.interval ? (schedule.interval.match(/[dwmy]$/i)?.[0].toLowerCase() || 'd') : 'd',
+      anyDayPeriod: schedule.duration === 'any-day' && ANY_DAY_PERIODS.includes(schedule.interval) ? schedule.interval : '1w',
       visible: !!schedule.visible,
       due_date: schedule.due_date || '',
       due_days: !isOneTime ? getDueDaysOffset(schedule.created_at, schedule.due_date) : '',
@@ -493,18 +496,20 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
 
     setSavingSchedule(true);
     try {
-      const normalizedInterval = !scheduleForm.isOneTime && scheduleForm.duration === 'once-completed'
-        ? `${scheduleForm.sleepCount}${scheduleForm.sleepUnit}`
-        : null;
+      const normalizedInterval = scheduleForm.isOneTime
+        ? null
+        : scheduleForm.duration === 'once-completed'
+          ? `${scheduleForm.sleepCount}${scheduleForm.sleepUnit}`
+          : scheduleForm.duration === 'any-day' ? scheduleForm.anyDayPeriod : null;
 
-      // A weekly chore's card is due by its Saturday; the server sets that.
+      // An any-day chore's card is due by its period's last day; the server sets that.
       const normalizedDueDate = scheduleForm.isOneTime
         ? (scheduleForm.due_date || null)
-        : (scheduleForm.due_days === '' || scheduleForm.duration === 'weekly'
+        : (scheduleForm.due_days === '' || scheduleForm.duration === 'any-day'
           ? null
           : buildDueDateFromOffset(editingSchedule?.created_at || new Date(), scheduleForm.due_days));
 
-      if (!scheduleForm.isOneTime && scheduleForm.duration !== 'weekly' && scheduleForm.due_days !== '' && !normalizedDueDate) {
+      if (!scheduleForm.isOneTime && scheduleForm.duration !== 'any-day' && scheduleForm.due_days !== '' && !normalizedDueDate) {
         showMessage('error', 'Days until due must be a non-negative whole number.');
         return;
       }
@@ -1062,8 +1067,8 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
                   {s.followup_of && <Box component="span" sx={{ display: 'block' }}>{t('chores:widget.followupOf', { title: s.followup_of })}</Box>}
                   {s.description && <Box component="span" sx={{ display: 'block' }}>{s.description}</Box>}
                   <Box component="span" sx={{ display: 'block' }}>
-                    {s.duration === 'weekly'
-                      ? t('chores:schedules.weeklyNext')
+                    {s.duration === 'any-day'
+                      ? t('chores:schedules.anyDayNext')
                       : `${t('chores:schedules.nextOccurrence')}: ${getNextOccurrence(s.crontab)}`}
                   </Box>
                 </>
@@ -1076,8 +1081,8 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
                     variant={s.user_id ? 'filled' : 'outlined'}
                     color={s.user_id ? 'primary' : 'default'}
                   />
-                  {s.crontab && s.duration === 'weekly' ? (
-                    <Chip label={t('chores:schedules.weeklyChip')} size="small" color="secondary" variant="outlined" />
+                  {s.crontab && s.duration === 'any-day' ? (
+                    <Chip label={t(`chores:board.timing.anyDay.${s.interval || '1w'}`)} size="small" color="secondary" variant="outlined" />
                   ) : s.crontab && s.duration === 'until-completed' ? (
                     <Chip label={t('chores:schedules.untilCompleted')} size="small" color="warning" />
                   ) : s.crontab && s.duration === 'once-completed' ? (
@@ -1495,8 +1500,8 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
 
             {!scheduleForm.isOneTime && (
               <>
-                {/* A weekly chore has no days to pick: any day of the week counts. */}
-                {scheduleForm.duration !== 'weekly' && (
+                {/* An any-day chore has no days to pick: any day of its period counts. */}
+                {scheduleForm.duration !== 'any-day' && (
                   <RadioGroup
                     row
                     value={scheduleForm.scheduleMode}
@@ -1519,16 +1524,30 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
                     <MenuItem value="day-of">{t('chores:schedules.dayOf')}</MenuItem>
                     <MenuItem value="until-completed">{t('chores:schedules.untilCompleted')}</MenuItem>
                     <MenuItem value="once-completed">{t('chores:schedules.onceCompleted')}</MenuItem>
-                    <MenuItem value="weekly">{t('chores:schedules.weekly')}</MenuItem>
+                    <MenuItem value="any-day">{t('chores:schedules.anyDay')}</MenuItem>
                   </Select>
                   <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, ml: 1.5 }}>
                     {t({
                       'until-completed': 'chores:schedules.durationHelp.untilCompleted',
                       'once-completed': 'chores:schedules.durationHelp.onceCompleted',
-                      weekly: 'chores:schedules.durationHelp.weekly',
+                      'any-day': 'chores:schedules.durationHelp.anyDay',
                     }[scheduleForm.duration] || 'chores:schedules.durationHelp.dayOf')}
                   </Typography>
                 </FormControl>
+
+                {scheduleForm.duration === 'any-day' && (
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="schedule-any-day-period-label">{t('chores:wizard.periodLabel')}</InputLabel>
+                    <Select
+                      labelId="schedule-any-day-period-label"
+                      value={scheduleForm.anyDayPeriod}
+                      label={t('chores:wizard.periodLabel')}
+                      onChange={(e) => updateScheduleForm({ anyDayPeriod: e.target.value })}
+                    >
+                      {ANY_DAY_PERIODS.map((p) => <MenuItem key={p} value={p}>{t(`chores:board.timing.anyDay.${p}`)}</MenuItem>)}
+                    </Select>
+                  </FormControl>
+                )}
 
                 {scheduleForm.duration === 'once-completed' && (
                   <Grid container spacing={2}>
@@ -1566,7 +1585,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
                   </Grid>
                 )}
 
-                {scheduleForm.duration !== 'weekly' && scheduleForm.scheduleMode === 'preset' && (
+                {scheduleForm.duration !== 'any-day' && scheduleForm.scheduleMode === 'preset' && (
                   <FormControl fullWidth size="small">
                     <InputLabel id="schedule-schedule-preset-label">{t('chores:schedules.schedulePreset')}</InputLabel>
                     <Select
@@ -1589,7 +1608,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
                   </FormControl>
                 )}
 
-                {scheduleForm.duration !== 'weekly' && scheduleForm.scheduleMode === 'days' && (
+                {scheduleForm.duration !== 'any-day' && scheduleForm.scheduleMode === 'days' && (
                   <Box>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                       {t('chores:schedules.selectDays')}
@@ -1625,7 +1644,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
                   </Box>
                 )}
 
-                {scheduleForm.duration !== 'weekly' && scheduleForm.scheduleMode === 'custom' && (
+                {scheduleForm.duration !== 'any-day' && scheduleForm.scheduleMode === 'custom' && (
                   <TextField
                     fullWidth
                     size="small"
@@ -1641,9 +1660,9 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
               </>
             )}
 
-            {!scheduleForm.isOneTime && scheduleForm.duration === 'weekly' ? (
+            {!scheduleForm.isOneTime && scheduleForm.duration === 'any-day' ? (
               <Alert severity="info" icon={<Schedule />} sx={{ py: 0.5 }}>
-                <Typography variant="body2">{t('chores:board.weeklyHelp')}</Typography>
+                <Typography variant="body2">{t('chores:wizard.anyDayNote')}</Typography>
               </Alert>
             ) : !crontabError && (
               <Alert severity={scheduleForm.isOneTime ? 'warning' : 'info'} icon={<Schedule />} sx={{ py: 0.5 }}>
@@ -1686,7 +1705,7 @@ export default function ChoreSchedulesTab({ setSaveMessage }) {
                   }
                 }}
               />
-            ) : scheduleForm.duration === 'weekly' ? null : (
+            ) : scheduleForm.duration === 'any-day' ? null : (
               <TextField
                 label={t('chores:schedules.daysUntilDue')}
                 type="number"

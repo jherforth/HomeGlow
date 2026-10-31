@@ -57,14 +57,26 @@ The chore system uses a **three-table model** (see [Database](../architecture/da
   - `day-of` — shows only on the scheduled day.
   - `until-completed` — a "sticky" chore that stays until done.
   - `once-completed` — sticky, and recurs again after an `interval` (e.g. `3m`).
-  - `weekly` — **once a week, any day** (practise an instrument). It shows all
-    week, Sunday to Saturday, and done once on any day counts. Its card is due
-    by the week's Saturday: until then it doesn't hold back the daily bonus, and
-    no miss is logged. On Saturday it counts toward the bonus if it's still open,
-    and an undone week is logged as **one** miss. Each Sunday a fresh card
-    replaces last week's, done or not. Its crontab is kept at `0 0 * * 0`, which
-    only marks the week start. Set it from the board's Add (*Once a week, any
-    day*) or the schedule dialog's Duration. Code: `server/services/weeklyChores.js`.
+  - `any-day` — **once in a period, any day of it** (practise an instrument
+    once a week; change the furnace filter once every 3 months). The period is
+    the schedule's `interval`:
+    - `1w`: Sunday to Saturday.
+    - `2w`: counted from the week the schedule was made.
+    - `1m`: a calendar month.
+    - `3m`, `6m`: quarters and halves of the year.
+    - `1y`: a calendar year.
+
+    Its card shows from the start of the period, and doing it once, any day,
+    counts. The card is due on the period's last day. Until then it doesn't hold
+    back the daily bonus and no miss is logged. On that last day it counts
+    toward the bonus if it's still open, and an undone period is logged as
+    **one** miss. When the next period starts, a fresh card replaces the old
+    one, done or not. Its crontab means nothing (kept at `0 0 * * *`). Set it
+    from the board's Add (the wizard's *Once in a while, any day*, or the
+    picker's *Once a week, any day*) or the schedule dialog's Duration.
+    `weekly`, its name for a day (#362), still works and means every `1w`;
+    migration `schema38-anyDayChores` converted those rows. Code:
+    `server/services/anyDayChores.js`.
 - **Sticky chores** are materialized nightly: the background job creates one-time
   child schedules (`parent_schedule_id`) when a recurring sticky schedule fires.
   When a card is cleared, its history moves to the schedule it came from, so the
@@ -135,16 +147,33 @@ tab, and unassigned bonus chores have one of their own. A tab shows:
   there, marked late), ✗ missed or not done, ⏳ a stays-until-done chore still
   waiting (also shown on today, "from Mon", until it's done); vacation days are striped and marked 🏖️, and days before a schedule
   existed show nothing. An "again after done" chore sits on its next date (the
-  server rewrites its crontab to that date when it's done). A once-a-week chore
-  sits on the day it was done. If it isn't done, it's on today (⏳) while the
-  week is open, and on Saturday otherwise (✗ for a past week, planned for a
-  week ahead). Arrows step to other
+  server rewrites its crontab to that date when it's done). An any-day chore
+  sits on the day it was done. If it isn't done, it's on today (⏳) while its
+  card is up, and on its period's last day if that falls in the week shown: ✗
+  for a logged miss (or, for a week, not done), planned for one ahead. A
+  longer period done in an earlier week shows nothing. Arrows step to other
   weeks. Chores with no fixed day (one-time with no date) are listed under it.
 - **The person's chores grouped by schedule**: "Every day", "Weekdays",
   "Mon · Wed · Fri", "Every other day", "Monthly · day 1",
   "Every 3 months · Jan 15, Apr 15, Jul 15, Oct 15", "Every year · Mar 20",
-  "One-time · Nov 3", "Again 3 days after done". **Add** offers the person's
-  schedules first, then the common ones, **Monthly** (pick the
+  "One-time · Nov 3", "Again 3 days after done", "Once a month, any day".
+  **Add** has two ways in, a **Picker** and a **Wizard**, and each display
+  remembers which it last used (the picker at first).
+  - **The wizard** steps through it:
+    1. How often: certain days of the week, once in a while any day, every
+       few days, a date each month, again a while after it's done, or just
+       once.
+    2. The details for that choice: the days, the period (a week, two weeks,
+       a month, three or six months, a year), the number of days, the dates
+       of the month, how long after, or the date.
+    3. For timings that fall on days only, if it isn't done that day: it goes
+       away at the end of the day, or it stays until it's done.
+    4. The chores.
+    5. A one-line summary, then Add.
+
+    Back keeps the answers given. `components/ScheduleWizard.jsx`.
+  - **The picker** offers the person's schedules first, then the common ones,
+    **Monthly** (pick the
   day of the month), **Custom** (every 1, 3, 6 or 9 months or a year, on set
   dates from a start date or counted from when it's done; 9 months only counts
   from when it's done), or any set of days; then a tick list of

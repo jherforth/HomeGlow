@@ -62,6 +62,14 @@ import {
   weekTiming,
 } from '../utils/choreScheduleGroups.js';
 import { calendarRoutinesFor } from '../utils/routineSchedules.js';
+import ScheduleWizard, { WIZARD_START } from './ScheduleWizard.jsx';
+
+// How the Add dialog picks a timing: the picker of chips, or the wizard.
+// Remembered per display; storage may be unavailable.
+const ADD_MODE_KEY = 'homeglow_choreAddMode';
+const readAddMode = () => {
+  try { return localStorage.getItem(ADD_MODE_KEY) === 'wizard' ? 'wizard' : 'picker'; } catch { return 'picker'; }
+};
 
 // "By person" view of Admin → Chores → Schedules: one tab per person (and
 // one for the unassigned bonus chores), a week calendar of what they have on
@@ -217,8 +225,8 @@ export default function ChoreScheduleBoard({
         return timing.dueDate ? t('chores:board.timing.oneTimeOn', { date: dateLabel(timing.dueDate) }) : t('chores:board.timing.oneTime');
       case 'after':
         return t('chores:board.timing.againAfter', { interval: intervalText(timing.interval) });
-      case 'weekly':
-        return t('chores:board.timing.weeklyAnyDay');
+      case 'anyDay':
+        return t(`chores:board.timing.anyDay.${timing.period}`);
       default:
         return t('chores:board.timing.custom', { expr: timing.rest });
     }
@@ -248,9 +256,15 @@ export default function ChoreScheduleBoard({
       .catch(() => { if (current) setHistory([]); });
     return () => { current = false; };
   }, [userId, dayKeys, today, schedules]);
+  // The sticky schedules with a card up now: an any-day chore without one
+  // was done earlier in its period (calendarWeek).
+  const openCards = useMemo(
+    () => new Set(schedules.filter((s) => s.parent_schedule_id && !s.crontab && s.visible).map((s) => s.parent_schedule_id)),
+    [schedules],
+  );
   const week = useMemo(
-    () => calendarWeek({ groups, dates: dayKeys, today, rows: history, vacation }),
-    [groups, dayKeys, today, history, vacation],
+    () => calendarWeek({ groups, dates: dayKeys, today, rows: history, vacation, openCards }),
+    [groups, dayKeys, today, history, vacation, openCards],
   );
 
   // ── Moving one chore (drag, or Move to…) ──────────────────────────
@@ -313,7 +327,8 @@ export default function ChoreScheduleBoard({
   });
 
   // ── Add chores ────────────────────────────────────────────────────
-  const [addDialog, setAddDialog] = useState(null); // { step, timing, picked:Set, days:[], date }
+  // step: 'timing' → 'chores' (→ 'review' from the wizard).
+  const [addDialog, setAddDialog] = useState(null); // { step, timing, picked:Set, days:[], date, wizard, keep, fromWizard }
   const openAdd = (timing = null) => setAddDialog({
     step: timing ? 'chores' : 'timing',
     timing,
@@ -324,7 +339,17 @@ export default function ChoreScheduleBoard({
     panel: null, // 'monthly' | 'custom' while one of those is open
     dom: '1',
     custom: { every: 3, from: 'dates', start: todayKeyString() },
+    wizard: WIZARD_START,
+    // From the wizard: true "stays until done", false "goes at day's end",
+    // null not asked (the chores keep their own setting).
+    keep: null,
+    fromWizard: false,
   });
+  const [addMode, setAddModeState] = useState(readAddMode);
+  const setAddMode = (mode) => {
+    setAddModeState(mode);
+    try { localStorage.setItem(ADD_MODE_KEY, mode); } catch { /* per-display convenience only */ }
+  };
   // A chore made with "New chore" while the dialog is open comes back ticked.
   const knownChoreIds = useRef(new Set(chores.map((c) => c.id)));
   useEffect(() => {
@@ -350,9 +375,13 @@ export default function ChoreScheduleBoard({
   const pickedNew = addDialog ? [...addDialog.picked].filter((id) => !mineByChore.has(id)) : [];
   const pickedMoves = addDialog ? [...addDialog.picked].filter((id) => mineByChore.has(id)) : [];
 
+  // The wizard's answer to "if it isn't done that day", for both the chores
+  // added and the ones moved; the picker doesn't ask.
+  const keepFields = (keep) => (keep === null || keep === undefined ? {} : { duration: keep ? 'until-completed' : 'day-of' });
   const saveAdd = () => {
     const timing = addTiming;
-    const fields = scheduleFieldsForTiming(timing);
+    const extra = keepFields(addDialog.keep);
+    const fields = { ...scheduleFieldsForTiming(timing), ...extra };
     const moves = pickedMoves.map((id) => mineByChore.get(id)[0].s);
     const created = pickedNew.length;
     setAddDialog(null);
@@ -361,7 +390,7 @@ export default function ChoreScheduleBoard({
         await axios.post(`${API_BASE_URL}/api/chore-schedules`, { chore_id: choreId, user_id: userId, visible: 1, ...fields });
       }
       for (const s of moves) {
-        await axios.patch(`${API_BASE_URL}/api/chore-schedules/${s.id}`, scheduleFieldsForTiming(timing, s));
+        await axios.patch(`${API_BASE_URL}/api/chore-schedules/${s.id}`, { ...scheduleFieldsForTiming(timing, s), ...extra });
       }
     }, moves.length && !created
       ? t('chores:board.movedCount', { count: moves.length, timing: timingLabel(timing) })
@@ -753,10 +782,16 @@ export default function ChoreScheduleBoard({
     // Every common schedule is offered, even ones the person already has:
     // picking one of those adds to it.
     const others = COMMON_TIMINGS;
-    const pick = (timing) => setAddDialog((d) => ({ ...d, step: 'chores', timing, date: timing.kind === 'once' ? (timing.dueDate || '') : '' }));
+    const pick = (timing) => setAddDialog((d) => ({ ...d, step: 'chores', timing, date: timing.kind === 'once' ? (timing.dueDate || '') : '', keep: null, fromWizard: false }));
+    const wizardMode = addMode === 'wizard';
+    // The person's own schedules are a shortcut: in the wizard, on its first step only.
+    const showGroups = groups.length > 0 && (!wizardMode || addDialog.wizard.step === 'how');
+    const finishWizard = (timing, keep) => setAddDialog((d) => ({
+      ...d, step: 'chores', timing, keep, fromWizard: true, date: timing.kind === 'once' ? (timing.dueDate || '') : '',
+    }));
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {groups.length > 0 && (
+        {showGroups && (
           <Box>
             <Typography variant="overline" color="text.secondary">{t('chores:board.theirTimings', { name: personName })}</Typography>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -778,6 +813,28 @@ export default function ChoreScheduleBoard({
             </Box>
           </Box>
         )}
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={addMode}
+            onChange={(_, mode) => mode && setAddMode(mode)}
+            aria-label={t('chores:wizard.modeLabel')}
+          >
+            <ToggleButton value="picker" sx={{ textTransform: 'none', px: 2 }}>{t('chores:wizard.picker')}</ToggleButton>
+            <ToggleButton value="wizard" sx={{ textTransform: 'none', px: 2 }}>{t('chores:wizard.wizard')}</ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+        {wizardMode ? (
+          <ScheduleWizard
+            value={addDialog.wizard}
+            onChange={(wizard) => setAddDialog((d) => ({ ...d, wizard }))}
+            onDone={finishWizard}
+            timingLabel={timingLabel}
+            shortDays={shortDays}
+          />
+        ) : (
+        <>
         <Box>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
             {others.map((tm) => (
@@ -813,9 +870,36 @@ export default function ChoreScheduleBoard({
             </Button>
           </Box>
         </Box>
+        </>
+        )}
       </Box>
     );
   };
+
+  // The wizard's last step: what will be added, in a sentence, before Add.
+  const renderAddReview = () => {
+    const picked = choresByTitle.filter((c) => addDialog.picked.has(c.id));
+    const names = picked.map((c) => `${c.icon ? `${c.icon} ` : ''}${c.title}`);
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+        <Typography variant="caption" color="text.secondary">{t('chores:wizard.stepOf', { step: wizardStepCount(), count: wizardStepCount() })}</Typography>
+        <Paper variant="outlined" sx={{ p: 2, bgcolor: 'rgba(var(--accent-rgb), 0.06)', borderColor: 'var(--accent)' }}>
+          <Typography sx={{ fontWeight: 600 }}>
+            {t('chores:wizard.reviewSentence', { name: personName, chores: names.join(', '), timing: timingLabel(addTiming) })}
+          </Typography>
+          {addDialog.keep === true && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{t('chores:wizard.reviewKeep')}</Typography>}
+          {addDialog.keep === false && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{t('chores:wizard.reviewDrop')}</Typography>}
+          {addTiming?.kind === 'anyDay' && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{t('chores:wizard.anyDayNote')}</Typography>}
+        </Paper>
+        {pickedMoves.length > 0 && (
+          <Alert severity="info">{t('chores:wizard.reviewMoves', { count: pickedMoves.length })}</Alert>
+        )}
+      </Box>
+    );
+  };
+  // How many steps the wizard has for the answers given: how, details,
+  // (if missed), chores, review.
+  const wizardStepCount = () => (['days', 'everyN', 'monthly'].includes(addDialog?.wizard?.how) ? 5 : 4);
 
   // Every day / Weekdays / Weekends buttons that fill the day toggles.
   const quickDays = (onPick) => (
@@ -918,8 +1002,13 @@ export default function ChoreScheduleBoard({
     });
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-        {addDialog.timing.kind === 'weekly' && <Alert severity="info">{t('chores:board.weeklyHelp')}</Alert>}
-        {addDialog.timing.kind === 'once' && (
+        {addDialog.fromWizard && (
+          <Typography variant="caption" color="text.secondary">
+            {t('chores:wizard.stepOf', { step: wizardStepCount() - 1, count: wizardStepCount() })} · {t('chores:wizard.choresTitle')}
+          </Typography>
+        )}
+        {addDialog.timing.kind === 'anyDay' && !addDialog.fromWizard && <Alert severity="info">{t('chores:wizard.anyDayNote')}</Alert>}
+        {addDialog.timing.kind === 'once' && !addDialog.fromWizard && (
           <TextField
             size="small"
             type="date"
@@ -1095,7 +1184,7 @@ export default function ChoreScheduleBoard({
       <Menu open={!!groupMenu} anchorEl={groupMenu?.anchor} onClose={() => setGroupMenu(null)}>
         {/* A group of routines only has nothing these can change; a
             once-a-week group has no days to change. */}
-        <MenuItem onClick={() => { const g = groupMenu.group; setGroupMenu(null); openEditDays(g); }} disabled={['custom', 'weekly'].includes(groupMenu?.group.timing.kind) || menuEmpty}>
+        <MenuItem onClick={() => { const g = groupMenu.group; setGroupMenu(null); openEditDays(g); }} disabled={['custom', 'anyDay'].includes(groupMenu?.group.timing.kind) || menuEmpty}>
           <EditCalendar fontSize="small" sx={{ mr: 1.5 }} />{t('chores:board.changeDays')}
         </MenuItem>
         <MenuItem onClick={() => { const g = groupMenu.group; setGroupMenu(null); setCopyDialog({ group: g, targets: [] }); }} disabled={menuEmpty}>
@@ -1110,21 +1199,36 @@ export default function ChoreScheduleBoard({
       {/* Add chores */}
       <Dialog open={!!addDialog} onClose={() => setAddDialog(null)} maxWidth="sm" fullWidth fullScreen={isMobile}>
         <DialogTitle>
-          {addDialog?.step === 'chores'
-            ? t('chores:board.addToTitle', { timing: timingLabel(addTiming), name: personName })
-            : t('chores:board.addTitle', { name: personName })}
+          {addDialog?.step === 'review'
+            ? t('chores:wizard.reviewTitle')
+            : addDialog?.step === 'chores'
+              ? t('chores:board.addToTitle', { timing: timingLabel(addTiming), name: personName })
+              : t('chores:board.addTitle', { name: personName })}
         </DialogTitle>
         <DialogContent dividers>
-          {addDialog && (addDialog.step === 'timing' ? renderAddTimingStep() : renderAddChoresStep())}
+          {addDialog && (addDialog.step === 'timing'
+            ? renderAddTimingStep()
+            : addDialog.step === 'review' ? renderAddReview() : renderAddChoresStep())}
         </DialogContent>
         <DialogActions>
           {addDialog?.step === 'chores' && (
-            <Button onClick={() => setAddDialog((d) => ({ ...d, step: 'timing', picked: new Set() }))} sx={{ mr: 'auto' }}>
+            // Back to the wizard keeps its answers; to the picker, starts over.
+            <Button onClick={() => setAddDialog((d) => ({ ...d, step: 'timing', picked: d.fromWizard ? d.picked : new Set() }))} sx={{ mr: 'auto' }}>
+              {t('chores:board.back')}
+            </Button>
+          )}
+          {addDialog?.step === 'review' && (
+            <Button onClick={() => setAddDialog((d) => ({ ...d, step: 'chores' }))} sx={{ mr: 'auto' }}>
               {t('chores:board.back')}
             </Button>
           )}
           <Button onClick={() => setAddDialog(null)}>{t('common:actions.cancel')}</Button>
-          {addDialog?.step === 'chores' && (
+          {addDialog?.step === 'chores' && addDialog.fromWizard && (
+            <Button variant="contained" onClick={() => setAddDialog((d) => ({ ...d, step: 'review' }))} disabled={!addDialog.picked.size}>
+              {t('chores:board.next')}
+            </Button>
+          )}
+          {(addDialog?.step === 'review' || (addDialog?.step === 'chores' && !addDialog.fromWizard)) && (
             <Button variant="contained" onClick={saveAdd} disabled={!addDialog.picked.size}>
               {pickedMoves.length
                 ? t('chores:board.addAndMove', { added: pickedNew.length, moved: pickedMoves.length })

@@ -39,21 +39,21 @@ describe('missesTracked', () => {
     expect(missesTracked({ ...base, clam_value: 2 })).toBe(false);
     expect(missesTracked({ ...base, user_id: 0 })).toBe(false);
     expect(missesTracked({ ...base, crontab: MWF, duration: 'until-completed' })).toBe(false);
-    expect(missesTracked({ ...base, crontab: '0 0 * * 0', duration: 'weekly' })).toBe(false);
+    expect(missesTracked({ ...base, crontab: '0 0 * * 0', duration: 'any-day', interval: '1w' })).toBe(false);
   });
 });
 
 describe('dueOn', () => {
-  it("is a once-a-week chore's Saturday only, for its card", () => {
-    const card = { ...base, parent_schedule_id: 9, parent_duration: 'weekly', due_date: '2026-10-24' };
+  it("is an any-day chore's last day only, for its card", () => {
+    const card = { ...base, parent_schedule_id: 9, parent_duration: 'any-day', due_date: '2026-10-24' };
     expect(dueOn(card, '2026-10-20')).toBe(false);
     expect(dueOn(card, '2026-10-24')).toBe(true);
     // Its schedule carries over, like the other sticky ones.
-    expect(dueOn({ ...base, crontab: '0 0 * * 0', duration: 'weekly' }, '2026-10-25')).toBeNull();
+    expect(dueOn({ ...base, crontab: '0 0 * * 0', duration: 'any-day', interval: '1w' }, '2026-10-25')).toBeNull();
   });
 
-  it("marks a weekly card's days before Saturday as off, not missed", () => {
-    const card = { ...base, parent_schedule_id: 9, parent_duration: 'weekly', due_date: '2026-10-24', created_at: '2026-10-18 08:00:00' };
+  it("marks an any-day card's days before its last day as off, not missed", () => {
+    const card = { ...base, parent_schedule_id: 9, parent_duration: 'any-day', due_date: '2026-10-24', created_at: '2026-10-18 08:00:00' };
     const days = choreDays({ rows: [], schedule: card, userId: 2, today: TODAY });
     expect(days.filter((d) => d.date < TODAY).every((d) => d.state === 'off')).toBe(true);
   });

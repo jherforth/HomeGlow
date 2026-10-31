@@ -51,11 +51,11 @@ export function cronFiresOn(crontab, dateStr) {
   return domMatch || dowMatch;
 }
 
-const STICKY_DURATIONS = ['until-completed', 'once-completed', 'weekly'];
+const STICKY_DURATIONS = ['until-completed', 'once-completed', 'any-day'];
 
 /**
  * Whether the midnight job logs misses for this schedule: an assigned,
- * zero-clam chore that isn't a sticky (until/once-completed, weekly) one.
+ * zero-clam chore that isn't a sticky (until/once-completed, any-day) one.
  * Mirrors the server's getTodaysRegularChoresForUser.
  */
 export function missesTracked(schedule) {
@@ -66,12 +66,12 @@ export function missesTracked(schedule) {
 
 /**
  * Whether the schedule was due on `dateStr`, or null when that can't be told
- * from the schedule (sticky chores carry over between days). A once-a-week
- * chore's card is due on its last day only (server/services/weeklyChores.js).
+ * from the schedule (sticky chores carry over between days). An any-day
+ * chore's card is due on its last day only (server/services/anyDayChores.js).
  */
 export function dueOn(schedule, dateStr) {
   if (schedule.crontab && STICKY_DURATIONS.includes(schedule.duration)) return null;
-  if (schedule.parent_duration === 'weekly' && schedule.due_date) return dateStr === schedule.due_date;
+  if (schedule.parent_duration === 'any-day' && schedule.due_date) return dateStr === schedule.due_date;
   if (!schedule.crontab) return true;
   return cronFiresOn(schedule.crontab, dateStr);
 }
