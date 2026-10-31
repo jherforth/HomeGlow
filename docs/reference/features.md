@@ -206,15 +206,17 @@ adding it to another moves its schedule there. Sticky chores' daily copies
 
 **Schedule a new chore** (`components/ScheduleChoreDialog.jsx`). The New chore
 dialog has **Cancel**, **Create** and **Schedule**. Schedule saves the chore
-and steps through giving it a schedule, one person at a time:
-1. Who it's for: a person, or **Bonus chores** (no one in particular).
-2. When: the same Picker | Wizard as the board's Add, with that person's own
-   schedules below to join one instead.
+and steps through giving it schedules:
+1. Who it's for: tap to pick one or more people, or **Bonus chores** (no one
+   in particular), then **Next**. Everyone picked gets the same schedule (one
+   schedule row each); an info line says so.
+2. When: the same Picker | Wizard as the board's Add. With one person picked,
+   their own schedules are listed below to join one instead.
 3. A one-line summary, with **Complete**. Under it, an info box offers **Next
-   schedule**: that saves this schedule and goes back to step 1, for someone
-   else with their own schedule.
+   schedule**: that saves this round and goes back to step 1, for someone
+   else with a different schedule.
 
-Each schedule is saved as it's confirmed. **Cancel** drops only the one in
+Each round is saved as it's confirmed. **Cancel** drops only the one in
 progress; the chore, and any schedules already saved, stay. People already
 scheduled in the flow are marked and can't be picked again. Editing a chore,
 or making one from the board's Add (already scheduling it), shows no Schedule

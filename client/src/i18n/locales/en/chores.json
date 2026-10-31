@@ -682,6 +682,7 @@
     "title": "Schedule {{chore}}",
     "titleFor": "Schedule {{chore}} for {{name}}",
     "whoTitle": "Who is it for?",
+    "whoInfo": "Pick one person, or several to give them all the same schedule. To give someone a different schedule, choose Next schedule at the end.",
     "bonusHint": "No one in particular: anyone can do it",
     "scheduled": "Scheduled: {{timing}}",
     "reviewTitle": "Check and save",
