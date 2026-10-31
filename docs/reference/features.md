@@ -57,8 +57,19 @@ The chore system uses a **three-table model** (see [Database](../architecture/da
   - `day-of` — shows only on the scheduled day.
   - `until-completed` — a "sticky" chore that stays until done.
   - `once-completed` — sticky, and recurs again after an `interval` (e.g. `3m`).
+  - `weekly` — **once a week, any day** (practise an instrument). It shows all
+    week, Sunday to Saturday, and done once on any day counts. Its card is due
+    by the week's Saturday: until then it doesn't hold back the daily bonus, and
+    no miss is logged. On Saturday it counts toward the bonus if it's still open,
+    and an undone week is logged as **one** miss. Each Sunday a fresh card
+    replaces last week's, done or not. Its crontab is kept at `0 0 * * 0`, which
+    only marks the week start. Set it from the board's Add (*Once a week, any
+    day*) or the schedule dialog's Duration. Code: `server/services/weeklyChores.js`.
 - **Sticky chores** are materialized nightly: the background job creates one-time
   child schedules (`parent_schedule_id`) when a recurring sticky schedule fires.
+  When a card is cleared, its history moves to the schedule it came from, so the
+  board calendar and the card's 7-day row still find it by chore. Before, those
+  rows lost their chore when the card was deleted.
 - **Clams** are a reward currency earned by completing chores; balances are derived
   by summing `chore_history` (no denormalized total). Completing *all* of a user's
   daily chores awards a bonus. **Bonus chores** carry a custom clam value and reset
@@ -124,7 +135,10 @@ tab, and unassigned bonus chores have one of their own. A tab shows:
   there, marked late), ✗ missed or not done, ⏳ a stays-until-done chore still
   waiting (also shown on today, "from Mon", until it's done); vacation days are striped and marked 🏖️, and days before a schedule
   existed show nothing. An "again after done" chore sits on its next date (the
-  server rewrites its crontab to that date when it's done). Arrows step to other
+  server rewrites its crontab to that date when it's done). A once-a-week chore
+  sits on the day it was done. If it isn't done, it's on today (⏳) while the
+  week is open, and on Saturday otherwise (✗ for a past week, planned for a
+  week ahead). Arrows step to other
   weeks. Chores with no fixed day (one-time with no date) are listed under it.
 - **The person's chores grouped by schedule**: "Every day", "Weekdays",
   "Mon · Wed · Fri", "Every other day", "Monthly · day 1",

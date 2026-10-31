@@ -37,11 +37,13 @@ export function shouldShowChoreToday(schedule, today = getTodayDateString()) {
 /**
  * Whether a chore counts toward the daily bonus today: a regular (zero-clam)
  * chore, unless it is a follow-up handed out today. A follow-up can arrive at
- * 9 pm, so it counts from the next day (issue #241). Mirrors the server's
- * getTodaysRegularChoresForUser, so the widget and the bonus agree.
+ * 9 pm, so it counts from the next day (issue #241). A once-a-week chore
+ * counts on its week's last day only (its card's due date). Mirrors the
+ * server's getTodaysRegularChoresForUser, so the widget and the bonus agree.
  */
 export function countsTowardDailyBonus(schedule, today = getTodayDateString()) {
   if ((schedule.clam_value || 0) !== 0) return false;
+  if (schedule.parent_duration === 'weekly' && schedule.due_date && schedule.due_date !== today) return false;
   return !(schedule.triggered_on && schedule.triggered_on === today);
 }
 

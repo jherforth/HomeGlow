@@ -217,6 +217,8 @@ export default function ChoreScheduleBoard({
         return timing.dueDate ? t('chores:board.timing.oneTimeOn', { date: dateLabel(timing.dueDate) }) : t('chores:board.timing.oneTime');
       case 'after':
         return t('chores:board.timing.againAfter', { interval: intervalText(timing.interval) });
+      case 'weekly':
+        return t('chores:board.timing.weeklyAnyDay');
       default:
         return t('chores:board.timing.custom', { expr: timing.rest });
     }
@@ -916,6 +918,7 @@ export default function ChoreScheduleBoard({
     });
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+        {addDialog.timing.kind === 'weekly' && <Alert severity="info">{t('chores:board.weeklyHelp')}</Alert>}
         {addDialog.timing.kind === 'once' && (
           <TextField
             size="small"
@@ -1090,8 +1093,9 @@ export default function ChoreScheduleBoard({
 
       {/* Group menu */}
       <Menu open={!!groupMenu} anchorEl={groupMenu?.anchor} onClose={() => setGroupMenu(null)}>
-        {/* A group of routines only has nothing these can change. */}
-        <MenuItem onClick={() => { const g = groupMenu.group; setGroupMenu(null); openEditDays(g); }} disabled={groupMenu?.group.timing.kind === 'custom' || menuEmpty}>
+        {/* A group of routines only has nothing these can change; a
+            once-a-week group has no days to change. */}
+        <MenuItem onClick={() => { const g = groupMenu.group; setGroupMenu(null); openEditDays(g); }} disabled={['custom', 'weekly'].includes(groupMenu?.group.timing.kind) || menuEmpty}>
           <EditCalendar fontSize="small" sx={{ mr: 1.5 }} />{t('chores:board.changeDays')}
         </MenuItem>
         <MenuItem onClick={() => { const g = groupMenu.group; setGroupMenu(null); setCopyDialog({ group: g, targets: [] }); }} disabled={menuEmpty}>
