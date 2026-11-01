@@ -5,7 +5,7 @@
 
 // Columns by rows; 'f' is the panel's whole width (a long tile).
 export const TILE_SIZES = ['1x1', '2x1', '1x2', '2x2', 'fx1', 'fx2'];
-export const COLUMN_CHOICES = ['auto', 1, 2, 3, 4, 5, 6];
+export const COLUMN_CHOICES = ['auto', 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 export const STYLE_CHOICES = ['classic', 'bold'];
 export const MAX_TILES = 48;
 export const EXPORT_FORMAT = 'homeglow-ha-panel';
