@@ -28,7 +28,9 @@ import {
 // until it's done", false for "goes at the end of the day", and null where
 // the question doesn't apply. The dialog then asks for the chores and shows a
 // summary before adding. The state lives with the dialog (`value`), so Back
-// from the chores returns to the step it left.
+// from the chores returns to the step it left. The chore dialog's Schedule
+// flow uses it too, between "who" and the summary: `stepsBefore` and
+// `stepsAfter` count the dialog's own steps around it, for "Step 2 of 5".
 
 export const WIZARD_START = {
   step: 'how', how: null, days: [], n: 2, period: '1w', dom: [1], count: 2, unit: 'w', date: '', keep: false,
@@ -72,7 +74,7 @@ export function wizardTiming(w) {
   }
 }
 
-export default function ScheduleWizard({ value: w, onChange, onDone, timingLabel, shortDays }) {
+export default function ScheduleWizard({ value: w, onChange, onDone, timingLabel, shortDays, stepsBefore = 0, stepsAfter = 2 }) {
   const { t } = useTranslation(['chores', 'common']);
   const set = (patch) => onChange({ ...w, ...patch });
   const timing = wizardTiming(w);
@@ -112,7 +114,7 @@ export default function ScheduleWizard({ value: w, onChange, onDone, timingLabel
   const steps = ['how', 'details', ...(asksMissed || !w.how ? ['missed'] : [])];
   const progress = (
     <Typography variant="caption" color="text.secondary" aria-live="polite">
-      {t('chores:wizard.stepOf', { step: steps.indexOf(w.step) + 1, count: steps.length + 2 })}
+      {t('chores:wizard.stepOf', { step: stepsBefore + steps.indexOf(w.step) + 1, count: stepsBefore + steps.length + stepsAfter })}
     </Typography>
   );
 
