@@ -15,6 +15,8 @@
 // one miss, that day. When the next period starts, the old card goes and a
 // fresh one comes, whether or not it was done.
 
+const { sqliteUtcToMs } = require('../utils/sqliteTime');
+
 const ANY_DAY = 'any-day';
 const PERIODS = ['1w', '2w', '1m', '3m', '6m', '1y'];
 const DEFAULT_PERIOD = '1w';
@@ -39,6 +41,16 @@ const weekStartOf = (dateStr) => addDays(dateStr, -parseDay(dateStr).getUTCDay()
 const weekEndOf = (dateStr) => addDays(weekStartOf(dateStr), 6);
 
 const isPeriod = (interval) => PERIODS.includes(interval);
+
+// The household's date ('YYYY-MM-DD') of a stored CURRENT_TIMESTAMP, which is
+// UTC: made at 8 pm on a Saturday in Pacific time is that Saturday, not
+// Sunday. The server runs in the household's time zone.
+function localDateOf(timestamp) {
+  const ms = sqliteUtcToMs(timestamp);
+  if (ms === null) return timestamp ? String(timestamp).slice(0, 10) : null;
+  const date = new Date(ms);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
 
 /**
  * The period `dateStr` falls in, as { start, end } ('YYYY-MM-DD', inclusive).
@@ -66,9 +78,18 @@ function periodOf(dateStr, interval = DEFAULT_PERIOD, anchor = null) {
   return { start: formatDay(start), end: formatDay(end) };
 }
 
+// The period an any-day schedule is in on `dateStr`: two-week periods count
+// from the household's date it was made.
+const periodOfSchedule = (dateStr, schedule) => periodOf(dateStr, schedule.interval, localDateOf(schedule.created_at));
+
 // Whether an any-day chore's card counts as due on `dateStr`: on its last
 // day only. A card without a date counts every day, as any one-time chore.
-const anyDayChildDueOn = (child, dateStr) => !child.due_date || child.due_date === dateStr;
+// One made on its last day (the chore was added that day) doesn't count
+// then, as a follow-up doesn't on the day it arrives: too late to be fair.
+const anyDayChildDueOn = (child, dateStr) => {
+  if (!child.due_date) return true;
+  return child.due_date === dateStr && localDateOf(child.created_at) !== dateStr;
+};
 
 // What a request's duration and interval mean: 'weekly' (the name this had
 // for a day) is an any-day chore once a week; an any-day chore without a
@@ -89,6 +110,8 @@ module.exports = {
   weekEndOf,
   isPeriod,
   periodOf,
+  localDateOf,
+  periodOfSchedule,
   anyDayChildDueOn,
   normalizeAnyDay,
 };

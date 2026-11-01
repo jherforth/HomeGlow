@@ -1,7 +1,7 @@
 // The period rules for "any day" chores (services/anyDayChores.js).
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { weekStartOf, weekEndOf, periodOf, anyDayChildDueOn, normalizeAnyDay, STICKY_DURATIONS } = require('../services/anyDayChores');
+const { weekStartOf, weekEndOf, periodOf, periodOfSchedule, localDateOf, anyDayChildDueOn, normalizeAnyDay, STICKY_DURATIONS } = require('../services/anyDayChores');
 
 test('a week runs Sunday to Saturday, from any day in it', () => {
   // 2026-11-01 is a Sunday.
@@ -45,4 +45,33 @@ test('"weekly" is an any-day chore once a week; any-day defaults to a week', () 
   assert.deepEqual(normalizeAnyDay('any-day', '3m'), { duration: 'any-day', interval: '3m' });
   assert.deepEqual(normalizeAnyDay('once-completed', '2w'), { duration: 'once-completed', interval: '2w' });
   assert.deepEqual(STICKY_DURATIONS, ['until-completed', 'once-completed', 'any-day']);
+});
+
+// The server runs in the household's time zone; created_at is UTC.
+function inZone(timeZone, work) {
+  const before = process.env.TZ;
+  process.env.TZ = timeZone;
+  try { return work(); } finally {
+    if (before === undefined) delete process.env.TZ; else process.env.TZ = before;
+  }
+}
+
+test("two weeks count from the household's date it was made, not UTC's", () => {
+  inZone('America/Los_Angeles', () => {
+    // Saturday 2026-10-31: 9 am and 8 pm Pacific (Sunday 03:00 UTC).
+    const morning = { interval: '2w', created_at: '2026-10-31 16:00:00' };
+    const evening = { interval: '2w', created_at: '2026-11-01 03:00:00' };
+    assert.equal(localDateOf(evening.created_at), '2026-10-31');
+    assert.equal(periodOfSchedule('2026-10-31', morning).end, '2026-11-07');
+    assert.equal(periodOfSchedule('2026-10-31', evening).end, '2026-11-07');
+  });
+});
+
+test("a card made on its last day doesn't count that day", () => {
+  inZone('America/Los_Angeles', () => {
+    const lateAdd = { due_date: '2026-10-31', created_at: '2026-11-01 03:00:00' }; // 8 pm Saturday
+    assert.equal(anyDayChildDueOn(lateAdd, '2026-10-31'), false);
+    const earlier = { due_date: '2026-10-31', created_at: '2026-10-28 16:00:00' };
+    assert.equal(anyDayChildDueOn(earlier, '2026-10-31'), true);
+  });
 });

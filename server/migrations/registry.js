@@ -40,4 +40,5 @@ module.exports = [
   { schemaId: 37, migrationPath: './migrations/schema37-photoDetails', },
   { schemaId: 38, migrationPath: './migrations/schema38-anyDayChores', },
   { schemaId: 39, migrationPath: './migrations/schema39-prizePaused', },
+  { schemaId: 40, migrationPath: './migrations/schema40-oneTimeAfter', },
 ];

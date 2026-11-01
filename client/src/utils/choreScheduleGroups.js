@@ -18,7 +18,7 @@
 // each schedule's own, and are kept when its group's days change.
 
 import { CronExpressionParser } from 'cron-parser';
-import { addDays, cronFiresOn } from './choreDays.js';
+import { addDays, cronFiresOn, localDateOf } from './choreDays.js';
 
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
 
@@ -353,39 +353,51 @@ const inVacation = (vacation, key) => !!vacation && vacation.enabled === true
 
 const STICKY = new Set(['until-completed', 'once-completed']);
 
-// An any-day chore on the week shown (`days`, Sunday to Saturday):
-//   on the day it was done;
-//   on today, waiting (or due today, on its period's last day), while it
-//     still has an open card (`openCards`: the schedules that do; unknown
-//     means it's assumed open);
-//   on its period's last day if that's in this week: missed if a miss was
-//     logged, not done if past (only when the whole period is this week, as
-//     an earlier week may have had it done), planned if ahead.
-function anyDayOnCalendar(s, period, days, { done, missed, today, openCards }) {
-  const doneDay = days.find((d) => done.has(`${s.chore_id}|${d.date}`));
-  if (doneDay) {
-    doneDay.items.push({ schedule: s, state: 'done', late: false });
-    return;
-  }
-  const since = s.created_at ? String(s.created_at).slice(0, 10) : null;
-  const periodEnd = days.find((d) => anyDayPeriodOf(d.date, period, s.created_at).end === d.date);
-  if (periodEnd && (!since || periodEnd.date >= since) && missed.has(`${s.chore_id}|${periodEnd.date}`)) {
-    periodEnd.items.push({ schedule: s, state: 'missed', late: false });
-    return;
-  }
-  const todayBox = days.find((d) => d.date === today);
-  if (todayBox) {
-    if (s.visible && (!openCards || openCards.has(s.id))) {
-      todayBox.items.push({ schedule: s, state: todayBox === periodEnd ? 'today' : 'waiting', late: false });
+// An any-day chore on the week shown (`days`, Sunday to Saturday), period by
+// period, as a week can hold the end of one and the start of the next:
+//   on the day it was done, for a period done in this week;
+//   for a period that's over, on its last day if that's in this week: missed
+//     if a miss was logged, else not done (only when the whole period is this
+//     week, as an earlier week may have had it done);
+//   for this period, while it still has an open card (`openCards`: the
+//     schedules that do; unknown means it's assumed open): on today, waiting
+//     (or due today, on its last day), or planned on its last day in a later
+//     week. Without an open card it was done on an earlier day;
+//   for a period ahead, planned on its last day.
+// Two-week periods count from the household's date it was made (`timeZone`).
+function anyDayOnCalendar(s, period, days, { done, missed, today, openCards, timeZone }) {
+  const since = localDateOf(s.created_at, timeZone);
+  const open = !!s.visible && (!openCards || openCards.has(s.id));
+  const periods = [];
+  for (const day of days) {
+    const p = anyDayPeriodOf(day.date, period, since);
+    let entry = periods.find((e) => e.start === p.start);
+    if (!entry) {
+      entry = { ...p, days: [] };
+      periods.push(entry);
     }
-    return;
+    entry.days.push(day);
   }
-  if (!periodEnd || (since && periodEnd.date < since)) return;
-  if (periodEnd.date < today) {
-    const wholeWeek = anyDayPeriodOf(periodEnd.date, period, s.created_at).start >= days[0].date;
-    if (wholeWeek && !periodEnd.vacation) periodEnd.items.push({ schedule: s, state: 'notDone', late: false });
-  } else if (s.visible) {
-    periodEnd.items.push({ schedule: s, state: 'planned', late: false });
+  const put = (day, state) => day.items.push({ schedule: s, state, late: false });
+  for (const p of periods) {
+    const doneDays = p.days.filter((d) => done.has(`${s.chore_id}|${d.date}`));
+    if (doneDays.length) {
+      doneDays.forEach((d) => put(d, 'done'));
+      continue;
+    }
+    const endBox = p.days.find((d) => d.date === p.end);
+    if (p.end < today) {
+      if (!endBox || (since && p.end < since)) continue;
+      if (missed.has(`${s.chore_id}|${p.end}`)) put(endBox, 'missed');
+      else if (p.start >= days[0].date && !endBox.vacation) put(endBox, 'notDone');
+    } else if (p.start <= today) {
+      if (!open) continue;
+      const todayBox = p.days.find((d) => d.date === today);
+      if (todayBox) put(todayBox, todayBox === endBox ? 'today' : 'waiting');
+      else if (endBox && p.end > today) put(endBox, 'planned');
+    } else if (endBox && s.visible) {
+      put(endBox, 'planned');
+    }
   }
 }
 
@@ -403,8 +415,9 @@ function anyDayOnCalendar(s, period, days, { done, missed, today, openCards }) {
  * `noDay` lists chores that can't be placed (one-time with no date, or an
  * again-after-done one with no next date). `openCards` is the ids of the
  * sticky schedules with a card on the wall now (see anyDayOnCalendar).
+ * `timeZone` is the household's, for the dates schedules were made.
  */
-export function calendarWeek({ groups, dates, today, rows = [], vacation = null, openCards = null }) {
+export function calendarWeek({ groups, dates, today, rows = [], vacation = null, openCards = null, timeZone = undefined }) {
   const done = new Map(); // `${chore_id}|${date}` → true
   const missed = new Set();
   for (const r of rows) {
@@ -418,7 +431,7 @@ export function calendarWeek({ groups, dates, today, rows = [], vacation = null,
   for (const g of groups) {
     for (const s of g.schedules) {
       if (g.timing.kind === 'anyDay') {
-        anyDayOnCalendar(s, g.timing.period, days, { done, missed, today, openCards });
+        anyDayOnCalendar(s, g.timing.period, days, { done, missed, today, openCards, timeZone });
         continue;
       }
       let dueKeys = [];

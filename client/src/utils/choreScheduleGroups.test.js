@@ -290,6 +290,30 @@ describe('calendarWeek', () => {
       expect(run(anyDay({ interval: '3m' }), { today: '2026-10-20' })).toEqual([]);
       expect(run(anyDay({ created_at: '2026-11-03 10:00:00' }), { today: '2026-11-04' })).toEqual([]);
     });
+
+    it('a week across two periods shows each: done in November, waiting in December', () => {
+      const boundary = ['2026-11-29', '2026-11-30', '2026-12-01', '2026-12-02', '2026-12-03', '2026-12-04', '2026-12-05'];
+      const rows = [{ chore_id: 9, date: '2026-11-30', kind: 'completion' }];
+      expect(run(anyDay({ interval: '1m' }), { dates: boundary, today: '2026-12-02', rows }))
+        .toEqual([['2026-11-30', 'done'], ['2026-12-02', 'waiting']]);
+      expect(run(anyDay({ interval: '1m' }), { dates: boundary, today: '2026-12-02', rows, openCards: new Set() }))
+        .toEqual([['2026-11-30', 'done']], "December's done too: no open card");
+    });
+
+    it('a later week with the last day of a period already done plans nothing', () => {
+      const yearEnd = ['2026-12-27', '2026-12-28', '2026-12-29', '2026-12-30', '2026-12-31', '2027-01-01', '2027-01-02'];
+      expect(run(anyDay({ interval: '1m' }), { dates: yearEnd, today: '2026-12-10', openCards: new Set() })).toEqual([]);
+      expect(run(anyDay({ interval: '1m' }), { dates: yearEnd, today: '2026-12-10', openCards: new Set([9]) }))
+        .toEqual([['2026-12-31', 'planned']]);
+    });
+
+    it("two weeks count from the household's date it was made", () => {
+      // 8 pm Saturday 2026-10-31 in Pacific time: that week, not the next.
+      const made = anyDay({ interval: '2w', created_at: '2026-11-01 03:00:00' });
+      const nextWeek = ['2026-11-01', '2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06', '2026-11-07'];
+      expect(run(made, { dates: nextWeek, today: '2026-11-07', timeZone: 'America/Los_Angeles' })).toEqual([['2026-11-07', 'today']]);
+      expect(run(made, { dates: nextWeek, today: '2026-11-07', timeZone: 'UTC' })).toEqual([['2026-11-07', 'waiting']]);
+    });
   });
 });
 

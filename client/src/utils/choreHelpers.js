@@ -1,5 +1,5 @@
 import { getServerTimezoneSync } from './timezone.js';
-import { cronFiresOn } from './choreDays.js';
+import { cronFiresOn, localDateOf } from './choreDays.js';
 
 // Whether a chore is on today's list. "Today" is the household's date (the
 // server's time zone), not the browser's: a display in another zone must
@@ -38,13 +38,25 @@ export function shouldShowChoreToday(schedule, today = getTodayDateString()) {
  * Whether a chore counts toward the daily bonus today: a regular (zero-clam)
  * chore, unless it is a follow-up handed out today. A follow-up can arrive at
  * 9 pm, so it counts from the next day (issue #241). An any-day chore
- * counts on its period's last day only (its card's due date). Mirrors the
+ * counts on its period's last day only (its card's due date), and not even
+ * then if its card was made that day, for the same reason. Mirrors the
  * server's getTodaysRegularChoresForUser, so the widget and the bonus agree.
  */
-export function countsTowardDailyBonus(schedule, today = getTodayDateString()) {
+export function countsTowardDailyBonus(schedule, today = getTodayDateString(), timeZone = getServerTimezoneSync()) {
   if ((schedule.clam_value || 0) !== 0) return false;
-  if (schedule.parent_duration === 'any-day' && schedule.due_date && schedule.due_date !== today) return false;
+  if (schedule.parent_duration === 'any-day' && schedule.due_date
+    && (schedule.due_date !== today || localDateOf(schedule.created_at, timeZone) === today)) return false;
   return !(schedule.triggered_on && schedule.triggered_on === today);
+}
+
+/**
+ * Whether a chore's due-time sound rings today: it's on today's list and not
+ * a one-time chore due on a later day (an any-day chore's card is due on its
+ * period's last day, though it's on the list all period).
+ */
+export function ringsToday(schedule, today = getTodayDateString()) {
+  if (!shouldShowChoreToday(schedule, today)) return false;
+  return !(!schedule.crontab && schedule.due_date && String(schedule.due_date).slice(0, 10) > today);
 }
 
 export function hasOutstandingBonusChore(schedules, history, userId, today) {
