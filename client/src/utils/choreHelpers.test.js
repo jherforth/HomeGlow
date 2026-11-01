@@ -5,7 +5,7 @@ vi.mock('./timezone.js', () => ({
     getServerTimezoneSync: () => zones.server,
 }));
 
-import { shouldShowChoreToday, convertDaysToCrontab, getDueDateStatus, formatDueDate, hasOutstandingBonusChore, compareByKey, countsTowardDailyBonus, ringsToday } from './choreHelpers.js';
+import { shouldShowChoreToday, convertDaysToCrontab, getDueDateStatus, formatDueDate, hasOutstandingBonusChore, compareByKey, countsTowardDailyBonus, ringsToday, getTransferTargets } from './choreHelpers.js';
 
 // Issue #241: a follow-up counts toward the daily bonus from the day after it
 // was handed out, as the server's getTodaysRegularChoresForUser does.
@@ -374,4 +374,34 @@ describe('shouldShowChoreToday across time zones', () => {
         at('2026-10-18T16:00:00Z', 'Asia/Tokyo', 'UTC');
         expect(shouldShowChoreToday(MONDAY_ONLY)).toBe(false);
     });
+});
+
+describe('getTransferTargets', () => {
+  const users = [
+    { id: 1, username: 'Emmett' },
+    { id: 2, username: 'Brynn' },
+    { id: 3, username: 'Calla' },
+  ];
+  const BONUS = 'Unassigned (Bonus chore)';
+
+  it('offers every other real user plus the bonus pool for an assigned chore', () => {
+    const targets = getTransferTargets(users, 1, BONUS);
+    expect(targets.map((t) => t.id)).toEqual([2, 3, 0]);
+    expect(targets[2]).toEqual({ id: 0, username: BONUS, isBonus: true });
+    expect(targets.slice(0, 2).every((t) => !t.isBonus)).toBe(true);
+  });
+
+  it('offers no bonus row for a bonus chore (user_id null or 0)', () => {
+    expect(getTransferTargets(users, null, BONUS).map((t) => t.id)).toEqual([1, 2, 3]);
+    expect(getTransferTargets(users, 0, BONUS).map((t) => t.id)).toEqual([1, 2, 3]);
+  });
+
+  it('still offers the bonus pool when the assignee is the only real user', () => {
+    expect(getTransferTargets([users[0]], 1, BONUS)).toEqual([{ id: 0, username: BONUS, isBonus: true }]);
+  });
+
+  it('never lists id 0 as a real user, even if the users list contains it', () => {
+    const targets = getTransferTargets([{ id: 0, username: 'Bonus' }, ...users], 2, BONUS);
+    expect(targets.filter((t) => t.id === 0)).toEqual([{ id: 0, username: BONUS, isBonus: true }]);
+  });
 });

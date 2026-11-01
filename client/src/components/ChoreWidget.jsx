@@ -42,7 +42,7 @@ import { editWholeNumber, savedWholeNumber } from '../utils/wholeNumberField.js'
 import { pinErrorText } from '../utils/pinErrors.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
 import { fetchPinRemembered, setPinRemembered, shouldPromptForPin } from '../utils/adminPinDevice.js';
-import { shouldShowChoreToday, getTodayDateString, convertDaysToCrontab, getDueDateStatus, formatDueDate, hasOutstandingBonusChore, countsTowardDailyBonus } from '../utils/choreHelpers.js';
+import { shouldShowChoreToday, getTodayDateString, convertDaysToCrontab, getDueDateStatus, formatDueDate, hasOutstandingBonusChore, countsTowardDailyBonus, getTransferTargets } from '../utils/choreHelpers.js';
 import { filterVisibleUsers, toggleHiddenUserId, pruneHiddenUserIds } from '../utils/choreUserVisibility.js';
 import { isControlHidden } from '../utils/displayControls.js';
 import { subscribePluginEvents } from '../utils/pluginEventBridge.js';
@@ -823,7 +823,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
     // which reads as a bug and has to be dismissed before anything else works.
     const canTransfer = !hideTransferChore
       && schedule.transferable !== 0
-      && users.filter(u => u.id !== 0 && u.id !== schedule.user_id).length > 0;
+      && (users.filter(u => u.id !== 0 && u.id !== schedule.user_id).length > 0 || Boolean(schedule.user_id));
     const canSnooze = !hideSnoozeChore && schedule.can_snooze !== 0;
     // History is one person's record, so an unassigned bonus chore has none.
     const canHistory = Boolean(schedule.user_id);
@@ -957,11 +957,12 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
 
   const confirmTransfer = () => {
     const { schedule, targetUserId, mode, bonus } = transferDialog;
-    if (!schedule || !targetUserId) return;
+    if (!schedule || targetUserId === null || targetUserId === undefined) return;
     const extras = {};
-    // The revoke/keep choice only applies when the receiver's day is already
-    // complete (and therefore rewarded).
-    if (isUserDayComplete(targetUserId)) {
+    // The revoke/keep choice only applies when the receiver is a real user
+    // whose day is already complete (and therefore rewarded). The bonus pool
+    // has no day to complete, so transferring back to bonus never attaches it.
+    if (targetUserId !== 0 && isUserDayComplete(targetUserId)) {
       if (mode === 'revoke') {
         extras.revoke_daily_bonus = true;
       } else {
@@ -2085,7 +2086,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
           anchorReference="anchorPosition"
           anchorPosition={choreMenu.position || undefined}
         >
-          {!hideTransferChore && choreMenu.schedule?.transferable !== 0 && users.filter(u => u.id !== 0 && u.id !== choreMenu.schedule?.user_id).length > 0 && (
+          {!hideTransferChore && choreMenu.schedule?.transferable !== 0 && (users.filter(u => u.id !== 0 && u.id !== choreMenu.schedule?.user_id).length > 0 || Boolean(choreMenu.schedule?.user_id)) && (
             <MenuItem onClick={openTransferDialog}>
               <ListItemIcon><SwapHoriz fontSize="small" /></ListItemIcon>
               <ListItemText primary={t('chores:transfer.menuItem')} />
@@ -2126,8 +2127,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
               {t('chores:transfer.dialogTitle')}
             </Typography>
             <List dense>
-              {users
-                .filter(user => user.id !== 0 && user.id !== transferDialog.schedule?.user_id)
+              {getTransferTargets(users, transferDialog.schedule?.user_id, t('chores:schedules.unassignedBonusChore'))
                 .map(user => (
                   <ListItemButton
                     key={user.id}
@@ -2136,17 +2136,17 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                   >
                     <ListItemAvatar>
                       <Avatar sx={{ width: 32, height: 32, bgcolor: 'var(--accent)' }}>
-                        {user.username?.charAt(0).toUpperCase()}
+                        {user.isBonus ? '🧺' : user.username?.charAt(0).toUpperCase()}
                       </Avatar>
                     </ListItemAvatar>
                     <ListItemText
                       primary={user.username}
-                      secondary={isUserDayComplete(user.id) ? 'All chores done today' : null}
+                      secondary={!user.isBonus && isUserDayComplete(user.id) ? 'All chores done today' : null}
                     />
                   </ListItemButton>
                 ))}
             </List>
-            {transferDialog.targetUserId && isUserDayComplete(transferDialog.targetUserId) && (
+            {transferDialog.targetUserId !== null && transferDialog.targetUserId !== undefined && transferDialog.targetUserId !== 0 && isUserDayComplete(transferDialog.targetUserId) && (
               <Box sx={{ mt: 1, p: 1.5, border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-md)' }}>
                 <Typography variant="body2" sx={{ mb: 1 }}>
                   {t('chores:transfer.alreadyFinished')}
@@ -2174,7 +2174,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setTransferDialog(prev => ({ ...prev, open: false }))}>{t('common:actions.cancel')}</Button>
-            <Button variant="contained" disabled={!transferDialog.targetUserId} onClick={confirmTransfer}>
+            <Button variant="contained" disabled={transferDialog.targetUserId === null || transferDialog.targetUserId === undefined} onClick={confirmTransfer}>
               {t('chores:transfer.confirm')}
             </Button>
           </DialogActions>
