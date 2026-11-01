@@ -11,7 +11,10 @@ import { subscribePluginEvents } from './pluginEventBridge.js';
 //     checks every 15 seconds while it's visible, and right away when it
 //     becomes visible again. A phone checks only when it becomes visible:
 //     it's opened, glanced at and put away, so a timer would mostly spend
-//     its battery while nobody looks.
+//     its battery while nobody looks. In visible mode the stream also
+//     establishes the baseline: if the first check fails, stream events
+//     still reach subscribers instead of being dropped until a visibility
+//     change (a phone has no timer to retry with).
 //   - The event stream, where it reaches the browser: the same counters
 //     arrive within a second of the write. Where it doesn't (some proxies
 //     and tunnels), the check above still catches up.
@@ -19,9 +22,22 @@ import { subscribePluginEvents } from './pluginEventBridge.js';
 // Coarse on purpose: a subscriber learns that a kind of data changed, never
 // what, and reloads all of it. No write can be missed by a widget asking
 // the wrong question.
+//
+// Plugin storage rides the same two paths (issue #347): the server keeps
+// one counter per plugin under `plugin:<pluginId>` in the same snapshot,
+// created on a plugin's first storage write and dropped when its data is
+// purged — and seeded at boot for every plugin that already has stored
+// data, so a restart reads as moved for its frames instead of silently
+// pruning a vanished key. A plugin's frame hears only its own plugin's
+// counter move, never another plugin's — the per-plugin subscription below
+// is where that scoping lives — and the frame gets the plugin id and the
+// write's revision, never a key, so it can skip its own writes.
 
 export const HOUSEHOLD_DOMAINS = Object.freeze(['chores', 'users', 'prizes', 'settings', 'calendar']);
 export const CHECK_INTERVAL_MS = 15 * 1000;
+
+const PLUGIN_DOMAIN_PREFIX = 'plugin:';
+const pluginDomain = (pluginId) => `${PLUGIN_DOMAIN_PREFIX}${pluginId}`;
 
 /** The kinds whose counters differ between two snapshots; none before the first. Pure. */
 export function changedDomains(known, next) {
@@ -29,7 +45,17 @@ export function changedDomains(known, next) {
   return HOUSEHOLD_DOMAINS.filter((domain) => next[domain] !== undefined && next[domain] !== known[domain]);
 }
 
+/** The plugin ids whose storage counters differ, or that newly appeared; none before the first. Pure. */
+export function changedPluginIds(known, next) {
+  if (!known || !next) return [];
+  return Object.keys(next)
+    .filter((key) => key.startsWith(PLUGIN_DOMAIN_PREFIX))
+    .map((key) => key.slice(PLUGIN_DOMAIN_PREFIX.length))
+    .filter((pluginId) => next[pluginDomain(pluginId)] !== known[pluginDomain(pluginId)]);
+}
+
 const subscribers = new Set();
+const pluginSubscribers = new Set();
 let known = null;
 let etag = null;
 let mode = 'interval';
@@ -40,15 +66,7 @@ let stopEvents = null;
 
 const isVisible = () => typeof document === 'undefined' || document.visibilityState !== 'hidden';
 
-function apply(next) {
-  if (!next || typeof next !== 'object') return;
-  if (!known) {
-    known = { ...next };
-    return;
-  }
-  const moved = changedDomains(known, next);
-  if (!moved.length) return;
-  known = { ...known, ...next };
+function notifyHousehold(moved) {
   for (const { domains, handler } of subscribers) {
     const theirs = moved.filter((domain) => domains.has(domain));
     if (!theirs.length) continue;
@@ -58,6 +76,84 @@ function apply(next) {
       console.error('Household change subscriber failed:', error);
     }
   }
+}
+
+function notifyPlugins(moved) {
+  if (!moved.length) return;
+  for (const { pluginId, handler } of pluginSubscribers) {
+    const entry = moved.find((item) => item.pluginId === pluginId);
+    if (!entry) continue;
+    try {
+      handler(pluginId, entry.revision);
+    } catch (error) {
+      console.error('Plugin storage change subscriber failed:', error);
+    }
+  }
+}
+
+// A full snapshot, from GET /api/changes only: household kinds plus plugin
+// counters. Plugin keys that vanished (uninstall with purge) drop out of
+// what this page knows on every 200, not only when something else moved:
+// otherwise the stale key lingers, and a reinstall at the same counter
+// value would read as unchanged and its first write would be lost.
+function applySnapshot(next) {
+  if (!next || typeof next !== 'object') return;
+  if (!known) {
+    known = { ...next };
+    return;
+  }
+  const moved = changedDomains(known, next);
+  const movedPlugins = changedPluginIds(known, next).map((pluginId) => ({ pluginId, revision: next[pluginDomain(pluginId)] }));
+  const pruned = { ...known, ...next };
+  for (const key of Object.keys(pruned)) {
+    if (key.startsWith(PLUGIN_DOMAIN_PREFIX) && !(key in next)) delete pruned[key];
+  }
+  known = pruned;
+  if (!moved.length && !movedPlugins.length) return;
+  notifyHousehold(moved);
+  notifyPlugins(movedPlugins);
+}
+
+// Event-stream household revisions: household kinds only, merged into what
+// this page knows without pruning and without establishing the baseline —
+// the GET baseline follows right behind, and the stream is only a fast
+// path, so a message that arrives before it is safely dropped. Except in
+// visible mode (phones), where there is no timer to retry the check: if
+// the first check failed, the stream establishes the baseline here
+// instead, and subscribers hear it — otherwise the phone would stay deaf
+// until a visibility change.
+function applyRevisions(revisions) {
+  if (!revisions || typeof revisions !== 'object') return;
+  if (!known) {
+    if (mode !== 'visible') return;
+    known = { ...revisions };
+    notifyHousehold(HOUSEHOLD_DOMAINS.filter((domain) => revisions[domain] !== undefined));
+    return;
+  }
+  const moved = changedDomains(known, revisions);
+  if (!moved.length) return;
+  known = { ...known, ...revisions };
+  notifyHousehold(moved);
+}
+
+// One plugin's counter from the event stream. Same baseline rule as above:
+// before the first GET answer, there is nothing to compare against —
+// except in visible mode, where the event establishes the baseline and
+// notifies, for the same reason. A later successful check adopts the full
+// snapshot; household kinds it never saw read as moved then, which is the
+// initial load this display never had.
+function applyPluginRevision(pluginId, revision) {
+  if (typeof pluginId !== 'string' || typeof revision !== 'number') return;
+  const domain = pluginDomain(pluginId);
+  if (!known) {
+    if (mode !== 'visible') return;
+    known = { [domain]: revision };
+    notifyPlugins([{ pluginId, revision }]);
+    return;
+  }
+  if (known[domain] === revision) return;
+  known = { ...known, [domain]: revision };
+  notifyPlugins([{ pluginId, revision }]);
 }
 
 /** Ask the server now. Resolves when the answer has been applied. */
@@ -71,7 +167,7 @@ export async function checkHouseholdChanges() {
     });
     if (response.status === 200) {
       etag = response.headers?.etag || null;
-      apply(response.data);
+      applySnapshot(response.data);
     }
   } catch {
     // Offline or restarting: the next check, or the next visibility, retries.
@@ -103,7 +199,10 @@ function start() {
   // checks alone keep up.
   if (typeof EventSource !== 'undefined') {
     stopEvents = subscribePluginEvents((message) => {
-      if (message?.event === 'household.changed') apply(message.payload?.revisions);
+      if (message?.event === 'household.changed') applyRevisions(message.payload?.revisions);
+      else if (message?.event === 'plugin.storage.changed') {
+        applyPluginRevision(message.payload?.pluginId, message.payload?.revision);
+      }
     });
   }
 }
@@ -140,17 +239,43 @@ export function subscribeHouseholdChanges(domains, handler) {
   start();
   return () => {
     subscribers.delete(entry);
-    if (!subscribers.size) stop();
+    if (!subscribers.size && !pluginSubscribers.size) stop();
   };
 }
 
-/** The counters this page last saw, or null before the first answer. */
-export const knownHouseholdRevisions = () => (known ? { ...known } : null);
+/**
+ * Call `handler(pluginId, revision)` whenever that plugin's storage counter
+ * moves on the server — from the event stream within a second, or from the
+ * 15-second check where the stream doesn't reach (phones: on becoming
+ * visible, and from the stream even before a first successful check). The
+ * revision is the write's new counter: a frame compares it against the
+ * revisions its own writes returned to skip its own writes. A subscriber
+ * hears only its own plugin: another plugin's writes never reach it, which
+ * is what keeps one plugin's frames from learning about another plugin's
+ * storage (issue #347). Returns an unsubscribe function. The checks run
+ * while anything is subscribed.
+ */
+export function subscribePluginStorageChanges(pluginId, handler) {
+  const entry = { pluginId, handler };
+  pluginSubscribers.add(entry);
+  start();
+  return () => {
+    pluginSubscribers.delete(entry);
+    if (!subscribers.size && !pluginSubscribers.size) stop();
+  };
+}
+
+/** The household counters this page last saw, or null before the first answer. Plugin counters are never included: a frame that declared household.changed must not learn about plugins' storage through it. */
+export const knownHouseholdRevisions = () => {
+  if (!known) return null;
+  return Object.fromEntries(HOUSEHOLD_DOMAINS.map((domain) => [domain, known[domain]]));
+};
 
 /** Tests only: forget everything. */
 export function resetHouseholdChangesForTests() {
   stop();
   subscribers.clear();
+  pluginSubscribers.clear();
   known = null;
   etag = null;
   mode = 'interval';

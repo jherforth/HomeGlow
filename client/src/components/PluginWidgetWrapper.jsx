@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceName } from '../utils/deviceName.js';
 import { subscribePluginEvents } from '../utils/pluginEventBridge.js';
-import { HOUSEHOLD_DOMAINS, knownHouseholdRevisions, subscribeHouseholdChanges } from '../utils/householdChanges.js';
+import { HOUSEHOLD_DOMAINS, knownHouseholdRevisions, subscribeHouseholdChanges, subscribePluginStorageChanges } from '../utils/householdChanges.js';
 import { acceptPluginDataMessage, emitPluginDataChanged } from '../utils/pluginDataBridge.js';
 import { acceptPluginCelebrateMessage, requestCelebration } from '../utils/celebrations.js';
 import { THEME_TOKENS_APPLIED_EVENT, buildPluginThemeMessage, readRoleTokens } from '../utils/pluginThemeBridge.js';
@@ -36,6 +36,10 @@ const PluginWidgetWrapper = ({
   transparentBackground = false,
   refreshNonce = 0,
   events = [],
+  // The manifest's plugin id, for plugin.storage.changed (issue #347): the
+  // frame hears only its own plugin's storage writes. Null for legacy
+  // widgets, which declare no events and never get one.
+  pluginId = null,
   // Control Limits: this plugin's own hidden control ids, already unprefixed by
   // the dashboard. HomeGlow cannot reach into the iframe, so the plugin is told
   // and does its own hiding — see docs/guides/plugin-development.md.
@@ -73,7 +77,7 @@ const PluginWidgetWrapper = ({
     return subscribePluginEvents((message) => {
       // Delivered below, from the same source as the dashboard's own
       // widgets, so it arrives once and where the stream doesn't reach.
-      if (message.event === 'household.changed') return;
+      if (message.event === 'household.changed' || message.event === 'plugin.storage.changed') return;
       if (!declared.has(message.event)) return;
       const target = iframeRef.current?.contentWindow;
       if (!target) return;
@@ -103,6 +107,29 @@ const PluginWidgetWrapper = ({
       );
     });
   }, [eventsKey]);
+
+  // plugin.storage.changed (issue #347), for a plugin that declared it: only
+  // this frame's own plugin's counter moves reach it — the subscription is
+  // per plugin, so a frame never hears another plugin's writes, and the
+  // payload carries the plugin id and the write's revision, never a key, so
+  // the frame reloads what it uses, learns nothing else, and can skip its
+  // own writes by comparing revisions.
+  useEffect(() => {
+    if (!pluginId || !eventsKey.split(',').includes('plugin.storage.changed')) return undefined;
+    return subscribePluginStorageChanges(pluginId, (id, revision) => {
+      const target = iframeRef.current?.contentWindow;
+      if (!target) return;
+      target.postMessage(
+        {
+          type: 'homeglow:event',
+          event: 'plugin.storage.changed',
+          payload: { pluginId: id, revision },
+          emittedAt: new Date().toISOString(),
+        },
+        TO_FRAME
+      );
+    });
+  }, [eventsKey, pluginId]);
 
   // The reverse direction: a plugin that wrote core data through the REST API
   // tells the host, so widgets showing that data can refetch instead of
