@@ -111,18 +111,19 @@ const PluginWidgetWrapper = ({
   // plugin.storage.changed (issue #347), for a plugin that declared it: only
   // this frame's own plugin's counter moves reach it — the subscription is
   // per plugin, so a frame never hears another plugin's writes, and the
-  // payload carries the plugin id only, never a key, so the frame reloads
-  // what it uses and learns nothing else.
+  // payload carries the plugin id and the write's revision, never a key, so
+  // the frame reloads what it uses, learns nothing else, and can skip its
+  // own writes by comparing revisions.
   useEffect(() => {
     if (!pluginId || !eventsKey.split(',').includes('plugin.storage.changed')) return undefined;
-    return subscribePluginStorageChanges(pluginId, () => {
+    return subscribePluginStorageChanges(pluginId, (id, revision) => {
       const target = iframeRef.current?.contentWindow;
       if (!target) return;
       target.postMessage(
         {
           type: 'homeglow:event',
           event: 'plugin.storage.changed',
-          payload: { pluginId },
+          payload: { pluginId: id, revision },
           emittedAt: new Date().toISOString(),
         },
         TO_FRAME

@@ -683,8 +683,11 @@ fastify.addHook('onResponse', async (request, reply) => {
   if (domains.length) householdChanges.bump(domains);
   // A plugin storage write moves only that plugin's counter (issue #347),
   // never a household kind — and only on success, like the hook above.
+  // Storage handlers bump in-route (so the response can carry the revision
+  // the event will carry) and set request.pluginStorageBumped; the hook
+  // stays as the backstop for any storage write path that doesn't.
   const pluginId = pluginStorageWrite(request.method, request.routeOptions?.url, reply.statusCode, request.params);
-  if (pluginId) householdChanges.bumpPlugin(pluginId);
+  if (pluginId && !request.pluginStorageBumped) householdChanges.bumpPlugin(pluginId);
 });
 
 fastify.register(multipart, {
@@ -1084,6 +1087,12 @@ function extractPluginManifest(htmlContent) {
           errors.push(`events: "${event}" is not a known event (catalog: ${pluginEvents.PLUGIN_EVENT_CATALOG.join(', ')}).`);
         }
       }
+    }
+    // Declaring the storage event without storage would install but never
+    // fire, so fail the install loudly — the same rule as reactions, which
+    // also need storage to run.
+    if (Array.isArray(manifest.events) && manifest.events.includes('plugin.storage.changed') && manifest.storage !== true) {
+      errors.push('events: "plugin.storage.changed" requires "storage": true (the event only fires for plugins that store data).');
     }
   }
   if (manifest.reactions !== undefined) {
@@ -1527,7 +1536,12 @@ fastify.put('/api/plugin/v1/storage/:pluginId/:key', async (request, reply) => {
       updated_at = CURRENT_TIMESTAMP
   `).run(pluginId, key, valueJson);
 
-  return { success: true };
+  // Bump in-route, not just in the onResponse hook: the response carries
+  // the exact revision the event will carry, so a frame can tell its own
+  // writes from others' (issue #347). The hook sees the flag and skips.
+  const revision = householdChanges.bumpPlugin(pluginId);
+  request.pluginStorageBumped = true;
+  return { success: true, revision };
 });
 
 fastify.delete('/api/plugin/v1/storage/:pluginId/:key', async (request, reply) => {
@@ -1539,7 +1553,10 @@ fastify.delete('/api/plugin/v1/storage/:pluginId/:key', async (request, reply) =
   if (result.changes === 0) {
     return reply.status(404).send({ error: 'Key not found.' });
   }
-  return { success: true };
+  // Same in-route bump as PUT, for the same reason.
+  const revision = householdChanges.bumpPlugin(pluginId);
+  request.pluginStorageBumped = true;
+  return { success: true, revision };
 });
 
 // Atomic numeric delta on a JSON path inside a stored document — the primitive
@@ -1627,7 +1644,10 @@ fastify.post('/api/plugin/v1/storage/:pluginId/:key/increment', async (request, 
     // concurrent HTTP requests cannot interleave a read-modify-write here.
     const applyIncrement = db.transaction(() => incrementPluginStorage(pluginId, key, pathSegments, delta));
     const { result, value } = applyIncrement();
-    return { success: true, result, value };
+    // Same in-route bump as PUT, for the same reason.
+    const revision = householdChanges.bumpPlugin(pluginId);
+    request.pluginStorageBumped = true;
+    return { success: true, result, value, revision };
   } catch (error) {
     if (error.statusCode) {
       return reply.status(error.statusCode).send({ error: error.message });
@@ -7645,6 +7665,23 @@ const start = async () => {
     fastify.register(require("./routes/driveBackup"), { db, uploadsDir: UPLOADS_ROOT, demoMode: DEMO_MODE });
     // Backup to a file and restore from one, without Google (issue #305).
     registerLocalBackupRoutes(fastify, { db: haDb, dbPath, uploadsDir: UPLOADS_ROOT, demoMode: DEMO_MODE });
+
+    // Seed a counter for every plugin that already has stored data (issue
+    // #347): after a restart, household counters all differ from what
+    // displays last saw, but a plugin counter would simply be gone — and
+    // the client prunes vanished keys silently, so a display that missed a
+    // write just before the restart would keep showing stale data until
+    // that plugin's next write. Seeding makes those frames read as moved,
+    // matching the "reloads everything once" promise. Best effort: a
+    // missing table must never fail boot.
+    try {
+      if (doesTableExist('plugin_storage')) {
+        const rows = db.prepare('SELECT DISTINCT plugin_id FROM plugin_storage').all();
+        householdChanges.seedPlugins(rows.map((row) => row.plugin_id));
+      }
+    } catch (error) {
+      console.warn('Plugin storage seeding failed, continuing without it:', error.message);
+    }
 
     await fastify.listen({ port: process.env.PORT || 5000, host: '0.0.0.0' });
     console.log(`Server running on port ${process.env.PORT || 5000}`);

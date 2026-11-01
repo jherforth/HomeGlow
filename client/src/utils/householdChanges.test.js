@@ -194,7 +194,7 @@ describe('plugin storage changes', () => {
 
     axios.get.mockResolvedValueOnce(answer(revisions({ 'plugin:plug-a': 6, 'plugin:plug-b': 7 })));
     await checkHouseholdChanges();
-    expect(handlerA).toHaveBeenCalledWith('plug-a');
+    expect(handlerA).toHaveBeenCalledWith('plug-a', 6);
     expect(handlerB).not.toHaveBeenCalled();
 
     axios.get.mockResolvedValueOnce(answer(revisions({ 'plugin:plug-a': 6, 'plugin:plug-b': 7, 'plugin:plug-c': 1 })));
@@ -203,7 +203,7 @@ describe('plugin storage changes', () => {
     expect(handlerB).not.toHaveBeenCalled();
 
     sseHandler({ event: 'plugin.storage.changed', payload: { pluginId: 'plug-b', revision: 8 } });
-    expect(handlerB).toHaveBeenCalledWith('plug-b');
+    expect(handlerB).toHaveBeenCalledWith('plug-b', 8);
     expect(handlerA).toHaveBeenCalledTimes(1);
 
     sseHandler({ event: 'plugin.storage.changed', payload: { pluginId: 'plug-c', revision: 1 } });
@@ -234,7 +234,7 @@ describe('plugin storage changes', () => {
     // A reinstall starts from a fresh counter, which reads as a change.
     axios.get.mockResolvedValueOnce(answer(revisions({ 'plugin:plug-b': 3 })));
     await checkHouseholdChanges();
-    expect(handler).toHaveBeenCalledWith('plug-b');
+    expect(handler).toHaveBeenCalledWith('plug-b', 3);
   });
 
   it('a reinstall reads as changed even when its counter value repeats the old one', async () => {
@@ -252,7 +252,29 @@ describe('plugin storage changes', () => {
     expect(handler).not.toHaveBeenCalled();
     axios.get.mockResolvedValueOnce(answer(revisions({ 'plugin:plug-b': 7 })));
     await checkHouseholdChanges();
-    expect(handler).toHaveBeenCalledWith('plug-b');
+    expect(handler).toHaveBeenCalledWith('plug-b', 7);
+  });
+
+  it('a phone hears the stream before the first check succeeds', async () => {
+    globalThis.EventSource = function () {};
+    setHouseholdChangesMode('visible');
+    const handler = vi.fn();
+    subscribePluginStorageChanges('plug-b', handler);
+    // start's own first check fails (no answer queued), so there is no
+    // baseline yet — and in visible mode there is no timer to retry with.
+    await flush();
+    sseHandler({ event: 'plugin.storage.changed', payload: { pluginId: 'plug-b', revision: 9 } });
+    expect(handler).toHaveBeenCalledWith('plug-b', 9);
+  });
+
+  it('a phone hears household stream revisions before the first check succeeds', async () => {
+    globalThis.EventSource = function () {};
+    setHouseholdChangesMode('visible');
+    const handler = vi.fn();
+    subscribeHouseholdChanges(['chores'], handler);
+    await flush();
+    sseHandler({ event: 'household.changed', payload: { domains: ['chores'], revisions: revisions({ chores: 11 }) } });
+    expect(handler).toHaveBeenCalledWith(['chores']);
   });
 
   it('a household subscriber never hears plugin counters, and household revisions exclude them', async () => {

@@ -417,8 +417,8 @@ const off = HomeGlow.on('clam.withdrawn', (payload, meta) => {
 | `chore.allCompleted` | a user's last **regular** chore for the day is done | `{ userId, username, date, reward }` |
 | `prize.redeemed` | a prize-store request is approved | `{ userId, prizeId, offerId, prizeName, cost, newTotal }` |
 | `ha.state` | Home Assistant entities changed | `{ entityIds }`: a nudge to read state again (§5a), never the state itself |
-| `household.changed` | household data changed, on any display or by the server | `{ domains, revisions }`: which kinds changed (`chores`, `users`, `prizes`, `settings`, `calendar`). Reload what you show; it never says what changed. Delivered within a second where the event stream works, and within 15 seconds where it doesn't |
-| `plugin.storage.changed` | your plugin's storage changed, on any display or by the server | `{ pluginId }`: only your plugin's id — never a key. Reload what you use. Delivered within a second where the event stream works, and within 15 seconds where it doesn't |
+| `household.changed` | household data changed, on any display or by the server | `{ domains, revisions }`: which kinds changed (`chores`, `users`, `prizes`, `settings`, `calendar`). Reload what you show; it never says what changed. Delivered within a second where the event stream works, and behind it by the changes check (every 15 seconds on wall and desktop displays while visible; on becoming visible on phones) |
+| `plugin.storage.changed` | your plugin's storage changed, on any display or by the server | `{ pluginId, revision }`: only your plugin's id and the write's new counter — never a key. Reload what you use. Delivered within a second where the event stream works, and behind it by the changes check (every 15 seconds on wall and desktop displays while visible; on becoming visible on phones) |
 
 Declaring an event not in the catalog rejects the install — typos fail loudly.
 Only declared events are ever delivered to your iframe.
@@ -426,16 +426,23 @@ Only declared events are ever delivered to your iframe.
 **On `plugin.storage.changed`:** declare it and your widget stops needing to
 poll its own storage: every write — a PUT or DELETE on a key, an increment,
 or a server-side reaction to another event — pushes this event to your frame
-within a second, with the 15-second changes check behind it where the stream
-doesn't reach. Declaring this event requires a server with this support: an
-older server rejects the install, since the event isn't in its catalog, so
-there is no older-server fallback to keep. The event is scoped to your plugin
-alone: a frame only ever hears its own plugin's writes, never another
-plugin's, and the payload carries no key, so don't expect one — reload what
-you use, and nothing about another plugin's storage can reach your frame.
-A frame hears its own writes too: a widget that writes on load and reloads on
-this event will loop about once a second, on every display, so only reload
-for writes you didn't just make.
+within a second, with the changes check behind it where the stream doesn't
+reach (every 15 seconds on wall and desktop displays while visible; on
+becoming visible on phones). Declaring this event requires a server with this
+support: an older server rejects the install, since the event isn't in its
+catalog, so there is no older-server fallback to keep. Declaring it without
+`"storage": true` also rejects the install — the event only fires for
+plugins that store data. The event is scoped to your plugin alone: a frame
+only ever hears its own plugin's writes, never another plugin's, and the
+payload carries no key, so don't expect one — reload what you use, and
+nothing about another plugin's storage can reach your frame. After a server
+restart, every plugin with stored data reads as moved once, so your frame
+reloads once — the same promise household data has. A frame hears its own
+writes too: a widget that writes on load and reloads on this event will loop
+about once a second, on every display. Each storage write returns its new
+revision (`HomeGlow.storage.set` resolves it), and the event carries that
+revision — remember the revisions your writes returned and skip events
+carrying one of them, so you only reload for writes you didn't just make.
 
 **On `chore.allCompleted`:** it fires alongside the daily-completion bonus, so it
 inherits that behaviour exactly — once per user per day, from whichever route

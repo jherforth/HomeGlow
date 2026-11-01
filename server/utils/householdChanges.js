@@ -24,7 +24,13 @@
 //
 // Counters live in memory and start from a random base at boot, so after a
 // restart every counter differs from what any display last saw, and every
-// display reloads everything once.
+// display reloads everything once. Plugin counters need the same treatment
+// explicitly: a plugin counter is created on its first write, so after a
+// restart it would simply be gone — and the client prunes vanished keys
+// silently, so a display that missed a write just before the restart would
+// keep showing stale data until that plugin's next write. seedPlugins()
+// (called at boot with every plugin that already has stored data) gives
+// those frames the same "read as moved" restart the household kinds get.
 const crypto = require('crypto');
 
 const DOMAINS = Object.freeze(['chores', 'users', 'prizes', 'settings', 'calendar']);
@@ -153,13 +159,33 @@ function createHouseholdChanges({ onBump = () => {}, onPluginStorage = () => {},
   // kinds never move here. Every bump takes the next server-wide sequence
   // value, not +1 on the plugin's own counter: after uninstall-with-purge
   // and a reinstall, the first write must not repeat the old value, or a
-  // display holding the old ETag would read a 304 and miss it.
+  // display holding the old ETag would read a 304 and miss it. Returns the
+  // new revision, so a storage write route can answer with the exact value
+  // its event will carry (a frame compares it against its own writes).
   function bumpPlugin(pluginId) {
-    if (typeof pluginId !== 'string' || pluginId.length === 0) return;
+    if (typeof pluginId !== 'string' || pluginId.length === 0) return undefined;
     const domain = pluginDomain(pluginId);
     revisions[domain] = ++pluginSeq;
     pending.add(domain);
     scheduleFlush();
+    return revisions[domain];
+  }
+
+  // At boot, seed a counter for every plugin that already has stored data
+  // (the server passes the distinct plugin ids from its storage rows).
+  // Values take the next server-wide sequence value each, in sorted plugin
+  // order, so they are distinct and never equal to `base`; a display that
+  // knew the plugin before the restart therefore reads the seeded counter
+  // as moved. Existing counters are left alone, and seeding schedules no
+  // event: nothing was written, and no display is listening yet — the
+  // seeded counters simply appear in the first post-boot check.
+  function seedPlugins(pluginIds) {
+    const ids = [...new Set((pluginIds || []).filter((id) => typeof id === 'string' && id.length > 0))].sort();
+    for (const id of ids) {
+      const domain = pluginDomain(id);
+      if (Object.prototype.hasOwnProperty.call(revisions, domain)) continue;
+      revisions[domain] = ++pluginSeq;
+    }
   }
 
   // The plugin's data is gone (uninstall with purge): its counter goes
@@ -172,7 +198,7 @@ function createHouseholdChanges({ onBump = () => {}, onPluginStorage = () => {},
     pending.delete(domain);
   }
 
-  return { bump, bumpPlugin, removePlugin, snapshot, etag, flush };
+  return { bump, bumpPlugin, removePlugin, seedPlugins, snapshot, etag, flush };
 }
 
 module.exports = {

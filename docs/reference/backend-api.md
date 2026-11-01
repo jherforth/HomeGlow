@@ -96,7 +96,7 @@ segment (the browser's `localStorage` UUID).
 | GET | `/api/update-status` | Running version vs the latest GitHub release, checked at most every 6 hours. `HOMEGLOW_DISABLE_UPDATE_CHECK=1` turns it off. |
 | GET | `/api/timezone` | Server timezone. |
 | GET | `/api/system/backgroundTasks` | Manually trigger nightly processing. |
-| GET | `/api/changes` | A revision counter for each kind of household data, `{ chores, users, prizes, settings, calendar }`, with an `ETag`; `304` for a matching `If-None-Match`. Displays check it to reload what changed (issue #325). Every successful write under the household routes moves its counters (`utils/householdChanges.js`); a chore or prize write also moves `users`, for clam totals. The nightly job, calendar sync and calendar routines move them too. The counters start from a random base on each start, so a restart reads as everything changed. |
+| GET | `/api/changes` | A revision counter for each kind of household data, `{ chores, users, prizes, settings, calendar }`, plus one counter per plugin with stored data under `plugin:<pluginId>` (issue #347), with an `ETag`; `304` for a matching `If-None-Match`. Displays check it to reload what changed (issue #325). Every successful write under the household routes moves its counters (`utils/householdChanges.js`); a chore or prize write also moves `users`, for clam totals. The nightly job, calendar sync and calendar routines move them too. The counters start from a random base on each start, so a restart reads as everything changed — plugin counters are seeded at boot for every plugin with stored data, so their frames reload once too. |
 | GET | `/index.css` | Serves the app CSS for custom widgets (with fallback). |
 
 ### Custom widgets / plugins

@@ -11,7 +11,10 @@ import { subscribePluginEvents } from './pluginEventBridge.js';
 //     checks every 15 seconds while it's visible, and right away when it
 //     becomes visible again. A phone checks only when it becomes visible:
 //     it's opened, glanced at and put away, so a timer would mostly spend
-//     its battery while nobody looks.
+//     its battery while nobody looks. In visible mode the stream also
+//     establishes the baseline: if the first check fails, stream events
+//     still reach subscribers instead of being dropped until a visibility
+//     change (a phone has no timer to retry with).
 //   - The event stream, where it reaches the browser: the same counters
 //     arrive within a second of the write. Where it doesn't (some proxies
 //     and tunnels), the check above still catches up.
@@ -23,9 +26,12 @@ import { subscribePluginEvents } from './pluginEventBridge.js';
 // Plugin storage rides the same two paths (issue #347): the server keeps
 // one counter per plugin under `plugin:<pluginId>` in the same snapshot,
 // created on a plugin's first storage write and dropped when its data is
-// purged. A plugin's frame hears only its own plugin's counter move, never
-// another plugin's — the per-plugin subscription below is where that
-// scoping lives, and the frame itself gets the plugin id only, never a key.
+// purged — and seeded at boot for every plugin that already has stored
+// data, so a restart reads as moved for its frames instead of silently
+// pruning a vanished key. A plugin's frame hears only its own plugin's
+// counter move, never another plugin's — the per-plugin subscription below
+// is where that scoping lives — and the frame gets the plugin id and the
+// write's revision, never a key, so it can skip its own writes.
 
 export const HOUSEHOLD_DOMAINS = Object.freeze(['chores', 'users', 'prizes', 'settings', 'calendar']);
 export const CHECK_INTERVAL_MS = 15 * 1000;
@@ -72,12 +78,13 @@ function notifyHousehold(moved) {
   }
 }
 
-function notifyPlugins(movedPluginIds) {
-  if (!movedPluginIds.length) return;
+function notifyPlugins(moved) {
+  if (!moved.length) return;
   for (const { pluginId, handler } of pluginSubscribers) {
-    if (!movedPluginIds.includes(pluginId)) continue;
+    const entry = moved.find((item) => item.pluginId === pluginId);
+    if (!entry) continue;
     try {
-      handler(pluginId);
+      handler(pluginId, entry.revision);
     } catch (error) {
       console.error('Plugin storage change subscriber failed:', error);
     }
@@ -96,7 +103,7 @@ function applySnapshot(next) {
     return;
   }
   const moved = changedDomains(known, next);
-  const movedPlugins = changedPluginIds(known, next);
+  const movedPlugins = changedPluginIds(known, next).map((pluginId) => ({ pluginId, revision: next[pluginDomain(pluginId)] }));
   const pruned = { ...known, ...next };
   for (const key of Object.keys(pruned)) {
     if (key.startsWith(PLUGIN_DOMAIN_PREFIX) && !(key in next)) delete pruned[key];
@@ -110,9 +117,19 @@ function applySnapshot(next) {
 // Event-stream household revisions: household kinds only, merged into what
 // this page knows without pruning and without establishing the baseline —
 // the GET baseline follows right behind, and the stream is only a fast
-// path, so a message that arrives before it is safely dropped.
+// path, so a message that arrives before it is safely dropped. Except in
+// visible mode (phones), where there is no timer to retry the check: if
+// the first check failed, the stream establishes the baseline here
+// instead, and subscribers hear it — otherwise the phone would stay deaf
+// until a visibility change.
 function applyRevisions(revisions) {
-  if (!revisions || typeof revisions !== 'object' || !known) return;
+  if (!revisions || typeof revisions !== 'object') return;
+  if (!known) {
+    if (mode !== 'visible') return;
+    known = { ...revisions };
+    notifyHousehold(HOUSEHOLD_DOMAINS.filter((domain) => revisions[domain] !== undefined));
+    return;
+  }
   const moved = changedDomains(known, revisions);
   if (!moved.length) return;
   known = { ...known, ...revisions };
@@ -120,13 +137,23 @@ function applyRevisions(revisions) {
 }
 
 // One plugin's counter from the event stream. Same baseline rule as above:
-// before the first GET answer, there is nothing to compare against.
+// before the first GET answer, there is nothing to compare against —
+// except in visible mode, where the event establishes the baseline and
+// notifies, for the same reason. A later successful check adopts the full
+// snapshot; household kinds it never saw read as moved then, which is the
+// initial load this display never had.
 function applyPluginRevision(pluginId, revision) {
-  if (!known || typeof pluginId !== 'string' || typeof revision !== 'number') return;
+  if (typeof pluginId !== 'string' || typeof revision !== 'number') return;
   const domain = pluginDomain(pluginId);
+  if (!known) {
+    if (mode !== 'visible') return;
+    known = { [domain]: revision };
+    notifyPlugins([{ pluginId, revision }]);
+    return;
+  }
   if (known[domain] === revision) return;
   known = { ...known, [domain]: revision };
-  notifyPlugins([pluginId]);
+  notifyPlugins([{ pluginId, revision }]);
 }
 
 /** Ask the server now. Resolves when the answer has been applied. */
@@ -217,13 +244,16 @@ export function subscribeHouseholdChanges(domains, handler) {
 }
 
 /**
- * Call `handler(pluginId)` whenever that plugin's storage counter moves on
- * the server — from the event stream within a second, or from the 15-second
- * check where the stream doesn't reach. A subscriber hears only its own
- * plugin: another plugin's writes never reach it, which is what keeps one
- * plugin's frames from learning about another plugin's storage (issue
- * #347). Returns an unsubscribe function. The checks run while anything is
- * subscribed.
+ * Call `handler(pluginId, revision)` whenever that plugin's storage counter
+ * moves on the server — from the event stream within a second, or from the
+ * 15-second check where the stream doesn't reach (phones: on becoming
+ * visible, and from the stream even before a first successful check). The
+ * revision is the write's new counter: a frame compares it against the
+ * revisions its own writes returned to skip its own writes. A subscriber
+ * hears only its own plugin: another plugin's writes never reach it, which
+ * is what keeps one plugin's frames from learning about another plugin's
+ * storage (issue #347). Returns an unsubscribe function. The checks run
+ * while anything is subscribed.
  */
 export function subscribePluginStorageChanges(pluginId, handler) {
   const entry = { pluginId, handler };

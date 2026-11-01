@@ -147,3 +147,53 @@ test('a reinstalled plugin never reuses its old counter, so its first write read
   assert.notEqual(changes.snapshot()['plugin:lists'], oldValue, 'purge + reinstall must not repeat the counter');
   assert.notEqual(changes.etag(), oldEtag, 'purge + reinstall must not repeat the etag');
 });
+
+test('bumpPlugin returns the new revision, so a write route can answer with it', () => {
+  const changes = createHouseholdChanges({ base: 100 });
+  assert.equal(changes.bumpPlugin('lists'), 101);
+  assert.equal(changes.bumpPlugin('lists'), 102);
+  assert.equal(changes.bumpPlugin('other'), 103);
+  assert.equal(changes.bumpPlugin(''), undefined, 'no plugin id, no revision');
+});
+
+test('seeding at boot makes plugin frames read as moved after a restart', async () => {
+  const before = createHouseholdChanges({ base: 100 });
+  before.bumpPlugin('lists');
+  before.bumpPlugin('lists');
+  const knownValue = before.snapshot()['plugin:lists'];
+  assert.equal(knownValue, 102);
+
+  // A restart: a new instance, seeded with every plugin that has stored
+  // data. The seeded counter differs from what the display last saw, so
+  // the frame reads as moved instead of silently pruning a vanished key
+  // and showing stale data until the plugin's next write.
+  const pluginEvents = [];
+  const after = createHouseholdChanges({
+    base: 5000,
+    coalesceMs: 20,
+    onPluginStorage: (pluginId, revision) => pluginEvents.push({ pluginId, revision }),
+  });
+  after.seedPlugins(['lists']);
+  const seeded = after.snapshot()['plugin:lists'];
+  assert.notEqual(seeded, knownValue);
+  assert.ok(seeded !== undefined);
+
+  // Seeding is deterministic (sorted order, sequence values) and never
+  // clobbers an existing counter — and it schedules no event: nothing
+  // was written, and no display is listening yet.
+  const again = createHouseholdChanges({ base: 5000 });
+  again.seedPlugins(['lists']);
+  assert.equal(again.snapshot()['plugin:lists'], seeded, 'same ids seed the same values');
+  const two = createHouseholdChanges({ base: 5000 });
+  two.seedPlugins(['zeta', 'alpha']);
+  assert.notEqual(two.snapshot()['plugin:zeta'], two.snapshot()['plugin:alpha'], 'seeded counters are distinct per plugin');
+  after.seedPlugins(['lists']);
+  assert.equal(after.snapshot()['plugin:lists'], seeded, 're-seeding leaves an existing counter alone');
+  await new Promise((r) => setTimeout(r, 40));
+  assert.deepEqual(pluginEvents, [], 'seeding sends no event');
+
+  // The first real write after the seed takes the next sequence value,
+  // never the seed itself.
+  after.bumpPlugin('lists');
+  assert.notEqual(after.snapshot()['plugin:lists'], seeded);
+});

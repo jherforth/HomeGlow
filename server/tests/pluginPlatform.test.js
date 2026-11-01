@@ -683,6 +683,26 @@ test('manifests may only declare catalog events', async () => {
     assert.equal(ok.status, 200);
 });
 
+test('declaring plugin.storage.changed without storage rejects the install', async () => {
+    const noStorage = {
+        manifestVersion: 1,
+        id: 'event-no-storage',
+        events: ['plugin.storage.changed'],
+    };
+    const upload = await uploadWidget('event-no-storage.html', widgetHtml(noStorage));
+    assert.equal(upload.status, 400);
+    assert.match(upload.body.error, /requires "storage": true/);
+
+    const withStorage = {
+        manifestVersion: 1,
+        id: 'event-with-storage',
+        storage: true,
+        events: ['plugin.storage.changed'],
+    };
+    const ok = await uploadWidget('event-with-storage.html', widgetHtml(withStorage));
+    assert.equal(ok.status, 200);
+});
+
 // --- Manifest description (issue #147) ---
 
 test('a manifest description is stored and returned with the plugin', async () => {

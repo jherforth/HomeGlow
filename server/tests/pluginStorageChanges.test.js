@@ -229,3 +229,95 @@ test('the etag moves with a plugin write, and 304 holds while nothing changes', 
   const again = await fetch(`${base}/api/changes`, { headers: { 'If-None-Match': second.headers.get('etag') } });
   assert.equal(again.status, 304);
 });
+
+test('storage writes return their revision, and the stream event carries the same one', async () => {
+  await upload('plug-rev.html', manifestPage(pluginManifest('plug-rev')));
+  const tokenA = await tokenOf('plug-rev.html');
+  const put = await asPlugin('/api/plugin/v1/storage/plug-rev/rev', tokenA, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ n: 1 }),
+  });
+  assert.equal(put.status, 200, JSON.stringify(put.body));
+  assert.equal(typeof put.body.revision, 'number', 'a PUT answers with its revision');
+  const afterPut = await changes();
+  assert.equal(afterPut['plugin:plug-rev'], put.body.revision, 'the changes snapshot carries the returned revision');
+
+  const removed = await asPlugin('/api/plugin/v1/storage/plug-rev/rev', tokenA, { method: 'DELETE' });
+  assert.equal(removed.status, 200, JSON.stringify(removed.body));
+  assert.equal(typeof removed.body.revision, 'number', 'a DELETE answers with its revision');
+  assert.notEqual(removed.body.revision, put.body.revision, 'each write takes the next sequence value');
+
+  const inc = await asPlugin('/api/plugin/v1/storage/plug-rev/cnt/increment', tokenA, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: 'n', delta: 2 }),
+  });
+  assert.equal(inc.status, 200, JSON.stringify(inc.body));
+  assert.equal(typeof inc.body.revision, 'number', 'an increment answers with its revision');
+  assert.equal(inc.body.result, 2);
+
+  // The stream event for a write carries the exact revision the write
+  // returned, so a frame can compare it against its own writes.
+  await delay(300);
+  const messages = [];
+  const req = http.get(`${base}/api/plugin/v1/events/stream`, (res) => {
+    let buffer = '';
+    res.on('data', (chunk) => {
+      buffer += chunk;
+      let idx;
+      while ((idx = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, idx).replace(/\r$/, '');
+        buffer = buffer.slice(idx + 1);
+        if (!line.startsWith('data: ')) continue;
+        messages.push(JSON.parse(line.slice(6)));
+      }
+    });
+  });
+  await delay(300);
+  const put2 = await asPlugin('/api/plugin/v1/storage/plug-rev/rev2', tokenA, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ n: 2 }),
+  });
+  assert.equal(put2.status, 200, JSON.stringify(put2.body));
+  await delay(500);
+  req.destroy();
+  const events = messages.filter((message) => message.event === 'plugin.storage.changed' && message.payload?.pluginId === 'plug-rev');
+  assert.ok(events.length >= 1, JSON.stringify(messages));
+  assert.equal(events[events.length - 1].payload.revision, put2.body.revision, 'the event carries the revision the write returned');
+  assert.equal('key' in events[events.length - 1].payload, false, 'the event still carries no key');
+});
+
+// Last: it restarts the server, so nothing after it may assume the old one.
+test('a restart seeds counters for plugins with stored data, so frames read as moved', async () => {
+  await upload('plug-restart.html', manifestPage(pluginManifest('plug-restart')));
+  const tokenA = await tokenOf('plug-restart.html');
+  await asPlugin('/api/plugin/v1/storage/plug-restart/restart-mark', tokenA, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(1),
+  });
+  const before = await changes();
+  const oldValue = before['plugin:plug-restart'];
+  assert.equal(typeof oldValue, 'number', 'plug-restart has a counter before the restart');
+
+  // Restart on the same database: uploads and storage rows persist.
+  await new Promise((resolve) => {
+    if (child.exitCode !== null) return resolve();
+    child.once('close', resolve);
+    child.kill();
+    setTimeout(resolve, 5000);
+  });
+  const port = await freePort();
+  child = spawn(process.execPath, ['index.js'], {
+    cwd: serverDir,
+    env: {
+      ...process.env, PORT: String(port), DB_PATH: path.join(dataDir, 'tasks.db'), TZ: 'UTC', DEMO_MODE: 'false',
+      ENCRYPTION_KEY: Buffer.alloc(32, 6).toString('base64'),
+      HOMEGLOW_DISABLE_BACKGROUND_JOBS: '1', HOMEGLOW_DISABLE_CALENDAR_SYNC: '1', HOMEGLOW_DISABLE_UPDATE_CHECK: '1',
+    },
+    stdio: ['ignore', 'ignore', 'ignore'],
+  });
+  base = `http://127.0.0.1:${port}`;
+  const start = Date.now();
+  while (Date.now() - start < 30000) {
+    try { if ((await fetch(`${base}/api/test`)).ok) break; } catch { /* starting */ }
+    await delay(250);
+  }
+  const after = await changes();
+  assert.ok(after['plugin:plug-restart'] !== undefined, 'the restarted server seeds a counter for the plugin');
+  assert.notEqual(after['plugin:plug-restart'], oldValue, 'the seeded counter differs, so the frame reads as moved');
+});
