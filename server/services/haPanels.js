@@ -21,7 +21,7 @@ const MAX_LABEL = 40;
 // Columns by rows; 'f' is the panel's whole width (a long tile).
 const TILE_SIZES = ['1x1', '2x1', '1x2', '2x2', 'fx1', 'fx2'];
 const LAYOUTS = ['grid', 'list'];
-const COLUMNS = ['auto', 1, 2, 3, 4, 5, 6];
+const COLUMNS = ['auto', 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 const STYLES = ['classic', 'bold'];
 // A panel's size on the dashboard, in grid squares (12 columns across).
 const WIDGET_MAX_W = 12;
@@ -484,7 +484,7 @@ const cleanText = (value) => (typeof value === 'string' ? value.trim() : value);
 /**
  * Problems with a recipe, as readable strings; empty when it is valid.
  * {
- *   name, layout: 'grid'|'list', columns: 'auto'|1..6, transparent,
+ *   name, layout: 'grid'|'list', columns: 'auto'|1..12, transparent,
  *   style: 'classic'|'bold', animate,
  *   widget: { w: 1..12, h: 1..12 } (its size on the dashboard),
  *   tiles: [{ id, entities: [entity_id, ...], label, icon, size, view, hold,
@@ -497,7 +497,7 @@ function validateRecipe(recipe) {
   const name = cleanText(recipe.name);
   if (typeof name !== 'string' || !name || name.length > MAX_LABEL) errors.push(`name is required, ${MAX_LABEL} characters at most.`);
   if (recipe.layout !== undefined && !LAYOUTS.includes(recipe.layout)) errors.push('layout must be grid or list.');
-  if (recipe.columns !== undefined && !COLUMNS.includes(recipe.columns)) errors.push('columns must be auto or 1 to 6.');
+  if (recipe.columns !== undefined && !COLUMNS.includes(recipe.columns)) errors.push('columns must be auto or 1 to 12.');
   if (recipe.transparent !== undefined && typeof recipe.transparent !== 'boolean') errors.push('transparent must be true or false.');
   if (recipe.style !== undefined && !STYLES.includes(recipe.style)) errors.push('style must be classic or bold.');
   if (recipe.animate !== undefined && typeof recipe.animate !== 'boolean') errors.push('animate must be true or false.');

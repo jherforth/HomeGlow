@@ -83,6 +83,8 @@ body:not(.bold) .grid.fit.short .tile.fan .speeds { width: 48px; flex: none; }
 .tile.w2 { grid-column: span 2; }
 .tile.wf { grid-column: 1 / -1; }
 .tile.h2 { grid-row: span 2; }
+/* One row: a tall tile is as high as the rest. */
+.grid.one-row .tile.h2 { grid-row: auto; }
 .tile.act { cursor: pointer; }
 .tile.act:active { transform: scale(0.98); }
 .tile:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; }
@@ -720,7 +722,9 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
     var fit = fitColumns(tiles, recipe.columns && recipe.columns !== 'auto' ? Number(recipe.columns) : 0);
     // A widget shows its tiles as a list only when they are too small to
     // tap as tiles.
-    var compact = recipe.layout === 'list' || (!solo && fit.cramped);
+    // A "Tiles across" the panel sets is kept; it scrolls rather than list.
+    var fixedCols = recipe.columns && recipe.columns !== 'auto';
+    var compact = recipe.layout === 'list' || (!solo && !fixedCols && fit.cramped);
     var bold = recipe.style === 'bold' && !compact;
     document.body.classList.toggle('bold', bold);
     document.body.classList.toggle('animate', bold && recipe.animate !== false);
@@ -728,15 +732,67 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
     var narrow = cols === 1 || window.innerWidth < 260;
     // Short rows put the icon beside the name, so the words fit.
     var short = !compact && !solo && fit.rowAvail < 92;
-    var shell = html + '<div class="' + (compact ? 'list' : 'grid fit' + (short ? ' short' : '')) + (problem ? ' offline' : '') + '"'
+    var shell = html + '<div class="' + (compact ? 'list' : 'grid fit' + (short ? ' short' : '') + (fit.oneRow ? ' one-row' : '')) + (problem ? ' offline' : '') + '"'
       + (!compact ? ' style="--cols:' + cols + ';--t:' + Math.floor(fit.side) + 'px;--row:' + Math.floor(fit.row) + 'px"' : '') + '>';
-    var parts = tiles.map(function (tile) { return { id: tile.id, html: tileHtml(tile, compact, narrow, bold) }; });
+    var spots = compact || narrow ? null : placeTiles(tiles, cols);
+    var parts = tiles.map(function (tile) {
+      var html = tileHtml(tile, compact, narrow, bold);
+      return { id: tile.id, html: spots && spots[tile.id] ? placed(html, spots[tile.id]) : html };
+    });
     draw(shell, parts);
     if (focusId) {
       var again = app.querySelector('[data-focus="' + focusId + '"]');
       if (again && again !== document.activeElement) again.focus();
     }
     loadCameras();
+  }
+
+  // Where each tile goes when a panel has big tiles (wide, tall or both):
+  // the big ones first, each in the first open spot reading left to right,
+  // top to bottom, then the rest in order in the spots left. Left to the
+  // browser, a big tile late in the list landed below the others and grew
+  // the panel a row it had no room for. Panels with a long tile, or only
+  // small ones, are left to the browser (null).
+  function placeTiles(tiles, cols) {
+    var big = false;
+    for (var i = 0; i < tiles.length; i += 1) {
+      var size = tiles[i].size || '1x1';
+      if (size.charAt(0) === 'f') return null;
+      if (size !== '1x1') big = true;
+    }
+    if (!big) return null;
+    var taken = [];
+    var free = function (r, c, w, h) {
+      if (c + w > cols) return false;
+      for (var y = r; y < r + h; y += 1) for (var x = c; x < c + w; x += 1) if (taken[y] && taken[y][x]) return false;
+      return true;
+    };
+    var take = function (r, c, w, h) {
+      for (var y = r; y < r + h; y += 1) { taken[y] = taken[y] || []; for (var x = c; x < c + w; x += 1) taken[y][x] = true; }
+    };
+    var spots = {};
+    var put = function (tile) {
+      var size = tile.size || '1x1';
+      var w = Math.min(cols, Number(size.charAt(0)));
+      var h = Number(size.charAt(2));
+      for (var r = 0; ; r += 1) {
+        for (var c = 0; c < cols; c += 1) {
+          if (free(r, c, w, h)) { take(r, c, w, h); spots[tile.id] = { row: r + 1, col: c + 1, w: w, h: h }; return; }
+        }
+      }
+    };
+    tiles.forEach(function (t) { if ((t.size || '1x1') !== '1x1') put(t); });
+    tiles.forEach(function (t) { if ((t.size || '1x1') === '1x1') put(t); });
+    return spots;
+  }
+  // A tile's drawing with its spot added to its style.
+  function placed(html, spot) {
+    var area = 'grid-area:' + spot.row + '/' + spot.col + '/span ' + spot.h + '/span ' + spot.w + ';';
+    var end = html.indexOf('>');
+    var open = html.slice(0, end);
+    var at = open.indexOf(' style="');
+    if (at !== -1) return html.slice(0, at + 8) + area + html.slice(at + 8);
+    return open + ' style="' + area + '"' + html.slice(end);
   }
 
   // Only tiles whose drawing changed are replaced, so a tile that didn't
@@ -793,33 +849,43 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
     el.style.setProperty('--fl', to + '%');
   }
 
-  // "Fit the widget": the column count that keeps tiles closest to square,
-  // avoiding empty spots (two by two for three tiles, say), with no tile
-  // narrower than the smallest a finger can use. Wide and tall tiles count
-  // their size. `fixed` is a count the panel set instead. Returns the count
-  // and a tile's shorter side, which sizes its icon and words.
+  // The columns a panel's tiles go in: `fixed` when the panel sets "Tiles
+  // across", else (on "Fit the widget") one row when every tile fits side by
+  // side, else the count that keeps tiles closest to square, avoiding empty
+  // spots, with no tile narrower than a finger can use. Wide and tall tiles
+  // count their size. Returns the count and a tile's shorter side, which
+  // sizes its icon and words.
   var MIN_TILE = 86;
   var SMALLEST_ROW = 56;
+  // As many columns as the dashboard has: a panel as wide as the screen can
+  // hold that many tiles across.
+  var MAX_COLUMNS = 12;
   function fitColumns(tiles, fixed) {
     var style = getComputedStyle(app);
     var width = Math.max(1, app.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight));
     var height = Math.max(1, app.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom));
     var gap = Math.max(6, Math.min(10, Math.min(window.innerWidth, window.innerHeight) * 0.018));
     var minRow = document.body.classList.contains('solo') ? 0 : Math.max(78, Math.min(140, Math.min(window.innerWidth, window.innerHeight) * 0.22));
-    var most = Math.max(1, Math.min(6, Math.floor((width + gap) / (MIN_TILE + gap))));
-    var best = null;
+    var most = Math.max(1, Math.min(MAX_COLUMNS, Math.floor((width + gap) / (MIN_TILE + gap))));
     // Never more columns than the tiles fill: blank spots in a row help no one.
     var fill = 0;
-    tiles.forEach(function (t) { fill += t.size && t.size.charAt(0) === '2' ? 2 : 1; });
+    var hasLong = false;
+    var hasTall = false;
+    tiles.forEach(function (t) {
+      if (t.size && t.size.charAt(0) === 'f') hasLong = true;
+      else if (t.size && t.size.charAt(2) === '2') hasTall = true;
+      fill += t.size && t.size.charAt(0) === '2' ? 2 : 1;
+    });
     most = Math.max(1, Math.min(most, fill));
-    for (var c = fixed || 1; c <= (fixed || most); c += 1) {
+    // oneRow: every tile side by side, each one row high (a tall tile too).
+    var measure = function (c, oneRow) {
       // Long tiles take whole rows of their own; the rest share the others.
       var spots = 0;
       var longRows = 0;
       tiles.forEach(function (t) {
         var size = t.size && (t.size.charAt(0) === 'f' || (c > 1 && window.innerWidth >= 260)) ? t.size : '1x1';
         if (size.charAt(0) === 'f') longRows += Number(size.charAt(2));
-        else spots += Math.min(Number(size.charAt(0)), c) * Number(size.charAt(2));
+        else spots += Math.min(Number(size.charAt(0)), c) * (oneRow ? 1 : Number(size.charAt(2)));
       });
       var rows = Math.max(1, Math.ceil(spots / c) + longRows);
       spots += longRows * c;
@@ -831,7 +897,23 @@ input[type=range] { width: 100%; accent-color: var(--level); position: relative;
       // (one grid row) still shows its tiles in a row.
       var rowAvail = (height - gap * (rows - 1)) / rows;
       var cramped = rowAvail < SMALLEST_ROW || tileW < MIN_TILE * 0.7;
-      if (!best || score < best.score) best = { cols: c, side: Math.max(0, Math.min(tileW, tileH)), score: score, cramped: cramped, rowAvail: rowAvail, row: Math.max(SMALLEST_ROW, Math.min(minRow, rowAvail)) };
+      return { cols: c, side: Math.max(0, Math.min(tileW, tileH)), score: score, cramped: cramped, rowAvail: rowAvail, row: Math.max(SMALLEST_ROW, Math.min(minRow, rowAvail)), oneRow: !!oneRow, tileW: tileW, tileH: tileH };
+    };
+    if (fixed) return measure(fixed);
+    // "Fit the widget": every tile side by side in one row whenever they fit,
+    // each at least MIN_TILE wide and no more than twice as tall as it is
+    // wide (a tall, narrow widget would make strips). A long tile always
+    // takes a row of its own, and a tall tile was asked to be tall, so a
+    // panel with either never goes in one row.
+    if (!hasLong && !hasTall && fill <= most) {
+      var row = measure(fill, true);
+      if (row.tileH <= row.tileW * 2) return row;
+    }
+    // Too many to fit across: the columns that keep tiles closest to square.
+    var best = null;
+    for (var c = 1; c <= most; c += 1) {
+      var m = measure(c);
+      if (!best || m.score < best.score) best = m;
     }
     return best;
   }

@@ -71,6 +71,12 @@ test('a panel may pick the bold look and turn its moving icons off', () => {
   assert.ok(rules.validateRecipe({ ...recipe(base), animate: 'yes' }).some((e) => /animate/.test(e)));
 });
 
+test('a panel may set up to 12 tiles across, as many columns as the dashboard has', () => {
+  const base = [tile('a', ['light.kitchen'])];
+  assert.deepEqual(rules.validateRecipe({ ...recipe(base), columns: 12 }), []);
+  assert.ok(rules.validateRecipe({ ...recipe(base), columns: 13 }).some((e) => /columns/.test(e)));
+});
+
 test('access follows the recipe: view-only tiles and conditions are read, not operated', () => {
   const access = rules.accessFromRecipe(recipe([
     tile('a', ['light.kitchen']),
