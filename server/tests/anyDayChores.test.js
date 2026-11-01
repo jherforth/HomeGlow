@@ -140,15 +140,88 @@ test('"weekly" still works, and a period must be one of the list', async () => {
   assert.equal((await patch(`/api/chore-schedules/${res.body.id}`, { interval: '3d' })).status, 400);
 });
 
-test('it holds back the daily bonus on its last day only', async () => {
+// Whether finishing everything else today pays the daily bonus, with the
+// any-day card due on `dueDate` and made `madeDaysAgo` days ago.
+async function bonusPaidWith(dueDate, madeDaysAgo) {
   const kid = await person();
-  await anyDay(kid);
+  const { parentId } = await anyDay(kid);
+  const [card] = await cardsOf(parentId);
+  withDb((db) => db.prepare("UPDATE chore_schedules SET due_date = ?, created_at = datetime('now', ?) WHERE id = ?")
+    .run(dueDate, `-${madeDaysAgo} days`, card.id));
   const dishesId = await chore('Dishes');
   const dishes = (await post('/api/chore-schedules', { chore_id: dishesId, user_id: kid, crontab: '0 0 * * *', duration: 'day-of' })).body.id;
   const done = await post('/api/chores/complete', { chore_schedule_id: dishes, user_id: kid, date: today });
   assert.equal(done.status, 200, JSON.stringify(done.body));
-  const bonus = (await historyOf(kid)).some((r) => r.kind === 'daily_bonus' && r.date === today);
-  assert.equal(bonus, today !== saturday, today === saturday ? 'its last day: the open chore is needed' : 'before its last day it is not');
+  return (await historyOf(kid)).some((r) => r.kind === 'daily_bonus' && r.date === today);
+}
+
+test('it holds back the daily bonus on its last day only', async () => {
+  assert.equal(await bonusPaidWith(shift(1), 1), true, 'before its last day it is not needed');
+  assert.equal(await bonusPaidWith(today, 1), false, 'its last day: the open chore is needed');
+  assert.equal(await bonusPaidWith(today, 0), true, 'added on its last day: too late to be fair');
+});
+
+test("a card from someone's schedule keeps its person overnight, clams or not", async () => {
+  const kid = await person();
+  const choreId = (await post('/api/chores', { title: 'Wash the car', clam_value: 2 })).body.id;
+  const parentId = (await post('/api/chore-schedules', { chore_id: choreId, user_id: kid, duration: 'any-day', interval: '1y' })).body.id;
+  const [card] = await cardsOf(parentId);
+  assert.equal(card.user_id, kid);
+
+  // A bonus chore someone took still goes back to everyone.
+  const bonusId = (await post('/api/chores', { title: 'Sweep the porch', clam_value: 3 })).body.id;
+  const bonusParent = (await post('/api/chore-schedules', { chore_id: bonusId, user_id: null, crontab: '0 0 * * *', duration: 'until-completed' })).body.id;
+  const [bonusCard] = await cardsOf(bonusParent);
+  assert.equal((await patch(`/api/chore-schedules/${bonusCard.id}`, { user_id: kid })).status, 200);
+
+  await nightly();
+  assert.equal((await api(`/api/chore-schedules/${card.id}`)).body.user_id, kid, 'still theirs');
+  assert.equal((await api(`/api/chore-schedules/${bonusCard.id}`)).body.user_id, null, 'back to everyone');
+});
+
+test('moved off any-day, or deleted, its open card goes', async () => {
+  const kid = await person();
+  const { parentId } = await anyDay(kid, '1m');
+  const [card] = await cardsOf(parentId);
+  // Due today, so it's the one chore holding back the bonus.
+  withDb((db) => db.prepare("UPDATE chore_schedules SET due_date = ?, created_at = datetime('now', '-1 days') WHERE id = ?").run(today, card.id));
+  const dishesId = await chore('Dishes');
+  const dishes = (await post('/api/chore-schedules', { chore_id: dishesId, user_id: kid, crontab: '0 0 * * *', duration: 'day-of' })).body.id;
+  await post('/api/chores/complete', { chore_schedule_id: dishes, user_id: kid, date: today });
+  assert.equal((await historyOf(kid)).some((r) => r.kind === 'daily_bonus'), false);
+
+  // To days that aren't today: the card goes, and the day is done.
+  const notToday = (new Date(`${today}T12:00:00Z`).getUTCDay() + 1) % 7;
+  const moved = await patch(`/api/chore-schedules/${parentId}`, { crontab: `0 0 * * ${notToday}`, duration: 'day-of', interval: null });
+  assert.equal(moved.status, 200, JSON.stringify(moved.body));
+  assert.equal((await api(`/api/chore-schedules/${card.id}`)).status, 404, 'the old card is gone');
+  assert.deepEqual(await cardsOf(parentId), []);
+  assert.equal((await historyOf(kid)).some((r) => r.kind === 'daily_bonus' && r.date === today), true, 'nothing holds the bonus back');
+
+  // Deleted: its card goes too, rather than staying on with no schedule.
+  const other = await anyDay(kid, '1y', 'Clean the gutters');
+  const [otherCard] = await cardsOf(other.parentId);
+  assert.equal((await api(`/api/chore-schedules/${other.parentId}`, { method: 'DELETE' })).status, 200);
+  assert.equal((await api(`/api/chore-schedules/${otherCard.id}`)).status, 404);
+});
+
+test('made one-time, what it was done before does not count: it stays until done', async () => {
+  const kid = await person();
+  const choreId = await chore('Fix the fence');
+  const parentId = (await post('/api/chore-schedules', { chore_id: choreId, user_id: kid, crontab: '0 0 * * *', duration: 'until-completed' })).body.id;
+  const [card] = await cardsOf(parentId);
+  await post('/api/chores/complete', { chore_schedule_id: card.id, user_id: kid, date: yesterday });
+  await nightly(); // the done card goes; its completion moves to the schedule
+
+  assert.equal((await patch(`/api/chore-schedules/${parentId}`, { crontab: null, duration: 'day-of' })).status, 200);
+  for (const open of await cardsOf(parentId)) await api(`/api/chore-schedules/${open.id}`, { method: 'DELETE' });
+  await nightly();
+  assert.equal((await api(`/api/chore-schedules/${parentId}`)).status, 200, 'not cleared undone');
+  assert.ok((await api('/api/chores')).body.some((c) => c.id === choreId), 'and the chore is still there');
+
+  await post('/api/chores/complete', { chore_schedule_id: parentId, user_id: kid, date: today });
+  await nightly();
+  assert.equal((await api(`/api/chore-schedules/${parentId}`)).status, 404, 'done now, it goes as one-time chores do');
 });
 
 test('done, it stays away until the next period, and its history stays with the chore', async () => {

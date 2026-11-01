@@ -44,6 +44,7 @@ import { adminHeadingRowSx, adminHeadingTextSx } from './AdminRows.jsx';
 import { getWeekdayLabels, getWeekdayOptions } from '../utils/dateUtils.js';
 import useIsMobile from '../hooks/useIsMobile.js';
 import { getTodayDateString } from '../utils/choreHelpers.js';
+import { getServerTimezoneSync } from '../utils/timezone.js';
 import { parseVacationModeSetting } from '../utils/interfaceSettings.js';
 import {
   COMMON_TIMINGS,
@@ -265,7 +266,7 @@ export default function ChoreScheduleBoard({
     [schedules],
   );
   const week = useMemo(
-    () => calendarWeek({ groups, dates: dayKeys, today, rows: history, vacation, openCards }),
+    () => calendarWeek({ groups, dates: dayKeys, today, rows: history, vacation, openCards, timeZone: getServerTimezoneSync() }),
     [groups, dayKeys, today, history, vacation, openCards],
   );
 
@@ -466,7 +467,8 @@ export default function ChoreScheduleBoard({
       for (const p of plan) for (const s of p.add) {
         const body = { chore_id: s.chore_id, user_id: p.targetId };
         for (const f of COPIED_FIELDS) if (s[f] !== undefined) body[f] = s[f];
-        if (body.duration !== 'once-completed') body.interval = null;
+        // The interval is the gap (again after done) or the period (any day).
+        if (body.duration !== 'once-completed' && body.duration !== 'any-day') body.interval = null;
         await axios.post(`${API_BASE_URL}/api/chore-schedules`, body);
       }
     }, t('chores:board.copied', { count: total }));

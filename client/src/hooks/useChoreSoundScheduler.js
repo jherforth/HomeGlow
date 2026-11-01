@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
-import { shouldShowChoreToday, getTodayDateString } from '../utils/choreHelpers.js';
+import { ringsToday, getTodayDateString } from '../utils/choreHelpers.js';
 import { getServerTimezoneSync } from '../utils/timezone.js';
 import {
   getMinutesSinceMidnightInTz,
@@ -81,7 +81,7 @@ export default function useChoreSoundScheduler({ enabled, defaultSound, volume =
 
       for (const schedule of schedulesRef.current) {
         if (!schedule.sound_enabled) continue;
-        if (!shouldShowChoreToday(schedule)) continue;
+        if (!ringsToday(schedule, today)) continue;
         if (isCompletedToday(schedule, today)) continue;
         // Expired, only a parent can mark it done (issue #279): reminding the
         // child is just noise, so the chime stops with the expiry.

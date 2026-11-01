@@ -5,7 +5,7 @@ vi.mock('./timezone.js', () => ({
     getServerTimezoneSync: () => zones.server,
 }));
 
-import { shouldShowChoreToday, convertDaysToCrontab, getDueDateStatus, formatDueDate, hasOutstandingBonusChore, compareByKey, countsTowardDailyBonus } from './choreHelpers.js';
+import { shouldShowChoreToday, convertDaysToCrontab, getDueDateStatus, formatDueDate, hasOutstandingBonusChore, compareByKey, countsTowardDailyBonus, ringsToday } from './choreHelpers.js';
 
 // Issue #241: a follow-up counts toward the daily bonus from the day after it
 // was handed out, as the server's getTodaysRegularChoresForUser does.
@@ -32,6 +32,27 @@ describe('countsTowardDailyBonus', () => {
         expect(countsTowardDailyBonus(card, '2026-10-10')).toBe(true);
         // Another sticky chore's card with a due date still counts every day.
         expect(countsTowardDailyBonus({ ...card, parent_duration: 'until-completed' }, today)).toBe(true);
+    });
+
+    it("doesn't count an any-day card made on its last day, that day", () => {
+        // 8 pm Saturday 2026-10-10 in Pacific time is Sunday in UTC.
+        const card = { clam_value: 0, parent_duration: 'any-day', due_date: '2026-10-10', created_at: '2026-10-11 03:00:00' };
+        expect(countsTowardDailyBonus(card, '2026-10-10', 'America/Los_Angeles')).toBe(false);
+        expect(countsTowardDailyBonus({ ...card, created_at: '2026-10-07 16:00:00' }, '2026-10-10', 'America/Los_Angeles')).toBe(true);
+    });
+});
+
+describe('ringsToday', () => {
+    const today = '2026-10-08';
+
+    it("rings for today's chores, not a one-time chore due on a later day", () => {
+        expect(ringsToday({ visible: 1, crontab: '0 0 * * *' }, today)).toBe(true);
+        expect(ringsToday({ visible: 1, crontab: null, due_date: null }, today)).toBe(true);
+        expect(ringsToday({ visible: 1, crontab: null, due_date: today }, today)).toBe(true);
+        expect(ringsToday({ visible: 1, crontab: null, due_date: '2026-10-07' }, today)).toBe(true);
+        // An any-day chore's card, due at the end of next year.
+        expect(ringsToday({ visible: 1, crontab: null, due_date: '2027-12-31', parent_duration: 'any-day' }, today)).toBe(false);
+        expect(ringsToday({ visible: 0, crontab: null, due_date: today }, today)).toBe(false);
     });
 });
 

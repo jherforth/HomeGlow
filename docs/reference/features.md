@@ -61,7 +61,8 @@ The chore system uses a **three-table model** (see [Database](../architecture/da
     once a week; change the furnace filter once every 3 months). The period is
     the schedule's `interval`:
     - `1w`: Sunday to Saturday.
-    - `2w`: counted from the week the schedule was made.
+    - `2w`: counted from the week the schedule was made (the household's date,
+      not UTC's: one made at 8 pm on a Saturday in Pacific time starts that week).
     - `1m`: a calendar month.
     - `3m`, `6m`: quarters and halves of the year.
     - `1y`: a calendar year.
@@ -70,8 +71,12 @@ The chore system uses a **three-table model** (see [Database](../architecture/da
     counts. The card is due on the period's last day. Until then it doesn't hold
     back the daily bonus and no miss is logged. On that last day it counts
     toward the bonus if it's still open, and an undone period is logged as
-    **one** miss. When the next period starts, a fresh card replaces the old
-    one, done or not. Its crontab means nothing (kept at `0 0 * * *`). Set it
+    **one** miss. A card made on its last day (the chore was added then) doesn't
+    count that day, as a follow-up doesn't on the day it arrives. When the next
+    period starts, a fresh card replaces the old one, done or not. Moved to
+    another kind of timing, or deleted, its open card goes with it, rather than
+    staying on as a one-time chore due every day. Its due-time sound rings on
+    the card's due date only. Its crontab means nothing (kept at `0 0 * * *`). Set it
     from the board's Add (the wizard's *Once in a while, any day*, or the
     picker's *Once a week, any day*) or the schedule dialog's Duration.
     `weekly`, its name for a day (#362), still works and means every `1w`;
@@ -82,10 +87,17 @@ The chore system uses a **three-table model** (see [Database](../architecture/da
   When a card is cleared, its history moves to the schedule it came from, so the
   board calendar and the card's 7-day row still find it by chore. Before, those
   rows lost their chore when the card was deleted.
+- **Made one-time**: a repeating schedule turned one-time keeps its history,
+  but only what's done after the change makes it done.
+  `one_time_after_history_id` (migration `schema40-oneTimeAfter`) is the last
+  history id at the change; the nightly cleanup counts completions after it.
+  Before, a schedule done once while it repeated was cleared undone the night
+  after it was made one-time, and its chore with it.
 - **Clams** are a reward currency earned by completing chores; balances are derived
   by summing `chore_history` (no denormalized total). Completing *all* of a user's
   daily chores awards a bonus. **Bonus chores** carry a custom clam value and reset
   to unassigned each night; only one uncompleted bonus chore per user at a time.
+  A card from someone's own schedule stays theirs overnight, clams or not.
 - **Chore icons** (issue #141): a chore can carry an optional emoji, picked from
   a grouped bank when creating or editing it. On the dashboard the icon **takes
   the place of the checkmark** while the chore is pending, and reverts to the

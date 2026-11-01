@@ -76,16 +76,22 @@ export function dueOn(schedule, dateStr) {
   return cronFiresOn(schedule.crontab, dateStr);
 }
 
-// created_at is SQLite CURRENT_TIMESTAMP: UTC, no zone marker.
-function createdOn(schedule, timeZone) {
-  if (!schedule.created_at) return null;
-  const raw = String(schedule.created_at);
+/**
+ * The household's date ('YYYY-MM-DD') of a stored timestamp such as
+ * created_at, which is SQLite CURRENT_TIMESTAMP: UTC, no zone marker. Made at
+ * 8 pm on a Saturday in Pacific time is that Saturday, not Sunday.
+ */
+export function localDateOf(timestamp, timeZone) {
+  if (!timestamp) return null;
+  const raw = String(timestamp);
   const created = new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(raw) ? raw : `${raw.replace(' ', 'T')}Z`);
   if (Number.isNaN(created.getTime())) return null;
   return new Intl.DateTimeFormat('en-CA', {
     timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
   }).format(created);
 }
+
+const createdOn = (schedule, timeZone) => localDateOf(schedule.created_at, timeZone);
 
 function inVacation(vacation, dateStr) {
   if (!vacation || vacation.enabled !== true) return false;
