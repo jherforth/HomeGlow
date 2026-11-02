@@ -88,3 +88,23 @@ test('an assigned chore transfers back to bonus and stays claimable', async () =
   assert.equal((await patch(`/api/chore-schedules/${id}`, { user_id: kid })).status, 200);
   assert.equal((await scheduleById(id)).user_id, kid);
 });
+
+test('transferring back to bonus clears a carried transfer bonus', async () => {
+  const kid = (await post('/api/users', { username: 'Mia', email: 'mia@example.com' })).body.id;
+  const chore = (await post('/api/chores', { title: 'Wipe table', clam_value: 2 })).body.id;
+  const made = await post('/api/chore-schedules', { chore_id: chore, user_id: kid, crontab: '0 0 * * *' });
+  assert.equal(made.status, 200, JSON.stringify(made.body));
+  const id = made.body.id;
+
+  // Simulate the "keep reward" transfer: the schedule now carries a pending
+  // bonus for whoever completes it.
+  assert.equal((await patch(`/api/chore-schedules/${id}`, { user_id: kid, transfer_bonus_clams: 3 })).status, 200);
+  assert.equal((await scheduleById(id)).transfer_bonus_clams, 3);
+
+  // The Transfer dialog's pool transfer sends exactly this PATCH; the bonus
+  // must not ride back into the pool for the next claimant.
+  assert.equal((await patch(`/api/chore-schedules/${id}`, { user_id: 0, visible: 1, transfer_bonus_clams: 0 })).status, 200);
+  const back = await scheduleById(id);
+  assert.equal(back.user_id, null);
+  assert.equal(back.transfer_bonus_clams, 0);
+});

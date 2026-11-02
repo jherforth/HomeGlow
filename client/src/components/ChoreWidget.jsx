@@ -961,8 +961,15 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
     const extras = {};
     // The revoke/keep choice only applies when the receiver is a real user
     // whose day is already complete (and therefore rewarded). The bonus pool
-    // has no day to complete, so transferring back to bonus never attaches it.
-    if (targetUserId !== 0 && isUserDayComplete(targetUserId)) {
+    // has no day to complete, so transferring back to bonus never attaches a
+    // new bonus — but it must clear one carried in: a chore moved to Henry
+    // with "keep reward" carries transfer_bonus_clams, and a bare pool
+    // transfer would leave it on the schedule for whoever claims it next.
+    // Clearing it here keeps the fix client-side; the API already accepts
+    // the field, and the completion route only pays it out while set.
+    if (targetUserId === 0) {
+      extras.transfer_bonus_clams = 0;
+    } else if (isUserDayComplete(targetUserId)) {
       if (mode === 'revoke') {
         extras.revoke_daily_bonus = true;
       } else {
@@ -2086,7 +2093,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
           anchorReference="anchorPosition"
           anchorPosition={choreMenu.position || undefined}
         >
-          {!hideTransferChore && choreMenu.schedule?.transferable !== 0 && (users.filter(u => u.id !== 0 && u.id !== choreMenu.schedule?.user_id).length > 0 || Boolean(choreMenu.schedule?.user_id)) && (
+          {!hideTransferChore && choreMenu.schedule?.transferable !== 0 && getTransferTargets(users, choreMenu.schedule?.user_id, '').length > 0 && (
             <MenuItem onClick={openTransferDialog}>
               <ListItemIcon><SwapHoriz fontSize="small" /></ListItemIcon>
               <ListItemText primary={t('chores:transfer.menuItem')} />
