@@ -328,6 +328,7 @@ const PhotoCollage = ({ photos, step, onUnavailable, showDetails = false }) => {
                 key={tile.photo.id}
                 src={srcOf(tile.photo.url)}
                 alt=""
+                data-photo-id={tile.photo.id}
                 sx={{ ...tileImageSx, ...(tile.previous ? fadeIn : {}) }}
               />
               {/* When, who and where, fading in with its photo. */}

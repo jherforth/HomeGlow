@@ -569,6 +569,10 @@ calculation); `server/services/homeAssistant.js` for the connection.
     or places.
   - **Uploaded photos:** none, because they're resized in the browser before
     upload, which drops the camera's data.
+- **Press and hold a photo** (any layout, touch or mouse) to see it large with
+  its details while the slideshow waits. A tap puts it back, and it goes back
+  by itself after 20 seconds; that tap doesn't end the screensaver
+  (`PhotoLightbox.jsx`, `utils/pressHold.js`).
 - Not mounted on mobile (phones lock themselves; see
   [Mobile Experience](../architecture/mobile-experience.md)).
 

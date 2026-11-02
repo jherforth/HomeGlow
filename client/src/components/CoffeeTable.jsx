@@ -59,7 +59,8 @@ const dropSx = {
   '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
 };
 
-export default function CoffeeTable({ photos, seconds = 4, showDetails = false }) {
+// `paused` holds the drops, for while one print is being looked at closely.
+export default function CoffeeTable({ photos, seconds = 4, showDetails = false, paused = false }) {
   const pageVisible = usePageVisibility();
   const [prints, setPrints] = useState([]);
   const queue = useRef([]);
@@ -67,6 +68,8 @@ export default function CoffeeTable({ photos, seconds = 4, showDetails = false }
   const seq = useRef(0);
   const dropping = useRef(false);
   const alive = useRef(true);
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
 
   const nextPhoto = () => {
     if (!queue.current.length) queue.current = shuffled(photos.filter((p) => p?.url));
@@ -83,6 +86,12 @@ export default function CoffeeTable({ photos, seconds = 4, showDetails = false }
         if (!photo) return;
         const img = await loadImage(srcOf(photo.url));
         if (!alive.current) return;
+        // Paused while this one was loading: it drops first when the table
+        // goes on, instead of landing on a table that is meant to be still.
+        if (pausedRef.current) {
+          queue.current.unshift(photo);
+          return;
+        }
         if (!img) continue;
 
         const viewW = window.innerWidth;
@@ -138,7 +147,7 @@ export default function CoffeeTable({ photos, seconds = 4, showDetails = false }
   // it, and waits out a drop still loading its photo rather than be turned
   // away by it.
   useEffect(() => {
-    if (!pageVisible || !photos.length) return undefined;
+    if (!pageVisible || !photos.length || paused) return undefined;
     let cancelled = false;
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     (async () => {
@@ -154,7 +163,7 @@ export default function CoffeeTable({ photos, seconds = 4, showDetails = false }
       cancelled = true;
       clearInterval(interval);
     };
-  }, [pageVisible, photos, seconds]);
+  }, [pageVisible, photos, seconds, paused]);
 
   return (
     <Box
@@ -163,6 +172,9 @@ export default function CoffeeTable({ photos, seconds = 4, showDetails = false }
         position: 'absolute',
         inset: 0,
         overflow: 'hidden',
+        // The prints stack by their own z-index; that stays on the table,
+        // under whatever the screensaver shows above it.
+        isolation: 'isolate',
         // A dim tabletop under a lamp, for the moments before it's covered.
         background: 'radial-gradient(ellipse at 50% 40%, #2b2622 0%, #15120f 65%, #0b0a09 100%)',
       }}
@@ -173,6 +185,7 @@ export default function CoffeeTable({ photos, seconds = 4, showDetails = false }
           <Box
             key={print.key}
             data-testid="coffee-print"
+            data-photo-id={print.photo.id}
             style={{ '--tilt': `${print.tilt}deg`, '--tilt-from': `${print.tiltFrom}deg` }}
             sx={{
               position: 'absolute',

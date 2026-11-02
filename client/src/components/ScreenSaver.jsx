@@ -7,7 +7,13 @@ import { usePageVisibility } from '../hooks/useScreenActivity.js';
 import ScreensaverOverlay from './ScreensaverOverlay.jsx';
 import PhotoCollage from './PhotoCollage.jsx';
 import CoffeeTable from './CoffeeTable.jsx';
+import PhotoLightbox from './PhotoLightbox.jsx';
 import { MIN_COLLAGE_PHOTOS } from '../utils/photoCollage.js';
+import { createPressHold } from '../utils/pressHold.js';
+
+// A photo held up for a closer look goes back by itself after this long, so
+// a kiosk nobody tapped again doesn't stay frozen on one picture.
+export const LIGHTBOX_MS = 20 * 1000;
 
 const ScreenSaver = ({
   mode, slideshowInterval, tabs, onExit, onTabChange, keepScreenAwake, overlay,
@@ -22,6 +28,12 @@ const ScreenSaver = ({
   const [loading, setLoading] = useState(true);
   const [currentTabIndex, setCurrentTabIndex] = useState(0);
   const exitTimeoutRef = useRef(null);
+  // The photo being looked at closely, if any: the slideshow waits meanwhile.
+  const [heldPhoto, setHeldPhoto] = useState(null);
+  const photosRef = useRef(photos);
+  const holdRef = useRef(null);
+  // The click the browser sends after a hold's release must not act as a tap.
+  const swallowClickRef = useRef(false);
 
   useEffect(() => {
     if (mode === 'photos') {
@@ -51,7 +63,7 @@ const ScreenSaver = ({
   // doesn't keep cycling photos, or worse, cycling tabs (each tab switch
   // mounts that tab's widgets and triggers their fetches).
   useEffect(() => {
-    if (loading || !pageVisible) return;
+    if (loading || !pageVisible || heldPhoto) return;
 
     const interval = setInterval(() => {
       if (mode === 'photos' && photos.length > 0) {
@@ -69,7 +81,7 @@ const ScreenSaver = ({
     }, slideshowInterval * 1000);
 
     return () => clearInterval(interval);
-  }, [mode, photos.length, tabs, slideshowInterval, loading, onTabChange, pageVisible]);
+  }, [mode, photos.length, tabs, slideshowInterval, loading, onTabChange, pageVisible, heldPhoto]);
 
   useEffect(() => {
     if (!('wakeLock' in navigator)) return undefined;
@@ -112,12 +124,57 @@ const ScreenSaver = ({
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
-        handleExit();
+        if (heldPhoto) setHeldPhoto(null);
+        else handleExit();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleExit]);
+  }, [handleExit, heldPhoto]);
+
+  // Press and hold a photo to look closer (utils/pressHold.js): it comes up
+  // large with its details, and the slideshow waits. A tap puts it back, and
+  // so does time; the tap that would have ended the screensaver doesn't,
+  // since holding a photo is not a wish to leave. Any pointer counts.
+  useEffect(() => { photosRef.current = photos; }, [photos]);
+  if (!holdRef.current) {
+    holdRef.current = createPressHold({
+      // The layouts tag their images with the photo's id, or its url where
+      // they key by that (the collage does); either finds the photo.
+      onHold: (key) => {
+        const photo = photosRef.current.find((p) => String(p.id) === key || p.url === key);
+        if (photo) setHeldPhoto(photo);
+      },
+    });
+  }
+  useEffect(() => {
+    if (!heldPhoto) return undefined;
+    const timer = setTimeout(() => setHeldPhoto(null), LIGHTBOX_MS);
+    return () => clearTimeout(timer);
+  }, [heldPhoto]);
+
+  const photoIdAt = (e) => e.target?.closest?.('[data-photo-id]')?.getAttribute('data-photo-id') || null;
+  const handlePointerDown = (e) => {
+    if (heldPhoto) return;
+    const id = photoIdAt(e);
+    if (id) holdRef.current.down(e.clientX, e.clientY, id);
+  };
+  const handlePointerMove = (e) => holdRef.current.move(e.clientX, e.clientY);
+  const handlePointerUp = () => {
+    if (holdRef.current.up()) swallowClickRef.current = true;
+  };
+  const handlePointerCancel = () => holdRef.current.cancel();
+  const handleTap = () => {
+    if (swallowClickRef.current) {
+      swallowClickRef.current = false;
+      return;
+    }
+    if (heldPhoto) {
+      setHeldPhoto(null);
+      return;
+    }
+    handleExit();
+  };
 
   if (mode === 'tabs') {
     return (
@@ -238,10 +295,14 @@ const ScreenSaver = ({
           opacity: 1,
         },
       }}
-      onClick={handleExit}
+      onClick={handleTap}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
     >
       {coffeeTable ? (
-        <CoffeeTable photos={photos} seconds={coffeeTableSeconds} showDetails={photoDetails} />
+        <CoffeeTable photos={photos} seconds={coffeeTableSeconds} showDetails={photoDetails} paused={!!heldPhoto} />
       ) : collage ? (
         <PhotoCollage
           photos={photos}
@@ -278,6 +339,7 @@ const ScreenSaver = ({
             component="img"
             src={`${API_BASE_URL}${currentPhoto?.url}`}
             alt="Slideshow"
+            data-photo-id={currentPhoto?.id}
             sx={{
               position: 'relative',
               zIndex: 1,
@@ -406,6 +468,8 @@ const ScreenSaver = ({
           </>
         )}
       </Box>
+
+      <PhotoLightbox photo={heldPhoto} />
     </Box>
   );
 };
