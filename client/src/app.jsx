@@ -279,7 +279,7 @@ const App = () => {
   const adminPinExistsTokenRef = useRef(0);
   const [installedPlugins, setInstalledPlugins] = useState([]);
   const [activeTab, setActiveTab] = useState(1);
-  const { tabs, fetchTabs } = useFetchTabs(API_DEVICE_URL);
+  const { tabs, setTabs, fetchTabs } = useFetchTabs(API_DEVICE_URL);
   const [widgetAssignments, setWidgetAssignments] = useState({});
   const [showTabIconModal, setShowTabIconModal] = useState(false);
   const [deviceSettingsLoaded, setDeviceSettingsLoaded] = useState(false);
@@ -581,6 +581,25 @@ const App = () => {
   // endRegion #98
 
   // region #98 - expected to get removed in the future (invoke migration bridge during bootstrap)
+  // Mirror entry/exit changes the effective device (API_DEVICE_URL), but the
+  // previous device's settings, tabs and assignments stay in state until the
+  // refetch for the new device resolves. Rendering those stale widgets under
+  // the new device's name is wrong on its own — and WidgetContainer's
+  // mount-transition save can persist the stale layout onto the new device
+  // (proven on :3001: the wall's calendar went 6x4 -> 8x5, the phone's
+  // default, after a mirror entry). Clear device-scoped state the moment the
+  // effective device changes, so the dashboard renders nothing stale while
+  // the new device's data loads. Runs on mount too, where it clears defaults
+  // to defaults (a no-op). Household settings are shared and untouched.
+  useEffect(() => {
+    setWidgetAssignments({});
+    setTabs([]);
+    setWidgetSettings({ ...DEFAULT_WIDGET_SETTINGS });
+    setPluginSettings({});
+    setRawDeviceSettings(null);
+    setDeviceSettingsLoaded(false);
+  }, [API_DEVICE_URL]);
+
   useEffect(() => {
     const fetchDemoStatus = async () => {
       try {
