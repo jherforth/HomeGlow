@@ -208,3 +208,16 @@ export function compareByKey(a, b, keyOf, direction = 'asc', locale = undefined)
   if (signed !== 0) return signed;
   return Number(a?.id ?? 0) - Number(b?.id ?? 0);
 }
+
+// Transfer targets for the widget's Transfer dialog: every real user except
+// the current assignee, plus the bonus pool when the chore is currently
+// assigned to someone. User id 0 is the bonus pool, not a person, so it is
+// never a "real user" target — but an assigned chore can always go back to
+// it, which the dialog previously never offered (its list filtered id 0
+// out, and the widget's users list never contains it). A bonus chore has no
+// one to hand back to, so it gets no bonus row.
+export function getTransferTargets(users, currentUserId, bonusLabel) {
+  const targets = users.filter((u) => u.id !== 0 && u.id !== currentUserId);
+  if (currentUserId) targets.push({ id: 0, username: bonusLabel, isBonus: true });
+  return targets;
+}
