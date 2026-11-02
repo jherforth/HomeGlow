@@ -110,6 +110,12 @@ const WidgetContainer = ({
   expandSettings = null,
   // Told 'normal', 'half' or 'full' whenever the expanded size changes.
   onExpandedSizeChange,
+  // Mirror mode renders this grid inside a CSS transform: scale() wrapper.
+  // RGL's drag math divides screen deltas and element rects by
+  // positionStrategy.scale, so passing the wrapper's scale here keeps drags
+  // landing on the right row/column instead of undershooting by the scale
+  // factor. 1 (the library default) when not mirroring.
+  gridTransformScale = 1,
 }) => {
   const { t } = useTranslation('common');
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
@@ -908,6 +914,7 @@ const WidgetContainer = ({
           className="layout"
           width={containerWidth}
           layout={gridLayout}
+          positionStrategy={gridTransformScale === 1 ? undefined : { type: 'transform', scale: gridTransformScale }}
           gridConfig={{
             cols: gridCols,
             rowHeight: gridMetrics.rowHeight,

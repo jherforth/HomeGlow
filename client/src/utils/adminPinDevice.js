@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getDeviceApiBase } from './deviceName.js';
+import { getLocalDeviceApiBase } from './deviceName.js';
 
 /**
  * "Remember the PIN on this device" (issue: admin PIN per-device memory).
@@ -28,10 +28,16 @@ export function shouldPromptForPin({ pinExists, remembered }) {
   return pinExists === true && remembered !== true;
 }
 
-/** Reads the flag for THIS device. Any failure returns false, so we prompt. */
+/**
+ * Reads the flag for THIS device. Any failure returns false, so we prompt.
+ * Always the LOCAL device, never the session override: "remember on this
+ * device" means this physical browser, so mirror-Admin must neither skip
+ * the phone's PIN prompt because the wall remembered, nor set the wall's
+ * flag when the phone user checks "remember on this device".
+ */
 export async function fetchPinRemembered(apiBaseUrl) {
   try {
-    const { data } = await axios.get(`${getDeviceApiBase(apiBaseUrl)}/settings`);
+    const { data } = await axios.get(`${getLocalDeviceApiBase(apiBaseUrl)}/settings`);
     return isPinRemembered(data);
   } catch (error) {
     console.error('Error reading device PIN setting:', error);
@@ -39,9 +45,9 @@ export async function fetchPinRemembered(apiBaseUrl) {
   }
 }
 
-/** Sets or clears the flag for THIS device. */
+/** Sets or clears the flag for THIS device (local, never the mirror target). */
 export async function setPinRemembered(apiBaseUrl, remembered) {
-  await axios.patch(`${getDeviceApiBase(apiBaseUrl)}/settings`, {
+  await axios.patch(`${getLocalDeviceApiBase(apiBaseUrl)}/settings`, {
     [ADMIN_PIN_REMEMBERED_KEY]: remembered === true,
   });
 }

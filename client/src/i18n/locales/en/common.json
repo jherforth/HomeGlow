@@ -74,5 +74,16 @@
     "expand": "Expand",
     "fullPage": "Fill the page",
     "shrink": "Put back"
+  },
+  "mirror": {
+    "mirroring": "Mirroring {{name}}",
+    "tab": "Tab {{label}}",
+    "fallbackSize": "no reported size — using fallback",
+    "zoom": "Zoom",
+    "fit": "Fit",
+    "admin": "Admin",
+    "exit": "Exit mirror",
+    "unlock": "Unlock layout",
+    "lock": "Lock layout"
   }
 }

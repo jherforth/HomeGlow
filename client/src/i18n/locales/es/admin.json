@@ -207,6 +207,7 @@
     "lastUpdated": "Última actualización",
     "renameCurrent": "Cambiar el nombre del dispositivo actual",
     "copyToCurrent": "Copiar este dispositivo al actual",
+    "remoteControl": "Control remoto (duplicar esta pantalla)",
     "deleteDevice": "Eliminar dispositivo",
     "copyTitle": "Copiar ajustes del dispositivo",
     "copyExplain": "Esta acción COPIARÁ todas las pestañas y ajustes de widgets del dispositivo seleccionado a este cliente.",

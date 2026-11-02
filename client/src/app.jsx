@@ -5,6 +5,7 @@ import { Box, Dialog, DialogContent, Typography, ThemeProvider, createTheme } fr
 import axios from 'axios';
 import PluginWidgetWrapper from './components/PluginWidgetWrapper.jsx';
 import WidgetContainer from './components/WidgetContainer.jsx';
+import MirrorView from './components/MirrorView.jsx';
 import MobileDashboard from './components/MobileDashboard.jsx';
 import TabBar from './components/TabBar.jsx';
 import ScreensaverCountdown from './components/ScreensaverCountdown.jsx';
@@ -12,7 +13,8 @@ import UpdateIndicator from './components/UpdateIndicator.jsx';
 import { API_BASE_URL } from './utils/apiConfig.js';
 import { migrateLegacyPluginStorage } from './utils/pluginLocalStore.js';
 import { pluginGridSize } from './utils/pluginGridSize.js';
-import { getDeviceApiBase, getDeviceName } from './utils/deviceName.js';
+import { getDeviceApiBase, getLocalDeviceName, setMirrorTarget as setSessionMirrorTarget, getMirrorTarget } from './utils/deviceName.js';
+import { parseMirrorHash, buildMirrorHash, createViewportReporter } from './utils/mirrorMode.js';
 import { refreshSubscription } from './utils/pushNotifications.js';
 import { unlockAudio } from './utils/choreSound.js';
 import useChoreSoundScheduler from './hooks/useChoreSoundScheduler.js';
@@ -221,6 +223,17 @@ const withSentenceCaseButtons = (options) => ({
 });
 
 const App = () => {
+  // Remote-control mirror mode: the device being mirrored, or null. The
+  // state setter is named ...State to avoid colliding with the session
+  // override setter from deviceName.js.
+  const [mirrorTarget, setMirrorTargetState] = useState(() => parseMirrorHash(window.location.hash));
+  const [mirrorAdmin, setMirrorAdmin] = useState(false);
+  // Sync the session device override BEFORE anything derives an API URL
+  // from getDeviceApiBase: while mirroring, every device-scoped call in
+  // this render (settings, tabs, assignments, layout saves) addresses the
+  // target. Idempotent — the module var is only written when it differs.
+  // It is never written to localStorage (see deviceName.js).
+  if (getMirrorTarget() !== mirrorTarget) setSessionMirrorTarget(mirrorTarget);
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
   const isMobile = useIsMobile();
   const [theme, setTheme] = useState(readLocalTheme);
@@ -299,8 +312,36 @@ const App = () => {
 
   // A phone's browser can replace its push subscription by itself; hand the
   // server the current one (utils/pushNotifications.js). Quiet: it never asks.
+  // Always this browser's own name — a push subscription belongs to the
+  // physical browser, and registering it under a mirror target would send
+  // the wall's notifications to this phone (and vice versa).
   useEffect(() => {
-    refreshSubscription(getDeviceName()).catch(() => {});
+    refreshSubscription(getLocalDeviceName()).catch(() => {});
+  }, []);
+  // Report this display's viewport size for mirror mode: a mirror renders
+  // at the target's reported size. Always this browser's own name — a
+  // mirror must never overwrite the target's record with the phone's size.
+  // Debounced and on-change only, fire-and-forget, and the route never
+  // bumps, so this cannot set off a refetch loop.
+  const viewportReporterRef = useRef(null);
+  if (viewportReporterRef.current === null) {
+    viewportReporterRef.current = createViewportReporter((size) => {
+      axios.post(`${API_BASE_URL}/api/devices/${encodeURIComponent(getLocalDeviceName())}/viewport`, size).catch(() => {});
+    });
+  }
+  useEffect(() => {
+    const reporter = viewportReporterRef.current;
+    const report = () => reporter.report({
+      width: window.innerWidth,
+      height: window.innerHeight,
+      devicePixelRatio: window.devicePixelRatio || 1,
+    });
+    report();
+    window.addEventListener('resize', report);
+    return () => {
+      window.removeEventListener('resize', report);
+      reporter.cancel();
+    };
   }, []);
   // A theme installed since this display loaded its list: read it again.
   const themeKnown = themeRegistry.themes.some((entry) => entry.id === appearance.theme);
@@ -1097,8 +1138,11 @@ const App = () => {
 
   useEffect(() => {
     // The screensaver is a kiosk ambient feature — phones lock themselves, so
-    // on mobile the inactivity timers never start (issue #118).
-    if (!screensaverSettings.enabled || isMobile) {
+    // on mobile the inactivity timers never start (issue #118). It also
+    // never starts in mirror mode: the mirror is an active editing session
+    // (the phone's own lock handles idle), and the target's screensaver
+    // settings must not blank the editor.
+    if (!screensaverSettings.enabled || isMobile || mirrorTarget) {
       if (inactivityTimerRef.current) {
         clearTimeout(inactivityTimerRef.current);
       }
@@ -1112,7 +1156,7 @@ const App = () => {
         clearTimeout(inactivityTimerRef.current);
       }
     };
-  }, [screensaverSettings.enabled, screensaverSettings.timeout, startInactivityTimer, isMobile]);
+  }, [screensaverSettings.enabled, screensaverSettings.timeout, startInactivityTimer, isMobile, mirrorTarget]);
 
   const handleExitScreensaver = useCallback(() => {
     screensaverActiveRef.current = false;
@@ -1197,10 +1241,43 @@ const App = () => {
 
   const toggleAdminPanel = () => {
     if (showAdminPanel) {
+      // Closing Admin from mirror-Admin returns to the mirror, not to the
+      // phone's dashboard: restore the mirror hash (the hashchange handler
+      // below confirms the mirror state) instead of clearing it.
+      if (mirrorAdmin && mirrorTarget) {
+        setMirrorAdmin(false);
+        setShowAdminPanel(false);
+        window.location.hash = buildMirrorHash(mirrorTarget);
+        return;
+      }
       void fetchDeviceSettings();
       clearAdminHash();
+    } else if (mirrorTarget) {
+      // Opening Admin from the mirror keeps the mirror session alive: Admin
+      // device-scoped writes route to the target until the mirror is exited.
+      // (Reloading while in Admin-from-mirror loses this flag, and Admin
+      // safely reverts to the local device — a documented limitation.)
+      setMirrorAdmin(true);
     }
     setShowAdminPanel(!showAdminPanel);
+  };
+
+  // Mirror mode exit returns to Admin Devices, never to the phone's
+  // dashboard: the mirror was entered from there, and the phone's own
+  // dashboard is one more tap away (Admin's close button).
+  const exitMirror = () => {
+    setMirrorTargetState(null);
+    setMirrorAdmin(false);
+    setShowAdminPanel(true);
+    window.location.hash = '#/admin/displays';
+  };
+
+  // Opening Admin from the mirror banner lands on Admin Devices with the
+  // mirror session alive (see toggleAdminPanel).
+  const openAdminFromMirror = () => {
+    setMirrorAdmin(true);
+    setShowAdminPanel(true);
+    window.location.hash = '#/admin/displays';
   };
 
   // Open admin panel if URL hash indicates it (deep link / refresh restore).
@@ -1212,6 +1289,24 @@ const App = () => {
     }
     // Only run on mount — subsequent hash changes are handled by AdminPanel.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Mirror mode entry via the URL hash: the Devices-row button sets
+  // #/mirror/<name>. Admin hashes are left alone — AdminPanel owns later
+  // admin-hash edits itself — and a manually cleared hash never silently
+  // exits a mirror (the banner on screen is the source of truth; exit is
+  // explicit, via the banner button).
+  useEffect(() => {
+    const handleHashChange = () => {
+      const target = parseMirrorHash(window.location.hash);
+      if (target !== null) {
+        setMirrorTargetState(target);
+        setMirrorAdmin(false);
+        setShowAdminPanel(false);
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
   const handlePageRefresh = () => {
@@ -1436,6 +1531,14 @@ const App = () => {
     return active?.id ?? 1;
   }, [tabs, activeTab]);
 
+  // The tab the mirror is editing, for the mirror banner (tab sync is out
+  // of scope: switching tabs in the mirror never moves the target's tab, so
+  // the banner must say which tab an edit will land on).
+  const activeTabLabel = useMemo(() => {
+    const active = tabs.find(tab => tab.number === activeTab);
+    return active?.label || `Tab ${activeTab}`;
+  }, [tabs, activeTab]);
+
   const shouldRunWeatherBackgroundPrefetch =
     widgetSettings.weather.enabled &&
     !isWidgetAssignedToTab('weather', activeTab);
@@ -1520,16 +1623,42 @@ const App = () => {
         {/* Its corner is the Save Layout button's while the layout is
             unlocked, which is never for long. */}
         {widgetsLocked && <UpdateIndicator />}
-        {/* Move/Resize ends here, not back in the dock (issue #333). */}
-        {!isMobile && !widgetsLocked && !showAdminPanel && !screensaverActive && (
+        {/* Move/Resize ends here, not back in the dock (issue #333). The
+            mirror banner carries its own lock toggle, so this stays hidden
+            while mirroring. */}
+        {!isMobile && !widgetsLocked && !showAdminPanel && !screensaverActive && !mirrorTarget && (
           <SaveLayoutButton onSave={toggleWidgetsLock} />
+        )}
+        {/* Mirror mode bypasses the mobile/kiosk fork below: it always
+            renders the target's grid path, scaled to fit this browser
+            (issue: remote-control mirror mode). The widgets/settings/tabs
+            here are already the target's — API_DEVICE_URL derives from the
+            session override while mirroring, so the existing fetches load
+            the target's data and its writes land on the target. */}
+        {mirrorTarget && (
+          <MirrorView
+            targetName={mirrorTarget}
+            widgets={widgets}
+            locked={widgetsLocked}
+            activeTab={activeTab}
+            activeTabId={activeTabId}
+            activeTabLabel={activeTabLabel}
+            deviceWidgetSettings={widgetSettings}
+            devicePluginSettings={pluginSettings}
+            isActive={widgetsActive}
+            expandSettings={screensaverSettings}
+            onExpandedSizeChange={setExpandedWidgetSize}
+            onToggleLock={toggleWidgetsLock}
+            onOpenAdmin={openAdminFromMirror}
+            onExit={exitMirror}
+          />
         )}
         {/* The one mobile/kiosk fork (issue #118): below 600px the grid —
             react-grid-layout, drag/resize, lock — never mounts. */}
-        {isMobile && mobileWidgets.length > 0 && (
+        {!mirrorTarget && isMobile && mobileWidgets.length > 0 && (
           <MobileDashboard widgets={mobileWidgets} />
         )}
-        {!isMobile && widgets.length > 0 && (
+        {!mirrorTarget && !isMobile && widgets.length > 0 && (
           <WidgetContainer
             widgets={widgets}
             locked={widgetsLocked}
@@ -1557,7 +1686,7 @@ const App = () => {
             </Suspense>
           </Box>
         )}
-        {deviceSettingsLoaded && widgets.length === 0 && isFirstRunClient && (
+        {!mirrorTarget && deviceSettingsLoaded && widgets.length === 0 && isFirstRunClient && (
           <Box
             sx={{
               minHeight: 'calc(100vh - 80px)',

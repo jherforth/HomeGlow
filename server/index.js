@@ -2939,6 +2939,72 @@ const upsertDeviceSettings = async (request, reply) => {
 fastify.put('/api/devices/:deviceName/settings', upsertDeviceSettings);
 fastify.patch('/api/devices/:deviceName/settings', upsertDeviceSettings);
 
+// Reported viewport size, for mirror mode (remote control): the dashboard
+// posts its own innerWidth/innerHeight/devicePixelRatio so a mirror can
+// render at the target's true size. Telemetry, not a setting — it lives in
+// its own column (see schema41) so a settings PUT can never wipe it, and
+// its route is excluded from the household-changes bump (see ROUTE_DOMAINS)
+// so a resize can never set off a refetch loop.
+const parseViewportReport = (body) => {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+  const { width, height } = body;
+  const devicePixelRatio = body.devicePixelRatio === undefined ? 1 : body.devicePixelRatio;
+  if (!Number.isInteger(width) || width <= 0) return null;
+  if (!Number.isInteger(height) || height <= 0) return null;
+  if (!Number.isFinite(devicePixelRatio) || devicePixelRatio <= 0) return null;
+  return { width, height, devicePixelRatio };
+};
+
+fastify.post('/api/devices/:deviceName/viewport', async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+
+  const viewport = parseViewportReport(request.body);
+  if (!viewport) {
+    return reply.status(400).send({ error: 'viewport must be { width, height, devicePixelRatio? } with positive numbers' });
+  }
+
+  try {
+    ensureDeviceExists(deviceName);
+    // Deliberately NOT touching updateTime: a viewport report is not an
+    // edit, and it must not reorder the Admin Devices list on every resize.
+    db.prepare('UPDATE devices SET viewport_json = ? WHERE name = ?').run(
+      JSON.stringify(viewport),
+      deviceName
+    );
+
+    return { ok: true, viewport };
+  } catch (error) {
+    console.error('Error saving device viewport:', error);
+    reply.status(500).send({ error: 'Failed to save device viewport' });
+  }
+});
+
+fastify.get('/api/devices/:deviceName/viewport', async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+
+  try {
+    const row = db.prepare('SELECT viewport_json FROM devices WHERE name = ?').get(deviceName);
+    if (!row || !row.viewport_json) {
+      return { viewport: null };
+    }
+
+    try {
+      return { viewport: JSON.parse(row.viewport_json) };
+    } catch {
+      return { viewport: null };
+    }
+  } catch (error) {
+    console.error('Error fetching device viewport:', error);
+    reply.status(500).send({ error: 'Failed to fetch device viewport' });
+  }
+});
+
 
 fastify.patch('/api/devices/:deviceName', async (request, reply) => {
   const { deviceName } = request.params;

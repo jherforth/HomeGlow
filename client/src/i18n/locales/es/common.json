@@ -74,5 +74,16 @@
     "expand": "Ampliar",
     "fullPage": "Llenar la página",
     "shrink": "Devolver"
+  },
+  "mirror": {
+    "mirroring": "Espejo de {{name}}",
+    "tab": "Pestaña {{label}}",
+    "fallbackSize": "sin tamaño notificado — usando el predeterminado",
+    "zoom": "Zoom",
+    "fit": "Ajustar",
+    "admin": "Admin",
+    "exit": "Salir del espejo",
+    "unlock": "Desbloquear diseño",
+    "lock": "Bloquear diseño"
   }
 }

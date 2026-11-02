@@ -207,6 +207,7 @@
     "lastUpdated": "Last Updated",
     "renameCurrent": "Rename current device",
     "copyToCurrent": "Copy this device to current",
+    "remoteControl": "Remote control (mirror this display)",
     "deleteDevice": "Delete device",
     "copyTitle": "Copy Device Settings",
     "copyExplain": "This action will COPY all tabs and widget settings from the selected device to this current client.",
