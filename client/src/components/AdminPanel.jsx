@@ -74,8 +74,9 @@ import { editWholeNumber, savedWholeNumber } from '../utils/wholeNumberField.js'
 import { pinErrorText } from '../utils/pinErrors.js';
 import { revealTabPicker } from '../utils/revealTabPicker.js';
 import { nextExpandedPlugin, firstMissingPluginFilename } from '../utils/pluginAccordion.js';
-import { getDeviceApiBase, getDeviceName, getLocalDeviceName, getLocalDeviceApiBase, setDeviceName, isValidDeviceName } from '../utils/deviceName.js';
+import { getDeviceApiBase, getDeviceName, getLocalDeviceName, getLocalDeviceApiBase, getMirrorTarget, setDeviceName, isValidDeviceName } from '../utils/deviceName.js';
 import { buildMirrorHash } from '../utils/mirrorMode.js';
+import { getDeviceRowState } from '../utils/mirrorAdmin.js';
 import { fetchPinRemembered, setPinRemembered, forgetPinOnAllDevices, shouldPromptForPin } from '../utils/adminPinDevice.js';
 import PinModal from './PinModal';
 import ChoreSchedulesTab from './ChoreSchedulesTab';
@@ -186,6 +187,12 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   // control): the "Current" chip, the rename row, the copy destination, and
   // the delete guard all mean THIS physical browser, never the target.
   const [currentDeviceName, setCurrentDeviceName] = useState(() => getLocalDeviceName());
+  // The mirror target while this panel was opened from a mirror, else null.
+  // The Devices section names it (banner + Target chip) so it is clear
+  // device changes here apply to the target, not this phone — while the
+  // Current identity above stays local. (A reload inside Admin-from-mirror
+  // loses this and the panel safely reverts to local: documented.)
+  const mirrorTarget = getMirrorTarget();
   // Device-scoped reads/writes address the EFFECTIVE device: the mirror
   // target while mirroring, else this browser's own device. That is the
   // whole point of mirror-Admin — Admin edits land on the target.
@@ -2026,6 +2033,16 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
 
   return (
     <AdminShell location={location} navigate={navigate} onClose={onRequestClose} startOnList={startOnList}>
+      {/* Mirror-Admin context bar: on EVERY page while this panel was
+          opened from a mirror, so it is always visible that edits land
+          on the target, not this phone. A label only — no Exit here:
+          closing Admin returns to the mirror, where the banner Exit
+          lives. (The Devices section keeps its own, fuller banner.) */}
+      {mirrorTarget && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          {t('admin:devices.mirrorAdminBanner', { target: mirrorTarget })}
+        </Alert>
+      )}
       {/* One place for every tab, rather than a copy per tab that most
           tabs lacked (screensaver and vacation saves showed nothing). */}
       {saveMessage.show && (
@@ -2752,6 +2769,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
         <>
             {location.section === 'devices' && (
               <>
+                {mirrorTarget && (
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    {t('admin:devices.mirrorBanner', { target: mirrorTarget })}
+                  </Alert>
+                )}
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2, px: 0.5 }}>
                   {t('admin:devices.manageHelp')}
                 </Typography>
@@ -2771,7 +2793,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                 {/* No heading: the section's own title already says Devices. */}
                 <AdminGroup>
                   {devices.map((device) => {
-                    const isCurrent = device.name === currentDeviceName;
+                    const { isCurrent, isTarget, showCopy, showRemote, showDelete } = getDeviceRowState(device.name, { currentDeviceName, mirrorTarget });
                     return (
                       <AdminRow
                         key={device.name}
@@ -2780,6 +2802,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                           <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                             <Box component="span" sx={{ fontFamily: 'var(--hg-font-mono)', fontSize: '0.9375rem' }}>{device.name}</Box>
                             {isCurrent && <Chip label={t('admin:devices.current')} color="primary" size="small" />}
+                            {isTarget && <Chip label={t('admin:devices.target')} color="secondary" size="small" />}
                           </Box>
                         )}
                         hint={[
@@ -2789,7 +2812,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                         control={(
                           <>
                             {/* This display is renamed from the row above. */}
-                            {!isCurrent && (
+                            {showCopy && (
                               <Tooltip title={t('admin:devices.copyToCurrent')}>
                                 <IconButton onClick={() => openCopyDeviceDialog(device)} size="small" aria-label={t('admin:devices.copyToCurrent')}>
                                   <ContentCopy fontSize="small" />
@@ -2801,26 +2824,32 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                                 from this browser. The mirror writes to this
                                 row's device, never to this browser's own
                                 device, and never creates a device row. */}
-                            {!isCurrent && (
+                            {showRemote && (
                               <Tooltip title={t('admin:devices.remoteControl')}>
                                 <IconButton onClick={() => { window.location.hash = buildMirrorHash(device.name); }} size="small" aria-label={t('admin:devices.remoteControl')}>
                                   <SettingsRemote fontSize="small" />
                                 </IconButton>
                               </Tooltip>
                             )}
-                            <Tooltip title={t('admin:devices.deleteDevice')}>
-                              <span>
-                                <IconButton
-                                  onClick={() => openDeleteDeviceDialog(device)}
-                                  color="error"
-                                  size="small"
-                                  aria-label={t('admin:devices.deleteDevice')}
-                                  disabled={isCurrent}
-                                >
-                                  <Delete fontSize="small" />
-                                </IconButton>
-                              </span>
-                            </Tooltip>
+                            {/* Delete renders disabled on this browser's
+                                own row (as before) and is absent entirely
+                                on the mirror target row (showDelete false
+                                there); every other row offers it. */}
+                            {(showDelete || isCurrent) && (
+                              <Tooltip title={t('admin:devices.deleteDevice')}>
+                                <span>
+                                  <IconButton
+                                    onClick={() => openDeleteDeviceDialog(device)}
+                                    color="error"
+                                    size="small"
+                                    aria-label={t('admin:devices.deleteDevice')}
+                                    disabled={isCurrent}
+                                  >
+                                    <Delete fontSize="small" />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                            )}
                           </>
                         )}
                       />
