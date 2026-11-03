@@ -3005,6 +3005,97 @@ fastify.get('/api/devices/:deviceName/viewport', async (request, reply) => {
   }
 });
 
+// One-time reload command for mirror exit (remote refresh): when a mirror
+// session exits, the exiting client POSTs here for the TARGET device. The
+// command is a timestamp inside the target's device settings — no new
+// column, no new domain. The POST matches the blanket /api/devices/**
+// entry, so it bumps `settings` and the target learns of it within ~1s
+// (SSE) / ≤15s (poll) like any other device write. The target's dashboard,
+// on seeing a pending command for its OWN device row, clears it (DELETE)
+// and reloads — clearing before reloading is what makes the command
+// one-time: a reloaded page finds nothing pending, and only a new exit
+// writes a new command. updateTime is untouched: a reload command is not
+// an edit and must not reorder the Admin Devices list. The command never
+// creates a device: POST/GET/DELETE to an unknown name 404.
+const MIRROR_RELOAD_FIELD = 'mirrorReloadRequestedAt';
+
+const readMirrorReloadRequest = (deviceName) => {
+  const row = db.prepare('SELECT device_settings_json FROM devices WHERE name = ?').get(deviceName);
+  if (!row) return { exists: false, value: null };
+  const settings = parseJsonObject(row.device_settings_json, {});
+  const value = settings[MIRROR_RELOAD_FIELD];
+  return { exists: true, value: typeof value === 'number' && Number.isFinite(value) ? value : null };
+};
+
+fastify.post('/api/devices/:deviceName/reload-request', async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+
+  try {
+    const row = db.prepare('SELECT device_settings_json FROM devices WHERE name = ?').get(deviceName);
+    if (!row) {
+      return reply.status(404).send({ error: 'device not found' });
+    }
+    const settings = parseJsonObject(row.device_settings_json, {});
+    const requestedAt = Date.now();
+    settings[MIRROR_RELOAD_FIELD] = requestedAt;
+    db.prepare('UPDATE devices SET device_settings_json = ? WHERE name = ?').run(
+      JSON.stringify(settings),
+      deviceName
+    );
+
+    return { ok: true, mirrorReloadRequestedAt: requestedAt };
+  } catch (error) {
+    console.error('Error saving mirror reload request:', error);
+    reply.status(500).send({ error: 'Failed to save mirror reload request' });
+  }
+});
+
+fastify.get('/api/devices/:deviceName/reload-request', async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+
+  try {
+    const { exists, value } = readMirrorReloadRequest(deviceName);
+    if (!exists) {
+      return reply.status(404).send({ error: 'device not found' });
+    }
+    return { mirrorReloadRequestedAt: value };
+  } catch (error) {
+    console.error('Error fetching mirror reload request:', error);
+    reply.status(500).send({ error: 'Failed to fetch mirror reload request' });
+  }
+});
+
+fastify.delete('/api/devices/:deviceName/reload-request', async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+
+  try {
+    const row = db.prepare('SELECT device_settings_json FROM devices WHERE name = ?').get(deviceName);
+    if (!row) {
+      return reply.status(404).send({ error: 'device not found' });
+    }
+    const settings = parseJsonObject(row.device_settings_json, {});
+    delete settings[MIRROR_RELOAD_FIELD];
+    db.prepare('UPDATE devices SET device_settings_json = ? WHERE name = ?').run(
+      JSON.stringify(settings),
+      deviceName
+    );
+
+    return { ok: true };
+  } catch (error) {
+    console.error('Error clearing mirror reload request:', error);
+    reply.status(500).send({ error: 'Failed to clear mirror reload request' });
+  }
+});
+
 
 fastify.patch('/api/devices/:deviceName', async (request, reply) => {
   const { deviceName } = request.params;

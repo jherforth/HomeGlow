@@ -14,6 +14,7 @@ import { API_BASE_URL } from './utils/apiConfig.js';
 import { migrateLegacyPluginStorage } from './utils/pluginLocalStore.js';
 import { pluginGridSize } from './utils/pluginGridSize.js';
 import { getDeviceApiBase, getLocalDeviceName, setMirrorTarget as setSessionMirrorTarget, getMirrorTarget } from './utils/deviceName.js';
+import { requestMirrorReload, checkMirrorReload } from './utils/mirrorReload.js';
 import { parseMirrorHash, buildMirrorHash, createViewportReporter } from './utils/mirrorMode.js';
 import { refreshSubscription } from './utils/pushNotifications.js';
 import { unlockAudio } from './utils/choreSound.js';
@@ -856,7 +857,30 @@ const App = () => {
   useEffect(() => subscribeHouseholdChanges(['settings'], () => {
     void fetchHouseholdSettings();
     void fetchWidgetAssignments();
+    // Remote refresh: a mirror session that just exited asked a device to
+    // reload. The check reads only this browser's own device row, so a
+    // mirror controller never reloads itself and a non-target never fires.
+    void checkMirrorReload(fetch, API_BASE_URL, getLocalDeviceName()).then((result) => {
+      if (result === 'reload') window.location.reload();
+    });
   }), [fetchHouseholdSettings]);
+
+  // Remote refresh, page-load seed: a reload command that predates this
+  // page is already reflected in the fresh state this page loaded with,
+  // so adopt (clear) it without reloading. The immediate second check
+  // closes the gap between seeding and the subscription above: anything
+  // written in between still fires, and anything written after subscribing
+  // fires through the subscription itself.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      await checkMirrorReload(fetch, API_BASE_URL, getLocalDeviceName(), { adopt: true });
+      if (cancelled) return;
+      const result = await checkMirrorReload(fetch, API_BASE_URL, getLocalDeviceName());
+      if (!cancelled && result === 'reload') window.location.reload();
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // A wall display checks for changes every 15 seconds; a phone only when
   // it's opened, since nobody watches one sitting in a pocket.
@@ -1283,8 +1307,16 @@ const App = () => {
 
   // Mirror mode exit returns to Admin Devices, never to the phone's
   // dashboard: the mirror was entered from there, and the phone's own
-  // dashboard is one more tap away (Admin's close button).
+  // dashboard is one more tap away (Admin's close button). Exiting also
+  // asks the target to reload once (remote refresh): the command is
+  // addressed to the captured target name, never the effective device, so
+  // the exiting phone can never command itself, and it is fire-and-
+  // forget — a failed request must never block the exit.
   const exitMirror = () => {
+    const target = mirrorTarget;
+    if (target) {
+      void requestMirrorReload(fetch, API_BASE_URL, target);
+    }
     setMirrorTargetState(null);
     setMirrorAdmin(false);
     setShowAdminPanel(true);
