@@ -3,6 +3,7 @@ import {
   activeDimTarget,
   initDisplayDim,
   isNightAt,
+  setDimmingHold,
   setDimmingPaused,
   updateDisplayDimming,
 } from './displayDim.js';
@@ -118,6 +119,20 @@ describe('live dimming with a stubbed DOM', () => {
 
     // Disabling clears the filter without a reload.
     updateDisplayDimming({ enabled: false });
+    expect(el.style.filter).toBe('');
+
+    // A display mode can hold the screen dimmed even with dimming off. A
+    // touch wakes it; it stays awake through the hold's idle time.
+    setDimmingHold(0.04);
+    expect(el.style.filter).toBe('brightness(0.04)');
+    listeners.pointerdown();
+    expect(el.style.filter).toBe('');
+    tick();
+    expect(el.style.filter).toBe('');
+    // Released, it stays awake and dimming stays off.
+    setDimmingHold(null);
+    expect(el.style.filter).toBe('');
+    tick();
     expect(el.style.filter).toBe('');
   });
 });

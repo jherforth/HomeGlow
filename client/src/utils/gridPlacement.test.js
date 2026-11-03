@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildLayout, savedSourcesById } from './gridPlacement';
+import { buildLayout, firstOpenSpot, savedSourcesById } from './gridPlacement';
 import { layoutToNormalized } from './gridLayout.js';
 
 const plugin = (id) => ({
@@ -205,5 +205,14 @@ describe('saving a built layout', () => {
   it('has nothing to keep for a widget that was never saved', () => {
     expect(savedSourcesById([plugin('a'), { ...plugin('b'), savedLayout: { x: 6, y: 0, w: 6, h: 4 } }]))
       .toEqual(new Map([['b', { x: 6, y: 0, w: 6, h: 4, minW: 2, minH: 2 }]]));
+  });
+});
+
+describe('firstOpenSpot', () => {
+  it('goes below everything with no row limit', () => {
+    expect(firstOpenSpot({ w: 12, h: 2 }, [{ x: 0, y: 0, w: 12, h: 3 }])).toEqual({ x: 0, y: 3, w: 12, h: 2 });
+  });
+  it('fills a gap beside a widget first', () => {
+    expect(firstOpenSpot({ w: 6, h: 2 }, [{ x: 0, y: 0, w: 6, h: 4 }])).toEqual({ x: 6, y: 0, w: 6, h: 2 });
   });
 });

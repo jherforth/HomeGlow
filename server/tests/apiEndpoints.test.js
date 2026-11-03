@@ -1269,3 +1269,37 @@ test('event streams past the cap are refused with 503 until one closes', async (
         opened.forEach((stream) => stream.req.destroy());
     }
 });
+
+test('a removed widget comes back with its place and settings when its entry is put back', async () => {
+    const deviceName = `entry-restore-${Date.now()}`;
+    const base = `/api/devices/${encodeURIComponent(deviceName)}`;
+
+    await api(`${base}/widget-assignments`, { method: 'POST', body: JSON.stringify({ widget_name: 'calendar', tabNumber: 1 }) });
+    await api(`${base}/widget-assignments/layout`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+            widget_name: 'calendar', tabNumber: 1,
+            layout_x: 4, layout_y: 1, layout_w: 8, layout_h: 6,
+            settings: { showStartTimes: false },
+        }),
+    });
+    const before = JSON.parse((await api(`${base}/tabs`)).body.find((tab) => tab.number === 1).config_json).calendar;
+
+    const del = await api(`${base}/widget-assignments/${encodeURIComponent('1::calendar')}`, { method: 'DELETE' });
+    assert.equal(del.status, 200);
+
+    const put = await api(`${base}/widget-assignments/entry`, {
+        method: 'PUT',
+        body: JSON.stringify({ widget_name: 'calendar', tabNumber: 1, entry: before }),
+    });
+    assert.equal(put.status, 200);
+
+    const after = JSON.parse((await api(`${base}/tabs`)).body.find((tab) => tab.number === 1).config_json).calendar;
+    assert.deepEqual(after, before);
+
+    const bad = await api(`${base}/widget-assignments/entry`, {
+        method: 'PUT',
+        body: JSON.stringify({ widget_name: 'calendar', tabNumber: 1, entry: [1, 2] }),
+    });
+    assert.equal(bad.status, 400);
+});

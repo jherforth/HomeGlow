@@ -72,7 +72,7 @@ import { API_BASE_URL } from '../utils/apiConfig.js';
 import { editWholeNumber, savedWholeNumber } from '../utils/wholeNumberField.js';
 import { pinErrorText } from '../utils/pinErrors.js';
 import { revealTabPicker } from '../utils/revealTabPicker.js';
-import { nextExpandedPlugin, firstMissingPluginFilename } from '../utils/pluginAccordion.js';
+import { EXPAND_PLUGIN_EVENT, nextExpandedPlugin, firstMissingPluginFilename } from '../utils/pluginAccordion.js';
 import { getDeviceApiBase, getDeviceName, setDeviceName, isValidDeviceName } from '../utils/deviceName.js';
 import { fetchPinRemembered, setPinRemembered, forgetPinOnAllDevices, shouldPromptForPin } from '../utils/adminPinDevice.js';
 import PinModal from './PinModal';
@@ -96,6 +96,9 @@ import { AdminFooter, AdminGroup, AdminNote, AdminRow } from './AdminRows.jsx';
 import SoundPicker from './SoundPicker';
 import ControlsOnDisplay from './ControlsOnDisplay';
 import ExpandWidgetsSettings from './ExpandWidgetsSettings';
+import ModesSettings from './ModesSettings.jsx';
+import StacksSettings from './StacksSettings.jsx';
+import { WIDGET_STACKS_KEY, isStackName, normalizeStacks, stackName } from '../utils/widgetStacks.js';
 import { frameNameFor } from '../utils/pluginLocalStore.js';
 import useFetchTabs from '../hooks/useFetchTabs.js';
 import { MAX_DOCK_HIDE_MINUTES, screensaverPreemptsDock } from '../utils/dockIdleHide.js';
@@ -282,6 +285,14 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   // expand button, so toggling it never expands the row.
   const [expandedPlugin, setExpandedPlugin] = useState(null);
   const toggleExpandedPlugin = (filename) => setExpandedPlugin((current) => nextExpandedPlugin(current, filename));
+  // A widget menu on the dashboard asking for one plugin's settings.
+  useEffect(() => {
+    const expand = (event) => {
+      if (typeof event.detail?.filename === 'string') setExpandedPlugin(event.detail.filename);
+    };
+    window.addEventListener(EXPAND_PLUGIN_EVENT, expand);
+    return () => window.removeEventListener(EXPAND_PLUGIN_EVENT, expand);
+  }, []);
   const [loadingGithub, setLoadingGithub] = useState(false);
   // The store list loads itself on opening Plugins (issue #273): whether it
   // has, and why not when it couldn't.
@@ -302,6 +313,9 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   const [checkingPin, setCheckingPin] = useState(true);
   const { tabs, fetchTabs } = useFetchTabs(API_DEVICE_URL);
   const [widgetAssignments, setWidgetAssignments] = useState({});
+  // Widgets shown inside a Stack that's on a tab: on the dashboard, so not
+  // "enabled but on no tab" (utils/widgetStacks.js).
+  const [stackedWidgets, setStackedWidgets] = useState(() => new Set());
   const [pluginSettings, setPluginSettings] = useState({});
   const [pluginAssignments, setPluginAssignments] = useState({});
   // Values for settings a plugin declared in its manifest (issue #105 Phase 2),
@@ -635,6 +649,16 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
 
       setWidgetAssignments(coreAssignments);
       setPluginAssignments(pluginAssign);
+      try {
+        const { data } = await axios.get(`${API_DEVICE_URL}/settings`);
+        const placed = new Set(assignments.map((row) => row.widget_name).filter(isStackName));
+        const members = normalizeStacks(data?.[WIDGET_STACKS_KEY]).stacks
+          .filter((stack) => placed.has(stackName(stack.id)))
+          .flatMap((stack) => stack.widgets);
+        setStackedWidgets(new Set(members));
+      } catch {
+        setStackedWidgets(new Set());
+      }
     } catch (error) {
       console.error('Error fetching widget assignments:', error);
       setWidgetAssignments({});
@@ -876,7 +900,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     return Object.keys(DEFAULT_WIDGET_SETTINGS).filter((widgetName) => {
       const isEnabled = Boolean(normalizedSettings?.[widgetName]?.enabled);
       const selectedTabNumbers = assignmentsToValidate?.[widgetName];
-      return isEnabled && (!Array.isArray(selectedTabNumbers) || selectedTabNumbers.length === 0);
+      return isEnabled && !stackedWidgets.has(widgetName) && (!Array.isArray(selectedTabNumbers) || selectedTabNumbers.length === 0);
     });
   };
 
@@ -894,7 +918,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
 
       const pluginWidgetName = `plugin:${filename}`;
       const selectedTabNumbers = assignmentsToValidate?.[pluginWidgetName];
-      if (!Array.isArray(selectedTabNumbers) || selectedTabNumbers.length === 0) {
+      if (!stackedWidgets.has(pluginWidgetName) && (!Array.isArray(selectedTabNumbers) || selectedTabNumbers.length === 0)) {
         missing.push(pluginWidgetName);
       }
 
@@ -2028,7 +2052,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
 
                 {['chores', 'calendar', 'photos', 'weather'].filter((widget) => widgetSettings[widget]).map((widget) => {
                   const config = widgetSettings[widget];
-                  const hasRequiredTabsError = Boolean(config.enabled) && (!Array.isArray(widgetAssignments[widget]) || widgetAssignments[widget].length === 0);
+                  const inStack = stackedWidgets.has(widget);
+                  const hasRequiredTabsError = Boolean(config.enabled) && !inStack && (!Array.isArray(widgetAssignments[widget]) || widgetAssignments[widget].length === 0);
                   return (
                     <AdminGroup
                       key={widget}
@@ -2075,7 +2100,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                         label={t('admin:widgets.showOnTabs')}
                         hint={hasRequiredTabsError
                           ? <Box component="span" sx={{ color: 'error.main' }}>Required: select at least one tab when this widget is enabled.</Box>
-                          : 'Select which tabs this widget should appear on.'}
+                          : (inStack ? t('admin:stacks.alsoInStack') : 'Select which tabs this widget should appear on.')}
                         wide
                         control={(
                           <Box sx={{ width: '100%' }} data-tab-picker={widget}>
@@ -2104,6 +2129,15 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                     </AdminGroup>
                   );
                 })}
+
+                {/* Stacks: several widgets in one spot (utils/widgetStacks.js). */}
+                <StacksSettings
+                  onOpenConnections={() => navigate({ tab: 'system', section: 'connections' })}
+                  onChanged={async () => {
+                    await fetchWidgetAssignments();
+                    await onTabsChanged?.();
+                  }}
+                />
 
                 <AdminFooter>
                   <Button variant="contained" onClick={() => saveWidgetSettings()} startIcon={<Save />}>
@@ -2353,7 +2387,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                       const storeEntry = plugin.source === 'builder' ? null : storeEntryOf(plugin, githubWidgets);
                       const updatable = storeEntry && pluginStoreStatus(storeEntry, [plugin]) === 'update';
                       const pluginWidgetName = `plugin:${plugin.filename}`;
-                      const hasRequiredTabsError = Boolean(pSettings.enabled) && (!Array.isArray(pluginAssignments[pluginWidgetName]) || pluginAssignments[pluginWidgetName].length === 0);
+                      const inStack = stackedWidgets.has(pluginWidgetName);
+                      const hasRequiredTabsError = Boolean(pSettings.enabled) && !inStack && (!Array.isArray(pluginAssignments[pluginWidgetName]) || pluginAssignments[pluginWidgetName].length === 0);
                       const setPluginField = (field, value) => setPluginSettings(prev => ({
                         ...prev,
                         [plugin.filename]: { ...prev[plugin.filename], [field]: value }
@@ -2563,7 +2598,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                             label={t('admin:widgets.showOnTabs')}
                             hint={hasRequiredTabsError
                               ? <Box component="span" sx={{ color: 'error.main' }}>Required: select at least one tab when this plugin is enabled.</Box>
-                              : 'Select which tabs this plugin should appear on.'}
+                              : (inStack ? t('admin:stacks.alsoInStack') : 'Select which tabs this plugin should appear on.')}
                             wide
                             control={(
                               <Box sx={{ width: '100%' }} data-tab-picker={pluginWidgetName}>
@@ -2902,6 +2937,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                   </Button>
                 </AdminFooter>
               </>
+            )}
+
+            {/* Modes: this display's own modes (utils/displayModes.js). */}
+            {location.section === 'modes' && (
+              <ModesSettings onOpenConnections={() => navigate({ tab: 'system', section: 'connections' })} />
             )}
 
             {location.section === 'screensaver' && (

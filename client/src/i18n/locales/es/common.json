@@ -74,5 +74,66 @@
     "expand": "Ampliar",
     "fullPage": "Llenar la página",
     "shrink": "Devolver"
+  },
+  "modes": {
+    "normal": "Normal",
+    "menuLabel": "Modo: {{name}}. Abrir el menú de modos",
+    "pin": "Fijar {{name}}",
+    "pinHelp": "Se mantiene hasta el próximo cambio programado",
+    "unpin": "Dejar de fijar",
+    "unpinHelp": "Volver al horario",
+    "switchTo": "Cambiar a"
+  },
+  "takeovers": {
+    "level": {
+      "urgent": "Urgente",
+      "high": "Aviso",
+      "normal": "Info"
+    },
+    "close": "Cerrar {{name}}"
+  },
+  "stacks": {
+    "roleDescription": "pila",
+    "label": "{{name}}, {{position}} de {{count}}",
+    "next": "Siguiente: {{name}}",
+    "previous": "Anterior: {{name}}",
+    "pages": "Widgets de esta pila",
+    "stackWith": "Apilar con {{name}}",
+    "addTo": "Añadir a la pila"
+  },
+  "widgetMenu": {
+    "moveToTab": "Mover a pestaña",
+    "duplicateToTab": "Duplicar en pestaña",
+    "duplicateHint": "El mismo widget y ajustes en ambas",
+    "settings": "Ajustes del widget",
+    "remove": "Quitar del panel",
+    "newTab": "Nueva pestaña",
+    "back": "Atrás",
+    "alreadyThere": "Ya está allí",
+    "alreadyOnThisTab": "Ya está en esta pestaña",
+    "alreadyOn": "Ya está en {{tab}}",
+    "moveFailed": "No se pudo mover el widget. Inténtalo de nuevo.",
+    "removeTitle": "¿Quitar {{name}}?",
+    "removeBody": "{{name}} sale de la pestaña {{tab}}. Sigue instalado en HomeGlow, así que puedes volver a ponerlo cuando quieras.",
+    "removeConfirm": "Quitar",
+    "cancel": "Cancelar",
+    "removed": "Se quitó {{name}} de {{tab}}",
+    "removeFailed": "No se pudo quitar el widget. Inténtalo de nuevo.",
+    "undo": "Deshacer",
+    "undoFailed": "No se pudo volver a poner el widget. Agrégalo de nuevo en Ajustes.",
+    "names": {
+      "calendar": "Calendario",
+      "weather": "Clima",
+      "chores": "Tareas",
+      "photos": "Fotos"
+    },
+    "stackSettings": "Ajustes de la pila",
+    "unstack": "Deshacer pila",
+    "unstackHint": "Vuelve a poner sus widgets aquí",
+    "tabNumber": "Pestaña {{number}}",
+    "stack": "Pila",
+    "memberSettings": "Ajustes de {{name}}",
+    "showingNow": "Se muestra ahora",
+    "otherSettings": "Ajustes de los otros widgets"
   }
 }

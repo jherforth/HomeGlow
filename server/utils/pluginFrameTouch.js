@@ -39,6 +39,11 @@
 // so using a plugin counts as use and holds the dim off. It has no UI
 // effect of its own, unlike `homeglow:frame-activity`.
 //
+// In a Stack (settings `flick: true`), a quick one-finger sideways flick is
+// reported as `homeglow:flick` { direction: 1 next, -1 previous }, so the
+// Stack can turn even when the flick lands on a plugin. Thresholds mirror
+// FLICK_MS and FLICK_PX in client/src/utils/widgetStacks.js.
+//
 // Plain ES5 in an IIFE, inlined into <head>: it must run in any plugin, old or
 // new, with or without the SDK, and leave no globals behind.
 
@@ -90,9 +95,15 @@ var h={t:t,x:e.clientX,y:e.clientY};h.timer=setTimeout(function(){held=null;repl
 function watchExpand(mode){var on=mode==="doubleTap"||mode==="button";var was=expand==="doubleTap"||expand==="button";
 if(on!==was){var f=on?"addEventListener":"removeEventListener";window[f]("pointerdown",onDown,opts);window[f]("click",onClick,true);}
 if(mode!=="doubleTap"){lastTap=null;flushHeld();}expand=on?mode:false;}
+var flick=null,flicking=false,FLICK_MS=350,FLICK_PX=60,fopts={capture:true,passive:true};
+function onFlickStart(e){flick=e.touches.length===1?{x:e.touches[0].clientX,y:e.touches[0].clientY,t:Date.now()}:null;}
+function onFlickEnd(e){var f=flick;flick=null;if(!f||e.touches.length||!e.changedTouches.length)return;
+var c=e.changedTouches[0],dx=c.clientX-f.x,dy=c.clientY-f.y;
+if(Date.now()-f.t<=FLICK_MS&&Math.abs(dx)>=FLICK_PX&&Math.abs(dx)>2*Math.abs(dy)){try{window.parent.postMessage({type:"homeglow:flick",direction:dx<0?1:-1},"*");}catch(x){}}}
+function watchFlick(on){if(on===flicking)return;flicking=on;flick=null;var f=on?"addEventListener":"removeEventListener";window[f]("touchstart",onFlickStart,fopts);window[f]("touchend",onFlickEnd,fopts);}
 window.addEventListener("message",function(e){
 if(e.source!==window.parent||!e.data||e.data.type!=="homeglow:touch-settings")return;
-listen(e.data.swipe===true);var mode=e.data.expand==="doubleTap"||e.data.expand==="button"?e.data.expand:false;watchExpand(mode);
+listen(e.data.swipe===true);watchFlick(e.data.flick===true);var mode=e.data.expand==="doubleTap"||e.data.expand==="button"?e.data.expand:false;watchExpand(mode);
 touchAction(e.data.blockPinchZoom===true?BLOCK:(mode==="doubleTap"?"manipulation":""));});
 })();`;
 

@@ -54,6 +54,10 @@ custom properties.
 | `WidgetContainer.jsx` | The responsive 12-column grid (`react-grid-layout`); drag/resize, layout persistence to the backend, lock/unlock. |
 | `DraggableWidget.jsx` | Individual widget frame with edge +/- resize controls and touch/mouse support. |
 | `TabBar.jsx` | Floating bottom dock: tab switching, add/delete tab, theme toggle, Move/Resize (only while the layout is locked), settings, refresh. |
+| `StackWidget.jsx` | A Stack (`utils/widgetStacks.js`): several widgets in one grid spot, a sideways swipe (also inside plugin frames) turning between them, dots that fade, back to the first after a while, and "Bring to front when…" from Home Assistant. |
+| `WidgetLongPressMenu.jsx` / `WidgetRemoveUndo.jsx` | The long-press menu in Move/Resize (move/duplicate to a tab, settings, remove with Undo; Stack settings and Unstack on a Stack). |
+| `ModeBadge.jsx` | The small mode label beside the dock: pin a mode, switch modes, back to the schedule. |
+| `TakeoverLayer.jsx` | Takeovers (`utils/takeovers.js`): widgets shown over the top or bottom half, or the whole screen, with a title bar and ✕. |
 | `SaveLayoutButton.jsx` | The pulsing **Save layout** button in the bottom-right corner while the layout is unlocked; it locks the layout again (issue #333). |
 | `TabIconModal.jsx` | Modal for creating/labelling a tab and picking its icon. |
 | `ScreenSaver.jsx` / `ScreensaverCountdown.jsx` | Burn-in-prevention overlay and its countdown indicator. |
@@ -77,6 +81,9 @@ custom properties.
 | `ChoreHistoryTab.jsx` | View/delete recent chore completions. |
 | `GoogleAccountConnection.jsx` | Google OAuth linking UI (calendar/photos). |
 | `PinModal.jsx` | On-screen + keyboard PIN entry for Admin Panel lock. |
+| `ModesSettings.jsx` / `ModesHaSettings.jsx` | Admin → Displays → Modes: modes, their schedules and Home Assistant triggers, the mode helper, takeovers. |
+| `StacksSettings.jsx` / `StackModeFields.jsx` | Admin → Widgets → Stacks: a Stack's widgets, Bring to front when…, tabs, and what it does in each mode. |
+| `HaEntityPicker.jsx` | Home Assistant entity picker used by Modes and Stacks. |
 | `ColorPickerPopover.jsx` | Reusable color picker (`react-color`) for theme/gradient/source colors. |
 | `DeleteConfirmationDialog.jsx` | Reusable delete confirmation modal with Warning icon, alert, and Cancel/Delete actions (used for Tabs, Devices, Users). |
 | `AdminFormSection.jsx` | Thin wrapper for admin form sections: title, subtitle, bordered container, children. |
@@ -113,6 +120,10 @@ custom properties.
 | `useIsMobile.js` | Returns `true` below 600px viewport width; used for mobile-adaptive layouts and fullScreen dialogs. |
 | `useFetchTabs.js` | Shared `fetchTabs` hook returning `{ tabs, setTabs, fetchTabs }`; used by both app.jsx and AdminPanel. |
 | `useChoreSoundScheduler.js` | Manages chore due-time sound playback scheduling (imported in app.jsx). |
+| `useCarryToTab.jsx` | Move/Resize: carrying a dragged widget to another tab (hover a dock tab or hold at the screen edge), phone style. |
+| `useDisplayModes.js` | A display's modes (`utils/displayModes.js`): which one is on (schedule, pin, Home Assistant), its helper and current-mode sensor. |
+| `useTakeovers.js` | Which takeovers are showing, from their Home Assistant rules and plugins' `HomeGlow.attention()`. |
+| `useStackStates.js` | The Home Assistant states a display's Stacks read for "Bring to front when…" (`GET /stacks/ha`). |
 
 Most utilities have a matching `*.test.js` (Vitest); pure-logic modules like
 `widgetSettings.js` should keep theirs up to date when behavior changes.

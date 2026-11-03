@@ -245,6 +245,10 @@ const householdChanges = createHouseholdChanges({
 const haPanelRules = require('./services/haPanels');
 const { HaLive } = require('./services/haLive');
 const { registerHaPanelRoutes, lazyDb } = require('./routes/haPanels');
+const { registerDisplayModesHaRoutes } = require('./routes/displayModesHa');
+const displayModesHa = require('./services/displayModesHa');
+const { registerWidgetStacksHaRoutes } = require('./routes/widgetStacksHa');
+const widgetStacksHa = require('./services/widgetStacksHa');
 const { registerRoutineRoutes } = require('./routes/routines');
 const { registerNotificationRoutes } = require('./routes/notifications');
 const { registerNtfyRoutes } = require('./routes/ntfy');
@@ -1252,6 +1256,16 @@ const haPanels = registerHaPanelRoutes(fastify, {
   installPluginRow,
   // A panel resized where it is placed: every display reloads its layouts.
   householdChanged: () => householdChanges.bump('settings'),
+  // Displays' modes and Stacks read Home Assistant entities too: keep those live.
+  extraWatched: () => {
+    const ids = new Set();
+    for (const row of db.prepare('SELECT device_settings_json FROM devices').all()) {
+      const settings = parseJsonObject(row.device_settings_json, {});
+      displayModesHa.entityRefs(settings.displayModes).forEach((id) => ids.add(id));
+      widgetStacksHa.entityRefs(settings.widgetStacks).forEach((id) => ids.add(id));
+    }
+    return [...ids];
+  },
   // A plugin's household setting: play_url checks addresses against the
   // media server one of them names (manifest homeAssistant.playUrlsFrom).
   readPluginSetting: (pluginId, key) => {
@@ -1259,6 +1273,39 @@ const haPanels = registerHaPanelRoutes(fastify, {
     return typeof value === 'string' ? value : null;
   },
 });
+// Display modes and Home Assistant (routes/displayModesHa.js): a display's
+// mode helper, its current-mode sensor, and the entities its modes read.
+registerDisplayModesHaRoutes(fastify, {
+  db: haDb,
+  live: haLive,
+  ha: homeAssistant,
+  demoMode: DEMO_MODE,
+  readDevice: (deviceName) => {
+    const row = db.prepare('SELECT device_settings_json FROM devices WHERE name = ?').get(deviceName);
+    return row ? parseJsonObject(row.device_settings_json, {}) : null;
+  },
+  writeDevice: (deviceName, patch) => {
+    ensureDeviceExists(deviceName);
+    const row = db.prepare('SELECT device_settings_json FROM devices WHERE name = ?').get(deviceName);
+    const merged = { ...parseJsonObject(row?.device_settings_json, {}), ...patch };
+    db.prepare('UPDATE devices SET device_settings_json = ?, updateTime = CURRENT_TIMESTAMP WHERE name = ?').run(JSON.stringify(merged), deviceName);
+    return merged;
+  },
+  refreshWatched: () => haPanels.refreshWatched(),
+});
+// Stacks and Home Assistant (routes/widgetStacksHa.js): what a display's
+// Stacks read for "Bring to front when…".
+registerWidgetStacksHaRoutes(fastify, {
+  db: haDb,
+  live: haLive,
+  ha: homeAssistant,
+  demoMode: DEMO_MODE,
+  readDevice: (deviceName) => {
+    const row = db.prepare('SELECT device_settings_json FROM devices WHERE name = ?').get(deviceName);
+    return row ? parseJsonObject(row.device_settings_json, {}) : null;
+  },
+});
+
 
 // Routines: steps a child ticks off, each routine one ordinary chore
 // (routes/routines.js). Chore completion is shared with the chore routes.
@@ -2928,6 +2975,9 @@ const upsertDeviceSettings = async (request, reply) => {
       JSON.stringify(merged),
       deviceName
     );
+    // A display's modes or Stacks may read other Home Assistant entities now.
+    if (Object.prototype.hasOwnProperty.call(incoming, 'displayModes')
+      || Object.prototype.hasOwnProperty.call(incoming, 'widgetStacks')) haPanels.refreshWatched();
 
     return merged;
   } catch (error) {
@@ -5325,6 +5375,45 @@ fastify.delete('/api/devices/:deviceName/widget-assignments/widget/:widgetName',
   } catch (error) {
     console.error('Error deleting widget assignments:', error);
     reply.status(500).send({ error: 'Failed to delete widget assignments' });
+  }
+});
+
+// Puts a tab's entry for a widget back exactly as it was: what Undo sends
+// after a widget is removed from a tab, so its place and per-tab settings
+// return with it.
+fastify.put('/api/devices/:deviceName/widget-assignments/entry', async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+  const { widget_name: widgetName, tabNumber, entry } = request.body || {};
+  const parsedTabNumber = Number.parseInt(tabNumber, 10);
+  if (!widgetName || !Number.isFinite(parsedTabNumber)) {
+    return reply.status(400).send({ error: 'widget_name and tabNumber are required' });
+  }
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+    return reply.status(400).send({ error: 'entry must be a JSON object' });
+  }
+
+  try {
+    const tab = getTabByNumber(deviceName, parsedTabNumber);
+    if (!tab) {
+      return reply.status(404).send({ error: 'Tab not found' });
+    }
+    const layoutMap = parseTabConfigJson(tab.config_json);
+    layoutMap[widgetName] = { ...entry, ...normalizeLayoutFields(entry) };
+    saveTabConfigById(tab.id, layoutMap);
+    touchDeviceUpdateTime(deviceName);
+    return {
+      id: buildAssignmentId(parsedTabNumber, widgetName),
+      device_name: deviceName,
+      tab_number: parsedTabNumber,
+      widget_name: widgetName,
+      ...layoutMap[widgetName],
+    };
+  } catch (error) {
+    console.error('Error restoring widget assignment:', error);
+    reply.status(500).send({ error: 'Failed to restore widget' });
   }
 });
 

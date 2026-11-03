@@ -72,6 +72,11 @@ let lastActivity = Date.now();
 let shield = null;
 let started = false;
 let adminPaused = false;
+// A display mode holding the screen dimmed (utils/displayModes.js): the
+// brightness level, or null. It dims even with dimming turned off; a touch
+// still wakes the screen, and it dims again after HOLD_IDLE_MS.
+let hold = null;
+export const HOLD_IDLE_MS = 30 * 1000;
 
 // Pixel shift against image persistence on always-on displays: nudge
 // the whole dashboard a few pixels on a slow cycle, so static elements
@@ -141,6 +146,7 @@ function resetPixelShift() {
 // The live target: the night level inside the household night window, else
 // the day level.
 function liveTarget(now = new Date()) {
+  if (hold != null) return hold;
   if (!config.enabled) return null;
   if (isNightAt(config.nightStart, config.nightEnd, now, timeZone)) return config.night;
   return config.day;
@@ -227,7 +233,7 @@ export function updateDisplayDimming(settings, zone) {
   if (!config.pixelShift) resetPixelShift();
   else if (document.body) document.body.style.overflowX = 'hidden';
   if (liveTarget() == null) setDimmed(false);
-  else if (config.after === 0) setDimmed(true);
+  else if (hold != null || config.after === 0) setDimmed(true);
   else setDimmed(false);
 }
 
@@ -244,6 +250,24 @@ export function setDimmingPaused(paused) {
   }
 }
 
+// Wake the screen as if touched (someone arrived home, utils/displayModes.js).
+// A held dim dims again after its idle time, like after a touch.
+export function wakeDisplay() {
+  poke();
+}
+
+// Hold the screen dimmed at `level` (0-1) while a display mode asks, or
+// release it with null. Dims at once, unless the Admin Panel is open.
+export function setDimmingHold(level) {
+  const next = Number.isFinite(level) ? Math.min(1, Math.max(0, level)) : null;
+  if (next === hold) return;
+  hold = next;
+  if (!started) return;
+  if (hold != null && !adminPaused) setDimmed(true);
+  else if (liveTarget() == null) setDimmed(false);
+  render();
+}
+
 export function initDisplayDim() {
   if (started) return;
   started = true;
@@ -254,7 +278,7 @@ export function initDisplayDim() {
   }
   window.addEventListener('message', onPluginActivity);
   lastActivity = Date.now();
-  if (liveTarget() != null && config.after === 0) setDimmed(true);
+  if (liveTarget() != null && (hold != null || config.after === 0)) setDimmed(true);
   window.setInterval(() => {
     if (config.pixelShift) {
       pixelShiftSeconds += 1;
@@ -264,7 +288,8 @@ export function initDisplayDim() {
       }
     }
     if (adminPaused) return;
-    if (!dimmed && liveTarget() != null && Date.now() - lastActivity >= config.after * 1000) {
+    const idleMs = hold != null ? HOLD_IDLE_MS : config.after * 1000;
+    if (!dimmed && liveTarget() != null && Date.now() - lastActivity >= idleMs) {
       setDimmed(true);
     } else if (dimmed) {
       // Re-render so a day/night boundary crossing retargets the level.

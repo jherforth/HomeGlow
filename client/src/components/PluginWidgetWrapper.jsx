@@ -24,6 +24,10 @@ export const PLUGIN_FRAME_SANDBOX = 'allow-scripts allow-forms allow-popups';
 // browser still asks the household first. Scoped to the plugin's own address.
 export const PLUGIN_FRAME_ALLOW = 'geolocation';
 const FRAME_ORIGIN = 'null';
+// A plugin asked for (or let go of) the wall's attention: hooks/useTakeovers.js.
+export const PLUGIN_ATTENTION_EVENT = 'homeglow:plugin-attention';
+// A quick one-finger flick inside a plugin frame: { direction } (1 = next).
+export const FRAME_FLICK_EVENT = 'homeglow:frame-flick';
 const TO_FRAME = '*';
 
 const PluginWidgetWrapper = ({
@@ -48,6 +52,8 @@ const PluginWidgetWrapper = ({
   // so a two-finger swipe between tabs works over the plugin and a blocked
   // pinch stays blocked on it (utils/twoFingerSwipe.js).
   touch = null,
+  // Shown inside a Stack (components/StackWidget.jsx passes it).
+  inStack = false,
   // Expanding (utils/widgetExpand.js), handed in by the widget grid: how this
   // plugin expands on this display ('doubleTap', 'button' or false), and how
   // big it is shown now ('normal', 'half', 'full'), which the plugin is told.
@@ -151,6 +157,24 @@ const PluginWidgetWrapper = ({
         requestCelebration(`plugin:${filename}`);
         return;
       }
+      // HomeGlow.attention(): raise or close this plugin's takeover
+      // (utils/takeovers.js). Only from this wrapper's own frame.
+      if (frame && event.source === frame && event.origin === iframeOrigin && event.data?.type === 'homeglow:attention') {
+        const { level, size } = event.data;
+        if (level === null || ['normal', 'high', 'urgent'].includes(level)) {
+          window.dispatchEvent(new CustomEvent(PLUGIN_ATTENTION_EVENT, {
+            detail: { widget: `plugin:${filename}`, level, size: size === 'full' || size === 'half' ? size : null },
+          }));
+        }
+        return;
+      }
+      // A one-finger flick inside the frame: raised on the frame element, so
+      // a Stack around it (components/StackWidget.jsx) can turn the page.
+      if (frame && event.source === frame && event.origin === iframeOrigin && event.data?.type === 'homeglow:flick') {
+        const direction = event.data.direction === 1 ? 1 : -1;
+        iframeRef.current?.dispatchEvent(new CustomEvent(FRAME_FLICK_EVENT, { bubbles: true, detail: { direction } }));
+        return;
+      }
       // A double-tap or a touch inside the frame, for expanding. Raised on
       // the frame element so the widget grid around it hears it.
       const expandReport = acceptFrameExpandMessage(event, frame, iframeOrigin);
@@ -204,14 +228,16 @@ const PluginWidgetWrapper = ({
   // frame, and again whenever they change while it is up.
   const swipeOn = touch?.swipe === true;
   const pinchBlocked = touch?.blockPinchZoom === true;
+  // In a Stack: flicks inside the frame turn it (components/StackWidget.jsx).
+  const flickOn = inStack === true;
   const postTouch = useCallback(() => {
     const target = iframeRef.current?.contentWindow;
     if (!target) return;
     target.postMessage(
-      buildFrameTouchSettingsMessage({ swipe: swipeOn, blockPinchZoom: pinchBlocked, expand: expandMode }),
+      buildFrameTouchSettingsMessage({ swipe: swipeOn, blockPinchZoom: pinchBlocked, expand: expandMode, flick: flickOn }),
       TO_FRAME
     );
-  }, [swipeOn, pinchBlocked, expandMode]);
+  }, [swipeOn, pinchBlocked, expandMode, flickOn]);
   useEffect(() => {
     postTouch();
   }, [postTouch]);

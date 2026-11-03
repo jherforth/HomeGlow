@@ -60,7 +60,18 @@ import {
 import { personalizationTokens } from './utils/personalize.js';
 import SaveLayoutButton from './components/SaveLayoutButton.jsx';
 import { setHouseholdChangesMode, subscribeHouseholdChanges } from './utils/householdChanges.js';
-import { updateDisplayDimming, setDimmingPaused } from './utils/displayDim.js';
+import { updateDisplayDimming, setDimmingPaused, setDimmingHold } from './utils/displayDim.js';
+import useDisplayModes from './hooks/useDisplayModes.js';
+import ModeBadge from './components/ModeBadge.jsx';
+import useCarryToTab, { dockTargetFrom } from './hooks/useCarryToTab.jsx';
+import useTakeovers from './hooks/useTakeovers.js';
+import TakeoverLayer from './components/TakeoverLayer.jsx';
+import i18n from 'i18next';
+import StackWidget from './components/StackWidget.jsx';
+import useStackStates from './hooks/useStackStates.js';
+import { WIDGET_STACKS_KEY, attentionWidget, isStackName, normalizeStacks, stackIdOf, stackInMode, stackName, stackWith } from './utils/widgetStacks.js';
+import { MODE_DIM_LEVEL } from './utils/displayModes.js';
+import { firstOpenSpot } from './utils/gridPlacement.js';
 import { getServerTimezoneSync } from './utils/timezone.js';
 import { THEME_TOKENS_APPLIED_EVENT } from './utils/pluginThemeBridge.js';
 import { loadInstalledThemes, useThemeRegistry } from './utils/installedThemes.js';
@@ -72,7 +83,9 @@ import CelebrationHost from './components/CelebrationHost.jsx';
 import { normalizeWidgetSettings, BASE_WIDGET_SETTINGS } from './utils/widgetSettings.js';
 import { buildMobileWidgetList } from './utils/mobileWidgets.js';
 import { CORE_CONTROLS, resolveHiddenControls } from './utils/displayControls.js';
-import { parseAdminHash, clearAdminHash } from './utils/adminNavigation.js';
+import { parseAdminHash, clearAdminHash, setAdminHash } from './utils/adminNavigation.js';
+import WidgetRemoveUndo from './components/WidgetRemoveUndo.jsx';
+import { EXPAND_PLUGIN_EVENT } from './utils/pluginAccordion.js';
 import './index.css';
 
 const loadAdminPanel = () => import('./components/AdminPanel.jsx');
@@ -382,6 +395,28 @@ const App = () => {
       console.error('Error fetching device settings:', error);
     }
   }, [API_DEVICE_URL, hydrateFromDeviceSettings]);
+
+  // This display's modes (utils/displayModes.js): on a wall display only,
+  // once its settings have loaded.
+  // This display's Stacks (utils/widgetStacks.js): several widgets in one
+  // spot, swiped between.
+  const widgetStacks = useMemo(
+    () => normalizeStacks(rawDeviceSettings?.[WIDGET_STACKS_KEY]).stacks,
+    [rawDeviceSettings]
+  );
+  const displayModes = useDisplayModes({
+    deviceSettings: rawDeviceSettings,
+    apiDeviceUrl: API_DEVICE_URL,
+    onSaved: hydrateFromDeviceSettings,
+    enabled: !isMobile && deviceSettingsLoaded,
+  });
+  const shownMode = displayModes.shownMode;
+  // What the Stacks' "Bring to front when…" rules read in Home Assistant.
+  const stackStates = useStackStates({
+    apiDeviceUrl: API_DEVICE_URL,
+    stacks: widgetStacks,
+    enabled: !isMobile && deviceSettingsLoaded,
+  });
 
   const fetchHouseholdSettings = useCallback(async () => {
     try {
@@ -1032,6 +1067,52 @@ const App = () => {
     setDimmingPaused(showAdminPanel);
   }, [showAdminPanel]);
 
+  // ---- Display modes (utils/displayModes.js) ----
+  const shownModeId = shownMode?.id ?? null;
+  const shownModeRef = useRef(shownMode);
+  shownModeRef.current = shownMode;
+  const modeSettings = displayModes.settings;
+  const lastShownModeIdRef = useRef(undefined);
+
+  // When the mode changes: its starting tab (its dimming is below).
+  useEffect(() => {
+    const previous = lastShownModeIdRef.current;
+    lastShownModeIdRef.current = shownModeId;
+    if (previous === undefined && shownModeId === null) return;
+    const mode = shownModeRef.current;
+    if (mode?.startTab && tabsRef.current.some((tab) => tab.number === mode.startTab)) {
+      setActiveTab(mode.startTab);
+    }
+  }, [shownModeId]);
+
+  // A mode can hold the screen dimmed almost to black; a touch still wakes it.
+  const modeDims = shownMode?.dim === true;
+  useEffect(() => {
+    setDimmingHold(modeDims ? MODE_DIM_LEVEL : null);
+  }, [modeDims]);
+
+  // Back to the mode's starting tab once nobody has touched the screen for a
+  // while, so the wall comes back to what the mode is for.
+  useEffect(() => {
+    const minutes = modeSettings.returnMinutes;
+    const startTab = shownMode?.startTab;
+    if (!startTab || !minutes) return undefined;
+    const timer = setInterval(() => {
+      if (showAdminPanelRef.current || screensaverActiveRef.current) return;
+      if (Date.now() - displayModes.lastActivityRef.current < minutes * 60 * 1000) return;
+      if (!tabsRef.current.some((tab) => tab.number === startTab)) return;
+      setActiveTab((current) => (current === startTab ? current : startTab));
+    }, 15 * 1000);
+    return () => clearInterval(timer);
+  }, [shownMode?.startTab, modeSettings.returnMinutes, displayModes.lastActivityRef]);
+
+  const showModeBadge = !isMobile
+    && modeSettings.showLabel
+    && modeSettings.modes.length > 0
+    && !screensaverActive
+    && !showAdminPanel
+    && expandedWidgetSize !== 'full';
+
   // Two fingers swiped sideways change the tab, and pinch zoom can be blocked
   // (utils/twoFingerSwipe.js). This display's choice, never on a phone, which
   // has no tabs. Plugin frames get the same settings from their wrappers.
@@ -1231,10 +1312,246 @@ const App = () => {
       const response = await axios.post(`${API_DEVICE_URL}/tabs`, tabData);
       await fetchTabs();
       setShowTabIconModal(false);
+      // A widget dropped on the dock's + goes into the new tab.
+      const pending = pendingTabMoveRef.current;
+      pendingTabMoveRef.current = null;
+      const newTab = Number(response.data?.number);
+      if (pending && Number.isInteger(newTab)) {
+        if (pending.copy) await duplicateWidgetToTab(pending.name, pending.fromTab, newTab);
+        else await moveWidgetToTab(pending.name, pending.fromTab, newTab);
+      }
     } catch (error) {
       console.error('Error creating tab:', error);
       alert('Failed to create tab. Please try again.');
     }
+  };
+
+  // ---- Moving a dragged widget to another tab (Move/Resize) ----
+  // Let go over a tab in the dock and it moves there; hold it over a tab or
+  // at the side of the screen and that tab opens with it in hand
+  // (hooks/useCarryToTab.jsx). Over +: a new tab is made (the usual new-tab
+  // dialog) and the widget moves into it.
+  const pendingTabMoveRef = useRef(null);
+
+  // Generous: anywhere near the dock picks the closest tab.
+  const dockTargetAt = dockTargetFrom([
+    { selector: '[data-dock-tab]', value: (el) => Number(el.getAttribute('data-dock-tab')) },
+    { selector: '[data-dock-add]', value: () => 'add' },
+  ]);
+
+  // `cell` is where on the tab ({x,y,w,h}), or null for the first open spot.
+  const moveWidgetToTab = async (name, fromTab, toTab, cell = null) => {
+    if (!name || (fromTab === toTab && !cell)) return;
+    try {
+      if (fromTab !== toTab && !isWidgetAssignedToTab(name, toTab)) {
+        await axios.post(`${API_DEVICE_URL}/widget-assignments`, { widget_name: name, tabNumber: toTab });
+      }
+      // Where it was let go, else the first open spot, at the size it had.
+      const size = getWidgetLayoutForTab(name, fromTab) || { w: 6, h: 4 };
+      const taken = Object.keys(widgetAssignments)
+        .filter((other) => other !== name)
+        .map((other) => getWidgetLayoutForTab(other, toTab))
+        .filter(Boolean);
+      const spot = cell || firstOpenSpot({ w: size.w, h: size.h }, taken);
+      await axios.patch(`${API_DEVICE_URL}/widget-assignments/layout/bulk`, {
+        layouts: [{ widget_name: name, tabNumber: toTab, layout_x: spot.x, layout_y: spot.y, layout_w: spot.w, layout_h: spot.h }],
+      });
+      if (fromTab !== toTab) {
+        await axios.delete(`${API_DEVICE_URL}/widget-assignments/${encodeURIComponent(`${fromTab}::${name}`)}`);
+      }
+      await fetchWidgetAssignments();
+      setActiveTab(toTab);
+    } catch (error) {
+      console.error('Error moving the widget to another tab:', error);
+      await fetchWidgetAssignments();
+    }
+  };
+
+  // ---- The long-press menu (Move/Resize; components/WidgetLongPressMenu.jsx) ----
+  // Also on that tab, at the same size, in its first open spot.
+  const duplicateWidgetToTab = async (name, fromTab, toTab) => {
+    if (!name || fromTab === toTab || isWidgetAssignedToTab(name, toTab)) return;
+    try {
+      await axios.post(`${API_DEVICE_URL}/widget-assignments`, { widget_name: name, tabNumber: toTab });
+      const size = getWidgetLayoutForTab(name, fromTab) || { w: 6, h: 4 };
+      const taken = Object.keys(widgetAssignments)
+        .filter((other) => other !== name)
+        .map((other) => getWidgetLayoutForTab(other, toTab))
+        .filter(Boolean);
+      const spot = firstOpenSpot({ w: size.w, h: size.h }, taken);
+      await axios.patch(`${API_DEVICE_URL}/widget-assignments/layout/bulk`, {
+        layouts: [{ widget_name: name, tabNumber: toTab, layout_x: spot.x, layout_y: spot.y, layout_w: spot.w, layout_h: spot.h }],
+      });
+      await fetchWidgetAssignments();
+      setActiveTab(toTab);
+    } catch (error) {
+      console.error('Error duplicating the widget:', error);
+      setWidgetNotice({ message: i18n.t('common:widgetMenu.moveFailed') });
+    }
+  };
+
+  const tabLabelFor = (number) => tabs.find((tab) => tab.number === number)?.label || i18n.t('common:widgetMenu.tabNumber', { number });
+  const stackFor = (name) => widgetStacks.find((stack) => stackName(stack.id) === name) || null;
+  const menuTitleFor = (name) => {
+    if (!name) return '';
+    if (isStackName(name)) {
+      const stack = stackFor(name);
+      return stack?.name || (stack ? stack.widgets.map(stackMemberLabel).join(' · ') : i18n.t('common:widgetMenu.stack'));
+    }
+    return stackMemberLabel(name);
+  };
+  // In a Stack that's on some tab: shown there, so not "on no tab".
+  const inPlacedStack = (name) => widgetStacks.some((stack) => stack.widgets.includes(name)
+    && (widgetAssignments[stackName(stack.id)] || []).length > 0);
+
+  const [removeRequest, setRemoveRequest] = useState(null);
+  const [widgetNotice, setWidgetNotice] = useState(null); // { message, undo? }
+
+  const setWidgetEnabled = async (name, enabled) => {
+    const isPlugin = name.startsWith('plugin:');
+    const key = isPlugin ? name.slice('plugin:'.length) : name;
+    const field = isPlugin ? 'pluginSettings' : 'widgetSettings';
+    const current = (rawDeviceSettings?.[field] && typeof rawDeviceSettings[field] === 'object')
+      ? rawDeviceSettings[field]
+      : (isPlugin ? pluginSettings : widgetSettings);
+    const saved = await axios.patch(`${API_DEVICE_URL}/settings`, { [field]: { ...current, [key]: { ...(current[key] || {}), enabled } } });
+    hydrateFromDeviceSettings(saved.data || {});
+  };
+
+  // Off this tab only. A widget left on no tab (and in no Stack) is turned
+  // off, the way Settings shows one that's on no tab. Undo puts it all back.
+  const confirmRemoveWidget = async () => {
+    const request = removeRequest;
+    setRemoveRequest(null);
+    if (!request) return;
+    const tab = tabs.find((item) => item.number === request.fromTab);
+    let entry = {};
+    try {
+      const map = typeof tab?.config_json === 'string' ? JSON.parse(tab.config_json || '{}') : (tab?.config_json || {});
+      entry = { ...(map?.[request.widgetName] || {}) };
+    } catch { /* no per-tab settings */ }
+    if (request.place) {
+      Object.assign(entry, { layout_x: request.place.x, layout_y: request.place.y, layout_w: request.place.w, layout_h: request.place.h });
+    }
+    const name = request.widgetName;
+    const turnOff = !isStackName(name) && (widgetAssignments[name] || []).length <= 1 && !inPlacedStack(name);
+    try {
+      await axios.delete(`${API_DEVICE_URL}/widget-assignments/${encodeURIComponent(`${request.fromTab}::${name}`)}`);
+      if (turnOff) await setWidgetEnabled(name, false);
+      await Promise.all([fetchTabs(), fetchWidgetAssignments()]);
+      setWidgetNotice({
+        message: i18n.t('common:widgetMenu.removed', { name: request.title, tab: tabLabelFor(request.fromTab) }),
+        undo: { name, tab: request.fromTab, entry, turnOff },
+      });
+    } catch (error) {
+      console.error('Error removing widget:', error);
+      setWidgetNotice({ message: i18n.t('common:widgetMenu.removeFailed') });
+    }
+  };
+  const undoRemoveWidget = async () => {
+    const undo = widgetNotice?.undo;
+    setWidgetNotice(null);
+    if (!undo) return;
+    try {
+      await axios.put(`${API_DEVICE_URL}/widget-assignments/entry`, { widget_name: undo.name, tabNumber: undo.tab, entry: undo.entry });
+      if (undo.turnOff) await setWidgetEnabled(undo.name, true);
+      await Promise.all([fetchTabs(), fetchWidgetAssignments()]);
+      setActiveTab(undo.tab);
+    } catch (error) {
+      console.error('Error restoring widget:', error);
+      setWidgetNotice({ message: i18n.t('common:widgetMenu.undoFailed') });
+    }
+  };
+
+  // Split a Stack on this tab back into its widgets: the first takes its
+  // spot, the rest go in the first open spots. The Stack itself is kept only
+  // while it's still on another tab.
+  const unstackOnTab = async ({ widgetName: name, fromTab: tab, place }) => {
+    const stack = stackFor(name);
+    if (!stack) return;
+    try {
+      await axios.delete(`${API_DEVICE_URL}/widget-assignments/${encodeURIComponent(`${tab}::${name}`)}`);
+      const back = stack.widgets.filter((widget) => !isWidgetAssignedToTab(widget, tab));
+      const taken = Object.keys(widgetAssignments)
+        .filter((other) => other !== name && !back.includes(other))
+        .map((other) => getWidgetLayoutForTab(other, tab))
+        .filter(Boolean);
+      const layouts = [];
+      back.forEach((widget, i) => {
+        const size = i === 0 && place ? place : { w: place?.w || 6, h: place?.h || 4 };
+        const spot = i === 0 && place ? place : firstOpenSpot({ w: size.w, h: size.h }, taken);
+        taken.push(spot);
+        layouts.push({ widget_name: widget, tabNumber: tab, layout_x: spot.x, layout_y: spot.y, layout_w: spot.w, layout_h: spot.h });
+      });
+      for (const widget of back) {
+        await axios.post(`${API_DEVICE_URL}/widget-assignments`, { widget_name: widget, tabNumber: tab }).catch(() => {});
+      }
+      if (layouts.length) await axios.patch(`${API_DEVICE_URL}/widget-assignments/layout/bulk`, { layouts });
+      if ((widgetAssignments[name] || []).length <= 1) {
+        const saved = await axios.patch(`${API_DEVICE_URL}/settings`, {
+          [WIDGET_STACKS_KEY]: { stacks: widgetStacks.filter((item) => item.id !== stack.id) },
+        });
+        hydrateFromDeviceSettings(saved.data || {});
+      }
+      await fetchWidgetAssignments();
+    } catch (error) {
+      console.error('Error unstacking:', error);
+      await fetchWidgetAssignments();
+    }
+  };
+
+  // "Widget settings": Admin, at the widget (or the Stack) once it's there.
+  const revealTimerRef = useRef(null);
+  const openWidgetSettings = (name) => {
+    if (!name) return;
+    const isPlugin = name.startsWith('plugin:');
+    setAdminHash({ tab: 'dashboard', section: isPlugin ? 'plugins' : 'widgets' });
+    setShowAdminPanel(true);
+    const selector = isStackName(name)
+      ? `[data-stack-row="${CSS.escape(stackIdOf(name))}"]`
+      : `[data-tab-picker="${CSS.escape(name)}"]`;
+    clearInterval(revealTimerRef.current);
+    const started = Date.now();
+    revealTimerRef.current = setInterval(() => {
+      const found = document.querySelector(selector);
+      // A plugin's settings sit in its row of Admin → Plugins: open the row.
+      if (!found && isPlugin) {
+        window.dispatchEvent(new CustomEvent(EXPAND_PLUGIN_EVENT, { detail: { filename: name.slice('plugin:'.length) } }));
+      }
+      const group = isStackName(name) ? found : (found?.closest?.('section') || found);
+      if (group) {
+        group.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        group.animate?.([{ boxShadow: '0 0 0 3px var(--accent)' }, { boxShadow: '0 0 0 3px transparent' }], { duration: 1600, easing: 'ease-out' });
+      }
+      if (group || Date.now() - started > 60000) clearInterval(revealTimerRef.current);
+    }, 250);
+  };
+  useEffect(() => () => clearInterval(revealTimerRef.current), []);
+
+  const widgetMenu = {
+    titleFor: menuTitleFor,
+    isStack: isStackName,
+    // A Stack's widgets for its menu, the one showing now first.
+    membersOf: (name) => {
+      const stack = stackFor(name);
+      if (!stack) return [];
+      const shown = document.querySelector(`[data-widget-name="${CSS.escape(name)}"] [data-stack-current]`)?.getAttribute('data-stack-current');
+      const members = stackInMode(stack, shownMode?.id || null).widgets.filter((member) => enabledWidgetNames.includes(member));
+      const ordered = shown && members.includes(shown) ? [shown, ...members.filter((member) => member !== shown)] : members;
+      return ordered.map((member) => ({ name: member, label: stackMemberLabel(member) }));
+    },
+    tabChoices: (name) => tabs
+      .filter((tab) => tab.number !== activeTab)
+      .map((tab) => ({ number: tab.number, label: tabLabelFor(tab.number), alreadyThere: isWidgetAssignedToTab(name, tab.number) })),
+    onMoveToTab: ({ widgetName, fromTab, toTab }) => { void moveWidgetToTab(widgetName, fromTab, toTab); },
+    onDuplicateToTab: ({ widgetName, fromTab, toTab }) => { void duplicateWidgetToTab(widgetName, fromTab, toTab); },
+    onNewTab: ({ widgetName, fromTab, mode }) => {
+      pendingTabMoveRef.current = { name: widgetName, fromTab, copy: mode === 'duplicate' };
+      setShowTabIconModal(true);
+    },
+    onOpenSettings: openWidgetSettings,
+    onUnstack: (request) => { void unstackOnTab(request); },
+    onRemove: (request) => setRemoveRequest({ ...request, tabLabel: tabLabelFor(request.fromTab) }),
   };
 
   const handleDeleteTab = async (tabNumber) => {
@@ -1303,11 +1620,39 @@ const App = () => {
     knownControlIds,
   }), [rawDeviceSettings, householdSettings, adminPinExists, knownControlIds]);
 
-  const widgets = useMemo(() => {
+  // Every widget turned on here, and the Stacks holding any of them.
+  const enabledWidgetNames = useMemo(() => {
+    const names = [
+      ...['calendar', 'weather', 'chores', 'photos'].filter((name) => widgetSettings[name]?.enabled),
+      ...installedPlugins
+        .filter((plugin) => pluginSettings[plugin.filename]?.enabled)
+        .map((plugin) => `plugin:${plugin.filename}`),
+    ];
+    const on = new Set(names);
+    // A Stack counts while any of its widgets is turned on.
+    widgetStacks.forEach((stack) => {
+      if (stack.widgets.some((name) => on.has(name))) names.push(stackName(stack.id));
+    });
+    return names;
+  }, [widgetSettings, pluginSettings, installedPlugins, widgetStacks]);
+
+  const widgetsOnActiveTab = useMemo(() => {
+    return enabledWidgetNames
+      .filter((name) => isWidgetAssignedToTab(name, activeTab))
+      .map((name) => ({ name, size: getWidgetLayoutForTab(name, activeTab) || { w: 4, h: 3 } }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabledWidgetNames, widgetAssignments, activeTab]);
+
+  const layoutOnActiveTab = (name) => getWidgetLayoutForTab(name, activeTab);
+
+  // The widgets for one tab, as the grid takes them: `include(name)` says
+  // which to show and `layoutOf(name)` where. A Stack builds its widgets'
+  // content from this too.
+  const makeWidgetList = (tabNumber, include, layoutOf) => {
     const result = [];
 
-    if (widgetSettings.calendar.enabled && isWidgetAssignedToTab('calendar', activeTab)) {
-      const dbLayout = getWidgetLayoutForTab('calendar', activeTab);
+    if (widgetSettings.calendar.enabled && include('calendar')) {
+      const dbLayout = layoutOf('calendar');
       result.push({
         id: 'calendar-widget',
         transparent: Boolean(widgetSettings.calendar.transparent),
@@ -1320,16 +1665,16 @@ const App = () => {
           <Suspense fallback={<WidgetLoadingFallback label="calendar" />}>
             <CalendarWidget
               hiddenControls={hiddenControls}
-              activeTab={activeTab}
-              activeTabConfigJson={tabs.find((tab) => tab.number === activeTab)?.config_json || null}
+              activeTab={tabNumber}
+              activeTabConfigJson={tabs.find((tab) => tab.number === tabNumber)?.config_json || null}
             />
           </Suspense>
         ),
       });
     }
 
-    if (widgetSettings.weather.enabled && isWidgetAssignedToTab('weather', activeTab)) {
-      const dbLayout = getWidgetLayoutForTab('weather', activeTab);
+    if (widgetSettings.weather.enabled && include('weather')) {
+      const dbLayout = layoutOf('weather');
       result.push({
         id: 'weather-widget',
         transparent: Boolean(widgetSettings.weather.transparent),
@@ -1343,8 +1688,8 @@ const App = () => {
             <WeatherWidget
               hiddenControls={hiddenControls}
               refreshInterval={widgetSettings.weather.refreshInterval || 0}
-              activeTab={activeTab}
-              activeTabConfigJson={tabs.find((tab) => tab.number === activeTab)?.config_json || null}
+              activeTab={tabNumber}
+              activeTabConfigJson={tabs.find((tab) => tab.number === tabNumber)?.config_json || null}
               allTabConfigs={tabs}
             />
           </Suspense>
@@ -1352,8 +1697,8 @@ const App = () => {
       });
     }
 
-    if (widgetSettings.chores.enabled && isWidgetAssignedToTab('chores', activeTab)) {
-      const dbLayout = getWidgetLayoutForTab('chores', activeTab);
+    if (widgetSettings.chores.enabled && include('chores')) {
+      const dbLayout = layoutOf('chores');
       result.push({
         id: 'chores-widget',
         transparent: Boolean(widgetSettings.chores.transparent),
@@ -1370,8 +1715,8 @@ const App = () => {
       });
     }
 
-    if (widgetSettings.photos.enabled && isWidgetAssignedToTab('photos', activeTab)) {
-      const dbLayout = getWidgetLayoutForTab('photos', activeTab);
+    if (widgetSettings.photos.enabled && include('photos')) {
+      const dbLayout = layoutOf('photos');
       result.push({
         id: 'photos-widget',
         transparent: Boolean(widgetSettings.photos.transparent),
@@ -1393,9 +1738,9 @@ const App = () => {
       if (!pSettings.enabled) return;
 
       const pluginWidgetName = `plugin:${plugin.filename}`;
-      if (!isWidgetAssignedToTab(pluginWidgetName, activeTab)) return;
+      if (!include(pluginWidgetName)) return;
 
-      const dbLayout = getWidgetLayoutForTab(pluginWidgetName, activeTab);
+      const dbLayout = layoutOf(pluginWidgetName);
       result.push({
         id: `plugin-${plugin.filename}`,
         transparent: Boolean(pSettings.transparent),
@@ -1421,8 +1766,198 @@ const App = () => {
       });
     });
 
+    // Stacks: their widgets, drawn as the grid would, in one spot.
+    widgetStacks.forEach((saved) => {
+      const name = stackName(saved.id);
+      if (!include(name)) return;
+      // As the mode on now has it (utils/widgetStacks.js stackInMode).
+      const stack = stackInMode(saved, shownMode?.id || null);
+      const items = stack.widgets
+        .filter((member) => enabledWidgetNames.includes(member) && !takeoverShowing?.has(member))
+        .map((member) => ({
+          name: member,
+          label: stackMemberLabel(member),
+          content: makeWidgetList(tabNumber, (n) => n === member, () => null)[0]?.content || null,
+        }))
+        .filter((item) => item.content);
+      if (items.length === 0) return;
+      result.push({
+        id: `stack-${stack.id}`,
+        transparent: false,
+        defaultPosition: { x: 0, y: 0 },
+        defaultSize: { width: 12, height: 4 },
+        minWidth: 2,
+        minHeight: 2,
+        savedLayout: layoutOf(name),
+        content: (
+          <StackWidget
+            items={items}
+            home={stack.first}
+            returnSeconds={stack.returnSeconds}
+            rotateSeconds={stack.rotateSeconds}
+            attention={attentionWidget(stack, stackStates)}
+          />
+        ),
+      });
+    });
+
     return result;
-  }, [widgetSettings, pluginSettings, activeTab, widgetAssignments, installedPlugins, displayTheme, themeColors, demoStatus.demo, hiddenControls, frameTouch]);
+  };
+
+  const stackMemberLabel = (name) => {
+    if (name.startsWith('plugin:')) {
+      const plugin = installedPlugins.find((item) => `plugin:${item.filename}` === name);
+      return plugin?.name || name.slice('plugin:'.length).replace(/\.html?$/i, '');
+    }
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  };
+
+  const widgetSizeOf = (name) => {
+    const placed = (widgetAssignments[name] || []).find((item) => item.layout_w);
+    if (placed) return { w: placed.layout_w, h: placed.layout_h };
+    const plugin = installedPlugins.find((item) => `plugin:${item.filename}` === name);
+    if (plugin) {
+      const { defaultSize } = pluginGridSize(plugin);
+      return { w: defaultSize.width, h: defaultSize.height };
+    }
+    return { w: 6, h: 4 };
+  };
+  const dashboardGridRef = useRef(null);
+  const carry = useCarryToTab({
+    tabs,
+    activeTab,
+    setTab: setActiveTab,
+    dockTargetAt,
+    sizeOf: (name) => getWidgetLayoutForTab(name, activeTab) || widgetSizeOf(name),
+    placedOn: () => {
+      const placed = {};
+      widgetsOnActiveTab.forEach(({ name }) => {
+        const item = getWidgetLayoutForTab(name, activeTab);
+        if (item) placed[name] = item;
+      });
+      return placed;
+    },
+    gridRoot: () => dashboardGridRef.current,
+    onDrop: ({ name, fromTab, toTab, cell }) => { void moveWidgetToTab(name, fromTab, toTab, cell); },
+    onDropAdd: ({ name, fromTab }) => {
+      pendingTabMoveRef.current = { name, fromTab };
+      setShowTabIconModal(true);
+    },
+  });
+  const carriedName = carry.carrying?.name || null;
+
+  // ---- Stacking in Move/Resize: hold a widget over another to stack them ----
+  const [stackDrop, setStackDrop] = useState(null); // { target, rect, adding }
+  const stackDropRef = useRef(null);
+  stackDropRef.current = stackDrop;
+  const stackDwellRef = useRef({ target: null, timer: null });
+  const clearStackDwell = () => {
+    clearTimeout(stackDwellRef.current.timer);
+    stackDwellRef.current = { target: null, timer: null };
+    setStackDrop(null);
+  };
+  const stackTargetAt = (dragged, x, y) => {
+    // A Stack isn't put inside another.
+    if (isStackName(dragged)) return null;
+    for (const el of document.elementsFromPoint(x, y)) {
+      const holder = el.closest?.('[data-widget-name]');
+      const name = holder?.getAttribute('data-widget-name');
+      if (name && name !== dragged && !holder.closest('[data-widget-name="' + CSS.escape(dragged) + '"]')) {
+        return { name, el: holder };
+      }
+    }
+    return null;
+  };
+  const handleWidgetDrag = (name, x, y) => {
+    carry.onDrag(name, x, y);
+    if (carry.carrying) return;
+    const hit = stackTargetAt(name, x, y);
+    if ((hit?.name || null) === stackDwellRef.current.target) {
+      // The grid shuffles widgets while one is dragged: keep the outline on the target.
+      const shown = stackDropRef.current;
+      if (shown && hit) {
+        const rect = hit.el.getBoundingClientRect();
+        if (rect.left !== shown.rect.left || rect.top !== shown.rect.top || rect.width !== shown.rect.width) setStackDrop({ ...shown, rect });
+      }
+      return;
+    }
+    clearStackDwell();
+    if (!hit) return;
+    stackDwellRef.current = {
+      target: hit.name,
+      timer: setTimeout(() => {
+        setStackDrop({ target: hit.name, rect: hit.el.getBoundingClientRect(), adding: isStackName(hit.name) });
+      }, 550),
+    };
+  };
+  const handleWidgetDragStop = (name, x, y) => {
+    const drop = stackDropRef.current;
+    clearStackDwell();
+    if (drop && name) {
+      void stackWidgets(name, drop.target);
+      return true;
+    }
+    return carry.onDragStop(name, x, y);
+  };
+
+  // Put `dragged` with `target` on the open tab: a new Stack where the target
+  // was, or one more widget in the target Stack.
+  const stackWidgets = async (dragged, target) => {
+    const tab = activeTab;
+    const existing = isStackName(target) ? widgetStacks.find((stack) => stackName(stack.id) === target) : null;
+    if (isStackName(target) && !existing) return;
+    const stack = stackWith(target, dragged, existing);
+    const stacks = existing
+      ? widgetStacks.map((item) => (item.id === existing.id ? stack : item))
+      : [...widgetStacks, stack];
+    try {
+      const saved = await axios.patch(`${API_DEVICE_URL}/settings`, { [WIDGET_STACKS_KEY]: { stacks } });
+      hydrateFromDeviceSettings(saved.data || {});
+      const remove = (name) => axios.delete(`${API_DEVICE_URL}/widget-assignments/${encodeURIComponent(`${tab}::${name}`)}`).catch(() => {});
+      if (!existing) {
+        const spot = getWidgetLayoutForTab(target, tab) || { x: 0, y: 0, w: 12, h: 4 };
+        const name = stackName(stack.id);
+        await axios.post(`${API_DEVICE_URL}/widget-assignments`, { widget_name: name, tabNumber: tab });
+        await axios.patch(`${API_DEVICE_URL}/widget-assignments/layout/bulk`, {
+          layouts: [{ widget_name: name, tabNumber: tab, layout_x: spot.x, layout_y: spot.y, layout_w: spot.w, layout_h: spot.h }],
+        });
+        await remove(target);
+      }
+      await remove(dragged);
+    } catch (error) {
+      console.error('Error stacking widgets:', error);
+    }
+    await fetchWidgetAssignments();
+  };
+
+  // Takeovers (hooks/useTakeovers.js): widgets taking over part of the wall.
+  // One showing there is left out of the grid, so it never runs twice.
+  const takeovers = useTakeovers({
+    rules: displayModes.settings.takeovers,
+    haStates: displayModes.haStates,
+    pinned: displayModes.pinned,
+    enabled: !isMobile && deviceSettingsLoaded,
+  });
+  const takeoverShowing = takeovers.showing;
+  const takeoverNameFor = (name) => {
+    if (name.startsWith('plugin:')) {
+      const plugin = installedPlugins.find((item) => `plugin:${item.filename}` === name);
+      return plugin?.name || name.slice('plugin:'.length).replace(/\.html?$/i, '');
+    }
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  };
+
+  const widgets = useMemo(
+    () => makeWidgetList(
+      activeTab,
+      (name) => name !== carriedName
+        && !takeoverShowing.has(name)
+        && isWidgetAssignedToTab(name, activeTab),
+      layoutOnActiveTab
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [widgetSettings, pluginSettings, activeTab, widgetAssignments, installedPlugins, displayTheme, themeColors, demoStatus.demo, hiddenControls, frameTouch, carriedName, takeoverShowing, widgetStacks, stackStates, shownMode?.id]
+  );
 
   // Mobile stack (issue #118): same widget content nodes, fixed order, photos
   // excluded, grid metadata ignored.
@@ -1517,6 +2052,16 @@ const App = () => {
             🏖️ Vacation Mode
           </Box>
         )}
+        {/* The mode label and its menu (utils/displayModes.js). */}
+        {showModeBadge && (
+          <ModeBadge
+            modes={displayModes.settings.modes}
+            shownMode={shownMode}
+            pinned={displayModes.pinned}
+            onPin={displayModes.pinMode}
+            onUnpin={displayModes.unpin}
+          />
+        )}
         {/* Its corner is the Save Layout button's while the layout is
             unlocked, which is never for long. */}
         {widgetsLocked && <UpdateIndicator />}
@@ -1529,8 +2074,64 @@ const App = () => {
         {isMobile && mobileWidgets.length > 0 && (
           <MobileDashboard widgets={mobileWidgets} />
         )}
+        {carry.overlay}
+        <WidgetRemoveUndo
+          confirm={removeRequest}
+          onConfirm={confirmRemoveWidget}
+          onCancel={() => setRemoveRequest(null)}
+          undo={widgetNotice ? { message: widgetNotice.message, canUndo: Boolean(widgetNotice.undo) } : null}
+          onUndo={undoRemoveWidget}
+          onUndoClose={() => setWidgetNotice(null)}
+        />
+        {stackDrop && (
+          <Box
+            aria-hidden="true"
+            sx={{
+              position: 'fixed',
+              left: stackDrop.rect.left,
+              top: stackDrop.rect.top,
+              width: stackDrop.rect.width,
+              height: stackDrop.rect.height,
+              zIndex: 1100,
+              pointerEvents: 'none',
+              borderRadius: 'var(--hg-frame-radius, 12px)',
+              border: '3px dashed var(--accent)',
+              backgroundColor: 'rgba(var(--accent-rgb), 0.12)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              animation: 'hg-stack-in 160ms ease-out',
+              '@keyframes hg-stack-in': { from: { transform: 'scale(0.97)', opacity: 0 }, to: { transform: 'scale(1)', opacity: 1 } },
+            }}
+          >
+            <Box
+              sx={{
+                px: 2,
+                py: 1,
+                borderRadius: 999,
+                backgroundColor: 'var(--accent)',
+                color: 'var(--accent-contrast, #fff)',
+                fontWeight: 700,
+                boxShadow: 'var(--shadow)',
+              }}
+            >
+              {stackDrop.adding ? i18n.t('common:stacks.addTo') : i18n.t('common:stacks.stackWith', { name: stackMemberLabel(stackDrop.target) })}
+            </Box>
+          </Box>
+        )}
+        {!screensaverActive && (
+          <TakeoverLayer
+            slots={takeovers.slots}
+            contentFor={(name) => makeWidgetList(activeTab, (n) => n === name, () => ({ x: 0, y: 0, w: 12, h: 6 }))[0]?.content || null}
+            nameFor={takeoverNameFor}
+            onDismiss={takeovers.dismiss}
+          />
+        )}
         {!isMobile && widgets.length > 0 && (
+          <Box ref={dashboardGridRef}>
           <WidgetContainer
+            // A widget carried to another tab ends the drag it began in.
+            key={`grid-${carry.carryKey}`}
             widgets={widgets}
             locked={widgetsLocked}
             activeTab={activeTab}
@@ -1540,7 +2141,11 @@ const App = () => {
             isActive={widgetsActive}
             expandSettings={screensaverSettings}
             onExpandedSizeChange={setExpandedWidgetSize}
+            onWidgetDrag={handleWidgetDrag}
+            onWidgetDragStop={handleWidgetDragStop}
+            widgetMenu={widgetMenu}
           />
+          </Box>
         )}
         {shouldRunWeatherBackgroundPrefetch && (
           <Box sx={{ display: 'none' }}>
@@ -1627,6 +2232,9 @@ const App = () => {
           covers the bottom action buttons of the panel's dialogs. */}
       {!(isMobile && showAdminPanel) && (
       <TabBar
+        dropTarget={carry.hoverTarget}
+        pendingTab={carry.pending}
+        dragging={carry.dragging}
         tabs={tabs}
         activeTab={activeTab}
         onTabChange={handleTabChange}
@@ -1638,7 +2246,7 @@ const App = () => {
         onOpenSettings={toggleAdminPanel}
         onRefresh={handlePageRefresh}
         // A widget filling the whole page covers the dock too.
-        hidden={dockHidden || expandedWidgetSize === 'full'}
+        hidden={!carry.dragging && (dockHidden || expandedWidgetSize === 'full')}
         underDialogs={showAdminPanel}
         theme={displayTheme}
         themeMode={themeMode}
@@ -1659,7 +2267,10 @@ const App = () => {
       <Suspense fallback={null}>
         <TabIconModal
           open={showTabIconModal}
-          onClose={() => setShowTabIconModal(false)}
+          onClose={() => {
+            pendingTabMoveRef.current = null;
+            setShowTabIconModal(false);
+          }}
           onSave={handleSaveTab}
         />
       </Suspense>

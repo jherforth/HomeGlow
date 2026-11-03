@@ -134,3 +134,19 @@ export function buildLayout(widgets, cols, locked) {
     };
   });
 }
+
+const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+// The first spot a w×h widget fits, top to bottom then left to right, inside
+// `cols` columns and `rows` rows, clear of `taken`. Null when there's none.
+export function firstOpenSpot({ w, h }, taken, cols = 12, rows = Infinity) {
+  const width = Math.min(w, cols);
+  const lastRow = Number.isFinite(rows) ? rows - h : Math.max(0, ...taken.map((t) => t.y + t.h));
+  for (let y = 0; y <= lastRow; y += 1) {
+    for (let x = 0; x + width <= cols; x += 1) {
+      const candidate = { x, y, w: width, h };
+      if (!taken.some((item) => overlaps(item, candidate))) return candidate;
+    }
+  }
+  return null;
+}
