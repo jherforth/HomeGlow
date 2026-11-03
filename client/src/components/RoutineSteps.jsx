@@ -3,17 +3,26 @@ import { Box, ButtonBase, Chip, LinearProgress, Typography } from '@mui/material
 import { Check, Close } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 
+// What a routine's card shows: its steps whenever any is still to do, and,
+// once finished, only when a parent has opened them with the card's button.
+// The button does nothing else, and is inert while steps remain.
+export function routineCardView(day, expanded = false) {
+  const finished = Boolean(day?.completed);
+  return { finished, stepsShown: !finished || Boolean(expanded), buttonActive: finished };
+}
+
 // A routine's steps inside its chore card (set up in Family → Chores). Each step is
-// ticked on its own; the last one completes the chore, and the card's own
-// button still completes the whole routine at once. Once done, only the
-// progress, streak and on-time chips stay, so the card is as small as any.
-// Past its expiry (issue #279), the steps still to do show a red ✕; tapping
-// one goes to the widget, which sends the child for a parent.
-export default function RoutineSteps({ day, onToggle, expired = false }) {
+// ticked on its own; the last one completes the chore. Once done, only the
+// streak and on-time chips stay, so the card is as small as any, until a
+// parent opens the steps to look them over; unticking one there reopens the
+// routine with the other ticks kept. Past its expiry (issue #279), the steps
+// still to do show a red ✕; tapping one goes to the widget, which sends the
+// child for a parent.
+export default function RoutineSteps({ day, onToggle, expired = false, expanded = false }) {
   const { t } = useTranslation(['chores']);
   const total = day.steps.length;
   const done = day.steps.filter((step) => day.done.includes(step.id)).length;
-  const finished = day.completed;
+  const { finished, stepsShown } = routineCardView(day, expanded);
 
   return (
     // The card's long-press opens its menu; ticking a step must not.
@@ -47,8 +56,9 @@ export default function RoutineSteps({ day, onToggle, expired = false }) {
         )}
       </Box>
 
-      {!finished && total > 0 && (
+      {stepsShown && total > 0 && (
         <>
+          {!finished && (
           <LinearProgress
             variant="determinate"
             value={(done / total) * 100}
@@ -61,6 +71,7 @@ export default function RoutineSteps({ day, onToggle, expired = false }) {
               '& .MuiLinearProgress-bar': { bgcolor: 'var(--hg-meter-fill, var(--accent))' },
             }}
           />
+          )}
           <Box component="ul" aria-label={t('chores:routines.stepsOf', { name: day.name })} sx={{ listStyle: 'none', m: 0, mt: 0.5, p: 0 }}>
             {day.steps.map((step) => {
               const on = day.done.includes(step.id);
