@@ -58,21 +58,6 @@ test('every server starts from its own base, so a restart reads as "everything c
 });
 
 // Plugin storage counters (issue #347): one per plugin, in the same map.
-const { pluginStorageWrite } = require('../utils/householdChanges');
-
-test('pluginStorageWrite routes only successful storage writes, by plugin id', () => {
-  const params = { pluginId: 'lists' };
-  assert.equal(pluginStorageWrite('PUT', '/api/plugin/v1/storage/:pluginId/:key', 200, params), 'lists');
-  assert.equal(pluginStorageWrite('DELETE', '/api/plugin/v1/storage/:pluginId/:key', 204, params), 'lists');
-  assert.equal(pluginStorageWrite('POST', '/api/plugin/v1/storage/:pluginId/:key/increment', 200, params), 'lists');
-  assert.equal(pluginStorageWrite('GET', '/api/plugin/v1/storage/:pluginId/:key', 200, params), null, 'reads move nothing');
-  assert.equal(pluginStorageWrite('PUT', '/api/plugin/v1/storage/:pluginId/:key', 400, params), null, 'failed writes move nothing');
-  assert.equal(pluginStorageWrite('PUT', '/api/plugin/v1/settings/:pluginId', 200, params), null, 'settings are not storage');
-  assert.equal(pluginStorageWrite('POST', '/api/plugin/v1/storage/:pluginId/:key', 200, params), null, 'POST on a key is not a write path');
-  assert.equal(pluginStorageWrite('PUT', '/api/plugin/v1/storage/:pluginId/:key', 200, {}), null, 'no plugin id, no counter');
-  assert.equal(pluginStorageWrite('PUT', undefined, 200, params), null, 'no route, no counter');
-});
-
 test('a plugin write moves only that plugin counter, in its own message', async () => {
   const household = [];
   const plugins = [];

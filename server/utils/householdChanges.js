@@ -76,28 +76,6 @@ function domainsForRequest(method, route, statusCode) {
 }
 
 /**
- * The plugin whose storage a finished request wrote, if any (issue #347):
- * PUT or DELETE on a storage key, or POST on a key's /increment — and only
- * on success, like domainsForRequest. Reads, failed writes, other plugin
- * routes (settings, notify, ha) and other routes return null. `params` is
- * the request's route params, so the id comes from the path, not the body.
- */
-function pluginStorageWrite(method, route, statusCode, params) {
-  if (!route || statusCode >= 400) return null;
-  const pluginId = params?.pluginId;
-  if (typeof pluginId !== 'string' || pluginId.length === 0) return null;
-  switch (String(method).toUpperCase()) {
-    case 'PUT':
-    case 'DELETE':
-      return route === '/api/plugin/v1/storage/:pluginId/:key' ? pluginId : null;
-    case 'POST':
-      return route === '/api/plugin/v1/storage/:pluginId/:key/increment' ? pluginId : null;
-    default:
-      return null;
-  }
-}
-
-/**
  * A set of counters. `onBump(domains, revisions)` is called once per burst
  * of bumps, after `coalesceMs`, so a write touching several kinds, or a
  * nightly job touching many rows, goes out as one message. `onPluginStorage`
@@ -207,6 +185,5 @@ module.exports = {
   PLUGIN_DOMAIN_PREFIX,
   pluginDomain,
   domainsForRequest,
-  pluginStorageWrite,
   createHouseholdChanges,
 };

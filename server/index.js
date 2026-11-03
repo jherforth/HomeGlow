@@ -231,7 +231,7 @@ axios.interceptors.request.use((config) => {
 let calendarSyncService = null;
 
 const pluginEvents = require('./services/pluginEvents');
-const { DOMAINS: HOUSEHOLD_DOMAINS, createHouseholdChanges, domainsForRequest, pluginStorageWrite } = require('./utils/householdChanges');
+const { DOMAINS: HOUSEHOLD_DOMAINS, createHouseholdChanges, domainsForRequest } = require('./utils/householdChanges');
 // A revision counter for each kind of household data, so every display can
 // tell what changed and reload it (issue #325, utils/householdChanges.js).
 // Each burst of changes also goes out on the event stream, the fast path
@@ -681,13 +681,10 @@ fastify.addHook('onRequest', async (request, reply) => {
 fastify.addHook('onResponse', async (request, reply) => {
   const domains = domainsForRequest(request.method, request.routeOptions?.url, reply.statusCode);
   if (domains.length) householdChanges.bump(domains);
-  // A plugin storage write moves only that plugin's counter (issue #347),
-  // never a household kind — and only on success, like the hook above.
-  // Storage handlers bump in-route (so the response can carry the revision
-  // the event will carry) and set request.pluginStorageBumped; the hook
-  // stays as the backstop for any storage write path that doesn't.
-  const pluginId = pluginStorageWrite(request.method, request.routeOptions?.url, reply.statusCode, request.params);
-  if (pluginId && !request.pluginStorageBumped) householdChanges.bumpPlugin(pluginId);
+  // Plugin storage counters move in-route only (issue #347): the three
+  // storage handlers bump so the response can carry the revision the event
+  // will carry. There is no hook backstop here — the old one could never
+  // fire, since it only matched those same three routes.
 });
 
 fastify.register(multipart, {
@@ -1536,11 +1533,9 @@ fastify.put('/api/plugin/v1/storage/:pluginId/:key', async (request, reply) => {
       updated_at = CURRENT_TIMESTAMP
   `).run(pluginId, key, valueJson);
 
-  // Bump in-route, not just in the onResponse hook: the response carries
-  // the exact revision the event will carry, so a frame can tell its own
-  // writes from others' (issue #347). The hook sees the flag and skips.
+  // Bump in-route so the response carries the exact revision the event
+  // will carry (issue #347).
   const revision = householdChanges.bumpPlugin(pluginId);
-  request.pluginStorageBumped = true;
   return { success: true, revision };
 });
 
@@ -1555,7 +1550,6 @@ fastify.delete('/api/plugin/v1/storage/:pluginId/:key', async (request, reply) =
   }
   // Same in-route bump as PUT, for the same reason.
   const revision = householdChanges.bumpPlugin(pluginId);
-  request.pluginStorageBumped = true;
   return { success: true, revision };
 });
 
@@ -1646,7 +1640,6 @@ fastify.post('/api/plugin/v1/storage/:pluginId/:key/increment', async (request, 
     const { result, value } = applyIncrement();
     // Same in-route bump as PUT, for the same reason.
     const revision = householdChanges.bumpPlugin(pluginId);
-    request.pluginStorageBumped = true;
     return { success: true, result, value, revision };
   } catch (error) {
     if (error.statusCode) {

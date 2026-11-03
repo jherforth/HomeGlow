@@ -438,11 +438,16 @@ payload carries no key, so don't expect one — reload what you use, and
 nothing about another plugin's storage can reach your frame. After a server
 restart, every plugin with stored data reads as moved once, so your frame
 reloads once — the same promise household data has. A frame hears its own
-writes too: a widget that writes on load and reloads on this event will loop
-about once a second, on every display. Each storage write returns its new
-revision (`HomeGlow.storage.set` resolves it), and the event carries that
-revision — remember the revisions your writes returned and skip events
-carrying one of them, so you only reload for writes you didn't just make.
+writes too: don't write storage in response to this event, or you'll loop —
+a widget that writes on load and reloads on this event will loop about once
+a second, on every display. Each storage write returns its new revision
+(`HomeGlow.storage.set` resolves it), and the event carries that revision,
+but don't skip events carrying your own revisions: one event can stand for
+several writes — writes within the 100 ms coalescing window go out as one
+event carrying only the latest revision, and the changes check returns only
+the latest counter — so skipping your own revision can lose another
+display's write. Reloading after your own write costs one extra fetch;
+skipping can lose data.
 
 **On `chore.allCompleted`:** it fires alongside the daily-completion bonus, so it
 inherits that behaviour exactly — once per user per day, from whichever route
