@@ -1329,6 +1329,13 @@ const App = () => {
   // addressed to the captured target name, never the effective device, so
   // the exiting phone can never command itself, and it is fire-and-
   // forget — a failed request must never block the exit.
+  // The exit REPLACES the mirror history entry instead of pushing a new
+  // one: a push would leave #/mirror/<target> in the stack, so the browser
+  // Back button would pop straight back into mirror mode. Replacing it
+  // means Back from the post-exit Admin page goes to the pre-mirror page
+  // (the phone's own dashboard), never back into the mirror. replaceState
+  // fires no hashchange, which is fine here: the state above is already
+  // set directly, and the freshly mounting Admin panel reads the hash.
   const exitMirror = () => {
     const target = mirrorTarget;
     if (target) {
@@ -1337,7 +1344,7 @@ const App = () => {
     setMirrorTargetState(null);
     setMirrorAdmin(false);
     setShowAdminPanel(true);
-    window.location.hash = '#/admin/displays';
+    window.history.replaceState(null, '', '#/admin/displays');
   };
 
   // Open admin panel if URL hash indicates it (deep link / refresh restore).
