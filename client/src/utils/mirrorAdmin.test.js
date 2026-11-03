@@ -5,7 +5,7 @@
 // These cases pin what the user sees: the phone keeps Current, the
 // target gains Target and loses delete, everything else is unchanged.
 import { describe, it, expect } from 'vitest';
-import { getDeviceRowState } from './mirrorAdmin.js';
+import { getDeviceRowState, getMirrorAdminBannerTarget } from './mirrorAdmin.js';
 
 const PHONE = 'Adam HomeGlow app';
 const WALL = 'Kitchen Wall Display';
@@ -38,5 +38,24 @@ describe('mirror-Admin Devices rows', () => {
         expect(inMirror.showDelete).toBe(false);
         const exited = getDeviceRowState(WALL, { currentDeviceName: PHONE, mirrorTarget: null });
         expect(exited).toEqual({ isCurrent: false, isTarget: false, showCopy: true, showRemote: true, showDelete: true });
+    });
+});
+
+describe('mirror-Admin banner above the panel', () => {
+    it('shows the target exactly when Admin is open while mirroring', () => {
+        expect(getMirrorAdminBannerTarget({ showAdminPanel: true, mirrorTarget: WALL })).toBe(WALL);
+    });
+
+    it('shows nothing when Admin is closed, even while mirroring', () => {
+        expect(getMirrorAdminBannerTarget({ showAdminPanel: false, mirrorTarget: WALL })).toBeNull();
+    });
+
+    it('shows nothing when Admin is open outside mirror mode', () => {
+        expect(getMirrorAdminBannerTarget({ showAdminPanel: true, mirrorTarget: null })).toBeNull();
+        expect(getMirrorAdminBannerTarget({ showAdminPanel: true, mirrorTarget: undefined })).toBeNull();
+    });
+
+    it('shows nothing when neither Admin nor a mirror is active', () => {
+        expect(getMirrorAdminBannerTarget({ showAdminPanel: false, mirrorTarget: null })).toBeNull();
     });
 });

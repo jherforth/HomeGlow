@@ -205,8 +205,6 @@
     "currentName": "Nombre del dispositivo actual",
     "current": "Actual",
     "target": "Destino",
-    "mirrorBanner": "Duplicando {{target}}: los cambios en dispositivos se aplican a la pared, no a este teléfono.",
-    "mirrorAdminBanner": "Duplicando {{target}}",
     "lastUpdated": "Última actualización",
     "renameCurrent": "Cambiar el nombre del dispositivo actual",
     "copyToCurrent": "Copiar este dispositivo al actual",

@@ -29,6 +29,7 @@ import { Box, Button, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import WidgetContainer from './WidgetContainer.jsx';
+import MirrorBanner from './MirrorBanner.jsx';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { MIRROR_FALLBACK_VIEWPORT } from '../utils/mirrorMode.js';
 
@@ -47,7 +48,6 @@ const MirrorView = ({
   expandSettings = null,
   onExpandedSizeChange,
   onToggleLock,
-  onOpenAdmin,
   onExit,
 }) => {
   const { t } = useTranslation('common');
@@ -128,29 +128,17 @@ const MirrorView = ({
 
   return (
     <Box ref={wrapperRef} sx={{ width: '100%' }}>
-      <Box
-        sx={{
-          display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap',
-          padding: '0.5rem', background: 'var(--hg-frame-bg)',
-          borderRadius: '8px', marginBottom: '0.5rem',
-        }}
-      >
-        <Typography variant="subtitle1" sx={{ fontWeight: 700, flex: '1 1 auto' }}>
-          {t('mirror.mirroring', { name: targetName })}
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          {dimsLabel}{activeTabLabel ? ` · ${t('mirror.tab', { label: activeTabLabel })}` : ''}
-        </Typography>
-        <Button size="small" variant="outlined" onClick={onToggleLock}>
-          {locked ? t('mirror.unlock') : t('mirror.lock')}
-        </Button>
-        <Button size="small" variant="outlined" onClick={onOpenAdmin}>
-          {t('mirror.admin')}
-        </Button>
-        <Button size="small" variant="contained" onClick={onExit}>
-          {t('mirror.exit')}
-        </Button>
-      </Box>
+      <MirrorBanner
+        targetName={targetName}
+        locked={locked}
+        onToggleLock={onToggleLock}
+        onExit={onExit}
+        extra={(
+          <Typography variant="body2" color="text.secondary">
+            {dimsLabel}{activeTabLabel ? ` · ${t('mirror.tab', { label: activeTabLabel })}` : ''}
+          </Typography>
+        )}
+      />
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, marginBottom: '0.5rem' }}>
         <Typography variant="body2" color="text.secondary">{t('mirror.zoom')}:</Typography>

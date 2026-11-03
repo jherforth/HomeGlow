@@ -1,3 +1,13 @@
+// The banner above the Admin panel: shown exactly when Admin is open
+// while a mirror session is active, and rendered OUTSIDE AdminShell (in
+// app.jsx) so it appears on every Admin page, including the top-level
+// list — AdminShell's children never render on the list page, which is
+// why the old panel-top banner never appeared there. Returns the target
+// name to display, or null when no banner belongs above the panel.
+export const getMirrorAdminBannerTarget = ({ showAdminPanel, mirrorTarget }) => (
+    showAdminPanel && mirrorTarget != null ? mirrorTarget : null
+);
+
 // Mirror-Admin Devices rows: which controls a row offers. The "Current"
 // identity is always this browser's own device, even in mirror-Admin —
 // rename, the delete guard, and the copy destination all mean the phone,

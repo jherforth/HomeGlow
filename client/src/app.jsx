@@ -6,6 +6,7 @@ import axios from 'axios';
 import PluginWidgetWrapper from './components/PluginWidgetWrapper.jsx';
 import WidgetContainer from './components/WidgetContainer.jsx';
 import MirrorView from './components/MirrorView.jsx';
+import MirrorBanner from './components/MirrorBanner.jsx';
 import MobileDashboard from './components/MobileDashboard.jsx';
 import TabBar from './components/TabBar.jsx';
 import ScreensaverCountdown from './components/ScreensaverCountdown.jsx';
@@ -14,6 +15,7 @@ import { API_BASE_URL } from './utils/apiConfig.js';
 import { migrateLegacyPluginStorage } from './utils/pluginLocalStore.js';
 import { pluginGridSize } from './utils/pluginGridSize.js';
 import { getDeviceApiBase, getLocalDeviceName, setMirrorTarget as setSessionMirrorTarget, getMirrorTarget } from './utils/deviceName.js';
+import { getMirrorAdminBannerTarget } from './utils/mirrorAdmin.js';
 import { requestMirrorReload, checkMirrorReload } from './utils/mirrorReload.js';
 import { parseMirrorHash, buildMirrorHash, createViewportReporter } from './utils/mirrorMode.js';
 import { refreshSubscription } from './utils/pushNotifications.js';
@@ -249,6 +251,10 @@ const App = () => {
   const [widgetSettings, setWidgetSettings] = useState({ ...DEFAULT_WIDGET_SETTINGS });
   const [pluginSettings, setPluginSettings] = useState({});
   const [showAdminPanel, setShowAdminPanel] = useState(false);
+  // The banner above the Admin panel: the mirror target's name exactly
+  // when Admin is open while mirroring, else null (see mirrorAdmin.js —
+  // it must live outside AdminShell so it shows on the top-level list).
+  const mirrorAdminBannerTarget = getMirrorAdminBannerTarget({ showAdminPanel, mirrorTarget });
   // Household settings the dashboard reads directly (chore sound preferences).
   // Credentials are no longer among them — GET /api/settings redacts secrets,
   // and weather is fetched server-side.
@@ -1323,14 +1329,6 @@ const App = () => {
     window.location.hash = '#/admin/displays';
   };
 
-  // Opening Admin from the mirror banner lands on Admin Devices with the
-  // mirror session alive (see toggleAdminPanel).
-  const openAdminFromMirror = () => {
-    setMirrorAdmin(true);
-    setShowAdminPanel(true);
-    window.location.hash = '#/admin/displays';
-  };
-
   // Open admin panel if URL hash indicates it (deep link / refresh restore).
   // The AdminPanel component syncs the specific tab/subtab from the hash.
   useEffect(() => {
@@ -1700,7 +1698,6 @@ const App = () => {
             expandSettings={screensaverSettings}
             onExpandedSizeChange={setExpandedWidgetSize}
             onToggleLock={toggleWidgetsLock}
-            onOpenAdmin={openAdminFromMirror}
             onExit={exitMirror}
           />
         )}
@@ -1785,9 +1782,26 @@ const App = () => {
         // of a similar solid color (#230). Full screen on a phone needs none.
         // The panel sets its own size (AdminShell), so it doesn't change from
         // section to section. Its corners stay MUI's own, like the fields in it.
-        slotProps={{ paper: { sx: isMobile ? {} : { border: '1px solid var(--card-border)' } } }}
+        // With the mirror banner above the panel, the paper grows by the
+        // strip height so the fixed-size panel is never clipped by it.
+        slotProps={{ paper: { sx: isMobile ? {} : { border: '1px solid var(--card-border)', ...(mirrorAdminBannerTarget ? { maxHeight: 'calc(100% - 12px)' } : {}) } } }}
       >
         <DialogContent sx={{ p: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {/* Mirror-Admin banner: the SAME banner as the mirror view
+              (label + Unlock + Exit, no Admin button, no zoom), rendered
+              ABOVE the panel so it shows on every Admin page including
+              the top-level list. Exit here is the mirror exit: it lands
+              on Admin Devices, local, like the mirror view's Exit. */}
+          {mirrorAdminBannerTarget && (
+            <MirrorBanner
+              targetName={mirrorAdminBannerTarget}
+              locked={widgetsLocked}
+              onToggleLock={toggleWidgetsLock}
+              onExit={exitMirror}
+              sx={{ marginBottom: 0, flexShrink: 0 }}
+            />
+          )}
+          <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <Suspense fallback={<Typography sx={{ p: 3 }}>Loading settings...</Typography>}>
             <AdminPanel
               setWidgetSettings={setWidgetSettings}
@@ -1799,6 +1813,7 @@ const App = () => {
               }}
             />
           </Suspense>
+          </Box>
         </DialogContent>
       </Dialog>
 

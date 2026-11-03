@@ -188,10 +188,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   // the delete guard all mean THIS physical browser, never the target.
   const [currentDeviceName, setCurrentDeviceName] = useState(() => getLocalDeviceName());
   // The mirror target while this panel was opened from a mirror, else null.
-  // The Devices section names it (banner + Target chip) so it is clear
-  // device changes here apply to the target, not this phone — while the
-  // Current identity above stays local. (A reload inside Admin-from-mirror
-  // loses this and the panel safely reverts to local: documented.)
+  // The Devices section names it with a Target chip (the banner above the
+  // panel, rendered by app.jsx, is what says edits land on the target)
+  // while the Current identity above stays local. (A reload inside
+  // Admin-from-mirror loses this and the panel safely reverts to local:
+  // documented.)
   const mirrorTarget = getMirrorTarget();
   // Device-scoped reads/writes address the EFFECTIVE device: the mirror
   // target while mirroring, else this browser's own device. That is the
@@ -2033,16 +2034,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
 
   return (
     <AdminShell location={location} navigate={navigate} onClose={onRequestClose} startOnList={startOnList}>
-      {/* Mirror-Admin context bar: on EVERY page while this panel was
-          opened from a mirror, so it is always visible that edits land
-          on the target, not this phone. A label only — no Exit here:
-          closing Admin returns to the mirror, where the banner Exit
-          lives. (The Devices section keeps its own, fuller banner.) */}
-      {mirrorTarget && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          {t('admin:devices.mirrorAdminBanner', { target: mirrorTarget })}
-        </Alert>
-      )}
       {/* One place for every tab, rather than a copy per tab that most
           tabs lacked (screensaver and vacation saves showed nothing). */}
       {saveMessage.show && (
@@ -2769,11 +2760,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
         <>
             {location.section === 'devices' && (
               <>
-                {mirrorTarget && (
-                  <Alert severity="info" sx={{ mb: 2 }}>
-                    {t('admin:devices.mirrorBanner', { target: mirrorTarget })}
-                  </Alert>
-                )}
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2, px: 0.5 }}>
                   {t('admin:devices.manageHelp')}
                 </Typography>

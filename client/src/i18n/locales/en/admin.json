@@ -205,8 +205,6 @@
     "currentName": "Current Device Name",
     "current": "Current",
     "target": "Target",
-    "mirrorBanner": "Mirroring {{target}} — device changes here apply to the wall, not this phone.",
-    "mirrorAdminBanner": "Mirroring {{target}}",
     "lastUpdated": "Last Updated",
     "renameCurrent": "Rename current device",
     "copyToCurrent": "Copy this device to current",
