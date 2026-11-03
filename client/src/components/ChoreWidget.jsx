@@ -31,7 +31,7 @@ import {
   Popover,
   Switch
 } from '@mui/material';
-import { Edit, Save, Cancel, Add, Delete, Check, Close, Undo, SwapHoriz, Snooze, History, Backspace, ChecklistOutlined, TollOutlined, VolumeUpOutlined, VolumeOffOutlined, Star, StarBorder, RedeemOutlined, SettingsOutlined, AccessTime, NotificationsNoneOutlined } from '@mui/icons-material';
+import { Edit, Save, Cancel, Add, Delete, Check, Close, Undo, SwapHoriz, Snooze, History, Backspace, ChecklistOutlined, TollOutlined, VolumeUpOutlined, VolumeOffOutlined, Star, StarBorder, RedeemOutlined, SettingsOutlined, AccessTime, NotificationsNoneOutlined, ExpandMore, ExpandLess } from '@mui/icons-material';
 import WidgetHeader, { headerIconButtonSx, headerMainButtonSx } from './WidgetHeader.jsx';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
@@ -54,7 +54,7 @@ import { formatTime } from '../utils/dateUtils.js';
 import PrizeCelebration from './PrizeCelebration.jsx';
 import { requestCelebration } from '../utils/celebrations.js';
 import ChoreIconPicker from './ChoreIconPicker.jsx';
-import RoutineSteps from './RoutineSteps.jsx';
+import RoutineSteps, { routineCardView } from './RoutineSteps.jsx';
 import LateApprovalDialog from './LateApprovalDialog.jsx';
 import { householdNow, isExpired } from '../utils/choreExpiry.js';
 import useRoutinesToday from '../utils/useRoutinesToday.js';
@@ -130,6 +130,22 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
   const [showBonusChores, setShowBonusChores] = useState(DEFAULT_SHOW_BONUS_CHORES);
   // A routine's card (Admin → Family → Chores) shows its steps; keyed by schedule id.
   const { routines: routineDays, reload: reloadRoutines, toggleStep: toggleRoutineStep } = useRoutinesToday();
+  // Finished routines whose steps a parent has opened to look over, keyed by
+  // schedule id. A routine with steps still to do shows them regardless, and
+  // forgets the flag, so finishing again collapses the card.
+  const [expandedRoutines, setExpandedRoutines] = useState({});
+  useEffect(() => {
+    setExpandedRoutines((prev) => {
+      const next = {};
+      for (const id of Object.keys(prev)) if (routineDays[id]?.completed) next[id] = true;
+      return Object.keys(next).length === Object.keys(prev).length ? prev : next;
+    });
+  }, [routineDays]);
+  const toggleRoutineExpanded = (scheduleId) => setExpandedRoutines((prev) => {
+    const next = { ...prev };
+    if (next[scheduleId]) delete next[scheduleId]; else next[scheduleId] = true;
+    return next;
+  });
   const [soundEnabled, setSoundEnabled] = useState(DEFAULT_SOUND_ENABLED);
   const [showWeek, setShowWeek] = useState(DEFAULT_SHOW_WEEK);
   // Per-device: which real users this display hides. Bonus pseudo-user (id 0)
@@ -740,8 +756,6 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
           user_id: schedule.user_id,
           date: today
         });
-        // Ticked from its card, a routine is finished all at once.
-        if (routineDays[schedule.id]) requestCelebration('chores');
       }
 
       // Server-confirmed, but the row stays optimistic until a full reload
@@ -1229,6 +1243,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
 
   const renderChoreItem = (schedule) => {
     const routineDay = routineDays[schedule.id];
+    const routineView = routineDay ? routineCardView(routineDay, expandedRoutines[schedule.id]) : null;
     const dueStatus = getDueDateStatus(schedule.due_date, getTodayDateString(), schedule.completed);
     // Too late (issue #279): red, with a ✕ where the tick was.
     const expired = !schedule.completed && isExpired(schedule, getTodayDateString(), now);
@@ -1314,60 +1329,78 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 0.5 }}>
-          {/* The chore's icon takes the place of the checkmark while the chore
-              is pending (issue #141): a separate icon slot would cost a narrow
-              column a quarter of its title area; reusing this button costs
-              nothing. Completion still flips to the undo arrow, so done-vs-todo
-              reads the same as before. Chores with no icon keep the checkmark. */}
-          <IconButton
-            color={schedule.completed ? "secondary" : "primary"}
-            disabled={schedule.pending}
-            onClick={() => toggleChoreCompletion(schedule, schedule.completed)}
-            size="small"
-            aria-label={schedule.completed
-              ? t('chores:widget.uncompleteAria', { title: schedule.title })
-              : expired
-                ? t('chores:expiry.markExpired', { name: schedule.title })
-                : t('chores:widget.completeAria', { title: schedule.title })}
-            sx={{
-              // Pending: a ring in the accent, or a tint behind the chore's own
-              // icon. Too late: solid red. Done: the undo arrow alone.
-              minWidth: 'auto',
-              width: 36,
-              height: 36,
-              border: !schedule.completed && !expired && !schedule.icon ? '2px solid rgba(var(--accent-rgb), 0.6)' : '2px solid transparent',
-              bgcolor: schedule.completed
-                ? 'transparent'
-                : expired ? 'var(--hg-error)' : schedule.icon ? 'rgba(var(--accent-rgb), 0.16)' : 'transparent',
-              color: expired ? 'white' : 'var(--accent)',
-              '&:hover': {
-                bgcolor: expired ? 'var(--hg-error)' : 'rgba(var(--accent-rgb), 0.22)',
-              }
-            }}
-          >
-            {schedule.completed
-              ? <Undo fontSize="small" />
-              : expired ? <Close fontSize="small" /> : (schedule.icon
-                ? (
-                  <Box
-                    component="span"
-                    aria-hidden="true"
-                    sx={{
-                      // Matches the optical weight of the 20px checkmark this
-                      // replaces; smaller leaves a conspicuous ring of accent
-                      // colour around the glyph.
-                      fontSize: '1.15rem',
-                      lineHeight: 1,
-                      // Emoji carry their own colour, so drop the white tint
-                      // the checkmark relies on.
-                      filter: 'none',
-                    }}
-                  >
-                    {schedule.icon}
-                  </Box>
-                )
-                : <Check fontSize="small" />)}
-          </IconButton>
+          {/* A routine is finished by its last step, never by this button, so
+              a parent can look the steps over without undoing the routine: the
+              button only folds the steps of a finished routine away and back.
+              With steps still to do they are shown regardless, and the button
+              is inert. Unticking a step in the opened list reopens the routine
+              with the other ticks kept, as it always has. */}
+          {routineView ? (
+            <IconButton
+              disabled={!routineView.buttonActive}
+              onClick={() => toggleRoutineExpanded(schedule.id)}
+              size="small"
+              aria-expanded={routineView.stepsShown}
+              aria-label={!routineView.buttonActive
+                ? t('chores:routines.stepsInProgress', { name: schedule.title })
+                : routineView.stepsShown
+                  ? t('chores:routines.hideSteps', { name: schedule.title })
+                  : t('chores:routines.showSteps', { name: schedule.title })}
+              sx={{ minWidth: 'auto', width: 36, height: 36, color: 'var(--text-secondary)', '&.Mui-disabled': { color: 'var(--text-secondary)', opacity: 0.35 } }}
+            >
+              {routineView.stepsShown ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
+            </IconButton>
+          ) : (
+            <IconButton
+              color={schedule.completed ? "secondary" : "primary"}
+              disabled={schedule.pending}
+              onClick={() => toggleChoreCompletion(schedule, schedule.completed)}
+              size="small"
+              aria-label={schedule.completed
+                ? t('chores:widget.uncompleteAria', { title: schedule.title })
+                : expired
+                  ? t('chores:expiry.markExpired', { name: schedule.title })
+                  : t('chores:widget.completeAria', { title: schedule.title })}
+              sx={{
+                // Pending: a ring in the accent, or a tint behind the chore's own
+                // icon. Too late: solid red. Done: the undo arrow alone.
+                minWidth: 'auto',
+                width: 36,
+                height: 36,
+                border: !schedule.completed && !expired && !schedule.icon ? '2px solid rgba(var(--accent-rgb), 0.6)' : '2px solid transparent',
+                bgcolor: schedule.completed
+                  ? 'transparent'
+                  : expired ? 'var(--hg-error)' : schedule.icon ? 'rgba(var(--accent-rgb), 0.16)' : 'transparent',
+                color: expired ? 'white' : 'var(--accent)',
+                '&:hover': {
+                  bgcolor: expired ? 'var(--hg-error)' : 'rgba(var(--accent-rgb), 0.22)',
+                }
+              }}
+            >
+              {schedule.completed
+                ? <Undo fontSize="small" />
+                : expired ? <Close fontSize="small" /> : (schedule.icon
+                  ? (
+                    <Box
+                      component="span"
+                      aria-hidden="true"
+                      sx={{
+                        // Matches the optical weight of the 20px checkmark this
+                        // replaces; smaller leaves a conspicuous ring of accent
+                        // colour around the glyph.
+                        fontSize: '1.15rem',
+                        lineHeight: 1,
+                        // Emoji carry their own colour, so drop the white tint
+                        // the checkmark relies on.
+                        filter: 'none',
+                      }}
+                    >
+                      {schedule.icon}
+                    </Box>
+                  )
+                  : <Check fontSize="small" />)}
+            </IconButton>
+        )}
         </Box>
           {/* Everything under the title spans the whole card: beside the
               button, a description in a narrow column wrapped a word a line. */}
@@ -1384,7 +1417,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
           )}
           {routineDay && (
             <Box sx={{ flexBasis: '100%' }}>
-              <RoutineSteps day={routineDay} onToggle={tickRoutineStep} expired={expired} />
+              <RoutineSteps day={routineDay} onToggle={tickRoutineStep} expired={expired} expanded={routineView.stepsShown} />
             </Box>
           )}
           {/* Its own line under the title and the button: beside the button,
