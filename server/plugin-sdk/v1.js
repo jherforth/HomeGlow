@@ -318,7 +318,10 @@
             throw error;
           });
       },
-      /** Upsert a JSON value under a key. */
+      /** Upsert a JSON value under a key. Resolves { success, revision }:
+       * the revision is this write's new storage counter. Don't skip
+       * plugin.storage.changed events carrying it: one event can stand for
+       * several writes, so skipping your own can lose another display's. */
       set: function (key, value) {
         return request('PUT', '/storage/' + requirePluginId() + '/' + encodeURIComponent(key), value);
       },
@@ -334,7 +337,8 @@
       /**
        * Atomically add `delta` to the number at dot-separated `path` inside the
        * document stored under `key` (created as {} if missing).
-       * -> Promise<{ result, value }> with the new leaf number and full document.
+       * -> Promise<{ result, value, revision }> with the new leaf number,
+       * full document, and this write's storage revision (see set).
        */
       increment: function (key, path, delta) {
         return request('POST', '/storage/' + requirePluginId() + '/' + encodeURIComponent(key) + '/increment', {

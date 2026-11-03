@@ -1411,6 +1411,10 @@ const App = () => {
           colors={themeColors}
           transparentBackground={pSettings.transparent || false}
           events={plugin.manifest?.events || []}
+          // The manifest id is the plugin id the server counts storage
+          // under (issue #347); null for legacy widgets, which declare no
+          // events and never get one.
+          pluginId={plugin.pluginId || plugin.manifest?.id || null}
           hiddenControls={unprefixedHiddenControlsFor(hiddenControls, plugin.manifest?.id)}
           touch={frameTouch}
         />,
