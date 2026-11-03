@@ -31,7 +31,8 @@ import { subscribePluginEvents } from './pluginEventBridge.js';
 // pruning a vanished key. A plugin's frame hears only its own plugin's
 // counter move, never another plugin's — the per-plugin subscription below
 // is where that scoping lives — and the frame gets the plugin id and the
-// write's revision, never a key, so it can skip its own writes.
+// write's revision, never a key. A burst of writes arrives as one change
+// carrying the latest revision, so a frame must not skip its own.
 
 export const HOUSEHOLD_DOMAINS = Object.freeze(['chores', 'users', 'prizes', 'settings', 'calendar']);
 export const CHECK_INTERVAL_MS = 15 * 1000;
@@ -248,8 +249,8 @@ export function subscribeHouseholdChanges(domains, handler) {
  * moves on the server — from the event stream within a second, or from the
  * 15-second check where the stream doesn't reach (phones: on becoming
  * visible, and from the stream even before a first successful check). The
- * revision is the write's new counter: a frame compares it against the
- * revisions its own writes returned to skip its own writes. A subscriber
+ * revision is the latest write's new counter, standing for every write
+ * since the last change this page saw. A subscriber
  * hears only its own plugin: another plugin's writes never reach it, which
  * is what keeps one plugin's frames from learning about another plugin's
  * storage (issue #347). Returns an unsubscribe function. The checks run

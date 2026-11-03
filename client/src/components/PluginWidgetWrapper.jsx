@@ -112,8 +112,7 @@ const PluginWidgetWrapper = ({
   // this frame's own plugin's counter moves reach it — the subscription is
   // per plugin, so a frame never hears another plugin's writes, and the
   // payload carries the plugin id and the write's revision, never a key, so
-  // the frame reloads what it uses, learns nothing else, and can skip its
-  // own writes by comparing revisions.
+  // the frame reloads what it uses and learns nothing else.
   useEffect(() => {
     if (!pluginId || !eventsKey.split(',').includes('plugin.storage.changed')) return undefined;
     return subscribePluginStorageChanges(pluginId, (id, revision) => {

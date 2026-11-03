@@ -139,7 +139,7 @@ function createHouseholdChanges({ onBump = () => {}, onPluginStorage = () => {},
   // and a reinstall, the first write must not repeat the old value, or a
   // display holding the old ETag would read a 304 and miss it. Returns the
   // new revision, so a storage write route can answer with the exact value
-  // its event will carry (a frame compares it against its own writes).
+  // its event will carry.
   function bumpPlugin(pluginId) {
     if (typeof pluginId !== 'string' || pluginId.length === 0) return undefined;
     const domain = pluginDomain(pluginId);

@@ -319,10 +319,9 @@
           });
       },
       /** Upsert a JSON value under a key. Resolves { success, revision }:
-       * the revision is this write's new storage counter — remember the
-       * revisions your writes returned and skip plugin.storage.changed
-       * events carrying one of them, so you only reload for writes you
-       * didn't just make. */
+       * the revision is this write's new storage counter. Don't skip
+       * plugin.storage.changed events carrying it: one event can stand for
+       * several writes, so skipping your own can lose another display's. */
       set: function (key, value) {
         return request('PUT', '/storage/' + requirePluginId() + '/' + encodeURIComponent(key), value);
       },
