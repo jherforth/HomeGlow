@@ -8,9 +8,12 @@
 //     device settings) reach the target, via the normal API + the
 //     household-changes bump, and the target picks them up on its own.
 //   - Not scroll sync: scrolling this view scrolls only this browser. The
-//     viewport below is a native overflow scroll container, so panning a
-//     zoomed region is just scrolling — no custom pointer math, and no
-//     scroll position ever leaves this browser.
+//     view scrolls as ordinary page scroll — the canvas sits at its full
+//     content height in page flow, exactly like the target kiosk's own
+//     dashboard scrolls its page. An earlier nested 70dvh scroll container
+//     stranded below-fold widgets on phones: the kiosk reaches them by
+//     page-scrolling, and the mirror now does the same, so every widget is
+//     reachable and a zoomed region pans by scrolling on both axes.
 //   - Not tab sync: the active tab is app.jsx's local state. The banner
 //     names the tab being edited so a silent edit to a non-visible tab is
 //     never a surprise.
@@ -23,7 +26,10 @@
 // undershooting by S.
 //
 // The banner and zoom controls sit OUTSIDE the scaled canvas, at this
-// browser's own size, so they stay tappable at any zoom.
+// browser's own size, in a sticky strip, so they stay tappable at any zoom
+// and at any scroll position. The strip sits behind the Admin dialog when
+// Admin is open (the dialog carries its own banner above the panel), so
+// it never double-banners.
 import React, { useState, useEffect, useRef } from 'react';
 import { Box, Button, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
@@ -57,7 +63,6 @@ const MirrorView = ({
   const [zoom, setZoom] = useState(1);
   const [contentHeight, setContentHeight] = useState(800);
   const wrapperRef = useRef(null);
-  const scrollRef = useRef(null);
   const canvasRef = useRef(null);
   const prevScaleRef = useRef(null);
 
@@ -111,15 +116,17 @@ const MirrorView = ({
   const fitScale = wrapperWidth > 0 ? Math.min(1, wrapperWidth / targetWidth) : 1;
   const scale = fitScale * zoom;
 
-  // Keep the view centred on the same region across zoom changes.
+  // Keep the view centred on the same region across zoom changes, in page
+  // scroll coordinates (the canvas is in page flow; there is no inner
+  // scroll element to centre anymore).
   useEffect(() => {
     const prev = prevScaleRef.current;
     prevScaleRef.current = scale;
-    const el = scrollRef.current;
-    if (!el || prev === null || prev === scale) return;
+    if (prev === null || prev === scale) return;
     const ratio = scale / prev;
-    el.scrollLeft = (el.scrollLeft + el.clientWidth / 2) * ratio - el.clientWidth / 2;
-    el.scrollTop = (el.scrollTop + el.clientHeight / 2) * ratio - el.clientHeight / 2;
+    const cx = window.scrollX + window.innerWidth / 2;
+    const cy = window.scrollY + window.innerHeight / 2;
+    window.scrollTo(cx * ratio - window.innerWidth / 2, cy * ratio - window.innerHeight / 2);
   }, [scale]);
 
   const dimsLabel = viewport
@@ -128,54 +135,62 @@ const MirrorView = ({
 
   return (
     <Box ref={wrapperRef} sx={{ width: '100%' }}>
-      <MirrorBanner
-        targetName={targetName}
-        locked={locked}
-        onToggleLock={onToggleLock}
-        onExit={onExit}
-        extra={(
-          <Typography variant="body2" color="text.secondary">
-            {dimsLabel}{activeTabLabel ? ` · ${t('mirror.tab', { label: activeTabLabel })}` : ''}
-          </Typography>
-        )}
-      />
+      {/* Sticky header: banner + zoom stay reachable at any scroll depth.
+          Solid page background so canvas content never shows through the
+          strip while it scrolls underneath; the zoom row's bottom margin
+          moves into the strip's padding for the same reason. */}
+      <Box sx={{
+        position: 'sticky', top: 0, zIndex: 1100,
+        background: 'var(--container-background-override)',
+        paddingBottom: '0.5rem',
+      }}>
+        <MirrorBanner
+          targetName={targetName}
+          locked={locked}
+          onToggleLock={onToggleLock}
+          onExit={onExit}
+          extra={(
+            <Typography variant="body2" color="text.secondary">
+              {dimsLabel}{activeTabLabel ? ` · ${t('mirror.tab', { label: activeTabLabel })}` : ''}
+            </Typography>
+          )}
+        />
 
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, marginBottom: '0.5rem' }}>
-        <Typography variant="body2" color="text.secondary">{t('mirror.zoom')}:</Typography>
-        {ZOOM_LEVELS.map((level) => (
-          <Button
-            key={level}
-            size="small"
-            variant={zoom === level ? 'contained' : 'outlined'}
-            onClick={() => setZoom(level)}
-          >
-            {level === 1 ? t('mirror.fit') : `${level}×`}
-          </Button>
-        ))}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="body2" color="text.secondary">{t('mirror.zoom')}:</Typography>
+          {ZOOM_LEVELS.map((level) => (
+            <Button
+              key={level}
+              size="small"
+              variant={zoom === level ? 'contained' : 'outlined'}
+              onClick={() => setZoom(level)}
+            >
+              {level === 1 ? t('mirror.fit') : `${level}×`}
+            </Button>
+          ))}
+        </Box>
       </Box>
 
-      <Box
-        ref={scrollRef}
-        sx={{ overflow: 'auto', height: '70dvh', width: '100%' }}
-      >
-        <Box sx={{ width: `${targetWidth * scale}px`, height: `${contentHeight * scale}px`, position: 'relative' }}>
-          <Box
-            ref={canvasRef}
-            sx={{ width: `${targetWidth}px`, transform: `scale(${scale})`, transformOrigin: 'top left' }}
-          >
-            <WidgetContainer
-              widgets={widgets}
-              locked={locked}
-              activeTab={activeTab}
-              activeTabId={activeTabId}
-              deviceWidgetSettings={deviceWidgetSettings}
-              devicePluginSettings={devicePluginSettings}
-              isActive={isActive}
-              expandSettings={expandSettings}
-              onExpandedSizeChange={onExpandedSizeChange}
-              gridTransformScale={scale}
-            />
-          </Box>
+      {/* Full content height in page flow: the page itself is the scroll
+          area, so every widget — including below-fold ones — is reachable
+          by scrolling, and a zoomed region pans by scrolling both axes. */}
+      <Box sx={{ width: `${targetWidth * scale}px`, height: `${contentHeight * scale}px`, position: 'relative' }}>
+        <Box
+          ref={canvasRef}
+          sx={{ width: `${targetWidth}px`, transform: `scale(${scale})`, transformOrigin: 'top left' }}
+        >
+          <WidgetContainer
+            widgets={widgets}
+            locked={locked}
+            activeTab={activeTab}
+            activeTabId={activeTabId}
+            deviceWidgetSettings={deviceWidgetSettings}
+            devicePluginSettings={devicePluginSettings}
+            isActive={isActive}
+            expandSettings={expandSettings}
+            onExpandedSizeChange={onExpandedSizeChange}
+            gridTransformScale={scale}
+          />
         </Box>
       </Box>
     </Box>

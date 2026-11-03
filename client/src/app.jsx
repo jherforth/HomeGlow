@@ -1799,7 +1799,8 @@ const App = () => {
       >
         <DialogContent sx={{ p: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {/* Mirror-Admin banner: the SAME banner as the mirror view
-              (label + Unlock + Exit, no Admin button, no zoom), rendered
+              but label + Exit only — no layout toggle above a settings
+              panel (the view banner keeps Unlock + Exit) — rendered
               ABOVE the panel so it shows on every Admin page including
               the top-level list. Exit here is the mirror exit: it lands
               on Admin Devices, local, like the mirror view's Exit. */}
@@ -1809,6 +1810,7 @@ const App = () => {
               locked={widgetsLocked}
               onToggleLock={toggleWidgetsLock}
               onExit={exitMirror}
+              showLock={false}
               sx={{ marginBottom: 0, flexShrink: 0 }}
             />
           )}
