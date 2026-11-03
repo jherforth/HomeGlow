@@ -72,6 +72,7 @@ import { API_BASE_URL } from '../utils/apiConfig.js';
 import { editWholeNumber, savedWholeNumber } from '../utils/wholeNumberField.js';
 import { pinErrorText } from '../utils/pinErrors.js';
 import { revealTabPicker } from '../utils/revealTabPicker.js';
+import { nextExpandedPlugin, firstMissingPluginFilename } from '../utils/pluginAccordion.js';
 import { getDeviceApiBase, getDeviceName, setDeviceName, isValidDeviceName } from '../utils/deviceName.js';
 import { fetchPinRemembered, setPinRemembered, forgetPinOnAllDevices, shouldPromptForPin } from '../utils/adminPinDevice.js';
 import PinModal from './PinModal';
@@ -275,6 +276,12 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   };
   // Which installed plugin is currently showing a live preview, if any.
   const [previewPlugin, setPreviewPlugin] = useState(null);
+  // The installed-plugins accordion: one plugin's settings expanded at a
+  // time, all collapsed by default so a long list stays scannable. The
+  // enabled toggle lives on the collapsed row itself, outside the row's
+  // expand button, so toggling it never expands the row.
+  const [expandedPlugin, setExpandedPlugin] = useState(null);
+  const toggleExpandedPlugin = (filename) => setExpandedPlugin((current) => nextExpandedPlugin(current, filename));
   const [loadingGithub, setLoadingGithub] = useState(false);
   // The store list loads itself on opening Plugins (issue #273): whether it
   // has, and why not when it couldn't.
@@ -935,7 +942,12 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     const missingEnabledPlugins = getMissingEnabledPluginAssignments(pluginSettings, pluginAssignments, uploadedWidgets);
     if (missingEnabledPlugins.length > 0) {
       setSaveMessage({ show: true, type: 'error', text: t('admin:messages.pluginNeedsTab') });
-      revealTabPicker(missingEnabledPlugins);
+      // The tab picker lives inside the expanded region, so a collapsed row
+      // has nothing on the page to reveal: expand the first missing plugin
+      // first, then reveal once React has mounted its region.
+      const firstMissing = firstMissingPluginFilename(missingEnabledPlugins);
+      if (firstMissing) setExpandedPlugin(firstMissing);
+      setTimeout(() => revealTabPicker(missingEnabledPlugins), 350);
       setTimeout(() => setSaveMessage({ show: false, type: '', text: '' }), 4000);
       return;
     }
@@ -1637,6 +1649,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
           delete updated[pluginWidgetName];
           return updated;
         });
+        setExpandedPlugin((current) => current === filename ? null : current);
         fetchUploadedWidgets();
         if (onPluginsChanged) onPluginsChanged();
       } catch (error) {
@@ -2345,14 +2358,69 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                         ...prev,
                         [plugin.filename]: { ...prev[plugin.filename], [field]: value }
                       }));
+                      const isExpanded = expandedPlugin === plugin.filename;
+                      const panelId = `plugin-panel-${plugin.filename}`;
                       return (
                         <AdminGroup key={plugin.filename} accent>
-                          {/* The header band (AdminGroup's accent), so one
-                              plugin's settings don't run into the next. */}
-                          <AdminRow
-                            label={<Box component="span" sx={{ fontWeight: 600 }}>{plugin.name}</Box>}
-                            control={(
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          {/* The accordion row: always visible, so a long list
+                              stays scannable. The whole row except the toggle
+                              expands/collapses; the toggle sits outside the
+                              expand button, so it never expands the row. The
+                              header band (AdminGroup's accent) keeps one
+                              plugin's settings from running into the next. */}
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1, py: 0.5, minHeight: 56 }}>
+                            <ButtonBase
+                              onClick={() => toggleExpandedPlugin(plugin.filename)}
+                              aria-expanded={isExpanded}
+                              aria-controls={panelId}
+                              sx={{
+                                flex: 1, minWidth: 0, justifyContent: 'flex-start', gap: 1, px: 1, py: 1,
+                                borderRadius: 1, textAlign: 'left',
+                                '&:hover': { backgroundColor: 'action.hover' },
+                                '&:focus-visible': { outline: '2px solid var(--accent)', outlineOffset: -2 },
+                              }}
+                            >
+                              <ExpandMore
+                                fontSize="small"
+                                sx={{ color: 'var(--accent)', flex: 'none', transition: 'transform 150ms', transform: isExpanded ? 'none' : 'rotate(-90deg)' }}
+                              />
+                              <Box sx={{ minWidth: 0 }}>
+                                <Box sx={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {plugin.name}
+                                </Box>
+                                <Box sx={{ color: 'text.secondary', fontSize: '0.8125rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {[plugin.version, plugin.author && t('admin:plugins.byAuthor', { author: plugin.author })]
+                                    .filter(Boolean).join(' · ')}
+                                </Box>
+                              </Box>
+                            </ButtonBase>
+                            <Switch
+                              checked={pSettings.enabled || false}
+                              onChange={() => setPluginField('enabled', !pSettings.enabled)}
+                              slotProps={{ input: { 'aria-label': t('common:labels.enabled') } }}
+                            />
+                          </Box>
+                          {isExpanded && (
+                            <Box id={panelId} sx={{ '& > * + *': { borderTop: 1, borderColor: 'divider' } }}>
+                              {/* What the old header row carried, now inside the
+                                  expanded region: filename, update note, and
+                                  the manifest description (issue #147). */}
+                              <Box sx={{ px: 2, py: 1.5 }}>
+                                <Box component="span" sx={{ display: 'block', color: 'text.secondary', fontSize: '0.8125rem' }}>
+                                  {plugin.filename}
+                                </Box>
+                                {updatable && (
+                                  <Box component="span" sx={{ display: 'block', color: 'var(--accent)', fontWeight: 600 }}>
+                                    {storeEntry.version
+                                      ? t('admin:plugins.updateAvailable', { version: storeEntry.version })
+                                      : t('admin:plugins.updateAvailableNoVersion')}
+                                  </Box>
+                                )}
+                                <Box component="span" sx={{ display: 'block', mt: 0.5, color: plugin.manifest?.description ? 'text.primary' : 'text.secondary', fontStyle: plugin.manifest?.description ? 'normal' : 'italic' }}>
+                                  {plugin.manifest?.description || t('admin:plugins.noDescription')}
+                                </Box>
+                              </Box>
+                              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5, px: 2, py: 1 }}>
                                 {updatable && (
                                   <Button size="small" variant="outlined" startIcon={<CloudDownload />} onClick={() => installGithubWidget(storeEntry)}>
                                     {t('admin:plugins.update')}
@@ -2376,28 +2444,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                                   </IconButton>
                                 </Tooltip>
                               </Box>
-                            )}
-                            hint={(
-                              <>
-                                <Box component="span" sx={{ display: 'block' }}>
-                                  {[plugin.filename, plugin.version, plugin.author && t('admin:plugins.byAuthor', { author: plugin.author })]
-                                    .filter(Boolean).join(' · ')}
-                                </Box>
-                                {updatable && (
-                                  <Box component="span" sx={{ display: 'block', color: 'var(--accent)', fontWeight: 600 }}>
-                                    {storeEntry.version
-                                      ? t('admin:plugins.updateAvailable', { version: storeEntry.version })
-                                      : t('admin:plugins.updateAvailableNoVersion')}
-                                  </Box>
-                                )}
-                                {/* Straight from the plugin's own manifest (issue
-                                    #147). A legacy widget has none, and says so. */}
-                                <Box component="span" sx={{ display: 'block', mt: 0.5, color: plugin.manifest?.description ? 'text.primary' : 'text.secondary', fontStyle: plugin.manifest?.description ? 'normal' : 'italic' }}>
-                                  {plugin.manifest?.description || t('admin:plugins.noDescription')}
-                                </Box>
-                              </>
-                            )}
-                          />
                           {previewPlugin === plugin.filename && (
                             <Box sx={{ px: 2, py: 1.5 }}>
                               <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden', height: 220 }}>
@@ -2421,16 +2467,6 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                               </Box>
                             </Box>
                           )}
-                          <AdminRow
-                            label={t('common:labels.enabled')}
-                            control={(
-                              <Switch
-                                checked={pSettings.enabled || false}
-                                onChange={() => setPluginField('enabled', !pSettings.enabled)}
-                                slotProps={{ input: { 'aria-label': t('common:labels.enabled') } }}
-                              />
-                            )}
-                          />
                           <AdminRow
                             label={t('admin:plugins.transparentBackground')}
                             control={(
@@ -2556,6 +2592,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                               </Box>
                             )}
                           />
+                            </Box>
+                          )}
                         </AdminGroup>
                       );
                     })}
