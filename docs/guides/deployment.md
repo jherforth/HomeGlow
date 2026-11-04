@@ -154,8 +154,13 @@ and [`server/Dockerfile`](../../server/Dockerfile). See
 - [`.github/workflows/ci-tests.yml`](../../.github/workflows/ci-tests.yml) — runs
   frontend and backend test suites (Node 24, as the Docker image) on every push.
 - [`.github/workflows/docker-image.yml`](../../.github/workflows/docker-image.yml) —
-  on a `v*` tag (or manual dispatch), builds and pushes both images to GHCR, injecting
-  version/commit/repo build args. Tags produced: the release tag and `latest-test`.
+  builds and pushes both images to GHCR, injecting version/commit/repo build args.
+  It runs:
+  - **On a `v*` tag:** tags the images with the release tag, `latest` and `latest-test`.
+  - **Nightly, at 08:17 UTC:** tags `latest-test` from `main`. It builds only when
+    `main` has a commit with no image yet, and only once CI Tests has passed for that
+    commit. A night with no new commits builds nothing.
+  - **On a manual dispatch:** tags `latest-test` from the chosen branch, always.
 
 To cut a release, push a `v*` tag (e.g. `git tag v1.4 && git push --tags`).
 
