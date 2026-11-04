@@ -8,10 +8,17 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+  # Nightly :latest-test from main, at 08:17 UTC (just after midnight
+  # Pacific). The check-main job below skips the build when main hasn't
+  # changed since its last image, so a quiet night builds nothing.
+  schedule:
+    - cron: '17 8 * * *'
 
 permissions:
   contents: read
   packages: write
+  # check-main reads this repository's workflow runs.
+  actions: read
 
 concurrency:
   group: docker-publish-${{ github.ref }}
@@ -21,7 +28,43 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  # Nightly runs only: build main when it has changed. github.sha is main's
+  # newest commit on a scheduled run. It is skipped when this workflow
+  # already succeeded for that commit (a manual or earlier nightly build),
+  # and when CI Tests hasn't passed for it, so a broken main never becomes
+  # :latest-test. A tag push or a manual run never asks, and always builds.
+  check-main:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.check.outputs.build }}
+    steps:
+      - name: Has main changed since its last image?
+        id: check
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          successes() {
+            gh api "repos/${REPO}/actions/workflows/$1/runs?status=success&head_sha=${SHA}&per_page=1" --jq .total_count
+          }
+          if [[ "$(successes docker-image.yml)" -gt 0 ]]; then
+            echo "main (${SHA::7}) already has an image; nothing to build."
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          elif [[ "$(successes ci-tests.yml)" -eq 0 ]]; then
+            echo "::warning::CI Tests hasn't passed for main (${SHA::7}); skipping tonight's :latest-test."
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "main moved to ${SHA::7}; building :latest-test."
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build-and-push:
+    needs: check-main
+    # check-main is skipped outside nightly runs; then always build.
+    if: ${{ !cancelled() && (needs.check-main.result == 'skipped' || needs.check-main.outputs.build == 'true') }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -79,8 +122,8 @@ jobs:
           tags: |
             type=ref,event=tag
             type=raw,value=latest-test
-            # Publish :latest only on a v* tag release, never on the frequent
-            # workflow_dispatch test builds (those keep publishing only
+            # Publish :latest only on a v* tag release, never on the nightly
+            # or workflow_dispatch test builds (those keep publishing only
             # :latest-test). Keeps :latest == the newest stable release, which
             # docker-compose.yml and the Proxmox install script both pull.
             type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}

@@ -11,9 +11,21 @@
 //   - must not contain '..'  (path-traversal shaped)
 //   - non-string inputs return false (matches server typeof guard)
 //
-// getDeviceName still returns exactly what is stored in localStorage —
-// no rewriting, no normalising on read. The validator runs only where a
-// human chooses a new name (rename dialog in AdminPanel).
+// getDeviceName returns exactly what is stored in localStorage —
+// no rewriting, no normalising on read — EXCEPT while mirror mode is
+// active (remote control): then it returns the mirror TARGET's name, so
+// every device-scoped API call (layout saves, device settings, widget
+// assignments) lands on the target, not on this browser's own device.
+// The validator runs only where a human chooses a new name (rename dialog
+// in AdminPanel).
+//
+// The override is module memory only — it is NEVER written to localStorage,
+// so exiting mirror mode restores this browser's own identity with no
+// cleanup, and a reload outside mirror mode can never inherit a target.
+// Call sites that must always mean THIS physical browser (push subscription
+// registration, the Admin Devices "Current" chip, copy-to-current, the PIN
+// remembered-device flag, the viewport report) use getLocalDeviceName /
+// getLocalDeviceApiBase instead of the effective name.
 
 const DEVICE_NAME_STORAGE_KEY = 'homeglow_device_name';
 
@@ -44,7 +56,22 @@ const generateDeviceName = () => {
     return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 };
 
-export const getDeviceName = () => {
+// Mirror target for this session, or null when not mirroring. In-memory
+// only — see the header note. app.jsx syncs it from its mirror state.
+let mirrorTargetName = null;
+
+export const setMirrorTarget = (deviceName) => {
+    mirrorTargetName = typeof deviceName === 'string' && deviceName ? deviceName : null;
+};
+
+export const clearMirrorTarget = () => {
+    mirrorTargetName = null;
+};
+
+export const getMirrorTarget = () => mirrorTargetName;
+
+// This browser's own device name, always — even while mirroring.
+export const getLocalDeviceName = () => {
     let deviceName = localStorage.getItem(DEVICE_NAME_STORAGE_KEY);
 
     if (!deviceName) {
@@ -55,11 +82,19 @@ export const getDeviceName = () => {
     return deviceName;
 };
 
+// Effective device name: the mirror target while mirroring, else local.
+export const getDeviceName = () => mirrorTargetName || getLocalDeviceName();
+
 export const setDeviceName = (deviceName) => {
     localStorage.setItem(DEVICE_NAME_STORAGE_KEY, deviceName);
 };
 
 export const getDeviceApiBase = (apiBaseUrl) => {
     const deviceName = getDeviceName();
+    return `${apiBaseUrl}/api/devices/${encodeURIComponent(deviceName)}`;
+};
+
+export const getLocalDeviceApiBase = (apiBaseUrl) => {
+    const deviceName = getLocalDeviceName();
     return `${apiBaseUrl}/api/devices/${encodeURIComponent(deviceName)}`;
 };
