@@ -74,5 +74,19 @@
     "expand": "Ampliar",
     "fullPage": "Llenar la página",
     "shrink": "Devolver"
+  },
+  "mirror": {
+    "mirroring": "Espejo de {{name}}",
+    "tab": "Pestaña {{label}}",
+    "fallbackSize": "sin tamaño notificado — usando el predeterminado",
+    "zoom": "Zoom",
+    "fit": "Ajustar",
+    "exit": "Salir del espejo",
+    "unlock": "Desbloquear diseño",
+    "lock": "Bloquear diseño",
+    "pinTitle": "Introduce el PIN de administrador para duplicar",
+    "notFoundTitle": "Pantalla no encontrada",
+    "notFoundMessage": "No existe ninguna pantalla llamada \"{{name}}\", por lo que no se puede duplicar.",
+    "backToDashboard": "Volver a mi panel"
   }
 }

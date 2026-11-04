@@ -58,6 +58,15 @@ const ROUTE_DOMAINS = [
   [/^\/api\/(prizes|prize-offers)(\/|$)/, ['prizes', 'users']],
   [/^\/api\/(settings|timezone|themes|appearance|sounds)(\/|$)/, ['settings']],
   [/^\/api\/(calendar|calendar-sources|calendar-sync)(\/|$)/, ['calendar']],
+  // Device writes (layout, settings, assignments, tabs, copy) bump `settings`,
+  // which app.jsx already subscribes to and answers by refetching household
+  // settings AND widget assignments — so a mirror edit reaches its target in
+  // ~1s (SSE) / ≤15s (poll) with no reload, with no new domain to subscribe.
+  // The viewport report matches the empty-domain entry FIRST (find returns
+  // the first match), so it never bumps: a display resizing must not make
+  // every display refetch on every resize.
+  [/^\/api\/devices\/[^/]+\/viewport(\/|$)/, []],
+  [/^\/api\/devices(\/|$)/, ['settings']],
 ];
 // POSTs that only read.
 const READ_ONLY_POSTS = new Set(['/api/settings/search', '/api/calendar-sources/:id/test']);

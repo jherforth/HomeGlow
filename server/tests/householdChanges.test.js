@@ -12,6 +12,13 @@ test('a successful write moves the kinds of data its route touches', () => {
   assert.deepEqual(domainsForRequest('POST', '/api/settings', 200), ['settings']);
   assert.deepEqual(domainsForRequest('PUT', '/api/timezone', 200), ['settings']);
   assert.deepEqual(domainsForRequest('DELETE', '/api/calendar-sources/:id/events/:eventId', 204), ['calendar']);
+  // Device writes bump `settings`, which app.jsx already subscribes to and
+  // answers by refetching assignments — this is how a mirror edit reaches
+  // its target without a reload (remote-control mirror mode).
+  assert.deepEqual(domainsForRequest('PATCH', '/api/devices/:deviceName/settings', 200), ['settings']);
+  assert.deepEqual(domainsForRequest('PATCH', '/api/devices/:deviceName/widget-assignments/layout/bulk', 200), ['settings']);
+  assert.deepEqual(domainsForRequest('POST', '/api/devices/:deviceName/widget-assignments', 200), ['settings']);
+  assert.deepEqual(domainsForRequest('DELETE', '/api/devices/:deviceName', 200), ['settings']);
 });
 
 test('reads, failed writes and other routes move nothing', () => {
@@ -20,7 +27,11 @@ test('reads, failed writes and other routes move nothing', () => {
   assert.deepEqual(domainsForRequest('POST', '/api/chores/complete', 409), []);
   assert.deepEqual(domainsForRequest('POST', '/api/settings/search', 200), []);
   assert.deepEqual(domainsForRequest('POST', '/api/calendar-sources/:id/test', 200), []);
-  assert.deepEqual(domainsForRequest('PATCH', '/api/devices/:deviceName/settings', 200), []);
+  // The viewport report is telemetry, not a write other displays care about:
+  // it never bumps, so a display resizing cannot set off a refetch loop.
+  assert.deepEqual(domainsForRequest('POST', '/api/devices/:deviceName/viewport', 200), []);
+  assert.deepEqual(domainsForRequest('POST', '/api/devices/:deviceName/viewport', 400), []);
+  assert.deepEqual(domainsForRequest('GET', '/api/devices/:deviceName/viewport', 200), []);
   assert.deepEqual(domainsForRequest('POST', '/api/plugin/v1/storage/:pluginId/:key', 200), []);
   assert.deepEqual(domainsForRequest('POST', undefined, 200), [], 'a 404 has no route');
   // A route that only starts with a known prefix isn't that route.

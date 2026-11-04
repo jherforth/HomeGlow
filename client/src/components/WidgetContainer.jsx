@@ -16,7 +16,7 @@ import {
 } from '../utils/gridLayout.js';
 import CountdownCircle from './CountdownCircle';
 import { canCommitResize } from '../utils/resizeGuard';
-import { shouldAcceptLayoutChange } from '../utils/layoutSync';
+import { shouldAcceptLayoutChange, reconcileLayoutWithLive } from '../utils/layoutSync';
 import { buildLayout, savedSourcesById } from '../utils/gridPlacement';
 import { resizeButtonMetrics, widgetPixelSize } from '../utils/resizeButtons.js';
 import { readGridMetrics } from '../utils/gridMetrics';
@@ -110,6 +110,12 @@ const WidgetContainer = ({
   expandSettings = null,
   // Told 'normal', 'half' or 'full' whenever the expanded size changes.
   onExpandedSizeChange,
+  // Mirror mode renders this grid inside a CSS transform: scale() wrapper.
+  // RGL's drag math divides screen deltas and element rects by
+  // positionStrategy.scale, so passing the wrapper's scale here keeps drags
+  // landing on the right row/column instead of undershooting by the scale
+  // factor. 1 (the library default) when not mirroring.
+  gridTransformScale = 1,
 }) => {
   const { t } = useTranslation('common');
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
@@ -137,6 +143,28 @@ const WidgetContainer = ({
   // tab. Read when a save is requested, not when the debounced save fires.
   const widgetsRef = useRef(widgets);
   widgetsRef.current = widgets;
+  // Layout items the user has moved or resized whose save has not settled
+  // yet (see saveLayoutsToApi). A same-tab refetch rebuild must not
+  // overwrite these with server values: the server copy predates the live
+  // gesture, and replacing it mid-interaction is the visible jump the
+  // mirror showed when a bump landed during a resize. Refs, not state:
+  // saveLayoutsToApi is a useCallback with [] deps, so only refs stay
+  // current inside it — the same stale-closure trap app.jsx's bump handler
+  // fell into (see the note on fetchWidgetAssignments there).
+  const touchedLayoutRef = useRef(new Set());
+  // Latest rendered layout, for comparing live values at save-settle time.
+  const layoutRef = useRef([]);
+  layoutRef.current = layout;
+
+  const settleTouchedLayout = (sentItems) => {
+    const liveById = new Map(layoutRef.current.map((item) => [item.i, item]));
+    for (const sent of sentItems) {
+      const live = liveById.get(sent.i);
+      if (live && live.x === sent.x && live.y === sent.y && live.w === sent.w && live.h === sent.h) {
+        touchedLayoutRef.current.delete(sent.i);
+      }
+    }
+  };
 
   const saveLayoutsToApi = useCallback((layoutItems, tabNumber, cols) => {
     // Every widget is saved, but against what it was loaded from: one nobody
@@ -158,7 +186,14 @@ const WidgetContainer = ({
         }));
 
       if (layouts.length > 0) {
-        axios.patch(`${API_DEVICE_URL}/widget-assignments/layout/bulk`, { layouts }).catch(() => { });
+        // Settle only what this PATCH carried, and only where live still
+        // equals what was sent: a newer gesture re-touches its items, and
+        // those stay protected until their own save settles. A failed save
+        // settles the same way, so a lost write never pins stale positions
+        // against later refetches — the next refetch heals instead.
+        axios.patch(`${API_DEVICE_URL}/widget-assignments/layout/bulk`, { layouts })
+          .then(() => { settleTouchedLayout(layoutItems); })
+          .catch(() => { settleTouchedLayout(layoutItems); });
       }
     }, 500);
   }, []);
@@ -214,7 +249,21 @@ const WidgetContainer = ({
       prevWidgetIdsRef.current = currentCacheKey;
 
       const initialLayout = buildLayout(widgets, gridCols, lockedRef.current);
-      setLayout(initialLayout);
+      if (layoutTabRef.current === activeTab) {
+        // Same-tab refetch: a bump landing mid-gesture, another writer, or
+        // this display's own save coming back. Reconcile instead of
+        // replacing, so the user's unsaved positions survive the refetch
+        // and server values win everywhere else (new widgets appear,
+        // removed ones drop, converged touches prune themselves).
+        const reconciled = reconcileLayoutWithLive(initialLayout, layoutRef.current, touchedLayoutRef.current);
+        touchedLayoutRef.current = reconciled.touched;
+        setLayout(reconciled.layout);
+      } else {
+        // First paint or a tab change: no live gesture to protect, and
+        // touches from the old tab must not leak into the new one.
+        touchedLayoutRef.current = new Set();
+        setLayout(initialLayout);
+      }
       layoutTabRef.current = activeTab;
     } else if (colsChanged) {
       setLayout((currentLayout) => {
@@ -317,6 +366,15 @@ const WidgetContainer = ({
 
     if (!hasChanged) return;
 
+    // The live gesture's positions are newer than the server copy a
+    // refetch may return before the debounced save lands; protect them.
+    for (const item of safeLayout) {
+      const existing = currentLayoutById.get(item.i);
+      if (!existing || existing.x !== item.x || existing.y !== item.y || existing.w !== item.w || existing.h !== item.h) {
+        touchedLayoutRef.current.add(item.i);
+      }
+    }
+
     const updatedLayout = safeLayout.map(item => ({
       ...item,
       static: locked
@@ -341,6 +399,10 @@ const WidgetContainer = ({
       e.preventDefault();
       e.stopPropagation();
     }
+
+    // Same protection as a drag: the click's save is debounced, and a
+    // refetch landing before it must not snap the widget back.
+    touchedLayoutRef.current.add(widgetId);
 
     setLayout((currentLayout) => {
       const newLayout = currentLayout.map((item) => {
@@ -908,6 +970,7 @@ const WidgetContainer = ({
           className="layout"
           width={containerWidth}
           layout={gridLayout}
+          positionStrategy={gridTransformScale === 1 ? undefined : { type: 'transform', scale: gridTransformScale }}
           gridConfig={{
             cols: gridCols,
             rowHeight: gridMetrics.rowHeight,

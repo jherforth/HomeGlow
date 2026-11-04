@@ -2939,6 +2939,182 @@ const upsertDeviceSettings = async (request, reply) => {
 fastify.put('/api/devices/:deviceName/settings', upsertDeviceSettings);
 fastify.patch('/api/devices/:deviceName/settings', upsertDeviceSettings);
 
+// Reported viewport size, for mirror mode (remote control): the dashboard
+// posts its own innerWidth/innerHeight/devicePixelRatio so a mirror can
+// render at the target's true size. Telemetry, not a setting — it lives in
+// its own column (see schema41) so a settings PUT can never wipe it, and
+// its route is excluded from the household-changes bump (see ROUTE_DOMAINS)
+// so a resize can never set off a refetch loop.
+// No reported viewport may be trusted at face value: a client can send any
+// numbers it likes, and the mirror renders at the reported size. Clamp into
+// sane bounds instead of rejecting — a real display outside them is still
+// renderable, just not at an absurd size.
+const clampViewportValue = (value, min, max) => Math.min(Math.max(value, min), max);
+
+const parseViewportReport = (body) => {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+  const { width, height } = body;
+  const devicePixelRatio = body.devicePixelRatio === undefined ? 1 : body.devicePixelRatio;
+  if (!Number.isInteger(width) || width <= 0) return null;
+  if (!Number.isInteger(height) || height <= 0) return null;
+  if (!Number.isFinite(devicePixelRatio) || devicePixelRatio <= 0) return null;
+  return {
+    width: clampViewportValue(width, 200, 10000),
+    height: clampViewportValue(height, 200, 10000),
+    devicePixelRatio: clampViewportValue(devicePixelRatio, 0.5, 8),
+  };
+};
+
+fastify.post('/api/devices/:deviceName/viewport', async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+
+  const viewport = parseViewportReport(request.body);
+  if (!viewport) {
+    return reply.status(400).send({ error: 'viewport must be { width, height, devicePixelRatio? } with positive numbers' });
+  }
+
+  try {
+    // Update-only, like the reload-request routes: a viewport report is
+    // telemetry from a display that already exists, not a registration.
+    // Creating the row here meant every browser that merely opened HomeGlow
+    // showed up in Admin → Devices. A genuinely new display still gets its
+    // row the first time it saves settings (PUT/PATCH settings, tab and
+    // widget-assignment writes all create it), so first-run is unaffected.
+    const row = db.prepare('SELECT id FROM devices WHERE name = ?').get(deviceName);
+    if (!row) {
+      return reply.status(404).send({ error: 'device not found' });
+    }
+    // Deliberately NOT touching updateTime: a viewport report is not an
+    // edit, and it must not reorder the Admin Devices list on every resize.
+    db.prepare('UPDATE devices SET viewport_json = ? WHERE name = ?').run(
+      JSON.stringify(viewport),
+      deviceName
+    );
+
+    return { ok: true, viewport };
+  } catch (error) {
+    console.error('Error saving device viewport:', error);
+    reply.status(500).send({ error: 'Failed to save device viewport' });
+  }
+});
+
+fastify.get('/api/devices/:deviceName/viewport', async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+
+  try {
+    const row = db.prepare('SELECT viewport_json FROM devices WHERE name = ?').get(deviceName);
+    if (!row || !row.viewport_json) {
+      return { viewport: null };
+    }
+
+    try {
+      return { viewport: JSON.parse(row.viewport_json) };
+    } catch {
+      return { viewport: null };
+    }
+  } catch (error) {
+    console.error('Error fetching device viewport:', error);
+    reply.status(500).send({ error: 'Failed to fetch device viewport' });
+  }
+});
+
+// One-time reload command for mirror exit (remote refresh): when a mirror
+// session exits, the exiting client POSTs here for the TARGET device. The
+// command is a timestamp inside the target's device settings — no new
+// column, no new domain. The POST matches the blanket /api/devices/**
+// entry, so it bumps `settings` and the target learns of it within ~1s
+// (SSE) / ≤15s (poll) like any other device write. The target's dashboard,
+// on seeing a pending command for its OWN device row, clears it (DELETE)
+// and reloads — clearing before reloading is what makes the command
+// one-time: a reloaded page finds nothing pending, and only a new exit
+// writes a new command. updateTime is untouched: a reload command is not
+// an edit and must not reorder the Admin Devices list. The command never
+// creates a device: POST/GET/DELETE to an unknown name 404.
+const MIRROR_RELOAD_FIELD = 'mirrorReloadRequestedAt';
+
+const readMirrorReloadRequest = (deviceName) => {
+  const row = db.prepare('SELECT device_settings_json FROM devices WHERE name = ?').get(deviceName);
+  if (!row) return { exists: false, value: null };
+  const settings = parseJsonObject(row.device_settings_json, {});
+  const value = settings[MIRROR_RELOAD_FIELD];
+  return { exists: true, value: typeof value === 'number' && Number.isFinite(value) ? value : null };
+};
+
+fastify.post('/api/devices/:deviceName/reload-request', async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+
+  try {
+    const row = db.prepare('SELECT device_settings_json FROM devices WHERE name = ?').get(deviceName);
+    if (!row) {
+      return reply.status(404).send({ error: 'device not found' });
+    }
+    const settings = parseJsonObject(row.device_settings_json, {});
+    const requestedAt = Date.now();
+    settings[MIRROR_RELOAD_FIELD] = requestedAt;
+    db.prepare('UPDATE devices SET device_settings_json = ? WHERE name = ?').run(
+      JSON.stringify(settings),
+      deviceName
+    );
+
+    return { ok: true, mirrorReloadRequestedAt: requestedAt };
+  } catch (error) {
+    console.error('Error saving mirror reload request:', error);
+    reply.status(500).send({ error: 'Failed to save mirror reload request' });
+  }
+});
+
+fastify.get('/api/devices/:deviceName/reload-request', async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+
+  try {
+    const { exists, value } = readMirrorReloadRequest(deviceName);
+    if (!exists) {
+      return reply.status(404).send({ error: 'device not found' });
+    }
+    return { mirrorReloadRequestedAt: value };
+  } catch (error) {
+    console.error('Error fetching mirror reload request:', error);
+    reply.status(500).send({ error: 'Failed to fetch mirror reload request' });
+  }
+});
+
+fastify.delete('/api/devices/:deviceName/reload-request', async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+
+  try {
+    const row = db.prepare('SELECT device_settings_json FROM devices WHERE name = ?').get(deviceName);
+    if (!row) {
+      return reply.status(404).send({ error: 'device not found' });
+    }
+    const settings = parseJsonObject(row.device_settings_json, {});
+    delete settings[MIRROR_RELOAD_FIELD];
+    db.prepare('UPDATE devices SET device_settings_json = ? WHERE name = ?').run(
+      JSON.stringify(settings),
+      deviceName
+    );
+
+    return { ok: true };
+  } catch (error) {
+    console.error('Error clearing mirror reload request:', error);
+    reply.status(500).send({ error: 'Failed to clear mirror reload request' });
+  }
+});
+
 
 fastify.patch('/api/devices/:deviceName', async (request, reply) => {
   const { deviceName } = request.params;

@@ -8,6 +8,11 @@ import {
     getDeviceName,
     setDeviceName,
     getDeviceApiBase,
+    getLocalDeviceName,
+    getLocalDeviceApiBase,
+    setMirrorTarget,
+    clearMirrorTarget,
+    getMirrorTarget,
     isValidDeviceName,
     normalizeDeviceName,
 } from './deviceName.js';
@@ -163,6 +168,73 @@ describe('normalizeDeviceName', () => {
         expect(normalizeDeviceName(null)).toBe('');
         expect(normalizeDeviceName(undefined)).toBe('');
         expect(normalizeDeviceName(12345)).toBe('');
+    });
+});
+
+describe('mirror target override (remote-control mirror mode)', () => {
+    const originalLocalStorage = globalThis.localStorage;
+
+    beforeEach(() => {
+        Object.defineProperty(globalThis, 'localStorage', {
+            value: createLocalStorageMock(),
+            configurable: true,
+            writable: true,
+        });
+        clearMirrorTarget();
+    });
+
+    afterEach(() => {
+        clearMirrorTarget();
+        Object.defineProperty(globalThis, 'localStorage', {
+            value: originalLocalStorage,
+            configurable: true,
+            writable: true,
+        });
+        vi.restoreAllMocks();
+    });
+
+    it('without a mirror target, effective and local names agree', () => {
+        setDeviceName('my-phone');
+        expect(getMirrorTarget()).toBe(null);
+        expect(getDeviceName()).toBe('my-phone');
+        expect(getLocalDeviceName()).toBe('my-phone');
+        expect(getDeviceApiBase('http://localhost:5001')).toBe('http://localhost:5001/api/devices/my-phone');
+        expect(getLocalDeviceApiBase('http://localhost:5001')).toBe('http://localhost:5001/api/devices/my-phone');
+    });
+
+    it('while mirroring, writes address the target, never the local device', () => {
+        setDeviceName('my-phone');
+        setMirrorTarget('Kitchen Wall Display');
+
+        // The single override point every device-scoped call flows through.
+        expect(getDeviceName()).toBe('Kitchen Wall Display');
+        expect(getDeviceApiBase('http://localhost:5001')).toBe('http://localhost:5001/api/devices/Kitchen%20Wall%20Display');
+        // And the local identity is still reachable for local-only call sites.
+        expect(getLocalDeviceName()).toBe('my-phone');
+        expect(getLocalDeviceApiBase('http://localhost:5001')).toBe('http://localhost:5001/api/devices/my-phone');
+        // The override never touches localStorage: exiting mirror mode needs
+        // no cleanup, and a reload outside mirror mode cannot inherit it.
+        expect(globalThis.localStorage.getItem('homeglow_device_name')).toBe('my-phone');
+    });
+
+    it('clearing the target restores the local device as effective', () => {
+        setDeviceName('my-phone');
+        setMirrorTarget('Kitchen Wall Display');
+        expect(getDeviceName()).toBe('Kitchen Wall Display');
+
+        clearMirrorTarget();
+
+        expect(getDeviceName()).toBe('my-phone');
+        expect(getDeviceApiBase('http://localhost:5001')).toBe('http://localhost:5001/api/devices/my-phone');
+    });
+
+    it('empty and non-string targets are ignored', () => {
+        setDeviceName('my-phone');
+        setMirrorTarget('');
+        expect(getMirrorTarget()).toBe(null);
+        setMirrorTarget(null);
+        expect(getMirrorTarget()).toBe(null);
+        expect(getDeviceName()).toBe('my-phone');
     });
 });
 
