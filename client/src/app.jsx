@@ -1340,29 +1340,44 @@ const App = () => {
   ]);
 
   // `cell` is where on the tab ({x,y,w,h}), or null for the first open spot.
+  // Where `name` goes on `toTab`: `cell` ({x,y,w,h}) when it was let go
+  // there, else the first open spot, at the size it had on `fromTab`.
+  const spotOnTab = (name, fromTab, toTab, cell) => {
+    if (cell) return cell;
+    const size = getWidgetLayoutForTab(name, fromTab) || { w: 6, h: 4 };
+    const taken = Object.keys(widgetAssignments)
+      .filter((other) => other !== name)
+      .map((other) => getWidgetLayoutForTab(other, toTab))
+      .filter(Boolean);
+    return firstOpenSpot({ w: size.w, h: size.h }, taken);
+  };
+  const layoutFields = (spot) => ({ layout_x: spot.x, layout_y: spot.y, layout_w: spot.w, layout_h: spot.h });
+
+  // Move a widget to another tab (or within this one, to `cell`). Between tabs
+  // it's one write on the server (widget-assignments/transfer): the widget is
+  // never left on no tab, and keeps its per-tab settings.
   const moveWidgetToTab = async (name, fromTab, toTab, cell = null) => {
     if (!name || (fromTab === toTab && !cell)) return;
     try {
-      if (fromTab !== toTab && !isWidgetAssignedToTab(name, toTab)) {
-        await axios.post(`${API_DEVICE_URL}/widget-assignments`, { widget_name: name, tabNumber: toTab });
-      }
-      // Where it was let go, else the first open spot, at the size it had.
-      const size = getWidgetLayoutForTab(name, fromTab) || { w: 6, h: 4 };
-      const taken = Object.keys(widgetAssignments)
-        .filter((other) => other !== name)
-        .map((other) => getWidgetLayoutForTab(other, toTab))
-        .filter(Boolean);
-      const spot = cell || firstOpenSpot({ w: size.w, h: size.h }, taken);
-      await axios.patch(`${API_DEVICE_URL}/widget-assignments/layout/bulk`, {
-        layouts: [{ widget_name: name, tabNumber: toTab, layout_x: spot.x, layout_y: spot.y, layout_w: spot.w, layout_h: spot.h }],
-      });
-      if (fromTab !== toTab) {
-        await axios.delete(`${API_DEVICE_URL}/widget-assignments/${encodeURIComponent(`${fromTab}::${name}`)}`);
+      const spot = spotOnTab(name, fromTab, toTab, cell);
+      if (fromTab === toTab || isWidgetAssignedToTab(name, toTab)) {
+        // Already there: place it, and take it off the tab it came from.
+        await axios.patch(`${API_DEVICE_URL}/widget-assignments/layout/bulk`, {
+          layouts: [{ widget_name: name, tabNumber: toTab, ...layoutFields(spot) }],
+        });
+        if (fromTab !== toTab) {
+          await axios.delete(`${API_DEVICE_URL}/widget-assignments/${encodeURIComponent(`${fromTab}::${name}`)}`);
+        }
+      } else {
+        await axios.post(`${API_DEVICE_URL}/widget-assignments/transfer`, {
+          widget_name: name, fromTab, toTab, layout: layoutFields(spot),
+        });
       }
       await fetchWidgetAssignments();
       setActiveTab(toTab);
     } catch (error) {
       console.error('Error moving the widget to another tab:', error);
+      setWidgetNotice({ message: i18n.t('common:widgetMenu.moveFailed') });
       await fetchWidgetAssignments();
     }
   };
@@ -1372,21 +1387,15 @@ const App = () => {
   const duplicateWidgetToTab = async (name, fromTab, toTab) => {
     if (!name || fromTab === toTab || isWidgetAssignedToTab(name, toTab)) return;
     try {
-      await axios.post(`${API_DEVICE_URL}/widget-assignments`, { widget_name: name, tabNumber: toTab });
-      const size = getWidgetLayoutForTab(name, fromTab) || { w: 6, h: 4 };
-      const taken = Object.keys(widgetAssignments)
-        .filter((other) => other !== name)
-        .map((other) => getWidgetLayoutForTab(other, toTab))
-        .filter(Boolean);
-      const spot = firstOpenSpot({ w: size.w, h: size.h }, taken);
-      await axios.patch(`${API_DEVICE_URL}/widget-assignments/layout/bulk`, {
-        layouts: [{ widget_name: name, tabNumber: toTab, layout_x: spot.x, layout_y: spot.y, layout_w: spot.w, layout_h: spot.h }],
+      await axios.post(`${API_DEVICE_URL}/widget-assignments/transfer`, {
+        widget_name: name, fromTab, toTab, copy: true, layout: layoutFields(spotOnTab(name, fromTab, toTab, null)),
       });
       await fetchWidgetAssignments();
       setActiveTab(toTab);
     } catch (error) {
       console.error('Error duplicating the widget:', error);
       setWidgetNotice({ message: i18n.t('common:widgetMenu.moveFailed') });
+      await fetchWidgetAssignments();
     }
   };
 
@@ -1857,20 +1866,27 @@ const App = () => {
     setStackDrop(null);
   };
   const stackTargetAt = (dragged, x, y) => {
-    // A Stack isn't put inside another.
-    if (isStackName(dragged)) return null;
+    // A Stack isn't put inside another, and over the dock the finger is on
+    // the dock (a tab, or +), never on a widget underneath it.
+    if (isStackName(dragged) || dockTargetAt(x, y) != null) return null;
+    const draggedSelector = `[data-widget-name="${CSS.escape(dragged)}"]`;
+    // The topmost thing under the finger, past the widget being dragged: it
+    // has to be another widget, not the dock or anything else on top.
     for (const el of document.elementsFromPoint(x, y)) {
+      // The dragged widget itself and the grid's drop shadow don't count.
+      if (el.closest?.(draggedSelector) || el.classList?.contains('react-grid-placeholder')) continue;
       const holder = el.closest?.('[data-widget-name]');
       const name = holder?.getAttribute('data-widget-name');
-      if (name && name !== dragged && !holder.closest('[data-widget-name="' + CSS.escape(dragged) + '"]')) {
-        return { name, el: holder };
-      }
+      return name && name !== dragged ? { name, el: holder } : null;
     }
     return null;
   };
   const handleWidgetDrag = (name, x, y) => {
     carry.onDrag(name, x, y);
-    if (carry.carrying) return;
+    if (carry.carrying) {
+      clearStackDwell();
+      return;
+    }
     const hit = stackTargetAt(name, x, y);
     if ((hit?.name || null) === stackDwellRef.current.target) {
       // The grid shuffles widgets while one is dragged: keep the outline on the target.
@@ -1893,12 +1909,20 @@ const App = () => {
   const handleWidgetDragStop = (name, x, y) => {
     const drop = stackDropRef.current;
     clearStackDwell();
-    if (drop && name) {
+    // Let go over the dock: that's a tab (or +), whatever was shown before.
+    if (drop && name && dockTargetAt(x, y) == null) {
       void stackWidgets(name, drop.target);
       return true;
     }
     return carry.onDragStop(name, x, y);
   };
+
+  // A widget carried off to another tab ends the grid's drag without a
+  // drop: don't leave "Stack with…" on the screen.
+  useEffect(() => {
+    clearStackDwell();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carriedName, activeTab]);
 
   // Put `dragged` with `target` on the open tab: a new Stack where the target
   // was, or one more widget in the target Stack.

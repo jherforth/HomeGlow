@@ -1303,3 +1303,110 @@ test('a removed widget comes back with its place and settings when its entry is 
     });
     assert.equal(bad.status, 400);
 });
+
+test('moving a widget to another tab carries its per-tab settings and clears its position', async () => {
+    const deviceName = `transfer-move-${Date.now()}`;
+    const base = `/api/devices/${encodeURIComponent(deviceName)}`;
+
+    const createTabRes = await api(`${base}/tabs`, {
+        method: 'POST',
+        body: JSON.stringify({ label: 'Kitchen', icon: 'star', show_label: true }),
+    });
+    assert.equal(createTabRes.status, 200);
+    assert.equal(createTabRes.body.number, 2);
+
+    assert.equal((await api(`${base}/widget-assignments`, {
+        method: 'POST',
+        body: JSON.stringify({ widget_name: 'calendar', tabNumber: 1 }),
+    })).status, 200);
+    assert.equal((await api(`${base}/widget-assignments/layout`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+            widget_name: 'calendar', tabNumber: 1,
+            layout_x: 0, layout_y: 2, layout_w: 8, layout_h: 5,
+            settings: { showStartTimes: false },
+        }),
+    })).status, 200);
+
+    const moveRes = await api(`${base}/widget-assignments/transfer`, {
+        method: 'POST',
+        body: JSON.stringify({ widget_name: 'calendar', fromTab: 1, toTab: 2 }),
+    });
+    assert.equal(moveRes.status, 200);
+    assert.equal(moveRes.body.tab_number, 2);
+    assert.equal(moveRes.body.copied, false);
+
+    const tabsRes = await api(`${base}/tabs`);
+    const config = (number) => JSON.parse(tabsRes.body.find((tab) => tab.number === number).config_json || '{}');
+    assert.equal('calendar' in config(1), false, 'gone from the tab it left');
+    assert.equal(config(2).calendar.showStartTimes, false, 'its settings came along');
+    assert.equal(config(2).calendar.layout_x, null, 'placed on arrival, not at its old spot');
+    assert.equal(config(2).calendar.layout_w, null);
+});
+
+test('copying a widget to another tab keeps it where it was', async () => {
+    const deviceName = `transfer-copy-${Date.now()}`;
+    const base = `/api/devices/${encodeURIComponent(deviceName)}`;
+
+    await api(`${base}/tabs`, { method: 'POST', body: JSON.stringify({ label: 'Two', icon: 'star', show_label: true }) });
+    await api(`${base}/widget-assignments`, { method: 'POST', body: JSON.stringify({ widget_name: 'plugin:grill.html', tabNumber: 1 }) });
+
+    const copyRes = await api(`${base}/widget-assignments/transfer`, {
+        method: 'POST',
+        body: JSON.stringify({ widget_name: 'plugin:grill.html', fromTab: 1, toTab: 2, copy: true }),
+    });
+    assert.equal(copyRes.status, 200);
+    assert.equal(copyRes.body.copied, true);
+
+    const list = (await api(`${base}/widget-assignments`)).body
+        .filter((row) => row.widget_name === 'plugin:grill.html')
+        .map((row) => row.tab_number)
+        .sort();
+    assert.deepEqual(list, [1, 2]);
+});
+
+test('a widget cannot be moved onto a tab that already shows it, or from a tab without it', async () => {
+    const deviceName = `transfer-refuse-${Date.now()}`;
+    const base = `/api/devices/${encodeURIComponent(deviceName)}`;
+
+    await api(`${base}/tabs`, { method: 'POST', body: JSON.stringify({ label: 'Two', icon: 'star', show_label: true }) });
+    await api(`${base}/widget-assignments`, { method: 'POST', body: JSON.stringify({ widget_name: 'weather', tabNumber: 1 }) });
+    await api(`${base}/widget-assignments`, { method: 'POST', body: JSON.stringify({ widget_name: 'weather', tabNumber: 2 }) });
+
+    const onto = await api(`${base}/widget-assignments/transfer`, {
+        method: 'POST',
+        body: JSON.stringify({ widget_name: 'weather', fromTab: 1, toTab: 2 }),
+    });
+    assert.equal(onto.status, 409);
+
+    const fromMissing = await api(`${base}/widget-assignments/transfer`, {
+        method: 'POST',
+        body: JSON.stringify({ widget_name: 'chores', fromTab: 1, toTab: 2 }),
+    });
+    assert.equal(fromMissing.status, 404);
+
+    const noTab = await api(`${base}/widget-assignments/transfer`, {
+        method: 'POST',
+        body: JSON.stringify({ widget_name: 'weather', fromTab: 1, toTab: 9 }),
+    });
+    assert.equal(noTab.status, 404);
+
+    const sameTab = await api(`${base}/widget-assignments/transfer`, {
+        method: 'POST',
+        body: JSON.stringify({ widget_name: 'weather', fromTab: 1, toTab: 1 }),
+    });
+    assert.equal(sameTab.status, 400);
+});
+
+test('a moved widget can land at a given spot', async () => {
+    const deviceName = `transfer-spot-${Date.now()}`;
+    const base = `/api/devices/${deviceName}`;
+    await api(`${base}/tabs`, { method: 'POST', body: JSON.stringify({ label: 'Two', icon: 'home' }) });
+    await api(`${base}/widget-assignments`, { method: 'POST', body: JSON.stringify({ widget_name: 'calendar', tabNumber: 1 }) });
+    const moved = await api(`${base}/widget-assignments/transfer`, {
+        method: 'POST',
+        body: JSON.stringify({ widget_name: 'calendar', fromTab: 1, toTab: 2, layout: { layout_x: 6, layout_y: 2, layout_w: 6, layout_h: 4 } }),
+    });
+    assert.equal(moved.status, 200, JSON.stringify(moved.body));
+    assert.deepEqual([moved.body.layout_x, moved.body.layout_y, moved.body.layout_w, moved.body.layout_h], [6, 2, 6, 4]);
+});
