@@ -83,6 +83,10 @@
     "fit": "Ajustar",
     "exit": "Salir del espejo",
     "unlock": "Desbloquear diseño",
-    "lock": "Bloquear diseño"
+    "lock": "Bloquear diseño",
+    "pinTitle": "Introduce el PIN de administrador para duplicar",
+    "notFoundTitle": "Pantalla no encontrada",
+    "notFoundMessage": "No existe ninguna pantalla llamada \"{{name}}\", por lo que no se puede duplicar.",
+    "backToDashboard": "Volver a mi panel"
   }
 }

@@ -83,6 +83,10 @@
     "fit": "Fit",
     "exit": "Exit mirror",
     "unlock": "Unlock layout",
-    "lock": "Lock layout"
+    "lock": "Lock layout",
+    "pinTitle": "Enter admin PIN to mirror",
+    "notFoundTitle": "Display not found",
+    "notFoundMessage": "No display named \"{{name}}\" exists, so it cannot be mirrored.",
+    "backToDashboard": "Back to my dashboard"
   }
 }

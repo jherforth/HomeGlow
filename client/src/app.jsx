@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspens
 import { Box, Button, Dialog, DialogContent, Typography, ThemeProvider, createTheme } from '@mui/material';
 
 import axios from 'axios';
+import { useTranslation } from 'react-i18next';
 import PluginWidgetWrapper from './components/PluginWidgetWrapper.jsx';
 import WidgetContainer from './components/WidgetContainer.jsx';
 import MirrorView from './components/MirrorView.jsx';
@@ -229,6 +230,7 @@ const withSentenceCaseButtons = (options) => ({
 });
 
 const App = () => {
+  const { t } = useTranslation('common');
   // Remote-control mirror mode: the device being mirrored, or null. The
   // state setter is named ...State to avoid colliding with the session
   // override setter from deviceName.js.
@@ -2037,7 +2039,7 @@ const App = () => {
         <PinModal
           open={mirrorPinPending !== null}
           mode="verify"
-          title="Enter admin PIN to mirror"
+          title={t('mirror.pinTitle')}
           onClose={cancelMirrorEntry}
           onVerify={handleMirrorPinVerify}
         />
@@ -2049,11 +2051,11 @@ const App = () => {
           until it is taken. */}
       <Dialog open={mirrorNotFound !== null} onClose={cancelMirrorEntry}>
         <DialogContent sx={{ p: 3, textAlign: 'center' }}>
-          <Typography variant="h6" sx={{ mb: 1 }}>Display not found</Typography>
+          <Typography variant="h6" sx={{ mb: 1 }}>{t('mirror.notFoundTitle')}</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {`No display named "${mirrorNotFound}" exists, so it cannot be mirrored.`}
+            {t('mirror.notFoundMessage', { name: mirrorNotFound })}
           </Typography>
-          <Button variant="contained" onClick={cancelMirrorEntry}>Back to my dashboard</Button>
+          <Button variant="contained" onClick={cancelMirrorEntry}>{t('mirror.backToDashboard')}</Button>
         </DialogContent>
       </Dialog>
 
