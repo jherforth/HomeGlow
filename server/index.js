@@ -2945,6 +2945,12 @@ fastify.patch('/api/devices/:deviceName/settings', upsertDeviceSettings);
 // its own column (see schema41) so a settings PUT can never wipe it, and
 // its route is excluded from the household-changes bump (see ROUTE_DOMAINS)
 // so a resize can never set off a refetch loop.
+// No reported viewport may be trusted at face value: a client can send any
+// numbers it likes, and the mirror renders at the reported size. Clamp into
+// sane bounds instead of rejecting — a real display outside them is still
+// renderable, just not at an absurd size.
+const clampViewportValue = (value, min, max) => Math.min(Math.max(value, min), max);
+
 const parseViewportReport = (body) => {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
   const { width, height } = body;
@@ -2952,7 +2958,11 @@ const parseViewportReport = (body) => {
   if (!Number.isInteger(width) || width <= 0) return null;
   if (!Number.isInteger(height) || height <= 0) return null;
   if (!Number.isFinite(devicePixelRatio) || devicePixelRatio <= 0) return null;
-  return { width, height, devicePixelRatio };
+  return {
+    width: clampViewportValue(width, 200, 10000),
+    height: clampViewportValue(height, 200, 10000),
+    devicePixelRatio: clampViewportValue(devicePixelRatio, 0.5, 8),
+  };
 };
 
 fastify.post('/api/devices/:deviceName/viewport', async (request, reply) => {
@@ -2967,7 +2977,16 @@ fastify.post('/api/devices/:deviceName/viewport', async (request, reply) => {
   }
 
   try {
-    ensureDeviceExists(deviceName);
+    // Update-only, like the reload-request routes: a viewport report is
+    // telemetry from a display that already exists, not a registration.
+    // Creating the row here meant every browser that merely opened HomeGlow
+    // showed up in Admin → Devices. A genuinely new display still gets its
+    // row the first time it saves settings (PUT/PATCH settings, tab and
+    // widget-assignment writes all create it), so first-run is unaffected.
+    const row = db.prepare('SELECT id FROM devices WHERE name = ?').get(deviceName);
+    if (!row) {
+      return reply.status(404).send({ error: 'device not found' });
+    }
     // Deliberately NOT touching updateTime: a viewport report is not an
     // edit, and it must not reorder the Admin Devices list on every resize.
     db.prepare('UPDATE devices SET viewport_json = ? WHERE name = ?').run(

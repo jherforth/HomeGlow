@@ -69,6 +69,20 @@ test('viewport report round-trips, unknown devices report null, bad reports are 
   assert.equal(missing.status, 200);
   assert.deepEqual(missing.body, { viewport: null });
 
+  // The viewport route is update-only: reporting for a device with no row
+  // is a 404 and must not create the row.
+  const ghost = await call('POST', '/api/devices/GhostDisplay/viewport', { width: 1920, height: 1080, devicePixelRatio: 1 });
+  assert.equal(ghost.status, 404, JSON.stringify(ghost.body));
+  const devices = await call('GET', '/api/devices');
+  assert.equal(devices.body.some((device) => device.name === 'GhostDisplay'), false);
+  const ghostRead = await call('GET', '/api/devices/GhostDisplay/viewport');
+  assert.deepEqual(ghostRead.body, { viewport: null });
+
+  // A genuinely new display gets its row from a settings write, not from
+  // the viewport report — that is the first-run creation path.
+  const created = await call('PATCH', '/api/devices/Wall/settings', { theme: 'light' });
+  assert.equal(created.status, 200, JSON.stringify(created.body));
+
   const saved = await call('POST', '/api/devices/Wall/viewport', { width: 1920, height: 1080, devicePixelRatio: 1 });
   assert.equal(saved.status, 200, JSON.stringify(saved.body));
   assert.deepEqual(saved.body.viewport, { width: 1920, height: 1080, devicePixelRatio: 1 });
@@ -98,6 +112,19 @@ test('viewport report round-trips, unknown devices report null, bad reports are 
   // The rejected reports left the last good value untouched.
   const afterBad = await call('GET', '/api/devices/Wall/viewport');
   assert.deepEqual(afterBad.body.viewport, { width: 1280, height: 800, devicePixelRatio: 1 });
+});
+
+test('viewport reports are clamped to sane bounds instead of stored raw', async () => {
+  const clamped = await call('POST', '/api/devices/Wall/viewport', { width: 50, height: 30000, devicePixelRatio: 20 });
+  assert.equal(clamped.status, 200, JSON.stringify(clamped.body));
+  assert.deepEqual(clamped.body.viewport, { width: 200, height: 10000, devicePixelRatio: 8 });
+
+  const lowDpr = await call('POST', '/api/devices/Wall/viewport', { width: 1920, height: 1080, devicePixelRatio: 0.1 });
+  assert.equal(lowDpr.status, 200, JSON.stringify(lowDpr.body));
+  assert.deepEqual(lowDpr.body.viewport, { width: 1920, height: 1080, devicePixelRatio: 0.5 });
+
+  const read = await call('GET', '/api/devices/Wall/viewport');
+  assert.deepEqual(read.body, { viewport: { width: 1920, height: 1080, devicePixelRatio: 0.5 } });
 });
 
 test('a viewport report moves no counters; a device settings write moves settings', async () => {

@@ -1,6 +1,6 @@
 // client/src/app.jsx
 import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
-import { Box, Dialog, DialogContent, Typography, ThemeProvider, createTheme } from '@mui/material';
+import { Box, Button, Dialog, DialogContent, Typography, ThemeProvider, createTheme } from '@mui/material';
 
 import axios from 'axios';
 import PluginWidgetWrapper from './components/PluginWidgetWrapper.jsx';
@@ -18,6 +18,7 @@ import { getDeviceApiBase, getLocalDeviceName, setMirrorTarget as setSessionMirr
 import { getMirrorAdminBannerTarget } from './utils/mirrorAdmin.js';
 import { requestMirrorReload, checkMirrorReload } from './utils/mirrorReload.js';
 import { parseMirrorHash, buildMirrorHash, createViewportReporter } from './utils/mirrorMode.js';
+import { fetchPinRemembered, shouldPromptForPin } from './utils/adminPinDevice.js';
 import { refreshSubscription } from './utils/pushNotifications.js';
 import { unlockAudio } from './utils/choreSound.js';
 import useChoreSoundScheduler from './hooks/useChoreSoundScheduler.js';
@@ -80,6 +81,7 @@ import { CORE_CONTROLS, resolveHiddenControls } from './utils/displayControls.js
 import { parseAdminHash, clearAdminHash } from './utils/adminNavigation.js';
 import './index.css';
 
+const loadPinModal = () => import('./components/PinModal.jsx');
 const loadAdminPanel = () => import('./components/AdminPanel.jsx');
 const loadCalendarWidget = () => import('./components/CalendarWidget.jsx');
 const loadPhotoWidget = () => import('./components/PhotoWidget.jsx');
@@ -121,6 +123,7 @@ const scheduleIdleWarmup = (work) => {
   return () => clearTimeout(timeoutId);
 };
 
+const PinModal = lazy(loadPinModal);
 const AdminPanel = lazy(loadAdminPanel);
 const CalendarWidget = lazy(loadCalendarWidget);
 const PhotoWidget = lazy(loadPhotoWidget);
@@ -229,8 +232,23 @@ const App = () => {
   // Remote-control mirror mode: the device being mirrored, or null. The
   // state setter is named ...State to avoid colliding with the session
   // override setter from deviceName.js.
-  const [mirrorTarget, setMirrorTargetState] = useState(() => parseMirrorHash(window.location.hash));
+  //
+  // Mirror entry is gated (see requestMirrorEntry below), so the state
+  // starts empty even for a mirror URL: the mount effect runs the gate,
+  // and only a passing entry sets the target. Nothing mirror-scoped loads
+  // before the gate passes, so a typed or bookmarked mirror URL can never
+  // render — let alone edit — the target first and ask later.
+  const [mirrorTarget, setMirrorTargetState] = useState(null);
   const [mirrorAdmin, setMirrorAdmin] = useState(false);
+  // A mirror entry waiting on the PIN prompt (device name), or a mirror URL
+  // naming a device that does not exist. Both render instead of entering
+  // the mirror; neither ever sets mirrorTarget.
+  const [mirrorPinPending, setMirrorPinPending] = useState(null);
+  const [mirrorNotFound, setMirrorNotFound] = useState(null);
+  // Ref mirror of mirrorTarget for the gate callback, which must stay
+  // stable across renders (the mount/hashchange effect depends on it).
+  const mirrorTargetRef = useRef(null);
+  if (mirrorTargetRef.current !== mirrorTarget) mirrorTargetRef.current = mirrorTarget;
   // Sync the session device override BEFORE anything derives an API URL
   // from getDeviceApiBase: while mirroring, every device-scoped call in
   // this render (settings, tabs, assignments, layout saves) addresses the
@@ -623,7 +641,13 @@ const App = () => {
       // delay the settings, tabs and plugins this dashboard renders from.
       void fetchAdminPinExists();
 
-      await migrateLocalDeviceSettingsToServer();
+      // Never migrate while mirroring: the migration PUTs to the effective
+      // device, so on mirror entry it would write this browser's legacy
+      // local settings onto the target (and mint the target's row for a
+      // bogus name). The effect re-runs on mirror entry/exit because its
+      // callbacks change with the effective device, so the guard — not a
+      // mount-only skip — is what keeps the target untouched.
+      if (!mirrorTarget) await migrateLocalDeviceSettingsToServer();
       await fetchDemoStatus();
       await fetchDeviceSettings();
       await Promise.all([
@@ -640,14 +664,18 @@ const App = () => {
     migrateLocalDeviceSettingsToServer,
     fetchHouseholdSettings,
     fetchAdminPinExists,
+    mirrorTarget,
   ]);
   // endRegion #98
 
   // Demo mode: each visitor's browser is a fresh "device", which normally
   // lands on the empty first-run welcome screen. Seed this device with the
   // chore + calendar widgets on the Home tab so the demo is instantly alive.
+  // Never while mirroring: the seed writes to the effective device, so a
+  // mirror of a display with no settings yet would stamp default widgets
+  // onto the target.
   useEffect(() => {
-    if (!demoStatus.demo || !isFirstRunClient || !deviceSettingsLoaded) return;
+    if (mirrorTarget || !demoStatus.demo || !isFirstRunClient || !deviceSettingsLoaded) return;
 
     const seedDemoDevice = async () => {
       try {
@@ -676,15 +704,17 @@ const App = () => {
     };
 
     void seedDemoDevice();
-  }, [demoStatus.demo, isFirstRunClient, deviceSettingsLoaded]);
+  }, [demoStatus.demo, isFirstRunClient, deviceSettingsLoaded, mirrorTarget]);
 
   // Mobile first-run (issue #118): a phone's first visit is its own fresh
   // device and would land on the empty welcome screen. Seed it with chores +
   // calendar + weather on the Home tab so the phone is instantly useful; the
   // user can adjust everything in Settings afterward. Demo mode has its own
   // seeding above; the kiosk (≥600px) first-run flow is unchanged.
+  // Never while mirroring, for the same reason as the demo seed above:
+  // the seed writes to the effective device, which is the target.
   useEffect(() => {
-    if (!isMobile || demoStatus.demo || !isFirstRunClient || !deviceSettingsLoaded) return;
+    if (mirrorTarget || !isMobile || demoStatus.demo || !isFirstRunClient || !deviceSettingsLoaded) return;
 
     const seedMobileDevice = async () => {
       try {
@@ -711,7 +741,7 @@ const App = () => {
     };
 
     void seedMobileDevice();
-  }, [isMobile, demoStatus.demo, isFirstRunClient, deviceSettingsLoaded]);
+  }, [isMobile, demoStatus.demo, isFirstRunClient, deviceSettingsLoaded, mirrorTarget]);
 
   // NOTE (mirror stale-closure trap): this fetch MUST resolve the device at
   // call time, not close over the render's API_DEVICE_URL. The household-
@@ -1358,23 +1388,144 @@ const App = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Mirror mode entry gate: EVERY entry path runs through here — the
+  // Devices-row button, a typed URL, a bookmark, a reload — so no path
+  // can skip it. Two checks, in this order:
+  //
+  // 1. PIN, under exactly Admin's rule (shouldPromptForPin): prompt unless
+  //    no PIN is configured or THIS browser remembered it (local device
+  //    name, never the target's flag). Without this, a browser that never
+  //    entered the PIN could open #/mirror/wall and unlock the wall's
+  //    layout. Checking the PIN before existence also avoids leaking which
+  //    device names exist to an unauthenticated prober.
+  // 2. Existence: the named device must already be in GET /api/devices.
+  //    Entering a mirror for a name with no row used to create that row
+  //    the moment the dashboard wrote anything device-scoped.
+  //
+  // A failed check never sets mirrorTarget: a pending PIN shows the PIN
+  // modal over this browser's own dashboard, and an unknown name shows the
+  // not-found dialog. The token drops stale completions when a second
+  // entry starts before the first finishes.
+  const mirrorGateTokenRef = useRef(0);
+  const confirmMirrorTargetExists = useCallback(async (name, token) => {
+    try {
+      const { data } = await axios.get(`${API_BASE_URL}/api/devices`);
+      if (token !== mirrorGateTokenRef.current) return false;
+      const names = Array.isArray(data) ? data.map((device) => device.name) : [];
+      if (!names.includes(name)) {
+        setMirrorPinPending(null);
+        setMirrorNotFound(name);
+        // The gate dialogs render at App level, so Admin must not stay
+        // open above them when entry started from its Devices row.
+        setMirrorAdmin(false);
+        setShowAdminPanel(false);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error('Error checking mirror target exists:', error);
+      // Fail closed: a device list that cannot be read cannot vouch for
+      // the target, so do not enter a mirror that might mint a bogus row.
+      if (token !== mirrorGateTokenRef.current) return false;
+      setMirrorPinPending(null);
+      setMirrorNotFound(name);
+      setMirrorAdmin(false);
+      setShowAdminPanel(false);
+      return false;
+    }
+  }, []);
+
+  const enterMirrorTarget = useCallback((name) => {
+    setMirrorPinPending(null);
+    setMirrorNotFound(null);
+    setMirrorTargetState(name);
+    setMirrorAdmin(false);
+    setShowAdminPanel(false);
+  }, []);
+
+  const requestMirrorEntry = useCallback(async (name) => {
+    // Re-confirming the active mirror (e.g. closing mirror-Admin restores
+    // the mirror hash) is not a new entry: it must not re-prompt.
+    if (name === mirrorTargetRef.current) {
+      setMirrorPinPending(null);
+      setMirrorNotFound(null);
+      return;
+    }
+    const token = ++mirrorGateTokenRef.current;
+    let pinExists = false;
+    try {
+      const { data } = await axios.get(`${API_BASE_URL}/api/admin-pin/exists`);
+      pinExists = data?.exists === true;
+    } catch (error) {
+      // Like Admin's gate, an unreachable PIN endpoint must not strand the
+      // dashboard: fall through without a prompt.
+      console.error('Error checking admin PIN status for mirror entry:', error);
+      pinExists = false;
+    }
+    if (token !== mirrorGateTokenRef.current) return;
+    const remembered = pinExists ? await fetchPinRemembered(API_BASE_URL) : false;
+    if (token !== mirrorGateTokenRef.current) return;
+    if (shouldPromptForPin({ pinExists, remembered })) {
+      setMirrorNotFound(null);
+      setMirrorPinPending(name);
+      // See confirmMirrorTargetExists: the PIN modal renders at App level,
+      // so Admin must not stay open above it.
+      setMirrorAdmin(false);
+      setShowAdminPanel(false);
+      return;
+    }
+    if (!(await confirmMirrorTargetExists(name, token))) return;
+    if (token !== mirrorGateTokenRef.current) return;
+    enterMirrorTarget(name);
+  }, [confirmMirrorTargetExists, enterMirrorTarget]);
+
+  // The PIN modal verifies against the server; only then does the pending
+  // entry continue to the existence check. A wrong PIN throws, which the
+  // modal shows — it never enters the mirror.
+  const handleMirrorPinVerify = async (pin) => {
+    const name = mirrorPinPending;
+    if (!name) throw new Error('Invalid PIN. Please try again.');
+    try {
+      const { data } = await axios.post(`${API_BASE_URL}/api/admin-pin/verify`, { pin });
+      if (data?.valid !== true) throw new Error('Invalid PIN. Please try again.');
+    } catch (error) {
+      if (error?.message === 'Invalid PIN. Please try again.') throw error;
+      console.error('Error verifying admin PIN for mirror entry:', error);
+      throw new Error('Invalid PIN. Please try again.');
+    }
+    const token = ++mirrorGateTokenRef.current;
+    if (await confirmMirrorTargetExists(name, token)) {
+      if (token !== mirrorGateTokenRef.current) return;
+      enterMirrorTarget(name);
+    }
+  };
+
+  // Declining the PIN prompt leaves the mirror hash behind: a cancelled
+  // entry must not re-prompt on reload, nor leave the URL claiming a
+  // mirror that is not running. Drop the hash, stay on this dashboard.
+  const cancelMirrorEntry = useCallback(() => {
+    mirrorGateTokenRef.current += 1;
+    setMirrorPinPending(null);
+    setMirrorNotFound(null);
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  }, []);
+
   // Mirror mode entry via the URL hash: the Devices-row button sets
-  // #/mirror/<name>. Admin hashes are left alone — AdminPanel owns later
+  // #/mirror/<name>, and a typed, bookmarked or reloaded mirror URL lands
+  // here on mount. Admin hashes are left alone — AdminPanel owns later
   // admin-hash edits itself — and a manually cleared hash never silently
   // exits a mirror (the banner on screen is the source of truth; exit is
   // explicit, via the banner button).
   useEffect(() => {
+    const initial = parseMirrorHash(window.location.hash);
+    if (initial !== null) void requestMirrorEntry(initial);
     const handleHashChange = () => {
       const target = parseMirrorHash(window.location.hash);
-      if (target !== null) {
-        setMirrorTargetState(target);
-        setMirrorAdmin(false);
-        setShowAdminPanel(false);
-      }
+      if (target !== null) void requestMirrorEntry(target);
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
+  }, [requestMirrorEntry]);
 
   const handlePageRefresh = () => {
     window.location.reload();
@@ -1878,6 +2029,33 @@ const App = () => {
           onSave={handleSaveTab}
         />
       </Suspense>
+
+      {/* Mirror-entry PIN gate: a mirror URL never enters the mirror
+          before this modal's verification succeeds. It renders over this
+          browser's own dashboard, never over the target's data. */}
+      <Suspense fallback={null}>
+        <PinModal
+          open={mirrorPinPending !== null}
+          mode="verify"
+          title="Enter admin PIN to mirror"
+          onClose={cancelMirrorEntry}
+          onVerify={handleMirrorPinVerify}
+        />
+      </Suspense>
+
+      {/* Mirror-entry unknown device: the URL named a display that does
+          not exist, so there is no mirror to enter and no row to create.
+          The way back is explicit — this dialog blocks the dashboard
+          until it is taken. */}
+      <Dialog open={mirrorNotFound !== null} onClose={cancelMirrorEntry}>
+        <DialogContent sx={{ p: 3, textAlign: 'center' }}>
+          <Typography variant="h6" sx={{ mb: 1 }}>Display not found</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {`No display named "${mirrorNotFound}" exists, so it cannot be mirrored.`}
+          </Typography>
+          <Button variant="contained" onClick={cancelMirrorEntry}>Back to my dashboard</Button>
+        </DialogContent>
+      </Dialog>
 
       <CelebrationHost
         enabled={householdSettings.CHORE_CELEBRATION_ENABLED !== 'false' && householdSettings.CHORE_CELEBRATION_ENABLED !== false}
