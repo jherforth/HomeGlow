@@ -993,14 +993,18 @@ const WidgetContainer = ({
         },
         // Where a dragged widget will land: a dashed outline, the same as
         // when it's carried to another tab (hooks/useCarryToTab.jsx).
-        '& .react-grid-item.react-grid-placeholder': {
+        // It glides from cell to cell instead of jumping, even though the
+        // rule above turns transitions off while a widget is selected.
+        '& .react-grid-item.react-grid-placeholder, & .react-grid-item.react-grid-placeholder.cssTransforms': {
           background: 'rgba(var(--accent-rgb), 0.10)',
           border: '2px dashed var(--accent)',
           boxSizing: 'border-box',
           opacity: 1,
           borderRadius: 'var(--hg-frame-radius, var(--hg-radius-md))',
           zIndex: 2,
-          transition: 'all 100ms ease',
+          transitionProperty: 'transform, width, height, left, top !important',
+          transitionDuration: '160ms !important',
+          transitionTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1) !important',
         },
         // The widget being dragged is lifted off the page.
         '& .react-grid-item.react-draggable-dragging > .widget-wrapper': {

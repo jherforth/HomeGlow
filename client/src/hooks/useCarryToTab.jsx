@@ -508,7 +508,8 @@ export default function useCarryToTab({
             borderRadius: 'var(--hg-frame-radius, 12px)',
             border: '2px dashed var(--accent)',
             backgroundColor: 'rgba(var(--accent-rgb), 0.10)',
-            transition: 'left 90ms ease, top 90ms ease',
+            transition: 'left 160ms cubic-bezier(0.2, 0.8, 0.2, 1), top 160ms cubic-bezier(0.2, 0.8, 0.2, 1), width 160ms ease, height 160ms ease',
+            '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
           }}
         />
       )}

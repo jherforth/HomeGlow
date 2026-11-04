@@ -1917,6 +1917,13 @@ const App = () => {
     return carry.onDragStop(name, x, y);
   };
 
+  // While "Stack with…" shows, the grid's own drop outline hides, so there's
+  // one outline on screen, not two (index.css .hg-stacking).
+  useEffect(() => {
+    document.body.classList.toggle('hg-stacking', Boolean(stackDrop));
+    return () => document.body.classList.remove('hg-stacking');
+  }, [stackDrop]);
+
   // A widget carried off to another tab ends the grid's drag without a
   // drop: don't leave "Stack with…" on the screen.
   useEffect(() => {
@@ -2121,6 +2128,7 @@ const App = () => {
               borderRadius: 'var(--hg-frame-radius, 12px)',
               border: '3px dashed var(--accent)',
               backgroundColor: 'rgba(var(--accent-rgb), 0.12)',
+              transition: 'left 160ms cubic-bezier(0.2, 0.8, 0.2, 1), top 160ms cubic-bezier(0.2, 0.8, 0.2, 1), width 160ms ease, height 160ms ease',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
