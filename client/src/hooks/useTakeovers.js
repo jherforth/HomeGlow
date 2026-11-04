@@ -5,6 +5,7 @@ import { wakeDisplay } from '../utils/displayDim.js';
 import { playSound, soundUrl } from '../utils/choreSound.js';
 
 const TICK_MS = 1000;
+const NONE = { candidates: [], byKey: {} };
 const CHIME = 'chime.wav';
 
 /**
@@ -70,8 +71,12 @@ export default function useTakeovers({ rules, haStates, pinned, enabled }) {
     return () => window.removeEventListener(PLUGIN_ATTENTION_EVENT, onAttention);
   }, [active, rules]);
 
+  // The once-a-second tick re-checks the rules, but the answer is kept as
+  // it was unless something changed, so the dashboard (which rebuilds its
+  // widgets when what's showing changes) is left alone between changes.
+  const lastRef = useRef(NONE);
   const { candidates, byKey } = useMemo(() => {
-    if (!active) return { candidates: [], byKey: {} };
+    if (!active) { lastRef.current = NONE; return NONE; }
     const step = stepRules(rules, haStates || {}, memoryRef.current, now);
     memoryRef.current = step.memory;
     const list = [];
@@ -107,7 +112,10 @@ export default function useTakeovers({ rules, haStates, pinned, enabled }) {
       if (!rule) continue;
       add(`ask:${widget}`, widget, 'urgent', ask.size === 'half' ? rule.place : 'full', ask.at);
     }
-    return { candidates: list, byKey: keyed };
+    const next = { candidates: list, byKey: keyed };
+    if (JSON.stringify(next) === JSON.stringify(lastRef.current)) return lastRef.current;
+    lastRef.current = next;
+    return next;
   }, [active, rules, haStates, now, requests, dismissed]);
 
   const placed = useMemo(() => arrange(candidates, { pinned }), [candidates, pinned]);
