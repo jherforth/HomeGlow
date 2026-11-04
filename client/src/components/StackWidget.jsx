@@ -170,7 +170,7 @@ const StackWidget = ({ items, home = null, returnSeconds = 60, rotateSeconds = 0
           <Box
             key={item.name}
             aria-hidden={i !== safeIndex}
-            inert={i !== safeIndex ? '' : undefined}
+            inert={i !== safeIndex}
             sx={{ width: `${100 / count}%`, height: '100%', flex: 'none', position: 'relative', overflow: 'hidden' }}
           >
             {withProps(item.content, {
