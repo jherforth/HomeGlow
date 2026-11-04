@@ -257,7 +257,7 @@ export default function useDisplayModes({ deviceSettings, apiDeviceUrl, onSaved,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, apiDeviceUrl, helper, settings.ha.report, reportKey, namesKey]);
 
-  // Pin a mode (or null, the normal layout) until the schedule next changes.
+  // Pin a mode (or null, Normal) until the schedule next changes.
   // Someone chose it at the screen, so it shows at once, and the helper says so.
   const pinMode = useCallback((modeId) => {
     setPin({ modeId, scheduledAtPin: automaticRef.current.id, at: Date.now() });

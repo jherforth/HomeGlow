@@ -129,7 +129,7 @@ function snapshotOf(el, scale = 1) {
 
 /**
  * Carrying a widget to another tab while dragging it, like moving an app on a
- * phone (Move/Resize and the mode layout editor). Hold it over a tab in the
+ * phone (Move/Resize). Hold it over a tab in the
  * dock, or at the side of the screen, and that tab opens with the widget in
  * hand: a lifted copy follows the finger and an outline shows where it will
  * land. Letting go over a tab without waiting still sends it there.

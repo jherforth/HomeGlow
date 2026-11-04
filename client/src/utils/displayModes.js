@@ -168,7 +168,7 @@ export function isScheduleActive(schedule, date = new Date(), timeZone) {
   return scheduleSpans(schedule).some(([a, b]) => now >= a && now < b);
 }
 
-// The scheduled mode right now, or null for the normal layout.
+// The scheduled mode right now, or null for Normal (no mode).
 export function scheduledModeAt(modes, date = new Date(), timeZone) {
   const list = Array.isArray(modes) ? modes : [];
   const hit = list.find((mode) => mode.schedule && isScheduleActive(mode.schedule, date, timeZone));
@@ -203,7 +203,7 @@ function sharedSpan(spansA, spansB) {
 // ---- Which mode shows ------------------------------------------------------
 
 // The director's one decision. `pin` is { modeId, scheduledAtPin }: what was
-// pinned (null for the normal layout) and what the schedule said when it was.
+// pinned (null for Normal) and what the schedule said when it was.
 // A pin lasts until the schedule changes its mind. `shownId` is on screen now;
 // a change waits while someone has touched the screen in the last
 // `touchWaitMs` (so it never moves under a finger).
@@ -218,7 +218,7 @@ export function decideMode({ scheduledId, pin, shownId, lastActivityMs, nowMs, t
   return { want, pinExpired, show };
 }
 
-// ---- Layouts ---------------------------------------------------------------
+// ---- Labels ----------------------------------------------------------------
 
 // "Mon–Fri · 6:00 → 9:00" style summary pieces, for labels.
 export function scheduleDaysKey(days) {
@@ -229,14 +229,9 @@ export function scheduleDaysKey(days) {
   return null;
 }
 
-// ---- The layout editor's draft for one tab -------------------------------
-// A draft is { saved: { name: {x,y,w,h} }, hidden: [names] }, what a mode
-// stores for the tab in layouts[tab] and hidden[tab].
-
-
 // ---- Home Assistant ------------------------------------------------------
 // The mode helper's options: Automatic hands the choice back to schedules
-// and triggers, Normal is the usual layout, then each mode by name. Fixed
+// and triggers, Normal is no mode at all, then each mode by name. Fixed
 // English, because Home Assistant automations name them.
 export const HELPER_AUTOMATIC = 'Automatic';
 export const HELPER_NORMAL = 'Normal';
@@ -301,7 +296,7 @@ export function rememberAlarms(memory, states, nowMs) {
  * trigger is on beats a scheduled one; either needs someone home when the
  * mode asks for it. Without Home Assistant (`ha` null) its triggers are off
  * and its conditions pass, so schedules carry on.
- * Returns { id, source } (id null for the normal layout).
+ * Returns { id, source } (id null for Normal).
  */
 export function automaticModeAt({ modes, now = new Date(), timeZone, ha = null, rang = {} }) {
   const list = Array.isArray(modes) ? modes : [];

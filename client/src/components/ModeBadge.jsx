@@ -5,10 +5,10 @@ import { useTranslation } from 'react-i18next';
 
 /**
  * The mode label on the wall (utils/displayModes.js): which mode is on, and a
- * menu to pin it, switch to another mode, or edit its layout.
+ * menu to pin it or switch to another mode.
  *
  * - modes: this display's modes
- * - shownMode: the mode on screen, or null for the normal layout
+ * - shownMode: the mode on screen, or null for Normal (no mode)
  * - pinned: whether a pin is holding the current view
  * - onPin(modeId | null), onUnpin()
  */

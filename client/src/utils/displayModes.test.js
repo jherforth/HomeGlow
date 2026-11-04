@@ -78,7 +78,7 @@ describe('decideMode', () => {
     expect(decideMode({ ...base, pin, shownId: 'n', scheduledId: null })).toEqual({ want: null, pinExpired: true, show: null });
   });
 
-  it('a pin to the normal layout is a pin too', () => {
+  it('a pin to Normal (no mode) is a pin too', () => {
     expect(decideMode({ ...base, pin: { modeId: null, scheduledAtPin: 'm' } }).show).toBeNull();
   });
 });

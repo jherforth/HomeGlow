@@ -15,7 +15,7 @@ const CHIME = 'chime.wav';
  * - rules: the display's takeover rules
  * - haStates: Home Assistant's states for them, or null while it's away
  * - pinned: a mode is pinned on the wall (only urgent ones show)
- * - enabled: false on a phone, before settings load, or in the layout editor
+ * - enabled: false on a phone or before settings load
  *
  * Returns { slots: { full, top, bottom } ({ key, widget, level } or null),
  * showing (a Set of widget names), dismiss(key) }.

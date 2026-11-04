@@ -1,8 +1,7 @@
 // Stacks: one spot on the dashboard holding several widgets, swiped between
 // like an iPhone Smart Stack. The rest of the dashboard never moves.
 //
-// A display's stacks live in its device settings under `widgetStacks`, like
-// its layouts. A stack is placed on a tab like any widget, under the name
+// A display's stacks live in its device settings under `widgetStacks`. A stack is placed on a tab like any widget, under the name
 // `stack:<id>`. It shows its first widget, goes back to it after a while
 // untouched, and can jump to a widget that needs attention ("the Grill card
 // while the grill is on", read from Home Assistant).
