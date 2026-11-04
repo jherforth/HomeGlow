@@ -681,6 +681,29 @@ const App = () => {
     void seedMobileDevice();
   }, [isMobile, demoStatus.demo, isFirstRunClient, deviceSettingsLoaded]);
 
+  // Positions the grid just saved, put into the dashboard's copy right away:
+  // the grid redraws a tab from this copy when it comes back to it.
+  const applySavedLayouts = useCallback((rows) => {
+    setWidgetAssignments((current) => {
+      let changed = false;
+      const next = { ...current };
+      rows.forEach((row) => {
+        const list = next[row.widget_name];
+        if (!Array.isArray(list)) return;
+        const index = list.findIndex((item) => item.tabNumber === row.tabNumber);
+        if (index < 0) return;
+        const item = list[index];
+        if (item.layout_x === row.layout_x && item.layout_y === row.layout_y
+          && item.layout_w === row.layout_w && item.layout_h === row.layout_h) return;
+        const copy = [...list];
+        copy[index] = { ...item, layout_x: row.layout_x, layout_y: row.layout_y, layout_w: row.layout_w, layout_h: row.layout_h };
+        next[row.widget_name] = copy;
+        changed = true;
+      });
+      return changed ? next : current;
+    });
+  }, []);
+
   const fetchWidgetAssignments = async () => {
     try {
       const response = await axios.get(`${API_DEVICE_URL}/widget-assignments`);
@@ -2176,6 +2199,7 @@ const App = () => {
             onWidgetDrag={handleWidgetDrag}
             onWidgetDragStop={handleWidgetDragStop}
             widgetMenu={widgetMenu}
+            onLayoutsSaved={applySavedLayouts}
           />
           </Box>
         )}

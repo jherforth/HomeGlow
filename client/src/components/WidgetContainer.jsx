@@ -130,6 +130,9 @@ const WidgetContainer = ({
   // on a tab in the dock.
   onWidgetDrag,
   onWidgetDragStop,
+  // Told the rows just saved (the same ones the API takes), so the
+  // dashboard's own copy of the positions stays in step (app.jsx).
+  onLayoutsSaved,
   // The long-press menu in Move/Resize (app.jsx): titleFor(name),
   // tabChoices(name), isStack(name), onMoveToTab, onDuplicateToTab, onNewTab,
   // onOpenSettings, onUnstack, onRemove. Without it, no menu (a preview).
@@ -163,6 +166,13 @@ const WidgetContainer = ({
   widgetsRef.current = widgets;
 
   const droppedAwayRef = useRef(false);
+  // A save waiting out its half second: { tab, send }.
+  const pendingSaveRef = useRef(null);
+  // A widget is being dragged: the grid's own layout is newer than any
+  // saved one, so a save landing now doesn't redraw the tab under it.
+  const draggingRef = useRef(false);
+  const onLayoutsSavedRef = useRef(onLayoutsSaved);
+  onLayoutsSavedRef.current = onLayoutsSaved;
   const saveLayoutsToApi = useCallback((layoutItems, tabNumber, cols) => {
     if (droppedAwayRef.current) {
       droppedAwayRef.current = false;
@@ -172,8 +182,7 @@ const WidgetContainer = ({
     // moved keeps its stored 12-col values exactly instead of being re-rounded
     // through the live column count (see layoutToNormalized).
     const savedSources = savedSourcesById(widgetsRef.current);
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
+    const send = () => {
       // Persist in normalized (12-col) units so layouts round-trip across breakpoints.
       const layouts = layoutToNormalized(layoutItems, cols, savedSources)
         .filter(stored => resolveWidgetName(stored.i))
@@ -187,8 +196,24 @@ const WidgetContainer = ({
         }));
 
       if (layouts.length > 0) {
+        // The dashboard's copy of the positions too, so coming back to this
+        // tab draws them where they were left, not where they were loaded.
+        onLayoutsSavedRef.current?.(layouts);
         axios.patch(`${API_DEVICE_URL}/widget-assignments/layout/bulk`, { layouts }).catch(() => { });
       }
+    };
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      // A save still waiting for another tab goes out now instead of being
+      // dropped: moving between tabs, two can change within half a second.
+      const pending = pendingSaveRef.current;
+      if (pending && pending.tab !== tabNumber) pending.send();
+    }
+    pendingSaveRef.current = { tab: tabNumber, send };
+    saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null;
+      pendingSaveRef.current = null;
+      send();
     }, 500);
   }, []);
 
@@ -228,6 +253,7 @@ const WidgetContainer = ({
     // Assistant panel resized in the builder) is drawn without a tab change.
     const savedKey = (w) => (w.savedLayout ? `@${w.savedLayout.x},${w.savedLayout.y},${w.savedLayout.w},${w.savedLayout.h}` : '');
     const currentCacheKey = `${activeTab}:${widgets.map(w => w.id + savedKey(w)).sort().join(',')}`;
+    const idsOnly = (key) => key.replace(/@[^,]*,[^,]*,[^,]*,[^,]*/g, '');
     const widgetsChanged = currentCacheKey !== prevWidgetIdsRef.current;
     const prevCols = prevGridColsRef.current;
     const colsChanged = prevCols != null && prevCols !== gridCols;
@@ -235,6 +261,14 @@ const WidgetContainer = ({
     // First paint / widget-set changes rebuild from saved (12-col) layouts.
     // Column-only changes rescale the live layout so resize affordances stay correct.
     if (!widgetsChanged && !colsChanged) {
+      prevGridColsRef.current = gridCols;
+      return;
+    }
+
+    const sameWidgets = idsOnly(prevWidgetIdsRef.current) === idsOnly(currentCacheKey);
+    if (widgetsChanged && sameWidgets && draggingRef.current && layoutTabRef.current === activeTab) {
+      // Mid-drag on this tab: what's on screen is newest; keep it.
+      prevWidgetIdsRef.current = currentCacheKey;
       prevGridColsRef.current = gridCols;
       return;
     }
@@ -1051,6 +1085,7 @@ const WidgetContainer = ({
           }}
           resizeConfig={{ enabled: false }}
           compactor={GRID_COMPACTOR}
+          onDragStart={() => { draggingRef.current = true; }}
           onDrag={(_layout, _old, item, _placeholder, event) => {
             const point = pointerPoint(event);
             if (point && onWidgetDrag) onWidgetDrag(resolveWidgetName(item.i), point.x, point.y);
@@ -1062,7 +1097,10 @@ const WidgetContainer = ({
             if (point && onWidgetDragStop && onWidgetDragStop(resolveWidgetName(item.i), point.x, point.y) === true) {
               droppedAwayRef.current = true;
               if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+              saveTimerRef.current = null;
+              pendingSaveRef.current = null;
             }
+            draggingRef.current = false;
           }}
           onLayoutChange={handleLayoutChange}
         >
