@@ -54,7 +54,7 @@ import { formatTime } from '../utils/dateUtils.js';
 import PrizeCelebration from './PrizeCelebration.jsx';
 import { requestCelebration } from '../utils/celebrations.js';
 import ChoreIconPicker from './ChoreIconPicker.jsx';
-import RoutineSteps, { routineCardView } from './RoutineSteps.jsx';
+import RoutineSteps, { routineCardView, tickRemainingSteps } from './RoutineSteps.jsx';
 import LateApprovalDialog from './LateApprovalDialog.jsx';
 import { householdNow, isExpired } from '../utils/choreExpiry.js';
 import useRoutinesToday from '../utils/useRoutinesToday.js';
@@ -1241,6 +1241,45 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
     await fetchData();
   };
 
+  // Complete a whole routine at once, from its card's button while steps
+  // remain: tick each remaining step through the normal step path, so the
+  // last tick completes the chore with the usual streak/on-time semantics —
+  // never a separate force-complete. Past its expiry the parent's yes comes
+  // first (issue #279), once, for all the remaining steps. A tap already in
+  // flight for this routine is ignored, like an ordinary chore tap.
+  const completingRoutinesRef = useRef(new Set());
+  const completeRoutine = async (day, schedule, expired) => {
+    if (completingRoutinesRef.current.has(schedule.id)) return;
+    if (day.steps.every((step) => day.done.includes(step.id))) return;
+    completingRoutinesRef.current.add(schedule.id);
+    try {
+      if (expired) {
+        askParent(day.name, async () => {
+          const done = await tickRemainingSteps(day, toggleRoutineStep, { parentApproved: true });
+          if (done && done !== 'expired') requestCelebration('chores');
+        });
+        return;
+      }
+      const done = await tickRemainingSteps(day, toggleRoutineStep);
+      if (done === 'expired') {
+        // Expired between the check and the tick: ask once, then finish the
+        // rest with the parent's yes. Steps already ticked are re-ticked
+        // with done=true, which is a no-op for them.
+        askParent(day.name, async () => {
+          const finished = await tickRemainingSteps(day, toggleRoutineStep, { parentApproved: true });
+          if (finished && finished !== 'expired') requestCelebration('chores');
+        });
+        return;
+      }
+      if (done) {
+        requestCelebration('chores');
+        await fetchData();
+      }
+    } finally {
+      completingRoutinesRef.current.delete(schedule.id);
+    }
+  };
+
   const renderChoreItem = (schedule) => {
     const routineDay = routineDays[schedule.id];
     const routineView = routineDay ? routineCardView(routineDay, expandedRoutines[schedule.id]) : null;
@@ -1329,27 +1368,35 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 0.5 }}>
-          {/* A routine is finished by its last step, never by this button, so
-              a parent can look the steps over without undoing the routine: the
-              button only folds the steps of a finished routine away and back.
-              With steps still to do they are shown regardless, and the button
-              is inert. Unticking a step in the opened list reopens the routine
-              with the other ticks kept, as it always has. */}
+          {/* The card's button always does something. While steps remain it
+              completes the whole routine at once (each step ticked through
+              the normal path, so the last one completes the chore); once
+              finished it only folds the steps away and back. Unticking a step
+              in the opened list reopens the routine with the other ticks
+              kept, as it always has. */}
           {routineView ? (
-            <IconButton
-              disabled={!routineView.buttonActive}
-              onClick={() => toggleRoutineExpanded(schedule.id)}
-              size="small"
-              aria-expanded={routineView.stepsShown}
-              aria-label={!routineView.buttonActive
-                ? t('chores:routines.stepsInProgress', { name: schedule.title })
-                : routineView.stepsShown
+            routineView.completeAll ? (
+              <IconButton
+                onClick={() => completeRoutine(routineDay, schedule, expired)}
+                size="small"
+                aria-label={t('chores:routines.completeAll', { name: schedule.title })}
+                sx={{ minWidth: 'auto', width: 36, height: 36, color: 'var(--accent)' }}
+              >
+                <Check fontSize="small" />
+              </IconButton>
+            ) : (
+              <IconButton
+                onClick={() => toggleRoutineExpanded(schedule.id)}
+                size="small"
+                aria-expanded={routineView.stepsShown}
+                aria-label={routineView.stepsShown
                   ? t('chores:routines.hideSteps', { name: schedule.title })
                   : t('chores:routines.showSteps', { name: schedule.title })}
-              sx={{ minWidth: 'auto', width: 36, height: 36, color: 'var(--text-secondary)', '&.Mui-disabled': { color: 'var(--text-secondary)', opacity: 0.35 } }}
-            >
-              {routineView.stepsShown ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
-            </IconButton>
+                sx={{ minWidth: 'auto', width: 36, height: 36, color: 'var(--text-secondary)' }}
+              >
+                {routineView.stepsShown ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
+              </IconButton>
+            )
           ) : (
             <IconButton
               color={schedule.completed ? "secondary" : "primary"}

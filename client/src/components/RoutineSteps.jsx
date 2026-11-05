@@ -5,19 +5,46 @@ import { useTranslation } from 'react-i18next';
 
 // What a routine's card shows: its steps whenever any is still to do, and,
 // once finished, only when a parent has opened them with the card's button.
-// The button does nothing else, and is inert while steps remain.
+// The card's button always does something: while steps remain it completes
+// the whole routine at once (through the normal step ticks, below), and once
+// finished it folds the steps away and back.
 export function routineCardView(day, expanded = false) {
   const finished = Boolean(day?.completed);
-  return { finished, stepsShown: !finished || Boolean(expanded), buttonActive: finished };
+  return {
+    finished,
+    stepsShown: !finished || Boolean(expanded),
+    buttonActive: true,
+    completeAll: !finished,
+  };
+}
+
+// Tick every step still to do, one at a time through the normal step path
+// (toggleStep), so the last tick completes the chore with the usual
+// streak/on-time semantics — never a separate force-complete. Returns the
+// final day on success, false if a tick failed, or 'expired' if the server
+// refused a tick past its expiry. A step already ticked is skipped, so
+// re-running after a partial pass (for example after a parent approval)
+// only ticks what is still open.
+export async function tickRemainingSteps(day, toggleStep, { parentApproved = false } = {}) {
+  let current = day;
+  for (const step of day.steps) {
+    if (current.done.includes(step.id)) continue;
+    const after = await toggleStep(current, step.id, true, { parentApproved });
+    if (!after) return false;
+    if (after.expired) return 'expired';
+    current = after;
+  }
+  return current;
 }
 
 // A routine's steps inside its chore card (set up in Family → Chores). Each step is
-// ticked on its own; the last one completes the chore. Once done, only the
-// streak and on-time chips stay, so the card is as small as any, until a
-// parent opens the steps to look them over; unticking one there reopens the
-// routine with the other ticks kept. Past its expiry (issue #279), the steps
-// still to do show a red ✕; tapping one goes to the widget, which sends the
-// child for a parent.
+// ticked on its own; the last one completes the chore, and the card's own
+// button completes the whole routine at once while steps remain. Once done,
+// only the streak and on-time chips stay, so the card is as small as any,
+// until a parent opens the steps to look them over; unticking one there
+// reopens the routine with the other ticks kept. Past its expiry (issue
+// #279), the steps still to do show a red ✕; tapping one goes to the widget,
+// which sends the child for a parent.
 export default function RoutineSteps({ day, onToggle, expired = false, expanded = false }) {
   const { t } = useTranslation(['chores']);
   const total = day.steps.length;
