@@ -99,11 +99,11 @@ function watchExpand(mode){var on=mode==="doubleTap"||mode==="button";var was=ex
 if(on!==was){var f=on?"addEventListener":"removeEventListener";window[f]("pointerdown",onDown,opts);window[f]("click",onClick,true);}
 if(mode!=="doubleTap"){lastTap=null;flushHeld();}expand=on?mode:false;}
 var flick=null,flicking=false,FLICK_MS=350,FLICK_PX=60,fopts={capture:true,passive:true};
-var NOFLICK='input,textarea,select,[role="slider"],[contenteditable="true"],[data-no-flick]';
-function ownsSideways(t){for(;t&&t.nodeType===1&&t!==document.body&&t!==document.documentElement;t=t.parentElement){
-if(t.matches&&t.matches(NOFLICK))return true;var cs=window.getComputedStyle(t),ta=String(cs.touchAction||"auto");
-if(ta!=="auto"&&ta!=="manipulation"&&ta.indexOf("pan-x")<0)return true;
-if((cs.overflowX==="auto"||cs.overflowX==="scroll")&&t.scrollWidth>t.clientWidth+1)return true;}return false;}
+var NOFLICK='input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]):not([type="file"]):not([type="color"]),textarea,select,[role="slider"],[contenteditable]:not([contenteditable="false"]),[data-no-flick]';
+function ownsSideways(t){try{for(;t&&t.nodeType===1&&t!==document.body&&t!==document.documentElement;t=t.parentElement){
+if(t.matches&&t.matches(NOFLICK))return true;var cs=window.getComputedStyle(t);if(!cs)continue;var ta=String(cs.touchAction||"auto");
+if(ta!=="auto"&&ta!=="manipulation"&&!/pan-(x|left|right)/.test(ta))return true;
+if((cs.overflowX==="auto"||cs.overflowX==="scroll")&&t.scrollWidth>t.clientWidth+8)return true;}}catch(x){}return false;}
 function onFlickStart(e){flick=e.touches.length===1&&!ownsSideways(e.target)?{x:e.touches[0].clientX,y:e.touches[0].clientY,t:Date.now()}:null;}
 function onFlickEnd(e){var f=flick;flick=null;if(!f||e.touches.length||!e.changedTouches.length)return;
 var c=e.changedTouches[0],dx=c.clientX-f.x,dy=c.clientY-f.y;

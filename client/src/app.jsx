@@ -2106,7 +2106,13 @@ const App = () => {
     const jobs = [];
     widgetStacks.forEach((stack) => {
       (widgetAssignments[stackName(stack.id)] || []).forEach(({ tabNumber }) => {
-        const missing = stack.widgets.filter((member) => !entryOnTab(member, tabNumber)?.inStack);
+        // Marked for another Stack that's real and holds it: left be. A mark
+        // for a Stack that's gone, or doesn't hold it, doesn't count.
+        const markedElsewhere = (member) => {
+          const other = entryOnTab(member, tabNumber)?.inStack;
+          return Boolean(other) && widgetStacks.some((item) => item.id === other && item.widgets.includes(member));
+        };
+        const missing = stack.widgets.filter((member) => entryOnTab(member, tabNumber)?.inStack !== stack.id && !markedElsewhere(member));
         const key = `${tabNumber}:${stack.id}:${missing.join(',')}`;
         if (!missing.length || stackRepairRef.current.has(key)) return;
         stackRepairRef.current.add(key);
@@ -2498,6 +2504,18 @@ const App = () => {
 
   // Put `dragged` with `target` on the open tab: a new Stack where the target
   // was, or one more widget in the target Stack.
+  // Whether `widget` is on `tab` marked as in that Stack, and the Stack placed
+  // there: a placing write that got no answer did go through.
+  const stackPlaced = async (tab, stackId, widget) => {
+    try {
+      const { data } = await axios.get(`${deviceApi()}/tabs`, { timeout: WRITE_TIMEOUT_MS });
+      const row = (Array.isArray(data) ? data : []).find((item) => item.number === tab);
+      const map = typeof row?.config_json === 'string' ? JSON.parse(row.config_json || '{}') : (row?.config_json || {});
+      return stackName(stackId) in map && map[widget]?.in_stack === stackId;
+    } catch {
+      return false;
+    }
+  };
   const stackWidgets = async (dragged, target) => {
     const tab = activeTab;
     const existing = isStackName(target) ? widgetStacks.find((stack) => stackName(stack.id) === target) : null;
@@ -2529,13 +2547,20 @@ const App = () => {
     } catch (error) {
       console.error('Error stacking widgets:', error);
       setWidgetNotice({ message: i18n.t('common:widgetMenu.stackFailed') });
-      // The Stack was saved but couldn't be placed: put the saved Stacks back
-      // as they were, so no empty Stack is left behind (and none piles up
-      // from trying again).
-      if (savedDefinition) {
+      // The Stack was saved but couldn't be placed: undo just that, so no
+      // empty Stack is left behind (and none piles up from trying again).
+      // No answer may still mean it went through: then it's kept.
+      if (savedDefinition && !(!error?.response && await stackPlaced(tab, stack.id, dragged))) {
         try {
-          const back = await axios.patch(`${deviceApi()}/settings`, { [WIDGET_STACKS_KEY]: { stacks: widgetStacks } }, { timeout: WRITE_TIMEOUT_MS });
-          hydrateFromDeviceSettings(back.data || {});
+          // From the Stacks as saved now, so a change made meanwhile isn't
+          // lost: the new Stack taken out, or the one added to as it was.
+          const { data: current } = await axios.get(`${deviceApi()}/settings`, { timeout: WRITE_TIMEOUT_MS });
+          const now = normalizeStacks(current?.[WIDGET_STACKS_KEY]).stacks;
+          const back = existing
+            ? now.map((item) => (item.id === existing.id ? existing : item))
+            : now.filter((item) => item.id !== stack.id);
+          const saved = await axios.patch(`${deviceApi()}/settings`, { [WIDGET_STACKS_KEY]: { stacks: back } }, { timeout: WRITE_TIMEOUT_MS });
+          hydrateFromDeviceSettings(saved.data || {});
         } catch (rollbackError) {
           console.error('Error putting the Stacks back:', rollbackError);
         }

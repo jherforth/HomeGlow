@@ -16,6 +16,7 @@ describe('flick targets', () => {
     expect(handlesSideways('none')).toBe(true);
     expect(handlesSideways('pan-y')).toBe(true);
     expect(handlesSideways('pan-y pinch-zoom')).toBe(true);
+    expect(handlesSideways('pan-left pan-y')).toBe(false);
   });
 
   it('plain content is the Stack\'s; a slider, a scroller, a scrubbed graph are theirs', () => {
@@ -25,6 +26,15 @@ describe('flick targets', () => {
     expect(ownsSideways(el(card, { matches: true }), stop, styleOf)).toBe(true);
     expect(ownsSideways(el(el(card, { style: { overflowX: 'auto' }, scrollWidth: 900, clientWidth: 300 })), stop, styleOf)).toBe(true);
     expect(ownsSideways(el(card, { style: { overflowX: 'auto' } }), stop, styleOf)).toBe(false);
+    // Up-and-down list a few pixels too wide: still the Stack's.
+    expect(ownsSideways(el(card, { style: { overflowX: 'auto' }, scrollWidth: 304, clientWidth: 300 }), stop, styleOf)).toBe(false);
     expect(ownsSideways(el(el(card, { style: { touchAction: 'none' } })), stop, styleOf)).toBe(true);
+  });
+
+  it('a touch in a dialog a stacked widget opened is not a flick of the Stack', () => {
+    const inside = el(null);
+    const stop = { ...el(null), contains: (node) => node === inside };
+    expect(ownsSideways(inside, stop, styleOf)).toBe(false);
+    expect(ownsSideways(el(null), stop, styleOf)).toBe(true);
   });
 });
