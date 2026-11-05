@@ -260,6 +260,9 @@ export function isHome(state) {
  * alarm until the next `until` time after it (in the household zone), at most
  * 12 hours. Null when no alarm has gone off.
  */
+// The longest an alarm keeps its mode on.
+const ALARM_LONGEST_MINUTES = 12 * 60;
+
 export function alarmWindow(rangIso, until, timeZone) {
   const start = Date.parse(rangIso || '');
   const untilMinutes = parseTime(until);
@@ -267,8 +270,11 @@ export function alarmWindow(rangIso, until, timeZone) {
   const startMinute = minuteOfWeek(new Date(start), timeZone) % MINUTES_PER_DAY;
   let wait = untilMinutes - startMinute;
   if (wait <= 0) wait += MINUTES_PER_DAY;
-  const end = start + Math.min(wait, 12 * 60) * 60000;
-  return [start, end];
+  // An alarm that rang after "until" (a late lie-in: rang 10:00, until 9:00)
+  // turns nothing on, rather than running to tomorrow's 9:00. Past midnight
+  // still works: rang 22:00, until 06:00 is eight hours.
+  if (wait > ALARM_LONGEST_MINUTES) return null;
+  return [start, start + wait * 60000];
 }
 
 /**

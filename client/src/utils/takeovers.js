@@ -68,8 +68,12 @@ export function newTakeoverId() {
  * ✕ from before is forgotten); a rule with a duration ends that long after.
  * `memory` is { [ruleId]: { since, on } }; returns the next memory and the
  * rules showing now: [{ rule, since }].
+ * `states` null is Home Assistant away: nothing shows, and nothing is
+ * forgotten, so a rule still on when it's back carries on as before (no new
+ * start, no second chime, a ✕ still holds).
  */
 export function stepRules(rules, states, memory, nowMs) {
+  if (states == null) return { memory: memory || {}, live: [] };
   const next = {};
   const live = [];
   for (const rule of rules) {
@@ -83,6 +87,24 @@ export function stepRules(rules, states, memory, nowMs) {
     live.push({ rule, since });
   }
   return { memory: next, live };
+}
+
+/**
+ * A plugin's ask (HomeGlow.attention(level, { size })) on top of what it
+ * asked before. `requests` is { [widget]: { level, size, at } }. Asking the
+ * same again returns `requests` itself: no new start, so no second chime,
+ * and a ✕ on it holds. A new level starts again; a new size alone doesn't.
+ * level null drops the ask.
+ */
+export function withAsk(requests, widget, level, size, nowMs) {
+  const was = requests[widget];
+  if (level === null) {
+    if (!was) return requests;
+    const { [widget]: _gone, ...rest } = requests;
+    return rest;
+  }
+  if (was && was.level === level && was.size === size) return requests;
+  return { ...requests, [widget]: { level, size, at: was && was.level === level ? was.at : nowMs } };
 }
 
 /**

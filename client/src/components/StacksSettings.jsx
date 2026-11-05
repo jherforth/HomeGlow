@@ -22,6 +22,7 @@ import { AdminGroup } from './AdminRows.jsx';
 import HaEntityPicker, { statesFor } from './HaEntityPicker.jsx';
 import { StackModeRows } from './StackModeFields.jsx';
 import { DISPLAY_MODES_KEY, normalizeModesSettings } from '../utils/displayModes.js';
+import { unstackSpots } from '../utils/gridPlacement.js';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
 import {
@@ -123,6 +124,17 @@ const StacksSettings = ({ onOpenConnections, onChanged }) => {
 
   const assign = (name, tab) => axios.post(`${apiDeviceUrl}/widget-assignments`, { widget_name: name, tabNumber: tab }).catch(() => {});
   const unassign = (name, tab) => axios.delete(`${apiDeviceUrl}/widget-assignments/${encodeURIComponent(`${tab}::${name}`)}`).catch(() => {});
+  // Widgets in a Stack keep their entry on the tab, marked with the Stack's
+  // id (in_stack), so their per-tab settings stay with them. `create` gives
+  // a widget not on that tab yet an entry there. stackId null unmarks.
+  const mark = (tab, widgets, stackId, create) => (widgets.length
+    ? axios.patch(`${apiDeviceUrl}/widget-assignments/in-stack`, { tabNumber: tab, stack: stackId, widgets, create }).catch(() => {})
+    : Promise.resolve());
+  const rowsOn = (tab) => assignments.filter((row) => row.tab_number === Number(tab));
+  const spotOf = (row) => (row && row.layout_w != null && row.layout_x != null
+    ? { x: row.layout_x, y: row.layout_y, w: row.layout_w, h: row.layout_h }
+    : null);
+  const markedOn = (stack, tab) => rowsOn(tab).filter((row) => row.in_stack === stack.id).map((row) => row.widget_name);
 
   const saveStacks = async (next) => {
     await axios.patch(`${apiDeviceUrl}/settings`, { [WIDGET_STACKS_KEY]: { stacks: next } });
@@ -134,21 +146,41 @@ const StacksSettings = ({ onOpenConnections, onChanged }) => {
     flash('success', text);
   };
 
-  // Put a Stack on these tabs. Where it goes, it takes its widgets' place.
-  const placeOn = async (stack, numbers) => {
+  // Put a Stack on these tabs. Where it goes, its widgets show in it rather
+  // than on their own; taken off a tab, they go with it.
+  // `before` is the Stack as it was saved (for an edit), to follow its widgets.
+  const placeOn = async (stack, numbers, before = null) => {
     const name = stackName(stack.id);
     const now = tabsOf(stack);
     for (const tab of numbers.filter((n) => !now.includes(n))) {
+      // It takes the spot of the first of its widgets showing there.
+      const here = rowsOn(tab).find((row) => stack.widgets.includes(row.widget_name) && !row.in_stack && spotOf(row));
       await assign(name, tab);
-      const there = new Set(assignments.filter((row) => row.tab_number === Number(tab)).map((row) => row.widget_name));
-      await Promise.all(stack.widgets.filter((widget) => there.has(widget)).map((widget) => unassign(widget, tab)));
+      if (here) {
+        const spot = spotOf(here);
+        await axios.patch(`${apiDeviceUrl}/widget-assignments/layout/bulk`, {
+          layouts: [{ widget_name: name, tabNumber: tab, layout_x: spot.x, layout_y: spot.y, layout_w: spot.w, layout_h: spot.h }],
+        }).catch(() => {});
+      }
+      await mark(tab, stack.widgets, stack.id, true);
     }
-    for (const tab of now.filter((n) => !numbers.includes(n))) await unassign(name, tab);
+    for (const tab of now.filter((n) => numbers.includes(n))) {
+      // Widgets added since: in it here too. Widgets taken out: off this tab
+      // with it, as when they were only in the Stack.
+      const added = stack.widgets.filter((widget) => !(before?.widgets || []).includes(widget));
+      await mark(tab, added, stack.id, true);
+      const gone = markedOn(stack, tab).filter((widget) => !stack.widgets.includes(widget));
+      for (const widget of gone) await unassign(widget, tab);
+    }
+    for (const tab of now.filter((n) => !numbers.includes(n))) {
+      await unassign(name, tab);
+      for (const widget of markedOn(stack, tab)) await unassign(widget, tab);
+    }
   };
   const onPlace = async (stack, numbers) => {
     setSaving(true);
     try {
-      await placeOn(stack, numbers);
+      await placeOn(stack, numbers, stack);
       await done(t('admin:stacks.placed'));
     } finally {
       setSaving(false);
@@ -159,10 +191,11 @@ const StacksSettings = ({ onOpenConnections, onChanged }) => {
     setSaving(true);
     // Mode settings for widgets no longer in it go.
     const draft = normalizeStack(raw) || raw;
+    const before = isNew ? null : stacks.find((stack) => stack.id === draft.id) || null;
     try {
       const next = isNew ? [...stacks, draft] : stacks.map((stack) => (stack.id === draft.id ? draft : stack));
       await saveStacks(next);
-      await placeOn(draft, numbers);
+      await placeOn(draft, numbers, before);
       setEditing(null);
       await done(t('admin:stacks.saved', { name: draft.name || t('admin:stacks.untitled') }));
     } catch (error) {
@@ -173,7 +206,9 @@ const StacksSettings = ({ onOpenConnections, onChanged }) => {
     }
   };
 
-  // Unstack: the widgets go back on each tab the Stack was on, the first in its spot.
+  // Unstack: on each tab the Stack was on, its widgets go back on their own
+  // with the settings they had: the first in its spot, the rest in the first
+  // open spots.
   const onUnstack = async (stack) => {
     if (!window.confirm(t('admin:stacks.confirmUnstack'))) return;
     setSaving(true);
@@ -181,14 +216,21 @@ const StacksSettings = ({ onOpenConnections, onChanged }) => {
       const name = stackName(stack.id);
       for (const row of assignments.filter((item) => item.widget_name === name)) {
         const tab = row.tab_number;
-        const there = new Set(assignments.filter((item) => item.tab_number === tab).map((item) => item.widget_name));
-        const back = stack.widgets.filter((widget) => !there.has(widget));
+        const here = new Map(rowsOn(tab).map((item) => [item.widget_name, item]));
+        // On their own here already: left where they are.
+        const back = stack.widgets.filter((widget) => !here.has(widget) || here.get(widget).in_stack === stack.id);
         await unassign(name, tab);
-        for (const widget of back) await assign(widget, tab);
-        if (back[0] && row.layout_w != null) {
-          await axios.patch(`${apiDeviceUrl}/widget-assignments/layout/bulk`, {
-            layouts: [{ widget_name: back[0], tabNumber: tab, layout_x: row.layout_x, layout_y: row.layout_y, layout_w: row.layout_w, layout_h: row.layout_h }],
-          }).catch(() => {});
+        await mark(tab, back, null, true);
+        const taken = rowsOn(tab)
+          .filter((item) => item.widget_name !== name && !back.includes(item.widget_name) && !item.in_stack && item.layout_w != null)
+          .map(spotOf);
+        const layouts = unstackSpots(
+          back.map((widget) => ({ name: widget, kept: here.has(widget) ? spotOf(here.get(widget)) : null })),
+          spotOf(row),
+          taken,
+        ).map((item) => ({ widget_name: item.name, tabNumber: tab, layout_x: item.x, layout_y: item.y, layout_w: item.w, layout_h: item.h }));
+        if (layouts.length) {
+          await axios.patch(`${apiDeviceUrl}/widget-assignments/layout/bulk`, { layouts }).catch(() => {});
         }
       }
       await saveStacks(stacks.filter((item) => item.id !== stack.id));

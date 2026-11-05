@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
+import { startHaPoll } from '../utils/haPoll.js';
 import {
   DISPLAY_MODES_KEY,
   TOUCH_WAIT_MS,
@@ -184,54 +185,52 @@ export default function useDisplayModes({ deviceSettings, apiDeviceUrl, onSaved,
       setHaState(null);
       return undefined;
     }
-    let stopped = false;
-    const read = async () => {
-      try {
-        const { data } = await axios.get(`${apiDeviceUrl}/modes/ha`);
-        if (stopped) return;
-        const states = data?.states || {};
-        // Alarms that went off.
-        const alarmStates = {};
-        settings.modes.forEach((mode) => {
-          if (mode.alarm && states[mode.alarm.entity]) alarmStates[mode.alarm.entity] = states[mode.alarm.entity];
-        });
-        const remembered = rememberAlarms(alarmsRef.current, alarmStates, Date.now());
-        if (JSON.stringify(remembered) !== JSON.stringify(alarmsRef.current)) {
-          alarmsRef.current = remembered;
-          writeJson(ALARM_STORAGE_KEY, remembered);
-        }
-        // The helper's option, and when it changed.
-        const option = helper ? states[helper]?.state : undefined;
-        if (option !== helperSeenRef.current.option) {
-          helperSeenRef.current = { option, at: helperSeenRef.current.option === undefined ? 0 : Date.now() };
-        }
-        // Someone arriving home wakes the screen.
-        const before = previousPeopleRef.current;
-        const arrived = settings.ha.wake.some((id) => before[id] === false && isHome(states[id]));
-        previousPeopleRef.current = Object.fromEntries(settings.ha.wake.map((id) => [id, isHome(states[id])]));
-        if (arrived) wakeDisplay();
-        const changed = JSON.stringify(data) !== JSON.stringify(haRef.current);
-        if (changed) {
-          haRef.current = data;
-          setHaState(data);
-          evaluate();
-        }
-      } catch (error) {
-        if (stopped) return;
-        const down = { connected: true, reachable: false, states: {} };
-        if (haRef.current?.reachable !== false) {
-          haRef.current = down;
-          setHaState(down);
-          evaluate();
-        }
+    // One read at a time; a missed read or two keeps what was read last
+    // (utils/haPoll.js), so takeovers and modes don't flip over a blip.
+    const onAnswer = (data) => {
+      const states = data?.states || {};
+      // Alarms that went off.
+      const alarmStates = {};
+      settings.modes.forEach((mode) => {
+        if (mode.alarm && states[mode.alarm.entity]) alarmStates[mode.alarm.entity] = states[mode.alarm.entity];
+      });
+      const remembered = rememberAlarms(alarmsRef.current, alarmStates, Date.now());
+      if (JSON.stringify(remembered) !== JSON.stringify(alarmsRef.current)) {
+        alarmsRef.current = remembered;
+        writeJson(ALARM_STORAGE_KEY, remembered);
+      }
+      // The helper's option, and when it changed.
+      const option = helper ? states[helper]?.state : undefined;
+      if (option !== helperSeenRef.current.option) {
+        helperSeenRef.current = { option, at: helperSeenRef.current.option === undefined ? 0 : Date.now() };
+      }
+      // Someone arriving home wakes the screen.
+      const before = previousPeopleRef.current;
+      const arrived = settings.ha.wake.some((id) => before[id] === false && isHome(states[id]));
+      previousPeopleRef.current = Object.fromEntries(settings.ha.wake.map((id) => [id, isHome(states[id])]));
+      if (arrived) wakeDisplay();
+      const changed = JSON.stringify(data) !== JSON.stringify(haRef.current);
+      if (changed) {
+        haRef.current = data;
+        setHaState(data);
+        evaluate();
       }
     };
-    void read();
-    const timer = setInterval(read, HA_POLL_MS);
-    return () => {
-      stopped = true;
-      clearInterval(timer);
+    const onDown = () => {
+      const down = { connected: true, reachable: false, states: {} };
+      if (haRef.current?.reachable !== false) {
+        haRef.current = down;
+        setHaState(down);
+        evaluate();
+      }
     };
+    return startHaPoll({
+      fetch: () => axios.get(`${apiDeviceUrl}/modes/ha`, { timeout: 10000 }).then(({ data }) => data),
+      onAnswer,
+      onDown,
+      intervalMs: HA_POLL_MS,
+      holding: Boolean(haRef.current) && haRef.current.reachable !== false,
+    });
   }, [haOn, apiDeviceUrl, helper, settings, evaluate]);
 
   // Keep the helper's options in step with the mode names.

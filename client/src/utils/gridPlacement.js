@@ -150,3 +150,24 @@ export function firstOpenSpot({ w, h }, taken, cols = 12, rows = Infinity) {
   }
   return null;
 }
+
+/**
+ * Where a Stack's widgets go when it's unstacked on a tab. The first takes
+ * the Stack's spot (`spot`, when it has one); each of the others goes back
+ * where it was before it was stacked (`kept`, its saved spot on the tab) if
+ * that's still free, else in the first open spot at its own size.
+ * `members` is [{ name, kept: {x,y,w,h} or null }]; `taken` the spots of what
+ * else shows on the tab. Returns [{ name, x, y, w, h }].
+ */
+export function unstackSpots(members, spot, taken) {
+  const used = [...taken];
+  return members.map(({ name, kept }, i) => {
+    const size = { w: kept?.w || spot?.w || 6, h: kept?.h || spot?.h || 4 };
+    let place = null;
+    if (i === 0 && spot) place = { x: spot.x, y: spot.y, w: spot.w, h: spot.h };
+    else if (kept && kept.x != null && kept.y != null && !used.some((item) => overlaps(item, kept))) place = { x: kept.x, y: kept.y, w: kept.w, h: kept.h };
+    else place = firstOpenSpot(size, used) || { x: 0, y: Math.max(0, ...used.map((t) => t.y + t.h)), ...size };
+    used.push(place);
+    return { name, ...place };
+  });
+}

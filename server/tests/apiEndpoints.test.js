@@ -1410,3 +1410,56 @@ test('a moved widget can land at a given spot', async () => {
     assert.equal(moved.status, 200, JSON.stringify(moved.body));
     assert.deepEqual([moved.body.layout_x, moved.body.layout_y, moved.body.layout_w, moved.body.layout_h], [6, 2, 6, 4]);
 });
+
+test('widgets in a Stack keep their tab entry, marked, with its settings', async () => {
+    const deviceName = `in-stack-${Date.now()}`;
+    const base = `/api/devices/${encodeURIComponent(deviceName)}`;
+    await api(`${base}/widget-assignments`, { method: 'POST', body: JSON.stringify({ widget_name: 'weather', tabNumber: 1 }) });
+    await api(`${base}/widget-assignments/entry`, {
+        method: 'PUT',
+        body: JSON.stringify({ widget_name: 'weather', tabNumber: 1, entry: { layout_x: 0, layout_y: 0, layout_w: 6, layout_h: 4, settings: { units: 'metric' } } }),
+    });
+
+    const marked = await api(`${base}/widget-assignments/in-stack`, {
+        method: 'PATCH',
+        body: JSON.stringify({ tabNumber: 1, stack: 'abcd1234', widgets: ['weather', 'calendar'], create: true }),
+    });
+    assert.equal(marked.status, 200, JSON.stringify(marked.body));
+    assert.deepEqual(marked.body.widgets, ['weather', 'calendar']);
+
+    const rows = (await api(`${base}/widget-assignments`)).body.filter((row) => row.tab_number === 1);
+    const weather = rows.find((row) => row.widget_name === 'weather');
+    const calendar = rows.find((row) => row.widget_name === 'calendar');
+    assert.equal(weather.in_stack, 'abcd1234');
+    assert.equal(calendar.in_stack, 'abcd1234', 'given an entry on the tab');
+    const config = JSON.parse((await api(`${base}/tabs`)).body.find((tab) => tab.number === 1).config_json);
+    assert.equal(config.weather.settings.units, 'metric', 'settings kept');
+    assert.equal(config.weather.layout_w, 6, 'its spot kept for when it comes out');
+
+    // A layout save keeps the mark.
+    await api(`${base}/widget-assignments/layout/bulk`, {
+        method: 'PATCH',
+        body: JSON.stringify({ layouts: [{ widget_name: 'weather', tabNumber: 1, layout_x: 2, layout_y: 0, layout_w: 6, layout_h: 4 }] }),
+    });
+    assert.equal(JSON.parse((await api(`${base}/tabs`)).body.find((tab) => tab.number === 1).config_json).weather.in_stack, 'abcd1234');
+
+    // Unmarked without create: only widgets with an entry; the mark goes.
+    const unmarked = await api(`${base}/widget-assignments/in-stack`, {
+        method: 'PATCH',
+        body: JSON.stringify({ tabNumber: 1, stack: null, widgets: ['weather', 'chores'] }),
+    });
+    assert.deepEqual(unmarked.body.widgets, ['weather']);
+    const after = (await api(`${base}/widget-assignments`)).body.filter((row) => row.tab_number === 1);
+    assert.equal(after.find((row) => row.widget_name === 'weather').in_stack, undefined);
+    assert.equal(after.some((row) => row.widget_name === 'chores'), false);
+});
+
+test('marking widgets in a Stack checks what it is given', async () => {
+    const base = `/api/devices/${encodeURIComponent(`in-stack-bad-${Date.now()}`)}`;
+    await api(`${base}/widget-assignments`, { method: 'POST', body: JSON.stringify({ widget_name: 'chores', tabNumber: 1 }) });
+    const send = (body) => api(`${base}/widget-assignments/in-stack`, { method: 'PATCH', body: JSON.stringify(body) });
+    assert.equal((await send({ tabNumber: 1, stack: 'abcd1234', widgets: [] })).status, 400);
+    assert.equal((await send({ tabNumber: 1, stack: 'abcd1234', widgets: ['stack:other'] })).status, 400, 'a Stack is not put in a Stack');
+    assert.equal((await send({ tabNumber: 1, stack: 'Bad Id!', widgets: ['weather'] })).status, 400);
+    assert.equal((await send({ tabNumber: 9, stack: 'abcd1234', widgets: ['weather'], create: true })).status, 404);
+});

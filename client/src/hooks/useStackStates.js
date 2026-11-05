@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
+import { startHaPoll } from '../utils/haPoll.js';
 
 // How often a display rereads what its Stacks watch in Home Assistant.
 const POLL_MS = 3 * 1000;
@@ -23,30 +24,22 @@ export default function useStackStates({ apiDeviceUrl, stacks, enabled = true })
       lastRef.current = '';
       return undefined;
     }
-    let stopped = false;
-    const read = async () => {
-      try {
-        const { data } = await axios.get(`${apiDeviceUrl}/stacks/ha`);
-        if (stopped) return;
-        const next = data?.connected && data.reachable !== false ? data.states || {} : null;
-        const text = JSON.stringify(next);
-        if (text !== lastRef.current) {
-          lastRef.current = text;
-          setStates(next);
-        }
-      } catch {
-        if (!stopped && lastRef.current !== 'null') {
-          lastRef.current = 'null';
-          setStates(null);
-        }
+    const show = (next) => {
+      const text = JSON.stringify(next);
+      if (text !== lastRef.current) {
+        lastRef.current = text;
+        setStates(next);
       }
     };
-    void read();
-    const timer = setInterval(read, POLL_MS);
-    return () => {
-      stopped = true;
-      clearInterval(timer);
-    };
+    // One read at a time; a missed read or two keeps what was read last
+    // (utils/haPoll.js), so a Stack doesn't jump back and forth over a blip.
+    return startHaPoll({
+      fetch: () => axios.get(`${apiDeviceUrl}/stacks/ha`, { timeout: 10000 }).then(({ data }) => data),
+      onAnswer: (data) => show(data?.connected ? data.states || {} : null),
+      onDown: () => show(null),
+      intervalMs: POLL_MS,
+      holding: lastRef.current !== '' && lastRef.current !== 'null',
+    });
   }, [apiDeviceUrl, key]);
 
   return states;

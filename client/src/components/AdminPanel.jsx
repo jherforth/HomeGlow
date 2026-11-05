@@ -106,7 +106,7 @@ import { frameNameFor } from '../utils/pluginLocalStore.js';
 import useFetchTabs from '../hooks/useFetchTabs.js';
 import { MAX_DOCK_HIDE_MINUTES, screensaverPreemptsDock } from '../utils/dockIdleHide.js';
 import useIsMobile from '../hooks/useIsMobile.js';
-import { syncWidgetAssignments } from '../utils/assignmentSync.js';
+import { isHiddenInStack, syncWidgetAssignments } from '../utils/assignmentSync.js';
 import { normalizeWidgetSettings as normalizeSharedWidgetSettings } from '../utils/widgetSettings.js';
 import { stackableTableSx } from '../utils/responsiveTable.js';
 import {
@@ -659,6 +659,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
       const coreAssignments = {};
       const pluginAssign = {};
       assignments.forEach(assignment => {
+        // Shown in a Stack there, not on that tab on its own.
+        if (isHiddenInStack(assignment, assignments)) return;
         if (assignment.widget_name.startsWith('plugin:')) {
           if (!pluginAssign[assignment.widget_name]) {
             pluginAssign[assignment.widget_name] = [];

@@ -216,3 +216,26 @@ describe('firstOpenSpot', () => {
     expect(firstOpenSpot({ w: 6, h: 2 }, [{ x: 0, y: 0, w: 6, h: 4 }])).toEqual({ x: 6, y: 0, w: 6, h: 2 });
   });
 });
+
+describe('unstackSpots', () => {
+  it('puts the first in the Stack spot and the others back where they were when free', async () => {
+    const { unstackSpots } = await import('./gridPlacement.js');
+    const out = unstackSpots(
+      [{ name: 'calendar', kept: { x: 0, y: 0, w: 6, h: 6 } }, { name: 'weather', kept: { x: 0, y: 6, w: 6, h: 4 } }],
+      { x: 0, y: 0, w: 6, h: 6 },
+      [{ x: 6, y: 0, w: 6, h: 6 }],
+    );
+    expect(out).toEqual([{ name: 'calendar', x: 0, y: 0, w: 6, h: 6 }, { name: 'weather', x: 0, y: 6, w: 6, h: 4 }]);
+  });
+  it('finds an open spot at its own size when its old one is taken, or it had none', async () => {
+    const { unstackSpots } = await import('./gridPlacement.js');
+    const out = unstackSpots(
+      [{ name: 'a', kept: null }, { name: 'b', kept: { x: 0, y: 0, w: 4, h: 3 } }, { name: 'c', kept: null }],
+      { x: 0, y: 0, w: 6, h: 4 },
+      [{ x: 6, y: 0, w: 6, h: 4 }],
+    );
+    expect(out[0]).toEqual({ name: 'a', x: 0, y: 0, w: 6, h: 4 });
+    expect(out[1]).toEqual({ name: 'b', x: 0, y: 4, w: 4, h: 3 });
+    expect(out[2]).toEqual({ name: 'c', x: 4, y: 4, w: 6, h: 4 });
+  });
+});

@@ -120,6 +120,20 @@ describe('Home Assistant', () => {
     expect(automaticModeAt({ modes, now: at('2026-11-02T15:01:00Z'), timeZone: tz, ha, rang }).id).toBeNull();
   });
 
+  it('an alarm that rang after its "until" turns nothing on', async () => {
+    const { alarmWindow, automaticModeAt } = await import('./displayModes.js');
+    // 10:00 am Chicago, until 9:00: not on until tomorrow morning.
+    expect(alarmWindow('2026-11-02T16:00:00Z', '09:00', tz)).toBeNull();
+    // Rang right at 9:00.
+    expect(alarmWindow('2026-11-02T15:00:00Z', '09:00', tz)).toBeNull();
+    const modes = [base({ id: 'm', alarm: { entity: 'sensor.a', until: '09:00' } })];
+    const rang = { 'sensor.a': '2026-11-02T16:00:00Z' };
+    expect(automaticModeAt({ modes, now: at('2026-11-02T16:30:00Z'), timeZone: tz, ha: { states: {} }, rang }).id).toBeNull();
+    // Past midnight is fine: 10 pm until 6 am.
+    const [start, end] = alarmWindow('2026-11-03T04:00:00Z', '06:00', tz);
+    expect((end - start) / 60000).toBe(8 * 60);
+  });
+
   it('an entity trigger beats a schedule; only-home holds both back', async () => {
     const { automaticModeAt } = await import('./displayModes.js');
     const modes = [

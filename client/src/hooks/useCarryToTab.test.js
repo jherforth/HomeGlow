@@ -20,9 +20,13 @@ describe('pickDockTarget', () => {
   it('picks the tab under the finger', () => {
     expect(pickDockTarget(182, 1022, items)).toBe(2);
   });
-  it('picks the nearest tab just off its icon, above or below the dock', () => {
-    expect(pickDockTarget(152, 960, items)).toBe(1);
-    expect(pickDockTarget(156, 1090, items)).toBe(2);
+  it('picks the nearest tab a finger-width off its icon', () => {
+    expect(pickDockTarget(150, 996, items)).toBe(1);
+    expect(pickDockTarget(156, 1048, items)).toBe(2);
+  });
+  it('picks nothing for a widget dragged in the rows just above the dock', () => {
+    expect(pickDockTarget(122, 980, items)).toBeNull();
+    expect(pickDockTarget(122, 960, items)).toBeNull();
   });
   it('picks nothing far from the dock', () => {
     expect(pickDockTarget(182, 900, items)).toBeNull();

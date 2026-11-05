@@ -5,17 +5,23 @@ import { ChevronLeft, ChevronRight } from '@mui/icons-material';
 import { TabIcon } from '../components/TabBar.jsx';
 import { readGridMetrics } from '../utils/gridMetrics.js';
 
-// Hold a dragged widget over a tab in the dock, or at the side of the screen,
-// this long and that tab opens with the widget still in hand.
+// Hold a dragged widget over a tab in the dock this long and that tab opens
+// with the widget still in hand. At the side of the screen it takes longer,
+// since a widget dragged along the side gets there without meaning to.
 export const CARRY_DWELL_MS = 500;
+export const EDGE_DWELL_MS = 900;
 // How close to the left or right of the screen counts as "the side". The strip
 // starts to show a little further in, so it's there before you reach it.
-export const EDGE_PX = 64;
-export const EDGE_HINT_PX = 160;
-// Around the dock, how far above and below it still counts as on it, and how
-// far past a tab's icon still picks that tab.
-const DOCK_REACH_Y = 56;
-const DOCK_REACH_X = 14;
+export const EDGE_PX = 40;
+export const EDGE_HINT_PX = 110;
+// The side only counts once the finger has come this far toward it during
+// the drag, so a widget picked up near the side doesn't head off at once.
+export const EDGE_TRAVEL_PX = 48;
+// How far past the dock's buttons still counts as on one: a little, for a
+// finger's width. A widget dragged in the bottom rows, above the dock, is not
+// on it.
+const DOCK_REACH_Y = 6;
+const DOCK_REACH_X = 8;
 const PITCH_PX = 116; // utils/gridMetrics.js GRID_PITCH: a row plus its gap
 const SLIDE_MS = 280;
 
@@ -188,22 +194,31 @@ export default function useCarryToTab({
 
   // What a point is over: a tab in the dock, the + button, or a side of the
   // screen (the tab before or after the open one).
+  // A side counts once the finger has travelled toward it during this drag
+  // (or while carrying, where the widget is already in hand).
+  const towardSide = useCallback((side, x) => {
+    if (live.current.carrying) return true;
+    const startX = dragRef.current.startX;
+    if (startX == null) return false;
+    return side === 'left' ? startX - x >= EDGE_TRAVEL_PX : x - startX >= EDGE_TRAVEL_PX;
+  }, []);
+
   const targetAt = useCallback((x, y) => {
     const overDock = live.current.dockTargetAt(x, y);
     if (overDock != null) return { target: overDock, side: null };
-    if (x <= EDGE_PX) return { target: tabAfter(-1), side: 'left' };
-    if (x >= window.innerWidth - EDGE_PX) return { target: tabAfter(1), side: 'right' };
+    if (x <= EDGE_PX && towardSide('left', x)) return { target: tabAfter(-1), side: 'left' };
+    if (x >= window.innerWidth - EDGE_PX && towardSide('right', x)) return { target: tabAfter(1), side: 'right' };
     return { target: null, side: null };
-  }, [tabAfter]);
+  }, [tabAfter, towardSide]);
 
   // The strip at a side shows as the finger comes near, filling once it's in.
   const edgeFor = useCallback((x) => {
-    const left = x <= EDGE_HINT_PX ? tabAfter(-1) : null;
-    const right = x >= window.innerWidth - EDGE_HINT_PX ? tabAfter(1) : null;
+    const left = x <= EDGE_HINT_PX && towardSide('left', x) ? tabAfter(-1) : null;
+    const right = x >= window.innerWidth - EDGE_HINT_PX && towardSide('right', x) ? tabAfter(1) : null;
     if (left != null) return { side: 'left', tab: left, armed: x <= EDGE_PX };
     if (right != null) return { side: 'right', tab: right, armed: x >= window.innerWidth - EDGE_PX };
     return null;
-  }, [tabAfter]);
+  }, [tabAfter, towardSide]);
 
   const clearDwell = useCallback(() => {
     clearTimeout(dwellRef.current.timer);
@@ -276,39 +291,41 @@ export default function useCarryToTab({
 
   // Start (or keep) the countdown for the tab under the finger. It runs on a
   // timer, so holding still on a tab opens it.
-  const aim = useCallback((target) => {
+  const aim = useCallback((target, side) => {
     const valid = Number.isInteger(target) && target !== live.current.activeTab;
     if (!valid) {
       if (dwellRef.current.target != null) clearDwell();
       return;
     }
-    if (dwellRef.current.target === target) return;
+    if (dwellRef.current.target === target && dwellRef.current.side === side) return;
     clearTimeout(dwellRef.current.timer);
     setPending(target);
     dwellRef.current = {
       target,
+      side,
       timer: setTimeout(() => {
         dwellRef.current = { target: null, timer: null };
         setPending(null);
         openTab(target);
-      }, CARRY_DWELL_MS),
+      }, side ? EDGE_DWELL_MS : CARRY_DWELL_MS),
     };
   }, [clearDwell, openTab]);
 
   const track = useCallback((x, y) => {
     dragRef.current.point = { x, y };
-    const { target } = targetAt(x, y);
+    const { target, side } = targetAt(x, y);
     setHoverTarget((current) => (current === target ? current : target));
     const nextEdge = edgeFor(x);
     setEdge((current) => (
       current?.side === nextEdge?.side && current?.armed === nextEdge?.armed && current?.tab === nextEdge?.tab ? current : nextEdge
     ));
-    aim(target);
+    aim(target, side);
   }, [targetAt, edgeFor, aim]);
 
   // A drag in the grid.
   const onDrag = useCallback((name, x, y) => {
     if (!name || live.current.carrying) return;
+    if (dragRef.current.name !== name || dragRef.current.startX == null) dragRef.current.startX = x;
     dragRef.current.name = name;
     setDragging(true);
     track(x, y);
@@ -321,7 +338,7 @@ export default function useCarryToTab({
     setEdge(null);
     setLanding(null);
     setPoint(null);
-    dragRef.current = { name: null, point: null };
+    dragRef.current = { name: null, point: null, startX: null };
   }, [clearDwell]);
 
   // Let go in the grid: over a tab in the dock, it goes there at once.
@@ -457,7 +474,7 @@ export default function useCarryToTab({
                 height: '100%',
                 transformOrigin: 'bottom',
                 background: 'rgba(var(--accent-rgb), 0.22)',
-                animation: `hg-edge-fill ${CARRY_DWELL_MS}ms linear forwards`,
+                animation: `hg-edge-fill ${EDGE_DWELL_MS}ms linear forwards`,
                 '@keyframes hg-edge-fill': { from: { transform: 'scaleY(0)' }, to: { transform: 'scaleY(1)' } },
               }}
             />

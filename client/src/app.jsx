@@ -78,7 +78,7 @@ import StackWidget from './components/StackWidget.jsx';
 import useStackStates from './hooks/useStackStates.js';
 import { WIDGET_STACKS_KEY, attentionWidget, isStackName, normalizeStacks, stackIdOf, stackInMode, stackName, stackWith } from './utils/widgetStacks.js';
 import { MODE_DIM_LEVEL } from './utils/displayModes.js';
-import { firstOpenSpot } from './utils/gridPlacement.js';
+import { firstOpenSpot, unstackSpots } from './utils/gridPlacement.js';
 import { getServerTimezoneSync } from './utils/timezone.js';
 import { THEME_TOKENS_APPLIED_EVENT } from './utils/pluginThemeBridge.js';
 import { loadInstalledThemes, useThemeRegistry } from './utils/installedThemes.js';
@@ -271,6 +271,9 @@ const App = () => {
   // It is never written to localStorage (see deviceName.js).
   if (getMirrorTarget() !== mirrorTarget) setSessionMirrorTarget(mirrorTarget);
   const API_DEVICE_URL = getDeviceApiBase(API_BASE_URL);
+  // The device this session means at the moment of the call: mirror mode can
+  // change it between a render and an awaited write (see fetchWidgetAssignments).
+  const deviceApi = () => getDeviceApiBase(API_BASE_URL);
   const isMobile = useIsMobile();
   const [theme, setTheme] = useState(readLocalTheme);
   // Rendered until both the household and this display's settings have loaded.
@@ -830,6 +833,8 @@ const App = () => {
           layout_y: assignment.layout_y,
           layout_w: assignment.layout_w,
           layout_h: assignment.layout_h,
+          // Shown inside that Stack on this tab (utils/widgetStacks.js).
+          inStack: assignment.in_stack || null,
         });
       });
 
@@ -1683,11 +1688,30 @@ const App = () => {
   const spotOnTab = (name, fromTab, toTab, cell) => {
     if (cell) return cell;
     const size = getWidgetLayoutForTab(name, fromTab) || { w: 6, h: 4 };
-    const taken = Object.keys(widgetAssignments)
-      .filter((other) => other !== name)
-      .map((other) => getWidgetLayoutForTab(other, toTab))
-      .filter(Boolean);
-    return firstOpenSpot({ w: size.w, h: size.h }, taken);
+    return firstOpenSpot({ w: size.w, h: size.h }, takenOnTab(toTab, [name]));
+  };
+
+  // A Stack going to another tab takes its widgets' entries along (moved, or
+  // copied for a duplicate), still marked as in it.
+  const carryStackMembers = async (name, fromTab, toTab, copy) => {
+    const stack = stackFor(name);
+    if (!stack) return;
+    const missing = [];
+    for (const member of stack.widgets) {
+      const here = entryOnTab(member, fromTab);
+      if (isWidgetAssignedToTab(member, toTab)) {
+        missing.push(member);
+        if (!copy && here?.inStack === stack.id) {
+          await axios.delete(`${deviceApi()}/widget-assignments/${encodeURIComponent(`${fromTab}::${member}`)}`).catch(() => {});
+        }
+      } else if (here?.inStack === stack.id) {
+        await axios.post(`${deviceApi()}/widget-assignments/transfer`, { widget_name: member, fromTab, toTab, copy })
+          .catch(() => missing.push(member));
+      } else {
+        missing.push(member);
+      }
+    }
+    await markInStack(toTab, missing, stack.id, true);
   };
   const layoutFields = (spot) => ({ layout_x: spot.x, layout_y: spot.y, layout_w: spot.w, layout_h: spot.h });
 
@@ -1696,20 +1720,26 @@ const App = () => {
   // never left on no tab, and keeps its per-tab settings.
   const moveWidgetToTab = async (name, fromTab, toTab, cell = null) => {
     if (!name || (fromTab === toTab && !cell)) return;
+    // Shown in a Stack there already: nothing to move.
+    if (fromTab !== toTab && hiddenInStack(name, toTab)) {
+      setWidgetNotice({ message: i18n.t('common:widgetMenu.alreadyOn', { tab: tabLabelFor(toTab) }) });
+      return;
+    }
     try {
       const spot = spotOnTab(name, fromTab, toTab, cell);
       if (fromTab === toTab || isWidgetAssignedToTab(name, toTab)) {
         // Already there: place it, and take it off the tab it came from.
-        await axios.patch(`${API_DEVICE_URL}/widget-assignments/layout/bulk`, {
+        await axios.patch(`${deviceApi()}/widget-assignments/layout/bulk`, {
           layouts: [{ widget_name: name, tabNumber: toTab, ...layoutFields(spot) }],
         });
         if (fromTab !== toTab) {
-          await axios.delete(`${API_DEVICE_URL}/widget-assignments/${encodeURIComponent(`${fromTab}::${name}`)}`);
+          await axios.delete(`${deviceApi()}/widget-assignments/${encodeURIComponent(`${fromTab}::${name}`)}`);
         }
       } else {
-        await axios.post(`${API_DEVICE_URL}/widget-assignments/transfer`, {
+        await axios.post(`${deviceApi()}/widget-assignments/transfer`, {
           widget_name: name, fromTab, toTab, layout: layoutFields(spot),
         });
+        if (isStackName(name)) await carryStackMembers(name, fromTab, toTab, false);
       }
       await fetchWidgetAssignments();
       setActiveTab(toTab);
@@ -1725,9 +1755,10 @@ const App = () => {
   const duplicateWidgetToTab = async (name, fromTab, toTab) => {
     if (!name || fromTab === toTab || isWidgetAssignedToTab(name, toTab)) return;
     try {
-      await axios.post(`${API_DEVICE_URL}/widget-assignments/transfer`, {
+      await axios.post(`${deviceApi()}/widget-assignments/transfer`, {
         widget_name: name, fromTab, toTab, copy: true, layout: layoutFields(spotOnTab(name, fromTab, toTab, null)),
       });
+      if (isStackName(name)) await carryStackMembers(name, fromTab, toTab, true);
       await fetchWidgetAssignments();
       setActiveTab(toTab);
     } catch (error) {
@@ -1761,7 +1792,7 @@ const App = () => {
     const current = (rawDeviceSettings?.[field] && typeof rawDeviceSettings[field] === 'object')
       ? rawDeviceSettings[field]
       : (isPlugin ? pluginSettings : widgetSettings);
-    const saved = await axios.patch(`${API_DEVICE_URL}/settings`, { [field]: { ...current, [key]: { ...(current[key] || {}), enabled } } });
+    const saved = await axios.patch(`${deviceApi()}/settings`, { [field]: { ...current, [key]: { ...(current[key] || {}), enabled } } });
     hydrateFromDeviceSettings(saved.data || {});
   };
 
@@ -1771,24 +1802,39 @@ const App = () => {
     const request = removeRequest;
     setRemoveRequest(null);
     if (!request) return;
-    const tab = tabs.find((item) => item.number === request.fromTab);
-    let entry = {};
+    // The tab as saved now (settings and Stack marks since the last load), so
+    // Undo puts back exactly what was there.
+    let tab = tabsRef.current.find((item) => item.number === request.fromTab);
     try {
-      const map = typeof tab?.config_json === 'string' ? JSON.parse(tab.config_json || '{}') : (tab?.config_json || {});
-      entry = { ...(map?.[request.widgetName] || {}) };
+      const { data } = await axios.get(`${deviceApi()}/tabs`);
+      tab = (Array.isArray(data) ? data : []).find((item) => item.number === request.fromTab) || tab;
+    } catch { /* the copy loaded earlier */ }
+    let map = {};
+    try {
+      map = (typeof tab?.config_json === 'string' ? JSON.parse(tab.config_json || '{}') : tab?.config_json) || {};
     } catch { /* no per-tab settings */ }
+    const name = request.widgetName;
+    const entry = { ...(map[name] || {}) };
     if (request.place) {
       Object.assign(entry, { layout_x: request.place.x, layout_y: request.place.y, layout_w: request.place.w, layout_h: request.place.h });
     }
-    const name = request.widgetName;
+    // A Stack takes the entries of the widgets shown in it here along, so
+    // they don't pop back up on their own; Undo puts them all back.
+    const stackId = stackIdOf(name);
+    const members = stackId
+      ? Object.entries(map).filter(([, value]) => value?.in_stack === stackId).map(([member, value]) => ({ name: member, entry: { ...value } }))
+      : [];
     const turnOff = !isStackName(name) && (widgetAssignments[name] || []).length <= 1 && !inPlacedStack(name);
     try {
-      await axios.delete(`${API_DEVICE_URL}/widget-assignments/${encodeURIComponent(`${request.fromTab}::${name}`)}`);
+      await axios.delete(`${deviceApi()}/widget-assignments/${encodeURIComponent(`${request.fromTab}::${name}`)}`);
+      for (const member of members) {
+        await axios.delete(`${deviceApi()}/widget-assignments/${encodeURIComponent(`${request.fromTab}::${member.name}`)}`).catch(() => {});
+      }
       if (turnOff) await setWidgetEnabled(name, false);
       await Promise.all([fetchTabs(), fetchWidgetAssignments()]);
       setWidgetNotice({
         message: i18n.t('common:widgetMenu.removed', { name: request.title, tab: tabLabelFor(request.fromTab) }),
-        undo: { name, tab: request.fromTab, entry, turnOff },
+        undo: { name, tab: request.fromTab, entry, turnOff, members },
       });
     } catch (error) {
       console.error('Error removing widget:', error);
@@ -1800,7 +1846,10 @@ const App = () => {
     setWidgetNotice(null);
     if (!undo) return;
     try {
-      await axios.put(`${API_DEVICE_URL}/widget-assignments/entry`, { widget_name: undo.name, tabNumber: undo.tab, entry: undo.entry });
+      await axios.put(`${deviceApi()}/widget-assignments/entry`, { widget_name: undo.name, tabNumber: undo.tab, entry: undo.entry });
+      for (const member of undo.members || []) {
+        await axios.put(`${deviceApi()}/widget-assignments/entry`, { widget_name: member.name, tabNumber: undo.tab, entry: member.entry });
+      }
       if (undo.turnOff) await setWidgetEnabled(undo.name, true);
       await Promise.all([fetchTabs(), fetchWidgetAssignments()]);
       setActiveTab(undo.tab);
@@ -1817,25 +1866,20 @@ const App = () => {
     const stack = stackFor(name);
     if (!stack) return;
     try {
-      await axios.delete(`${API_DEVICE_URL}/widget-assignments/${encodeURIComponent(`${tab}::${name}`)}`);
-      const back = stack.widgets.filter((widget) => !isWidgetAssignedToTab(widget, tab));
-      const taken = Object.keys(widgetAssignments)
-        .filter((other) => other !== name && !back.includes(other))
-        .map((other) => getWidgetLayoutForTab(other, tab))
-        .filter(Boolean);
-      const layouts = [];
-      back.forEach((widget, i) => {
-        const size = i === 0 && place ? place : { w: place?.w || 6, h: place?.h || 4 };
-        const spot = i === 0 && place ? place : firstOpenSpot({ w: size.w, h: size.h }, taken);
-        taken.push(spot);
-        layouts.push({ widget_name: widget, tabNumber: tab, layout_x: spot.x, layout_y: spot.y, layout_w: spot.w, layout_h: spot.h });
-      });
-      for (const widget of back) {
-        await axios.post(`${API_DEVICE_URL}/widget-assignments`, { widget_name: widget, tabNumber: tab }).catch(() => {});
-      }
-      if (layouts.length) await axios.patch(`${API_DEVICE_URL}/widget-assignments/layout/bulk`, { layouts });
+      await axios.delete(`${deviceApi()}/widget-assignments/${encodeURIComponent(`${tab}::${name}`)}`);
+      // Back on their own: the ones that showed in the Stack get placed; their
+      // entries (and settings) were kept, so they're only unmarked.
+      const back = stack.widgets.filter((widget) => !visibleOnTab(widget, tab));
+      await markInStack(tab, stack.widgets.filter((widget) => entryOnTab(widget, tab)?.inStack === stack.id || !isWidgetAssignedToTab(widget, tab)), null, true);
+      const spot = place || getWidgetLayoutForTab(name, tab);
+      const layouts = unstackSpots(
+        back.map((widget) => ({ name: widget, kept: getWidgetLayoutForTab(widget, tab) })),
+        spot,
+        takenOnTab(tab, [name, ...back]),
+      ).map((item) => ({ widget_name: item.name, tabNumber: tab, layout_x: item.x, layout_y: item.y, layout_w: item.w, layout_h: item.h }));
+      if (layouts.length) await axios.patch(`${deviceApi()}/widget-assignments/layout/bulk`, { layouts });
       if ((widgetAssignments[name] || []).length <= 1) {
-        const saved = await axios.patch(`${API_DEVICE_URL}/settings`, {
+        const saved = await axios.patch(`${deviceApi()}/settings`, {
           [WIDGET_STACKS_KEY]: { stacks: widgetStacks.filter((item) => item.id !== stack.id) },
         });
         hydrateFromDeviceSettings(saved.data || {});
@@ -1926,6 +1970,51 @@ const App = () => {
     return assignments.some(a => a.tabNumber === tabNumber);
   };
 
+  // ---- Widgets in a Stack keep their tab entries ----
+  // Stacking marks a widget's entry on the tab (in_stack: the Stack's id)
+  // instead of deleting it: the entry holds the widget's per-tab settings
+  // (Weather's location and units, the calendar's view), so they stay with
+  // it inside the Stack and come back when it's unstacked, and a build
+  // without Stacks still shows the widget.
+  const entryOnTab = (name, tabNumber) => (widgetAssignments[name] || []).find((a) => a.tabNumber === tabNumber) || null;
+  // Hidden on its own because it shows in that Stack, which is on this tab.
+  const hiddenInStack = (name, tabNumber) => {
+    const stackId = entryOnTab(name, tabNumber)?.inStack;
+    if (!stackId) return false;
+    return isWidgetAssignedToTab(stackName(stackId), tabNumber)
+      && widgetStacks.some((stack) => stack.id === stackId && stack.widgets.includes(name));
+  };
+  const visibleOnTab = (name, tabNumber) => isWidgetAssignedToTab(name, tabNumber) && !hiddenInStack(name, tabNumber);
+  // The spots taken on a tab by what shows there, past `except`.
+  const takenOnTab = (tabNumber, except = []) => Object.keys(widgetAssignments)
+    .filter((other) => !except.includes(other) && visibleOnTab(other, tabNumber))
+    .map((other) => getWidgetLayoutForTab(other, tabNumber))
+    .filter(Boolean);
+  // Mark widgets' entries on a tab as in a Stack (or not: stack null). With
+  // create, a widget not on that tab yet gets an entry there.
+  const markInStack = (tabNumber, widgetNames, stackId, create = false) => (widgetNames.length
+    ? axios.patch(`${deviceApi()}/widget-assignments/in-stack`, { tabNumber, stack: stackId, widgets: widgetNames, create })
+    : Promise.resolve());
+  // Stacks made before entries were kept: their widgets have no entry on the
+  // Stack's tabs. Give them one, marked, once, so they have somewhere to keep
+  // settings and come back when unstacked.
+  const stackRepairRef = useRef(new Set());
+  useEffect(() => {
+    if (mirrorTarget || !Object.keys(widgetAssignments).length) return;
+    const jobs = [];
+    widgetStacks.forEach((stack) => {
+      (widgetAssignments[stackName(stack.id)] || []).forEach(({ tabNumber }) => {
+        const missing = stack.widgets.filter((member) => !isWidgetAssignedToTab(member, tabNumber));
+        const key = `${tabNumber}:${stack.id}:${missing.join(',')}`;
+        if (!missing.length || stackRepairRef.current.has(key)) return;
+        stackRepairRef.current.add(key);
+        jobs.push(markInStack(tabNumber, missing, stack.id, true).catch(() => {}));
+      });
+    });
+    if (jobs.length) void Promise.all(jobs).then(() => fetchWidgetAssignments());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [widgetAssignments, widgetStacks, mirrorTarget]);
+
   const getWidgetLayoutForTab = (widgetName, tabNumber) => {
     const assignments = widgetAssignments[widgetName];
     if (!assignments) return null;
@@ -1985,10 +2074,10 @@ const App = () => {
 
   const widgetsOnActiveTab = useMemo(() => {
     return enabledWidgetNames
-      .filter((name) => isWidgetAssignedToTab(name, activeTab))
+      .filter((name) => visibleOnTab(name, activeTab))
       .map((name) => ({ name, size: getWidgetLayoutForTab(name, activeTab) || { w: 4, h: 3 } }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabledWidgetNames, widgetAssignments, activeTab]);
+  }, [enabledWidgetNames, widgetAssignments, activeTab, widgetStacks]);
 
   const layoutOnActiveTab = (name) => getWidgetLayoutForTab(name, activeTab);
 
@@ -2203,6 +2292,12 @@ const App = () => {
     stackDwellRef.current = { target: null, timer: null };
     setStackDrop(null);
   };
+  // Stacking takes a deliberate hold: the finger resting (within
+  // STACK_STILL_PX) on the middle of another widget for STACK_HOLD_MS. Just
+  // passing over one, or pausing near its edge, never stacks.
+  const STACK_HOLD_MS = 700;
+  const STACK_STILL_PX = 14;
+  const STACK_MIDDLE = 0.5; // the middle half of the widget, each way
   const stackTargetAt = (dragged, x, y) => {
     // A Stack isn't put inside another, and over the dock the finger is on
     // the dock (a tab, or +), never on a widget underneath it.
@@ -2215,7 +2310,12 @@ const App = () => {
       if (el.closest?.(draggedSelector) || el.classList?.contains('react-grid-placeholder')) continue;
       const holder = el.closest?.('[data-widget-name]');
       const name = holder?.getAttribute('data-widget-name');
-      return name && name !== dragged ? { name, el: holder } : null;
+      if (!name || name === dragged) return null;
+      const rect = holder.getBoundingClientRect();
+      const insetX = (rect.width * (1 - STACK_MIDDLE)) / 2;
+      const insetY = (rect.height * (1 - STACK_MIDDLE)) / 2;
+      const middle = x >= rect.left + insetX && x <= rect.right - insetX && y >= rect.top + insetY && y <= rect.bottom - insetY;
+      return { name, el: holder, middle };
     }
     return null;
   };
@@ -2226,22 +2326,35 @@ const App = () => {
       return;
     }
     const hit = stackTargetAt(name, x, y);
-    if ((hit?.name || null) === stackDwellRef.current.target) {
-      // The grid shuffles widgets while one is dragged: keep the outline on the target.
-      const shown = stackDropRef.current;
-      if (shown && hit) {
-        const rect = hit.el.getBoundingClientRect();
-        if (rect.left !== shown.rect.left || rect.top !== shown.rect.top || rect.width !== shown.rect.width) setStackDrop({ ...shown, rect });
-      }
+    const shown = stackDropRef.current;
+    if (shown && hit?.name === shown.target) {
+      // Shown: it stays while the finger is anywhere on the target. Keep the
+      // outline on it.
+      const rect = hit.el.getBoundingClientRect();
+      if (rect.left !== shown.rect.left || rect.top !== shown.rect.top || rect.width !== shown.rect.width) setStackDrop({ ...shown, rect });
       return;
     }
-    clearStackDwell();
-    if (!hit) return;
+    if (!hit?.middle) {
+      if (shown || stackDwellRef.current.target) clearStackDwell();
+      return;
+    }
+    const dwell = stackDwellRef.current;
+    // Still resting on the same widget: let the hold run.
+    if (dwell.target === hit.name && Math.hypot(x - dwell.x, y - dwell.y) <= STACK_STILL_PX) return;
+    // Moved on, or started: the hold starts again from here.
+    if (shown) setStackDrop(null);
+    clearTimeout(dwell.timer);
+    const target = hit.name;
     stackDwellRef.current = {
-      target: hit.name,
+      target,
+      x,
+      y,
       timer: setTimeout(() => {
-        setStackDrop({ target: hit.name, rect: hit.el.getBoundingClientRect(), adding: isStackName(hit.name) });
-      }, 550),
+        const el = document.querySelector(`[data-widget-name="${CSS.escape(target)}"]`);
+        if (!el) return;
+        navigator.vibrate?.(10);
+        setStackDrop({ target, rect: el.getBoundingClientRect(), adding: isStackName(target) });
+      }, STACK_HOLD_MS),
     };
   };
   const handleWidgetDragStop = (name, x, y) => {
@@ -2280,19 +2393,18 @@ const App = () => {
       ? widgetStacks.map((item) => (item.id === existing.id ? stack : item))
       : [...widgetStacks, stack];
     try {
-      const saved = await axios.patch(`${API_DEVICE_URL}/settings`, { [WIDGET_STACKS_KEY]: { stacks } });
+      const saved = await axios.patch(`${deviceApi()}/settings`, { [WIDGET_STACKS_KEY]: { stacks } });
       hydrateFromDeviceSettings(saved.data || {});
-      const remove = (name) => axios.delete(`${API_DEVICE_URL}/widget-assignments/${encodeURIComponent(`${tab}::${name}`)}`).catch(() => {});
       if (!existing) {
         const spot = getWidgetLayoutForTab(target, tab) || { x: 0, y: 0, w: 12, h: 4 };
         const name = stackName(stack.id);
-        await axios.post(`${API_DEVICE_URL}/widget-assignments`, { widget_name: name, tabNumber: tab });
-        await axios.patch(`${API_DEVICE_URL}/widget-assignments/layout/bulk`, {
+        await axios.post(`${deviceApi()}/widget-assignments`, { widget_name: name, tabNumber: tab });
+        await axios.patch(`${deviceApi()}/widget-assignments/layout/bulk`, {
           layouts: [{ widget_name: name, tabNumber: tab, layout_x: spot.x, layout_y: spot.y, layout_w: spot.w, layout_h: spot.h }],
         });
-        await remove(target);
       }
-      await remove(dragged);
+      // Their entries stay, marked as in the Stack (settings and all).
+      await markInStack(tab, existing ? [dragged] : [target, dragged], stack.id, true);
     } catch (error) {
       console.error('Error stacking widgets:', error);
     }
@@ -2321,7 +2433,8 @@ const App = () => {
       activeTab,
       (name) => name !== carriedName
         && !takeoverShowing.has(name)
-        && isWidgetAssignedToTab(name, activeTab),
+        // A widget shown in a Stack here isn't shown on its own as well.
+        && visibleOnTab(name, activeTab),
       layoutOnActiveTab
     ),
     // eslint-disable-next-line react-hooks/exhaustive-deps

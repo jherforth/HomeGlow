@@ -2860,6 +2860,9 @@ function listWidgetAssignmentsFromTabLayouts(deviceName) {
         layout_y: normalized.layout_y,
         layout_w: normalized.layout_w,
         layout_h: normalized.layout_h,
+        // Shown inside that Stack on this tab (client/src/utils/widgetStacks.js);
+        // its entry, settings and all, stays here.
+        ...(typeof layout?.in_stack === 'string' && layout.in_stack ? { in_stack: layout.in_stack } : {}),
       });
     });
   });
@@ -5613,6 +5616,52 @@ fastify.post('/api/devices/:deviceName/widget-assignments/transfer', async (requ
   } catch (error) {
     console.error('Error transferring widget assignment:', error);
     reply.status(500).send({ error: 'Failed to move widget' });
+  }
+});
+
+// Puts widgets in a Stack on a tab, or takes them out ({ stack: null }), by
+// marking their tab entries: the entry (a widget's place and its per-tab
+// settings, like Weather's location) stays where it is, so nothing is lost
+// and a build without Stacks still shows the widgets. With create, a widget
+// that isn't on the tab yet gets an entry there.
+fastify.patch('/api/devices/:deviceName/widget-assignments/in-stack', async (request, reply) => {
+  const { deviceName } = request.params;
+  const { tabNumber, stack = null, widgets, create = false } = request.body || {};
+  const parsedTabNumber = Number.parseInt(tabNumber, 10);
+  const names = Array.isArray(widgets) ? widgets.filter((name) => typeof name === 'string' && name && !name.startsWith('stack:')) : [];
+  if (!deviceName || !Number.isFinite(parsedTabNumber) || names.length === 0) {
+    return reply.status(400).send({ error: 'tabNumber and widgets are required' });
+  }
+  if (stack !== null && (typeof stack !== 'string' || !/^[a-z0-9]{4,24}$/.test(stack))) {
+    return reply.status(400).send({ error: 'stack must be a stack id or null' });
+  }
+  try {
+    const tab = getTabByNumber(deviceName, parsedTabNumber);
+    if (!tab) {
+      return reply.status(404).send({ error: 'Tab not found' });
+    }
+    const layoutMap = parseTabConfigJson(tab.config_json);
+    const changed = [];
+    names.forEach((name) => {
+      let entry = layoutMap[name];
+      if (!entry || typeof entry !== 'object') {
+        if (create !== true) return;
+        entry = { ...normalizeLayoutFields(null) };
+      }
+      const next = { ...entry };
+      if (stack) next.in_stack = stack;
+      else delete next.in_stack;
+      layoutMap[name] = next;
+      changed.push(name);
+    });
+    if (changed.length > 0) {
+      saveTabConfigById(tab.id, layoutMap);
+      touchDeviceUpdateTime(deviceName);
+    }
+    return { tab_number: parsedTabNumber, stack, widgets: changed };
+  } catch (error) {
+    console.error('Error marking widgets in a stack:', error);
+    reply.status(500).send({ error: 'Failed to update the stack' });
   }
 });
 

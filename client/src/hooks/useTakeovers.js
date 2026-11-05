@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { arrange, levelRank, stepRules } from '../utils/takeovers.js';
+import { arrange, levelRank, stepRules, withAsk } from '../utils/takeovers.js';
 import { PLUGIN_ATTENTION_EVENT } from '../components/PluginWidgetWrapper.jsx';
 import { wakeDisplay } from '../utils/displayDim.js';
 import { playSound, soundUrl } from '../utils/choreSound.js';
@@ -25,6 +25,8 @@ export default function useTakeovers({ rules, haStates, pinned, enabled }) {
   const [requests, setRequests] = useState({}); // widget -> { level, size, at }
   const [dismissed, setDismissed] = useState({}); // key -> { since, rank }
   const memoryRef = useRef({});
+  const requestsRef = useRef(requests);
+  requestsRef.current = requests;
   const announcedRef = useRef(new Set());
 
   const active = enabled && rules.some((rule) => rule.enabled);
@@ -41,13 +43,11 @@ export default function useTakeovers({ rules, haStates, pinned, enabled }) {
     const onAttention = (event) => {
       const { widget, level, size } = event.detail || {};
       if (!rules.some((rule) => rule.enabled && rule.widget === widget)) return;
-      setRequests((prev) => {
-        if (level === null) {
-          const { [widget]: _gone, ...rest } = prev;
-          return rest;
-        }
-        return { ...prev, [widget]: { level, size, at: Date.now() } };
-      });
+      // The same ask again (a plugin asking on every update) changes nothing:
+      // no new start, no second chime, and a ✕ on it stays closed.
+      const at = Date.now();
+      if (level !== null && withAsk(requestsRef.current, widget, level, size, at) === requestsRef.current) return;
+      setRequests((prev) => withAsk(prev, widget, level, size, at));
       if (level === null) {
         // Closing is the plugin's ✕: hide what's showing for it now.
         setDismissed((prev) => {
@@ -59,11 +59,6 @@ export default function useTakeovers({ rules, haStates, pinned, enabled }) {
           next[`ask:${widget}`] = { since: 0, rank: levelRank('urgent') };
           return next;
         });
-      } else {
-        setDismissed((prev) => {
-          const { [`ask:${widget}`]: _gone, ...rest } = prev;
-          return rest;
-        });
       }
     };
     window.addEventListener(PLUGIN_ATTENTION_EVENT, onAttention);
@@ -72,7 +67,7 @@ export default function useTakeovers({ rules, haStates, pinned, enabled }) {
 
   const { candidates, byKey } = useMemo(() => {
     if (!active) return { candidates: [], byKey: {} };
-    const step = stepRules(rules, haStates || {}, memoryRef.current, now);
+    const step = stepRules(rules, haStates, memoryRef.current, now);
     memoryRef.current = step.memory;
     const list = [];
     const seenWidget = new Set();
@@ -88,15 +83,15 @@ export default function useTakeovers({ rules, haStates, pinned, enabled }) {
     };
     // The plugin's ask, layered on its rule: urgent fills the screen unless
     // it asked to keep to its half.
-    const withAsk = (rule) => {
+    const askOn = (rule) => {
       const ask = requests[rule.widget];
       const level = ask?.level || rule.level;
       const place = ask?.size === 'full' || (ask?.level === 'urgent' && ask.size !== 'half') ? 'full' : rule.place;
       return { level, place };
     };
-    const live = step.live.slice().sort((a, b) => levelRank(withAsk(b.rule).level) - levelRank(withAsk(a.rule).level));
+    const live = step.live.slice().sort((a, b) => levelRank(askOn(b.rule).level) - levelRank(askOn(a.rule).level));
     for (const { rule, since } of live) {
-      const { level, place } = withAsk(rule);
+      const { level, place } = askOn(rule);
       add(rule.id, rule.widget, level, place, since);
     }
     // An urgent ask from a plugin on screen whose rule isn't on (the food hit
@@ -145,13 +140,9 @@ export default function useTakeovers({ rules, haStates, pinned, enabled }) {
   const dismiss = useCallback((key) => {
     const item = byKey[key];
     if (!item) return;
+    // The plugin's ask is kept, so asking the same again stays closed; a
+    // new ask (after attention(null), or a higher level) shows again.
     setDismissed((prev) => ({ ...prev, [key]: { since: item.since, rank: levelRank(item.level) } }));
-    if (key.startsWith('ask:')) {
-      setRequests((prev) => {
-        const { [item.widget]: _gone, ...rest } = prev;
-        return rest;
-      });
-    }
   }, [byKey]);
 
   const showing = useMemo(

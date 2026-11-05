@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { arrange, conditionMet, normalizeTakeovers, stepRules } from './takeovers.js';
+import { arrange, conditionMet, normalizeTakeovers, stepRules, withAsk } from './takeovers.js';
 
 const grill = { id: 'g', widget: 'plugin:Grill.html', entity: 'climate.pit_boss', op: 'is_not', state: 'off', level: 'high', place: 'bottom', seconds: 0 };
 const door = { id: 'd', widget: 'plugin:ha-front-door.html', entity: 'binary_sensor.doorbell', op: 'is', state: 'on', level: 'urgent', place: 'bottom', seconds: 30 };
@@ -33,6 +33,36 @@ describe('stepRules', () => {
     step = stepRules(rules, { ...on, 'binary_sensor.doorbell': { state: 'off' } }, step.memory, 32000);
     step = stepRules(rules, on, step.memory, 33000);
     expect(step.live.find((x) => x.rule.id === 'd').since).toBe(33000);
+  });
+
+  it('forgets nothing while Home Assistant is away', () => {
+    const rules = normalizeTakeovers([grill]);
+    const on = { 'climate.pit_boss': { state: 'heat' } };
+    let step = stepRules(rules, on, {}, 1000);
+    const away = stepRules(rules, null, step.memory, 4000);
+    expect(away.live).toEqual([]);
+    expect(away.memory).toEqual(step.memory);
+    // Back, still on: the same start, so no second chime and a ✕ holds.
+    step = stepRules(rules, on, away.memory, 7000);
+    expect(step.live[0].since).toBe(1000);
+  });
+});
+
+describe('withAsk', () => {
+  it('the same ask again changes nothing', () => {
+    const first = withAsk({}, 'plugin:grill.html', 'urgent', undefined, 1000);
+    expect(first['plugin:grill.html']).toEqual({ level: 'urgent', size: undefined, at: 1000 });
+    expect(withAsk(first, 'plugin:grill.html', 'urgent', undefined, 5000)).toBe(first);
+  });
+  it('a new level starts again; a new size keeps its start', () => {
+    const first = withAsk({}, 'w', 'high', 'half', 1000);
+    expect(withAsk(first, 'w', 'urgent', 'half', 2000).w.at).toBe(2000);
+    expect(withAsk(first, 'w', 'high', 'full', 3000).w).toEqual({ level: 'high', size: 'full', at: 1000 });
+  });
+  it('null drops the ask', () => {
+    expect(withAsk({ w: { level: 'urgent', at: 1 } }, 'w', null, undefined, 2)).toEqual({});
+    const none = {};
+    expect(withAsk(none, 'w', null, undefined, 2)).toBe(none);
   });
 });
 
