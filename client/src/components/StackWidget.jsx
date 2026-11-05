@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { FRAME_FLICK_EVENT } from './PluginWidgetWrapper.jsx';
 import { flickDirection } from '../utils/widgetStacks.js';
+import { ownsSideways } from '../utils/flickTarget.js';
 
 // How long the dots stay after a touch, and how long a page turn takes.
 const DOTS_MS = 2500;
@@ -92,10 +93,19 @@ const StackWidget = ({ items, home = null, returnSeconds = 60, rotateSeconds = 0
   }, [rotateSeconds, count, attention]);
 
   // Something needs attention: show it, unless someone's using the stack.
+  // Then as soon as they've left it be (it may never go back on its own, with
+  // no return time, so it's checked again then rather than missed).
   useEffect(() => {
-    if (!attention) return;
-    const busy = Date.now() - lastTouchRef.current < Math.max(returnSeconds, 15) * 1000;
-    if (!busy) setIndex(homeIndex());
+    if (!attention) return undefined;
+    const quietMs = Math.max(returnSeconds, 15) * 1000;
+    let timer = null;
+    const check = () => {
+      const left = quietMs - (Date.now() - lastTouchRef.current);
+      if (left <= 0) setIndex(homeIndex());
+      else timer = setTimeout(check, left + 50);
+    };
+    check();
+    return () => clearTimeout(timer);
   }, [attention, homeIndex, returnSeconds]);
 
   // Back home after a while untouched (not while it's turning on its own).
@@ -130,7 +140,10 @@ const StackWidget = ({ items, home = null, returnSeconds = 60, rotateSeconds = 0
       startRef.current = null;
       return;
     }
-    startRef.current = { x: event.clientX, y: event.clientY, t: Date.now() };
+    // A slider, a sideways list, a graph you scrub: the flick is theirs.
+    startRef.current = ownsSideways(event.target, rootRef.current)
+      ? null
+      : { x: event.clientX, y: event.clientY, t: Date.now() };
     showDots();
   };
   const onPointerUp = (event) => {

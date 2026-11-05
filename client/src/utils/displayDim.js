@@ -264,7 +264,9 @@ export function setDimmingHold(level) {
   hold = next;
   if (!started) return;
   if (hold != null && !adminPaused) setDimmed(true);
-  else if (liveTarget() == null) setDimmed(false);
+  // Let go: back to what idle dimming says. Dim (at its own level) only if
+  // the screen has been left alone that long; the timer dims it later if not.
+  else if (liveTarget() == null || Date.now() - lastActivity < config.after * 1000) setDimmed(false);
   render();
 }
 

@@ -1898,6 +1898,17 @@ const App = () => {
       undo: { name, tab: request.fromTab, entries, turnOff, wasOn },
     });
   };
+  // Whether every entry an Undo puts back is on its tab now.
+  const entriesAreBack = async (undo) => {
+    try {
+      const { data } = await axios.get(`${deviceApi()}/tabs`, { timeout: WRITE_TIMEOUT_MS });
+      const tab = (Array.isArray(data) ? data : []).find((item) => item.number === undo.tab);
+      const map = typeof tab?.config_json === 'string' ? JSON.parse(tab.config_json || '{}') : (tab?.config_json || {});
+      return Boolean(tab) && Object.keys(undo.entries || {}).every((name) => name in map);
+    } catch {
+      return false;
+    }
+  };
   const undoRemoveWidget = async () => {
     const shown = widgetNotice;
     const undo = shown?.undo;
@@ -1925,6 +1936,17 @@ const App = () => {
       setActiveTab(undo.tab);
     } catch (error) {
       console.error('Error restoring widget:', error);
+      // No answer (timed out, connection dropped): the server may have put it
+      // all back anyway. If so, finish the job (turn it on, show the tab)
+      // rather than saying it failed.
+      if (!error?.response && await entriesAreBack(undo)) {
+        if (!isStackName(undo.name) && undo.wasOn !== false && !isWidgetEnabled(undo.name)) {
+          await setWidgetEnabled(undo.name, true).catch(() => setWidgetNotice({ message: i18n.t('common:widgetMenu.turnOnFailed') }));
+        }
+        await Promise.all([fetchTabs(), fetchWidgetAssignments()]);
+        setActiveTab(undo.tab);
+        return;
+      }
       // Still there to try again.
       setNotices((current) => pushUndo(current, shown));
       setWidgetNotice({ message: i18n.t('common:widgetMenu.undoFailed') });
@@ -2072,16 +2094,19 @@ const App = () => {
   const markInStack = (tabNumber, widgetNames, stackId, create = false) => (widgetNames.length
     ? axios.patch(`${deviceApi()}/widget-assignments/in-stack`, { tabNumber, stack: stackId, widgets: widgetNames, create })
     : Promise.resolve());
-  // Stacks made before entries were kept: their widgets have no entry on the
-  // Stack's tabs. Give them one, marked, once, so they have somewhere to keep
-  // settings and come back when unstacked.
+  // A Stack's widgets on a tab where it's placed should each have an entry
+  // there marked as in it. Repaired, once: Stacks made before entries were
+  // kept (no entry), and a widget on the tab on its own as well (a deleted
+  // tab's Stack landing on Home where it already was, an Admin save that
+  // didn't finish), which would otherwise show twice. Its entry is kept,
+  // settings and all, just marked. One marked for another Stack is left be.
   const stackRepairRef = useRef(new Set());
   useEffect(() => {
     if (mirrorTarget || !Object.keys(widgetAssignments).length) return;
     const jobs = [];
     widgetStacks.forEach((stack) => {
       (widgetAssignments[stackName(stack.id)] || []).forEach(({ tabNumber }) => {
-        const missing = stack.widgets.filter((member) => !isWidgetAssignedToTab(member, tabNumber));
+        const missing = stack.widgets.filter((member) => !entryOnTab(member, tabNumber)?.inStack);
         const key = `${tabNumber}:${stack.id}:${missing.join(',')}`;
         if (!missing.length || stackRepairRef.current.has(key)) return;
         stackRepairRef.current.add(key);
@@ -2486,9 +2511,11 @@ const App = () => {
     const stacks = existing
       ? widgetStacks.map((item) => (item.id === existing.id ? stack : item))
       : [...widgetStacks, stack];
+    let savedDefinition = false;
     try {
-      const saved = await axios.patch(`${deviceApi()}/settings`, { [WIDGET_STACKS_KEY]: { stacks } });
+      const saved = await axios.patch(`${deviceApi()}/settings`, { [WIDGET_STACKS_KEY]: { stacks } }, { timeout: WRITE_TIMEOUT_MS });
       hydrateFromDeviceSettings(saved.data || {});
+      savedDefinition = true;
       // Their entries stay, marked as in the Stack (settings and all); a new
       // Stack goes on the tab in the target's spot in the same write.
       const spot = existing ? null : (getWidgetLayoutForTab(target, tab) || { x: 0, y: 0, w: 12, h: 4 });
@@ -2502,6 +2529,17 @@ const App = () => {
     } catch (error) {
       console.error('Error stacking widgets:', error);
       setWidgetNotice({ message: i18n.t('common:widgetMenu.stackFailed') });
+      // The Stack was saved but couldn't be placed: put the saved Stacks back
+      // as they were, so no empty Stack is left behind (and none piles up
+      // from trying again).
+      if (savedDefinition) {
+        try {
+          const back = await axios.patch(`${deviceApi()}/settings`, { [WIDGET_STACKS_KEY]: { stacks: widgetStacks } }, { timeout: WRITE_TIMEOUT_MS });
+          hydrateFromDeviceSettings(back.data || {});
+        } catch (rollbackError) {
+          console.error('Error putting the Stacks back:', rollbackError);
+        }
+      }
     }
     await fetchWidgetAssignments();
   };

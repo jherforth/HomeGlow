@@ -604,6 +604,19 @@ returns an unsubscribe function; `HomeGlow.expandSize` has the current size.
 A plugin whose own double-tap or drag would fight with expanding sets
 `"expand": false` in its manifest, and is never expanded.
 
+### In a Stack: sideways flicks
+
+A Stack (several widgets in one spot) turns to the next on a quick sideways
+flick, and a flick that lands on your page counts. It doesn't when the flick
+starts on something that takes sideways drags itself: a slider or text field,
+a list that scrolls sideways, or an element with `touch-action: none` or
+`pan-y` (a graph you scrub). Anything else that handles its own sideways drag
+can say so with `data-no-flick`:
+
+```html
+<div class="timeline" data-no-flick>…</div>
+```
+
 ## 5a. Home Assistant — read and operate devices
 
 Admin → Dashboard → Home Assistant builds panels without code. A plugin that

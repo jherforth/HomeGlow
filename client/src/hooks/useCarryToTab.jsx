@@ -389,17 +389,29 @@ export default function useCarryToTab({
       const cell = Number.isInteger(over) ? null : landingAt(at.x, at.y, carry)?.cell || null;
       live.current.onDrop({ name: carry.name, fromTab: carry.fromTab, toTab, cell });
     };
+    // The browser or the system took the touch away (a call, a gesture of
+    // its own): nobody let go here, so nothing is dropped. The widget stays
+    // where it was, and the screen goes back to its tab.
+    const cancel = () => {
+      const carry = live.current.carrying;
+      setCarrying(null);
+      snapshotRef.current = null;
+      reset();
+      if (carry && carry.fromTab !== live.current.activeTab) live.current.setTab(carry.fromTab);
+    };
     window.addEventListener('pointermove', move, true);
     window.addEventListener('touchmove', move, true);
     window.addEventListener('pointerup', finish, true);
-    window.addEventListener('pointercancel', finish, true);
+    window.addEventListener('pointercancel', cancel, true);
+    window.addEventListener('touchcancel', cancel, true);
     window.addEventListener('touchend', finish, true);
     window.addEventListener('mouseup', finish, true);
     return () => {
       window.removeEventListener('pointermove', move, true);
       window.removeEventListener('touchmove', move, true);
       window.removeEventListener('pointerup', finish, true);
-      window.removeEventListener('pointercancel', finish, true);
+      window.removeEventListener('pointercancel', cancel, true);
+      window.removeEventListener('touchcancel', cancel, true);
       window.removeEventListener('touchend', finish, true);
       window.removeEventListener('mouseup', finish, true);
     };

@@ -1647,3 +1647,24 @@ test('a new Stack is placed and its widgets marked in one write', async () => {
     assert.equal(config.weather.in_stack, 'abcd');
     assert.equal(config.calendar.in_stack, 'abcd');
 });
+
+test('a late Undo keeps a Stack mark the widget got since it was removed', async () => {
+    const deviceName = `undo-mark-${Date.now()}`;
+    const base = `/api/devices/${encodeURIComponent(deviceName)}`;
+    await api(`${base}/widget-assignments`, { method: 'POST', body: JSON.stringify({ widget_name: 'weather', tabNumber: 1 }) });
+    await api(`${base}/widget-assignments/layout`, {
+        method: 'PATCH',
+        body: JSON.stringify({ widget_name: 'weather', tabNumber: 1, layout_x: 0, layout_y: 0, layout_w: 6, layout_h: 4, settings: { location: 'Denver' } }),
+    });
+    const del = await api(`${base}/widget-assignments/${encodeURIComponent('1::weather')}`, { method: 'DELETE' });
+    // Before Undo: weather is put in a Stack on this tab (a blank, marked entry).
+    await api(`${base}/widget-assignments/in-stack`, { method: 'PATCH', body: JSON.stringify({ tabNumber: 1, stack: 'abcd', widgets: ['weather'], create: true }) });
+    const undo = await api(`${base}/widget-assignments/entry`, {
+        method: 'PUT',
+        body: JSON.stringify({ tabNumber: 1, entries: del.body.removed, onlyMissing: true }),
+    });
+    assert.equal(undo.status, 200);
+    const weather = JSON.parse((await api(`${base}/tabs`)).body.find((tab) => tab.number === 1).config_json).weather;
+    assert.equal(weather.location, 'Denver', 'its settings came back');
+    assert.equal(weather.in_stack, 'abcd', 'and it stays in the Stack');
+});

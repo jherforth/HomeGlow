@@ -205,7 +205,11 @@ const StacksSettings = ({ onOpenConnections, onChanged }) => {
     const draft = normalizeStack(raw) || raw;
     const before = isNew ? null : stacks.find((stack) => stack.id === draft.id) || null;
     try {
-      const next = isNew ? [...stacks, draft] : stacks.map((stack) => (stack.id === draft.id ? draft : stack));
+      // By id, new or not: a retry after a save that stopped half way finds
+      // the Stack already saved, and must replace it, not add a second.
+      const next = stacks.some((stack) => stack.id === draft.id)
+        ? stacks.map((stack) => (stack.id === draft.id ? draft : stack))
+        : [...stacks, draft];
       await saveStacks(next);
       await placeOn(draft, numbers, before);
       setEditing(null);

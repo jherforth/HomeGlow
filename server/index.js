@@ -5797,7 +5797,13 @@ fastify.put('/api/devices/:deviceName/widget-assignments/entry', async (request,
       const restored = Object.entries(entries).filter(([name]) => onlyMissing !== true
         || !stackEntries.holdsSomething(layoutMap[name]));
       restored.forEach(([name, value]) => {
-        layoutMap[name] = { ...value, ...normalizeLayoutFields(value) };
+        const now = layoutMap[name];
+        const next = { ...value, ...normalizeLayoutFields(value) };
+        // Put in a Stack here since it was removed: it stays in that Stack.
+        if (onlyMissing === true && now && typeof now === 'object' && typeof now.in_stack === 'string' && now.in_stack) {
+          next.in_stack = now.in_stack;
+        }
+        layoutMap[name] = next;
       });
       if (restored.length > 0) {
         saveTabConfigById(tab.id, layoutMap);

@@ -135,4 +135,27 @@ describe('live dimming with a stubbed DOM', () => {
     tick();
     expect(el.style.filter).toBe('');
   });
+
+  it('a released hold goes back to what idle dimming says, not straight to its level', () => {
+    const el = globalThis.document.documentElement;
+    // Idle dimming on, after five minutes; the screen was just used.
+    updateDisplayDimming({ enabled: true, day: 0.7, night: 0.03, after: 300, nightStart: 6, nightEnd: 6 });
+    expect(el.style.filter).toBe('');
+    setDimmingHold(0.04);
+    expect(el.style.filter).toBe('brightness(0.04)');
+    // The mode lets go: not idle for five minutes yet, so it's bright.
+    setDimmingHold(null);
+    expect(el.style.filter).toBe('');
+    // Held again, and let go once it has been idle long enough: idle dim.
+    setDimmingHold(0.04);
+    const realNow = Date.now;
+    Date.now = () => realNow() + 301 * 1000;
+    try {
+      setDimmingHold(null);
+      expect(el.style.filter).toBe('brightness(0.7)');
+    } finally {
+      Date.now = realNow;
+    }
+    updateDisplayDimming({ enabled: false });
+  });
 });
