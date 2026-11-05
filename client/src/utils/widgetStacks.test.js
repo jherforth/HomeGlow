@@ -42,6 +42,12 @@ describe('flickDirection', () => {
 });
 
 describe('stackWith', () => {
+  it('a full Stack takes no 13th widget', () => {
+    const full = { id: 'abcd', name: '', widgets: Array.from({ length: 12 }, (_, i) => `plugin:w${i}.html`), returnSeconds: 60, attention: [], modes: {} };
+    expect(stackWith(null, 'weather', full)).toBeNull();
+    expect(stackWith(null, 'plugin:w3.html', full)).toBe(full);
+  });
+
   it('makes a stack with the target first, or adds to one', () => {
     const made = stackWith('calendar', 'plugin:Grill.html');
     expect(made.widgets).toEqual(['calendar', 'plugin:Grill.html']);

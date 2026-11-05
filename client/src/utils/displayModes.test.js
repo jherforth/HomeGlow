@@ -134,6 +134,36 @@ describe('Home Assistant', () => {
     expect((end - start) / 60000).toBe(8 * 60);
   });
 
+  it('an alarm can keep its mode on all day, until the evening', async () => {
+    const { alarmWindow, automaticModeAt } = await import('./displayModes.js');
+    // 7:00 am Chicago, until 8:00 pm: thirteen hours, not nothing.
+    const [start, end] = alarmWindow('2026-11-02T13:00:00Z', '20:00', tz);
+    expect((end - start) / 60000).toBe(13 * 60);
+    const modes = [base({ id: 'm', alarm: { entity: 'sensor.a', until: '20:00' } })];
+    const rang = { 'sensor.a': '2026-11-02T13:00:00Z' };
+    expect(automaticModeAt({ modes, now: at('2026-11-03T01:30:00Z'), timeZone: tz, ha: { states: {} }, rang }).id).toBe('m');
+    expect(automaticModeAt({ modes, now: at('2026-11-03T02:01:00Z'), timeZone: tz, ha: { states: {} }, rang }).id).toBeNull();
+    // Overnight stays capped: rang 5 pm, until 6 am is "rang after until".
+    expect(alarmWindow('2026-11-02T23:00:00Z', '06:00', tz)).toBeNull();
+    // "Until 00:00" is the end of that day: 7 am until midnight is 17 hours.
+    const [s0, e0] = alarmWindow('2026-11-02T13:00:00Z', '00:00', tz);
+    expect((e0 - s0) / 60000).toBe(17 * 60);
+  });
+
+  it('an alarm ends at "until" on the clock across a clock change', async () => {
+    const { alarmWindow } = await import('./displayModes.js');
+    // Clocks went back at 2:00 am Chicago on Nov 1, 2026. Rang 1:30 am CDT
+    // (06:30Z), until 6:00 am CST (12:00Z): five and a half hours pass.
+    const [start, end] = alarmWindow('2026-11-01T06:30:00Z', '06:00', tz);
+    expect(new Date(end).toISOString()).toBe('2026-11-01T12:00:00.000Z');
+    expect((end - start) / 60000).toBe(5.5 * 60);
+    // Clocks went forward at 2:00 am on Mar 8, 2026. Rang 1:30 am CST
+    // (07:30Z), until 6:00 am CDT (11:00Z): three and a half hours.
+    const [s2, e2] = alarmWindow('2026-03-08T07:30:00Z', '06:00', tz);
+    expect(new Date(e2).toISOString()).toBe('2026-03-08T11:00:00.000Z');
+    expect((e2 - s2) / 60000).toBe(3.5 * 60);
+  });
+
   it('an entity trigger beats a schedule; only-home holds both back', async () => {
     const { automaticModeAt } = await import('./displayModes.js');
     const modes = [
@@ -165,5 +195,66 @@ describe('Home Assistant', () => {
     expect(helperCommand({ modes, option: 'Party' })).toBeNull();
     expect(helperCommand({ modes, option: 'Night', pin: { modeId: 'n' } })).toBeNull();
     expect(helperCommand({ modes, option: 'Night', pin: { modeId: 'm' } })).toEqual({ modeId: 'n' });
+  });
+});
+
+describe('pins and Home Assistant going away', () => {
+  it('a pin outlives Home Assistant going away, but not the schedule moving on', async () => {
+    const { decideMode, pinWhileHaAway } = await import('./displayModes.js');
+    // Pinned "movie" while the "guest" trigger mode was on; the schedule alone said none.
+    const pin = { modeId: 'movie', scheduledAtPin: 'guest', scheduleAtPin: null, at: 1 };
+    const decide = (scheduledId, haAway) => decideMode({
+      scheduledId, pin: pinWhileHaAway(pin, haAway), shownId: 'movie', lastActivityMs: -Infinity, nowMs: 0, touchWaitMs: 0,
+    });
+    // Before: Home Assistant away drops "guest" and the pin went with it.
+    expect(decideMode({ scheduledId: null, pin, shownId: 'movie', lastActivityMs: -Infinity, nowMs: 0, touchWaitMs: 0 }).pinExpired).toBe(true);
+    // Now it holds.
+    expect(decide(null, true)).toMatchObject({ pinExpired: false, show: 'movie' });
+    // A schedule starting while it's away still ends it.
+    expect(decide('night', true).pinExpired).toBe(true);
+    // Back again with "guest" still on: still pinned.
+    expect(decide('guest', false).pinExpired).toBe(false);
+  });
+
+  it('pins saved by an older build behave as before', async () => {
+    const { pinWhileHaAway } = await import('./displayModes.js');
+    const old = { modeId: 'movie', scheduledAtPin: 'guest' };
+    expect(pinWhileHaAway(old, true)).toBe(old);
+    expect(pinWhileHaAway(null, true)).toBeNull();
+  });
+
+  it("the wall's helper choice holds until Home Assistant shows it", async () => {
+    const { readHelper } = await import('./displayModes.js');
+    const seen = { option: 'Movie', at: 1000 };
+    const pending = { option: 'Movie', acceptedAt: null, failed: false, sends: 1 };
+    // Not yet accepted: an old answer is ignored, however late it started.
+    expect(readHelper({ seen, pending, option: 'Automatic', readStartedAt: 1500, now: 1600 })).toEqual({ seen, pending, resend: false });
+    // Accepted at 2000: a read that started just after can still be old.
+    const accepted = { ...pending, acceptedAt: 2000 };
+    expect(readHelper({ seen, pending: accepted, option: 'Automatic', readStartedAt: 2500, now: 2600 }).pending).toBe(accepted);
+    // Well after: Home Assistant really says Automatic.
+    expect(readHelper({ seen, pending: accepted, option: 'Automatic', readStartedAt: 3500, now: 3600 }))
+      .toEqual({ seen: { option: 'Automatic', at: 3600 }, pending: null, resend: false });
+    // Shows the wall's choice: settled.
+    expect(readHelper({ seen, pending: accepted, option: 'Movie', readStartedAt: 2100, now: 2200 }).pending).toBeNull();
+  });
+
+  it('a choice that could not be sent goes again when Home Assistant answers, a few times at most', async () => {
+    const { readHelper, HELPER_MAX_SENDS } = await import('./displayModes.js');
+    const seen = { option: 'Movie', at: 1000 };
+    const failed = { option: 'Movie', acceptedAt: null, failed: true, sends: 1 };
+    const out = readHelper({ seen, pending: failed, option: 'Automatic', readStartedAt: 9000, now: 9100 });
+    expect(out.resend).toBe(true);
+    expect(out.seen).toBe(seen);
+    const refused = { ...failed, sends: HELPER_MAX_SENDS };
+    // Given up: the wall stops trying, and its pin stands (not "changed in HA").
+    expect(readHelper({ seen, pending: refused, option: 'Automatic', readStartedAt: 9000, now: 9100 }))
+      .toEqual({ seen: { option: 'Automatic', at: 0 }, pending: null, resend: false });
+  });
+
+  it('with nothing pending, a change is taken; the first read counts as long ago', async () => {
+    const { readHelper } = await import('./displayModes.js');
+    expect(readHelper({ seen: { option: undefined, at: 0 }, pending: null, option: 'Night', readStartedAt: 5, now: 10 }).seen).toEqual({ option: 'Night', at: 0 });
+    expect(readHelper({ seen: { option: 'Night', at: 0 }, pending: null, option: 'Movie', readStartedAt: 5, now: 10 }).seen).toEqual({ option: 'Movie', at: 10 });
   });
 });

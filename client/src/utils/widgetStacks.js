@@ -12,6 +12,8 @@ import { conditionMet } from './haConditions.js';
 
 export const WIDGET_STACKS_KEY = 'widgetStacks';
 export const STACK_PREFIX = 'stack:';
+// The most widgets one Stack holds.
+export const STACK_MAX_WIDGETS = 12;
 export const RETURN_CHOICES = [0, 30, 60, 120, 300, 600];
 export const ROTATE_CHOICES = [0, 10, 20, 30, 60];
 const MODE_ID = /^[A-Za-z0-9_-]{1,40}$/;
@@ -72,7 +74,7 @@ function normalizeModes(raw, members) {
 
 export function normalizeStack(raw) {
   if (!raw || typeof raw !== 'object' || !ID.test(raw.id || '')) return null;
-  const widgets = [...new Set((Array.isArray(raw.widgets) ? raw.widgets : []).filter((w) => typeof w === 'string' && MEMBER.test(w)))].slice(0, 12);
+  const widgets = [...new Set((Array.isArray(raw.widgets) ? raw.widgets : []).filter((w) => typeof w === 'string' && MEMBER.test(w)))].slice(0, STACK_MAX_WIDGETS);
   if (widgets.length === 0) return null;
   const seconds = Number(raw.returnSeconds);
   return {
@@ -144,11 +146,15 @@ export function flickDirection(start, end) {
   return dx < 0 ? 1 : -1;
 }
 
-/** A new stack from dropping `dragged` onto `target` (target first), or `dragged` added to a stack. */
+/**
+ * A new stack from dropping `dragged` onto `target` (target first), or
+ * `dragged` added to a stack. null when that Stack is full: nothing changes.
+ */
 export function stackWith(target, dragged, existing = null) {
   if (existing) {
     if (existing.widgets.includes(dragged)) return existing;
-    return { ...existing, widgets: [...existing.widgets, dragged].slice(0, 12) };
+    if (existing.widgets.length >= STACK_MAX_WIDGETS) return null;
+    return { ...existing, widgets: [...existing.widgets, dragged] };
   }
   return { id: newStackId(), name: '', widgets: [target, dragged], returnSeconds: 60, attention: [], modes: {} };
 }

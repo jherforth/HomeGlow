@@ -10,7 +10,9 @@ import {
   helperCommand,
   helperOptionFor,
   isHome,
+  readHelper,
   normalizeModesSettings,
+  pinWhileHaAway,
   rememberAlarms,
 } from '../utils/displayModes.js';
 import { getServerTimezoneSync } from '../utils/timezone.js';
@@ -74,6 +76,19 @@ export default function useDisplayModes({ deviceSettings, apiDeviceUrl, onSaved,
   const shownRef = useRef(shownId);
   const haRef = useRef(haState);
   const automaticRef = useRef({ id: null, source: 'none' });
+  // What the schedule alone says (Home Assistant's triggers left out): a pin
+  // remembers it, so Home Assistant going away isn't taken for a change.
+  const scheduleOnlyRef = useRef(null);
+  // A pin that ended while Home Assistant was away couldn't hand the helper
+  // back to Automatic; this does it once Home Assistant answers again (the
+  // helper option the pin had set, or null).
+  const helperBackDueRef = useRef(null);
+  // When the read now under way was asked for (one at a time).
+  const readStartedRef = useRef(0);
+  // The wall's helper choice until Home Assistant shows it (readHelper).
+  const pendingHelperRef = useRef(null);
+  // Whether Home Assistant was away at the last check (for a new pin).
+  const haAwayRef = useRef(false);
   // The helper's option and when this display saw it change (its own clock,
   // so a pin and a choice made in Home Assistant compare fairly).
   const helperSeenRef = useRef({ option: undefined, at: 0 });
@@ -92,12 +107,26 @@ export default function useDisplayModes({ deviceSettings, apiDeviceUrl, onSaved,
   const helper = settings.ha.helper;
 
   // Set this display's helper in Home Assistant (the wall chose).
+  // Pending until Home Assistant shows it; sent again when Home Assistant
+  // answers, if it couldn't be sent (utils/displayModes.js readHelper).
+  const sendHelper = useCallback((pending) => {
+    pending.sends = (pending.sends || 0) + 1;
+    axios.post(`${apiDeviceUrl}/modes/ha/select`, { option: pending.option }, { timeout: 15000 })
+      .then(() => {
+        if (pendingHelperRef.current === pending) pendingHelperRef.current = { ...pending, acceptedAt: Date.now() };
+      })
+      .catch((error) => {
+        if (pendingHelperRef.current === pending) pendingHelperRef.current = { ...pending, failed: true };
+        console.warn('Display modes: could not set the Home Assistant helper:', error?.response?.data?.error || error.message);
+      });
+  }, [apiDeviceUrl]);
   const selectHelper = useCallback((option) => {
     if (!helper) return;
     helperSeenRef.current = { option, at: Date.now() };
-    axios.post(`${apiDeviceUrl}/modes/ha/select`, { option })
-      .catch((error) => console.warn('Display modes: could not set the Home Assistant helper:', error?.response?.data?.error || error.message));
-  }, [apiDeviceUrl, helper]);
+    const pending = { option, acceptedAt: null, failed: false, sends: 0 };
+    pendingHelperRef.current = pending;
+    sendHelper(pending);
+  }, [helper, sendHelper]);
 
   // Touches, keys and use inside a plugin frame all count as someone at the
   // screen, so a mode change waits for them.
@@ -122,14 +151,16 @@ export default function useDisplayModes({ deviceSettings, apiDeviceUrl, onSaved,
     const ha = haRef.current;
     const haUp = Boolean(ha?.connected && ha.reachable !== false);
     const states = haUp ? ha.states || {} : {};
-    const automatic = automaticModeAt({
-      modes: settings.modes,
-      now: new Date(),
-      timeZone: getServerTimezoneSync(),
-      ha: haUp ? { states } : null,
-      rang: alarmsRef.current.rang || {},
-    });
+    const now = new Date();
+    const timeZone = getServerTimezoneSync();
+    const rang = alarmsRef.current.rang || {};
+    const automatic = automaticModeAt({ modes: settings.modes, now, timeZone, ha: haUp ? { states } : null, rang });
     automaticRef.current = automatic;
+    scheduleOnlyRef.current = haUp
+      ? automaticModeAt({ modes: settings.modes, now, timeZone, ha: null, rang }).id
+      : automatic.id;
+    const haAway = haOn && !haUp;
+    haAwayRef.current = haAway;
 
     let currentPin = pinRef.current;
     // A pin to a mode that was deleted is no pin.
@@ -137,8 +168,27 @@ export default function useDisplayModes({ deviceSettings, apiDeviceUrl, onSaved,
       setPin(null);
       currentPin = null;
     }
-    // The helper: Home Assistant's choice, unless the wall chose since.
-    const option = helper && haUp ? states[helper]?.state : undefined;
+    // Pinned while Home Assistant was away: what was "automatic" then left
+    // its triggers out. Now it's back, the pin starts from what's automatic
+    // with them, unless the schedule itself moved on meanwhile.
+    if (currentPin?.haAway && haUp && scheduleOnlyRef.current === currentPin.scheduleAtPin) {
+      currentPin = { ...currentPin, scheduledAtPin: automatic.id, haAway: false };
+      setPin(currentPin);
+    }
+    // The helper: Home Assistant's choice, unless the wall chose since (as
+    // seen by this display: a read older than the wall's own choice can't
+    // undo it).
+    let option = helper && haUp ? helperSeenRef.current.option : undefined;
+    // A pin ran out while Home Assistant was away: hand the helper back now,
+    // unless Home Assistant has chosen something else in the meantime.
+    if (option !== undefined && helperBackDueRef.current !== null) {
+      const due = helperBackDueRef.current;
+      helperBackDueRef.current = null;
+      if (option === due && option !== HELPER_AUTOMATIC) {
+        selectHelper(HELPER_AUTOMATIC);
+        option = HELPER_AUTOMATIC;
+      }
+    }
     // Changed in Home Assistant since the wall pinned (to anything but the
     // wall's own choice, Automatic included): Home Assistant has the say.
     if (currentPin && option !== undefined && helperSeenRef.current.at > (currentPin.at || 0)
@@ -151,7 +201,7 @@ export default function useDisplayModes({ deviceSettings, apiDeviceUrl, onSaved,
     const shown = known.has(shownRef.current) ? shownRef.current : null;
     const decision = decideMode({
       scheduledId: base,
-      pin: currentPin,
+      pin: pinWhileHaAway(currentPin, haAway),
       shownId: shown,
       lastActivityMs: force ? -Infinity : lastActivityRef.current,
       nowMs: Date.now(),
@@ -159,8 +209,10 @@ export default function useDisplayModes({ deviceSettings, apiDeviceUrl, onSaved,
     });
     if (decision.pinExpired) {
       setPin(null);
-      // The pin ran its course: hand the helper back to the schedule.
+      // The pin ran its course: hand the helper back to the schedule (once
+      // Home Assistant is back, if it's away now).
       if (option && option !== HELPER_AUTOMATIC) selectHelper(HELPER_AUTOMATIC);
+      else if (option === undefined && helper) helperBackDueRef.current = helperOptionFor(settings.modes, currentPin.modeId);
     }
     setShownId(decision.show);
     // Why it's showing, for Home Assistant: only once the wall has changed
@@ -169,7 +221,7 @@ export default function useDisplayModes({ deviceSettings, apiDeviceUrl, onSaved,
       const stillPinned = currentPin && !decision.pinExpired;
       setSource(stillPinned ? 'wall' : (command ? 'home_assistant' : automatic.source));
     }
-  }, [enabled, settings, setPin, helper, selectHelper]);
+  }, [enabled, settings, setPin, helper, selectHelper, haOn]);
 
   useEffect(() => {
     evaluate({ force: true });
@@ -201,9 +253,16 @@ export default function useDisplayModes({ deviceSettings, apiDeviceUrl, onSaved,
       }
       // The helper's option, and when it changed.
       const option = helper ? states[helper]?.state : undefined;
-      if (option !== helperSeenRef.current.option) {
-        helperSeenRef.current = { option, at: helperSeenRef.current.option === undefined ? 0 : Date.now() };
-      }
+      const read = readHelper({
+        seen: helperSeenRef.current,
+        pending: pendingHelperRef.current,
+        option,
+        readStartedAt: readStartedRef.current,
+        now: Date.now(),
+      });
+      helperSeenRef.current = read.seen;
+      pendingHelperRef.current = read.pending;
+      if (read.resend && read.pending) sendHelper(read.pending);
       // Someone arriving home wakes the screen.
       const before = previousPeopleRef.current;
       const arrived = settings.ha.wake.some((id) => before[id] === false && isHome(states[id]));
@@ -225,13 +284,16 @@ export default function useDisplayModes({ deviceSettings, apiDeviceUrl, onSaved,
       }
     };
     return startHaPoll({
-      fetch: () => axios.get(`${apiDeviceUrl}/modes/ha`, { timeout: 10000 }).then(({ data }) => data),
+      fetch: () => {
+        readStartedRef.current = Date.now();
+        return axios.get(`${apiDeviceUrl}/modes/ha`, { timeout: 10000 }).then(({ data }) => data);
+      },
       onAnswer,
       onDown,
       intervalMs: HA_POLL_MS,
       holding: Boolean(haRef.current) && haRef.current.reachable !== false,
     });
-  }, [haOn, apiDeviceUrl, helper, settings, evaluate]);
+  }, [haOn, apiDeviceUrl, helper, settings, evaluate, sendHelper]);
 
   // Keep the helper's options in step with the mode names.
   const namesKey = settings.modes.map((mode) => mode.name).join('\u0000');
@@ -259,13 +321,21 @@ export default function useDisplayModes({ deviceSettings, apiDeviceUrl, onSaved,
   // Pin a mode (or null, Normal) until the schedule next changes.
   // Someone chose it at the screen, so it shows at once, and the helper says so.
   const pinMode = useCallback((modeId) => {
-    setPin({ modeId, scheduledAtPin: automaticRef.current.id, at: Date.now() });
+    helperBackDueRef.current = null;
+    setPin({
+      modeId,
+      scheduledAtPin: automaticRef.current.id,
+      scheduleAtPin: scheduleOnlyRef.current,
+      haAway: haAwayRef.current,
+      at: Date.now(),
+    });
     setShownId(modeId);
     setSource('wall');
     selectHelper(helperOptionFor(settings.modes, modeId));
   }, [settings.modes, setPin, selectHelper]);
 
   const unpin = useCallback(() => {
+    helperBackDueRef.current = null;
     setPin(null);
     selectHelper(HELPER_AUTOMATIC);
     evaluate({ force: true });

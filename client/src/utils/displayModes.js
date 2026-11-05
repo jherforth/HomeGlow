@@ -218,6 +218,53 @@ export function decideMode({ scheduledId, pin, shownId, lastActivityMs, nowMs, t
   return { want, pinExpired, show };
 }
 
+// The pin to judge, given whether Home Assistant is away. While it's away the
+// HA triggers can't be read, so the schedule alone decides what's "automatic";
+// that dropping a trigger mode isn't the schedule changing its mind, so a pin
+// is held to what the schedule alone said when it was made (`scheduleAtPin`)
+// and still ends if the schedule really moves on. Pins saved by an older
+// build lack it and keep the old behaviour.
+export function pinWhileHaAway(pin, haAway) {
+  if (!pin || !haAway || !('scheduleAtPin' in pin)) return pin;
+  return { ...pin, scheduledAtPin: pin.scheduleAtPin };
+}
+
+// The wall's helper choice is pending until Home Assistant shows it: a read
+// asked for before Home Assistant took it (or while the choice couldn't be
+// sent) still carries the old option, and that isn't Home Assistant
+// changing its mind. A read that started a moment after Home Assistant
+// accepted the choice, and shows something else, is.
+export const HELPER_SETTLE_MS = 1000;
+// A choice Home Assistant keeps refusing is given up after this many sends.
+export const HELPER_MAX_SENDS = 3;
+
+/**
+ * What to make of one read of the helper's option.
+ * - seen: { option, at } (what this display goes by, and when it changed)
+ * - pending: null, or the wall's choice { option, acceptedAt, failed, sends }
+ * Returns { seen, pending, resend }: resend when a choice that couldn't be
+ * sent should go again now (Home Assistant answered).
+ */
+export function readHelper({ seen, pending, option, readStartedAt, now }) {
+  if (pending) {
+    if (option === pending.option) {
+      return { seen: seen.option === option ? seen : { option, at: now }, pending: null, resend: false };
+    }
+    const accepted = Number.isFinite(pending.acceptedAt) && readStartedAt > pending.acceptedAt + HELPER_SETTLE_MS;
+    const givenUp = pending.failed && (pending.sends || 0) >= HELPER_MAX_SENDS;
+    if (!accepted && !givenUp) {
+      return { seen, pending: pending.failed ? { ...pending, failed: false } : pending, resend: pending.failed };
+    }
+    // Home Assistant chose otherwise since: it has the say.
+    if (accepted) return { seen: { option, at: now }, pending: null, resend: false };
+    // It won't take the wall's choice: stop trying, but that isn't Home
+    // Assistant choosing, so the wall's pin stands (seen as long ago).
+    return { seen: { option, at: 0 }, pending: null, resend: false };
+  }
+  if (option === seen.option) return { seen, pending: null, resend: false };
+  return { seen: { option, at: seen.option === undefined ? 0 : now }, pending: null, resend: false };
+}
+
 // ---- Labels ----------------------------------------------------------------
 
 // "Mon–Fri · 6:00 → 9:00" style summary pieces, for labels.
@@ -257,10 +304,11 @@ export function isHome(state) {
 
 /**
  * When an alarm that went off keeps its mode on: [start, end) in ms, from the
- * alarm until the next `until` time after it (in the household zone), at most
- * 12 hours. Null when no alarm has gone off.
+ * alarm until `until` (in the household zone): later that day however long
+ * (00:00 is the end of that day), or past midnight when that's at most 12
+ * hours away. Null when no alarm has gone off, or it rang after "until".
  */
-// The longest an alarm keeps its mode on.
+// The longest an alarm keeps its mode on past midnight.
 const ALARM_LONGEST_MINUTES = 12 * 60;
 
 export function alarmWindow(rangIso, until, timeZone) {
@@ -268,13 +316,30 @@ export function alarmWindow(rangIso, until, timeZone) {
   const untilMinutes = parseTime(until);
   if (!Number.isFinite(start) || untilMinutes == null) return null;
   const startMinute = minuteOfWeek(new Date(start), timeZone) % MINUTES_PER_DAY;
-  let wait = untilMinutes - startMinute;
-  if (wait <= 0) wait += MINUTES_PER_DAY;
-  // An alarm that rang after "until" (a late lie-in: rang 10:00, until 9:00)
-  // turns nothing on, rather than running to tomorrow's 9:00. Past midnight
-  // still works: rang 22:00, until 06:00 is eight hours.
-  if (wait > ALARM_LONGEST_MINUTES) return null;
-  return [start, start + wait * 60000];
+  // "until 00:00" means the end of the day it rang (unless it rang right at
+  // midnight, when there's nothing left of that day).
+  let wait = (untilMinutes === 0 && startMinute > 0 ? MINUTES_PER_DAY : untilMinutes) - startMinute;
+  // "until" earlier in the day than the ring: it's tomorrow's "until". That's
+  // a night (rang 22:00, until 06:00: eight hours) only when it's near; far
+  // off, the alarm rang after "until" (a late lie-in: rang 10:00, until 9:00)
+  // and turns nothing on, rather than running to tomorrow's 9:00. "until"
+  // later the same day is fine however long: rang 7:00, until 20:00.
+  if (wait <= 0) {
+    wait += MINUTES_PER_DAY;
+    if (wait > ALARM_LONGEST_MINUTES) return null;
+  }
+  // Ends at "until" on the clock, even across a clock change that night: the
+  // wait above is in clock minutes, which isn't always the time that passes.
+  let end = start + wait * 60000;
+  for (let i = 0; i < 2; i += 1) {
+    const endMinute = minuteOfWeek(new Date(end), timeZone) % MINUTES_PER_DAY;
+    let off = untilMinutes - endMinute;
+    if (off >= MINUTES_PER_DAY / 2) off -= MINUTES_PER_DAY;
+    if (off < -MINUTES_PER_DAY / 2) off += MINUTES_PER_DAY;
+    if (off === 0 || Math.abs(off) > 120) break;
+    end += off * 60000;
+  }
+  return end > start ? [start, end] : null;
 }
 
 /**

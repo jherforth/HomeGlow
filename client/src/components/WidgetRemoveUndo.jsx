@@ -47,13 +47,15 @@ const WidgetRemoveUndo = ({
         </DialogActions>
       </Dialog>
 
+      {/* Keyed per notice: one that comes up (or back) gets its full time. */}
       <Snackbar
+        key={undo?.key ?? 'none'}
         open={Boolean(undo)}
         autoHideDuration={UNDO_MS}
         onClose={(event, reason) => {
           // A tap elsewhere shouldn't take Undo away early.
           if (reason === 'clickaway') return;
-          onUndoClose();
+          onUndoClose(undo?.key);
         }}
         anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
         sx={{ zIndex: 10003 }}

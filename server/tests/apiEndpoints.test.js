@@ -1463,3 +1463,187 @@ test('marking widgets in a Stack checks what it is given', async () => {
     assert.equal((await send({ tabNumber: 1, stack: 'Bad Id!', widgets: ['weather'] })).status, 400);
     assert.equal((await send({ tabNumber: 9, stack: 'abcd1234', widgets: ['weather'], create: true })).status, 404);
 });
+
+test('a Stack moves to another tab with its widgets in one write, settings and all', async () => {
+    const deviceName = `stack-move-${Date.now()}`;
+    const base = `/api/devices/${encodeURIComponent(deviceName)}`;
+    await api(`${base}/tabs`, { method: 'POST', body: JSON.stringify({ label: 'Two', icon: 'star', show_label: true }) });
+    for (const name of ['stack:abcd', 'weather', 'calendar']) {
+        await api(`${base}/widget-assignments`, { method: 'POST', body: JSON.stringify({ widget_name: name, tabNumber: 1 }) });
+    }
+    await api(`${base}/widget-assignments/layout`, {
+        method: 'PATCH',
+        body: JSON.stringify({ widget_name: 'weather', tabNumber: 1, layout_x: 0, layout_y: 0, layout_w: 6, layout_h: 4, settings: { units: 'metric' } }),
+    });
+    await api(`${base}/widget-assignments/in-stack`, { method: 'PATCH', body: JSON.stringify({ tabNumber: 1, stack: 'abcd', widgets: ['weather', 'calendar'] }) });
+
+    const moved = await api(`${base}/widget-assignments/transfer`, {
+        method: 'POST',
+        body: JSON.stringify({ widget_name: 'stack:abcd', fromTab: 1, toTab: 2, members: ['weather', 'calendar'] }),
+    });
+    assert.equal(moved.status, 200);
+    const tabs = (await api(`${base}/tabs`)).body;
+    const config = (number) => JSON.parse(tabs.find((tab) => tab.number === number).config_json || '{}');
+    assert.deepEqual(Object.keys(config(1)), [], 'nothing left behind to pop up on its own');
+    assert.equal(config(2).weather.units, 'metric');
+    assert.equal(config(2).weather.in_stack, 'abcd');
+    assert.equal(config(2).calendar.in_stack, 'abcd');
+
+    const again = await api(`${base}/widget-assignments/transfer`, {
+        method: 'POST',
+        body: JSON.stringify({ widget_name: 'stack:abcd', fromTab: 2, toTab: 1, members: ['weather'], copy: true }),
+    });
+    assert.equal(again.status, 200);
+    const refused = await api(`${base}/widget-assignments/transfer`, {
+        method: 'POST',
+        body: JSON.stringify({ widget_name: 'stack:abcd', fromTab: 2, toTab: 1, members: ['weather'] }),
+    });
+    assert.equal(refused.status, 409);
+    const merged = await api(`${base}/widget-assignments/transfer`, {
+        method: 'POST',
+        body: JSON.stringify({ widget_name: 'stack:abcd', fromTab: 2, toTab: 1, members: ['weather', 'calendar'], merge: true }),
+    });
+    assert.equal(merged.status, 200);
+    const after = (await api(`${base}/tabs`)).body;
+    assert.deepEqual(JSON.parse(after.find((tab) => tab.number === 2).config_json || '{}'), {}, 'merged: the second copy left with all its widgets');
+});
+
+test('removing a Stack takes its widgets along, and one write puts them all back', async () => {
+    const deviceName = `stack-remove-${Date.now()}`;
+    const base = `/api/devices/${encodeURIComponent(deviceName)}`;
+    for (const name of ['stack:abcd', 'weather', 'chores']) {
+        await api(`${base}/widget-assignments`, { method: 'POST', body: JSON.stringify({ widget_name: name, tabNumber: 1 }) });
+    }
+    await api(`${base}/widget-assignments/layout`, {
+        method: 'PATCH',
+        body: JSON.stringify({ widget_name: 'weather', tabNumber: 1, layout_x: 2, layout_y: 3, layout_w: 6, layout_h: 4, settings: { units: 'metric' } }),
+    });
+    await api(`${base}/widget-assignments/in-stack`, { method: 'PATCH', body: JSON.stringify({ tabNumber: 1, stack: 'abcd', widgets: ['weather'] }) });
+    const config = async () => JSON.parse((await api(`${base}/tabs`)).body.find((tab) => tab.number === 1).config_json || '{}');
+    const before = await config();
+
+    const del = await api(`${base}/widget-assignments/${encodeURIComponent('1::stack:abcd')}?members=1`, { method: 'DELETE' });
+    assert.equal(del.status, 200);
+    assert.deepEqual(Object.keys(await config()), ['chores']);
+    assert.deepEqual(Object.keys(del.body.removed).sort(), ['stack:abcd', 'weather']);
+
+    const put = await api(`${base}/widget-assignments/entry`, {
+        method: 'PUT',
+        body: JSON.stringify({ tabNumber: 1, entries: del.body.removed }),
+    });
+    assert.equal(put.status, 200);
+    assert.deepEqual(await config(), before, 'Undo put back every entry exactly');
+
+    // A late Undo: a blank re-add is replaced, one placed with settings since is kept.
+    await api(`${base}/widget-assignments/${encodeURIComponent('1::stack:abcd')}?members=1`, { method: 'DELETE' });
+    await api(`${base}/widget-assignments`, { method: 'POST', body: JSON.stringify({ widget_name: 'weather', tabNumber: 1 }) });
+    const late = await api(`${base}/widget-assignments/entry`, {
+        method: 'PUT',
+        body: JSON.stringify({ tabNumber: 1, entries: del.body.removed, onlyMissing: true }),
+    });
+    assert.deepEqual(late.body.widgets.sort(), ['stack:abcd', 'weather']);
+    assert.equal((await config()).weather.units, 'metric', 'a blank re-add gave way to the real entry');
+    await api(`${base}/widget-assignments/${encodeURIComponent('1::stack:abcd')}?members=1`, { method: 'DELETE' });
+    await api(`${base}/widget-assignments`, { method: 'POST', body: JSON.stringify({ widget_name: 'weather', tabNumber: 1 }) });
+    await api(`${base}/widget-assignments/layout`, {
+        method: 'PATCH',
+        body: JSON.stringify({ widget_name: 'weather', tabNumber: 1, layout_x: 6, layout_y: 6, layout_w: 6, layout_h: 4, settings: { units: 'imperial' } }),
+    });
+    const later = await api(`${base}/widget-assignments/entry`, {
+        method: 'PUT',
+        body: JSON.stringify({ tabNumber: 1, entries: del.body.removed, onlyMissing: true }),
+    });
+    assert.deepEqual(later.body.widgets, ['stack:abcd']);
+    assert.equal((await config()).weather.units, 'imperial', 'a widget placed and set since is kept');
+
+    const bad = await api(`${base}/widget-assignments/entry`, { method: 'PUT', body: JSON.stringify({ tabNumber: 1, entries: { weather: [1] } }) });
+    assert.equal(bad.status, 400);
+});
+
+test('unstacking is one write: the Stack goes, its widgets come back with their settings', async () => {
+    const deviceName = `stack-unstack-${Date.now()}`;
+    const base = `/api/devices/${encodeURIComponent(deviceName)}`;
+    for (const name of ['stack:abcd', 'weather']) {
+        await api(`${base}/widget-assignments`, { method: 'POST', body: JSON.stringify({ widget_name: name, tabNumber: 1 }) });
+    }
+    await api(`${base}/widget-assignments/layout`, {
+        method: 'PATCH',
+        body: JSON.stringify({ widget_name: 'weather', tabNumber: 1, layout_x: 0, layout_y: 0, layout_w: 6, layout_h: 4, settings: { units: 'metric' } }),
+    });
+    await api(`${base}/widget-assignments/in-stack`, { method: 'PATCH', body: JSON.stringify({ tabNumber: 1, stack: 'abcd', widgets: ['weather'] }) });
+
+    const res = await api(`${base}/widget-assignments/unstack`, {
+        method: 'POST',
+        body: JSON.stringify({ tabNumber: 1, stack: 'abcd', members: ['weather', 'calendar'], layouts: [{ widget_name: 'calendar', layout_x: 6, layout_y: 0, layout_w: 6, layout_h: 4 }] }),
+    });
+    assert.equal(res.status, 200);
+    const config = JSON.parse((await api(`${base}/tabs`)).body.find((tab) => tab.number === 1).config_json);
+    assert.equal('stack:abcd' in config, false);
+    assert.equal(config.weather.in_stack, undefined);
+    assert.equal(config.weather.units, 'metric');
+    assert.equal(config.calendar.layout_x, 6);
+
+    const gone = await api(`${base}/widget-assignments/unstack`, { method: 'POST', body: JSON.stringify({ tabNumber: 1, stack: 'abcd' }) });
+    assert.equal(gone.status, 404);
+});
+
+test('deleting a tab with a Stack hands it to Home with its widgets still inside', async () => {
+    const deviceName = `stack-deltab-${Date.now()}`;
+    const base = `/api/devices/${encodeURIComponent(deviceName)}`;
+    await api(`${base}/tabs`, { method: 'POST', body: JSON.stringify({ label: 'Two', icon: 'star', show_label: true }) });
+    for (const name of ['stack:abcd', 'weather', 'calendar']) {
+        await api(`${base}/widget-assignments`, { method: 'POST', body: JSON.stringify({ widget_name: name, tabNumber: 2 }) });
+    }
+    await api(`${base}/widget-assignments/in-stack`, { method: 'PATCH', body: JSON.stringify({ tabNumber: 2, stack: 'abcd', widgets: ['weather', 'calendar'] }) });
+
+    assert.equal((await api(`${base}/tabs/2`, { method: 'DELETE' })).status, 200);
+    const home = JSON.parse((await api(`${base}/tabs`)).body.find((tab) => tab.number === 1).config_json);
+    assert.ok('stack:abcd' in home);
+    assert.equal(home.weather.in_stack, 'abcd');
+    assert.equal(home.calendar.in_stack, 'abcd');
+});
+
+test('a Stack move goes by the saved Stack, not an out-of-date list from the wall', async () => {
+    const deviceName = `stack-stale-${Date.now()}`;
+    const base = `/api/devices/${encodeURIComponent(deviceName)}`;
+    await api(`${base}/tabs`, { method: 'POST', body: JSON.stringify({ label: 'Two', icon: 'star', show_label: true }) });
+    for (const name of ['stack:abcd', 'calendar', 'chores']) {
+        await api(`${base}/widget-assignments`, { method: 'POST', body: JSON.stringify({ widget_name: name, tabNumber: 1 }) });
+    }
+    await api(`${base}/widget-assignments/in-stack`, { method: 'PATCH', body: JSON.stringify({ tabNumber: 1, stack: 'abcd', widgets: ['calendar', 'chores'] }) });
+    // Weather on tab 2 on its own, with its place set.
+    await api(`${base}/widget-assignments`, { method: 'POST', body: JSON.stringify({ widget_name: 'weather', tabNumber: 2 }) });
+    await api(`${base}/widget-assignments/layout`, {
+        method: 'PATCH',
+        body: JSON.stringify({ widget_name: 'weather', tabNumber: 2, layout_x: 0, layout_y: 0, layout_w: 6, layout_h: 4, settings: { location: 'Denver' } }),
+    });
+    // Saved in Admin: the Stack holds calendar and chores. The wall still thinks weather and calendar.
+    await api(`${base}/settings`, { method: 'PATCH', body: JSON.stringify({ widgetStacks: { stacks: [{ id: 'abcd', name: '', widgets: ['calendar', 'chores'], returnSeconds: 60, attention: [], modes: {} }] } }) });
+
+    const moved = await api(`${base}/widget-assignments/transfer`, {
+        method: 'POST',
+        body: JSON.stringify({ widget_name: 'stack:abcd', fromTab: 1, toTab: 2, members: ['weather', 'calendar'] }),
+    });
+    assert.equal(moved.status, 200);
+    const tabs = (await api(`${base}/tabs`)).body;
+    const config = (number) => JSON.parse(tabs.find((tab) => tab.number === number).config_json || '{}');
+    assert.deepEqual(Object.keys(config(1)), [], 'chores (not in the old list) came along too');
+    assert.equal(config(2).chores.in_stack, 'abcd');
+    assert.equal(config(2).weather.in_stack, undefined, "weather on tab 2 stays on its own: it isn't in the Stack");
+    assert.equal(config(2).weather.location, 'Denver');
+});
+
+test('a new Stack is placed and its widgets marked in one write', async () => {
+    const deviceName = `stack-place-${Date.now()}`;
+    const base = `/api/devices/${encodeURIComponent(deviceName)}`;
+    await api(`${base}/widget-assignments`, { method: 'POST', body: JSON.stringify({ widget_name: 'weather', tabNumber: 1 }) });
+    const res = await api(`${base}/widget-assignments/in-stack`, {
+        method: 'PATCH',
+        body: JSON.stringify({ tabNumber: 1, stack: 'abcd', widgets: ['weather', 'calendar'], create: true, place: { layout_x: 2, layout_y: 3, layout_w: 6, layout_h: 4 } }),
+    });
+    assert.equal(res.status, 200);
+    const config = JSON.parse((await api(`${base}/tabs`)).body.find((tab) => tab.number === 1).config_json);
+    assert.deepEqual(config['stack:abcd'], { layout_x: 2, layout_y: 3, layout_w: 6, layout_h: 4 });
+    assert.equal(config.weather.in_stack, 'abcd');
+    assert.equal(config.calendar.in_stack, 'abcd');
+});

@@ -77,6 +77,7 @@ import i18n from 'i18next';
 import StackWidget from './components/StackWidget.jsx';
 import useStackStates from './hooks/useStackStates.js';
 import { WIDGET_STACKS_KEY, attentionWidget, isStackName, normalizeStacks, stackIdOf, stackInMode, stackName, stackWith } from './utils/widgetStacks.js';
+import { dropNotice, emptyNotices, pushUndo, showMessage, shownNotice } from './utils/undoNotices.js';
 import { MODE_DIM_LEVEL } from './utils/displayModes.js';
 import { firstOpenSpot, unstackSpots } from './utils/gridPlacement.js';
 import { getServerTimezoneSync } from './utils/timezone.js';
@@ -185,6 +186,13 @@ const ADMIN_PIN_EXISTS_RECOVERY_INTERVAL_MS = 5 * 60 * 1000;
 // How often every display rereads the household settings, so a change made on
 // another display (vacation, appearance) arrives without a reload.
 const HOUSEHOLD_SETTINGS_REFRESH_MS = 5 * 60 * 1000;
+// Moving, removing and putting back widgets: a server that hangs gets a
+// "didn't work" notice and a fresh look at the tabs, rather than nothing.
+const WRITE_TIMEOUT_MS = 20 * 1000;
+// Taps on Undo this soon after a notice comes up are ignored (a double tap).
+const UNDO_TAP_GUARD_MS = 600;
+// A Stack repair that failed is tried again after this long.
+const STACK_REPAIR_RETRY_MS = 60 * 1000;
 
 /**
  * Control Limits ids are namespaced in storage (`plugin:<pluginId>:<control>`)
@@ -1692,27 +1700,14 @@ const App = () => {
   };
 
   // A Stack going to another tab takes its widgets' entries along (moved, or
-  // copied for a duplicate), still marked as in it.
-  const carryStackMembers = async (name, fromTab, toTab, copy) => {
-    const stack = stackFor(name);
-    if (!stack) return;
-    const missing = [];
-    for (const member of stack.widgets) {
-      const here = entryOnTab(member, fromTab);
-      if (isWidgetAssignedToTab(member, toTab)) {
-        missing.push(member);
-        if (!copy && here?.inStack === stack.id) {
-          await axios.delete(`${deviceApi()}/widget-assignments/${encodeURIComponent(`${fromTab}::${member}`)}`).catch(() => {});
-        }
-      } else if (here?.inStack === stack.id) {
-        await axios.post(`${deviceApi()}/widget-assignments/transfer`, { widget_name: member, fromTab, toTab, copy })
-          .catch(() => missing.push(member));
-      } else {
-        missing.push(member);
-      }
-    }
-    await markInStack(toTab, missing, stack.id, true);
-  };
+  // copied for a duplicate), still marked as in it: one write on the server,
+  // so no display (this one included) ever sees the Stack without them.
+  // `merge`: the Stack is already on that tab, so only this side goes.
+  const stackTransfer = (name, fromTab, toTab, { copy = false, layout = null, merge = false } = {}) => axios.post(
+    `${deviceApi()}/widget-assignments/transfer`,
+    { widget_name: name, fromTab, toTab, copy, layout, merge, members: stackFor(name)?.widgets || [] },
+    { timeout: WRITE_TIMEOUT_MS },
+  );
   const layoutFields = (spot) => ({ layout_x: spot.x, layout_y: spot.y, layout_w: spot.w, layout_h: spot.h });
 
   // Move a widget to another tab (or within this one, to `cell`). Between tabs
@@ -1727,19 +1722,23 @@ const App = () => {
     }
     try {
       const spot = spotOnTab(name, fromTab, toTab, cell);
-      if (fromTab === toTab || isWidgetAssignedToTab(name, toTab)) {
+      if (fromTab !== toTab && isStackName(name)) {
+        await stackTransfer(name, fromTab, toTab, {
+          layout: layoutFields(spot),
+          merge: isWidgetAssignedToTab(name, toTab),
+        });
+      } else if (fromTab === toTab || isWidgetAssignedToTab(name, toTab)) {
         // Already there: place it, and take it off the tab it came from.
         await axios.patch(`${deviceApi()}/widget-assignments/layout/bulk`, {
           layouts: [{ widget_name: name, tabNumber: toTab, ...layoutFields(spot) }],
-        });
+        }, { timeout: WRITE_TIMEOUT_MS });
         if (fromTab !== toTab) {
-          await axios.delete(`${deviceApi()}/widget-assignments/${encodeURIComponent(`${fromTab}::${name}`)}`);
+          await axios.delete(`${deviceApi()}/widget-assignments/${encodeURIComponent(`${fromTab}::${name}`)}`, { timeout: WRITE_TIMEOUT_MS });
         }
       } else {
         await axios.post(`${deviceApi()}/widget-assignments/transfer`, {
           widget_name: name, fromTab, toTab, layout: layoutFields(spot),
-        });
-        if (isStackName(name)) await carryStackMembers(name, fromTab, toTab, false);
+        }, { timeout: WRITE_TIMEOUT_MS });
       }
       await fetchWidgetAssignments();
       setActiveTab(toTab);
@@ -1755,10 +1754,14 @@ const App = () => {
   const duplicateWidgetToTab = async (name, fromTab, toTab) => {
     if (!name || fromTab === toTab || isWidgetAssignedToTab(name, toTab)) return;
     try {
-      await axios.post(`${deviceApi()}/widget-assignments/transfer`, {
-        widget_name: name, fromTab, toTab, copy: true, layout: layoutFields(spotOnTab(name, fromTab, toTab, null)),
-      });
-      if (isStackName(name)) await carryStackMembers(name, fromTab, toTab, true);
+      const layout = layoutFields(spotOnTab(name, fromTab, toTab, null));
+      if (isStackName(name)) {
+        await stackTransfer(name, fromTab, toTab, { copy: true, layout });
+      } else {
+        await axios.post(`${deviceApi()}/widget-assignments/transfer`, {
+          widget_name: name, fromTab, toTab, copy: true, layout,
+        }, { timeout: WRITE_TIMEOUT_MS });
+      }
       await fetchWidgetAssignments();
       setActiveTab(toTab);
     } catch (error) {
@@ -1783,15 +1786,35 @@ const App = () => {
     && (widgetAssignments[stackName(stack.id)] || []).length > 0);
 
   const [removeRequest, setRemoveRequest] = useState(null);
-  const [widgetNotice, setWidgetNotice] = useState(null); // { message, undo? }
+  // Notices at the top (components/WidgetRemoveUndo.jsx): a plain message,
+  // and the Undos still waiting (utils/undoNotices.js). Another notice never
+  // takes an Undo away: it waits, and shows again once that one has gone.
+  const [notices, setNotices] = useState(emptyNotices);
+  const setWidgetNotice = useCallback((notice) => {
+    setNotices((current) => (notice?.undo ? pushUndo(current, notice) : showMessage(current, notice?.message || null)));
+  }, []);
+  const widgetNotice = shownNotice(notices);
+  // When the notice now showing came up, and whether an Undo is under way:
+  // a quick double tap on Undo is one Undo, not that one and the next.
+  const noticeShownAtRef = useRef(0);
+  const undoBusyRef = useRef(false);
+  useEffect(() => { noticeShownAtRef.current = Date.now(); }, [widgetNotice?.key]);
 
-  const setWidgetEnabled = async (name, enabled) => {
+  const enabledSettingsFor = (name) => {
     const isPlugin = name.startsWith('plugin:');
     const key = isPlugin ? name.slice('plugin:'.length) : name;
     const field = isPlugin ? 'pluginSettings' : 'widgetSettings';
     const current = (rawDeviceSettings?.[field] && typeof rawDeviceSettings[field] === 'object')
       ? rawDeviceSettings[field]
       : (isPlugin ? pluginSettings : widgetSettings);
+    return { key, field, current };
+  };
+  const isWidgetEnabled = (name) => {
+    const { key, current } = enabledSettingsFor(name);
+    return current?.[key]?.enabled !== false;
+  };
+  const setWidgetEnabled = async (name, enabled) => {
+    const { key, field, current } = enabledSettingsFor(name);
     const saved = await axios.patch(`${deviceApi()}/settings`, { [field]: { ...current, [key]: { ...(current[key] || {}), enabled } } });
     hydrateFromDeviceSettings(saved.data || {});
   };
@@ -1824,38 +1847,90 @@ const App = () => {
     const members = stackId
       ? Object.entries(map).filter(([, value]) => value?.in_stack === stackId).map(([member, value]) => ({ name: member, entry: { ...value } }))
       : [];
-    const turnOff = !isStackName(name) && (widgetAssignments[name] || []).length <= 1 && !inPlacedStack(name);
+    let turnOff = !isStackName(name) && (widgetAssignments[name] || []).length <= 1 && !inPlacedStack(name);
+    // Off in Settings before this removal: Undo leaves it off.
+    const wasOn = isStackName(name) || isWidgetEnabled(name);
+    const localEntries = { ...Object.fromEntries(members.map((member) => [member.name, member.entry])), [name]: entry };
+    let entries;
     try {
-      await axios.delete(`${deviceApi()}/widget-assignments/${encodeURIComponent(`${request.fromTab}::${name}`)}`);
-      for (const member of members) {
-        await axios.delete(`${deviceApi()}/widget-assignments/${encodeURIComponent(`${request.fromTab}::${member.name}`)}`).catch(() => {});
-      }
-      if (turnOff) await setWidgetEnabled(name, false);
-      await Promise.all([fetchTabs(), fetchWidgetAssignments()]);
-      setWidgetNotice({
-        message: i18n.t('common:widgetMenu.removed', { name: request.title, tab: tabLabelFor(request.fromTab) }),
-        undo: { name, tab: request.fromTab, entry, turnOff, members },
-      });
+      // A Stack and the widgets in it go in one write (?members=1), and the
+      // server hands back exactly what it took, for Undo.
+      const { data } = await axios.delete(
+        `${deviceApi()}/widget-assignments/${encodeURIComponent(`${request.fromTab}::${name}`)}${stackId ? '?members=1' : ''}`,
+        { timeout: WRITE_TIMEOUT_MS },
+      );
+      const taken = data?.removed && typeof data.removed === 'object' ? data.removed : {};
+      entries = { ...localEntries, ...taken, [name]: entry };
     } catch (error) {
       console.error('Error removing widget:', error);
-      setWidgetNotice({ message: i18n.t('common:widgetMenu.removeFailed') });
+      // No answer (timed out, connection dropped): the server may have done
+      // it anyway. If it's gone from the tab, it was removed, and Undo still
+      // has what was there.
+      let gone = false;
+      if (!error?.response) {
+        try {
+          const { data } = await axios.get(`${deviceApi()}/tabs`, { timeout: WRITE_TIMEOUT_MS });
+          const now = (Array.isArray(data) ? data : []).find((item) => item.number === request.fromTab);
+          const nowMap = typeof now?.config_json === 'string' ? JSON.parse(now.config_json || '{}') : (now?.config_json || {});
+          gone = Boolean(now) && !(name in nowMap);
+        } catch { /* can't tell: treated as not removed */ }
+      }
+      if (!gone) {
+        setWidgetNotice({ message: i18n.t('common:widgetMenu.removeFailed') });
+        await Promise.all([fetchTabs(), fetchWidgetAssignments()]);
+        return;
+      }
+      entries = localEntries;
     }
+    // Off the tab now; turning it off is extra. If that fails it's simply
+    // left on (Settings shows it on no tab), and Undo still works.
+    if (turnOff) {
+      try {
+        await setWidgetEnabled(name, false);
+      } catch (error) {
+        console.error('Error turning the removed widget off:', error);
+        turnOff = false;
+      }
+    }
+    await Promise.all([fetchTabs(), fetchWidgetAssignments()]);
+    setWidgetNotice({
+      message: i18n.t('common:widgetMenu.removed', { name: request.title, tab: tabLabelFor(request.fromTab) }),
+      undo: { name, tab: request.fromTab, entries, turnOff, wasOn },
+    });
   };
   const undoRemoveWidget = async () => {
-    const undo = widgetNotice?.undo;
-    setWidgetNotice(null);
+    const shown = widgetNotice;
+    const undo = shown?.undo;
     if (!undo) return;
+    // One at a time, and not a tap meant for the notice that was just there.
+    if (undoBusyRef.current || Date.now() - noticeShownAtRef.current < UNDO_TAP_GUARD_MS) return;
+    undoBusyRef.current = true;
+    setNotices((current) => dropNotice(current, shown.key));
     try {
-      await axios.put(`${deviceApi()}/widget-assignments/entry`, { widget_name: undo.name, tabNumber: undo.tab, entry: undo.entry });
-      for (const member of undo.members || []) {
-        await axios.put(`${deviceApi()}/widget-assignments/entry`, { widget_name: member.name, tabNumber: undo.tab, entry: member.entry });
+      // Every entry back in one write: nothing half-restored. Only what isn't
+      // on the tab again since (onlyMissing), so a late Undo never overwrites
+      // a newer change.
+      await axios.put(`${deviceApi()}/widget-assignments/entry`, {
+        tabNumber: undo.tab, entries: undo.entries, onlyMissing: true,
+      }, { timeout: WRITE_TIMEOUT_MS });
+      // Back on a tab means shown: turned on if it's off now, whichever
+      // removal turned it off (but not one that was off before this one).
+      if (!isStackName(undo.name) && undo.wasOn !== false && !isWidgetEnabled(undo.name)) {
+        await setWidgetEnabled(undo.name, true).catch((error) => {
+          console.error('Error turning the widget back on:', error);
+          setWidgetNotice({ message: i18n.t('common:widgetMenu.turnOnFailed') });
+        });
       }
-      if (undo.turnOff) await setWidgetEnabled(undo.name, true);
       await Promise.all([fetchTabs(), fetchWidgetAssignments()]);
       setActiveTab(undo.tab);
     } catch (error) {
       console.error('Error restoring widget:', error);
+      // Still there to try again.
+      setNotices((current) => pushUndo(current, shown));
       setWidgetNotice({ message: i18n.t('common:widgetMenu.undoFailed') });
+      await Promise.all([fetchTabs(), fetchWidgetAssignments()]);
+    } finally {
+      undoBusyRef.current = false;
     }
   };
 
@@ -1866,18 +1941,19 @@ const App = () => {
     const stack = stackFor(name);
     if (!stack) return;
     try {
-      await axios.delete(`${deviceApi()}/widget-assignments/${encodeURIComponent(`${tab}::${name}`)}`);
       // Back on their own: the ones that showed in the Stack get placed; their
-      // entries (and settings) were kept, so they're only unmarked.
+      // entries (and settings) were kept, so they're only unmarked. The Stack
+      // leaving, the unmarking and the places are one write on the server.
       const back = stack.widgets.filter((widget) => !visibleOnTab(widget, tab));
-      await markInStack(tab, stack.widgets.filter((widget) => entryOnTab(widget, tab)?.inStack === stack.id || !isWidgetAssignedToTab(widget, tab)), null, true);
       const spot = place || getWidgetLayoutForTab(name, tab);
       const layouts = unstackSpots(
         back.map((widget) => ({ name: widget, kept: getWidgetLayoutForTab(widget, tab) })),
         spot,
         takenOnTab(tab, [name, ...back]),
-      ).map((item) => ({ widget_name: item.name, tabNumber: tab, layout_x: item.x, layout_y: item.y, layout_w: item.w, layout_h: item.h }));
-      if (layouts.length) await axios.patch(`${deviceApi()}/widget-assignments/layout/bulk`, { layouts });
+      ).map((item) => ({ widget_name: item.name, layout_x: item.x, layout_y: item.y, layout_w: item.w, layout_h: item.h }));
+      await axios.post(`${deviceApi()}/widget-assignments/unstack`, {
+        tabNumber: tab, stack: stack.id, members: stack.widgets, layouts,
+      }, { timeout: WRITE_TIMEOUT_MS });
       if ((widgetAssignments[name] || []).length <= 1) {
         const saved = await axios.patch(`${deviceApi()}/settings`, {
           [WIDGET_STACKS_KEY]: { stacks: widgetStacks.filter((item) => item.id !== stack.id) },
@@ -1887,6 +1963,7 @@ const App = () => {
       await fetchWidgetAssignments();
     } catch (error) {
       console.error('Error unstacking:', error);
+      setWidgetNotice({ message: i18n.t('common:widgetMenu.unstackFailed') });
       await fetchWidgetAssignments();
     }
   };
@@ -2008,10 +2085,22 @@ const App = () => {
         const key = `${tabNumber}:${stack.id}:${missing.join(',')}`;
         if (!missing.length || stackRepairRef.current.has(key)) return;
         stackRepairRef.current.add(key);
-        jobs.push(markInStack(tabNumber, missing, stack.id, true).catch(() => {}));
+        // Failed (server away or refusing): tried again a while later, not on
+        // every reload, so a server that keeps failing isn't hammered.
+        jobs.push(markInStack(tabNumber, missing, stack.id, true).then(() => true, () => {
+          setTimeout(() => {
+            stackRepairRef.current.delete(key);
+            void fetchWidgetAssignments();
+          }, STACK_REPAIR_RETRY_MS);
+          return false;
+        }));
       });
     });
-    if (jobs.length) void Promise.all(jobs).then(() => fetchWidgetAssignments());
+    if (jobs.length) {
+      void Promise.all(jobs).then((done) => {
+        if (done.some(Boolean)) void fetchWidgetAssignments();
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [widgetAssignments, widgetStacks, mirrorTarget]);
 
@@ -2389,24 +2478,30 @@ const App = () => {
     const existing = isStackName(target) ? widgetStacks.find((stack) => stackName(stack.id) === target) : null;
     if (isStackName(target) && !existing) return;
     const stack = stackWith(target, dragged, existing);
+    if (!stack) {
+      // Full: say so, rather than marking the widget into a Stack it isn't in.
+      setWidgetNotice({ message: i18n.t('common:widgetMenu.stackFull') });
+      return;
+    }
     const stacks = existing
       ? widgetStacks.map((item) => (item.id === existing.id ? stack : item))
       : [...widgetStacks, stack];
     try {
       const saved = await axios.patch(`${deviceApi()}/settings`, { [WIDGET_STACKS_KEY]: { stacks } });
       hydrateFromDeviceSettings(saved.data || {});
-      if (!existing) {
-        const spot = getWidgetLayoutForTab(target, tab) || { x: 0, y: 0, w: 12, h: 4 };
-        const name = stackName(stack.id);
-        await axios.post(`${deviceApi()}/widget-assignments`, { widget_name: name, tabNumber: tab });
-        await axios.patch(`${deviceApi()}/widget-assignments/layout/bulk`, {
-          layouts: [{ widget_name: name, tabNumber: tab, layout_x: spot.x, layout_y: spot.y, layout_w: spot.w, layout_h: spot.h }],
-        });
-      }
-      // Their entries stay, marked as in the Stack (settings and all).
-      await markInStack(tab, existing ? [dragged] : [target, dragged], stack.id, true);
+      // Their entries stay, marked as in the Stack (settings and all); a new
+      // Stack goes on the tab in the target's spot in the same write.
+      const spot = existing ? null : (getWidgetLayoutForTab(target, tab) || { x: 0, y: 0, w: 12, h: 4 });
+      await axios.patch(`${deviceApi()}/widget-assignments/in-stack`, {
+        tabNumber: tab,
+        stack: stack.id,
+        widgets: existing ? [dragged] : [target, dragged],
+        create: true,
+        ...(spot ? { place: { layout_x: spot.x, layout_y: spot.y, layout_w: spot.w, layout_h: spot.h } } : {}),
+      }, { timeout: WRITE_TIMEOUT_MS });
     } catch (error) {
       console.error('Error stacking widgets:', error);
+      setWidgetNotice({ message: i18n.t('common:widgetMenu.stackFailed') });
     }
     await fetchWidgetAssignments();
   };
@@ -2594,9 +2689,9 @@ const App = () => {
           confirm={removeRequest}
           onConfirm={confirmRemoveWidget}
           onCancel={() => setRemoveRequest(null)}
-          undo={widgetNotice ? { message: widgetNotice.message, canUndo: Boolean(widgetNotice.undo) } : null}
+          undo={widgetNotice ? { key: widgetNotice.key, message: widgetNotice.message, canUndo: Boolean(widgetNotice.undo) } : null}
           onUndo={undoRemoveWidget}
-          onUndoClose={() => setWidgetNotice(null)}
+          onUndoClose={(key) => setNotices((current) => dropNotice(current, key))}
         />
         {stackDrop && (
           <Box

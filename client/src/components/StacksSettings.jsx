@@ -122,13 +122,20 @@ const StacksSettings = ({ onOpenConnections, onChanged }) => {
     .filter((row) => row.widget_name === stackName(stack.id))
     .map((row) => row.tab_number);
 
-  const assign = (name, tab) => axios.post(`${apiDeviceUrl}/widget-assignments`, { widget_name: name, tabNumber: tab }).catch(() => {});
-  const unassign = (name, tab) => axios.delete(`${apiDeviceUrl}/widget-assignments/${encodeURIComponent(`${tab}::${name}`)}`).catch(() => {});
+  // Failures are not hidden: the save stops, says so, and reloads what's
+  // really saved, rather than flashing "saved" over a half-done change.
+  const assign = (name, tab) => axios.post(`${apiDeviceUrl}/widget-assignments`, { widget_name: name, tabNumber: tab });
   // Widgets in a Stack keep their entry on the tab, marked with the Stack's
   // id (in_stack), so their per-tab settings stay with them. `create` gives
-  // a widget not on that tab yet an entry there. stackId null unmarks.
+  // a widget not on that tab yet an entry there.
   const mark = (tab, widgets, stackId, create) => (widgets.length
-    ? axios.patch(`${apiDeviceUrl}/widget-assignments/in-stack`, { tabNumber: tab, stack: stackId, widgets, create }).catch(() => {})
+    ? axios.patch(`${apiDeviceUrl}/widget-assignments/in-stack`, { tabNumber: tab, stack: stackId, widgets, create })
+    : Promise.resolve());
+  // Out of the Stack on that tab: a widget whose entry holds a spot or its
+  // settings comes back on its own; one made only for the Stack goes. Nothing
+  // the widget had is deleted (server: utils/stackEntries.js).
+  const release = (tab, widgets, stackId) => (widgets.length
+    ? axios.patch(`${apiDeviceUrl}/widget-assignments/in-stack`, { tabNumber: tab, release: stackId, widgets })
     : Promise.resolve());
   const rowsOn = (tab) => assignments.filter((row) => row.tab_number === Number(tab));
   const spotOf = (row) => (row && row.layout_w != null && row.layout_x != null
@@ -160,21 +167,22 @@ const StacksSettings = ({ onOpenConnections, onChanged }) => {
         const spot = spotOf(here);
         await axios.patch(`${apiDeviceUrl}/widget-assignments/layout/bulk`, {
           layouts: [{ widget_name: name, tabNumber: tab, layout_x: spot.x, layout_y: spot.y, layout_w: spot.w, layout_h: spot.h }],
-        }).catch(() => {});
+        });
       }
       await mark(tab, stack.widgets, stack.id, true);
     }
     for (const tab of now.filter((n) => numbers.includes(n))) {
-      // Widgets added since: in it here too. Widgets taken out: off this tab
-      // with it, as when they were only in the Stack.
+      // Widgets added since: in it here too. Widgets taken out: back on their
+      // own if they had a spot or settings here, else off this tab.
       const added = stack.widgets.filter((widget) => !(before?.widgets || []).includes(widget));
       await mark(tab, added, stack.id, true);
       const gone = markedOn(stack, tab).filter((widget) => !stack.widgets.includes(widget));
-      for (const widget of gone) await unassign(widget, tab);
+      await release(tab, gone, stack.id);
     }
     for (const tab of now.filter((n) => !numbers.includes(n))) {
-      await unassign(name, tab);
-      for (const widget of markedOn(stack, tab)) await unassign(widget, tab);
+      // Off this tab, in one write: widgets with a spot or settings of their
+      // own here come back on their own; the rest go with it.
+      await axios.post(`${apiDeviceUrl}/widget-assignments/unstack`, { tabNumber: tab, stack: stack.id, dropBlank: true });
     }
   };
   const onPlace = async (stack, numbers) => {
@@ -182,6 +190,10 @@ const StacksSettings = ({ onOpenConnections, onChanged }) => {
     try {
       await placeOn(stack, numbers, stack);
       await done(t('admin:stacks.placed'));
+    } catch (error) {
+      console.error('Error placing stack:', error);
+      await load();
+      flash('error', error?.response?.data?.error || t('admin:stacks.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -200,6 +212,7 @@ const StacksSettings = ({ onOpenConnections, onChanged }) => {
       await done(t('admin:stacks.saved', { name: draft.name || t('admin:stacks.untitled') }));
     } catch (error) {
       console.error('Error saving stack:', error);
+      await load();
       flash('error', error?.response?.data?.error || t('admin:stacks.saveFailed'));
     } finally {
       setSaving(false);
@@ -219,8 +232,6 @@ const StacksSettings = ({ onOpenConnections, onChanged }) => {
         const here = new Map(rowsOn(tab).map((item) => [item.widget_name, item]));
         // On their own here already: left where they are.
         const back = stack.widgets.filter((widget) => !here.has(widget) || here.get(widget).in_stack === stack.id);
-        await unassign(name, tab);
-        await mark(tab, back, null, true);
         const taken = rowsOn(tab)
           .filter((item) => item.widget_name !== name && !back.includes(item.widget_name) && !item.in_stack && item.layout_w != null)
           .map(spotOf);
@@ -228,16 +239,16 @@ const StacksSettings = ({ onOpenConnections, onChanged }) => {
           back.map((widget) => ({ name: widget, kept: here.has(widget) ? spotOf(here.get(widget)) : null })),
           spotOf(row),
           taken,
-        ).map((item) => ({ widget_name: item.name, tabNumber: tab, layout_x: item.x, layout_y: item.y, layout_w: item.w, layout_h: item.h }));
-        if (layouts.length) {
-          await axios.patch(`${apiDeviceUrl}/widget-assignments/layout/bulk`, { layouts }).catch(() => {});
-        }
+        ).map((item) => ({ widget_name: item.name, layout_x: item.x, layout_y: item.y, layout_w: item.w, layout_h: item.h }));
+        // The Stack leaving, its widgets unmarked and placed: one write.
+        await axios.post(`${apiDeviceUrl}/widget-assignments/unstack`, { tabNumber: tab, stack: stack.id, members: stack.widgets, layouts });
       }
       await saveStacks(stacks.filter((item) => item.id !== stack.id));
       setEditing(null);
       await done(t('admin:stacks.unstacked'));
     } catch (error) {
       console.error('Error unstacking:', error);
+      await load();
       flash('error', t('admin:stacks.saveFailed'));
     } finally {
       setSaving(false);
