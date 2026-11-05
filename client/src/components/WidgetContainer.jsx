@@ -19,6 +19,7 @@ import { canCommitResize } from '../utils/resizeGuard';
 import { shouldAcceptLayoutChange, reconcileLayoutWithLive } from '../utils/layoutSync';
 import { buildLayout, savedSourcesById } from '../utils/gridPlacement';
 import { resizeButtonMetrics, widgetPixelSize } from '../utils/resizeButtons.js';
+import { createContainerWidthWatcher, gridColsForWidth } from '../utils/containerWidth.js';
 import { readGridMetrics } from '../utils/gridMetrics';
 import { frameDecoration } from '../utils/widgetFrame';
 import FrameOrnaments from './FrameOrnaments';
@@ -198,31 +199,25 @@ const WidgetContainer = ({
     }, 500);
   }, []);
 
-  // Update container width and grid columns based on screen size
+  // The container width drives the grid, so re-measure whenever the
+  // container element itself changes size — not just on window resize.
+  // In mirror the canvas starts at the 1280 fallback width and widens to
+  // the target's real width once its viewport arrives; that widening is
+  // not a window resize, so a window-only listener leaves the grid laid
+  // out at the fallback size (the weather widget then lands compact at
+  // 294px instead of medium at 332px). The watcher reports only on an
+  // actual width change, so no layout rebuild runs on a no-op.
   useEffect(() => {
-    const updateDimensions = () => {
-      if (containerRef.current) {
-        const computed = window.getComputedStyle(containerRef.current);
-        const paddingLeft = parseFloat(computed.paddingLeft) || 0;
-        const paddingRight = parseFloat(computed.paddingRight) || 0;
-        const width = Math.max(0, containerRef.current.clientWidth - paddingLeft - paddingRight);
+    const element = containerRef.current;
+    if (!element) return undefined;
+    const watcher = createContainerWidthWatcher({
+      element,
+      onChange: (width) => {
         setContainerWidth(width);
-
-        // Responsive grid columns
-        if (width < 600) {
-          setGridCols(4); // Mobile: 4 columns
-        } else if (width < 960) {
-          setGridCols(8); // Tablet: 8 columns
-        } else {
-          setGridCols(12); // Desktop: 12 columns
-        }
-      }
-    };
-
-    updateDimensions();
-    window.addEventListener('resize', updateDimensions);
-
-    return () => window.removeEventListener('resize', updateDimensions);
+        setGridCols(gridColsForWidth(width));
+      },
+    });
+    return () => watcher.disconnect();
   }, []);
 
   useEffect(() => {
