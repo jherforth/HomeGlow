@@ -2668,6 +2668,46 @@ async function dailyBackgroundProcessing() {
       resetSchedules: choresToReset,
     }
 
+    // A recurring bonus chore claimed from the pool and completed stays
+    // assigned to whoever claimed it: the reset above only touches
+    // one-time cards (crontab IS NULL), so a daily bonus chore never
+    // cycles back to the pool on its own. Return a recurring bonus
+    // schedule to the pool once its current holder has completed it for
+    // the day that just ended. A claim that was never completed stays
+    // assigned — the holder still owes it, and a parent can move it back
+    // with the Transfer dialog.
+    const completedDay = addDaysToDateOnly(today, -1);
+    const completedBonusSchedules = db.prepare(`
+      SELECT cs.id,
+        cs.user_id,
+        c.title
+      FROM chore_schedules cs
+      JOIN chores c ON cs.chore_id = c.id
+      WHERE cs.crontab IS NOT NULL
+        AND cs.visible = 1
+        AND cs.user_id IS NOT NULL
+        AND c.clam_value > 0
+        AND EXISTS (
+          SELECT 1 FROM chore_history ch
+          WHERE ch.chore_schedule_id = cs.id
+            AND ch.user_id = cs.user_id
+            AND ch.date = ?
+            AND ch.kind = 'completion'
+        );
+    `).all(completedDay);
+    console.log(`Found ${completedBonusSchedules.length} completed recurring bonus chores to return to the pool`);
+    let returnedBonusCount = 0;
+    for (const schedule of completedBonusSchedules) {
+      db.prepare('UPDATE chore_schedules set user_id = NULL WHERE id = ?').run(schedule.id);
+      console.log(`Returned schedule ID ${schedule.id}: "${schedule.title}" to the bonus pool (user_id: ${schedule.user_id})`);
+      returnedBonusCount++;
+    }
+    results = {
+      ...results,
+      returnedBonusSchedulesCount: returnedBonusCount,
+      returnedBonusSchedules: completedBonusSchedules,
+    }
+
 
     // Sticky schedules: today's one-time child for each until-completed and
     // once-completed parent that fires today and has none open yet.
@@ -2685,13 +2725,14 @@ async function dailyBackgroundProcessing() {
     console.log(`  - Day-of schedules pruned: ${prunedScheduleCount}`);
     console.log(`  - Orphaned chores deleted: ${prunedChoreCount}`);
     console.log(`  - Bonus chores reset: ${resetScheduleCount}`);
+    console.log(`  - Completed recurring bonus chores returned to pool: ${returnedBonusCount}`);
     console.log(`  - Sticky chores triggered: ${stickySchedulesCreated}`);
     try {
       routines.nightly();
     } catch (error) {
       console.error('Routines nightly tidy failed:', error);
     }
-    console.log(`Total: ${prunedScheduleCount + prunedChoreCount + resetScheduleCount} operations performed`);
+    console.log(`Total: ${prunedScheduleCount + prunedChoreCount + resetScheduleCount + returnedBonusCount} operations performed`);
     // Written without a request, so the displays are told here.
     householdChanges.bump('chores', 'users');
     return results;
