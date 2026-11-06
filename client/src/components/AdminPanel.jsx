@@ -3977,14 +3977,17 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                       onChange={(e) => setSettings(prev => ({ ...prev, WEATHER_PROVIDER: e.target.value }))}
                     >
                       <MenuItem value="openweathermap">{t('admin:connections.providerOpenWeather')}</MenuItem>
+                      <MenuItem value="openmeteo">{t('admin:connections.providerOpenMeteo')}</MenuItem>
                       <MenuItem value="homeassistant">{t('admin:connections.providerHomeAssistant')}</MenuItem>
                     </Select>
                   </FormControl>
                 )}
               />
               {/* The key field is write-only: the server redacts it, so this
-                  shows whether one is stored and accepts a replacement. */}
-              {settings.WEATHER_PROVIDER !== 'homeassistant' && (
+                  shows whether one is stored and accepts a replacement.
+                  Home Assistant and Open-Meteo need no key — HA authenticates
+                  with its own token, Open-Meteo needs none at all. */}
+              {settings.WEATHER_PROVIDER !== 'homeassistant' && settings.WEATHER_PROVIDER !== 'openmeteo' && (
                 <AdminRow
                   label={t('admin:connections.openWeatherKey')}
                   hint={weatherProviderStatus?.has_api_key

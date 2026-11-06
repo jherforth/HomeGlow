@@ -543,6 +543,7 @@
     "weatherHeading": "El tiempo",
     "weatherProvider": "Fuente meteorológica",
     "providerOpenWeather": "OpenWeatherMap",
+    "providerOpenMeteo": "Open-Meteo",
     "providerHomeAssistant": "Home Assistant",
     "openWeatherKey": "Clave de API de OpenWeatherMap",
     "openWeatherHelp": "Consigue tu clave gratuita en openweathermap.org/api",
