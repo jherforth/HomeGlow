@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { BONUS, schedulePayload } from './ScheduleChoreDialog.jsx';
 import { customTiming } from './SchedulePicker.jsx';
-import { afterTiming, anyDayTiming, monthlyTiming, weekTiming } from '../utils/choreScheduleGroups.js';
+import { afterTiming, anyDayTiming, monthlyTiming, onceTiming, weekTiming } from '../utils/choreScheduleGroups.js';
 
 describe('schedulePayload', () => {
   it('saves one person\'s schedule of the chore, shown', () => {
@@ -26,6 +26,33 @@ describe('schedulePayload', () => {
     const body = schedulePayload(7, 3, anyDayTiming('1m'), null);
     expect(body.duration).toBe('any-day');
     expect(body.interval).toBe('1m');
+  });
+
+  // The widget's Add flow used to build this by hand; it now goes through
+  // ScheduleChoreDialog, so the 2026-10-05 once-completed case is pinned
+  // here: a one-time chore still saves with a null crontab (and its due
+  // date), never a fabricated one.
+  it('a one-time chore saves with a null crontab and its due date', () => {
+    const body = schedulePayload(7, 3, onceTiming('2026-11-20'), null);
+    expect(body.chore_id).toBe(7);
+    expect(body.user_id).toBe(3);
+    expect(body.crontab).toBeNull();
+    expect(body.duration).toBe('day-of');
+    expect(body.due_date).toBe('2026-11-20');
+  });
+
+  it('a one-time chore with no date still saves with a null crontab', () => {
+    const body = schedulePayload(7, 3, onceTiming(null), null);
+    expect(body.crontab).toBeNull();
+    expect(body.due_date).toBeNull();
+  });
+
+  // Repeat-after-completion was unreachable from the widget's old Add flow.
+  it('repeat after completion carries its interval', () => {
+    const body = schedulePayload(7, 3, afterTiming('3d'), null);
+    expect(body.duration).toBe('once-completed');
+    expect(body.interval).toBe('3d');
+    expect(body.crontab).toBe('0 0 * * *');
   });
 });
 
