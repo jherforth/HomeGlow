@@ -54,7 +54,7 @@ import { formatTime } from '../utils/dateUtils.js';
 import PrizeCelebration from './PrizeCelebration.jsx';
 import { requestCelebration } from '../utils/celebrations.js';
 import ChoreIconPicker from './ChoreIconPicker.jsx';
-import RoutineSteps, { routineCardView, tickRemainingSteps } from './RoutineSteps.jsx';
+import RoutineSteps, { routineCardView, tickRemainingSteps, tickRemainingStepsOrThrow } from './RoutineSteps.jsx';
 import LateApprovalDialog from './LateApprovalDialog.jsx';
 import { householdNow, isExpired } from '../utils/choreExpiry.js';
 import useRoutinesToday from '../utils/useRoutinesToday.js';
@@ -1255,8 +1255,8 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
     try {
       if (expired) {
         askParent(day.name, async () => {
-          const done = await tickRemainingSteps(day, toggleRoutineStep, { parentApproved: true });
-          if (done && done !== 'expired') requestCelebration('chores');
+          const done = await tickRemainingStepsOrThrow(day, toggleRoutineStep);
+          if (done.completed) requestCelebration('chores');
         });
         return;
       }
@@ -1266,13 +1266,13 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
         // rest with the parent's yes. Steps already ticked are re-ticked
         // with done=true, which is a no-op for them.
         askParent(day.name, async () => {
-          const finished = await tickRemainingSteps(day, toggleRoutineStep, { parentApproved: true });
-          if (finished && finished !== 'expired') requestCelebration('chores');
+          const finished = await tickRemainingStepsOrThrow(day, toggleRoutineStep);
+          if (finished.completed) requestCelebration('chores');
         });
         return;
       }
       if (done) {
-        requestCelebration('chores');
+        if (done.completed) requestCelebration('chores');
         await fetchData();
       }
     } finally {

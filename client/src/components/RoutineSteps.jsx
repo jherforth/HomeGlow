@@ -37,6 +37,16 @@ export async function tickRemainingSteps(day, toggleStep, { parentApproved = fal
   return current;
 }
 
+// Finish a routine with a parent's yes, for complete-all: tick the
+// remaining steps, and throw when they did not finish the routine, so the
+// approval dialog shows approveFailed instead of closing as if it worked.
+// Matches tickRoutineStep, which throws 'Not approved' there.
+export async function tickRemainingStepsOrThrow(day, toggleStep) {
+  const done = await tickRemainingSteps(day, toggleStep, { parentApproved: true });
+  if (!done || done === 'expired') throw new Error('Not approved');
+  return done;
+}
+
 // A routine's steps inside its chore card (set up in Family → Chores). Each step is
 // ticked on its own; the last one completes the chore, and the card's own
 // button completes the whole routine at once while steps remain. Once done,

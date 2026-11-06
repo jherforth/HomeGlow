@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { routineCardView, tickRemainingSteps } from './RoutineSteps.jsx';
+import { routineCardView, tickRemainingSteps, tickRemainingStepsOrThrow } from './RoutineSteps.jsx';
 
 const open = { completed: false, steps: [{ id: 1 }, { id: 2 }], done: [1] };
 const fresh = { completed: false, steps: [{ id: 1 }, { id: 2 }], done: [] };
@@ -81,5 +81,38 @@ describe('tickRemainingSteps', () => {
   it('stops and reports false when a tick fails', async () => {
     const toggleStep = async () => null;
     expect(await tickRemainingSteps(fresh, toggleStep)).toBe(false);
+  });
+});
+
+describe('tickRemainingStepsOrThrow', () => {
+  // Same stand-in as above: applies the tick and marks the day completed
+  // once every step is done.
+  const ticking = async (day, stepId, done) => {
+    const nextDone = done ? [...day.done, stepId] : day.done.filter((id) => id !== stepId);
+    return { ...day, done: nextDone, completed: nextDone.length === day.steps.length };
+  };
+
+  it('finishes the routine and passes parent approval through', async () => {
+    const seen = [];
+    const toggleStep = async (day, stepId, done, opts) => {
+      seen.push(opts);
+      return ticking(day, stepId, done);
+    };
+    const after = await tickRemainingStepsOrThrow(fresh, toggleStep);
+    expect(after.completed).toBe(true);
+    expect(seen).toEqual([{ parentApproved: true }, { parentApproved: true }]);
+  });
+
+  it('throws Not approved when a tick fails, so the dialog shows approveFailed', async () => {
+    const toggleStep = async () => null;
+    await expect(tickRemainingStepsOrThrow(fresh, toggleStep)).rejects.toThrow('Not approved');
+  });
+
+  it('throws Not approved when the server refuses a tick past expiry', async () => {
+    const toggleStep = async (day, stepId, done) => {
+      if (stepId === 2) return { expired: true };
+      return ticking(day, stepId, done);
+    };
+    await expect(tickRemainingStepsOrThrow(fresh, toggleStep)).rejects.toThrow('Not approved');
   });
 });
