@@ -2979,7 +2979,9 @@ const upsertDeviceSettings = async (request, reply) => {
     ensureDeviceExists(deviceName);
     const row = db.prepare('SELECT device_settings_json FROM devices WHERE name = ?').get(deviceName);
     const existingSettings = parseJsonObject(row?.device_settings_json, {});
-    const merged = { ...existingSettings, ...incoming };
+    // The modes' Home Assistant helper is chosen only with the PIN
+    // (routes/displayModesHa.js), so a save keeps the one this display has.
+    const merged = displayModesHa.keepHelperLink({ ...existingSettings, ...incoming }, existingSettings);
 
     db.prepare('UPDATE devices SET device_settings_json = ?, updateTime = CURRENT_TIMESTAMP WHERE name = ?').run(
       JSON.stringify(merged),
@@ -3238,6 +3240,10 @@ fastify.post('/api/devices/:deviceName/copy-from/:sourceDeviceName', async (requ
 
     ensureDeviceExists(deviceName);
     const sourceDeviceSettings = db.prepare('SELECT device_settings_json FROM devices WHERE name = ?').get(sourceDeviceName);
+    // Everything but the modes' Home Assistant helper, which stays this
+    // display's own (chosen only with the PIN, routes/displayModesHa.js).
+    const targetSettings = parseJsonObject(db.prepare('SELECT device_settings_json FROM devices WHERE name = ?').get(deviceName)?.device_settings_json, {});
+    const copiedSettings = displayModesHa.keepHelperLink(parseJsonObject(sourceDeviceSettings?.device_settings_json, {}), targetSettings);
 
     const copyTransaction = db.transaction(() => {
       db.prepare('DELETE FROM tabs WHERE device_name = ?').run(deviceName);
@@ -3251,7 +3257,7 @@ fastify.post('/api/devices/:deviceName/copy-from/:sourceDeviceName', async (requ
       `).run(deviceName, sourceDeviceName);
 
       db.prepare('UPDATE devices SET device_settings_json = ?, updateTime = CURRENT_TIMESTAMP WHERE name = ?').run(
-        sourceDeviceSettings?.device_settings_json || '{}',
+        JSON.stringify(copiedSettings),
         deviceName
       );
 

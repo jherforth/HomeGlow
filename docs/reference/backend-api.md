@@ -184,9 +184,15 @@ Every recipient (a device's browser push, an ntfy topic, a Home Assistant phone)
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/api/devices` | List devices with widget counts. |
-| GET/PUT/PATCH | `/api/devices/:deviceName/settings` | Get/merge device settings JSON. |
+| GET/PUT/PATCH | `/api/devices/:deviceName/settings` | Get/merge device settings JSON. `displayModes.ha.helper`, `helperId` and `title` (the mode helper) are kept as stored: only `POST …/modes/ha/helper` changes them. |
 | PATCH | `/api/devices/:deviceName` | Rename a device. |
-| POST | `/api/devices/:deviceName/copy-from/:sourceDeviceName` | Copy tabs + settings from another device. |
+| POST | `/api/devices/:deviceName/copy-from/:sourceDeviceName` | Copy tabs + settings from another device. The device keeps its own mode helper. |
+| GET | `/api/devices/:deviceName/modes/ha` | The Home Assistant states this display's modes read (only the entities its modes name). |
+| GET | `/api/devices/:deviceName/modes/ha/entities` | Entities for Admin's pickers (`?kind=helper|alarm|people|any`). |
+| POST | `/api/devices/:deviceName/modes/ha/helper` | The mode helper: make one (`{ title }`), use an existing `input_select` (`{ entity_id }`, its options are replaced) or stop using one (`{ entity_id: null }`). Needs the admin PIN (`pin`) when one is set; 404 for an unknown device. Demo-blocked. |
+| POST | `/api/devices/:deviceName/modes/ha/sync` | Set the helper's options to Automatic, Normal and the modes. |
+| POST | `/api/devices/:deviceName/modes/ha/select` | Set the helper to one of its options (`{ option }`). |
+| POST | `/api/devices/:deviceName/modes/ha/report` | Post the showing mode (`{ mode, source, pinned }`) to `sensor.homeglow_*_showing`. |
 | DELETE | `/api/devices/:deviceName` | Delete a device (cascades tabs and its notifications). |
 | GET/PUT/DELETE | `/api/devices/:deviceName/notifications` | A device's push notifications: read, turn on or change (`subscription`, `events`, `members`, `language`), turn off. `events` may include `plugin:<id>` for an installed plugin that declares `notify`; reading lists those as `plugins`. |
 | POST | `/api/devices/:deviceName/notifications/test` | Send the device a test notification. |

@@ -15,6 +15,8 @@ import { CheckCircle, HomeOutlined, LinkOff } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { AdminGroup, AdminRow } from './AdminRows.jsx';
 import HaEntityPicker from './HaEntityPicker.jsx';
+import PinModal from './PinModal';
+import { useAdminPinPrompt } from '../hooks/useAdminPinPrompt.js';
 import { HELPER_AUTOMATIC, HELPER_NORMAL } from '../utils/displayModes.js';
 
 const mono = { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12.5 };
@@ -44,9 +46,14 @@ const ModesHaSettings = ({ modes, connection, entities, entitiesLoading, apiDevi
   const [choosing, setChoosing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState(null);
+  // Choosing the helper asks for the admin PIN when one is set; the server
+  // checks it too (routes/displayModesHa.js).
+  const { ask: askPin, pinModalProps } = useAdminPinPrompt({ wrongPin: t('admin:modes.ha.wrongPin') });
   const ha = modes.ha;
 
-  const run = async (body, text) => {
+  const run = (body, text) => askPin(t('admin:modes.ha.pinTitle'), (pin) => send(pin ? { ...body, pin } : body, text));
+
+  const send = async (body, text) => {
     setBusy(true);
     setProblem(null);
     try {
@@ -206,6 +213,7 @@ const ModesHaSettings = ({ modes, connection, entities, entitiesLoading, apiDevi
           />
         )}
       />
+      <PinModal {...pinModalProps} />
     </AdminGroup>
   );
 };
