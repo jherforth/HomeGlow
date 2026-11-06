@@ -131,6 +131,65 @@ test('the 3-hour forecast rolls into daily highs and lows at the location\'s mid
     assert.equal(typeof hourly[0].timestamp, 'number');
 });
 
+test('summarizeForecast carries the OWM pop fraction as a 0-100 probability', () => {
+    const base = Date.UTC(2026, 6, 8, 5, 0, 0) / 1000; // 00:00 Eastern, so i<8 is one local day
+    const list = [];
+    for (let i = 0; i < 16; i++) {
+        list.push({
+            dt: base + i * 3 * 3600,
+            main: { temp: 70, temp_min: 60, temp_max: 80 },
+            weather: [{ id: 800, icon: '01d', description: 'clear sky' }],
+            // The likeliest block of the first local day is 0.6; the second day peaks at 0.25.
+            pop: i < 8 ? (i === 3 ? 0.6 : 0.2) : (i === 10 ? 0.25 : 0.1),
+        });
+    }
+
+    const { forecast, hourly } = owm.summarizeForecast(list, -5 * 3600);
+
+    assert.equal(hourly[3].precipitationProbability, 60, 'hourly pop is a 0-100 percent');
+    assert.equal(hourly[0].precipitationProbability, 20);
+    assert.equal(forecast[0].precipitationProbability, 60, 'the day takes its likeliest block');
+    assert.equal(forecast[1].precipitationProbability, 25);
+});
+
+test('summarizeForecast leaves probability null when OWM sends no pop', () => {
+    const base = Date.UTC(2026, 6, 8, 0, 0, 0) / 1000;
+    const list = [{
+        dt: base,
+        main: { temp: 70, temp_min: 60, temp_max: 80 },
+        weather: [{ id: 800, icon: '01d', description: 'clear sky' }],
+    }];
+
+    const { forecast, hourly } = owm.summarizeForecast(list, -5 * 3600);
+
+    assert.equal(hourly[0].precipitationProbability, null);
+    assert.equal(forecast[0].precipitationProbability, null);
+});
+
+test('the payload contract carries precipitation probability, and null stays valid', () => {
+    const built = payload.buildPayload({
+        provider: 'test',
+        units: 'imperial',
+        coordinates: { lat: 1, lon: 2 },
+        current: { temp: 50, condition: 'rainy' },
+        forecast: [{ date: '2026-07-08', high: 70, low: 60, condition: 'rainy', precipitation: 2, precipitationProbability: 60 }],
+        hourly: [{ timestamp: 1783536000, temp: 65, precipitation: 0, precipitationProbability: 20 }],
+    });
+    assert.equal(built.forecast[0].precipitationProbability, 60);
+    assert.equal(built.hourly[0].precipitationProbability, 20);
+    assert.deepEqual(payload.validatePayload(built), []);
+
+    // A probability outside 0-100 is a provider bug, not a display value.
+    const bad = { ...built, forecast: [{ ...built.forecast[0], precipitationProbability: 140 }] };
+    assert.ok(payload.validatePayload(bad).length > 0, '140% is not a probability');
+
+    // Providers without a probability (demo, Home Assistant) stay null and valid.
+    const demo = demoProvider.fetchWeather({ units: 'imperial' });
+    assert.ok(demo.forecast.every((day) => day.precipitationProbability === null), 'demo days have no probability');
+    assert.ok(demo.hourly.every((point) => point.precipitationProbability === null), 'demo hours have no probability');
+    assert.deepEqual(payload.validatePayload(demo), []);
+});
+
 test("the free endpoint's full 40 points give five days, and the chart stays at eight", () => {
     // OpenWeatherMap's free /forecast is 5 days of 3-hourly points. Starting
     // at local midnight, that is exactly five local days.
