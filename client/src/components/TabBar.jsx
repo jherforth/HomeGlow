@@ -220,6 +220,29 @@ const MenuIcon = ({ name, size = 20, color = 'currentColor' }) => {
   return icons[name] || null;
 };
 
+// A tab a dragged widget is over: it grows and takes the accent outline.
+export const dropTargetSx = {
+  transform: 'scale(1.18)',
+  border: '1.5px solid var(--accent)',
+  backgroundColor: 'rgba(var(--accent-rgb), 0.18)',
+  '&:hover': {
+    transform: 'scale(1.18)',
+    backgroundColor: 'rgba(var(--accent-rgb), 0.18)',
+  },
+};
+
+// A tab about to open: a ring fills around it, then it bounces.
+export const pendingTabSx = (ms = 500) => ({
+  ...dropTargetSx,
+  animation: `hg-tab-wait ${ms}ms linear forwards`,
+  '@keyframes hg-tab-wait': {
+    '0%': { boxShadow: '0 0 0 0 rgba(var(--accent-rgb), 0.55)', transform: 'scale(1.18)' },
+    '80%': { boxShadow: '0 0 0 7px rgba(var(--accent-rgb), 0.35)', transform: 'scale(1.22)' },
+    '90%': { transform: 'scale(1.08)' },
+    '100%': { boxShadow: '0 0 0 9px rgba(var(--accent-rgb), 0)', transform: 'scale(1.2)' },
+  },
+});
+
 const TabBar = ({
   tabs,
   activeTab,
@@ -236,6 +259,13 @@ const TabBar = ({
   theme,
   themeMode,
   screensaverCountdown,
+  // While a widget is dragged over the dock: the tab number it would move
+  // to, or 'add' for the + button (app.jsx). That one is highlighted.
+  dropTarget = null,
+  // The tab about to open under a dragged widget (it fills, then bounces),
+  // and whether a widget is being dragged at all (the dock lifts).
+  pendingTab = null,
+  dragging = false,
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuAnchorRef = useRef(null);
@@ -313,9 +343,14 @@ const TabBar = ({
         sx={{
           display: 'flex',
           alignItems: 'center',
-          gap: 0.5,
-          px: 2,
-          py: 1,
+          // While a widget is dragged the dock lifts and spreads its tabs,
+          // so they're easier to aim at.
+          gap: dragging ? 2 : 0.5,
+          px: dragging ? 3 : 2,
+          py: dragging ? 1.5 : 1,
+          transform: dragging ? 'translateY(-8px) scale(1.12)' : 'none',
+          transformOrigin: 'bottom center',
+          transition: 'gap 200ms ease, padding 200ms ease, transform 200ms ease, box-shadow 200ms ease',
           borderRadius: 'var(--hg-radius-2xl)',
           backgroundColor: 'var(--dock-bg)',
           border: '1px solid var(--dock-border)',
@@ -475,6 +510,7 @@ const TabBar = ({
               )}
               <Tooltip title={tab.label || `Tab ${tabNumber}`} placement="top">
                 <Box
+                  data-dock-tab={tabNumber}
                   onClick={() => onTabChange(tabNumber)}
                   sx={{
                     width: 44,
@@ -490,6 +526,8 @@ const TabBar = ({
                     backgroundImage: isActive ? 'var(--dock-active-image)' : 'none',
                     border: isActive ? '1.5px solid var(--dock-active-border)' : '1.5px solid transparent',
                     boxShadow: isActive ? '0 2px 8px var(--hg-black-20)' : 'none',
+                    ...(dropTarget === tabNumber && dropTargetSx),
+                    ...(pendingTab === tabNumber && pendingTabSx()),
                     '&:hover': {
                       backgroundColor: isActive ? 'var(--dock-active-bg)' : 'var(--hg-white-10)',
                       transform: 'translateY(-2px)',
@@ -524,19 +562,12 @@ const TabBar = ({
           );
         })}
 
-        {/* Add Tab Button (only in edit mode) */}
+        {/* Add Tab Button (only in edit mode), spaced like the tabs. */}
         {!widgetsLocked && (
           <>
-            <Box
-              sx={{
-                width: '1px',
-                height: '28px',
-                backgroundColor: 'var(--dock-separator)',
-                mx: 0.5,
-              }}
-            />
             <Tooltip title="Add new tab" placement="top">
               <Box
+                data-dock-add="true"
                 onClick={onAddTab}
                 sx={{
                   width: 44,
@@ -551,6 +582,7 @@ const TabBar = ({
                     backgroundColor: 'var(--hg-white-10)',
                     transform: 'translateY(-2px)',
                   },
+                  ...(dropTarget === 'add' && dropTargetSx),
                 }}
               >
                 <Add sx={{ fontSize: 20, color: 'var(--dock-icon)' }} />
@@ -559,17 +591,17 @@ const TabBar = ({
           </>
         )}
 
-        {/* Separator before screensaver */}
+        {/* Separator before screensaver; not beside the + button. */}
         {screensaverCountdown && (
           <>
-            <Box
+            {widgetsLocked && <Box
               sx={{
                 width: '1px',
                 height: '28px',
                 backgroundColor: 'var(--dock-separator)',
                 mx: 0.5,
               }}
-            />
+            />}
             <Box sx={{ display: 'flex', alignItems: 'center', px: 0.5 }}>
               {screensaverCountdown}
             </Box>
@@ -580,4 +612,5 @@ const TabBar = ({
   );
 };
 
+export { TabIcon };
 export default TabBar;

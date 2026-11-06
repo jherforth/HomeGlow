@@ -3,6 +3,10 @@
 // stays scannable. Tapping the open row collapses it; tapping another row
 // swaps to that one. The expanded row is identified by plugin filename.
 
+// Asks Admin → Plugins to open one plugin's row: detail { filename }. The
+// dashboard sends it for a widget menu's "settings" (app.jsx).
+export const EXPAND_PLUGIN_EVENT = 'homeglow:expand-plugin';
+
 // The expanded row after tapping `filename` while `current` is expanded.
 // Null means no row is expanded.
 export function nextExpandedPlugin(current, filename) {

@@ -404,7 +404,7 @@
     "untickStep": "Mark {{step}} not done",
     "showSteps": "Show the steps of {{name}}",
     "hideSteps": "Hide the steps of {{name}}",
-    "stepsInProgress": "{{name}}: steps still to do",
+    "completeAll": "Mark all of {{name}} done",
     "stepsOf": "Steps for {{name}}",
     "forEach": "One routine is made for each of the {{count}} people, each with its own ticks and streak.",
     "savedMany_one": "Saved {{name}} for {{count}} person.",

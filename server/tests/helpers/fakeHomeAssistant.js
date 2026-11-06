@@ -20,6 +20,12 @@ const PIXEL_PNG = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010
 function defaultStates() {
   const s = (entity_id, state, attributes = {}) => ({ entity_id, state, attributes, last_changed: new Date().toISOString(), last_updated: new Date().toISOString() });
   return [
+    // For display modes: a phone's next alarm, people, a guest switch.
+    s('sensor.pixel_next_alarm', new Date(Date.now() + 8 * 3600 * 1000).toISOString(), { friendly_name: "Jason's Pixel Next alarm", device_class: 'timestamp' }),
+    s('person.jason', 'home', { friendly_name: 'Jason' }),
+    s('person.wife', 'not_home', { friendly_name: 'Wife' }),
+    s('zone.home', '1', { friendly_name: 'Home' }),
+    s('input_boolean.guest_mode', 'off', { friendly_name: 'Guest mode' }),
     s('light.kitchen', 'on', { friendly_name: 'Kitchen lights', brightness: 128, supported_color_modes: ['brightness'], color_mode: 'brightness' }),
     s('light.desk', 'off', { friendly_name: 'Desk lamp', supported_color_modes: ['color_temp'], min_color_temp_kelvin: 2700, max_color_temp_kelvin: 6500 }),
     s('switch.coffee', 'off', { friendly_name: 'Coffee maker', device_class: 'outlet' }),
@@ -263,7 +269,11 @@ async function startFakeHomeAssistant({ token = 'secret-token', port = 0, wsEnab
       case 'media_player.volume_set': return [setState(id, state.state, { volume_level: data.volume_level })];
       case 'media_player.shuffle_set': return [setState(id, state.state, { shuffle: data.shuffle })];
       case 'media_player.play_media': return [setState(id, 'playing', { media_title: data.media_content_id, entity_picture: `/api/media_player_proxy/${id}?token=proxy-token&cache=${Date.now()}` })];
-      case 'input_select.select_option': return [setState(id, data.option)];
+      case 'input_select.select_option': {
+        if (!(a.options || []).includes(data.option)) return [];
+        return [setState(id, data.option)];
+      }
+      case 'input_select.set_options': return [setState(id, (data.options || []).includes(state.state) ? state.state : data.options[0], { options: data.options })];
       case 'vacuum.start': return [setState(id, 'cleaning')];
       case 'vacuum.return_to_base': return [setState(id, 'returning')];
       default: return [];
@@ -288,6 +298,12 @@ async function startFakeHomeAssistant({ token = 'secret-token', port = 0, wsEnab
       if (req.method === 'GET' && stateMatch) {
         const state = states.get(decodeURIComponent(stateMatch[1]));
         return state ? send(200, state) : send(404, { message: 'Entity not found.' });
+      }
+      // A sensor posted from outside (HomeGlow's current mode).
+      if (req.method === 'POST' && stateMatch) {
+        const data = body ? JSON.parse(body) : {};
+        calls.push({ postState: decodeURIComponent(stateMatch[1]), data });
+        return send(200, setState(decodeURIComponent(stateMatch[1]), String(data.state), data.attributes || {}));
       }
       const serviceMatch = url.pathname.match(/^\/api\/services\/([a-z_]+)\/([a-z_]+)$/);
       if (req.method === 'POST' && serviceMatch) {
@@ -369,6 +385,24 @@ async function startFakeHomeAssistant({ token = 'secret-token', port = 0, wsEnab
         case 'media_player/search_media': {
           calls.push({ ws: 'search_media', data: message });
           reply({ result: SEARCH.filter((item) => item.title.toLowerCase().includes(String(message.search_query).toLowerCase().split(' ')[0])) });
+          return;
+        }
+        // Helpers made in the UI (HomeGlow's mode helper).
+        case 'input_select/create': {
+          const id = String(message.name || 'select').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+          calls.push({ ws: 'input_select/create', data: message });
+          setState(`input_select.${id}`, message.options[0], { options: message.options, friendly_name: message.name, icon: message.icon, editable: true });
+          reply({ id, name: message.name, options: message.options, icon: message.icon });
+          return;
+        }
+        case 'input_select/update': {
+          const entityId = `input_select.${message.input_select_id}`;
+          const current = states.get(entityId);
+          if (!current) { connection.send(JSON.stringify({ id: message.id, type: 'result', success: false, error: { code: 'not_found', message: 'Unable to find input_select_id' } })); return; }
+          calls.push({ ws: 'input_select/update', data: message });
+          const options = message.options || current.attributes.options;
+          setState(entityId, options.includes(current.state) ? current.state : options[0], { options, ...(message.name ? { friendly_name: message.name } : {}) });
+          reply({ id: message.input_select_id, options });
           return;
         }
         default: reply(null, false);

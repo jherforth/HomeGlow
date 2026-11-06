@@ -310,3 +310,22 @@ test('a blocked pinch wins over double-tap expanding, and both work together', (
     f.settings({ expand: 'doubleTap', blockPinchZoom: false });
     assert.equal(f.document.documentElement.style.touchAction, 'manipulation');
 });
+
+test('in a Stack, a quick one-finger sideways flick is reported; otherwise nothing listens for it', () => {
+    const f = frame();
+    f.settings({ swipe: false, flick: true });
+    assert.ok(f.listeners.has('touchstart') && f.listeners.has('touchend'));
+    f.fire('touchstart', touchEvent([300, 200]));
+    f.tick(150);
+    f.fire('touchend', { touches: [], changedTouches: touches([180, 210]) });
+    assert.deepEqual(f.posted.map(({ data }) => data), [{ type: 'homeglow:flick', direction: 1 }]);
+    // Too slow, or too steep: not a flick.
+    f.fire('touchstart', touchEvent([100, 200]));
+    f.tick(600);
+    f.fire('touchend', { touches: [], changedTouches: touches([250, 200]) });
+    f.fire('touchstart', touchEvent([100, 200]));
+    f.fire('touchend', { touches: [], changedTouches: touches([180, 300]) });
+    assert.equal(f.posted.length, 1);
+    f.settings({ swipe: false, flick: false });
+    assert.ok(!f.listeners.has('touchstart') && !f.listeners.has('touchend'));
+});

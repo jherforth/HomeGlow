@@ -170,7 +170,9 @@ describe('frame messages', () => {
       swipe: true,
       blockPinchZoom: false,
       expand: false,
+      flick: false,
     });
+    expect(buildFrameTouchSettingsMessage({ swipe: false, blockPinchZoom: false, flick: true }).flick).toBe(true);
   });
 
   it('passes on how the plugin expands, and nothing else', () => {

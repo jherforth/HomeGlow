@@ -188,3 +188,48 @@ test('the compressed state format and the WebSocket address', () => {
   assert.equal(websocketUrl('https://ha.local:8123'), 'wss://ha.local:8123/api/websocket');
   assert.equal(websocketUrl('http://10.0.0.5:8123'), 'ws://10.0.0.5:8123/api/websocket');
 });
+
+test('a failed REST read is remembered briefly, and reads at the same moment are shared', async () => {
+  let now = 1000;
+  let calls = 0;
+  let down = false;
+  const ha = {
+    getConfig: () => ({ baseUrl: 'http://ha.invalid', tokenEnc: 't' }),
+    async homeAssistantFetch() {
+      calls += 1;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      if (down) {
+        const error = new Error('Home Assistant could not be reached.');
+        error.status = 502;
+        throw error;
+      }
+      return { entity_id: 'light.kitchen', state: 'on' };
+    },
+  };
+  const live = new HaLive({ db: {}, ha, decryptToken: (t) => t, now: () => now });
+  try {
+    const together = await Promise.all([live.getStates(['light.kitchen']), live.getStates(['light.kitchen'])]);
+    assert.equal(calls, 1, 'one read for both');
+    assert.equal(together[1].states['light.kitchen'].state, 'on');
+
+    down = true;
+    now += 3000;
+    const failed = await live.getStates(['light.kitchen']);
+    assert.equal(calls, 2);
+    assert.ok(failed.error, 'the failure is reported');
+    assert.equal(failed.states['light.kitchen'].state, 'on', 'with the last state');
+
+    now += 5000;
+    const again = await live.getStates(['light.kitchen']);
+    assert.equal(calls, 2, 'not asked again so soon');
+    assert.ok(again.error);
+
+    down = false;
+    now += 6000;
+    const back = await live.getStates(['light.kitchen']);
+    assert.equal(calls, 3, 'asked again once the failure is old');
+    assert.equal(back.error, null);
+  } finally {
+    live.close();
+  }
+});

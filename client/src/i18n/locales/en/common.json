@@ -75,6 +75,71 @@
     "fullPage": "Fill the page",
     "shrink": "Put back"
   },
+  "modes": {
+    "normal": "Normal",
+    "menuLabel": "Mode: {{name}}. Open the mode menu",
+    "pin": "Pin {{name}}",
+    "pinHelp": "Stays until the next scheduled change",
+    "unpin": "Unpin",
+    "unpinHelp": "Go back to the schedule",
+    "switchTo": "Switch to"
+  },
+  "takeovers": {
+    "level": {
+      "urgent": "Urgent",
+      "high": "Heads up",
+      "normal": "Info"
+    },
+    "close": "Close {{name}}"
+  },
+  "stacks": {
+    "roleDescription": "stack",
+    "label": "{{name}}, {{position}} of {{count}}",
+    "next": "Next: {{name}}",
+    "previous": "Previous: {{name}}",
+    "pages": "Widgets in this stack",
+    "stackWith": "Stack with {{name}}",
+    "addTo": "Add to stack"
+  },
+  "widgetMenu": {
+    "moveToTab": "Move to tab",
+    "duplicateToTab": "Duplicate to tab",
+    "duplicateHint": "Same widget and settings on both",
+    "settings": "Widget settings",
+    "remove": "Remove from dashboard",
+    "newTab": "New tab",
+    "back": "Back",
+    "alreadyThere": "Already there",
+    "alreadyOnThisTab": "Already on this tab",
+    "alreadyOn": "It's already on {{tab}}",
+    "moveFailed": "Couldn't move the widget. Try again.",
+    "stackFull": "A Stack holds up to 12 widgets.",
+    "turnOnFailed": "Put it back, but couldn't turn it on. Turn it on in Settings.",
+    "stackFailed": "Couldn't stack those widgets. Try again.",
+    "unstackFailed": "Couldn't unstack. Try again.",
+    "removeTitle": "Remove {{name}}?",
+    "removeBody": "{{name}} comes off the {{tab}} tab. It stays installed in HomeGlow, so you can put it back any time.",
+    "removeConfirm": "Remove",
+    "cancel": "Cancel",
+    "removed": "Removed {{name}} from {{tab}}",
+    "removeFailed": "Couldn't remove the widget. Try again.",
+    "undo": "Undo",
+    "undoFailed": "Couldn't put the widget back. Tap Undo to try again.",
+    "names": {
+      "calendar": "Calendar",
+      "weather": "Weather",
+      "chores": "Chores",
+      "photos": "Photos"
+    },
+    "stackSettings": "Stack settings",
+    "unstack": "Unstack",
+    "unstackHint": "Put its widgets back here",
+    "tabNumber": "Tab {{number}}",
+    "stack": "Stack",
+    "memberSettings": "{{name}} settings",
+    "showingNow": "Showing now",
+    "otherSettings": "Other widgets' settings"
+  },
   "mirror": {
     "mirroring": "Mirroring {{name}}",
     "tab": "Tab {{label}}",

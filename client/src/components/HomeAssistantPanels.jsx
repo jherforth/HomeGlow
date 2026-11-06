@@ -39,6 +39,9 @@ const conditionColumns = {
 
 // The preview is drawn at the panel's real size, shrunk to fit this box.
 const PREVIEW_MAX = 480;
+// The "Add devices" box always starts with nothing picked. One shared empty
+// list: a new [] on every redraw reads as a new pick and clears the typing.
+const NOTHING_PICKED = [];
 // The width the size pickers need.
 const PICKER_MIN_WIDTH = 260;
 const range = (n) => Array.from({ length: n }, (_, i) => i + 1);
@@ -547,7 +550,7 @@ const HomeAssistantPanels = ({ onNavigate }) => {
                 </li>
               );
             }}
-            value={[]}
+            value={NOTHING_PICKED}
             disabled={draft.recipe.tiles.length >= MAX_TILES}
             onChange={(_, value) => updateRecipe({ tiles: addTiles(draft.recipe.tiles, value) })}
             renderInput={(params) => <TextField {...params} label={t('admin:haPanels.addEntities')} helperText={t('admin:haPanels.addEntitiesHelp')} />}
