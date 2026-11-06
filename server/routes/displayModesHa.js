@@ -7,7 +7,8 @@
 //                                                     alarm|people|any)
 //   POST /api/devices/:deviceName/modes/ha/helper     make the mode helper
 //                                                     ({ title }), or use one
-//                                                     ({ entity_id }), or none
+//                                                     ({ entity_id }), or none;
+//                                                     needs the admin PIN ({ pin })
 //   POST /api/devices/:deviceName/modes/ha/sync       its options = the modes
 //   POST /api/devices/:deviceName/modes/ha/select     choose a helper option
 //   POST /api/devices/:deviceName/modes/ha/report     post the showing mode
@@ -17,6 +18,7 @@
 
 const rules = require('../services/displayModesHa');
 const { readStates } = require('../services/haEntities');
+const { checkAdminPin, refusePin } = require('../utils/adminPin');
 
 function registerDisplayModesHaRoutes(fastify, {
   db, live, ha, demoMode, readDevice, writeDevice, refreshWatched,
@@ -69,11 +71,17 @@ function registerDisplayModesHaRoutes(fastify, {
 
   // Make the helper ({ title }), use an existing one ({ entity_id }), or stop
   // using one ({ entity_id: null }). A helper HomeGlow made can be kept in
-  // step with the modes by id; one made elsewhere by set_options.
+  // step with the modes by id; one made elsewhere by set_options. The helper
+  // is what /sync and /select write to, and set_options replaces the options
+  // of whatever dropdown is named, so choosing one needs the admin PIN (asked
+  // for even on a display that remembers it, as backups are).
   fastify.post('/api/devices/:deviceName/modes/ha/helper', async (request, reply) => {
     if (unavailable(reply)) return undefined;
     const { deviceName } = request.params;
     const body = request.body || {};
+    if (!readDevice(deviceName)) return reply.status(404).send({ error: 'Device not found' });
+    const pinCheck = await checkAdminPin(db, typeof body.pin === 'string' ? body.pin : undefined);
+    if (!pinCheck.ok) return refusePin(reply, pinCheck, 'The admin PIN is needed to choose the mode helper.');
     try {
       if (body.entity_id === null) {
         return { settings: saveHa(deviceName, { helper: null, helperId: null, title: null }) };

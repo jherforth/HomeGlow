@@ -51,6 +51,26 @@ function haSettings(displayModes) {
   };
 }
 
+// Which helper a display writes to is chosen only through POST
+// /modes/ha/helper, which needs the admin PIN. Any other write of a display's
+// settings keeps the link it has, or a settings save could point /sync and
+// /select at any input_select in Home Assistant.
+const HELPER_LINK_FIELDS = ['helper', 'helperId', 'title'];
+
+/** `next` settings with `displayModes.ha`'s helper link taken from `existing`. */
+function keepHelperLink(next, existing) {
+  if (!isObject(next) || !isObject(next.displayModes)) return next;
+  const before = isObject(existing?.displayModes?.ha) ? existing.displayModes.ha : {};
+  const linked = HELPER_LINK_FIELDS.filter((field) => before[field] !== undefined);
+  if (!isObject(next.displayModes.ha) && linked.length === 0) return next;
+  const ha = isObject(next.displayModes.ha) ? { ...next.displayModes.ha } : {};
+  HELPER_LINK_FIELDS.forEach((field) => {
+    if (before[field] !== undefined) ha[field] = before[field];
+    else delete ha[field];
+  });
+  return { ...next, displayModes: { ...next.displayModes, ha } };
+}
+
 /** The sensor HomeGlow posts the showing mode to, named after the helper. */
 function sensorIdFor(ha) {
   if (!ha.helper) return null;
@@ -101,6 +121,7 @@ module.exports = {
   slugify,
   helperOptions,
   haSettings,
+  keepHelperLink,
   sensorIdFor,
   entityRefs,
   trimState,

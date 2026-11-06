@@ -161,3 +161,70 @@ test('an existing dropdown can be used instead, and the helper let go', async ()
   const noHelper = await post(`${D}/modes/ha/select`, { option: 'Night' });
   assert.equal(noHelper.status, 409);
 });
+
+// The helper is what /sync and /select write to, so only /helper (with the
+// admin PIN) chooses it: a settings save can't point them at another dropdown.
+test('a settings save keeps the helper the display has', async () => {
+  fake.setState('input_select.house_mode', 'Home', { options: ['Home', 'Away', 'Vacation'], friendly_name: 'House mode' });
+  const houseOptions = () => fake.states.get('input_select.house_mode').attributes.options;
+
+  const current = (await api(`${D}/settings`)).body.displayModes;
+  const sneaky = await patch(`${D}/settings`, { displayModes: { ...current, ha: { ...current.ha, helper: 'input_select.house_mode', helperId: 'house_mode' } } });
+  assert.equal(sneaky.status, 200, JSON.stringify(sneaky.body));
+  assert.equal(sneaky.body.displayModes.ha.helper, null, 'no helper taken from the save');
+  assert.equal(sneaky.body.displayModes.ha.helperId, null);
+  assert.equal((await post(`${D}/modes/ha/sync`, {})).body.synced, false);
+  assert.equal((await post(`${D}/modes/ha/select`, { option: 'Normal' })).status, 409);
+  assert.deepEqual(houseOptions(), ['Home', 'Away', 'Vacation'], 'the house helper is untouched');
+  assert.equal(fake.states.get('input_select.house_mode').state, 'Home');
+
+  const used = await post(`${D}/modes/ha/helper`, { entity_id: 'input_select.my_modes' });
+  assert.equal(used.status, 200, JSON.stringify(used.body));
+  const now = (await api(`${D}/settings`)).body.displayModes;
+  const saved = await put(`${D}/settings`, { displayModes: { ...now, ha: { ...now.ha, helper: 'input_select.house_mode', helperId: null, wake: ['person.sam'] } } });
+  assert.equal(saved.body.displayModes.ha.helper, 'input_select.my_modes', 'the chosen helper stays');
+  assert.deepEqual(saved.body.displayModes.ha.wake, ['person.sam'], 'the rest of ha saves');
+  const dropped = await patch(`${D}/settings`, { displayModes: { modes: now.modes } });
+  assert.equal(dropped.body.displayModes.ha.helper, 'input_select.my_modes', 'a save without ha keeps it too');
+  await post(`${D}/modes/ha/sync`, {});
+  assert.deepEqual(houseOptions(), ['Home', 'Away', 'Vacation']);
+});
+
+test('copying another display\'s settings keeps this display\'s own helper', async () => {
+  await patch('/api/devices/hall/settings', { displayModes: { modes } });
+  const copied = await post('/api/devices/hall/copy-from/kitchen-wall', {});
+  assert.equal(copied.status, 200, JSON.stringify(copied.body));
+  const hall = (await api('/api/devices/hall/settings')).body;
+  assert.deepEqual(hall.displayModes.modes.map((m) => m.id), ['morning', 'guest', 'night'], 'the modes are copied');
+  assert.equal(hall.displayModes.ha.helper, undefined, 'the kitchen\'s helper is not');
+});
+
+test('choosing the helper of an unknown display is refused, and makes no display', async () => {
+  const made = await post('/api/devices/not-a-display/modes/ha/helper', { entity_id: 'input_select.house_mode' });
+  assert.equal(made.status, 404);
+  const devices = (await api('/api/devices')).body;
+  assert.ok(!JSON.stringify(devices).includes('not-a-display'));
+  assert.deepEqual(fake.states.get('input_select.house_mode').attributes.options, ['Home', 'Away', 'Vacation']);
+});
+
+test('with an admin PIN set, choosing the helper needs it', async () => {
+  assert.equal((await post('/api/admin-pin/set', { pin: '2468' })).status, 200);
+  try {
+    // A display that says it remembers the PIN still has to give it.
+    await patch(`${D}/settings`, { adminPinRemembered: true });
+    const none = await post(`${D}/modes/ha/helper`, { entity_id: 'input_select.house_mode' });
+    assert.equal(none.status, 403, JSON.stringify(none.body));
+    assert.equal(none.body.needsPin, true);
+    const wrong = await post(`${D}/modes/ha/helper`, { entity_id: null, pin: '1111' });
+    assert.equal(wrong.status, 403);
+    assert.deepEqual(fake.states.get('input_select.house_mode').attributes.options, ['Home', 'Away', 'Vacation']);
+    assert.equal((await api(`${D}/settings`)).body.displayModes.ha.helper, 'input_select.my_modes', 'nothing changed');
+
+    const right = await post(`${D}/modes/ha/helper`, { entity_id: null, pin: '2468' });
+    assert.equal(right.status, 200, JSON.stringify(right.body));
+    assert.equal(right.body.settings.displayModes.ha.helper, null);
+  } finally {
+    await patch(`${D}/settings`, { adminPinRemembered: false });
+    await api('/api/admin-pin', { method: 'DELETE', body: JSON.stringify({ pin: '2468' }) });
+  }
+});

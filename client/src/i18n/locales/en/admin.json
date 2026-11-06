@@ -1043,6 +1043,8 @@
       "openConnections": "Open Connections",
       "unreachable": "Home Assistant can't be reached right now. Modes are following their schedules until it's back.",
       "failed": "That didn't work. Try again.",
+      "pinTitle": "Enter the admin PIN to change the mode helper",
+      "wrongPin": "Incorrect PIN. Please try again.",
       "letHaSwitch": "Let Home Assistant switch modes",
       "letHaSwitchHelp": "HomeGlow makes a dropdown helper in Home Assistant with Automatic, Normal and your modes. Automations set it to switch the wall; picking a mode on the wall sets it too.",
       "defaultTitle": "HomeGlow display mode",

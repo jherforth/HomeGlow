@@ -1043,6 +1043,8 @@
       "openConnections": "Abrir Conexiones",
       "unreachable": "No se puede contactar con Home Assistant ahora mismo. Los modos siguen sus horarios hasta que vuelva.",
       "failed": "No funcionó. Inténtalo de nuevo.",
+      "pinTitle": "Introduce el PIN de administrador para cambiar el ayudante de modo",
+      "wrongPin": "PIN incorrecto. Inténtalo de nuevo.",
       "letHaSwitch": "Dejar que Home Assistant cambie los modos",
       "letHaSwitchHelp": "HomeGlow crea un ayudante desplegable en Home Assistant con Automatic, Normal y tus modos. Las automatizaciones lo cambian para cambiar la pantalla; elegir un modo en la pantalla también lo cambia.",
       "defaultTitle": "HomeGlow display mode",
