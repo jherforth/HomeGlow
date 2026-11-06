@@ -167,6 +167,9 @@ function summarizeForecast(list, timezoneOffsetSeconds) {
 
         const existing = byDay.get(dayKey);
         const precipitation = item.rain ? item.rain['3h'] || 0 : 0;
+        // OWM /forecast items carry pop as a 0-1 fraction; the payload
+        // contract is 0-100, and null when the provider says nothing.
+        const pop = Number.isFinite(item.pop) ? Math.round(item.pop * 100) : null;
 
         if (!existing) {
             byDay.set(dayKey, {
@@ -176,11 +179,18 @@ function summarizeForecast(list, timezoneOffsetSeconds) {
                 condition: conditionFromOwm(item.weather?.[0]?.id, item.weather?.[0]?.icon),
                 description: item.weather?.[0]?.description || null,
                 precipitation,
+                precipitationProbability: pop,
             });
         } else {
             existing.high = Math.max(existing.high, item.main.temp_max);
             existing.low = Math.min(existing.low, item.main.temp_min);
             existing.precipitation += precipitation;
+            // The day's chance is the likeliest 3-hour block in it.
+            if (pop !== null) {
+                existing.precipitationProbability = existing.precipitationProbability === null
+                    ? pop
+                    : Math.max(existing.precipitationProbability, pop);
+            }
         }
 
         if (hourly.length < 8) {
@@ -188,6 +198,7 @@ function summarizeForecast(list, timezoneOffsetSeconds) {
                 timestamp: item.dt,
                 temp: item.main.temp,
                 precipitation,
+                precipitationProbability: pop,
             });
         }
     }
