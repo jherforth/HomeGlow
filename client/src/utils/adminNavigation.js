@@ -16,7 +16,7 @@
 export const ADMIN_LAYOUT = [
   { tab: 'dashboard', sections: ['widgets', 'plugins', 'homeassistant', 'tabs'] },
   { tab: 'look', sections: [] },
-  { tab: 'displays', sections: ['devices', 'screensaver', 'thisdisplay'] },
+  { tab: 'displays', sections: ['devices', 'screensaver', 'thisdisplay', 'modes'] },
   {
     tab: 'family',
     sections: ['users', 'chores', 'prizes', 'vacation'],

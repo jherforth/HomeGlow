@@ -275,6 +275,11 @@ body {
   visibility: hidden;
 }
 
+/* Holding a widget over another to stack them: only the stack outline shows. */
+body.hg-stacking .react-grid-item.react-grid-placeholder {
+  opacity: 0 !important;
+}
+
 .react-grid-item.react-grid-placeholder {
   background: var(--accent);
   opacity: 0.2;

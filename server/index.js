@@ -245,6 +245,10 @@ const householdChanges = createHouseholdChanges({
 const haPanelRules = require('./services/haPanels');
 const { HaLive } = require('./services/haLive');
 const { registerHaPanelRoutes, lazyDb } = require('./routes/haPanels');
+const { registerDisplayModesHaRoutes } = require('./routes/displayModesHa');
+const displayModesHa = require('./services/displayModesHa');
+const { registerWidgetStacksHaRoutes } = require('./routes/widgetStacksHa');
+const widgetStacksHa = require('./services/widgetStacksHa');
 const { registerRoutineRoutes } = require('./routes/routines');
 const { registerNotificationRoutes } = require('./routes/notifications');
 const { registerNtfyRoutes } = require('./routes/ntfy');
@@ -1252,6 +1256,16 @@ const haPanels = registerHaPanelRoutes(fastify, {
   installPluginRow,
   // A panel resized where it is placed: every display reloads its layouts.
   householdChanged: () => householdChanges.bump('settings'),
+  // Displays' modes and Stacks read Home Assistant entities too: keep those live.
+  extraWatched: () => {
+    const ids = new Set();
+    for (const row of db.prepare('SELECT device_settings_json FROM devices').all()) {
+      const settings = parseJsonObject(row.device_settings_json, {});
+      displayModesHa.entityRefs(settings.displayModes).forEach((id) => ids.add(id));
+      widgetStacksHa.entityRefs(settings.widgetStacks).forEach((id) => ids.add(id));
+    }
+    return [...ids];
+  },
   // A plugin's household setting: play_url checks addresses against the
   // media server one of them names (manifest homeAssistant.playUrlsFrom).
   readPluginSetting: (pluginId, key) => {
@@ -1259,6 +1273,39 @@ const haPanels = registerHaPanelRoutes(fastify, {
     return typeof value === 'string' ? value : null;
   },
 });
+// Display modes and Home Assistant (routes/displayModesHa.js): a display's
+// mode helper, its current-mode sensor, and the entities its modes read.
+registerDisplayModesHaRoutes(fastify, {
+  db: haDb,
+  live: haLive,
+  ha: homeAssistant,
+  demoMode: DEMO_MODE,
+  readDevice: (deviceName) => {
+    const row = db.prepare('SELECT device_settings_json FROM devices WHERE name = ?').get(deviceName);
+    return row ? parseJsonObject(row.device_settings_json, {}) : null;
+  },
+  writeDevice: (deviceName, patch) => {
+    ensureDeviceExists(deviceName);
+    const row = db.prepare('SELECT device_settings_json FROM devices WHERE name = ?').get(deviceName);
+    const merged = { ...parseJsonObject(row?.device_settings_json, {}), ...patch };
+    db.prepare('UPDATE devices SET device_settings_json = ?, updateTime = CURRENT_TIMESTAMP WHERE name = ?').run(JSON.stringify(merged), deviceName);
+    return merged;
+  },
+  refreshWatched: () => haPanels.refreshWatched(),
+});
+// Stacks and Home Assistant (routes/widgetStacksHa.js): what a display's
+// Stacks read for "Bring to front when…".
+registerWidgetStacksHaRoutes(fastify, {
+  db: haDb,
+  live: haLive,
+  ha: homeAssistant,
+  demoMode: DEMO_MODE,
+  readDevice: (deviceName) => {
+    const row = db.prepare('SELECT device_settings_json FROM devices WHERE name = ?').get(deviceName);
+    return row ? parseJsonObject(row.device_settings_json, {}) : null;
+  },
+});
+
 
 // Routines: steps a child ticks off, each routine one ordinary chore
 // (routes/routines.js). Chore completion is shared with the chore routes.
@@ -2738,6 +2785,13 @@ function sendJsonWithConditionalCache(request, reply, payload, lastModifiedMs = 
   return reply.send(payload);
 }
 
+const stackEntries = require('./utils/stackEntries');
+// A Stack's widgets as this display saved them (utils/stackEntries.js).
+function savedStackMembers(deviceName, stackId) {
+  const row = db.prepare('SELECT device_settings_json FROM devices WHERE name = ?').get(deviceName);
+  return stackEntries.savedMembers(parseJsonObject(row?.device_settings_json, {}), stackId);
+}
+
 function normalizeLayoutFields(layout) {
   if (!layout || typeof layout !== 'object') {
     return {
@@ -2813,6 +2867,9 @@ function listWidgetAssignmentsFromTabLayouts(deviceName) {
         layout_y: normalized.layout_y,
         layout_w: normalized.layout_w,
         layout_h: normalized.layout_h,
+        // Shown inside that Stack on this tab (client/src/utils/widgetStacks.js);
+        // its entry, settings and all, stays here.
+        ...(typeof layout?.in_stack === 'string' && layout.in_stack ? { in_stack: layout.in_stack } : {}),
       });
     });
   });
@@ -2928,6 +2985,9 @@ const upsertDeviceSettings = async (request, reply) => {
       JSON.stringify(merged),
       deviceName
     );
+    // A display's modes or Stacks may read other Home Assistant entities now.
+    if (Object.prototype.hasOwnProperty.call(incoming, 'displayModes')
+      || Object.prototype.hasOwnProperty.call(incoming, 'widgetStacks')) haPanels.refreshWatched();
 
     return merged;
   } catch (error) {
@@ -5336,12 +5396,13 @@ fastify.delete('/api/devices/:deviceName/tabs/:tabNumber', async (request, reply
     const homeLayoutMap = parseTabConfigJson(homeTab?.config_json);
     let homeChanged = false;
 
-    Object.entries(sourceLayoutMap).forEach(([widgetName, layout]) => {
-      if (!(widgetName in homeLayoutMap)) {
-        homeLayoutMap[widgetName] = normalizeLayoutFields(layout);
-        homeChanged = true;
-      }
-    });
+    // A widget shown in a Stack stays in it when the Stack goes to Home too
+    // (utils/stackEntries.js), rather than also showing on its own.
+    const toHome = stackEntries.entriesForHome(sourceLayoutMap, homeLayoutMap, normalizeLayoutFields);
+    if (Object.keys(toHome).length > 0) {
+      Object.assign(homeLayoutMap, toHome);
+      homeChanged = true;
+    }
 
     if (homeTab && homeChanged) {
       saveTabConfigById(homeTab.id, homeLayoutMap);
@@ -5465,10 +5526,21 @@ fastify.delete('/api/devices/:deviceName/widget-assignments/:id', async (request
       return reply.status(404).send({ error: 'Assignment not found' });
     }
 
+    // A Stack with ?members=1: the widgets shown in it on this tab go with it,
+    // in the same write, and come back in `removed` for Undo.
+    const stackId = parsedId.widgetName.startsWith('stack:') ? parsedId.widgetName.slice('stack:'.length) : null;
+    if (stackId && String(request.query?.members || '') === '1') {
+      const removed = stackEntries.takeStack(layoutMap, stackId, savedStackMembers(deviceName, stackId));
+      saveTabConfigById(tab.id, layoutMap);
+      touchDeviceUpdateTime(deviceName);
+      return { success: true, message: 'Assignment deleted successfully', removed };
+    }
+
+    const removed = { [parsedId.widgetName]: layoutMap[parsedId.widgetName] };
     delete layoutMap[parsedId.widgetName];
     saveTabConfigById(tab.id, layoutMap);
     touchDeviceUpdateTime(deviceName);
-    return { success: true, message: 'Assignment deleted successfully' };
+    return { success: true, message: 'Assignment deleted successfully', removed };
   } catch (error) {
     console.error('Error deleting widget assignment:', error);
     reply.status(500).send({ error: 'Failed to delete widget assignment' });
@@ -5501,6 +5573,274 @@ fastify.delete('/api/devices/:deviceName/widget-assignments/widget/:widgetName',
   } catch (error) {
     console.error('Error deleting widget assignments:', error);
     reply.status(500).send({ error: 'Failed to delete widget assignments' });
+  }
+});
+
+// Moves a widget to another tab, or puts it on another tab as well (copy), in
+// one write, so a widget is never left on no tab halfway through. A tab's
+// entry carries more than a position (the calendar's view and the weather's
+// place live there too), so the whole entry goes along. Its position is the
+// one given, or cleared for the dashboard to place.
+fastify.post('/api/devices/:deviceName/widget-assignments/transfer', async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+  const { widget_name: widgetName, fromTab, toTab, copy = false, layout = null } = request.body || {};
+  const from = Number.parseInt(fromTab, 10);
+  const to = Number.parseInt(toTab, 10);
+  if (!widgetName || !Number.isFinite(from) || !Number.isFinite(to)) {
+    return reply.status(400).send({ error: 'widget_name, fromTab and toTab are required' });
+  }
+  if (from === to) {
+    return reply.status(400).send({ error: 'fromTab and toTab must differ' });
+  }
+
+  try {
+    const sourceTab = getTabByNumber(deviceName, from);
+    const targetTab = getTabByNumber(deviceName, to);
+    if (!sourceTab || !targetTab) {
+      return reply.status(404).send({ error: 'Tab not found' });
+    }
+    const sourceMap = parseTabConfigJson(sourceTab.config_json);
+    const targetMap = parseTabConfigJson(targetTab.config_json);
+
+    // A Stack, given its widgets (`members`): they go along in the same write
+    // (utils/stackEntries.js), so no display ever sees one without the other.
+    // `merge`: a Stack already on that tab stays, and only this side goes.
+    const { members, merge = false } = request.body || {};
+    if (widgetName.startsWith('stack:') && Array.isArray(members)) {
+      const stackId = widgetName.slice('stack:'.length);
+      if (!stackEntries.isStackId(stackId)) {
+        return reply.status(400).send({ error: 'Not a stack' });
+      }
+      // The saved Stack decides what's in it; the list sent is only a fallback
+      // for a Stack this display has no record of.
+      const outcome = stackEntries.carryStack(sourceMap, targetMap, {
+        stackId, members: savedStackMembers(deviceName, stackId) ?? members, copy: copy === true, layout, merge: merge === true,
+      }, normalizeLayoutFields);
+      if (!outcome.ok) {
+        return reply.status(outcome.status).send({ error: outcome.error });
+      }
+      db.transaction(() => {
+        saveTabConfigById(targetTab.id, targetMap);
+        if (copy !== true) saveTabConfigById(sourceTab.id, sourceMap);
+      })();
+      touchDeviceUpdateTime(deviceName);
+      return {
+        id: buildAssignmentId(to, widgetName),
+        device_name: deviceName,
+        tab_number: to,
+        widget_name: widgetName,
+        copied: copy === true,
+        ...targetMap[widgetName],
+      };
+    }
+
+    const entry = sourceMap[widgetName];
+    if (!entry || typeof entry !== 'object') {
+      return reply.status(404).send({ error: 'Assignment not found' });
+    }
+    if (widgetName in targetMap) {
+      return reply.status(409).send({ error: 'Widget is already on that tab' });
+    }
+
+    // Where it lands ({ layout_x, layout_y, layout_w, layout_h }), else
+    // unplaced: the dashboard puts it in the first open spot.
+    targetMap[widgetName] = { ...entry, ...normalizeLayoutFields(layout && typeof layout === 'object' ? layout : null) };
+    db.transaction(() => {
+      saveTabConfigById(targetTab.id, targetMap);
+      if (copy !== true) {
+        delete sourceMap[widgetName];
+        saveTabConfigById(sourceTab.id, sourceMap);
+      }
+    })();
+    touchDeviceUpdateTime(deviceName);
+
+    return {
+      id: buildAssignmentId(to, widgetName),
+      device_name: deviceName,
+      tab_number: to,
+      widget_name: widgetName,
+      copied: copy === true,
+      ...targetMap[widgetName],
+    };
+  } catch (error) {
+    console.error('Error transferring widget assignment:', error);
+    reply.status(500).send({ error: 'Failed to move widget' });
+  }
+});
+
+// Puts widgets in a Stack on a tab, or takes them out ({ stack: null }), by
+// marking their tab entries: the entry (a widget's place and its per-tab
+// settings, like Weather's location) stays where it is, so nothing is lost
+// and a build without Stacks still shows the widgets. With create, a widget
+// that isn't on the tab yet gets an entry there.
+fastify.patch('/api/devices/:deviceName/widget-assignments/in-stack', async (request, reply) => {
+  const { deviceName } = request.params;
+  const { tabNumber, stack = null, widgets, create = false, release = null, place = null } = request.body || {};
+  const parsedTabNumber = Number.parseInt(tabNumber, 10);
+  const names = Array.isArray(widgets) ? widgets.filter((name) => typeof name === 'string' && name && !name.startsWith('stack:')) : [];
+  if (!deviceName || !Number.isFinite(parsedTabNumber) || names.length === 0) {
+    return reply.status(400).send({ error: 'tabNumber and widgets are required' });
+  }
+  if (stack !== null && (typeof stack !== 'string' || !/^[a-z0-9]{4,24}$/.test(stack))) {
+    return reply.status(400).send({ error: 'stack must be a stack id or null' });
+  }
+  try {
+    const tab = getTabByNumber(deviceName, parsedTabNumber);
+    if (!tab) {
+      return reply.status(404).send({ error: 'Tab not found' });
+    }
+    const layoutMap = parseTabConfigJson(tab.config_json);
+    // `release` (a Stack's id): widgets taken out of that Stack here come back
+    // on their own when their entry holds a spot or settings, and go when it
+    // was only made for the Stack (utils/stackEntries.js). Nothing is lost.
+    if (release !== null) {
+      if (!stackEntries.isStackId(release)) {
+        return reply.status(400).send({ error: 'release must be a stack id' });
+      }
+      const released = stackEntries.release(layoutMap, release, names);
+      if (released.length > 0) {
+        saveTabConfigById(tab.id, layoutMap);
+        touchDeviceUpdateTime(deviceName);
+      }
+      return { tab_number: parsedTabNumber, stack: null, widgets: released };
+    }
+    // `place` ({ layout_x, ... }): put the Stack itself on the tab there too,
+    // in the same write, so a new Stack never shows next to its widgets.
+    if (place && typeof place === 'object' && stack) {
+      const key = stackEntries.stackKey(stack);
+      layoutMap[key] = { ...(layoutMap[key] || {}), ...normalizeLayoutFields(place) };
+    }
+    const changed = [];
+    names.forEach((name) => {
+      let entry = layoutMap[name];
+      if (!entry || typeof entry !== 'object') {
+        if (create !== true) return;
+        entry = { ...normalizeLayoutFields(null) };
+      }
+      const next = { ...entry };
+      if (stack) next.in_stack = stack;
+      else delete next.in_stack;
+      layoutMap[name] = next;
+      changed.push(name);
+    });
+    if (changed.length > 0 || (place && stack)) {
+      saveTabConfigById(tab.id, layoutMap);
+      touchDeviceUpdateTime(deviceName);
+    }
+    return { tab_number: parsedTabNumber, stack, widgets: changed };
+  } catch (error) {
+    console.error('Error marking widgets in a stack:', error);
+    reply.status(500).send({ error: 'Failed to update the stack' });
+  }
+});
+
+// Splits a Stack on a tab back into its widgets in one write: the Stack's
+// entry goes, its widgets' entries are unmarked (their settings kept), and
+// `layouts` place them (utils/stackEntries.js).
+fastify.post('/api/devices/:deviceName/widget-assignments/unstack', async (request, reply) => {
+  const { deviceName } = request.params;
+  const { tabNumber, stack, members = [], layouts = [], dropBlank = false } = request.body || {};
+  const parsedTabNumber = Number.parseInt(tabNumber, 10);
+  if (!deviceName || !Number.isFinite(parsedTabNumber) || !stackEntries.isStackId(stack)) {
+    return reply.status(400).send({ error: 'tabNumber and stack are required' });
+  }
+  try {
+    const tab = getTabByNumber(deviceName, parsedTabNumber);
+    if (!tab) {
+      return reply.status(404).send({ error: 'Tab not found' });
+    }
+    const layoutMap = parseTabConfigJson(tab.config_json);
+    if (!(stackEntries.stackKey(stack) in layoutMap)) {
+      return reply.status(404).send({ error: 'Assignment not found' });
+    }
+    stackEntries.unstack(layoutMap, {
+      stackId: stack, members: savedStackMembers(deviceName, stack) ?? members, layouts, dropBlank: dropBlank === true,
+    }, normalizeLayoutFields);
+    saveTabConfigById(tab.id, layoutMap);
+    touchDeviceUpdateTime(deviceName);
+    return { tab_number: parsedTabNumber, stack };
+  } catch (error) {
+    console.error('Error unstacking:', error);
+    return reply.status(500).send({ error: 'Failed to unstack' });
+  }
+});
+
+// Puts a tab's entry for a widget back exactly as it was: what Undo sends
+// after a widget is removed from a tab, so its place and per-tab settings
+// return with it.
+fastify.put('/api/devices/:deviceName/widget-assignments/entry', async (request, reply) => {
+  const { deviceName } = request.params;
+  if (!deviceName) {
+    return reply.status(400).send({ error: 'deviceName is required' });
+  }
+  const { widget_name: widgetName, tabNumber, entry, entries, onlyMissing = false } = request.body || {};
+  const parsedTabNumber = Number.parseInt(tabNumber, 10);
+  const isObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+  // `entries` ({ name: entry }): several put back in one write (a Stack and
+  // the widgets that were in it), so Undo never half-restores.
+  if (entries !== undefined) {
+    if (!Number.isFinite(parsedTabNumber) || !isObject(entries) || Object.keys(entries).length === 0
+      || !Object.entries(entries).every(([name, value]) => name && isObject(value))) {
+      return reply.status(400).send({ error: 'tabNumber and entries (name -> object) are required' });
+    }
+    try {
+      const tab = getTabByNumber(deviceName, parsedTabNumber);
+      if (!tab) {
+        return reply.status(404).send({ error: 'Tab not found' });
+      }
+      const layoutMap = parseTabConfigJson(tab.config_json);
+      // onlyMissing (Undo): what's on the tab again since, with a spot or
+      // settings of its own, is newer and left alone; a blank entry isn't.
+      const restored = Object.entries(entries).filter(([name]) => onlyMissing !== true
+        || !stackEntries.holdsSomething(layoutMap[name]));
+      restored.forEach(([name, value]) => {
+        const now = layoutMap[name];
+        const next = { ...value, ...normalizeLayoutFields(value) };
+        // Put in a Stack here since it was removed: it stays in that Stack.
+        if (onlyMissing === true && now && typeof now === 'object' && typeof now.in_stack === 'string' && now.in_stack) {
+          next.in_stack = now.in_stack;
+        }
+        layoutMap[name] = next;
+      });
+      if (restored.length > 0) {
+        saveTabConfigById(tab.id, layoutMap);
+        touchDeviceUpdateTime(deviceName);
+      }
+      return { tab_number: parsedTabNumber, widgets: restored.map(([name]) => name) };
+    } catch (error) {
+      console.error('Error restoring widget assignments:', error);
+      return reply.status(500).send({ error: 'Failed to restore widgets' });
+    }
+  }
+  if (!widgetName || !Number.isFinite(parsedTabNumber)) {
+    return reply.status(400).send({ error: 'widget_name and tabNumber are required' });
+  }
+  if (!isObject(entry)) {
+    return reply.status(400).send({ error: 'entry must be a JSON object' });
+  }
+
+  try {
+    const tab = getTabByNumber(deviceName, parsedTabNumber);
+    if (!tab) {
+      return reply.status(404).send({ error: 'Tab not found' });
+    }
+    const layoutMap = parseTabConfigJson(tab.config_json);
+    layoutMap[widgetName] = { ...entry, ...normalizeLayoutFields(entry) };
+    saveTabConfigById(tab.id, layoutMap);
+    touchDeviceUpdateTime(deviceName);
+    return {
+      id: buildAssignmentId(parsedTabNumber, widgetName),
+      device_name: deviceName,
+      tab_number: parsedTabNumber,
+      widget_name: widgetName,
+      ...layoutMap[widgetName],
+    };
+  } catch (error) {
+    console.error('Error restoring widget assignment:', error);
+    reply.status(500).send({ error: 'Failed to restore widget' });
   }
 });
 

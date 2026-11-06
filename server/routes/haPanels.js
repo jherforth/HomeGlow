@@ -93,6 +93,8 @@ function registerHaPanelRoutes(fastify, {
   db, live, ha, demoMode, installPluginRow, readPluginSetting = () => null,
   // Tells every display a tab's layout changed (household sync, #325).
   householdChanged = () => {},
+  // More entities to keep live: the ones displays' modes read.
+  extraWatched = () => [],
 }) {
   let templateCache = null;
   const template = () => {
@@ -200,6 +202,11 @@ function registerHaPanelRoutes(fastify, {
         // Domain grants: the entities last listed there (the state route lists them).
         live.knownIdsIn([...access.domains]).forEach((id) => ids.add(id));
       }
+    }
+    try {
+      extraWatched().forEach((id) => ids.add(id));
+    } catch (error) {
+      console.warn('Home Assistant panels: could not read the extra entities to watch:', error.message);
     }
     return ids;
   }

@@ -518,6 +518,34 @@ the household's to control, not yours:
 - **Check for it first.** A HomeGlow older than the call has no `celebrate`.
 - **Keep it for real moments.** Every tick of a checkbox is not one.
 
+### Taking over the wall
+
+A household can let your plugin take over part of a wall display when
+something needs them: in Admin → Displays → Modes → Takeovers they pick your
+plugin, the Home Assistant entity that starts it ("when the grill is on"),
+how important it is, and which half of the screen it covers. HomeGlow shows
+your plugin there, over whatever tab is open, and hands the screen back when
+the entity changes back.
+
+While it's showing, your plugin can raise it or close it:
+
+```js
+if (typeof HomeGlow.attention === 'function') {
+  HomeGlow.attention('urgent');               // food at target: fills the screen, wakes it, chimes
+  HomeGlow.attention('high');                 // back to its usual size
+  HomeGlow.attention('urgent', { size: 'half' }); // urgent, but keep to its half
+  HomeGlow.attention(null);                   // done: close the takeover, like its ✕
+}
+```
+
+- **Only with a rule.** A plugin no takeover rule names can't take the screen;
+  the call does nothing.
+- **Your size follows.** `HomeGlow.onExpand()` reports `'half'` or `'full'`
+  while you're taking over, so you can show more.
+- **Urgent is loud.** It wakes a dimmed screen and chimes. Keep it for the
+  moment someone must act.
+- **Check for it first.** A HomeGlow older than the call has no `attention`.
+
 ### Sending a notification
 
 For news someone away from the board would want (a poll closed, the
@@ -575,6 +603,19 @@ if (typeof HomeGlow.onExpand === 'function') {
 returns an unsubscribe function; `HomeGlow.expandSize` has the current size.
 A plugin whose own double-tap or drag would fight with expanding sets
 `"expand": false` in its manifest, and is never expanded.
+
+### In a Stack: sideways flicks
+
+A Stack (several widgets in one spot) turns to the next on a quick sideways
+flick, and a flick that lands on your page counts. It doesn't when the flick
+starts on something that takes sideways drags itself: a slider or text field,
+a list that scrolls sideways, or an element with `touch-action: none` or
+`pan-y` (a graph you scrub). Anything else that handles its own sideways drag
+can say so with `data-no-flick`:
+
+```html
+<div class="timeline" data-no-flick>…</div>
+```
 
 ## 5a. Home Assistant — read and operate devices
 

@@ -17,6 +17,10 @@ const homeAssistant = require('./homeAssistant');
 const { decrypt } = require('../utils/encryption');
 
 const REST_TTL_MS = 2000;
+// After Home Assistant fails to answer for an entity, displays asking again
+// within this long get the same answer (the last state, and the error)
+// instead of each one waiting on it again.
+const REST_FAILURE_TTL_MS = 10000;
 const ENTITY_LIST_TTL_MS = 30000;
 const COMMAND_TIMEOUT_MS = 10000;
 const RETRY_SECONDS = [1, 2, 5, 10, 30, 60];
@@ -55,6 +59,8 @@ class HaLive {
     this.onChange = onChange;
     this.now = now;
     this.cache = new Map(); // entity_id -> { state, at }
+    this.failed = new Map(); // entity_id -> { error, at }: a REST read that failed
+    this.reading = new Map(); // entity_id -> the REST read under way, shared
     this.watched = new Set();
     this.subscribed = new Set();
     this.ws = null;
@@ -261,16 +267,33 @@ class HaLive {
     }
     let error = null;
     await Promise.all(missing.map(async (entityId) => {
+      const failed = this.failed.get(entityId);
+      if (failed && now - failed.at < REST_FAILURE_TTL_MS) {
+        error = error || failed.error;
+        const stale = this.cache.get(entityId);
+        if (stale) states[entityId] = stale.state;
+        return;
+      }
       try {
-        const state = await this.ha.homeAssistantFetch(this.db, 'GET', `/api/states/${encodeURIComponent(entityId)}`);
+        // Displays asking at the same moment share one read.
+        let reading = this.reading.get(entityId);
+        if (!reading) {
+          reading = this.ha.homeAssistantFetch(this.db, 'GET', `/api/states/${encodeURIComponent(entityId)}`)
+            .finally(() => this.reading.delete(entityId));
+          this.reading.set(entityId, reading);
+        }
+        const state = await reading;
         this.cache.set(entityId, { state, at: this.now() });
+        this.failed.delete(entityId);
         states[entityId] = state;
       } catch (err) {
         if (err.status === 404) {
           this.cache.set(entityId, { state: null, at: this.now() });
+          this.failed.delete(entityId);
           states[entityId] = null;
         } else {
           error = error || err;
+          this.failed.set(entityId, { error: err, at: this.now() });
           const stale = this.cache.get(entityId);
           if (stale) states[entityId] = stale.state;
         }
@@ -450,4 +473,4 @@ class HaLive {
   }
 }
 
-module.exports = { HaLive, expandCompressed, websocketUrl, REST_TTL_MS };
+module.exports = { HaLive, expandCompressed, websocketUrl, REST_TTL_MS, REST_FAILURE_TTL_MS };
