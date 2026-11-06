@@ -116,9 +116,10 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
   const [vacation, setVacation] = useState(null);
   const [prizes, setPrizes] = useState([]);
   // Add Chore opens the same dialog as Admin → Chores' New Chore button
-  // (ChoreFormDialog.jsx): identity, follow-ups, Create and Schedule. Who
-  // it is for and when it happens are picked in ScheduleChoreDialog, which
-  // opens once this is saved with Schedule. The widget used to bake in one
+  // (ChoreFormDialog.jsx): identity and follow-ups, saved only with Schedule
+  // here (scheduleOnly), since an unscheduled chore never shows on the wall.
+  // Who it is for and when it happens are picked in ScheduleChoreDialog,
+  // which opens once this is saved. The widget used to bake in one
   // fixed schedule here (one person, weekly days or one-time, no due date,
   // no duration), so it could not do every-N-days, monthly, any-day,
   // repeat-after-completion, keep-until-completed, several people, or
@@ -2035,8 +2036,9 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
         )}
 
         {/* Add Chore is the same dialog as Admin → Chores' New Chore button
-            (ChoreFormDialog.jsx): identity, follow-ups, Create and Schedule.
-            There is no toast system on the dashboard, so only errors surface
+            (ChoreFormDialog.jsx): identity and follow-ups, then Schedule,
+            which Enter does too (scheduleOnly: a chore saved without a
+            schedule would not show on the wall). There is no toast system on the dashboard, so only errors surface
             (as an alert, as the widget's other error paths do); a successful
             save simply closes the dialog and the chore appears. */}
         <ChoreFormDialog
@@ -2044,7 +2046,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
           chore={null}
           chores={chores.filter((c) => !c.routine_id)}
           users={users}
-          offerSchedule
+          scheduleOnly
           onClose={() => setShowAddDialog(false)}
           onSaved={() => fetchData()}
           onSchedule={openScheduleForChore}

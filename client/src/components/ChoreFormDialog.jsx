@@ -50,7 +50,11 @@ import {
 // (the widget has no toast system). `chores` is the list a follow-up may
 // give — Admin passes its non-routine chores, the widget its non-routine
 // ones — and `users` the people a follow-up may go to.
-export default function ChoreFormDialog({ open, chore, chores, users, offerSchedule, onClose, onSaved, onSchedule, showMessage }) {
+//
+// `scheduleOnly` (the widget): Schedule is the only way to save, and Enter
+// does the same. The dashboard shows only scheduled chores and has no toast,
+// so a chore saved with Create alone would seem to vanish.
+export default function ChoreFormDialog({ open, chore, chores, users, offerSchedule, scheduleOnly = false, onClose, onSaved, onSchedule, showMessage }) {
   const { t } = useTranslation(['chores', 'common']);
   const isMobile = useIsMobile();
   const [choreForm, setChoreForm] = useState(defaultChoreForm);
@@ -149,7 +153,7 @@ export default function ChoreFormDialog({ open, chore, chores, users, offerSched
           component: 'form',
           onSubmit: (event) => {
             event.preventDefault();
-            handleSaveChore();
+            handleSaveChore(scheduleOnly);
           },
         }
       }}
@@ -307,21 +311,23 @@ export default function ChoreFormDialog({ open, chore, chores, users, offerSched
       </DialogContent>
       <DialogActions>
         <Button type="button" onClick={onClose} startIcon={<Cancel />}>{t('common:actions.cancel')}</Button>
-        <Button
-          type="submit"
-          variant={offerSchedule ? 'outlined' : 'contained'}
-          startIcon={savingChore ? <CircularProgress size={16} /> : <Save />}
-          disabled={savingChore || !choreForm.title.trim()}
-        >
-          {savingChore ? 'Saving...' : savedChore ? 'Update' : 'Create'}
-        </Button>
-        {offerSchedule && (
+        {!scheduleOnly && (
           <Button
-            type="button"
-            variant="contained"
-            startIcon={<Schedule />}
+            type="submit"
+            variant={offerSchedule ? 'outlined' : 'contained'}
+            startIcon={savingChore ? <CircularProgress size={16} /> : <Save />}
             disabled={savingChore || !choreForm.title.trim()}
-            onClick={() => handleSaveChore(true)}
+          >
+            {savingChore ? 'Saving...' : savedChore ? 'Update' : 'Create'}
+          </Button>
+        )}
+        {(offerSchedule || scheduleOnly) && (
+          <Button
+            type={scheduleOnly ? 'submit' : 'button'}
+            variant="contained"
+            startIcon={savingChore && scheduleOnly ? <CircularProgress size={16} /> : <Schedule />}
+            disabled={savingChore || !choreForm.title.trim()}
+            onClick={scheduleOnly ? undefined : () => handleSaveChore(true)}
           >
             {t('chores:scheduleFlow.scheduleButton')}
           </Button>

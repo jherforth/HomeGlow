@@ -109,14 +109,6 @@
     "alreadyHasBonus": "Esta persona ya tiene una tarea extra sin terminar. ¡Complétala primero!",
     "assignFailed": "No se pudo asignar la tarea extra"
   },
-  "add": {
-    "dialogTitle": "Añadir nueva tarea",
-    "assignToUser": "Asignar a",
-    "bonusChoreUnassigned": "Tarea extra (sin asignar)",
-    "oneTime": "Tarea única (sin repetición)",
-    "selectDays": "Elige los días (uno o más):",
-    "clamValue": "🥟 Valor en almejas (0 para tarea normal)"
-  },
   "transfer": {
     "menuItem": "Transferir tarea",
     "dialogTitle": "¿Quién se encarga de esta tarea?",
