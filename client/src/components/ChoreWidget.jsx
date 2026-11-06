@@ -38,11 +38,10 @@ import { useTranslation } from 'react-i18next';
 import LoadingBackdrop from './LoadingBackdrop';
 import PinModal from './PinModal';
 import { API_BASE_URL } from '../utils/apiConfig.js';
-import { editWholeNumber, savedWholeNumber } from '../utils/wholeNumberField.js';
 import { pinErrorText } from '../utils/pinErrors.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
 import { fetchPinRemembered, setPinRemembered, shouldPromptForPin } from '../utils/adminPinDevice.js';
-import { shouldShowChoreToday, getTodayDateString, convertDaysToCrontab, getDueDateStatus, formatDueDate, hasOutstandingBonusChore, countsTowardDailyBonus, getTransferTargets } from '../utils/choreHelpers.js';
+import { shouldShowChoreToday, getTodayDateString, getDueDateStatus, formatDueDate, hasOutstandingBonusChore, countsTowardDailyBonus, getTransferTargets } from '../utils/choreHelpers.js';
 import { filterVisibleUsers, toggleHiddenUserId, pruneHiddenUserIds } from '../utils/choreUserVisibility.js';
 import { isControlHidden } from '../utils/displayControls.js';
 import { subscribePluginEvents } from '../utils/pluginEventBridge.js';
@@ -53,8 +52,7 @@ import { useEdgeFade } from '../hooks/useEdgeFade.js';
 import { formatTime } from '../utils/dateUtils.js';
 import PrizeCelebration from './PrizeCelebration.jsx';
 import { requestCelebration } from '../utils/celebrations.js';
-import ChoreIconPicker from './ChoreIconPicker.jsx';
-import RoutineSteps, { routineCardView } from './RoutineSteps.jsx';
+import RoutineSteps, { routineCardView, tickRemainingSteps, tickRemainingStepsOrThrow } from './RoutineSteps.jsx';
 import LateApprovalDialog from './LateApprovalDialog.jsx';
 import { householdNow, isExpired } from '../utils/choreExpiry.js';
 import useRoutinesToday from '../utils/useRoutinesToday.js';
@@ -64,6 +62,8 @@ import { addDays, choreDays } from '../utils/choreDays.js';
 import { getServerTimezoneSync } from '../utils/timezone.js';
 import ChoreDayMark from './ChoreDayMark.jsx';
 import ChoreHistoryDialog from './ChoreHistoryDialog.jsx';
+import ChoreFormDialog from './ChoreFormDialog.jsx';
+import ScheduleChoreDialog from './ScheduleChoreDialog.jsx';
 
 // Shared by the initial state and by the snapshot taken when a load returns no
 // stored settings, so "never saved" and "saved the defaults" compare equal.
@@ -115,16 +115,24 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
   const [weekHistory, setWeekHistory] = useState([]);
   const [vacation, setVacation] = useState(null);
   const [prizes, setPrizes] = useState([]);
-  const [newChore, setNewChore] = useState({
-    user_id: '',
-    title: '',
-    description: '',
-    assigned_days_of_week: ['monday'],
-    clam_value: 0,
-    icon: '',
-    is_one_time: false
-  });
+  // Add Chore opens the same dialog as Admin → Chores' New Chore button
+  // (ChoreFormDialog.jsx): identity and follow-ups, saved only with Schedule
+  // here (scheduleOnly), since an unscheduled chore never shows on the wall.
+  // Who it is for and when it happens are picked in ScheduleChoreDialog,
+  // which opens once this is saved. The widget used to bake in one
+  // fixed schedule here (one person, weekly days or one-time, no due date,
+  // no duration), so it could not do every-N-days, monthly, any-day,
+  // repeat-after-completion, keep-until-completed, several people, or
+  // joining an existing schedule.
   const [showAddDialog, setShowAddDialog] = useState(false);
+  // The chore just created, while its schedules are picked in
+  // ScheduleChoreDialog; null when that flow is not open.
+  const [scheduleChore, setScheduleChore] = useState(null);
+  // The dialog's own schedules: the widget's list is usage=chart, which
+  // leaves out the sticky durations, so "join one of their schedules" would
+  // miss any-day / again-after-done / until-completed timings. This is the
+  // full list, as Admin → Chores passes it.
+  const [dialogSchedules, setDialogSchedules] = useState([]);
   const [showPrizesModal, setShowPrizesModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showBonusChores, setShowBonusChores] = useState(DEFAULT_SHOW_BONUS_CHORES);
@@ -190,8 +198,6 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
   const longPressStartRef = useRef(null);
   const choreMenuOpenedAtRef = useRef(0);
 
-  const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-
   // Control Limits (resolved once in app.jsx and handed down). Hidden means NOT
   // RENDERED — never a disabled button and never a PIN prompt offered in place of
   // the action, because the point is that this display does not carry the control
@@ -209,6 +215,8 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
   useEffect(() => {
     if (hideAddChore) {
       setShowAddDialog((prev) => (prev ? false : prev));
+      // The schedule flow is the second half of Add, so it closes too.
+      setScheduleChore((prev) => (prev ? null : prev));
     }
     if (hideTransferChore) {
       setTransferDialog((prev) => (prev.open ? { ...prev, open: false } : prev));
@@ -1053,42 +1061,26 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
     });
   };
 
-  const saveChore = async () => {
+  // The chore the form dialog just saved with Schedule, while its schedules
+  // are picked in ScheduleChoreDialog — the same two-step flow as Admin →
+  // Chores' Schedule button. Who it is for and when it happens are picked
+  // there, with the same save path (one schedule per person, via
+  // schedulePayload), so the widget can now do every-N-days, monthly,
+  // any-day, repeat-after-completion, keep-until-completed, several people,
+  // and joining an existing schedule. Cancelling the schedule step leaves
+  // the chore unscheduled, as in Admin; it simply does not show on the wall
+  // until it has a schedule.
+  const openScheduleForChore = async (saved) => {
+    // The full schedule list, for "join one of their schedules" (see the
+    // dialogSchedules note above); a failed load only hides that section.
     try {
-      setIsLoading(true);
-
-      const choreResponse = await axios.post(`${API_BASE_URL}/api/chores`, {
-        title: newChore.title,
-        description: newChore.description,
-        clam_value: savedWholeNumber(newChore.clam_value),
-        icon: newChore.icon
-      });
-
-      const choreId = choreResponse.data.id;
-      const crontab = newChore.is_one_time ? null : convertDaysToCrontab(newChore.assigned_days_of_week);
-
-      await axios.post(`${API_BASE_URL}/api/chore-schedules`, {
-        chore_id: choreId,
-        user_id: newChore.user_id || null,
-        crontab: crontab,
-        visible: 1
-      });
-
-      setNewChore({
-        user_id: '',
-        title: '',
-        description: '',
-        assigned_days_of_week: ['monday'],
-        clam_value: 0,
-        is_one_time: false
-      });
-      setShowAddDialog(false);
-      await fetchData();
+      const res = await axios.get(`${API_BASE_URL}/api/chore-schedules`);
+      setDialogSchedules(Array.isArray(res.data) ? res.data : []);
     } catch (error) {
-      console.error('Error saving chore:', error);
-    } finally {
-      setIsLoading(false);
+      console.error('Error fetching schedules for the schedule dialog:', error);
+      setDialogSchedules([]);
     }
+    setScheduleChore(saved);
   };
 
   const getUserChoresForToday = (userId) => {
@@ -1241,6 +1233,45 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
     await fetchData();
   };
 
+  // Complete a whole routine at once, from its card's button while steps
+  // remain: tick each remaining step through the normal step path, so the
+  // last tick completes the chore with the usual streak/on-time semantics —
+  // never a separate force-complete. Past its expiry the parent's yes comes
+  // first (issue #279), once, for all the remaining steps. A tap already in
+  // flight for this routine is ignored, like an ordinary chore tap.
+  const completingRoutinesRef = useRef(new Set());
+  const completeRoutine = async (day, schedule, expired) => {
+    if (completingRoutinesRef.current.has(schedule.id)) return;
+    if (day.steps.every((step) => day.done.includes(step.id))) return;
+    completingRoutinesRef.current.add(schedule.id);
+    try {
+      if (expired) {
+        askParent(day.name, async () => {
+          const done = await tickRemainingStepsOrThrow(day, toggleRoutineStep);
+          if (done.completed) requestCelebration('chores');
+        });
+        return;
+      }
+      const done = await tickRemainingSteps(day, toggleRoutineStep);
+      if (done === 'expired') {
+        // Expired between the check and the tick: ask once, then finish the
+        // rest with the parent's yes. Steps already ticked are re-ticked
+        // with done=true, which is a no-op for them.
+        askParent(day.name, async () => {
+          const finished = await tickRemainingStepsOrThrow(day, toggleRoutineStep);
+          if (finished.completed) requestCelebration('chores');
+        });
+        return;
+      }
+      if (done) {
+        if (done.completed) requestCelebration('chores');
+        await fetchData();
+      }
+    } finally {
+      completingRoutinesRef.current.delete(schedule.id);
+    }
+  };
+
   const renderChoreItem = (schedule) => {
     const routineDay = routineDays[schedule.id];
     const routineView = routineDay ? routineCardView(routineDay, expandedRoutines[schedule.id]) : null;
@@ -1329,27 +1360,35 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 0.5 }}>
-          {/* A routine is finished by its last step, never by this button, so
-              a parent can look the steps over without undoing the routine: the
-              button only folds the steps of a finished routine away and back.
-              With steps still to do they are shown regardless, and the button
-              is inert. Unticking a step in the opened list reopens the routine
-              with the other ticks kept, as it always has. */}
+          {/* The card's button always does something. While steps remain it
+              completes the whole routine at once (each step ticked through
+              the normal path, so the last one completes the chore); once
+              finished it only folds the steps away and back. Unticking a step
+              in the opened list reopens the routine with the other ticks
+              kept, as it always has. */}
           {routineView ? (
-            <IconButton
-              disabled={!routineView.buttonActive}
-              onClick={() => toggleRoutineExpanded(schedule.id)}
-              size="small"
-              aria-expanded={routineView.stepsShown}
-              aria-label={!routineView.buttonActive
-                ? t('chores:routines.stepsInProgress', { name: schedule.title })
-                : routineView.stepsShown
+            routineView.completeAll ? (
+              <IconButton
+                onClick={() => completeRoutine(routineDay, schedule, expired)}
+                size="small"
+                aria-label={t('chores:routines.completeAll', { name: schedule.title })}
+                sx={{ minWidth: 'auto', width: 36, height: 36, color: 'var(--accent)' }}
+              >
+                <Check fontSize="small" />
+              </IconButton>
+            ) : (
+              <IconButton
+                onClick={() => toggleRoutineExpanded(schedule.id)}
+                size="small"
+                aria-expanded={routineView.stepsShown}
+                aria-label={routineView.stepsShown
                   ? t('chores:routines.hideSteps', { name: schedule.title })
                   : t('chores:routines.showSteps', { name: schedule.title })}
-              sx={{ minWidth: 'auto', width: 36, height: 36, color: 'var(--text-secondary)', '&.Mui-disabled': { color: 'var(--text-secondary)', opacity: 0.35 } }}
-            >
-              {routineView.stepsShown ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
-            </IconButton>
+                sx={{ minWidth: 'auto', width: 36, height: 36, color: 'var(--text-secondary)' }}
+              >
+                {routineView.stepsShown ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
+              </IconButton>
+            )
           ) : (
             <IconButton
               color={schedule.completed ? "secondary" : "primary"}
@@ -1432,15 +1471,6 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
           ) : null}
       </Box>
     );
-  };
-
-  const handleDayToggle = (day) => {
-    setNewChore(prev => ({
-      ...prev,
-      assigned_days_of_week: prev.assigned_days_of_week.includes(day)
-        ? prev.assigned_days_of_week.filter(d => d !== day)
-        : [...prev.assigned_days_of_week, day]
-    }));
   };
 
   if (loading) {
@@ -2005,119 +2035,39 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
           />
         )}
 
-        <Dialog
+        {/* Add Chore is the same dialog as Admin → Chores' New Chore button
+            (ChoreFormDialog.jsx): identity and follow-ups, then Schedule,
+            which Enter does too (scheduleOnly: a chore saved without a
+            schedule would not show on the wall). There is no toast system on the dashboard, so only errors surface
+            (as an alert, as the widget's other error paths do); a successful
+            save simply closes the dialog and the chore appears. */}
+        <ChoreFormDialog
           open={showAddDialog}
+          chore={null}
+          chores={chores.filter((c) => !c.routine_id)}
+          users={users}
+          scheduleOnly
           onClose={() => setShowAddDialog(false)}
-          maxWidth="sm"
-          fullWidth
-          slotProps={{
-            paper: {
-              component: 'form',
-              onSubmit: (event) => {
-                event.preventDefault();
-                saveChore();
-              },
-            }
-          }}
-        >
-          <DialogTitle>{t('chores:add.dialogTitle')}</DialogTitle>
-          <DialogContent>
-            <TextField
-              fullWidth
-              label={t('common:labels.title')}
-              value={newChore.title}
-              onChange={(e) => setNewChore({ ...newChore, title: e.target.value })}
-              sx={{ mb: 2, mt: 1 }}
-            />
-            <TextField
-              fullWidth
-              label={t('common:labels.description')}
-              value={newChore.description}
-              onChange={(e) => setNewChore({ ...newChore, description: e.target.value })}
-              sx={{ mb: 2 }}
-            />
-            <Box sx={{ mb: 2 }}>
-              <ChoreIconPicker
-                value={newChore.icon}
-                onChange={(icon) => setNewChore({ ...newChore, icon })}
-              />
-            </Box>
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel>{t('chores:add.assignToUser')}</InputLabel>
-              <Select
-                value={newChore.user_id}
-                onChange={(e) => setNewChore({ ...newChore, user_id: e.target.value })}
-              >
-                <MenuItem value={0}>{t('chores:add.bonusChoreUnassigned')}</MenuItem>
-                {users.map(user => (
-                  <MenuItem key={user.id} value={user.id}>
-                    {user.username}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+          onSaved={() => fetchData()}
+          onSchedule={openScheduleForChore}
+          showMessage={(type, message) => { if (type === 'error') alert(message); }}
+        />
 
-            <Box sx={{ mb: 2 }}>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={newChore.is_one_time}
-                    onChange={(e) => setNewChore({
-                      ...newChore,
-                      is_one_time: e.target.checked,
-                      assigned_days_of_week: e.target.checked ? [] : ['monday']
-                    })}
-                    color="primary"
-                  />
-                }
-                label={t('chores:add.oneTime')}
-              />
-            </Box>
 
-            {!newChore.is_one_time && (
-              <Box sx={{ mb: 2 }}>
-                <FormLabel component="legend" sx={{ mb: 1, display: 'block' }}>
-                  {t('chores:add.selectDays')}
-                </FormLabel>
-                <FormGroup row>
-                  {daysOfWeek.map(day => (
-                    <FormControlLabel
-                      key={day}
-                      control={
-                        <Checkbox
-                          checked={newChore.assigned_days_of_week.includes(day)}
-                          onChange={() => handleDayToggle(day)}
-                          color="primary"
-                        />
-                      }
-                      // Label is translated; `day` stays the English key that
-                      // crontab conversion and the API depend on.
-                      label={t(`chores:days.${day}`)}
-                    />
-                  ))}
-                </FormGroup>
-              </Box>
-            )}
-
-            <TextField
-              fullWidth
-              type="number"
-              label={t('chores:add.clamValue')}
-              value={newChore.clam_value}
-              onChange={(e) => setNewChore({ ...newChore, clam_value: editWholeNumber(e.target.value) })}
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button type="button" onClick={() => setShowAddDialog(false)}>{t('common:actions.cancel')}</Button>
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={!newChore.is_one_time && newChore.assigned_days_of_week.length === 0}
-            >
-              {t('chores:widget.addChore')}
-            </Button>
-          </DialogActions>
-        </Dialog>
+        {/* Who it is for and when it happens: the Admin → Chores schedule
+            flow, for the chore just created above. Its saves go through the
+            same schedulePayload as Admin, and onChanged reloads the widget.
+            There is no toast system on the dashboard, so only errors surface
+            (as an alert, as the widget's other error paths do); a successful
+            save simply closes the dialog and the chore appears. */}
+        <ScheduleChoreDialog
+          chore={scheduleChore}
+          users={users}
+          schedules={dialogSchedules}
+          onClose={() => setScheduleChore(null)}
+          onChanged={fetchData}
+          showMessage={(type, message) => { if (type === 'error') alert(message); }}
+        />
 
         {/* Long-press / right-click chore menu */}
         <Menu

@@ -24,6 +24,11 @@ HomeGlow is built with a focus on modern aesthetics, user experience, and practi
     -   **Grid-Based System**: Responsive 12-column grid that adapts to mobile, tablet, and desktop screens
     -   **Persistent Layouts**: Your custom arrangement is automatically saved and restored
     -   **Touch & Mouse Support**: Full support for both touch gestures and traditional mouse interactions
+    -   **Move Between Tabs**: In Move/Resize, drag a widget onto a tab in the dock, or hold it at the side of the screen to carry it to the next tab, like moving an app on a phone
+    -   **Long-Press Menu**: In Move/Resize, hold a widget to move or duplicate it to another tab (or a new one), open its settings, or remove it from the tab (with Undo)
+    -   **Stacks**: Several widgets in one spot, swiped between, while the rest of the dashboard stays put. Make one by holding a widget over another in Move/Resize, or under Admin → Widgets → Stacks. A Stack goes back to its first widget after a while, and can bring a widget to the front when Home Assistant says something needs attention (the grill card while the grill is on)
+-   **Display Modes**: A wall display can change through the day without anything moving: Morning, Dinner, Night and so on, each on a schedule or turned on from Home Assistant (a phone alarm going off, an entity's state, only while someone is home). A mode can start on a tab, dim the screen to off, and change what each Stack shows. HomeGlow can make a dropdown helper in Home Assistant to switch modes from automations, and reports which mode is showing. Set up under Admin → Displays → Modes
+-   **Takeovers**: A widget can take over the top or bottom half (or the whole screen) when Home Assistant says it needs you, then hand the wall back. Plugins can raise or close their own takeover with `HomeGlow.attention()`
 
 ### Enhanced Widgets
 -   **Widget Refresh System**: Configure auto-refresh rates for each widget independently (5, 15, 30 minutes, or 1-6 hours)

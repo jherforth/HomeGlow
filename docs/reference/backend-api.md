@@ -184,9 +184,15 @@ Every recipient (a device's browser push, an ntfy topic, a Home Assistant phone)
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/api/devices` | List devices with widget counts. |
-| GET/PUT/PATCH | `/api/devices/:deviceName/settings` | Get/merge device settings JSON. |
+| GET/PUT/PATCH | `/api/devices/:deviceName/settings` | Get/merge device settings JSON. `displayModes.ha.helper`, `helperId` and `title` (the mode helper) are kept as stored: only `POST …/modes/ha/helper` changes them. |
 | PATCH | `/api/devices/:deviceName` | Rename a device. |
-| POST | `/api/devices/:deviceName/copy-from/:sourceDeviceName` | Copy tabs + settings from another device. |
+| POST | `/api/devices/:deviceName/copy-from/:sourceDeviceName` | Copy tabs + settings from another device. The device keeps its own mode helper. |
+| GET | `/api/devices/:deviceName/modes/ha` | The Home Assistant states this display's modes read (only the entities its modes name). |
+| GET | `/api/devices/:deviceName/modes/ha/entities` | Entities for Admin's pickers (`?kind=helper|alarm|people|any`). |
+| POST | `/api/devices/:deviceName/modes/ha/helper` | The mode helper: make one (`{ title }`), use an existing `input_select` (`{ entity_id }`, its options are replaced) or stop using one (`{ entity_id: null }`). Needs the admin PIN (`pin`) when one is set; 404 for an unknown device. Demo-blocked. |
+| POST | `/api/devices/:deviceName/modes/ha/sync` | Set the helper's options to Automatic, Normal and the modes. |
+| POST | `/api/devices/:deviceName/modes/ha/select` | Set the helper to one of its options (`{ option }`). |
+| POST | `/api/devices/:deviceName/modes/ha/report` | Post the showing mode (`{ mode, source, pinned }`) to `sensor.homeglow_*_showing`. |
 | DELETE | `/api/devices/:deviceName` | Delete a device (cascades tabs and its notifications). |
 | GET/PUT/DELETE | `/api/devices/:deviceName/notifications` | A device's push notifications: read, turn on or change (`subscription`, `events`, `members`, `language`), turn off. `events` may include `plugin:<id>` for an installed plugin that declares `notify`; reading lists those as `plugins`. |
 | POST | `/api/devices/:deviceName/notifications/test` | Send the device a test notification. |
@@ -195,9 +201,13 @@ Every recipient (a device's browser push, an ntfy topic, a Home Assistant phone)
 | GET/POST | `/api/devices/:deviceName/tabs` | List / create tabs. |
 | PATCH | `/api/devices/:deviceName/tabs/:tabNumber` | Update a tab. |
 | PATCH | `/api/devices/:deviceName/tabs/reorder` | Reorder tabs. |
-| DELETE | `/api/devices/:deviceName/tabs/:tabNumber` | Delete a tab (widgets fall back to Home). |
+| DELETE | `/api/devices/:deviceName/tabs/:tabNumber` | Delete a tab (widgets fall back to Home; a widget shown in a Stack stays in it when that Stack is on Home too). |
 | GET/POST | `/api/devices/:deviceName/widget-assignments` | List / assign widgets to tabs (backed by `tabs.config_json`). |
-| DELETE | `/api/devices/:deviceName/widget-assignments/:id` | Remove an assignment. |
+| DELETE | `/api/devices/:deviceName/widget-assignments/:id` | Remove an assignment. Answers `removed` (`{ name: entry }`), what was taken, for Undo. For a Stack (`<tab>::stack:<id>`), `?members=1` also takes the widgets shown in it on that tab, in the same write. |
+| POST | `/api/devices/:deviceName/widget-assignments/transfer` | Move (or `copy: true`) a widget to another tab in one write, with its per-tab settings; `layout` places it. For a Stack, send `members` (its widgets) to carry their entries too, in the same write; the Stack as saved decides which widgets go, and `members` is used only for a Stack with no saved record. A widget still marked for the Stack but no longer in it stays, unmarked. `merge: true` when the Stack is already on that tab. 409 if already there, 404 if not on the source tab. |
+| PUT | `/api/devices/:deviceName/widget-assignments/entry` | Put a widget's tab entry back exactly (`widget_name`, `tabNumber`, `entry`), or several at once (`tabNumber`, `entries: { name: entry }`). `onlyMissing: true` leaves alone any that are on the tab again. |
+| PATCH | `/api/devices/:deviceName/widget-assignments/in-stack` | Mark widgets' entries on a tab as shown in a Stack (`stack`, `widgets`, `create` for widgets not on the tab yet, `place` to put the Stack itself there too), or take them out (`stack: null`). `release: <stack id>`: widgets taken out of that Stack come back on their own if their entry holds a spot or settings, else go. |
+| POST | `/api/devices/:deviceName/widget-assignments/unstack` | Split a Stack on a tab back into its widgets in one write (`tabNumber`, `stack`, `layouts`). `dropBlank: true` (Admin taking the Stack off the tab): only widgets with a spot or settings there come back. |
 | DELETE | `/api/devices/:deviceName/widget-assignments/widget/:widgetName` | Remove all assignments for a widget. |
 | PATCH | `/api/devices/:deviceName/widget-assignments/layout` | Update one widget's grid layout. |
 | PATCH | `/api/devices/:deviceName/widget-assignments/layout/bulk` | Bulk layout update (drag/resize save). |

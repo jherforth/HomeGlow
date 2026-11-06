@@ -267,6 +267,22 @@
     },
 
     /**
+     * Ask for the wall's attention, while this plugin is taking over part of
+     * the screen (Admin → Displays → Modes → Takeovers): 'urgent' fills the
+     * screen, wakes it and chimes (food at target), 'high' or 'normal' sets it
+     * back. attention(null) closes the takeover, as its ✕ does. Options:
+     * { size: 'full' | 'half' }. Does nothing unless a takeover rule names
+     * this plugin. Older HomeGlows have no attention(); check for it first.
+     */
+    attention: function (level, options) {
+      if (!window.parent || window.parent === window) return;
+      var valid = level === null || level === 'normal' || level === 'high' || level === 'urgent';
+      if (!valid) return;
+      var size = options && (options.size === 'full' || options.size === 'half') ? options.size : null;
+      window.parent.postMessage({ type: 'homeglow:attention', level: level, size: size }, '*');
+    },
+
+    /**
      * Ask the board for its celebration: the theme's confetti, and its cast if
      * it has one, across the whole screen. For a moment worth marking (a list
      * finished, a vote closed). HomeGlow plays at most one per plugin every 15

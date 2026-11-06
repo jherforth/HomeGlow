@@ -40,11 +40,9 @@ import {
 } from '@mui/icons-material';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/apiConfig.js';
-import { editWholeNumber, savedWholeNumber } from '../utils/wholeNumberField.js';
 import { CronExpressionParser } from 'cron-parser';
 import { getServerTimezoneSync } from '../utils/timezone.js';
 import SoundPicker from './SoundPicker.jsx';
-import ChoreIconPicker from './ChoreIconPicker.jsx';
 import { useTranslation } from 'react-i18next';
 import { AdminGroup, AdminNote, AdminRow, AdminSortControl } from './AdminRows.jsx';
 import { getWeekdayLabels } from '../utils/dateUtils.js';
@@ -52,6 +50,7 @@ import useIsMobile from '../hooks/useIsMobile.js';
 import { compareByKey } from '../utils/choreHelpers.js';
 import ExpiresSelect from './ExpiresSelect.jsx';
 import ChoreScheduleBoard from './ChoreScheduleBoard.jsx';
+import ChoreFormDialog from './ChoreFormDialog.jsx';
 import ScheduleChoreDialog from './ScheduleChoreDialog.jsx';
 import RoutinesGroup from './RoutinesGroup.jsx';
 import ChoreHistoryTab from './ChoreHistoryTab.jsx';
@@ -245,30 +244,6 @@ const defaultScheduleForm = {
   can_snooze: true
 };
 
-const defaultChoreForm = { title: '', description: '', clam_value: 0, icon: '' };
-
-// Follow-ups (issue #241): "when this is done, give that chore to them".
-const MAX_FOLLOWUPS = 3;
-const newFollowupRow = () => ({ followup_chore_id: '', user_ids: [], timing: 'now', amount: 1, unit: 'hours' });
-// The server stores a delay in minutes; the form shows whole hours when it can.
-const followupRowFromRule = (rule) => {
-  const minutes = rule.delay_minutes || 0;
-  if (!minutes) return { followup_chore_id: rule.followup_chore_id, user_ids: rule.user_ids, timing: 'now', amount: 1, unit: 'hours' };
-  const hours = minutes % 60 === 0;
-  return {
-    followup_chore_id: rule.followup_chore_id,
-    user_ids: rule.user_ids,
-    timing: 'after',
-    amount: hours ? minutes / 60 : minutes,
-    unit: hours ? 'hours' : 'minutes',
-  };
-};
-const followupRuleFromRow = (row) => ({
-  followup_chore_id: row.followup_chore_id,
-  user_ids: row.user_ids,
-  delay_minutes: row.timing === 'after' ? Math.round(Number(row.amount) * (row.unit === 'hours' ? 60 : 1)) : 0,
-});
-
 // Clicking the active column flips it; clicking a new one starts ascending,
 // which is the reading order for names and "soonest first" for dates.
 function nextSort(sort, column) {
@@ -291,9 +266,6 @@ export default function ChoreSchedulesTab({ setSaveMessage, section, onSection, 
   const chores = useMemo(() => allChores.filter((c) => !c.routine_id), [allChores]);
   const schedules = useMemo(() => schedulesWithRoutines(allSchedules, routines), [allSchedules, routines]);
   const [routineEditor, setRoutineEditor] = useState({ open: false, routine: null, copyOf: null });
-  // The chore dialog's follow-ups, as form rows (issue #241).
-  const [followupRows, setFollowupRows] = useState([]);
-  const [followupError, setFollowupError] = useState('');
   const [loading, setLoading] = useState(true);
 
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
@@ -305,13 +277,11 @@ export default function ChoreSchedulesTab({ setSaveMessage, section, onSection, 
 
   const [choreDialogOpen, setChoreDialogOpen] = useState(false);
   const [editingChore, setEditingChore] = useState(null);
-  const [choreForm, setChoreForm] = useState(defaultChoreForm);
   const [deleteChoreDialog, setDeleteChoreDialog] = useState({ open: false, chore: null });
   // Chores ticked for deleting together.
   const [selectedChoreIds, setSelectedChoreIds] = useState(new Set());
   const [bulkDeleteDialog, setBulkDeleteDialog] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
-  const [savingChore, setSavingChore] = useState(false);
   // The chore dialog's Schedule button: offered for a new chore, except one
   // made from the board's Add, which is already scheduling it. It stays if a
   // follow-up problem keeps the saved chore's dialog open.
@@ -586,94 +556,18 @@ export default function ChoreSchedulesTab({ setSaveMessage, section, onSection, 
   };
 
   // `fromBoard` is true only from the board; a click handler passes an event.
+  // The form itself lives in ChoreFormDialog; this only says which chore it
+  // edits (none for a new one) and whether to offer its Schedule button.
   const openCreateChore = (fromBoard) => {
     setOfferSchedule(fromBoard !== true);
     setEditingChore(null);
-    setChoreForm(defaultChoreForm);
-    setFollowupRows([]);
-    setFollowupError('');
     setChoreDialogOpen(true);
   };
 
   const openEditChore = (chore) => {
     setOfferSchedule(false);
     setEditingChore(chore);
-    setChoreForm({
-      title: chore.title,
-      description: chore.description || '',
-      clam_value: chore.clam_value || 0,
-      icon: chore.icon || '',
-    });
-    setFollowupRows([]);
-    setFollowupError('');
     setChoreDialogOpen(true);
-    axios.get(`${API_BASE_URL}/api/chores/${chore.id}/followups`)
-      .then((res) => setFollowupRows((res.data || []).map(followupRowFromRule)))
-      .catch(() => setFollowupRows([]));
-  };
-
-  const updateFollowupRow = (index, changes) => {
-    setFollowupError('');
-    setFollowupRows((rows) => rows.map((row, i) => (i === index ? { ...row, ...changes } : row)));
-  };
-
-  // What the form can check before anything is saved; the server checks the
-  // rest (loops, people who no longer exist).
-  const followupFormError = () => {
-    for (const [index, row] of followupRows.entries()) {
-      const n = index + 1;
-      if (!row.followup_chore_id) return t('chores:followups.errorChore', { n });
-      if (!row.user_ids.length) return t('chores:followups.errorPeople', { n });
-      const minutes = followupRuleFromRow(row).delay_minutes;
-      if (row.timing === 'after' && (!(minutes > 0) || minutes > 7 * 24 * 60)) return t('chores:followups.errorDelay', { n });
-    }
-    return '';
-  };
-
-  // With thenSchedule, a saved chore goes straight on to the Schedule flow.
-  const handleSaveChore = async (thenSchedule = false) => {
-    if (!choreForm.title.trim()) return;
-    const formError = followupFormError();
-    if (formError) { setFollowupError(formError); return; }
-    setSavingChore(true);
-    // A cleared clam field edits as ''; the server gets 0 for it, as before.
-    const chorePayload = { ...choreForm, clam_value: savedWholeNumber(choreForm.clam_value) };
-    let choreId = editingChore?.id;
-    try {
-      if (editingChore) {
-        await axios.patch(`${API_BASE_URL}/api/chores/${editingChore.id}`, chorePayload);
-      } else {
-        const res = await axios.post(`${API_BASE_URL}/api/chores`, chorePayload);
-        choreId = res.data?.id;
-        // Saved: from here on this dialog is editing it, so a follow-up
-        // problem below can be fixed and saved again without a duplicate.
-        if (choreId) setEditingChore({ id: choreId, ...chorePayload });
-        // A new chore has no schedule yet, so a chip or search would hide it.
-        setPerson('all');
-        setQuery('');
-      }
-    } catch (err) {
-      showMessage('error', err.response?.data?.error || 'Failed to save chore.');
-      setSavingChore(false);
-      return;
-    }
-    try {
-      if (choreId && (editingChore || followupRows.length)) {
-        await axios.put(`${API_BASE_URL}/api/chores/${choreId}/followups`, {
-          followups: followupRows.map(followupRuleFromRow),
-        });
-      }
-      showMessage('success', editingChore ? 'Chore updated.' : 'Chore created.');
-      setChoreDialogOpen(false);
-      await fetchAll();
-      if (thenSchedule && choreId) setScheduleChore({ id: choreId, ...chorePayload });
-    } catch (err) {
-      // The chore itself is saved; the dialog stays open on the follow-ups.
-      setFollowupError(err.response?.data?.error || t('chores:followups.errorSave'));
-      await fetchAll();
-    } finally {
-      setSavingChore(false);
-    }
   };
 
   const handleDeleteChore = async () => {
@@ -1206,196 +1100,24 @@ export default function ChoreSchedulesTab({ setSaveMessage, section, onSection, 
       )}
 
       {/* ── CHORE DIALOG ─────────────────────────────────── */}
-      <Dialog
+      {/* The same New Chore / Edit Chore dialog the widget's Add Chore
+          opens (ChoreFormDialog.jsx): identity, follow-ups, Create and
+          Schedule. A new chore has no schedule yet, so a chip or search
+          would hide it — saving one resets the person filter. */}
+      <ChoreFormDialog
         open={choreDialogOpen}
+        chore={editingChore}
+        chores={chores}
+        users={users}
+        offerSchedule={offerSchedule}
         onClose={() => setChoreDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-        fullScreen={isMobile}
-        slotProps={{
-          paper: {
-            component: 'form',
-            onSubmit: (event) => {
-              event.preventDefault();
-              handleSaveChore();
-            },
-          }
+        onSaved={(saved, { isNew }) => {
+          if (isNew) { setPerson('all'); setQuery(''); }
+          fetchAll();
         }}
-      >
-        <DialogTitle>{editingChore ? t('chores:schedules.editChore') : t('chores:schedules.newChore')}</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-            <TextField
-              fullWidth
-              size="small"
-              label={t('common:labels.title')}
-              value={choreForm.title}
-              onChange={(e) => setChoreForm(f => ({ ...f, title: e.target.value }))}
-              required
-            />
-            <TextField
-              fullWidth
-              size="small"
-              label={t('common:labels.description')}
-              value={choreForm.description}
-              onChange={(e) => setChoreForm(f => ({ ...f, description: e.target.value }))}
-              multiline
-              rows={2}
-            />
-            <TextField
-              size="small"
-              label={t('chores:schedules.clamValue')}
-              type="number"
-              value={choreForm.clam_value}
-              onChange={(e) => setChoreForm(f => ({ ...f, clam_value: editWholeNumber(e.target.value) }))}
-              slotProps={{ htmlInput: { min: 0 } }}
-              sx={{ width: { xs: '100%', sm: 140 } }}
-            />
-            {/* The icon belongs to the chore, not the schedule, so it is picked
-                here and every schedule of this chore inherits it (issue #141). */}
-            <ChoreIconPicker
-              value={choreForm.icon}
-              onChange={(icon) => setChoreForm(f => ({ ...f, icon }))}
-            />
-
-            {/* Follow-ups (issue #241). Nothing but one button until used. */}
-            <Divider />
-            <Box>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                {t('chores:followups.heading')}{' '}
-                <Typography component="span" variant="caption" color="text.secondary">{t('chores:followups.optional')}</Typography>
-              </Typography>
-              {followupRows.length > 0 && (
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                  {t('chores:followups.help')}
-                </Typography>
-              )}
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1.5 }}>
-                {followupRows.map((row, index) => (
-                  <Box
-                    key={index}
-                    sx={{ border: '1px solid var(--card-border)', borderRadius: 'var(--hg-radius-sm)', p: 1.5, display: 'flex', flexDirection: 'column', gap: 1.5 }}
-                  >
-                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                      <FormControl fullWidth size="small">
-                        <InputLabel id={`followup-${index}-give-label`}>{t('chores:followups.give')}</InputLabel>
-                        <Select
-                          labelId={`followup-${index}-give-label`}
-                          value={row.followup_chore_id}
-                          label={t('chores:followups.give')}
-                          onChange={(e) => updateFollowupRow(index, { followup_chore_id: e.target.value })}
-                        >
-                          {chores.filter((c) => c.id !== editingChore?.id).map((c) => (
-                            <MenuItem key={c.id} value={c.id}>{c.icon ? `${c.icon} ` : ''}{c.title}</MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                      <Tooltip title={t('chores:followups.remove')}>
-                        <IconButton
-                          size="small"
-                          color="error"
-                          aria-label={t('chores:followups.remove')}
-                          onClick={() => { setFollowupError(''); setFollowupRows((rows) => rows.filter((_, i) => i !== index)); }}
-                        >
-                          <Delete fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </Box>
-                    <FormControl fullWidth size="small">
-                      <InputLabel id={`followup-${index}-to-label`}>{t('chores:followups.to')}</InputLabel>
-                      <Select
-                        labelId={`followup-${index}-to-label`}
-                        multiple
-                        value={row.user_ids}
-                        label={t('chores:followups.to')}
-                        onChange={(e) => updateFollowupRow(index, { user_ids: e.target.value })}
-                        renderValue={(ids) => ids.map(getUserName).join(', ')}
-                      >
-                        {users.filter((u) => u.id > 0).map((u) => (
-                          <MenuItem key={u.id} value={u.id}>
-                            <Checkbox size="small" checked={row.user_ids.includes(u.id)} sx={{ p: 0.5, mr: 1 }} />
-                            <ListItemText primary={u.username} />
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-                      <FormControl size="small" sx={{ minWidth: 150 }}>
-                        <InputLabel id={`followup-${index}-when-label`}>{t('chores:followups.when')}</InputLabel>
-                        <Select
-                          labelId={`followup-${index}-when-label`}
-                          value={row.timing}
-                          label={t('chores:followups.when')}
-                          onChange={(e) => updateFollowupRow(index, { timing: e.target.value })}
-                        >
-                          <MenuItem value="now">{t('chores:followups.rightAway')}</MenuItem>
-                          <MenuItem value="after">{t('chores:followups.after')}</MenuItem>
-                        </Select>
-                      </FormControl>
-                      {row.timing === 'after' && (
-                        <>
-                          <TextField
-                            size="small"
-                            type="number"
-                            value={row.amount}
-                            onChange={(e) => updateFollowupRow(index, { amount: e.target.value })}
-                            slotProps={{ htmlInput: { min: 1, 'aria-label': t('chores:followups.amount') } }}
-                            sx={{ width: 90 }}
-                          />
-                          <FormControl size="small" sx={{ minWidth: 110 }}>
-                            <Select
-                              value={row.unit}
-                              onChange={(e) => updateFollowupRow(index, { unit: e.target.value })}
-                              inputProps={{ 'aria-label': t('chores:followups.unit') }}
-                            >
-                              <MenuItem value="minutes">{t('chores:followups.minutes')}</MenuItem>
-                              <MenuItem value="hours">{t('chores:followups.hours')}</MenuItem>
-                            </Select>
-                          </FormControl>
-                        </>
-                      )}
-                    </Box>
-                  </Box>
-                ))}
-              </Box>
-              {followupError && <Alert severity="error" sx={{ mt: 1.5 }}>{followupError}</Alert>}
-              {followupRows.length < MAX_FOLLOWUPS && (
-                <Button
-                  type="button"
-                  size="small"
-                  startIcon={<Add />}
-                  sx={{ mt: 1 }}
-                  onClick={() => { setFollowupError(''); setFollowupRows((rows) => [...rows, newFollowupRow()]); }}
-                >
-                  {t('chores:followups.add')}
-                </Button>
-              )}
-            </Box>
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button type="button" onClick={() => setChoreDialogOpen(false)} startIcon={<Cancel />}>{t('common:actions.cancel')}</Button>
-          <Button
-            type="submit"
-            variant={offerSchedule ? 'outlined' : 'contained'}
-            startIcon={savingChore ? <CircularProgress size={16} /> : <Save />}
-            disabled={savingChore || !choreForm.title.trim()}
-          >
-            {savingChore ? 'Saving...' : editingChore ? 'Update' : 'Create'}
-          </Button>
-          {offerSchedule && (
-            <Button
-              type="button"
-              variant="contained"
-              startIcon={<Schedule />}
-              disabled={savingChore || !choreForm.title.trim()}
-              onClick={() => handleSaveChore(true)}
-            >
-              {t('chores:scheduleFlow.scheduleButton')}
-            </Button>
-          )}
-        </DialogActions>
-      </Dialog>
+        onSchedule={(saved) => setScheduleChore(saved)}
+        showMessage={showMessage}
+      />
 
       {/* ── SCHEDULE A NEW CHORE ─────────────────────────── */}
       <ScheduleChoreDialog

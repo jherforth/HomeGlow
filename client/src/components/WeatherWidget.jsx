@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import useDataRefresh from '../hooks/useDataRefresh.js';
 import {
   Typography,
@@ -51,6 +51,9 @@ const isValidCoordinates = (candidate) => {
 // days. Providers may send more (OpenWeatherMap's free endpoint gives five),
 // which plugins such as Weather Glance show; this widget keeps to three.
 const CORE_FORECAST_DAYS = 3;
+
+// One object for every render (see chartSeries).
+const CHART_DOT = { fill: 'var(--accent)' };
 
 const WeatherWidget = ({
   refreshInterval = 0,
@@ -668,11 +671,14 @@ const WeatherWidget = ({
   // Spanish display shows "mié" rather than "Wed".
   const forecastDayLabel = (day) => formatWeekdayShort(new Date(`${day.date}T12:00:00`));
 
-  const chartSeries = chartData.map((point) => ({
+  // The same array until the data changes: the chart keeps its data in a
+  // store, and a new array on every render makes it update over and over
+  // (React error 185 when the widget re-renders often, as in a Stack).
+  const chartSeries = useMemo(() => chartData.map((point) => ({
     time: formatTime(new Date(point.timestamp * 1000)),
     temperature: point.temp === null ? null : Math.round(point.temp),
     precipitation: point.precipitation ?? 0,
-  }));
+  })), [chartData, t]); // t: times follow a language change
 
   // Compact Layout - Current weather only
   const renderCompactLayout = () => {
@@ -965,7 +971,7 @@ const WeatherWidget = ({
                       dataKey="temperature"
                       stroke="var(--accent)"
                       strokeWidth={2}
-                      dot={{ fill: 'var(--accent)' }}
+                      dot={CHART_DOT}
                     />
                   </LineChart>
                 ) : (
