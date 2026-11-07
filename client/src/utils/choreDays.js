@@ -133,6 +133,17 @@ export function choreDays({ rows, schedule, userId, today, count = 7, vacation =
 }
 
 /**
+ * The 7-day row's display states. With missed marks hidden, a missed day
+ * draws as 'open' (due, nothing logged) instead of the red cross — no
+ * negative mark for a day that didn't get done. The underlying days are
+ * unchanged, so the History dialog and the streak still see the miss.
+ */
+export function displayDays(days, { showMissed = true } = {}) {
+  if (showMissed) return days;
+  return days.map((day) => (day.state === 'missed' ? { ...day, state: 'open' } : day));
+}
+
+/**
  * Consecutive due days done, counting back from today. Today counts once done
  * and never breaks the run while still open; days off and vacation days are
  * skipped. `capped` is true when the run reaches the oldest day given.

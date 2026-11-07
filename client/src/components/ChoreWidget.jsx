@@ -19,6 +19,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Divider,
   CircularProgress,
   Menu,
   ListItemText,
@@ -58,7 +59,7 @@ import { householdNow, isExpired } from '../utils/choreExpiry.js';
 import useRoutinesToday from '../utils/useRoutinesToday.js';
 import { shouldPersistSettings } from '../utils/widgetSettingsPersist';
 import { parseVacationModeSetting } from '../utils/interfaceSettings.js';
-import { addDays, choreDays } from '../utils/choreDays.js';
+import { addDays, choreDays, displayDays } from '../utils/choreDays.js';
 import { getServerTimezoneSync } from '../utils/timezone.js';
 import ChoreDayMark from './ChoreDayMark.jsx';
 import ChoreHistoryDialog from './ChoreHistoryDialog.jsx';
@@ -71,6 +72,9 @@ const DEFAULT_SHOW_BONUS_CHORES = true;
 const DEFAULT_SOUND_ENABLED = true;
 // Off by default: the 7-day row under each chore is opt-in per display.
 const DEFAULT_SHOW_WEEK = false;
+// On by default: the 7-day row shows missed days as red crosses. Turn it off
+// per display to draw missed days as plain "nothing logged" instead.
+const DEFAULT_SHOW_MISSED_MARKS = true;
 const WEEK_DAYS = 7;
 // Frozen: it is shared by every instance's initial state and by the
 // no-stored-settings snapshot, so an in-place mutation would corrupt both.
@@ -156,6 +160,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
   });
   const [soundEnabled, setSoundEnabled] = useState(DEFAULT_SOUND_ENABLED);
   const [showWeek, setShowWeek] = useState(DEFAULT_SHOW_WEEK);
+  const [showMissedMarks, setShowMissedMarks] = useState(DEFAULT_SHOW_MISSED_MARKS);
   // Per-device: which real users this display hides. Bonus pseudo-user (id 0)
   // is not a real user and is not offered in the selector — the "Bonus Chores"
   // column already has its own toggle.
@@ -258,11 +263,15 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
           showWeek: choreSettings && typeof choreSettings.showWeek === 'boolean'
             ? choreSettings.showWeek
             : DEFAULT_SHOW_WEEK,
+          showMissedMarks: choreSettings && typeof choreSettings.showMissedMarks === 'boolean'
+            ? choreSettings.showMissedMarks
+            : DEFAULT_SHOW_MISSED_MARKS,
         };
         setShowBonusChores(adopted.showBonusChores);
         setSoundEnabled(adopted.soundEnabled);
         setHiddenUserIds(adopted.hiddenUserIds);
         setShowWeek(adopted.showWeek);
+        setShowMissedMarks(adopted.showMissedMarks);
       } catch (error) {
         console.error('Error loading chore widget settings:', error);
       } finally {
@@ -291,7 +300,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
       return;
     }
 
-    const current = { showBonusChores, soundEnabled, hiddenUserIds, showWeek };
+    const current = { showBonusChores, soundEnabled, hiddenUserIds, showWeek, showMissedMarks };
     // The load itself is not an edit. Without this the effect writes back what
     // it just read on every mount — and on every tab change that remounts the
     // widget, which on a rotating display is a write a minute.
@@ -311,7 +320,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
     }, 250);
 
     return () => clearTimeout(timeoutId);
-  }, [API_DEVICE_URL, deviceSettingsLoaded, showBonusChores, soundEnabled, hiddenUserIds, showWeek]);
+  }, [API_DEVICE_URL, deviceSettingsLoaded, showBonusChores, soundEnabled, hiddenUserIds, showWeek, showMissedMarks]);
 
   useEffect(() => {
     const onUsersUpdated = () => {
@@ -1461,9 +1470,13 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
           )}
           {/* Its own line under the title and the button: beside the button,
               seven marks don't fit a narrow column and push the button out. */}
+          {/* The 7-day row. displayDays hides the red missed crosses when
+              the display's "show missed days" setting is off — missed days
+              draw as plain "nothing logged" instead. The History dialog
+              still shows the real record. */}
           {showWeek && schedule.user_id ? (
             <Box sx={{ flexBasis: '100%', display: 'flex', gap: '2px', mt: 0.5 }} aria-label={t('chores:history.weekAria', { title: schedule.title })}>
-              {choreDays({ rows: weekHistory, schedule, userId: schedule.user_id, today: getTodayDateString(), count: WEEK_DAYS, vacation, timeZone: getServerTimezoneSync() })
+              {displayDays(choreDays({ rows: weekHistory, schedule, userId: schedule.user_id, today: getTodayDateString(), count: WEEK_DAYS, vacation, timeZone: getServerTimezoneSync() }), { showMissed: showMissedMarks })
                 .map((day) => (
                   <ChoreDayMark key={day.date} state={day.state} size={14} label={`${day.date}: ${t(`chores:history.state.${day.state}`)}`} />
                 ))}
@@ -2243,6 +2256,24 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                 })}
               </FormGroup>
             )}
+            <Divider sx={{ my: 1.5 }} />
+            <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+              {t('chores:history.weekHeading')}
+            </Typography>
+            <FormControlLabel
+              control={
+                <Switch
+                  size="small"
+                  checked={showMissedMarks}
+                  disabled={!showWeek}
+                  onChange={(event) => setShowMissedMarks(event.target.checked)}
+                />
+              }
+              label={t('chores:history.showMissedMarks')}
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+              {t('chores:history.showMissedMarksHelper')}
+            </Typography>
           </Box>
         </Popover>
 

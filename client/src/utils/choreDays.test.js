@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { addDays, cronFiresOn, missesTracked, dueOn, choreDays, streakOf, summarize, rowsFor } from './choreDays.js';
+import { addDays, cronFiresOn, missesTracked, dueOn, choreDays, displayDays, streakOf, summarize, rowsFor } from './choreDays.js';
 
 // 2026-10-20 is a Tuesday.
 const TODAY = '2026-10-20';
@@ -117,6 +117,27 @@ describe('choreDays', () => {
     const schedule = { ...base, crontab: MWF, duration: 'until-completed' };
     const days = choreDays({ rows: [row(TODAY)], schedule, userId: 2, today: TODAY, count: 2 });
     expect(states(days)).toEqual(['off', 'done']);
+  });
+});
+
+describe('displayDays', () => {
+  const d = (...s) => s.map((state, i) => ({ date: `2026-10-1${i}`, state }));
+  it('hides missed days as open when missed marks are off', () => {
+    expect(displayDays(d('done', 'missed', 'open', 'missed'), { showMissed: false }).map((day) => day.state))
+      .toEqual(['done', 'open', 'open', 'open']);
+  });
+  it('keeps missed days when missed marks are on', () => {
+    expect(displayDays(d('done', 'missed'), { showMissed: true }).map((day) => day.state))
+      .toEqual(['done', 'missed']);
+  });
+  it('defaults to showing missed days and leaves other states alone', () => {
+    expect(displayDays(d('missed', 'today', 'vacation', 'off')).map((day) => day.state))
+      .toEqual(['missed', 'today', 'vacation', 'off']);
+  });
+  it('does not mutate the input days', () => {
+    const days = d('missed');
+    displayDays(days, { showMissed: false });
+    expect(days[0].state).toBe('missed');
   });
 });
 
