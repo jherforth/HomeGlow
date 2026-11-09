@@ -2642,6 +2642,9 @@ async function dailyBackgroundProcessing() {
     // bonus chores that persist from day to day should reset to unassigned.
     // A card from someone's own schedule stays theirs, clams or not: an
     // any-day one is open all period, and its person is part of it.
+    // Clearing pool_claimed_on matters too: a claimed card that is reset
+    // here and later assigned to someone as a daily chore must not be
+    // mistaken for a claim by the recurring return below (issue #386).
     const choresToReset = db.prepare(`
       SELECT cs.id,
         cs.user_id,
@@ -2658,7 +2661,7 @@ async function dailyBackgroundProcessing() {
     console.log(`Found ${choresToReset.length} bonus chores to reset`);
     let resetScheduleCount = 0;
     for (const schedule of choresToReset) {
-      db.prepare('UPDATE chore_schedules set user_id = NULL WHERE id = ?').run(schedule.id);
+      db.prepare('UPDATE chore_schedules set user_id = NULL, pool_claimed_on = NULL WHERE id = ?').run(schedule.id);
       console.log(`Reset schedule ID ${schedule.id}: "${schedule.title}" (user_id: ${schedule.user_id})`);
       resetScheduleCount++;
     }
@@ -2666,6 +2669,39 @@ async function dailyBackgroundProcessing() {
       ...results,
       resetSchedulesCount: resetScheduleCount,
       resetSchedules: choresToReset,
+    }
+
+    // A recurring bonus chore claimed from the pool returns to it every
+    // night, done or not — the same as the one-time reset above, and the
+    // docs say bonus chores "reset to unassigned each night". Only a
+    // claim carries the marker (pool_claimed_on, set by the claim route),
+    // so a recurring chore a parent assigned stays theirs overnight, clams
+    // or not. The marker is cleared on return, so a night the job misses
+    // (the server was off) cannot strand the claim: it is still marked,
+    // and the next run returns it.
+    const claimedBonusSchedules = db.prepare(`
+      SELECT cs.id,
+        cs.user_id,
+        c.title
+      FROM chore_schedules cs
+      JOIN chores c ON cs.chore_id = c.id
+      WHERE cs.crontab IS NOT NULL
+        AND cs.visible = 1
+        AND cs.user_id IS NOT NULL
+        AND c.clam_value > 0
+        AND cs.pool_claimed_on IS NOT NULL;
+    `).all();
+    console.log(`Found ${claimedBonusSchedules.length} claimed recurring bonus chores to return to the pool`);
+    let returnedBonusCount = 0;
+    for (const schedule of claimedBonusSchedules) {
+      db.prepare('UPDATE chore_schedules set user_id = NULL, pool_claimed_on = NULL WHERE id = ?').run(schedule.id);
+      console.log(`Returned schedule ID ${schedule.id}: "${schedule.title}" to the bonus pool (user_id: ${schedule.user_id})`);
+      returnedBonusCount++;
+    }
+    results = {
+      ...results,
+      returnedBonusSchedulesCount: returnedBonusCount,
+      returnedBonusSchedules: claimedBonusSchedules,
     }
 
 
@@ -2685,13 +2721,14 @@ async function dailyBackgroundProcessing() {
     console.log(`  - Day-of schedules pruned: ${prunedScheduleCount}`);
     console.log(`  - Orphaned chores deleted: ${prunedChoreCount}`);
     console.log(`  - Bonus chores reset: ${resetScheduleCount}`);
+    console.log(`  - Claimed recurring bonus chores returned to pool: ${returnedBonusCount}`);
     console.log(`  - Sticky chores triggered: ${stickySchedulesCreated}`);
     try {
       routines.nightly();
     } catch (error) {
       console.error('Routines nightly tidy failed:', error);
     }
-    console.log(`Total: ${prunedScheduleCount + prunedChoreCount + resetScheduleCount} operations performed`);
+    console.log(`Total: ${prunedScheduleCount + prunedChoreCount + resetScheduleCount + returnedBonusCount} operations performed`);
     // Written without a request, so the displays are told here.
     householdChanges.bump('chores', 'users');
     return results;
@@ -3796,7 +3833,13 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
     const params = [];
 
     if (chore_id !== undefined) { updates.push('chore_id = ?'); params.push(chore_id); }
-    if (user_id !== undefined) { updates.push('user_id = ?'); params.push(user_id || null); }
+    if (user_id !== undefined) {
+      updates.push('user_id = ?'); params.push(user_id || null);
+      // Back to the pool: the claim is over, so the marker goes with it.
+      // Any other move keeps the marker — a claimed chore transferred to
+      // another kid still returns at the nightly cleanup.
+      if (!user_id) updates.push('pool_claimed_on = NULL');
+    }
     if (crontab !== undefined) { updates.push('crontab = ?'); params.push(crontab || null); }
     // Made one-time: what it was done before doesn't make it done now (the
     // nightly cleanup prunes a one-time chore once it's done).
@@ -3918,6 +3961,99 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
   } catch (error) {
     console.error('Error updating schedule:', error);
     reply.status(500).send({ error: 'Failed to update schedule' });
+  }
+});
+
+// Claiming a bonus chore from the pool is its own route, not a plain
+// assignment: the widget used to claim with PATCH /api/chore-schedules/:id
+// {user_id, visible: 1}, the same request an admin uses to assign a chore
+// on purpose, so the server could not tell the two apart — and the nightly
+// cleanup then pulled parent-assigned paid chores into the pool (issue
+// #386). Claiming records the claim date on the schedule (pool_claimed_on,
+// migration schema42); the nightly job returns only schedules carrying
+// that marker. The route is also where "one open bonus chore per kid" is
+// enforced: the widget checks it too, but only the server sees every
+// display.
+fastify.post('/api/chore-schedules/:id/claim', async (request, reply) => {
+  const { id } = request.params;
+  const userId = request.body?.user_id;
+  if (userId === undefined || userId === null || userId === 0) {
+    return reply.status(400).send({ error: 'user_id is required to claim a chore' });
+  }
+  const parsedUserId = parseInt(userId, 10);
+  if (Number.isNaN(parsedUserId)) {
+    return reply.status(400).send({ error: 'user_id must be a number' });
+  }
+  try {
+    const user = db.prepare('SELECT id FROM users WHERE id = ?').get(parsedUserId);
+    if (!user) {
+      return reply.status(404).send({ error: 'User not found' });
+    }
+    const schedule = db.prepare(`
+      SELECT cs.*, c.clam_value
+      FROM chore_schedules cs JOIN chores c ON cs.chore_id = c.id
+      WHERE cs.id = ?
+    `).get(id);
+    if (!schedule) {
+      return reply.status(404).send({ error: 'Schedule not found' });
+    }
+    // A routine's schedules belong to the routine: assigning one by hand
+    // is refused on PATCH the same way.
+    const owner = routineOwning(schedule.chore_id);
+    if (owner) return refuseRoutineEdit(reply, owner);
+    if (schedule.user_id !== null) {
+      return reply.status(409).send({ error: 'This chore is already assigned' });
+    }
+    if (!schedule.visible) {
+      return reply.status(409).send({ error: 'This chore is not available to claim' });
+    }
+    if (!(schedule.clam_value > 0)) {
+      return reply.status(409).send({ error: 'Only bonus chores can be claimed from the pool' });
+    }
+
+    // One open bonus chore per kid: an assigned bonus chore due today
+    // that is not completed today blocks another claim — the same test
+    // the widget runs first (hasOutstandingBonusChore), here so a second
+    // display cannot race past it.
+    const today = getTodayLocalDateString();
+    const assigned = db.prepare(`
+      SELECT cs.*, c.clam_value
+      FROM chore_schedules cs JOIN chores c ON cs.chore_id = c.id
+      WHERE cs.user_id = ? AND cs.visible = 1 AND c.clam_value > 0
+    `).all(parsedUserId);
+    const completedToday = new Set(db.prepare(`
+      SELECT chore_schedule_id FROM chore_history
+      WHERE user_id = ? AND date = ? AND kind = 'completion'
+    `).all(parsedUserId, today).map((row) => row.chore_schedule_id));
+    const now = new Date();
+    const outstanding = assigned.some((row) => {
+      if (completedToday.has(row.id)) return false;
+      if (row.snoozed_until && new Date(row.snoozed_until) > now) return false;
+      if (!row.crontab) return true;
+      try {
+        return cronFiresOnDate(row.crontab, today);
+      } catch {
+        return false;
+      }
+    });
+    if (outstanding) {
+      return reply.status(409).send({ error: 'This person already has an outstanding bonus chore' });
+    }
+
+    db.prepare('UPDATE chore_schedules SET user_id = ?, visible = 1, pool_claimed_on = ? WHERE id = ?')
+      .run(parsedUserId, today, id);
+    // Claiming moves someone's set the same way an assignment does: the
+    // daily "all regular chores done" bonus is re-checked for the new
+    // owner, as PATCH does.
+    awardDailyRegularBonusIfDue(parsedUserId, today);
+    return db.prepare(`
+      SELECT cs.*, c.title, c.description, c.clam_value, c.icon
+      FROM chore_schedules cs JOIN chores c ON cs.chore_id = c.id
+      WHERE cs.id = ?
+    `).get(id);
+  } catch (error) {
+    console.error('Error claiming schedule:', error);
+    reply.status(500).send({ error: 'Failed to claim chore' });
   }
 });
 

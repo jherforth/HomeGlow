@@ -797,9 +797,11 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
         return;
       }
 
-      await axios.patch(`${API_BASE_URL}/api/chore-schedules/${scheduleId}`, {
-        user_id: userId,
-        visible: 1
+      // Claiming is its own route, not an assignment: it records the claim
+      // (pool_claimed_on) so the nightly cleanup knows this one came from
+      // the pool — an admin assigning the same chore must not be returned.
+      await axios.post(`${API_BASE_URL}/api/chore-schedules/${scheduleId}/claim`, {
+        user_id: userId
       });
 
       await fetchData();
