@@ -32,6 +32,7 @@ import {
   dockHideTimeoutMs,
   wantsActivityListeners,
 } from './utils/dockIdleHide.js';
+import { createDialogWatcher } from './utils/dialogVisibility.js';
 import {
   BLOCK_PINCH_TOUCH_ACTION,
   attachTwoFingerSwipe,
@@ -1211,6 +1212,15 @@ const App = () => {
   // phone, where the dock is the navigation, and never while Admin is open.
   const dockHideMs = isMobile ? null : dockHideTimeoutMs(screensaverSettings.dockHideMinutes);
   const [dockHidden, setDockHidden] = useState(false);
+  // A dialog anywhere hides the dock too: the dock sits above MUI dialogs,
+  // so a dialog opened from a widget would end up with its bottom buttons
+  // under it. Any open dialog hides it, on any screen, and it returns when
+  // the last dialog closes (stacked dialogs included — the watcher counts).
+  const [dialogOpen, setDialogOpen] = useState(false);
+  useEffect(() => {
+    const watcher = createDialogWatcher({ onChange: setDialogOpen });
+    return () => watcher.dispose();
+  }, []);
   // How big the expanded widget is, if any (utils/widgetExpand.js).
   const [expandedWidgetSize, setExpandedWidgetSize] = useState('normal');
   const dockIdleRef = useRef(null);
@@ -2922,9 +2932,11 @@ const App = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Floating Dock TabBar. The dock renders above MUI dialogs, so hide it
-          while the Admin Panel is open full-screen on mobile — otherwise it
-          covers the bottom action buttons of the panel's dialogs. */}
+      {/* Floating Dock TabBar. The dock renders above MUI dialogs, so it
+          hides whenever one is open (any dialog, any screen — dialogOpen
+          above), and while the Admin Panel is open full-screen on mobile it
+          is not rendered at all — otherwise it covers the bottom action
+          buttons of the dialogs. */}
       {!(isMobile && showAdminPanel) && (
       <TabBar
         dropTarget={carry.hoverTarget}
@@ -2941,7 +2953,7 @@ const App = () => {
         onOpenSettings={toggleAdminPanel}
         onRefresh={handlePageRefresh}
         // A widget filling the whole page covers the dock too.
-        hidden={!carry.dragging && (dockHidden || expandedWidgetSize === 'full')}
+        hidden={!carry.dragging && (dockHidden || expandedWidgetSize === 'full' || dialogOpen)}
         underDialogs={showAdminPanel}
         theme={displayTheme}
         themeMode={themeMode}
