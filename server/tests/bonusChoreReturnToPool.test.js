@@ -209,6 +209,38 @@ test('a claim through the new route sets the marker and an admin assign does not
   assert.equal((await scheduleById(second.scheduleId)).user_id, kid);
 });
 
+test('a one-time claim reset clears the marker so a later parent assignment sticks', async () => {
+  // Jay's repro: Ava claims a one-time "Clean the garage". The nightly
+  // job resets it; if the marker survived, a parent PATCHing it to Leo
+  // as a daily chore would lose it the next night.
+  const chore = (await post('/api/chores', { title: 'Clean the garage', clam_value: 3 })).body.id;
+  const made = await post('/api/chore-schedules', { chore_id: chore, user_id: null });
+  assert.equal(made.status, 200, JSON.stringify(made.body));
+  const scheduleId = made.body.id;
+  const ava = await makeKid('Ava');
+  await claimSchedule(scheduleId, ava);
+  assert.equal((await scheduleById(scheduleId)).pool_claimed_on, today);
+
+  // The nightly one-time reset puts the card back in the pool — and
+  // clears the marker with it.
+  const reset = await nightly();
+  assert.equal(reset.status, 200, JSON.stringify(reset.body));
+  assert.equal((await scheduleById(scheduleId)).user_id, null);
+  assert.equal((await scheduleById(scheduleId)).pool_claimed_on, null);
+  assert.equal(reset.body.resetSchedulesCount, 1, JSON.stringify(reset.body));
+
+  // A parent makes it Leo's daily chore. The next night Leo keeps it:
+  // without the marker it is an assignment, not a claim.
+  const leo = await makeKid('Leo');
+  assert.equal((await patch(`/api/chore-schedules/${scheduleId}`, { user_id: leo, crontab: '0 0 * * *' })).status, 200);
+  const completed = await post('/api/chores/complete', { chore_schedule_id: scheduleId, user_id: leo, date: yesterday });
+  assert.equal(completed.status, 200, JSON.stringify(completed.body));
+  const run = await nightly();
+  assert.equal(run.status, 200, JSON.stringify(run.body));
+  assert.equal((await scheduleById(scheduleId)).user_id, leo);
+  assert.equal(run.body.returnedBonusSchedulesCount, 0, JSON.stringify(run.body));
+});
+
 test('the claim route enforces one open bonus chore per kid', async () => {
   const first = await makeRecurringChore({ title: 'Sweep the porch', clamValue: 2, userId: null });
   const second = await makeRecurringChore({ title: 'Water the plants', clamValue: 2, userId: null });
