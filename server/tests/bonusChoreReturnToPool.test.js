@@ -1,10 +1,16 @@
-// A recurring bonus chore claimed from the pool and completed should cycle
-// back to the pool at the nightly cleanup — not stay assigned to whoever
-// claimed it. The nightly reset used to touch only one-time cards
-// (crontab IS NULL), so a daily bonus chore kept its claimer forever. A
-// real HomeGlow server on a throwaway database; the nightly job runs via
-// /api/system/backgroundTasks and "yesterday" is simulated by completing
-// with a past date, which the complete endpoint accepts.
+// A recurring bonus chore claimed from the pool returns to it at the
+// nightly cleanup — done or not. The first version of this fix returned a
+// schedule only when its holder had completed it yesterday, which had two
+// holes Jay caught on review: it also pulled in a recurring chore a parent
+// had assigned (the server could not tell a claim from an assignment —
+// both were PATCH user_id), and a missed night stranded the claim for
+// good. So claiming is now its own route
+// (POST /api/chore-schedules/:id/claim) that records the claim date on
+// the schedule (pool_claimed_on, migration schema42), and the nightly job
+// returns only schedules carrying that marker, every night, clearing it
+// as it goes. A real HomeGlow server on a throwaway database; the nightly
+// job runs via /api/system/backgroundTasks and past dates are simulated by
+// completing with a past date, which the complete endpoint accepts.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
@@ -38,6 +44,7 @@ const nightly = () => api('/api/system/backgroundTasks');
 const shift = (days) => new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
 const today = shift(0);
 const yesterday = shift(-1);
+const twoDaysAgo = shift(-2);
 
 test.before(async () => {
   fs.mkdirSync(tmpDir, { recursive: true });
@@ -79,25 +86,32 @@ test.after(async () => {
 const scheduleById = async (id) => (await api('/api/chore-schedules')).body.find((s) => s.id === id);
 
 let people = 0;
-// userId omitted: create a user and assign the schedule to them.
-// userId null: leave the schedule unassigned (in the bonus pool).
-async function makeRecurringChore({ title, clamValue, userId = undefined }) {
+async function makeKid(username) {
   people += 1;
-  const user = userId === undefined
-    ? (await post('/api/users', { username: `Kid ${people}`, email: `kid${people}@example.com` })).body.id
-    : userId;
+  return (await post('/api/users', { username: username || `Kid ${people}`, email: `kid${people}@example.com` })).body.id;
+}
+// userId omitted: create a user and assign the schedule to them (a parent
+// assignment, made at creation). userId null: leave the schedule
+// unassigned (in the bonus pool).
+async function makeRecurringChore({ title, clamValue, userId = undefined }) {
+  const user = userId === undefined ? await makeKid() : userId;
   const chore = (await post('/api/chores', { title, clam_value: clamValue })).body.id;
   const made = await post('/api/chore-schedules', { chore_id: chore, user_id: user ?? null, crontab: '0 0 * * *' });
   assert.equal(made.status, 200, JSON.stringify(made.body));
   return { userId: user, chore, scheduleId: made.body.id };
 }
+// Claim it from the pool, as the widget's bonus section does.
+async function claimSchedule(scheduleId, kid) {
+  const claimed = await post(`/api/chore-schedules/${scheduleId}/claim`, { user_id: kid });
+  assert.equal(claimed.status, 200, JSON.stringify(claimed.body));
+  return claimed.body;
+}
 
 test('a claimed + completed recurring bonus chore returns to the pool overnight', async () => {
   const { scheduleId } = await makeRecurringChore({ title: 'Empty the dishwasher', clamValue: 2, userId: null });
-  const kid = (await post('/api/users', { username: 'Claimer', email: 'claimer@example.com' })).body.id;
+  const kid = await makeKid('Claimer');
 
-  // Claim it from the pool, as the widget's bonus section does.
-  assert.equal((await patch(`/api/chore-schedules/${scheduleId}`, { user_id: kid, visible: 1 })).status, 200);
+  await claimSchedule(scheduleId, kid);
   assert.equal((await scheduleById(scheduleId)).user_id, kid);
 
   // Complete it for yesterday, then run the nightly job.
@@ -106,35 +120,132 @@ test('a claimed + completed recurring bonus chore returns to the pool overnight'
   const run = await nightly();
   assert.equal(run.status, 200, JSON.stringify(run.body));
 
-  // Back in the pool: unassigned, and claimable again.
+  // Back in the pool: unassigned, marker cleared, and claimable again.
   assert.equal((await scheduleById(scheduleId)).user_id, null);
+  assert.equal((await scheduleById(scheduleId)).pool_claimed_on, null);
   assert.equal(run.body.returnedBonusSchedulesCount, 1, JSON.stringify(run.body));
-  assert.equal((await patch(`/api/chore-schedules/${scheduleId}`, { user_id: kid, visible: 1 })).status, 200);
+  await claimSchedule(scheduleId, kid);
   assert.equal((await scheduleById(scheduleId)).user_id, kid);
+  // Leave it returned, so a later test's nightly run has nothing of this
+  // test's to move.
+  await nightly();
+  assert.equal((await scheduleById(scheduleId)).user_id, null);
 });
 
-test('a claimed but uncompleted recurring bonus chore stays assigned', async () => {
+test('a claimed but uncompleted recurring bonus chore returns to the pool overnight', async () => {
   const { scheduleId } = await makeRecurringChore({ title: 'Take out recycling', clamValue: 2, userId: null });
-  const kid = (await post('/api/users', { username: 'Holder', email: 'holder@example.com' })).body.id;
-  assert.equal((await patch(`/api/chore-schedules/${scheduleId}`, { user_id: kid, visible: 1 })).status, 200);
+  const kid = await makeKid('Holder');
+  await claimSchedule(scheduleId, kid);
 
-  // No completion: the nightly job must not take it off them — they still owe it.
+  // Done or not, a claimed chore cycles back each night — that is how
+  // one-time bonus cards already work, and the docs say bonus chores
+  // "reset to unassigned each night".
   const run = await nightly();
   assert.equal(run.status, 200, JSON.stringify(run.body));
-  assert.equal((await scheduleById(scheduleId)).user_id, kid);
+  assert.equal((await scheduleById(scheduleId)).user_id, null);
+  assert.equal((await scheduleById(scheduleId)).pool_claimed_on, null);
 });
 
-test('a completion today does not return it to the pool early', async () => {
+test('a claimed + completed-today recurring bonus chore returns overnight', async () => {
   const { scheduleId } = await makeRecurringChore({ title: 'Wipe the table', clamValue: 2, userId: null });
-  const kid = (await post('/api/users', { username: 'Early', email: 'early@example.com' })).body.id;
-  assert.equal((await patch(`/api/chore-schedules/${scheduleId}`, { user_id: kid, visible: 1 })).status, 200);
+  const kid = await makeKid('Early');
+  await claimSchedule(scheduleId, kid);
   const completed = await post('/api/chores/complete', { chore_schedule_id: scheduleId, user_id: kid, date: today });
   assert.equal(completed.status, 200, JSON.stringify(completed.body));
 
-  // Only the day that just ended cycles back: returning it now would let
-  // someone else claim and complete the same chore again today.
+  // The return happens at midnight, after today is over: nobody can claim
+  // and complete the same chore again today.
   await nightly();
-  assert.equal((await scheduleById(scheduleId)).user_id, kid);
+  assert.equal((await scheduleById(scheduleId)).user_id, null);
+});
+
+test('a claim from two days ago returns even when a night was missed', async () => {
+  const { scheduleId } = await makeRecurringChore({ title: 'Feed the dog', clamValue: 2, userId: null });
+  const kid = await makeKid('Missed');
+  await claimSchedule(scheduleId, kid);
+  const completed = await post('/api/chores/complete', { chore_schedule_id: scheduleId, user_id: kid, date: twoDaysAgo });
+  assert.equal(completed.status, 200, JSON.stringify(completed.body));
+
+  // No nightly run happened last night (the server was off): the marker
+  // is still there, so the next run returns it — the old
+  // "completed yesterday" check would have left it with the kid for good.
+  const run = await nightly();
+  assert.equal(run.status, 200, JSON.stringify(run.body));
+  assert.equal((await scheduleById(scheduleId)).user_id, null);
+  assert.equal(run.body.returnedBonusSchedulesCount, 1, JSON.stringify(run.body));
+});
+
+test('a parent-assigned recurring chore that pays clams stays with its owner', async () => {
+  // Jay's case A: "Mow the lawn, 5 clams, every day, for Sam" — assigned
+  // by a parent, not claimed from the pool. The old query matched any
+  // recurring assigned schedule with clams, so it took it off Sam.
+  const { userId, scheduleId } = await makeRecurringChore({ title: 'Mow the lawn', clamValue: 5 });
+  assert.equal((await scheduleById(scheduleId)).pool_claimed_on, null);
+  const completed = await post('/api/chores/complete', { chore_schedule_id: scheduleId, user_id: userId, date: yesterday });
+  assert.equal(completed.status, 200, JSON.stringify(completed.body));
+  const run = await nightly();
+  assert.equal(run.status, 200, JSON.stringify(run.body));
+  assert.equal((await scheduleById(scheduleId)).user_id, userId);
+  assert.equal(run.body.returnedBonusSchedulesCount, 0, JSON.stringify(run.body));
+});
+
+test('a claim through the new route sets the marker and an admin assign does not', async () => {
+  const first = await makeRecurringChore({ title: 'Vacuum the stairs', clamValue: 2, userId: null });
+  const kid = await makeKid('Marked');
+  await claimSchedule(first.scheduleId, kid);
+  assert.equal((await scheduleById(first.scheduleId)).pool_claimed_on, today);
+
+  // The same schedule handed out by an admin (PATCH, as AdminPanel does)
+  // carries no marker: it is an assignment, not a claim.
+  const second = await makeRecurringChore({ title: 'Dust the shelves', clamValue: 2, userId: null });
+  assert.equal((await patch(`/api/chore-schedules/${second.scheduleId}`, { user_id: kid, visible: 1 })).status, 200);
+  assert.equal((await scheduleById(second.scheduleId)).pool_claimed_on, null);
+
+  // The nightly job returns the claimed one and leaves the admin-assigned
+  // one alone.
+  const run = await nightly();
+  assert.equal(run.status, 200, JSON.stringify(run.body));
+  assert.equal((await scheduleById(first.scheduleId)).user_id, null);
+  assert.equal((await scheduleById(second.scheduleId)).user_id, kid);
+});
+
+test('the claim route enforces one open bonus chore per kid', async () => {
+  const first = await makeRecurringChore({ title: 'Sweep the porch', clamValue: 2, userId: null });
+  const second = await makeRecurringChore({ title: 'Water the plants', clamValue: 2, userId: null });
+  const kid = await makeKid('Greedy');
+  await claimSchedule(first.scheduleId, kid);
+
+  // An outstanding bonus chore blocks another claim — the server check, so
+  // a second display cannot race past the widget's own check.
+  const blocked = await post(`/api/chore-schedules/${second.scheduleId}/claim`, { user_id: kid });
+  assert.equal(blocked.status, 409, JSON.stringify(blocked.body));
+  assert.equal((await scheduleById(second.scheduleId)).user_id, null);
+
+  // Once the first one is done today, the second can be claimed.
+  const completed = await post('/api/chores/complete', { chore_schedule_id: first.scheduleId, user_id: kid, date: today });
+  assert.equal(completed.status, 200, JSON.stringify(completed.body));
+  await claimSchedule(second.scheduleId, kid);
+  assert.equal((await scheduleById(second.scheduleId)).user_id, kid);
+
+  // Tidy up: both return at the next nightly run.
+  await nightly();
+  assert.equal((await scheduleById(second.scheduleId)).user_id, null);
+});
+
+test('transferring a claimed chore to another kid keeps the marker', async () => {
+  const { scheduleId } = await makeRecurringChore({ title: 'Clean the mirrors', clamValue: 2, userId: null });
+  const firstKid = await makeKid('First');
+  const secondKid = await makeKid('Second');
+  await claimSchedule(scheduleId, firstKid);
+
+  // The Transfer dialog reassigns with PATCH: the marker stays, so the
+  // chore still cycles back at the nightly cleanup under its new holder.
+  assert.equal((await patch(`/api/chore-schedules/${scheduleId}`, { user_id: secondKid, visible: 1 })).status, 200);
+  assert.equal((await scheduleById(scheduleId)).pool_claimed_on, today);
+  const run = await nightly();
+  assert.equal(run.status, 200, JSON.stringify(run.body));
+  assert.equal((await scheduleById(scheduleId)).user_id, null);
+  assert.equal((await scheduleById(scheduleId)).pool_claimed_on, null);
 });
 
 test('a non-bonus recurring chore is unaffected', async () => {
@@ -148,14 +259,19 @@ test('a non-bonus recurring chore is unaffected', async () => {
 
 test('manually transferring a recurring bonus chore back to the pool still works', async () => {
   const { scheduleId } = await makeRecurringChore({ title: 'Sort laundry', clamValue: 2, userId: null });
-  const kid = (await post('/api/users', { username: 'Mover', email: 'mover@example.com' })).body.id;
-  assert.equal((await patch(`/api/chore-schedules/${scheduleId}`, { user_id: kid, visible: 1 })).status, 200);
+  const kid = await makeKid('Mover');
+  await claimSchedule(scheduleId, kid);
 
-  // The Transfer dialog's pool target: user_id 0 stores NULL.
+  // The Transfer dialog's pool target: user_id 0 stores NULL — and the
+  // marker goes with it, since the claim is over.
   assert.equal((await patch(`/api/chore-schedules/${scheduleId}`, { user_id: 0, visible: 1 })).status, 200);
-  assert.equal((await scheduleById(scheduleId)).user_id, null);
+  const afterTransfer = await scheduleById(scheduleId);
+  assert.equal(afterTransfer.user_id, null);
+  assert.equal(afterTransfer.pool_claimed_on, null);
 
   // ...and it can be claimed again afterwards.
-  assert.equal((await patch(`/api/chore-schedules/${scheduleId}`, { user_id: kid, visible: 1 })).status, 200);
+  await claimSchedule(scheduleId, kid);
   assert.equal((await scheduleById(scheduleId)).user_id, kid);
+  await nightly();
+  assert.equal((await scheduleById(scheduleId)).user_id, null);
 });

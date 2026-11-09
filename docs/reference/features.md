@@ -95,9 +95,15 @@ The chore system uses a **three-table model** (see [Database](../architecture/da
   after it was made one-time, and its chore with it.
 - **Clams** are a reward currency earned by completing chores; balances are derived
   by summing `chore_history` (no denormalized total). Completing *all* of a user's
-  daily chores awards a bonus. **Bonus chores** carry a custom clam value and reset
-  to unassigned each night; only one uncompleted bonus chore per user at a time.
-  A card from someone's own schedule stays theirs overnight, clams or not.
+  daily chores awards a bonus. **Bonus chores** carry a custom clam value; one
+  claimed from the pool resets to unassigned each night, done or not, while a card
+  from someone's own schedule stays theirs overnight, clams or not. Only one
+  uncompleted bonus chore per user at a time, enforced where the claim is made.
+  Claiming is its own route (`POST /api/chore-schedules/:id/claim`): it records
+  the claim date on the schedule (`pool_claimed_on`, migration
+  `schema42-poolClaimedOn`), and the nightly cleanup returns only schedules
+  carrying that marker — an admin assigning the same chore sets no marker, and
+  a transfer to another kid keeps it.
 - **Chore icons** (issue #141): a chore can carry an optional emoji, picked from
   a grouped bank when creating or editing it. On the dashboard the icon **takes
   the place of the checkmark** while the chore is pending, and reverts to the

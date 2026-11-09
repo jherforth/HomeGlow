@@ -42,4 +42,5 @@ module.exports = [
   { schemaId: 39, migrationPath: './migrations/schema39-prizePaused', },
   { schemaId: 40, migrationPath: './migrations/schema40-oneTimeAfter', },
   { schemaId: 41, migrationPath: './migrations/schema41-deviceViewport', },
+  { schemaId: 42, migrationPath: './migrations/schema42-poolClaimedOn', },
 ];
