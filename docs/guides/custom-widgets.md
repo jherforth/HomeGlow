@@ -27,6 +27,11 @@ app required.
   references to the current origin and injects an overflow-fix `<style>` so widgets
   size correctly.
 - Widgets are enabled per device and can be assigned to tabs like built-in widgets.
+- A plugin installed for the first time (uploaded, or from the store) is switched
+  on for the display Admin is editing and placed on the tab being viewed (the
+  first tab if that one isn't the display's), and its row in the plugin list opens.
+  Updating a plugin, or uploading a file that is already installed, keeps its
+  settings and tabs as they were.
 
 ## Minimum requirements
 
@@ -58,7 +63,8 @@ colors: light `#333`, dark `#a6a6d1`. A full template is in the
 1. Write your HTML file (start from the template).
 2. Test locally in a browser with `?theme=dark` / `?theme=light`.
 3. Upload via **Admin Panel → Dashboard → Plugins → Upload Widget**.
-4. Enable it and assign it to a tab.
+4. It's switched on and placed on the tab you were viewing; choose other tabs
+   in its row if you want it elsewhere.
 5. Verify transparency and both themes.
 
 ## Calling APIs from a widget

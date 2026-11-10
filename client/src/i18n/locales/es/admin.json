@@ -101,6 +101,7 @@
     "prizePauseFailed": "No se pudo cambiar ese premio. Inténtalo de nuevo.",
     "widgetUploadFailed": "No se pudo subir el widget. Inténtalo de nuevo.",
     "widgetInstalled": "¡El widget \"{{name}}\" se instaló correctamente!",
+    "pluginPlaced": "\"{{name}}\" está instalado, activado y colocado en la pestaña \"{{tab}}\". Abre su fila en la lista de plugins para elegir otras pestañas o cambiar sus ajustes.",
     "widgetInstallFailed": "No se pudo instalar el widget. Inténtalo de nuevo.",
     "scheduleDeleteFailed": "No se pudo eliminar la programación. Inténtalo de nuevo.",
     "pictureUploadFailed": "No se pudo subir la foto de perfil. Inténtalo de nuevo.",

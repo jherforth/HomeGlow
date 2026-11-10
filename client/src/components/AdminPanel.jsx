@@ -74,6 +74,7 @@ import { editWholeNumber, savedWholeNumber } from '../utils/wholeNumberField.js'
 import { pinErrorText } from '../utils/pinErrors.js';
 import { revealTabPicker } from '../utils/revealTabPicker.js';
 import { EXPAND_PLUGIN_EVENT, nextExpandedPlugin, firstMissingPluginFilename } from '../utils/pluginAccordion.js';
+import { isNewPluginInstall, tabForNewPlugin } from '../utils/pluginPlacement.js';
 import { getDeviceApiBase, getDeviceName, getLocalDeviceName, getLocalDeviceApiBase, getMirrorTarget, setDeviceName, isValidDeviceName } from '../utils/deviceName.js';
 import { buildMirrorHash } from '../utils/mirrorMode.js';
 import { getDeviceRowState } from '../utils/mirrorAdmin.js';
@@ -183,7 +184,7 @@ const DB_BACKED_PHOTO_TYPES = ['GooglePhotos', 'HomeGlowPhotos'];
 // A form inside a group: its rows are divided like the group's own.
 const formRowsSx = { '& > * + *': { borderTop: 1, borderColor: 'divider' } };
 
-const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequestClose }) => {
+const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequestClose, viewedTab }) => {
   const { t, i18n } = useTranslation(['admin', 'common']);
   const isMobile = useIsMobile();
   // This browser's own device, always — even in mirror-Admin (remote
@@ -624,9 +625,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
       const widgets = Array.isArray(response.data) ? response.data : [];
       setUploadedWidgets(widgets);
       await fetchPluginDeclaredValues(widgets);
+      return widgets;
     } catch (error) {
       console.error('Error fetching uploaded widgets:', error);
       setUploadedWidgets([]);
+      return [];
     }
   };
 
@@ -1658,19 +1661,61 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     const formData = new FormData();
     formData.append('file', file);
 
+    // Picking the same file again must fire onChange again.
+    event.target.value = '';
+
     try {
       setIsLoading(true);
-      await axios.post(`${API_BASE_URL}/api/widgets/upload`, formData, {
+      const response = await axios.post(`${API_BASE_URL}/api/widgets/upload`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      fetchUploadedWidgets();
+      const filename = response.data?.widget;
+      const isNew = isNewPluginInstall(uploadedWidgets, filename);
+      const widgets = await fetchUploadedWidgets();
+      const tab = isNew ? await placeNewPlugin(filename) : null;
       if (onPluginsChanged) onPluginsChanged();
+      if (tab) {
+        const name = widgets.find((widget) => widget.filename === filename)?.name || filename.replace(/\.html$/, '');
+        alert(t('admin:messages.pluginPlaced', { name, tab: tab.label }));
+      }
     } catch (error) {
       console.error('Error uploading widget:', error);
       alert(t('admin:messages.widgetUploadFailed'));
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // A newly installed plugin is switched on and put on the tab being viewed,
+  // so it shows on the screen at once; where exactly it sits, and on which
+  // other tabs, is the user's to refine afterwards. Its row opens, so the
+  // list shows where those settings are. Only this plugin's entry is
+  // written: settings saved on the server are read fresh and merged, so
+  // unsaved edits to other plugins stay unsaved. Returns the tab it went on,
+  // or null when it couldn't be placed (the install itself still stands).
+  const placeNewPlugin = async (filename) => {
+    const tabNumber = tabForNewPlugin(tabs, viewedTab);
+    if (!filename || tabNumber === null) return null;
+    const pluginWidgetName = `plugin:${filename}`;
+    try {
+      const response = await axios.get(`${API_DEVICE_URL}/settings`);
+      const saved = response.data?.pluginSettings && typeof response.data.pluginSettings === 'object'
+        ? response.data.pluginSettings
+        : {};
+      await patchDeviceSettings({
+        pluginSettings: { ...saved, [filename]: { ...saved[filename], enabled: true } },
+      });
+      await axios.post(`${API_DEVICE_URL}/widget-assignments`, { widget_name: pluginWidgetName, tabNumber });
+    } catch (error) {
+      console.error('Error placing new plugin:', error);
+      return null;
+    }
+    setPluginSettings((prev) => ({ ...prev, [filename]: { ...prev[filename], enabled: true } }));
+    setPluginAssignments((prev) => ({ ...prev, [pluginWidgetName]: [tabNumber] }));
+    setExpandedPlugin(filename);
+    if (onTabsChanged) await onTabsChanged();
+    const tab = tabs.find((entry) => entry.number === tabNumber);
+    return { number: tabNumber, label: tab?.label || String(tabNumber) };
   };
 
   const deleteWidget = async (filename) => {
@@ -1714,14 +1759,19 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   const installGithubWidget = async (widget) => {
     try {
       setIsLoading(true);
-      await axios.post(`${API_BASE_URL}/api/widgets/github/install`, {
+      const response = await axios.post(`${API_BASE_URL}/api/widgets/github/install`, {
         download_url: widget.download_url,
         filename: widget.filename,
         name: widget.name
       });
-      fetchUploadedWidgets();
+      const filename = response.data?.widget;
+      const isNew = isNewPluginInstall(uploadedWidgets, filename);
+      await fetchUploadedWidgets();
+      const tab = isNew ? await placeNewPlugin(filename) : null;
       if (onPluginsChanged) onPluginsChanged();
-      alert(t('admin:messages.widgetInstalled', { name: widget.name }));
+      alert(tab
+        ? t('admin:messages.pluginPlaced', { name: widget.name, tab: tab.label })
+        : t('admin:messages.widgetInstalled', { name: widget.name }));
     } catch (error) {
       console.error('Error installing GitHub widget:', error);
       alert(t('admin:messages.widgetInstallFailed'));
