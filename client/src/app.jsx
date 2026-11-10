@@ -2922,6 +2922,7 @@ const App = () => {
               setWidgetSettings={setWidgetSettings}
               onRequestClose={toggleAdminPanel}
               onPluginsChanged={fetchInstalledPlugins}
+              viewedTab={activeTab}
               onTabsChanged={async () => {
                 await fetchTabs();
                 await fetchWidgetAssignments();

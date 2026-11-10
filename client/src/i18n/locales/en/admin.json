@@ -101,6 +101,7 @@
     "prizePauseFailed": "Could not change that prize. Try again.",
     "widgetUploadFailed": "Failed to upload widget. Please try again.",
     "widgetInstalled": "Widget \"{{name}}\" installed successfully!",
+    "pluginPlaced": "\"{{name}}\" is installed, switched on, and placed on the \"{{tab}}\" tab. Open its row in the plugin list to choose other tabs or change its settings.",
     "widgetInstallFailed": "Failed to install widget. Please try again.",
     "scheduleDeleteFailed": "Failed to delete chore schedule. Please try again.",
     "pictureUploadFailed": "Failed to upload profile picture. Please try again.",
