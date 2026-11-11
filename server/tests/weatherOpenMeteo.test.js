@@ -214,14 +214,14 @@ test('coordinates skip geocoding and units pick the Open-Meteo unit set', async 
     assert.equal(fetchCalls.length, 1, 'only the forecast call');
     assert.ok(fetchCalls[0].includes('temperature_unit=fahrenheit'));
     assert.ok(fetchCalls[0].includes('wind_speed_unit=mph'));
-    assert.ok(fetchCalls[0].includes('precipitation_unit=inch'));
+    assert.ok(fetchCalls[0].includes('precipitation_unit=mm'));
     assert.equal(imperial.resolvedName, '', 'no geocode result, no name');
 
     const metric = await openmeteo.fetchWeather({
         coordinates: { lat: 43.08, lon: -77.75 }, units: 'metric', now: NOW,
     });
     assert.ok(fetchCalls[1].includes('temperature_unit=celsius'));
-    assert.ok(fetchCalls[1].includes('wind_speed_unit=kmh'));
+    assert.ok(fetchCalls[1].includes('wind_speed_unit=ms'));
     assert.ok(fetchCalls[1].includes('precipitation_unit=mm'));
     assert.equal(metric.units, 'metric');
 });

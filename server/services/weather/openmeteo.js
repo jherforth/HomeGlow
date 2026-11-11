@@ -14,13 +14,12 @@
 //     hourly, and daily series, so there is no 3-hour-to-daily rollup the way
 //     OpenWeatherMap needs one; the daily arrays arrive already daily.
 //
-// Precipitation-unit convention: the forecast request asks for
-// precipitation_unit=inch under imperial and =mm under metric, so the
-// precipitation values in the payload arrive already in the display unit for
-// the requested system — inches for imperial, millimetres for metric —
-// matching how the widget already treats wind (mph imperial, m/s metric) and
-// OpenWeatherMap's precipitation. The client must NOT convert them again; it
-// keys off the payload's `units` field, not the provider.
+// Precipitation-unit convention: the forecast request always asks for
+// precipitation_unit=mm, whatever the unit system — matching OpenWeatherMap,
+// whose `rain['3h']` is always millimetres whatever the units. The rain
+// chart has no unit label, so the two providers must plot on the same
+// scale. The client must NOT convert precipitation values; it keys off
+// the payload's `units` field, not the provider.
 //
 // Air quality is deliberately null. Open-Meteo serves AQI from a separate
 // air-quality-api.open-meteo.com endpoint, not the forecast API, and wiring a
@@ -29,8 +28,10 @@
 
 const { buildPayload } = require('./payload');
 
-const GEO_BASE = 'https://geocoding-api.open-meteo.com/v1/search';
-const FORECAST_BASE = 'https://api.open-meteo.com/v1/forecast';
+// Overridable for tests: the geocode route test points the geocoder at a
+// local fake instead of the live API, so the suite runs offline and in CI.
+const GEO_BASE = process.env.OPENMETEO_GEO_BASE || 'https://geocoding-api.open-meteo.com/v1/search';
+const FORECAST_BASE = process.env.OPENMETEO_FORECAST_BASE || 'https://api.open-meteo.com/v1/forecast';
 
 const REQUEST_TIMEOUT_MS = 15000;
 
@@ -192,8 +193,13 @@ async function fetchWeather({ locationQuery, coordinates, units = 'imperial', no
         hourly: 'temperature_2m,precipitation,precipitation_probability',
         daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,uv_index_max,sunrise,sunset',
         temperature_unit: metric ? 'celsius' : 'fahrenheit',
-        wind_speed_unit: metric ? 'kmh' : 'mph',
-        precipitation_unit: metric ? 'mm' : 'inch',
+        // The widget labels metric wind m/s (WeatherWidget.jsx windUnitLabel),
+        // which is what OpenWeatherMap returns — km/h would read 3.6x high.
+        wind_speed_unit: metric ? 'ms' : 'mph',
+        // Always millimetres: OpenWeatherMap's rain is always mm whatever the
+        // units, and the rain chart has no unit label, so the providers must
+        // agree on the scale.
+        precipitation_unit: 'mm',
         timezone: 'auto',
         forecast_days: '7',
     });

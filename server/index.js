@@ -5170,6 +5170,16 @@ fastify.get('/api/weather/geocode', async (request, reply) => {
       return reply.status(400).send({ error: 'A location query is required.' });
     }
 
+    // Open-Meteo is keyless: its own geocoder resolves the query, so a
+    // household with no OpenWeatherMap key can still set a location — in
+    // the weather widget's settings dialog and in Admin → Look →
+    // Appearance, both of which save through this route.
+    if (weatherService.getConfiguredProvider(db) === weatherService.PROVIDERS.OPENMETEO) {
+      const openMeteo = require('./services/weather/openmeteo');
+      const resolved = await openMeteo.resolveCoordinates(query);
+      return { lat: resolved.lat, lon: resolved.lon, resolvedName: resolved.name || '' };
+    }
+
     const apiKey = db.prepare('SELECT value FROM settings WHERE key = ?').get('WEATHER_API_KEY')?.value;
     if (!apiKey) {
       return reply.status(400).send({
