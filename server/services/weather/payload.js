@@ -105,6 +105,10 @@ function validatePayload(payload) {
                 && (!isFiniteNumber(day.precipitationProbability) || day.precipitationProbability < 0 || day.precipitationProbability > 100)) {
                 problems.push(`forecast[${index}].precipitationProbability must be 0-100 when present`);
             }
+            if (day?.uvIndex !== null && day?.uvIndex !== undefined
+                && (!isFiniteNumber(day.uvIndex) || day.uvIndex < 0 || day.uvIndex > 20)) {
+                problems.push(`forecast[${index}].uvIndex must be 0-20 when present`);
+            }
         });
     }
 
@@ -176,6 +180,9 @@ function buildPayload({
             // equivalent in the standard forecast attributes and the demo
             // snapshot has none, so null there and the client hides it.
             precipitationProbability: optionalNumber(day.precipitationProbability),
+            // 0-20. Open-Meteo supplies uv_index_max per day; other
+            // providers have no equivalent, so null there.
+            uvIndex: optionalNumber(day.uvIndex),
         })),
         hourly: hourly.map((point) => ({
             timestamp: point.timestamp,

@@ -12,6 +12,7 @@
 // call serves every display in the house.
 
 const openWeatherMap = require('./openweathermap');
+const openMeteo = require('./openmeteo');
 const homeAssistantProvider = require('./homeassistant');
 const demoProvider = require('./demo');
 const homeAssistant = require('../homeAssistant');
@@ -19,8 +20,14 @@ const { validatePayload } = require('./payload');
 
 const PROVIDERS = {
     OPENWEATHERMAP: 'openweathermap',
+    OPENMETEO: 'openmeteo',
     HOMEASSISTANT: 'homeassistant',
 };
+
+// Providers that resolve a place by geocoding it — both need a location to
+// work from, so the "scenes need a location" guard in getCondition applies
+// to them and not to Home Assistant (which reports its own location) or demo.
+const GEOCODING_PROVIDERS = new Set([PROVIDERS.OPENWEATHERMAP, PROVIDERS.OPENMETEO]);
 
 const PROVIDER_SETTING_KEY = 'WEATHER_PROVIDER';
 const DEFAULT_PROVIDER = PROVIDERS.OPENWEATHERMAP;
@@ -74,7 +81,9 @@ function getSetting(db, key) {
 
 function getConfiguredProvider(db) {
     const stored = String(getSetting(db, PROVIDER_SETTING_KEY) || '').trim().toLowerCase();
-    return stored === PROVIDERS.HOMEASSISTANT ? PROVIDERS.HOMEASSISTANT : DEFAULT_PROVIDER;
+    if (stored === PROVIDERS.HOMEASSISTANT) return PROVIDERS.HOMEASSISTANT;
+    if (stored === PROVIDERS.OPENMETEO) return PROVIDERS.OPENMETEO;
+    return DEFAULT_PROVIDER;
 }
 
 /**
@@ -109,6 +118,16 @@ function getProviderStatus(db, { demoMode = false } = {}) {
                 reason: 'Home Assistant is selected but its URL or token is not configured.',
             };
         }
+        return {
+            provider: configuredProvider,
+            configured_provider: configuredProvider,
+            configured: true,
+            reason: null,
+        };
+    }
+
+    // Open-Meteo needs no API key, so it is always configured.
+    if (configuredProvider === PROVIDERS.OPENMETEO) {
         return {
             provider: configuredProvider,
             configured_provider: configuredProvider,
@@ -176,6 +195,12 @@ async function getWeather(db, {
             },
             units: normalizedUnits,
         });
+    } else if (provider === PROVIDERS.OPENMETEO) {
+        payload = await openMeteo.fetchWeather({
+            locationQuery,
+            coordinates: Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null,
+            units: normalizedUnits,
+        });
     } else {
         payload = await openWeatherMap.fetchWeather({
             apiKey: getSetting(db, 'WEATHER_API_KEY'),
@@ -230,7 +255,7 @@ async function getCondition(db, { lat, lon, demoMode = false } = {}) {
     const provider = demoMode ? 'demo' : getConfiguredProvider(db);
     let entry = findFreshReading(provider, lat, lon);
     if (!entry) {
-        if (provider === PROVIDERS.OPENWEATHERMAP && !(Number.isFinite(lat) && Number.isFinite(lon))) {
+        if (GEOCODING_PROVIDERS.has(provider) && !(Number.isFinite(lat) && Number.isFinite(lon))) {
             const err = new Error('Weather scenes need a location (Admin → Look → Appearance).');
             err.status = 400;
             throw err;

@@ -543,6 +543,7 @@
     "weatherHeading": "Weather",
     "weatherProvider": "Weather Source",
     "providerOpenWeather": "OpenWeatherMap",
+    "providerOpenMeteo": "Open-Meteo",
     "providerHomeAssistant": "Home Assistant",
     "openWeatherKey": "OpenWeatherMap API Key",
     "openWeatherHelp": "Get your free API key from openweathermap.org/api",
