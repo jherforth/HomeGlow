@@ -134,6 +134,19 @@ test.after(async () => {
     }
 });
 
+// Runs first, while the test DB is a new install: nothing has been stored.
+test('a new install uses Open-Meteo with nothing set up', async () => {
+    const status = await api('/api/connections/weather/status');
+    assert.equal(status.status, 200);
+    assert.equal(status.body.provider, 'openmeteo');
+    assert.equal(status.body.configured_provider, 'openmeteo');
+    assert.equal(status.body.configured, true);
+
+    const result = await api('/api/weather/geocode?q=Seattle');
+    assert.equal(result.status, 200);
+    assert.equal(result.body.resolvedName, 'Seattle');
+});
+
 test('geocode resolves a place through Open-Meteo with no API key stored', async () => {
     await setSetting('WEATHER_PROVIDER', 'openmeteo');
 

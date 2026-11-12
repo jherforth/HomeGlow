@@ -30,7 +30,8 @@ const PROVIDERS = {
 const GEOCODING_PROVIDERS = new Set([PROVIDERS.OPENWEATHERMAP, PROVIDERS.OPENMETEO]);
 
 const PROVIDER_SETTING_KEY = 'WEATHER_PROVIDER';
-const DEFAULT_PROVIDER = PROVIDERS.OPENWEATHERMAP;
+// Open-Meteo needs no key, so a new install has weather with no setup.
+const DEFAULT_PROVIDER = PROVIDERS.OPENMETEO;
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
 
@@ -79,11 +80,13 @@ function getSetting(db, key) {
     return row ? row.value : null;
 }
 
+// A stored choice wins. With none stored, Open-Meteo, unless an
+// OpenWeatherMap key is stored: that is an install from before Open-Meteo,
+// when OpenWeatherMap was the default, and its weather keeps working as it was.
 function getConfiguredProvider(db) {
     const stored = String(getSetting(db, PROVIDER_SETTING_KEY) || '').trim().toLowerCase();
-    if (stored === PROVIDERS.HOMEASSISTANT) return PROVIDERS.HOMEASSISTANT;
-    if (stored === PROVIDERS.OPENMETEO) return PROVIDERS.OPENMETEO;
-    return DEFAULT_PROVIDER;
+    if (Object.values(PROVIDERS).includes(stored)) return stored;
+    return getSetting(db, 'WEATHER_API_KEY') ? PROVIDERS.OPENWEATHERMAP : DEFAULT_PROVIDER;
 }
 
 /**

@@ -314,7 +314,7 @@ test('status reports the stored provider separately from the effective one', asy
 
     assert.equal(status.body.configured_provider, 'homeassistant');
     assert.ok(
-        ['openweathermap', 'homeassistant'].includes(status.body.configured_provider),
+        ['openweathermap', 'openmeteo', 'homeassistant'].includes(status.body.configured_provider),
         'configured_provider must always be a selectable option',
     );
 

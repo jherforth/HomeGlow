@@ -129,7 +129,7 @@ Open with the gear (⚙️) icon. These persist server-side (global settings in 
 | **Security** | Admin PIN, controls on displays | `admin_pin`, `device_settings_json` |
 | **System → Language & time** | Language for this display; the household time zone | `localStorage` (language); `settings` (`APP_TIMEZONE`) |
 | **System → Connections → Proxy whitelist** | The hosts plugins may fetch through `/api/proxy` (`PROXY_WHITELIST`, comma-separated hostnames). Added as chips: a full address is cut to its host, a pasted list adds several, and each change saves at once | `settings` (global) |
-| **System → Connections → Weather** | Provider choice (`WEATHER_PROVIDER`: `openweathermap` \| `openmeteo` \| `homeassistant`), OpenWeatherMap key (`WEATHER_API_KEY`, write-only; not needed for Open-Meteo) | `settings` (global) |
+| **System → Connections → Weather** | Provider choice (`WEATHER_PROVIDER`: `openmeteo` \| `openweathermap` \| `homeassistant`; unset means Open-Meteo, or OpenWeatherMap if its key is stored), OpenWeatherMap key (`WEATHER_API_KEY`, write-only; not needed for Open-Meteo) | `settings` (global) |
 | **System → Connections → Home Assistant** | Base URL (`HOME_ASSISTANT_URL`), long-lived token (`HOME_ASSISTANT_TOKEN_ENC`, encrypted + write-only), weather entity (`HOME_ASSISTANT_WEATHER_ENTITY`) | `settings` (global) |
 | **System → Connections → Google** | Google OAuth linking | `google_accounts` |
 | **System → Notifications** | The address a tap opens (`NOTIFY_OPEN_URL`); browser notifications for this device and every device; ntfy (`NTFY_ENABLED`, `NTFY_SERVER`, `NTFY_TOKEN_ENC` encrypted + write-only) and its topics; Home Assistant Companion app phones | `settings` (global), `device_notifications`, `ntfy_topics`, `ha_notify_phones` |

@@ -263,13 +263,27 @@ test('upstream failures map like the OpenWeatherMap provider', async () => {
 
 // --- provider selection / status --------------------------------------------
 
-test('openmeteo is recognized as the configured provider; unknown values fall back to OWM', () => {
-    assert.equal(weatherService.getConfiguredProvider(stubDb({ WEATHER_PROVIDER: 'openmeteo' })), 'openmeteo');
-    assert.equal(weatherService.getConfiguredProvider(stubDb({ WEATHER_PROVIDER: 'homeassistant' })), 'homeassistant');
-    assert.equal(weatherService.getConfiguredProvider(stubDb({ WEATHER_PROVIDER: 'openweathermap' })), 'openweathermap');
-    assert.equal(weatherService.getConfiguredProvider(stubDb({ WEATHER_PROVIDER: 'bogus' })), 'openweathermap');
-    assert.equal(weatherService.getConfiguredProvider(stubDb({})), 'openweathermap');
-    assert.equal(weatherService.DEFAULT_PROVIDER, 'openweathermap', 'OWM stays the default');
+test('a stored provider choice is used as is', () => {
+    for (const provider of ['openmeteo', 'homeassistant', 'openweathermap']) {
+        assert.equal(weatherService.getConfiguredProvider(stubDb({ WEATHER_PROVIDER: provider })), provider);
+        // A stored key does not override a stored choice.
+        assert.equal(weatherService.getConfiguredProvider(stubDb({ WEATHER_PROVIDER: provider, WEATHER_API_KEY: 'secret' })), provider);
+    }
+    assert.equal(weatherService.getConfiguredProvider(stubDb({ WEATHER_PROVIDER: ' OpenMeteo ' })), 'openmeteo');
+});
+
+test('with no choice stored, a new install gets Open-Meteo and an old keyed one keeps OpenWeatherMap', () => {
+    assert.equal(weatherService.DEFAULT_PROVIDER, 'openmeteo');
+    // A new install: nothing stored.
+    assert.equal(weatherService.getConfiguredProvider(stubDb({})), 'openmeteo');
+    assert.equal(weatherService.getProviderStatus(stubDb({})).configured, true);
+    // An empty key (the Admin Panel's write-only field saved blank) is no key.
+    assert.equal(weatherService.getConfiguredProvider(stubDb({ WEATHER_API_KEY: '' })), 'openmeteo');
+    // An install from before Open-Meteo, relying on the old default.
+    assert.equal(weatherService.getConfiguredProvider(stubDb({ WEATHER_API_KEY: 'secret' })), 'openweathermap');
+    // An unknown stored value is treated as no choice.
+    assert.equal(weatherService.getConfiguredProvider(stubDb({ WEATHER_PROVIDER: 'bogus' })), 'openmeteo');
+    assert.equal(weatherService.getConfiguredProvider(stubDb({ WEATHER_PROVIDER: 'bogus', WEATHER_API_KEY: 'secret' })), 'openweathermap');
 });
 
 test('openmeteo is always configured; OWM still needs its key', () => {

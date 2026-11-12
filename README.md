@@ -61,7 +61,7 @@ HomeGlow is built with a focus on modern aesthetics, user experience, and practi
 
 ### Prerequisites
 -   **Docker** and **Docker Compose** (required for all supported deployment methods)
--   **OpenWeatherMap API Key**: (Optional, for Weather widget): free license
+-   **Weather**: nothing needed. The Weather widget uses Open-Meteo, which has no API key; an OpenWeatherMap key or Home Assistant are optional alternatives
 -   **Calendar Source** (Optional, for Calendar widget): ICS link from any calendar service (Google Calendar, Apple Calendar, etc.) or CalDAV server credentials
 -   **Immich Instance** (Optional, for Photo widget): A running Immich server with API access
 
@@ -104,7 +104,7 @@ docker compose -f docker-compose.dev.yml up --build
 
 Click the gear icon (⚙️) to access settings:
 
-- **APIs**: Add OpenWeatherMap API key for weather
+- **APIs**: Choose the weather source (Open-Meteo by default, no key needed)
 - **Widgets**: Enable/disable widgets, set refresh intervals
 - **Users**: Add family members, manage clam rewards
 - **Chores**: Manage chores, schedules, and history
@@ -114,7 +114,7 @@ Click the gear icon (⚙️) to access settings:
 
 ### API Keys
 
-**OpenWeatherMap**: Sign up for a free API key at [openweathermap.org](https://openweathermap.org/api).
+**Weather**: none needed; Open-Meteo is the default. To use OpenWeatherMap instead, sign up for a free API key at [openweathermap.org](https://openweathermap.org/api) and choose it in the Admin Panel.
 
 **Calendar Integration**:
 - **Google Calendar**: Settings → Integrate calendar → Copy "Secret address in iCal format"
@@ -152,7 +152,7 @@ DISCLAIMER: This project uses AI in its development process. While you are right
 
 **Calendar issues**: Verify calendar sources are enabled, test ICS URLs in browser
 
-**Weather not working**: Check OpenWeatherMap API key validity and rate limits
+**Weather not working**: Check the weather source in the Admin Panel; on OpenWeatherMap, check the API key's validity and rate limits
 
 **Help**: GitHub Issues or check container logs for details
 
