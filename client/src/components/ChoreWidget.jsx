@@ -1191,7 +1191,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
         )}
 
         {badge && <Chip
-          label={`${user.clam_total || 0} 🥟`}
+          label={t('common:points.amount', { amount: user.clam_total || 0 })}
           size="small"
           sx={{
             position: 'absolute',
@@ -1334,7 +1334,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                 chips: the title stays the loudest thing in the row. */}
             {schedule.clam_value > 0 && (
               <Box component="span" sx={{ ml: 0.75, fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent)', whiteSpace: 'nowrap' }}>
-                {`+${schedule.clam_value} 🥟`}
+                {t('common:points.gain', { amount: schedule.clam_value })}
               </Box>
             )}
             {timeText && (expired ? (
@@ -1637,7 +1637,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                         py: 0.25,
                       }}
                     >
-                      {`${user.clam_total || 0} 🥟`}
+                      {t('common:points.amount', { amount: user.clam_total || 0 })}
                     </Box>
                   </Box>
                   {allRegularChoresCompleted && (
@@ -1708,7 +1708,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                         <Typography variant="subtitle2">
                           {schedule.title}
                           <Chip
-                            label={`${schedule.clam_value} 🥟`}
+                            label={t('common:points.amount', { amount: schedule.clam_value })}
                             size="small"
                             sx={{ ml: 1, bgcolor: 'var(--accent)', color: 'white' }}
                           />
@@ -1782,7 +1782,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                   >
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                       <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{offer.name}</Typography>
-                      <Chip label={`${offer.clam_cost} 🥟`} sx={{ bgcolor: 'var(--accent)', color: 'white', fontWeight: 'bold' }} />
+                      <Chip label={t('common:points.amount', { amount: offer.clam_cost })} sx={{ bgcolor: 'var(--accent)', color: 'white', fontWeight: 'bold' }} />
                     </Box>
                     {offer.description && (
                       <Typography variant="body2" color="text.secondary" sx={{ mb: 1, whiteSpace: 'pre-line' }}>
@@ -1844,7 +1844,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                       <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
                         {offer.name}{offer.repeatable ? ' 🔁' : ''}
                       </Typography>
-                      <Chip label={`${offer.clam_cost} 🥟`} sx={{ bgcolor: 'var(--accent)', color: 'white', fontWeight: 'bold' }} />
+                      <Chip label={t('common:points.amount', { amount: offer.clam_cost })} sx={{ bgcolor: 'var(--accent)', color: 'white', fontWeight: 'bold' }} />
                     </Box>
                     {offer.description && (
                       <Typography variant="body2" color="text.secondary" sx={{ mb: 1, whiteSpace: 'pre-line' }}>
@@ -1951,7 +1951,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                     transition: 'color 0.2s ease',
                   }}
                 >
-                  {parsed > 0 ? `${quickSpend.amount} 🥟` : '0 🥟'}
+                  {t('common:points.amount', { amount: parsed > 0 ? quickSpend.amount : 0 })}
                 </Typography>
               );
             })()}

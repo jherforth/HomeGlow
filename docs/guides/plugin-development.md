@@ -408,6 +408,11 @@ const off = HomeGlow.on('clam.withdrawn', (payload, meta) => {
 
 ### Event catalog
 
+`clam` in event names, routes and fields is the internal name for chore points.
+When a plugin shows points to people, it should use the household's name and emoji:
+read `POINTS_NAME` and `POINTS_ICON` from `GET /api/settings?keys=POINTS_NAME,POINTS_ICON`,
+and use **Stars** and ⭐ for whichever is blank.
+
 | Event | Fires when | Payload |
 | --- | --- | --- |
 | `clam.deposited` | clams added to a user | `{ userId, amount, newTotal }` |

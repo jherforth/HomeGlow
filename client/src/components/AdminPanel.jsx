@@ -94,6 +94,16 @@ import RefreshIntervalSelect from './RefreshIntervalSelect';
 import ScreensaverIntervalSlider from './ScreensaverIntervalSlider';
 import GoogleAccountConnection from './GoogleAccountConnection';
 import ClamValueModal from './ClamValueModal';
+import {
+  applyHouseholdPoints,
+  normalizePointsIcon,
+  normalizePointsName,
+  DEFAULT_POINTS_ICON,
+  POINTS_ICON_SETTING,
+  POINTS_ICON_SUGGESTIONS,
+  POINTS_NAME_MAX_LENGTH,
+  POINTS_NAME_SETTING,
+} from '../utils/points.js';
 import { normalizeAdminLocation, parseAdminHash, setAdminHash } from '../utils/adminNavigation.js';
 import AdminShell, { ADMIN_PANEL_SIZE } from './AdminShell.jsx';
 import { AdminFooter, AdminGroup, AdminNote, AdminRow } from './AdminRows.jsx';
@@ -822,6 +832,15 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     setSettings((prev) => ({ ...prev, [key]: value }));
     try {
       await saveSetting(key, value, false);
+      // A renamed currency shows here at once; other displays follow at their
+      // next settings poll (app.jsx).
+      if (key === POINTS_NAME_SETTING || key === POINTS_ICON_SETTING) {
+        applyHouseholdPoints(i18n, {
+          [POINTS_NAME_SETTING]: settings[POINTS_NAME_SETTING],
+          [POINTS_ICON_SETTING]: settings[POINTS_ICON_SETTING],
+          [key]: value,
+        });
+      }
       setChoreSettingNote(t('admin:messages.settingSaved'));
     } catch {
       setSettings((prev) => ({ ...prev, [key]: revertTo }));
@@ -3413,7 +3432,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                       <>
                         <Tooltip title={t('admin:users.editClams')}>
                           <Chip
-                            label={`${user.clam_total || 0} 🥟`}
+                            label={t('common:points.amount', { amount: user.clam_total || 0 })}
                             color="primary"
                             size="small"
                             onClick={() => setClamModalUser(user)}
@@ -3468,6 +3487,77 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
             settings={(
             <>
               <AdminGroup title={t('admin:chores.rewards')}>
+                <AdminRow
+                  label={t('admin:chores.pointsName')}
+                  hint={t('admin:chores.pointsNameHelp', { defaultName: t('common:points.defaultName') })}
+                  control={(
+                    <TextField
+                      size="small"
+                      value={settings[POINTS_NAME_SETTING] ?? ''}
+                      placeholder={t('common:points.defaultName')}
+                      onChange={(e) => editChoreSetting(POINTS_NAME_SETTING, e.target.value)}
+                      onBlur={() => commitChoreSetting(POINTS_NAME_SETTING, normalizePointsName(settings[POINTS_NAME_SETTING]))}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') e.target.blur(); }}
+                      slotProps={{ htmlInput: { maxLength: POINTS_NAME_MAX_LENGTH, 'aria-label': t('admin:chores.pointsName') } }}
+                      sx={{ width: 180 }}
+                    />
+                  )}
+                />
+                <AdminRow
+                  label={t('admin:chores.pointsIcon')}
+                  hint={t('admin:chores.pointsIconHelp')}
+                  wide
+                  control={(
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                      <TextField
+                        size="small"
+                        value={settings[POINTS_ICON_SETTING] ?? ''}
+                        placeholder={DEFAULT_POINTS_ICON}
+                        onChange={(e) => {
+                          // Cleared means the default; anything without an
+                          // emoji in it is ignored rather than clearing it.
+                          const typed = e.target.value;
+                          const emoji = typed.trim() === '' ? '' : normalizePointsIcon(typed);
+                          if (typed.trim() !== '' && !emoji) return;
+                          if (emoji !== (settings[POINTS_ICON_SETTING] ?? '')) {
+                            saveChoreSetting(POINTS_ICON_SETTING, emoji, settings[POINTS_ICON_SETTING]);
+                          }
+                        }}
+                        slotProps={{ htmlInput: { 'aria-label': t('admin:chores.pointsIcon'), style: { textAlign: 'center', fontSize: '1.25rem' } } }}
+                        sx={{ width: 72 }}
+                      />
+                      <Box role="group" aria-label={t('admin:chores.pointsIconSuggestions')} sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                        {POINTS_ICON_SUGGESTIONS.map((emoji) => {
+                          const selected = (settings[POINTS_ICON_SETTING] || DEFAULT_POINTS_ICON) === emoji;
+                          return (
+                            <ButtonBase
+                              key={emoji}
+                              aria-label={t('admin:chores.pointsIconUse', { emoji })}
+                              aria-pressed={selected}
+                              onClick={() => {
+                                const next = emoji === DEFAULT_POINTS_ICON ? '' : emoji;
+                                if (next !== (settings[POINTS_ICON_SETTING] ?? '')) {
+                                  saveChoreSetting(POINTS_ICON_SETTING, next, settings[POINTS_ICON_SETTING]);
+                                }
+                              }}
+                              sx={{
+                                width: 40,
+                                height: 40,
+                                fontSize: '1.4rem',
+                                borderRadius: 'var(--hg-radius-md)',
+                                border: selected ? '2px solid var(--accent)' : '2px solid transparent',
+                                backgroundColor: selected ? 'rgba(var(--accent-rgb), 0.18)' : 'transparent',
+                                '&:hover': { backgroundColor: 'rgba(var(--accent-rgb), 0.1)' },
+                              }}
+                            >
+                              <span aria-hidden="true">{emoji}</span>
+                            </ButtonBase>
+                          );
+                        })}
+                      </Box>
+                    </Box>
+                  )}
+                />
                 <AdminRow
                   label={t('admin:chores.dailyReward')}
                   hint={t('admin:chores.dailyRewardHelp')}
@@ -3746,7 +3836,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
             ) : prizeOffers.map((offer) => (
               <AdminRow
                 key={offer.id}
-                label={`${offer.name} — ${offer.clam_cost} 🥟${offer.repeatable ? ' · 🔁' : ''}`}
+                label={`${offer.name} — ${t('common:points.amount', { amount: offer.clam_cost })}${offer.repeatable ? ' · 🔁' : ''}`}
                 hint={offer.status === 'requested'
                   ? `${t('admin:prizes.requestedBy', { name: offer.requested_by_name || t('common:state.none') })}${offer.paused ? ` · ${t('admin:prizes.pausedShort')}` : ''}`
                   : (offer.paused ? t('admin:prizes.pausedHidden') : t('admin:prizes.onTheShelf'))}
@@ -4404,7 +4494,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                       <TableCell data-label={t('admin:chores.clams')}>
                         {chore.clam_value > 0 ? (
                           <Chip
-                            label={`${chore.clam_value} 🥟`}
+                            label={t('common:points.amount', { amount: chore.clam_value })}
                             color="primary"
                             size="small"
                           />

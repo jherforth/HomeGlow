@@ -415,7 +415,7 @@ export default function ChoreScheduleBoard({
   // ── Pieces ────────────────────────────────────────────────────────
   const choreChips = (s) => (
     <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
-      {s.clam_value > 0 && <Chip size="small" color="primary" label={`+${s.clam_value} 🥟`} />}
+      {s.clam_value > 0 && <Chip size="small" color="primary" label={t('common:points.gain', { amount: s.clam_value })} />}
       {s.due_time && <Chip size="small" variant="outlined" label={`${s.sound_enabled ? '🔔' : '⏰'} ${fmtTime(s.due_time)}`} />}
       {/* Set in the chore's gear settings; shown here so it's visible at a glance. */}
       {s.crontab && s.duration === 'until-completed' && (
@@ -832,7 +832,7 @@ export default function ChoreScheduleBoard({
                   control={<Checkbox checked={checked} disabled={here} onChange={() => toggle(c.id)} />}
                   label={(
                     <ListItemText
-                      primary={`${c.icon ? `${c.icon} ` : ''}${c.title}${c.clam_value > 0 ? `  +${c.clam_value} 🥟` : ''}`}
+                      primary={`${c.icon ? `${c.icon} ` : ''}${c.title}${c.clam_value > 0 ? `  ${t('common:points.gain', { amount: c.clam_value })}` : ''}`}
                       secondary={note}
                       slotProps={{ secondary: { sx: { color: elsewhere && addDialog.picked.has(c.id) ? 'warning.main' : 'text.secondary' } } }}
                     />

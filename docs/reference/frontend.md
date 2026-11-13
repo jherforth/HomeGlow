@@ -67,7 +67,7 @@ custom properties.
 | --- | --- |
 | `CalendarWidget.jsx` (largest) | Month/week calendar via `react-big-calendar`; multi-source, multi-day & all-day events; reads cached events from the backend. |
 | `WeatherWidget.jsx` | Current conditions + 3-day forecast with temperature/precipitation graphs (`recharts`); talks to OpenWeatherMap. |
-| `ChoreWidget.jsx` | Per-user daily chores, swipe-to-complete, clam progress and rewards. |
+| `ChoreWidget.jsx` | Per-user daily chores, swipe-to-complete, points progress and rewards. |
 | `PhotoWidget.jsx` | Slideshow from configured photo sources (Immich, Google Photos, uploads). |
 | `PluginWidgetWrapper.jsx` | Renders a custom/plugin widget in a sandboxed `<iframe>` served from `/widgets/:filename`, passing the theme via query param. |
 | `MonthDayCell.jsx` | Custom day cell renderer for the calendar. |
@@ -88,7 +88,7 @@ custom properties.
 | `DeleteConfirmationDialog.jsx` | Reusable delete confirmation modal with Warning icon, alert, and Cancel/Delete actions (used for Tabs, Devices, Users). |
 | `AdminFormSection.jsx` | Thin wrapper for admin form sections: title, subtitle, bordered container, children. |
 | `VersionInfoCard.jsx` | Version info card showing label, version chip, commit link, repo link, and Git tags (used in Admin → System → About). |
-| `LoadingBackdrop.jsx` | Shared glass-morphism loading backdrop with 3 bouncing clam emojis (used in AdminPanel + ChoreWidget). |
+| `LoadingBackdrop.jsx` | Shared glass-morphism loading backdrop with 3 bouncing points emoji (the household's, ⭐ by default) (used in AdminPanel + ChoreWidget). |
 | `RefreshIntervalSelect.jsx` | Reusable refresh interval dropdown (FormControl + Select + Timer icon). |
 | `ScreensaverIntervalSlider.jsx` | Reusable interval slider with label, value display, and marks (used for Photo and Tab cycle modes). |
 | `ExampleWidgetUsage.jsx` | Reference/demo component for widget authors. |

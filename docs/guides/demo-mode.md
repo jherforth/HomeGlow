@@ -81,19 +81,19 @@ The sample data lives in [`server/utils/demoSeed.js`](../../server/utils/demoSee
 and is designed to make an empty dashboard feel like a real family command center:
 
 - **Three family members** — Emma, Liam, and Noah.
-- **A mix of chores that shows off how clams work:**
-  - **Reward chores** worth clams — Dishes (5), Vacuum living room (10), Take out
+- **A mix of chores that shows off how points work:**
+  - **Reward chores** worth points — Dishes (5), Vacuum living room (10), Take out
     trash (3), Fold laundry (5), Walk the dog (4), Water the plants (2), and a
     weekend "Wash the car" (15) bonus.
-  - **Routine chores with _no_ clam value** — Make your bed, Brush teeth, Tidy
-    your room, Homework. These demonstrate that clams are **optional per chore**:
+  - **Routine chores with _no_ points value** — Make your bed, Brush teeth, Tidy
+    your room, Homework. These demonstrate that points are **optional per chore**:
     a chore can be a tracked responsibility without paying out any reward.
   - **Unassigned bonus chores** anyone can grab (the weekend vacuum and car wash).
   - A spread of schedules (daily, weekdays, specific days) and durations
     (`day-of`, `until-completed`) so the different scheduling modes are visible.
-- **A few days of completion history** so clam totals look lived-in — reward
-  chores post clams, routine chores post zero.
-- **Prizes** to spend clams on — Movie night pick (50), Ice cream trip (30),
+- **A few days of completion history** so points totals look lived-in — reward
+  chores post points, routine chores post zero.
+- **Prizes** to spend points on — Movie night pick (50), Ice cream trip (30),
   30 min extra screen time (15).
 - **A week of family calendar events** — soccer practice, pizza night, a dentist
   appointment, an overnight trip to Grandma's, a piano recital, and a
@@ -140,4 +140,4 @@ The client learns it's in demo mode from `GET /api/demo`, which returns
 
 - [Deployment → Running a public demo instance](deployment.md#running-a-public-demo-instance-demo-mode) — the short ops-focused version of this switch.
 - [Configuration](../reference/configuration.md) — the full environment-variable reference, including `DEMO_MODE`.
-- [Features & Domains](../reference/features.md) — how chores, clams, calendars, and the other widgets work outside the demo.
+- [Features & Domains](../reference/features.md) — how chores, points, calendars, and the other widgets work outside the demo.

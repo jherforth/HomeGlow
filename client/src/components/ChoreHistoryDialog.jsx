@@ -110,7 +110,7 @@ export default function ChoreHistoryDialog({ open, onClose, schedule, user, vaca
               {tracked && view.summary.rate !== null
                 ? t('chores:history.doneOfDue', { done: view.summary.doneCount, due: view.summary.doneCount + view.summary.missedCount, rate: view.summary.rate })
                 : t('chores:history.doneTimes', { count: view.summary.doneCount })}
-              {view.summary.clams > 0 && <>{' · '}{view.summary.clams} 🥟</>}
+              {view.summary.clams > 0 && <>{' · '}{t('common:points.amount', { amount: view.summary.clams })}</>}
             </Typography>
 
             <Typography variant="caption" color="text.secondary">{t('chores:history.lastDays', { count: GRID_DAYS })}</Typography>

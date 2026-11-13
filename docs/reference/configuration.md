@@ -120,11 +120,11 @@ Open with the gear (⚙️) icon. These persist server-side (global settings in 
 | **Displays → Devices** | Name this display; list and manage the others | `devices` |
 | **Displays → Screensaver** | Screensaver for this display | `localStorage` (per display) |
 | **Displays → This Display** | Hide the dock when idle, touch gestures (two-finger swipe, block pinch zoom), expand widgets | `localStorage` (per display, saved with the screensaver's) |
-| **Family → Users** | Family members, avatars, clam adjustments | `users`, `chore_history` |
+| **Family → Users** | Family members, avatars, points adjustments | `users`, `chore_history` |
 | **Family → Chores** | Chore definitions, schedules (cron/duration/interval), history | `chores`, `chore_schedules`, `chore_history` |
-| **Family → Chores → Settings: rewards** | Daily completion bonus (`daily_completion_clam_reward`), all-chores-done celebration (`CHORE_CELEBRATION_ENABLED`, default on) | `settings` (global) |
+| **Family → Chores → Settings: rewards** | What points are called (`POINTS_NAME`, blank for Stars) and their emoji (`POINTS_ICON`, blank for ⭐), daily completion bonus (`daily_completion_clam_reward`), all-chores-done celebration (`CHORE_CELEBRATION_ENABLED`, default on) | `settings` (global) |
 | **Family → Chores → Settings: sounds** | Master enable (`CHORE_SOUND_ENABLED`), default sound (`CHORE_SOUND_DEFAULT`), volume (`CHORE_SOUND_VOLUME`) | `settings` (global) |
-| **Family → Prizes** | Clam-purchasable rewards | `prizes` |
+| **Family → Prizes** | Rewards bought with points | `prizes` |
 | **Family → Vacation** | Vacation mode for the household: dates, chime mute (switching it on asks for the admin PIN) | `settings` (`vacation_mode`, household) |
 | **Security** | Admin PIN, controls on displays | `admin_pin`, `device_settings_json` |
 | **System → Language & time** | Language for this display; the household time zone | `localStorage` (language); `settings` (`APP_TIMEZONE`) |

@@ -53,8 +53,17 @@ For values inside a sentence, interpolate rather than concatenating — word
 order differs between languages:
 
 ```jsx
-t('chores:widget.allDone', { count: dailyClamReward })   // "All Done! +{{count}} 🥟"
+t('chores:widget.allDone', { count: dailyClamReward })   // "All Done! +{{count}} {{pointsIcon}}"
 ```
+
+Every string can also use `{{points}}` and `{{pointsIcon}}` without being passed
+them: the household's name and emoji for chore points (issue #392). They are
+i18next default variables, set in `utils/points.js`. A household that set no name
+gets `common:points.defaultName` (Stars), so translate that, but write a chosen name
+into sentences as it is: it may be "Robux" or "XP", so don't lowercase it or decline
+it, and in gendered languages keep articles away from it ("Se pagan {{points}}", not
+"Las {{points}} se pagan"). A count goes beside the emoji, not the name, so no plural
+is needed: `common:points.amount` is "{{amount}} {{pointsIcon}}".
 
 ## Rules worth knowing
 

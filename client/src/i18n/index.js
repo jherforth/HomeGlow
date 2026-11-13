@@ -13,6 +13,7 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 import { setDateLocale } from '../utils/dateUtils.js';
+import { pointsVariables, refreshPointsVariables, POINTS_CHANGED_EVENT } from '../utils/points.js';
 
 export const LANGUAGE_STORAGE_KEY = 'language';
 export const FALLBACK_LANGUAGE = 'en';
@@ -74,7 +75,12 @@ export async function initI18n({ initialLanguage } = {}) {
       defaultNS: 'common',
       supportedLngs: SUPPORTED_LANGUAGES.map((l) => l.code),
       nonExplicitSupportedLngs: true, // treat es-MX as es
-      interpolation: { escapeValue: false }, // React already escapes
+      interpolation: {
+        escapeValue: false, // React already escapes
+        // {{points}} and {{pointsIcon}} in any string: the household's name and
+        // emoji for chore points (utils/points.js).
+        defaultVariables: pointsVariables,
+      },
       detection: {
         order: ['localStorage', 'navigator'],
         lookupLocalStorage: LANGUAGE_STORAGE_KEY,
@@ -84,8 +90,13 @@ export async function initI18n({ initialLanguage } = {}) {
       missingKeyHandler: isDev
         ? (lngs, ns, key) => console.warn(`[i18n] missing key: ${ns}:${key} (${lngs.join(',')})`)
         : undefined,
-      react: { useSuspense: false },
+      // A renamed currency re-renders what's on screen, as a language change does.
+      react: { useSuspense: false, bindI18n: `languageChanged ${POINTS_CHANGED_EVENT}` },
     });
+
+  // The default name is translated, so it follows the language. Registered
+  // before any component subscribes, so it runs before they re-render.
+  i18n.on('languageChanged', () => refreshPointsVariables(i18n));
 
   await changeLanguage(i18n.language || FALLBACK_LANGUAGE);
   return i18n;

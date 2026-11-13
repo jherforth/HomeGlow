@@ -237,6 +237,11 @@ Every recipient (a device's browser push, an ntfy topic, a Home Assistant phone)
 | POST | `/api/routines/:id/steps/:stepId` | Tick or untick one step: `{ date, done }`. The last tick completes the routine's chore; an untick on a completed day uncompletes it. Answers the day as `/today` does. On an expired day a tick answers 403 `CHORE_EXPIRED` unless `parent_approved: true`, which completes the whole routine. Routines also take `expire_minutes` (after the end time). |
 
 ### Users & clams
+
+"Clams" is the API's name for chore points. People see the household's own name and
+emoji, the `POINTS_NAME` and `POINTS_ICON` settings (Stars and ⭐ when blank). Error
+messages and push notifications use them too: `Not enough Stars`, `+5 ⭐`.
+
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET/POST | `/api/users` | List / create users. Listed in admin-chosen display order (`sort_order`, then `id`); new users append at the end. |
@@ -264,7 +269,7 @@ Every recipient (a device's browser push, an ntfy topic, a Home Assistant phone)
 ### Settings & API keys
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET/POST | `/api/settings` | Read / write global settings (ICS URL, chore sounds, …). `GET ?keys=KEY,PREFIX_*` narrows the read; omit `keys` for the whole table. |
+| GET/POST | `/api/settings` | Read / write global settings (ICS URL, chore sounds, …). `GET ?keys=KEY,PREFIX_*` narrows the read; omit `keys` for the whole table. `POINTS_NAME` is stored trimmed, at most 24 characters; `POINTS_ICON` is stored only if it is an emoji (up to 16 UTF-16 units), else blank. |
 | POST | `/api/settings/search` | Look up specific settings. Equivalent to `GET /api/settings?keys=…`; kept because plugins are documented against it. |
 | POST | `/api/test-api-key` | Validate an OpenWeatherMap key. |
 | GET | `/api/proxy` | Generic CORS proxy (used by widgets/integrations). |

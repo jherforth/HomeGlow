@@ -83,12 +83,12 @@
     "loading": "Loading chores...",
     "addChore": "Add chore",
     "noChoresToday": "No chores for today",
-    "allDone": "All Done! +{{count}} 🥟",
+    "allDone": "All Done! +{{count}} {{pointsIcon}}",
     "completeAria": "Mark \"{{title}}\" complete",
     "uncompleteAria": "Undo \"{{title}}\"",
     "dueOn": "Due {{date}}",
     "overdue": "⚠️ Overdue",
-    "redeemClamsFor": "Redeem clams for {{name}}",
+    "redeemClamsFor": "Redeem {{points}} for {{name}}",
     "followupOf": "↪ after {{title}}"
   },
   "days": {
@@ -101,7 +101,7 @@
     "saturday": "Saturday"
   },
   "bonus": {
-    "heading": "🥟 Bonus Chores",
+    "heading": "{{pointsIcon}} Bonus Chores",
     "show": "Show Bonus Chores",
     "hide": "Hide Bonus Chores",
     "available": "Available:",
@@ -115,7 +115,7 @@
     "alreadyFinished": "They already finished today's chores and earned the daily reward.",
     "revokeAndAssign": "Revoke current reward and assign",
     "keepAndAssign": "Keep current reward and assign",
-    "bonusWhenCompleted": "🥟 Bonus when completed",
+    "bonusWhenCompleted": "{{pointsIcon}} Bonus when completed",
     "confirm": "Transfer"
   },
   "snooze": {
@@ -136,7 +136,7 @@
     "onTheShelf": "On the shelf",
     "requestedByLabel": "Requested by",
     "splittingWithLabel": "— splitting with",
-    "eachShareSuffix": "({{share}} 🥟 each)",
+    "eachShareSuffix": "({{share}} {{pointsIcon}} each)",
     "approve": "Approve",
     "decline": "Decline",
     "cancelRequest": "Cancel request",
@@ -145,18 +145,18 @@
     "splittingBetween": "Splitting between:",
     "requestSplit": "Request split",
     "pickTwoKids": "Pick at least 2 kids",
-    "eachShare": "{{share}} 🥟 each",
-    "eachShareDiscounted": "{{share}} 🥟 each ({{discounted}} 🥟 discounted)"
+    "eachShare": "{{share}} {{pointsIcon}} each",
+    "eachShareDiscounted": "{{share}} {{pointsIcon}} each ({{discounted}} {{pointsIcon}} discounted)"
   },
   "quickSpend": {
-    "title": "🥟 Redeem clams — {{name}}",
+    "title": "{{pointsIcon}} Redeem {{points}} — {{name}}",
     "balanceLabel": "Balance:",
-    "clamCount": "{{count}} clams",
-    "balanceHint": ". Record clams spent outside the store (e.g. a toy bought while out).",
+    "clamCount": "{{count}} {{pointsIcon}}",
+    "balanceHint": ". Record {{points}} spent outside the store (e.g. a toy bought while out).",
     "whatFor": "What for? (optional)",
     "whatForPlaceholder": "Toy store",
-    "confirm": "Redeem Clams",
-    "failed": "Could not redeem clams."
+    "confirm": "Redeem {{points}}",
+    "failed": "Could not redeem {{points}}."
   },
   "celebration": {
     "redeemedAPrize": "{{name}} redeemed a prize!"
@@ -172,10 +172,10 @@
   "schedules": {
     "definitionsHeading": "Chores",
     "newChore": "New Chore",
-    "definitionsHelp": "Chore definitions hold the title, description, and clam value. Add schedules on the Schedules tab to assign them to users with a recurrence pattern.",
+    "definitionsHelp": "Chore definitions hold the title, description, and {{points}} value. Add schedules on the Schedules tab to assign them to users with a recurrence pattern.",
     "noChores": "No chores defined yet.",
     "noDescription": "No description",
-    "clams": "Clams",
+    "clams": "{{points}}",
     "schedulesColumn": "Schedules",
     "editChore": "Edit chore",
     "deleteChoreAndSchedules": "Delete chore and all its schedules",
@@ -206,7 +206,7 @@
     "visible": "Visible",
     "duplicate": "Duplicate",
     "unknownUser": "User #{{id}}",
-    "clamValue": "Clam Value",
+    "clamValue": "{{points}} Value",
     "deleteChore": "Delete Chore",
     "unassignedBonusChore": "Unassigned (Bonus chore)",
     "oneTimeTask": "One-time task (no recurrence)",
@@ -303,7 +303,7 @@
   },
   "routines": {
     "heading": "Routines",
-    "intro": "A routine is a checklist of steps a child ticks off in the Chores widget, on chosen days or on days with a matching calendar event. Each routine is one chore, so it counts toward the day once. Clams are paid at streak milestones you choose.",
+    "intro": "A routine is a checklist of steps a child ticks off in the Chores widget, on chosen days or on days with a matching calendar event. Each routine is one chore, so it counts toward the day once. {{points}} are paid at streak milestones you choose.",
     "newRoutine": "New routine",
     "noRoutines": "No routines yet. Choose New routine to build one.",
     "loadFailed": "Could not load routines.",
@@ -364,9 +364,9 @@
     "every": "Every",
     "everyAria": "Days in a row",
     "daysInARow": "days in a row, worth",
-    "clamsAria": "Clams",
+    "clamsAria": "{{points}}",
     "rewardHelp": "Steps never pay out on their own. Set either to 0 for no reward.",
-    "rewardChip": "Every {{every}}: {{clams}} 🥟",
+    "rewardChip": "Every {{every}}: {{clams}} {{pointsIcon}}",
     "create": "Create routine",
     "newTitle": "New routine",
     "editTitle": "Edit routine",
@@ -374,7 +374,7 @@
     "copy": "Copy for someone else",
     "copyHelp": "A copy of {{name}}. Pick who it's for: their ticks and streak start fresh.",
     "deleteTitle": "Delete routine",
-    "deleteWarning": "Deleting a routine deletes its chore too. Clams already earned and the completion history stay.",
+    "deleteWarning": "Deleting a routine deletes its chore too. {{points}} already earned and the completion history stay.",
     "deletePrompt": "Delete",
     "stepsHeading": "Steps",
     "stepsIntro": "Build a step once, then use it in any routine.",
@@ -405,7 +405,7 @@
     "selectRoutine": "Select {{name}} for {{person}}",
     "bulkDeleteTitle_one": "Delete {{count}} routine",
     "bulkDeleteTitle_other": "Delete {{count}} routines",
-    "bulkDeleteWarning": "This deletes the selected routines and their chores. Clams already earned and the completion history stay. This cannot be undone.",
+    "bulkDeleteWarning": "This deletes the selected routines and their chores. {{points}} already earned and the completion history stay. This cannot be undone.",
     "bulkDeletePrompt_one": "Delete the selected routine?",
     "bulkDeletePrompt_other": "Delete the {{count}} selected routines?",
     "bulkDeleteSuccess_one": "Deleted {{count}} routine.",
@@ -448,7 +448,7 @@
     "doneOfDue": "done {{done}} of {{due}} ({{rate}}%)",
     "doneTimes_one": "done {{count}} time",
     "doneTimes_other": "done {{count}} times",
-    "untrackedClams": "Misses aren't recorded for chores worth clams, so an empty star only means nothing was logged.",
+    "untrackedClams": "Misses aren't recorded for chores worth {{points}}, so an empty star only means nothing was logged.",
     "untrackedOther": "Misses aren't recorded for this chore, so an empty star only means nothing was logged.",
     "recent": "Recent",
     "none": "Nothing logged yet.",
@@ -690,5 +690,10 @@
     "savedOne": "Saved for {{name}}: {{timing}}. Who’s next?",
     "done_one": "Saved {{count}} schedule for {{chore}}.",
     "done_other": "Saved {{count}} schedules for {{chore}}."
+  },
+  "pointsModal": {
+    "title": "Set {{points}} for {{name}}",
+    "titleNoName": "Set {{points}}",
+    "hint": "Use the keyboard or touch to enter a new total"
   }
 }

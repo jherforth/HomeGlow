@@ -184,7 +184,7 @@ test('one completion reaches a browser device, an ntfy topic and a phone, each a
     service: 'mobile_app_jason_s_pixel',
     data: {
       title: 'Ava finished Feed the cat',
-      message: '+2 clams',
+      message: '+2 ⭐',
       data: { priority: 'high', ttl: 0, tag: 'homeglow-chores-1-2026-10-23', clickAction: 'http://homeglow.lan:3000/' },
     },
   }], "Sam's iPhone hears only about Leo");

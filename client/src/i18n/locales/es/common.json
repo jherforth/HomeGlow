@@ -21,7 +21,8 @@
     "loading": "Cargando...",
     "saving": "Guardando...",
     "none": "Ninguno",
-    "optional": "opcional"
+    "optional": "opcional",
+    "processing": "Procesando..."
   },
   "labels": {
     "title": "Título",
@@ -153,5 +154,11 @@
     "notFoundTitle": "Pantalla no encontrada",
     "notFoundMessage": "No existe ninguna pantalla llamada \"{{name}}\", por lo que no se puede duplicar.",
     "backToDashboard": "Volver a mi panel"
+  },
+  "points": {
+    "defaultName": "Estrellas",
+    "amount": "{{amount}} {{pointsIcon}}",
+    "gain": "+{{amount}} {{pointsIcon}}",
+    "icon": "{{pointsIcon}}"
   }
 }

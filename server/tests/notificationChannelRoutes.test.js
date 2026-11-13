@@ -197,10 +197,10 @@ test('a finished chore reaches the ntfy topic and the phone; a plugin\'s urgent 
   const message = published.find((p) => p.body.title === 'Ava finished Feed the cat');
   assert.ok(message, JSON.stringify(published));
   assert.equal(message.body.topic, 'homeglow-route-mom');
-  assert.equal(message.body.message, '+2 clams');
+  assert.equal(message.body.message, '+2 ⭐');
   assert.equal(message.body.click, 'http://homeglow.lan:3000/');
   assert.deepEqual(fake.calls.map((c) => [c.service, c.data.title, c.data.message]),
-    [['mobile_app_sam_s_pixel', 'Ava finished Feed the cat', '+2 clams']]);
+    [['mobile_app_sam_s_pixel', 'Ava finished Feed the cat', '+2 ⭐']]);
 
   // A plugin's urgent message: only the phone ticked it, and it rings.
   fake.calls.length = 0;

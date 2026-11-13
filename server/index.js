@@ -95,6 +95,7 @@ const axios = require('axios');
 const ICAL = require('ical.js');
 const { CronExpressionParser } = require('cron-parser');
 const { cronFiresOnDate } = require('./utils/cronDay');
+const points = require('./utils/points');
 const anyDayChores = require('./services/anyDayChores');
 const choreExpiry = require('./utils/choreExpiry');
 const cron = require('node-cron');
@@ -4752,7 +4753,7 @@ fastify.post('/api/users/:id/clams/reduce', async (request, reply) => {
 
     const currentResult = db.prepare('SELECT COALESCE(SUM(clam_value), 0) as total FROM chore_history WHERE user_id = ?').get(id);
     if (currentResult.total < amount) {
-      return reply.status(400).send({ error: 'Insufficient clams' });
+      return reply.status(400).send({ error: `Not enough ${points.readPoints(db).name}` });
     }
 
     // Non-destructive spend (issue #72): record a negative ledger row instead
@@ -5355,9 +5356,14 @@ fastify.post('/api/settings', async (request, reply) => {
       return { success: true, message: `Setting '${key}' left unchanged.` };
     }
 
+    // The points name and emoji are shown on every display, so they are kept
+    // short and tidy here too; '' means the default (utils/points.js).
+    const pointsValue = points.normalizePointsSetting(key, value);
+    const stored = pointsValue === undefined ? value : pointsValue;
+
     // Use INSERT OR REPLACE to either insert a new setting or update an existing one
     const stmt = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
-    const result = stmt.run(key, value);
+    const result = stmt.run(key, stored);
     console.log('Database insert result:', result);
 
     // Verify the setting was saved
@@ -6323,7 +6329,7 @@ const validatePrizeBody = (body) => {
   const { clam_cost, description } = body || {};
   const name = trimmed(body?.name);
   if (!name || !clam_cost || clam_cost <= 0) {
-    return { error: 'Prize name and a positive clam cost are required.' };
+    return { error: 'Prize name and a positive cost are required.' };
   }
   if (description !== undefined && description !== null && typeof description !== 'string') {
     return { error: 'Prize description must be text.' };
@@ -6582,8 +6588,9 @@ fastify.post('/api/prize-offers/:id/approve', async (request, reply) => {
     const short = participantIds.filter((pid) => balanceStmt.get(pid).total < share);
     if (short.length > 0) {
       const names = short.map((pid) => nameStmt.get(pid)?.username || `user ${pid}`).join(', ');
+      const { name: pointsName, icon } = points.readPoints(db);
       return reply.status(400).send({
-        error: `Insufficient clams: ${names} ${short.length === 1 ? 'has' : 'have'} less than the ${share}-clam share`,
+        error: `Not enough ${pointsName}: ${names} ${short.length === 1 ? 'has' : 'have'} less than the share of ${share} ${icon}`,
       });
     }
 
