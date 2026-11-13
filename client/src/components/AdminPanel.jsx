@@ -253,7 +253,8 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     // Write-only: the server redacts this from GET /api/settings, so the field
     // starts blank and an empty save leaves the stored key untouched.
     WEATHER_API_KEY: '',
-    WEATHER_PROVIDER: 'openweathermap',
+    // Filled from the server's status; blank until then (see saveAllApiSettings).
+    WEATHER_PROVIDER: '',
     PROXY_WHITELIST: '',
     daily_completion_clam_reward: '2',
     CHORE_CELEBRATION_ENABLED: 'true',
@@ -845,7 +846,7 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
       // the effective one is "demo", which is not a selectable option.
       setSettings((prev) => ({
         ...prev,
-        WEATHER_PROVIDER: provider.data?.configured_provider || 'openweathermap',
+        WEATHER_PROVIDER: provider.data?.configured_provider || '',
       }));
     } catch (error) {
       console.error('Error fetching weather connection status:', error);
@@ -908,7 +909,11 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
     try {
       await Promise.all([
         axios.post(`${API_BASE_URL}/api/settings`, { key: 'WEATHER_API_KEY', value: settings.WEATHER_API_KEY || '' }),
-        axios.post(`${API_BASE_URL}/api/settings`, { key: 'WEATHER_PROVIDER', value: settings.WEATHER_PROVIDER || 'openweathermap' }),
+        // Blank until the server has said which provider is in use; saving
+        // a guess would switch an install's provider without anyone choosing.
+        ...(settings.WEATHER_PROVIDER
+          ? [axios.post(`${API_BASE_URL}/api/settings`, { key: 'WEATHER_PROVIDER', value: settings.WEATHER_PROVIDER })]
+          : []),
       ]);
       // Clear the write-only field and re-read what the server now holds.
       setSettings((prev) => ({ ...prev, WEATHER_API_KEY: '' }));
@@ -3972,12 +3977,12 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                 control={(
                   <FormControl size="small" sx={{ minWidth: 240 }}>
                     <Select
-                      value={settings.WEATHER_PROVIDER || 'openweathermap'}
+                      value={settings.WEATHER_PROVIDER || ''}
                       inputProps={{ 'aria-label': t('admin:connections.weatherProvider') }}
                       onChange={(e) => setSettings(prev => ({ ...prev, WEATHER_PROVIDER: e.target.value }))}
                     >
-                      <MenuItem value="openweathermap">{t('admin:connections.providerOpenWeather')}</MenuItem>
                       <MenuItem value="openmeteo">{t('admin:connections.providerOpenMeteo')}</MenuItem>
+                      <MenuItem value="openweathermap">{t('admin:connections.providerOpenWeather')}</MenuItem>
                       <MenuItem value="homeassistant">{t('admin:connections.providerHomeAssistant')}</MenuItem>
                     </Select>
                   </FormControl>
@@ -3985,9 +3990,9 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
               />
               {/* The key field is write-only: the server redacts it, so this
                   shows whether one is stored and accepts a replacement.
-                  Home Assistant and Open-Meteo need no key — HA authenticates
-                  with its own token, Open-Meteo needs none at all. */}
-              {settings.WEATHER_PROVIDER !== 'homeassistant' && settings.WEATHER_PROVIDER !== 'openmeteo' && (
+                  Only OpenWeatherMap uses it — HA authenticates with its own
+                  token, Open-Meteo needs none at all. */}
+              {settings.WEATHER_PROVIDER === 'openweathermap' && (
                 <AdminRow
                   label={t('admin:connections.openWeatherKey')}
                   hint={weatherProviderStatus?.has_api_key

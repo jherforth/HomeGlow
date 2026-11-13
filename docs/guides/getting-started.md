@@ -11,8 +11,9 @@ iteration, or **Docker** for a production-like setup.
 - A C toolchain for `better-sqlite3` native build (usually preinstalled; on Linux
   you may need `python3`, `make`, `g++`).
 - Optional: **Docker + Docker Compose** for the containerized path.
-- Optional API access: an **OpenWeatherMap** key (weather + auto dark mode), a
-  **calendar** source (ICS/CalDAV/Google), an **Immich** instance (photos).
+- Optional API access: a **calendar** source (ICS/CalDAV/Google), an
+  **Immich** instance (photos). Weather needs no key: it comes from Open-Meteo
+  unless you pick OpenWeatherMap or Home Assistant in the Admin Panel.
 
 ## Option A — Native (npm) with hot reload
 

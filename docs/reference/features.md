@@ -525,9 +525,15 @@ and the `photo-sources` / `photo-items` routes.
 
 - Current conditions + 3-day forecast with interactive temperature and
   precipitation graphs.
-- **Two sources** (issue #57), chosen in Admin Panel → System → Connections:
-  **OpenWeatherMap** (free API key, location by city/zip/coords) or
-  **Home Assistant** (reads an existing `weather.*` entity, no API key needed).
+- **Three sources** (issue #57), chosen in Admin Panel → System → Connections:
+  - **Open-Meteo**, the default: no API key, so weather works on a new install
+    with nothing set up. Location by city/zip/coords. No air quality.
+  - **OpenWeatherMap**: free API key, location by city/zip/coords.
+  - **Home Assistant**: reads an existing `weather.*` entity, no API key needed.
+
+  With no source chosen, an install that has an OpenWeatherMap key stored keeps
+  using OpenWeatherMap. That's an install from before Open-Meteo, when
+  OpenWeatherMap was the default. A source chosen in the Admin Panel always wins.
 - Fetched **server-side**. Credentials stay on the server, and one upstream call
   is cached for every display rather than each tab fetching its own.
 
@@ -550,7 +556,7 @@ localized description is preferred where it exists.
 
 **Auto dark mode** no longer needs a weather provider at all: sunrise and sunset
 are computed from coordinates (`GET /api/sun`), so the theme switches on schedule
-with Home Assistant, with OpenWeatherMap, or with nothing configured.
+with any weather source, or with nothing configured.
 
 **Code:** `WeatherWidget.jsx`; `server/services/weather/` (`payload.js` defines
 the shared contract, one module per provider, `sun.js` for the solar

@@ -281,7 +281,9 @@ Every recipient (a device's browser push, an ntfy topic, a Home Assistant phone)
 ### Weather
 Weather is fetched **server-side** so provider credentials never reach a browser
 (issue #57). The active provider is the `WEATHER_PROVIDER` setting
-(`openweathermap` | `openmeteo` | `homeassistant`); demo mode always uses the bundled snapshot.
+(`openmeteo` | `openweathermap` | `homeassistant`). Unset, it is `openmeteo`, or
+`openweathermap` when an OpenWeatherMap key is stored (an install from before
+Open-Meteo). Demo mode always uses the bundled snapshot.
 Every provider returns the same payload — see
 `server/services/weather/payload.js`.
 
