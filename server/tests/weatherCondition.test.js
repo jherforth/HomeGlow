@@ -80,7 +80,21 @@ test('OpenWeatherMap with no location is a 400, not an upstream call', async () 
     }
 });
 
-test('demo mode answers with the demo snapshot\'s condition', async () => {
-    const answer = await weather.getCondition(fakeDb, { demoMode: true });
-    assert.equal(answer.condition, demo.fetchWeather().current.condition);
+test('demo mode falls back to the snapshot when Open-Meteo is unreachable', async () => {
+    const originalFetch = global.fetch;
+    let calls = 0;
+    global.fetch = async () => { calls += 1; throw new Error('offline'); };
+    try {
+        const answer = await weather.getCondition(fakeDb, { demoMode: true });
+        assert.equal(answer.condition, demo.fetchWeather().current.condition);
+
+        const payload = await weather.getWeather(fakeDb, { demoMode: true, forceRefresh: true });
+        assert.equal(payload.provider, 'demo');
+        assert.equal(payload.resolvedName, 'Chili');
+        // The fallback is cached like any reading, so a dead upstream isn't
+        // retried on every request, even a forced refresh.
+        assert.equal(calls, 1);
+    } finally {
+        global.fetch = originalFetch;
+    }
 });

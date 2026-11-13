@@ -283,7 +283,9 @@ Weather is fetched **server-side** so provider credentials never reach a browser
 (issue #57). The active provider is the `WEATHER_PROVIDER` setting
 (`openmeteo` | `openweathermap` | `homeassistant`). Unset, it is `openmeteo`, or
 `openweathermap` when an OpenWeatherMap key is stored (an install from before
-Open-Meteo). Demo mode always uses the bundled snapshot.
+Open-Meteo). Demo mode always uses Open-Meteo for New York City (ZIP 10001),
+whatever place is asked for, with the bundled snapshot as a fallback; its
+geocode route answers New York for any query.
 Every provider returns the same payload — see
 `server/services/weather/payload.js`.
 

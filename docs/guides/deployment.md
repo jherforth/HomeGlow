@@ -110,9 +110,10 @@ What it changes:
 - **Admin PIN disabled** — the Admin Panel opens without a prompt, and the
   PIN set/verify/delete routes return 403 so a visitor can't lock others out.
 - **Sample data** — a demo household (users, chores, schedules, clam history,
-  prizes, family calendar events, live public calendar feeds, and a static
-  weather snapshot) is seeded at boot and re-seeded every 6 hours; new visitor
-  devices auto-enable the chore, calendar, and weather widgets.
+  prizes, family calendar events, and live public calendar feeds) is seeded at
+  boot and re-seeded every 6 hours; new visitor devices auto-enable the chore,
+  calendar, and weather widgets. Weather is live from Open-Meteo for New York
+  City.
 - **Abuse-prone routes return 403** — all uploads (widgets/sounds/avatars/
   photos), widget install/delete, the `/api/proxy` CORS proxy, Google/Apple
   connection setup, and all calendar source add/edit/delete/test/sync routes.

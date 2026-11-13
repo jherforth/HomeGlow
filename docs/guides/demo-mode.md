@@ -45,7 +45,7 @@ DEMO MODE enabled: in-memory database, PIN disabled, sample data resets every 6h
 | **Admin PIN** | Optional PIN gate on the Admin Panel | **Disabled** — panel opens freely; PIN set/verify/delete return `403` so no visitor can lock others out |
 | **Sample data** | Empty first-run welcome screen | A demo household is **seeded at boot and re-seeded every 6 hours**; new visitor devices auto-enable the chore, calendar, and weather widgets |
 | **Calendar sync** | Syncs whatever sources you configure | Runs **only for the curated demo feeds** seeded at boot; source add/edit/delete routes are blocked so visitor URLs are never fetched |
-| **Weather** | Live data from your chosen provider | A **static snapshot of Chili, NY** — demo mode selects the demo provider behind the normal `GET /api/weather`, so no credentials are involved |
+| **Weather** | Live data from your chosen provider, for the place you set | **Live data from Open-Meteo (no key), always for New York City (ZIP 10001)**, whatever location a visitor sets; a static snapshot if Open-Meteo can't be reached |
 | **Abuse-prone routes** | Available | Return `403` (see below) |
 | **Client banner** | — | A **"Demo Mode — sample data resets every N hours"** banner is shown |
 
@@ -107,13 +107,18 @@ and is designed to make an empty dashboard feel like a real family command cente
   - **Town of Chili — Calendar** and **Town of Chili — Community Events** — two
     overlapping town feeds, which double as a live demonstration of
     cross-calendar event deduplication.
-- **A weather snapshot for Chili, NY** — the demo has no weather credentials, so
-  the server selects the demo provider behind the normal `GET /api/weather` and
-  the widget renders a static real-conditions snapshot (current temp, 3-day
-  outlook, hourly chart, air quality). Forecast dates are generated relative to
-  today, so the demo never shows a stale week. Because it goes through the same
-  route as a real install, demo mode exercises the production code path rather
-  than a special case in the widget.
+- **Live weather for New York City** — the server fetches it from Open-Meteo,
+  which needs no key, behind the normal `GET /api/weather`. The place is fixed
+  at ZIP 10001 whatever a visitor asks for: every weather request and every
+  location lookup (`GET /api/weather/geocode`) answers with New York. So all
+  visitors share one cached reading per unit system, a forced refresh reuses
+  it, and a visitor's text is never sent to a geocoder. That's at most a couple
+  of upstream calls every 10 minutes. Open-Meteo has no air quality, so that
+  section is hidden.
+
+  If Open-Meteo can't be reached, the widget shows a static real-conditions
+  snapshot of Chili, NY instead of an error (current temp, 3-day outlook,
+  hourly chart, air quality), with forecast dates generated relative to today.
 
 Because the whole set is re-seeded on a timer (every 6 hours by default) and the
 database is in-memory, the demo always returns to this known-good state; each

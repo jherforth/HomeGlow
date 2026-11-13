@@ -733,8 +733,8 @@ const App = () => {
             chores: { enabled: true },
             calendar: { enabled: true },
             photos: { enabled: false },
-            // Weather renders from the server's static demo snapshot
-            // (/api/demo/weather) — no OpenWeatherMap key needed.
+            // The demo's weather is live from Open-Meteo for New York
+            // City, chosen by the server — no key or location needed.
             weather: { enabled: true },
           },
         });

@@ -5152,6 +5152,14 @@ fastify.get('/api/weather/geocode', async (request, reply) => {
   try {
     const query = String(request.query?.q || '').trim();
 
+    // The demo's weather is always New York, whatever a visitor asks for, so
+    // every lookup resolves there too. That also keeps visitors' text from
+    // being sent on to a geocoder.
+    if (DEMO_MODE) {
+      const { DEMO_PLACE } = require('./services/weather/demo');
+      return { lat: DEMO_PLACE.lat, lon: DEMO_PLACE.lon, resolvedName: DEMO_PLACE.name };
+    }
+
     // With no query, report the provider's own location where it has one. A
     // Home Assistant household already told HA where it lives, so auto dark
     // mode should not need a second answer — or an OpenWeatherMap key.

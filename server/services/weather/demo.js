@@ -1,18 +1,24 @@
 // Demo-mode weather provider (issue #57; formerly server/utils/demoWeather.js).
 //
-// The demo has no OpenWeatherMap key and no Home Assistant, so the weather
-// widget would sit empty. This provider serves a fixed snapshot through the
-// same contract as the live providers, which means demo mode exercises the real
-// code path rather than a special case in the widget.
+// The demo shows live weather from Open-Meteo, which needs no key, always for
+// one place: New York City (ZIP 10001), whatever location a visitor sets. One
+// place means one cached reading for every visitor, so the demo makes at most
+// a few upstream calls in each cache period however it is used.
 //
-// The numbers are a real snapshot of Chili, NY (Monroe County) taken
+// If Open-Meteo can't be reached, or answers with something unusable, the
+// demo falls back to a fixed snapshot, so the widget never shows an error.
+// The snapshot's numbers are a real reading of Chili, NY (Monroe County) taken
 // 2026-07-08 1:00 PM EDT from open-meteo.com. Only the values are static — the
-// dates and hourly timestamps are generated relative to now, so the demo shows
-// a plausible upcoming forecast instead of a stale one from a fixed date.
+// dates and hourly timestamps are generated relative to now, so the fallback
+// shows a plausible upcoming forecast instead of a stale one from a fixed date.
 
-const { buildPayload } = require('./payload');
+const { buildPayload, validatePayload } = require('./payload');
+const openMeteo = require('./openmeteo');
 
 const CHILI_NY = { lat: 43.0848, lon: -77.7522 };
+
+// ZIP 10001, as Open-Meteo's geocoder resolves it.
+const DEMO_PLACE = { lat: 40.71427, lon: -74.00597, name: 'New York' };
 
 // Base snapshot in imperial units (°F, mph).
 const SNAPSHOT = {
@@ -97,4 +103,23 @@ function fetchWeather({ units = 'imperial', now = new Date() } = {}) {
     });
 }
 
-module.exports = { fetchWeather, CHILI_NY };
+/**
+ * Live weather for the demo's place, or the snapshot when Open-Meteo fails.
+ * @param {'imperial'|'metric'} units
+ */
+async function fetchLiveWeather({ units = 'imperial' } = {}) {
+    try {
+        const payload = await openMeteo.fetchWeather({
+            coordinates: { lat: DEMO_PLACE.lat, lon: DEMO_PLACE.lon },
+            units,
+        });
+        const problems = validatePayload(payload);
+        if (problems.length === 0) return { ...payload, resolvedName: DEMO_PLACE.name };
+        console.warn(`Demo weather: Open-Meteo's answer was unusable (${problems.join('; ')}); showing the snapshot.`);
+    } catch (error) {
+        console.warn(`Demo weather: Open-Meteo is unavailable (${error.message}); showing the snapshot.`);
+    }
+    return fetchWeather({ units });
+}
+
+module.exports = { fetchWeather, fetchLiveWeather, CHILI_NY, DEMO_PLACE };
