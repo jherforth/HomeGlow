@@ -45,11 +45,11 @@ code, so you know where to look when working on a given domain.
 `utils/weatherScenes.js`, `utils/useWeatherCondition.js`, `resolveTheme` in
 `utils/themes.js`, and `getCondition` in `server/services/weather/index.js`.
 
-## Chores & the clam reward system
+## Chores & the points system
 
 The chore system uses a **three-table model** (see [Database](../architecture/database.md)):
 `chores` (definitions) → `chore_schedules` (recurrence + assignment) →
-`chore_history` (completion/clam ledger).
+`chore_history` (completion/points ledger).
 
 - **Recurrence** is expressed as cron (`crontab`). A `NULL` crontab means a
   one-time instance.
@@ -93,11 +93,19 @@ The chore system uses a **three-table model** (see [Database](../architecture/da
   history id at the change; the nightly cleanup counts completions after it.
   Before, a schedule done once while it repeated was cleared undone the night
   after it was made one-time, and its chore with it.
-- **Clams** are a reward currency earned by completing chores; balances are derived
+- **What points are called** is the household's choice (issue #392). *Family → Chores →
+  Settings → Rewards* sets a name and an emoji, stored as the `POINTS_NAME` and
+  `POINTS_ICON` settings. Blank means the default, **Stars** and ⭐, with the name
+  translated (*Estrellas*); a chosen name is shown as written in every language. Every
+  display follows a change at its next settings poll. Before #392 they were always
+  "clams" and 🥟; a household that liked them can type *Clams* and pick 🥟. Code,
+  routes, columns and plugin events still say clam (`clam_value`,
+  `/api/users/:id/clams`, `clam.deposited`).
+- **Points** are a reward currency earned by completing chores; balances are derived
   by summing `chore_history` (no denormalized total). Completing *all* of a user's
-  daily chores awards a bonus. **Bonus chores** carry a custom clam value; one
+  daily chores awards a bonus. **Bonus chores** carry a custom points value; one
   claimed from the pool resets to unassigned each night, done or not, while a card
-  from someone's own schedule stays theirs overnight, clams or not. Only one
+  from someone's own schedule stays theirs overnight, points or not. Only one
   uncompleted bonus chore per user at a time, enforced where the claim is made.
   Claiming is its own route (`POST /api/chore-schedules/:id/claim`): it records
   the claim date on the schedule (`pool_claimed_on`, migration
@@ -149,7 +157,7 @@ The chore system uses a **three-table model** (see [Database](../architecture/da
   - **Cost splitting**: kids sharing a prize pick "👥 Split cost" and select
     who's in; each participant pays an even `floor(cost / N)` share (the odd
     remainder is silently discounted) and the celebration names everyone.
-- **Avatar quick-spend**: tapping a kid's profile picture opens "Redeem clams" —
+- **Avatar quick-spend**: tapping a kid's profile picture opens "Redeem Stars" —
   a parent records off-store spending (e.g. a toy bought while out) with an
   optional note that lands in the ledger and metrics.
 

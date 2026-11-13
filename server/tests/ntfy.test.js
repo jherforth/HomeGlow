@@ -143,7 +143,7 @@ test('a completion goes to the topics that asked, alongside browser push, with a
   assert.deepEqual(pushed.map((p) => p.payload.title), ['Ava finished Feed the cat'], 'browser push still goes');
   assert.deepEqual(posted.map((p) => p.body.topic), ['homeglow-mom'], 'Dad hears only about Leo; Grandma only about whole days');
   assert.deepEqual(posted[0].body, {
-    topic: 'homeglow-mom', priority: 3, title: 'Ava finished Feed the cat', message: '+5 clams',
+    topic: 'homeglow-mom', priority: 3, title: 'Ava finished Feed the cat', message: '+5 ⭐',
     click: 'http://homeglow.lan:3000/', tags: ['white_check_mark'],
   });
   assert.equal(posted[0].url, 'https://ntfy.sh/');

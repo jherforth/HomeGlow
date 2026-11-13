@@ -485,7 +485,7 @@ export default function RoutineEditorDialog({ open, routine, copyOf = null, step
                 slotProps={{ htmlInput: { min: 0, max: 999, 'aria-label': t('chores:routines.clamsAria') } }}
                 sx={{ width: 90 }}
               />
-              <Typography variant="body2">🥟</Typography>
+              <Typography variant="body2">{t('common:points.icon')}</Typography>
             </Box>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>{t('chores:routines.rewardHelp')}</Typography>
           </Box>

@@ -105,4 +105,4 @@ Update the relevant page in `docs/` when you change behavior — new routes
 | Change dashboard layout/tabs | `WidgetContainer.jsx`, `TabBar.jsx`, `app.jsx` |
 | Add configuration/settings | [Configuration](../reference/configuration.md) + `AdminPanel.jsx` |
 | Build a custom widget | [Custom Widget Development](custom-widgets.md) |
-| Understand chores/clams | [Features](../reference/features.md#chores--the-clam-reward-system) |
+| Understand chores/points | [Features](../reference/features.md#chores--the-points-system) |

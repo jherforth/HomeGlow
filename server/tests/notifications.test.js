@@ -133,7 +133,7 @@ test('a completion goes to the devices that asked, about the people they asked a
   await notifier.handle(completed(1, 10, 5));
   assert.deepEqual(sent.map((s) => s.endpoint), [subscription(1).endpoint]);
   assert.deepEqual(sent[0].payload, {
-    title: 'Ava finished Feed the cat', body: '+5 clams', tag: 'homeglow-chores-1-2026-10-16', url: '/',
+    title: 'Ava finished Feed the cat', body: '+5 ⭐', tag: 'homeglow-chores-1-2026-10-16', url: '/',
   });
   assert.equal(sent[0].options.vapidDetails.publicKey, 'PUBLIC');
   assert.equal(sent[0].options.vapidDetails.privateKey, 'PRIVATE');
@@ -147,7 +147,7 @@ test('completions close together grow one message; later ones start afresh', asy
   advance(60_000);
   await notifier.handle(completed(1, 11, 2));
   assert.equal(sent[1].payload.title, 'Ava finished 2 chores');
-  assert.equal(sent[1].payload.body, 'Feed the cat · Make the bed (+7 clams)');
+  assert.equal(sent[1].payload.body, 'Feed the cat · Make the bed (+7 ⭐)');
   assert.equal(sent[1].payload.tag, sent[0].payload.tag, 'replaces the first on the phone');
 
   advance(11 * 60_000);
@@ -163,7 +163,7 @@ test('a routine is named as a routine; finishing the day says so', async () => {
   assert.equal(sent[0].payload.title, 'Leo finished the Morning routine');
   await notifier.handle({ event: 'chore.allCompleted', payload: { userId: 2, username: 'Leo', date: '2026-10-16', reward: 3 } });
   assert.deepEqual(sent[1].payload, {
-    title: "Leo finished all of today's chores", body: 'Bonus: +3 clams', tag: 'homeglow-alldone-2-2026-10-16', url: '/',
+    title: "Leo finished all of today's chores", body: 'Bonus: +3 ⭐', tag: 'homeglow-alldone-2-2026-10-16', url: '/',
   });
 });
 
@@ -174,8 +174,18 @@ test('each device hears in its own language', async () => {
   await notifier.handle(completed(1, 10, 1));
   const byEndpoint = Object.fromEntries(sent.map((s) => [s.endpoint, s.payload]));
   assert.equal(byEndpoint[subscription(1).endpoint].title, 'Ava terminó Feed the cat');
-  assert.equal(byEndpoint[subscription(1).endpoint].body, '+1 almeja');
+  assert.equal(byEndpoint[subscription(1).endpoint].body, '+1 ⭐');
   assert.equal(byEndpoint[subscription(2).endpoint].title, 'Ava finished Feed the cat');
+});
+
+test("points show as the household's own emoji (issue #392)", async () => {
+  const { db, notifier, sent } = setup();
+  db.prepare("INSERT INTO settings (key, value) VALUES ('POINTS_ICON', '🥟')").run();
+  notifier.save('Mom phone', { subscription: subscription() });
+  await notifier.handle(completed(1, 10, 4));
+  assert.equal(sent[0].payload.body, '+4 🥟');
+  await notifier.handle({ event: 'chore.allCompleted', payload: { userId: 1, username: 'Ava', date: '2026-10-16', reward: 2 } });
+  assert.equal(sent[1].payload.body, 'Bonus: +2 🥟');
 });
 
 test('other events, the bonus user and unknown people send nothing', async () => {

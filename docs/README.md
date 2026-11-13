@@ -29,7 +29,7 @@ stays relevant.
 - [Chores Refactor History](architecture/chores-refactor-history.md) — the (implemented) original design spec for the three-table chore system.
 
 ### Feature deep-dives
-- [Features & Domains](reference/features.md) — chores/clams, calendar sync, photos, screensaver, theming, tabs & layout.
+- [Features & Domains](reference/features.md) — chores/points, calendar sync, photos, screensaver, theming, tabs & layout.
 
 ### Guides
 - [Getting Started (Local Dev)](guides/getting-started.md)

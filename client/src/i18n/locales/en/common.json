@@ -21,7 +21,8 @@
     "loading": "Loading...",
     "saving": "Saving...",
     "none": "None",
-    "optional": "optional"
+    "optional": "optional",
+    "processing": "Processing..."
   },
   "labels": {
     "title": "Title",
@@ -153,5 +154,11 @@
     "notFoundTitle": "Display not found",
     "notFoundMessage": "No display named \"{{name}}\" exists, so it cannot be mirrored.",
     "backToDashboard": "Back to my dashboard"
+  },
+  "points": {
+    "defaultName": "Stars",
+    "amount": "{{amount}} {{pointsIcon}}",
+    "gain": "+{{amount}} {{pointsIcon}}",
+    "icon": "{{pointsIcon}}"
   }
 }

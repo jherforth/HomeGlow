@@ -152,10 +152,29 @@ test('approval blocks on insufficient clams and leaves the request pending', asy
 
     const approve = await api(`/api/prize-offers/${offerId}/approve`, { method: 'POST' });
     assert.equal(approve.status, 400);
-    assert.match(approve.body.error, /Insufficient clams/);
+    assert.match(approve.body.error, /Not enough Stars: store-kid has less than the share of 40 ⭐/);
     assert.equal((await api('/api/prize-offers')).body[0].status, 'requested', 'request stays pending so the parent sees why');
 
     await api(`/api/prize-offers/${offerId}/cancel-request`, { method: 'POST' });
+});
+
+test("a household's own name and emoji are stored tidied and used in the message (issue #392)", async () => {
+    await api('/api/settings', { method: 'POST', body: JSON.stringify({ key: 'POINTS_NAME', value: '  Clams  ' }) });
+    await api('/api/settings', { method: 'POST', body: JSON.stringify({ key: 'POINTS_ICON', value: ' 🥟 ' }) });
+    const stored = await api('/api/settings?keys=POINTS_NAME,POINTS_ICON');
+    assert.deepEqual(stored.body, { POINTS_NAME: 'Clams', POINTS_ICON: '🥟' });
+
+    const offerId = (await api('/api/prize-offers')).body[0].id;
+    await api(`/api/prize-offers/${offerId}/request`, { method: 'POST', body: JSON.stringify({ user_id: kidId }) });
+    const approve = await api(`/api/prize-offers/${offerId}/approve`, { method: 'POST' });
+    assert.match(approve.body.error, /Not enough Clams: store-kid has less than the share of 40 🥟/);
+    await api(`/api/prize-offers/${offerId}/cancel-request`, { method: 'POST' });
+
+    // Text where an emoji belongs is not kept as one; blank goes back to Stars.
+    await api('/api/settings', { method: 'POST', body: JSON.stringify({ key: 'POINTS_ICON', value: 'clam' }) });
+    await api('/api/settings', { method: 'POST', body: JSON.stringify({ key: 'POINTS_NAME', value: '   ' }) });
+    assert.deepEqual((await api('/api/settings?keys=POINTS_NAME,POINTS_ICON')).body, { POINTS_NAME: '', POINTS_ICON: '' });
+    assert.equal((await api(`/api/users/${kidId}/clams/reduce`, { method: 'POST', body: JSON.stringify({ amount: 5 }) })).body.error, 'Not enough Stars');
 });
 
 test('approval redeems once: clams deducted with the prize name, offer leaves the store, ledger intact', async () => {

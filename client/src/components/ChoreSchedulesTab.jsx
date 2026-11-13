@@ -853,7 +853,7 @@ export default function ChoreSchedulesTab({ setSaveMessage, section, onSection, 
             )}
             control={(
               <>
-                {c.clam_value > 0 && <Chip label={`${c.clam_value} 🥟`} size="small" color="primary" />}
+                {c.clam_value > 0 && <Chip label={t('common:points.amount', { amount: c.clam_value })} size="small" color="primary" />}
                 <Tooltip describeChild title={scheduleCount(c.id) === 0 ? t('chores:schedules.addScheduleForChore') : t('chores:schedules.viewSchedules')}>
                   <Chip
                     label={`${scheduleCount(c.id)} schedule${scheduleCount(c.id) !== 1 ? 's' : ''}`}
@@ -1018,7 +1018,7 @@ export default function ChoreSchedulesTab({ setSaveMessage, section, onSection, 
                   ) : s.crontab ? (
                     <Chip label={t('chores:schedules.dayOf')} size="small" variant="outlined" />
                   ) : null}
-                  {s.clam_value > 0 && <Chip label={`${s.clam_value} 🥟`} size="small" color="primary" />}
+                  {s.clam_value > 0 && <Chip label={t('common:points.amount', { amount: s.clam_value })} size="small" color="primary" />}
                 </Box>
               )}
               control={s.routine ? (
@@ -1210,7 +1210,7 @@ export default function ChoreSchedulesTab({ setSaveMessage, section, onSection, 
                   <MenuItem key={c.id} value={c.id}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
                       <span>{c.title}</span>
-                      {c.clam_value > 0 && <Chip label={`${c.clam_value} 🥟`} size="small" sx={{ ml: 1 }} />}
+                      {c.clam_value > 0 && <Chip label={t('common:points.amount', { amount: c.clam_value })} size="small" sx={{ ml: 1 }} />}
                     </Box>
                   </MenuItem>
                 ))}

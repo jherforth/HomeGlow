@@ -21,6 +21,8 @@
 // own (sendFromPlugin). A device hears a plugin only after it ticks that
 // plugin, kept with its events as "plugin:<id>"; it starts with none.
 
+const { readPoints } = require('../utils/points');
+
 const NOTIFICATION_EVENTS = Object.freeze(['chore.completed', 'chore.allCompleted']);
 const PLUGIN_EVENT_PREFIX = 'plugin:';
 
@@ -63,9 +65,11 @@ const TEXT = {
     finished: (name, what) => `${name} finished ${what}`,
     routine: (routineName) => `the ${routineName} routine`,
     finishedMany: (name, count) => `${name} finished ${count} chores`,
-    clams: (count) => `+${count} ${count === 1 ? 'clam' : 'clams'}`,
+    // Points as the household's emoji (utils/points.js), which reads the same
+    // in any language and needs no plural.
+    points: (count, icon) => `+${count} ${icon}`,
     allDone: (name) => `${name} finished all of today's chores`,
-    bonus: (count) => `Bonus: +${count} ${count === 1 ? 'clam' : 'clams'}`,
+    bonus: (count, icon) => `Bonus: +${count} ${icon}`,
     testTitle: 'Notifications are working',
     testBody: (device) => `This is ${device}. Chore news will arrive here.`,
   },
@@ -73,9 +77,9 @@ const TEXT = {
     finished: (name, what) => `${name} terminó ${what}`,
     routine: (routineName) => `la rutina ${routineName}`,
     finishedMany: (name, count) => `${name} terminó ${count} tareas`,
-    clams: (count) => `+${count} ${count === 1 ? 'almeja' : 'almejas'}`,
+    points: (count, icon) => `+${count} ${icon}`,
     allDone: (name) => `${name} terminó todas las tareas de hoy`,
-    bonus: (count) => `Bono: +${count} ${count === 1 ? 'almeja' : 'almejas'}`,
+    bonus: (count, icon) => `Bono: +${count} ${icon}`,
     testTitle: 'Las notificaciones funcionan',
     testBody: (device) => `Este es ${device}. Aquí llegarán las noticias de tareas.`,
   },
@@ -423,6 +427,7 @@ function createNotifier({
       byLanguage.get(key).push(row);
     }
 
+    const { icon } = readPoints(db);
     return [...byLanguage].map(([language, languageRows]) => {
       const text = TEXT[language];
       let title;
@@ -435,14 +440,14 @@ function createNotifier({
           : text.finishedMany(name, count);
         if (count > 1) {
           body = merged.choreIds.map((id) => finishedThing(id, text)).filter(Boolean).join(' · ');
-          if (merged.clams > 0) body += ` (${text.clams(merged.clams)})`;
+          if (merged.clams > 0) body += ` (${text.points(merged.clams, icon)})`;
         } else {
-          body = merged.clams > 0 ? text.clams(merged.clams) : '';
+          body = merged.clams > 0 ? text.points(merged.clams, icon) : '';
         }
         tag = `homeglow-chores-${userId}-${payload.date}`;
       } else {
         title = text.allDone(name);
-        body = Number(payload.reward) > 0 ? text.bonus(Number(payload.reward)) : '';
+        body = Number(payload.reward) > 0 ? text.bonus(Number(payload.reward), icon) : '';
         tag = `homeglow-alldone-${userId}-${payload.date}`;
       }
       return { rows: languageRows, payload: { title, body, tag, url: '/' } };

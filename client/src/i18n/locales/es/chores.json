@@ -83,12 +83,12 @@
     "loading": "Cargando tareas...",
     "addChore": "Añadir tarea",
     "noChoresToday": "No hay tareas para hoy",
-    "allDone": "¡Todo hecho! +{{count}} 🥟",
+    "allDone": "¡Todo hecho! +{{count}} {{pointsIcon}}",
     "completeAria": "Marcar «{{title}}» como completada",
     "uncompleteAria": "Deshacer «{{title}}»",
     "dueOn": "Para el {{date}}",
     "overdue": "⚠️ Atrasada",
-    "redeemClamsFor": "Canjear almejas de {{name}}",
+    "redeemClamsFor": "Canjear {{points}} de {{name}}",
     "followupOf": "↪ después de {{title}}"
   },
   "days": {
@@ -101,7 +101,7 @@
     "saturday": "Sábado"
   },
   "bonus": {
-    "heading": "🥟 Tareas extra",
+    "heading": "{{pointsIcon}} Tareas extra",
     "show": "Mostrar tareas extra",
     "hide": "Ocultar tareas extra",
     "available": "Disponibles:",
@@ -115,7 +115,7 @@
     "alreadyFinished": "Ya terminó las tareas de hoy y ganó la recompensa diaria.",
     "revokeAndAssign": "Retirar la recompensa actual y asignar",
     "keepAndAssign": "Mantener la recompensa actual y asignar",
-    "bonusWhenCompleted": "🥟 Bonificación al completar",
+    "bonusWhenCompleted": "{{pointsIcon}} Bonificación al completar",
     "confirm": "Transferir"
   },
   "snooze": {
@@ -136,7 +136,7 @@
     "onTheShelf": "En la estantería",
     "requestedByLabel": "Pedido por",
     "splittingWithLabel": "— compartido con",
-    "eachShareSuffix": "({{share}} 🥟 cada uno)",
+    "eachShareSuffix": "({{share}} {{pointsIcon}} cada uno)",
     "approve": "Aprobar",
     "decline": "Rechazar",
     "cancelRequest": "Cancelar petición",
@@ -145,18 +145,18 @@
     "splittingBetween": "Compartido entre:",
     "requestSplit": "Pedir compartido",
     "pickTwoKids": "Elige al menos 2 niños",
-    "eachShare": "{{share}} 🥟 cada uno",
-    "eachShareDiscounted": "{{share}} 🥟 cada uno ({{discounted}} 🥟 de descuento)"
+    "eachShare": "{{share}} {{pointsIcon}} cada uno",
+    "eachShareDiscounted": "{{share}} {{pointsIcon}} cada uno ({{discounted}} {{pointsIcon}} de descuento)"
   },
   "quickSpend": {
-    "title": "🥟 Canjear almejas — {{name}}",
+    "title": "{{pointsIcon}} Canjear {{points}} — {{name}}",
     "balanceLabel": "Saldo:",
-    "clamCount": "{{count}} almejas",
-    "balanceHint": ". Registra las almejas gastadas fuera de la tienda (por ejemplo, un juguete comprado por ahí).",
+    "clamCount": "{{count}} {{pointsIcon}}",
+    "balanceHint": ". Registra lo gastado fuera de la tienda (por ejemplo, un juguete comprado por ahí).",
     "whatFor": "¿Para qué? (opcional)",
     "whatForPlaceholder": "Juguetería",
-    "confirm": "Canjear almejas",
-    "failed": "No se pudieron canjear las almejas."
+    "confirm": "Canjear {{points}}",
+    "failed": "No se pudo canjear."
   },
   "celebration": {
     "redeemedAPrize": "¡{{name}} canjeó un premio!"
@@ -172,10 +172,10 @@
   "schedules": {
     "definitionsHeading": "Tareas",
     "newChore": "Nueva tarea",
-    "definitionsHelp": "Las definiciones de tareas contienen el título, la descripción y el valor en almejas. Añade programaciones en la pestaña Programaciones para asignarlas a personas con un patrón de repetición.",
+    "definitionsHelp": "Las definiciones de tareas contienen el título, la descripción y el valor en {{points}}. Añade programaciones en la pestaña Programaciones para asignarlas a personas con un patrón de repetición.",
     "noChores": "Aún no hay tareas definidas.",
     "noDescription": "Sin descripción",
-    "clams": "Almejas",
+    "clams": "{{points}}",
     "schedulesColumn": "Programaciones",
     "editChore": "Editar tarea",
     "deleteChoreAndSchedules": "Eliminar la tarea y todas sus programaciones",
@@ -206,7 +206,7 @@
     "visible": "Visible",
     "duplicate": "Duplicar",
     "unknownUser": "Persona n.º {{id}}",
-    "clamValue": "Valor en almejas",
+    "clamValue": "Valor en {{points}}",
     "deleteChore": "Eliminar tarea",
     "unassignedBonusChore": "Sin asignar (tarea extra)",
     "oneTimeTask": "Tarea única (sin repetición)",
@@ -303,7 +303,7 @@
   },
   "routines": {
     "heading": "Rutinas",
-    "intro": "Una rutina es una lista de pasos que un niño va marcando en el widget de tareas, los días elegidos o los días con un evento del calendario que coincida. Cada rutina es una tarea, así que cuenta una sola vez en el día. Las almejas se pagan al alcanzar las rachas que elijas.",
+    "intro": "Una rutina es una lista de pasos que un niño va marcando en el widget de tareas, los días elegidos o los días con un evento del calendario que coincida. Cada rutina es una tarea, así que cuenta una sola vez en el día. Se pagan {{points}} al alcanzar las rachas que elijas.",
     "newRoutine": "Nueva rutina",
     "noRoutines": "Aún no hay rutinas. Elige Nueva rutina para crear una.",
     "loadFailed": "No se pudieron cargar las rutinas.",
@@ -364,9 +364,9 @@
     "every": "Cada",
     "everyAria": "Días seguidos",
     "daysInARow": "días seguidos, vale",
-    "clamsAria": "Almejas",
+    "clamsAria": "{{points}}",
     "rewardHelp": "Los pasos nunca pagan por sí solos. Pon 0 en cualquiera de los dos para no dar recompensa.",
-    "rewardChip": "Cada {{every}}: {{clams}} 🥟",
+    "rewardChip": "Cada {{every}}: {{clams}} {{pointsIcon}}",
     "create": "Crear rutina",
     "newTitle": "Nueva rutina",
     "editTitle": "Editar rutina",
@@ -374,7 +374,7 @@
     "copy": "Copiar para otra persona",
     "copyHelp": "Una copia de {{name}}. Elige para quién es: sus marcas y su racha empiezan de cero.",
     "deleteTitle": "Eliminar rutina",
-    "deleteWarning": "Eliminar una rutina elimina también su tarea. Las almejas ganadas y el historial se conservan.",
+    "deleteWarning": "Eliminar una rutina elimina también su tarea. Lo ya ganado y el historial se conservan.",
     "deletePrompt": "Eliminar",
     "stepsHeading": "Pasos",
     "stepsIntro": "Crea un paso una vez y úsalo en cualquier rutina.",
@@ -405,7 +405,7 @@
     "selectRoutine": "Seleccionar {{name}} de {{person}}",
     "bulkDeleteTitle_one": "Eliminar {{count}} rutina",
     "bulkDeleteTitle_other": "Eliminar {{count}} rutinas",
-    "bulkDeleteWarning": "Esto elimina las rutinas seleccionadas y sus tareas. Las almejas ganadas y el historial se conservan. No se puede deshacer.",
+    "bulkDeleteWarning": "Esto elimina las rutinas seleccionadas y sus tareas. Lo ya ganado y el historial se conservan. No se puede deshacer.",
     "bulkDeletePrompt_one": "¿Eliminar la rutina seleccionada?",
     "bulkDeletePrompt_other": "¿Eliminar las {{count}} rutinas seleccionadas?",
     "bulkDeleteSuccess_one": "Se eliminó {{count}} rutina.",
@@ -448,7 +448,7 @@
     "doneOfDue": "hecha {{done}} de {{due}} ({{rate}} %)",
     "doneTimes_one": "hecha {{count}} vez",
     "doneTimes_other": "hecha {{count}} veces",
-    "untrackedClams": "No se registran las faltas de las tareas con almejas, así que una estrella vacía solo significa que no se registró nada.",
+    "untrackedClams": "No se registran las faltas de las tareas que dan {{points}}, así que una estrella vacía solo significa que no se registró nada.",
     "untrackedOther": "No se registran las faltas de esta tarea, así que una estrella vacía solo significa que no se registró nada.",
     "recent": "Recientes",
     "none": "Aún no hay nada registrado.",
@@ -690,5 +690,10 @@
     "savedOne": "Guardado para {{name}}: {{timing}}. ¿Quién sigue?",
     "done_one": "Se guardó {{count}} horario para {{chore}}.",
     "done_other": "Se guardaron {{count}} horarios para {{chore}}."
+  },
+  "pointsModal": {
+    "title": "Fijar {{points}} de {{name}}",
+    "titleNoName": "Fijar {{points}}",
+    "hint": "Usa el teclado o toca para escribir el nuevo total"
   }
 }

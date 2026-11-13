@@ -39,10 +39,10 @@ HomeGlow is built with a focus on modern aesthetics, user experience, and practi
 -   **Menu Widget**: Add multiple menu items per day, allowing for detailed meal planning.
 -   **Chores Widget**:
     -   **User-Centric Task Management**: Assign and track chores for multiple users, with visual progress indicators.
-    -   **Clam Reward System**: Users earn "clams" (a customizable reward currency) upon completing all their daily chores.
+    -   **Points Reward System**: Users earn points upon completing all their daily chores. They are called Stars (⭐) by default; a household can give them its own name and emoji.
     -   **Swipe-to-Complete**: Mark chores as complete with a simple swipe gesture (on touch-enabled devices).
     -   **Sticky Chores (Until-Completed)**: Keep chores visible until they are completed, perfect for flexible schedules and ongoing tasks.
-    -   **Bonus Chore System**: Create special bonus chores with custom clam rewards.
+    -   **Bonus Chore System**: Create special bonus chores with custom point rewards.
 -   **Photo Widget**: Integrates with self-hosted Immich instances to display your personal photo library.
 -   **Weather Widget**: Provides current weather conditions and a 3-day forecast for a specified zip code, including interactive temperature and precipitation graphs.
 -   **Custom Widget System**: Upload and manage custom HTML widgets through the Admin Panel, with full theme integration and transparency support.
@@ -106,9 +106,9 @@ Click the gear icon (⚙️) to access settings:
 
 - **APIs**: Choose the weather source (Open-Meteo by default, no key needed)
 - **Widgets**: Enable/disable widgets, set refresh intervals
-- **Users**: Add family members, manage clam rewards
+- **Users**: Add family members, manage point rewards
 - **Chores**: Manage chores, schedules, and history
-- **Prizes**: Create rewards for the clam system
+- **Prizes**: Create rewards to spend points on
 - **Calendar**: Add ICS/CalDAV sources in the Calendar Widget settings
 - **Plugins**: Upload custom HTML widgets
 

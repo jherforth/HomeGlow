@@ -11,11 +11,13 @@ import {
   Paper,
 } from '@mui/material';
 import { Backspace } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 import useIsMobile from '../hooks/useIsMobile.js';
 
 const MAX_DIGITS = 6;
 
 const ClamValueModal = ({ open, onClose, onSave, user, isSaving = false }) => {
+  const { t } = useTranslation(['chores', 'common']);
   const isMobile = useIsMobile();
   const [value, setValue] = useState('');
 
@@ -104,7 +106,9 @@ const ClamValueModal = ({ open, onClose, onSave, user, isSaving = false }) => {
     >
       <DialogTitle>
         <Typography variant="h6" component="div" sx={{ fontWeight: 'bold', textAlign: 'center' }}>
-          {user?.username ? `Set clams for ${user.username}` : 'Set clams'}
+          {user?.username
+            ? t('chores:pointsModal.title', { name: user.username })
+            : t('chores:pointsModal.titleNoName')}
         </Typography>
       </DialogTitle>
 
@@ -120,7 +124,7 @@ const ClamValueModal = ({ open, onClose, onSave, user, isSaving = false }) => {
               fontSize: '0.85rem',
             }}
           >
-            Use keyboard or touch to enter a new clam total
+            {t('chores:pointsModal.hint')}
           </Typography>
 
           <Typography
@@ -133,7 +137,7 @@ const ClamValueModal = ({ open, onClose, onSave, user, isSaving = false }) => {
               color: 'var(--text)',
             }}
           >
-            {value === '' ? '0' : value} 🥟
+            {t('common:points.amount', { amount: value === '' ? '0' : value })}
           </Typography>
 
           <Paper
@@ -173,7 +177,7 @@ const ClamValueModal = ({ open, onClose, onSave, user, isSaving = false }) => {
                   },
                 }}
               >
-                Clear
+                {t('common:actions.clear')}
               </Button>
 
               <Button
@@ -187,6 +191,7 @@ const ClamValueModal = ({ open, onClose, onSave, user, isSaving = false }) => {
 
               <IconButton
                 onClick={handleBackspace}
+                aria-label={t('common:actions.backspace')}
                 disabled={isSaving}
                 sx={{
                   height: 60,
@@ -220,7 +225,7 @@ const ClamValueModal = ({ open, onClose, onSave, user, isSaving = false }) => {
             },
           }}
         >
-          Cancel
+          {t('common:actions.cancel')}
         </Button>
         <Button
           type="button"
@@ -232,7 +237,7 @@ const ClamValueModal = ({ open, onClose, onSave, user, isSaving = false }) => {
             background: 'linear-gradient(135deg, var(--accent) 0%, var(--secondary) 100%)',
           }}
         >
-          {isSaving ? 'Saving...' : 'Save'}
+          {isSaving ? t('common:state.saving') : t('common:actions.save')}
         </Button>
       </DialogActions>
     </Dialog>

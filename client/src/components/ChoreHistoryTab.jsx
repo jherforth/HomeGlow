@@ -186,7 +186,7 @@ export default function ChoreHistoryTab({ person = 'all', query = '' }) {
         </TableCell>
         <TableCell data-label={t('admin:chores.clams')}>
           {entry.clam_value ? (
-            <Chip label={`${entry.clam_value} 🥟`} size="small" color="primary" variant="filled" sx={{ fontWeight: 600 }} />
+            <Chip label={t('common:points.amount', { amount: entry.clam_value })} size="small" color="primary" variant="filled" sx={{ fontWeight: 600 }} />
           ) : (
             <Typography variant="body2" color="text.secondary">0</Typography>
           )}

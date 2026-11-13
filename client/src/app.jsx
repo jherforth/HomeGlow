@@ -75,6 +75,7 @@ import useCarryToTab, { dockTargetFrom } from './hooks/useCarryToTab.jsx';
 import useTakeovers from './hooks/useTakeovers.js';
 import TakeoverLayer from './components/TakeoverLayer.jsx';
 import i18n from 'i18next';
+import { applyHouseholdPoints, POINTS_NAME_SETTING, POINTS_ICON_SETTING } from './utils/points.js';
 import StackWidget from './components/StackWidget.jsx';
 import useStackStates from './hooks/useStackStates.js';
 import { WIDGET_STACKS_KEY, attentionWidget, isStackName, normalizeStacks, stackIdOf, stackInMode, stackName, stackWith } from './utils/widgetStacks.js';
@@ -304,6 +305,17 @@ const App = () => {
   // Credentials are no longer among them — GET /api/settings redacts secrets,
   // and weather is fetched server-side.
   const [householdSettings, setHouseholdSettings] = useState({});
+  // What chore points are called (issue #392) follows the household, so a
+  // rename in one display's Admin Panel reaches the others at their next poll.
+  const householdPointsName = householdSettings[POINTS_NAME_SETTING];
+  const householdPointsIcon = householdSettings[POINTS_ICON_SETTING];
+  useEffect(() => {
+    if (!householdSettingsLoaded) return;
+    applyHouseholdPoints(i18n, {
+      [POINTS_NAME_SETTING]: householdPointsName,
+      [POINTS_ICON_SETTING]: householdPointsIcon,
+    });
+  }, [householdSettingsLoaded, householdPointsName, householdPointsIcon]);
   // Vacation is a household setting every display follows (issue #230): the
   // vacation screensaver and, with muteSounds, silent chore chimes.
   const vacationModeSettings = useMemo(
