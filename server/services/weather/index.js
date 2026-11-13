@@ -173,8 +173,13 @@ async function getWeather(db, {
     const normalizedUnits = units === 'metric' ? 'metric' : 'imperial';
     const provider = demoMode ? 'demo' : getConfiguredProvider(db);
 
-    const key = cacheKey({ provider, lat, lon, locationQuery, units: normalizedUnits, lang });
-    if (!forceRefresh) {
+    // The demo's weather is always the same place, whatever a visitor asks
+    // for, so every request shares one cached reading per unit system, and a
+    // visitor's refresh can't force a new upstream call.
+    const key = provider === 'demo'
+        ? cacheKey({ provider, lat: demoProvider.DEMO_PLACE.lat, lon: demoProvider.DEMO_PLACE.lon, units: normalizedUnits, lang: '' })
+        : cacheKey({ provider, lat, lon, locationQuery, units: normalizedUnits, lang });
+    if (!forceRefresh || provider === 'demo') {
         const cached = readCache(key);
         if (cached) return cached;
     }
@@ -182,7 +187,7 @@ async function getWeather(db, {
     let payload;
 
     if (provider === 'demo') {
-        payload = demoProvider.fetchWeather({ units: normalizedUnits });
+        payload = await demoProvider.fetchLiveWeather({ units: normalizedUnits });
     } else if (provider === PROVIDERS.HOMEASSISTANT) {
         const { weatherEntity } = homeAssistant.getConfig(db);
         payload = await homeAssistantProvider.fetchWeather({

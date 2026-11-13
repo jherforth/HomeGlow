@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
+const http = require('node:http');
 const path = require('node:path');
 const { freePort } = require('./freePort');
 
@@ -69,8 +70,54 @@ async function api(pathname, options = {}) {
     return { status: response.status, body };
 }
 
+// Stand-in for Open-Meteo's forecast API, so the demo's live weather is
+// tested offline. Records each request; answers a forecast for the next two
+// days in UTC, with temperatures in whichever unit was asked for.
+let fakeForecast;
+const forecastRequests = [];
+function forecastFor(params) {
+    const metric = params.get('temperature_unit') === 'celsius';
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const isoHour = (h) => new Date(today.getTime() + h * 3600 * 1000).toISOString().slice(0, 16);
+    const hours = Array.from({ length: 48 }, (_, h) => isoHour(h));
+    const days = Array.from({ length: 7 }, (_, d) => isoHour(d * 24).slice(0, 10));
+    return {
+        utc_offset_seconds: 0,
+        current: {
+            temperature_2m: metric ? 10 : 50, relative_humidity_2m: 60, apparent_temperature: metric ? 8 : 46,
+            weather_code: 3, wind_speed_10m: metric ? 2 : 4.5, is_day: 1,
+        },
+        hourly: {
+            time: hours,
+            temperature_2m: hours.map(() => (metric ? 10 : 50)),
+            precipitation: hours.map(() => 0),
+            precipitation_probability: hours.map(() => 10),
+        },
+        daily: {
+            time: days,
+            weather_code: days.map(() => 3),
+            temperature_2m_max: days.map(() => (metric ? 12 : 54)),
+            temperature_2m_min: days.map(() => (metric ? 4 : 39)),
+            precipitation_sum: days.map(() => 0),
+            precipitation_probability_max: days.map(() => 10),
+            uv_index_max: days.map(() => 2),
+            sunrise: days.map((d) => `${d}T11:40`),
+            sunset: days.map((d) => `${d}T21:40`),
+        },
+    };
+}
+
 test.before(async () => {
     await usePort();
+    fakeForecast = http.createServer((req, res) => {
+        const url = new URL(req.url, 'http://127.0.0.1');
+        forecastRequests.push(url.searchParams);
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify(forecastFor(url.searchParams)));
+    });
+    await new Promise((resolve) => fakeForecast.listen(0, '127.0.0.1', resolve));
+
     serverProcess = spawn('node', ['index.js'], {
         cwd: serverDir,
         env: {
@@ -81,6 +128,8 @@ test.before(async () => {
             HOMEGLOW_DISABLE_BACKGROUND_JOBS: '1',
             // Demo mode syncs its curated calendar feeds; keep tests offline.
             HOMEGLOW_DISABLE_CALENDAR_SYNC: '1',
+            // ...and its live weather.
+            OPENMETEO_FORECAST_BASE: `http://127.0.0.1:${fakeForecast.address().port}/v1/forecast`,
             ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
         },
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -104,6 +153,7 @@ test.after(async () => {
             setTimeout(resolve, 5000);
         });
     }
+    if (fakeForecast) await new Promise((resolve) => fakeForecast.close(resolve));
 });
 
 test('demo status endpoint reports demo mode', async () => {
@@ -163,23 +213,48 @@ test('sample data is seeded (users, chores, prizes, calendar events)', async () 
     assert.ok(sourceNames.includes('Arizona Diamondbacks'));
 });
 
-test('demo weather snapshot is served through the normal weather route', async () => {
-    // Demo mode selects the demo provider behind GET /api/weather rather than
-    // exposing a separate endpoint, so this exercises the same path a real
-    // install uses.
-    const imperial = await api('/api/weather');
+test('demo weather is live from Open-Meteo, always for New York', async () => {
+    // Through the normal weather route, so this exercises the same path a
+    // real install uses.
+    const imperial = await api('/api/weather?location=Paris');
     assert.equal(imperial.status, 200);
-    assert.equal(imperial.body.provider, 'demo');
-    assert.equal(imperial.body.resolvedName, 'Chili');
-    assert.equal(typeof imperial.body.current.temp, 'number');
-    assert.equal(imperial.body.forecast.length, 3);
+    assert.equal(imperial.body.provider, 'openmeteo');
+    assert.equal(imperial.body.resolvedName, 'New York');
+    assert.equal(imperial.body.current.temp, 50);
     assert.equal(imperial.body.hourly.length, 8);
-    assert.ok(imperial.body.airQuality.aqi >= 1);
+    assert.equal(forecastRequests.length, 1);
+    assert.equal(forecastRequests[0].get('latitude'), '40.71427');
+    assert.equal(forecastRequests[0].get('longitude'), '-74.00597');
 
+    // Another place, other coordinates, another language, a forced refresh:
+    // all answered from the one cached New York reading.
+    for (const query of ['?location=Tokyo', '?lat=51.5&lon=-0.12', '?lang=es', '?refresh=1']) {
+        const again = await api(`/api/weather${query}`);
+        assert.equal(again.status, 200);
+        assert.equal(again.body.resolvedName, 'New York', query);
+    }
+    assert.equal(forecastRequests.length, 1, 'no further upstream calls');
+
+    // Metric is its own reading, fetched in metric units.
     const metric = await api('/api/weather?units=metric');
     assert.equal(metric.status, 200);
-    assert.ok(metric.body.current.temp < imperial.body.current.temp,
-        'metric temperature should be the Celsius conversion of the imperial snapshot');
+    assert.equal(metric.body.current.temp, 10);
+    assert.equal(forecastRequests.length, 2);
+    assert.equal(forecastRequests[1].get('wind_speed_unit'), 'ms');
+
+    // Weather scenes read the same cached reading.
+    const condition = await api('/api/weather/condition');
+    assert.equal(condition.status, 200);
+    assert.equal(condition.body.condition, 'cloudy');
+    assert.equal(forecastRequests.length, 2);
+});
+
+test('demo location lookups all resolve to New York, without a geocoder', async () => {
+    for (const q of ['Paris', '90210', '']) {
+        const res = await api(`/api/weather/geocode?q=${encodeURIComponent(q)}`);
+        assert.equal(res.status, 200, q);
+        assert.deepEqual(res.body, { lat: 40.71427, lon: -74.00597, resolvedName: 'New York' });
+    }
 });
 
 test('abuse-prone routes are blocked with 403', async () => {
