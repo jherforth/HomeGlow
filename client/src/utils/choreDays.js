@@ -14,7 +14,6 @@ import { CronExpressionParser } from 'cron-parser';
 //   today     due today and not done yet
 //   vacation  inside the household's vacation dates, nothing logged
 //   off       not due, or before the schedule existed
-export const DAY_STATES = ['done', 'missed', 'open', 'today', 'vacation', 'off'];
 
 const pad = (n) => String(n).padStart(2, '0');
 

@@ -18,7 +18,7 @@ code, so you know where to look when working on a given domain.
 - **Copy a device**: `POST /api/devices/:deviceName/copy-from/:sourceDeviceName`
   duplicates tabs + settings — handy for provisioning a new display like an existing one.
 
-**Code:** `WidgetContainer.jsx`, `DraggableWidget.jsx`, `TabBar.jsx`,
+**Code:** `WidgetContainer.jsx`, `TabBar.jsx`,
 `TabIconModal.jsx`, and the `widgets` memo in `app.jsx`.
 
 ## Theming (light / dark / auto)

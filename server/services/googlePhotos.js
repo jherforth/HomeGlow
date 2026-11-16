@@ -41,43 +41,6 @@ async function listAlbums(db, accountId) {
     return merged;
 }
 
-async function searchAlbumMedia(db, accountId, albumId, { limit = 200 } = {}) {
-    const out = [];
-    let pageToken;
-    while (out.length < limit) {
-        const body = { albumId, pageSize: 100 };
-        if (pageToken) body.pageToken = pageToken;
-        const data = await googleFetch(db, accountId, 'POST', '/mediaItems:search', body);
-        const items = Array.isArray(data.mediaItems) ? data.mediaItems : [];
-        out.push(...items);
-        pageToken = data.nextPageToken;
-        if (!pageToken) break;
-    }
-    return out.slice(0, limit);
-}
-
-async function listRecentMedia(db, accountId, { limit = 200 } = {}) {
-    const out = [];
-    let pageToken;
-    while (out.length < limit) {
-        const params = new URLSearchParams({ pageSize: '100' });
-        if (pageToken) params.set('pageToken', pageToken);
-        const data = await googleFetch(db, accountId, 'GET', `/mediaItems?${params.toString()}`);
-        const items = Array.isArray(data.mediaItems) ? data.mediaItems : [];
-        out.push(...items);
-        pageToken = data.nextPageToken;
-        if (!pageToken) break;
-    }
-    return out.slice(0, limit);
-}
-
-async function getMediaItem(db, accountId, mediaItemId) {
-    return await googleFetch(db, accountId, 'GET', `/mediaItems/${encodeURIComponent(mediaItemId)}`);
-}
-
 module.exports = {
     listAlbums,
-    searchAlbumMedia,
-    listRecentMedia,
-    getMediaItem,
 };

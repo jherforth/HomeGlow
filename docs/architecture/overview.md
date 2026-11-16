@@ -54,7 +54,7 @@ the system, and the technology choices.
   path-based rendering — `/photos` renders the upload page, everything else
   renders the dashboard `App`. There is no React Router.
 - Reusable components (`DeleteConfirmationDialog`, `LoadingBackdrop`,
-  `RefreshIntervalSelect`, `ScreensaverIntervalSlider`, `AdminFormSection`,
+  `ScreensaverIntervalSlider`, `AdminFormSection`,
   `VersionInfoCard`) are factored out of `AdminPanel.jsx` and shared across
   widgets. See [Frontend Reference](../reference/frontend.md).
 

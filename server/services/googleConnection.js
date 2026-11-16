@@ -80,10 +80,6 @@ function saveOAuthConfig(db, { clientId, clientSecret, redirectUriOverride }) {
     }
 }
 
-function clearOAuthSecret(db) {
-    setSetting(db, CLIENT_SECRET_KEY, '');
-}
-
 function deriveRedirectUri(db, request) {
     const override = getSetting(db, REDIRECT_URI_OVERRIDE_KEY);
     if (override && override.trim()) return override.trim();
@@ -317,7 +313,6 @@ module.exports = {
     googleRequest,
     getOAuthStatus,
     saveOAuthConfig,
-    clearOAuthSecret,
     deriveRedirectUri,
     createAuthState,
     consumeAuthState,

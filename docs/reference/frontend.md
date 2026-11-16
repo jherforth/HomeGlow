@@ -16,9 +16,6 @@ custom properties.
   variables (`--background`, `--card-bg`, `--accent`, gradients, etc.) that
   implement light/dark theming and are also shared with custom widgets.
 
-> `pages/Dashboard.jsx` is an **older/standalone** dashboard implementation not
-> used by the main app flow (`app.jsx` supersedes it). Treat it as legacy.
-
 ## Top-level state & data flow (`app.jsx`)
 
 `App` owns the dashboard's configuration and fetches it on mount:
@@ -52,7 +49,6 @@ custom properties.
 | Component | Role |
 | --- | --- |
 | `WidgetContainer.jsx` | The responsive 12-column grid (`react-grid-layout`); drag/resize, layout persistence to the backend, lock/unlock. |
-| `DraggableWidget.jsx` | Individual widget frame with edge +/- resize controls and touch/mouse support. |
 | `TabBar.jsx` | Floating bottom dock: tab switching, add/delete tab, theme toggle, Move/Resize (only while the layout is locked), settings, refresh. |
 | `StackWidget.jsx` | A Stack (`utils/widgetStacks.js`): several widgets in one grid spot, a sideways swipe (also inside plugin frames) turning between them, dots that fade, back to the first after a while, and "Bring to front when…" from Home Assistant. |
 | `WidgetLongPressMenu.jsx` / `WidgetRemoveUndo.jsx` | The long-press menu in Move/Resize (move/duplicate to a tab, settings, remove with Undo; Stack settings and Unstack on a Stack). |
@@ -89,9 +85,7 @@ custom properties.
 | `AdminFormSection.jsx` | Thin wrapper for admin form sections: title, subtitle, bordered container, children. |
 | `VersionInfoCard.jsx` | Version info card showing label, version chip, commit link, repo link, and Git tags (used in Admin → System → About). |
 | `LoadingBackdrop.jsx` | Shared glass-morphism loading backdrop with 3 bouncing points emoji (the household's, ⭐ by default) (used in AdminPanel + ChoreWidget). |
-| `RefreshIntervalSelect.jsx` | Reusable refresh interval dropdown (FormControl + Select + Timer icon). |
 | `ScreensaverIntervalSlider.jsx` | Reusable interval slider with label, value display, and marks (used for Photo and Tab cycle modes). |
-| `ExampleWidgetUsage.jsx` | Reference/demo component for widget authors. |
 
 ### Pages (`client/src/pages/`)
 | Page | Role |

@@ -48,10 +48,10 @@
 
 ### 2a. Dead server functions (each has exactly 2 references: its definition + its `module.exports` entry — never called anywhere)
 
-- [ ] `clearOAuthSecret` — [googleConnection.js:61](../../server/services/googleConnection.js) (+ export line 262). Never called.
-- [ ] `searchAlbumMedia` — [googlePhotos.js:73](../../server/services/googlePhotos.js) (+ export line 109). Never called.
-- [ ] `listRecentMedia` — [googlePhotos.js:88](../../server/services/googlePhotos.js) (+ export line 110). Never called.
-- [ ] `getMediaItem` — [googlePhotos.js:103](../../server/services/googlePhotos.js) (+ export line 111). Never called.
+- [x] `clearOAuthSecret` — [googleConnection.js:61](../../server/services/googleConnection.js) (+ export line 262). Never called. ✅ removed in #393
+- [x] `searchAlbumMedia` — [googlePhotos.js:73](../../server/services/googlePhotos.js) (+ export line 109). Never called. ✅ removed in #393
+- [x] `listRecentMedia` — [googlePhotos.js:88](../../server/services/googlePhotos.js) (+ export line 110). Never called. ✅ removed in #393
+- [x] `getMediaItem` — [googlePhotos.js:103](../../server/services/googlePhotos.js) (+ export line 111). Never called. ✅ removed in #393
 
 > **Context / bigger opportunity:** `searchAlbumMedia`, `listRecentMedia`, and `getMediaItem`
 > are the legacy **Google Photos Library API** helpers. The app moved to the **Picker API**
@@ -61,9 +61,9 @@
 
 ### 2b. Dead client files (cluster — remove together)
 
-- [ ] `client/src/components/ExampleWidgetUsage.jsx` — **zero** references anywhere. Demo/example scaffolding.
-- [ ] `client/src/components/DraggableWidget.jsx` — only referenced *from* `ExampleWidgetUsage.jsx`. The live app renders widgets via [WidgetContainer.jsx](../../client/src/components/WidgetContainer.jsx), not `DraggableWidget`. Dead once ExampleWidgetUsage is removed.
-- [ ] `client/src/pages/Dashboard.jsx` — orphaned. [main.jsx](../../client/src/main.jsx) renders `App` (`app.jsx`) directly (and lazy-loads `PhotosUpload`); nothing imports `pages/Dashboard.jsx`.
+- [x] `client/src/components/ExampleWidgetUsage.jsx` — **zero** references anywhere. Demo/example scaffolding. ✅ removed in #393
+- [x] `client/src/components/DraggableWidget.jsx` — only referenced *from* `ExampleWidgetUsage.jsx`. The live app renders widgets via [WidgetContainer.jsx](../../client/src/components/WidgetContainer.jsx), not `DraggableWidget`. Dead once ExampleWidgetUsage is removed. ✅ removed in #393
+- [x] `client/src/pages/Dashboard.jsx` — orphaned. [main.jsx](../../client/src/main.jsx) renders `App` (`app.jsx`) directly (and lazy-loads `PhotosUpload`); nothing imports `pages/Dashboard.jsx`. ✅ removed in #393
 
 > ⚠️ `DraggableWidget` is a whole widget-drag system — confirm it isn't an
 > intentionally-parked alternative before deleting. Evidence says dead, but it's the one

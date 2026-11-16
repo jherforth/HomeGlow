@@ -1,5 +1,35 @@
 {
   "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "entry": [
+    "client/public/sw.js",
+    "server/plugin-sdk/v1.js"
+  ],
+  "dynamicallyLoaded": [
+    "server/migrations/*.js"
+  ],
+  "supportEntry": [
+    "server/tests/**/*.test.js",
+    "server/scripts/*.js"
+  ],
+  "ignoreExportsUsedInFile": true,
+  "ignoreExports": [
+    {
+      "file": "client/src/utils/dateUtils.js",
+      "exports": ["toDateKey", "toDateTimeInputValue", "toMonthKey"]
+    },
+    {
+      "file": "server/services/weather/*.js",
+      "exports": ["fetchWeather", "resolveCoordinates"]
+    },
+    {
+      "file": "server/services/displayModesHa.js",
+      "exports": ["entityRefs", "isEntityId", "listEntities"]
+    },
+    {
+      "file": "server/services/widgetStacksHa.js",
+      "exports": ["entityRefs"]
+    }
+  ],
   "duplicates": {
     "ignore": [
       "server/migrations/**"
