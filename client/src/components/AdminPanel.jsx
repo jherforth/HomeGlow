@@ -90,7 +90,6 @@ import TimezoneSettings from './TimezoneSettings';
 import VersionInfoCard from './VersionInfoCard';
 import { groupPluginsByCategory, pluginStoreStatus, storeEntryOf } from '../utils/pluginCatalog.js';
 import LoadingBackdrop from './LoadingBackdrop';
-import RefreshIntervalSelect from './RefreshIntervalSelect';
 import ScreensaverIntervalSlider from './ScreensaverIntervalSlider';
 import GoogleAccountConnection from './GoogleAccountConnection';
 import ClamValueModal from './ClamValueModal';

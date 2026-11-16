@@ -36,8 +36,7 @@ the embedded [ChoreSchedulesTab.jsx](../../client/src/components/ChoreSchedulesT
 `<Dialog>` in `app.jsx`.
 
 **Explicitly out of scope (do not touch):** the dashboard/widget grid
-([WidgetContainer.jsx](../../client/src/components/WidgetContainer.jsx),
-[DraggableWidget.jsx](../../client/src/components/DraggableWidget.jsx)), the widgets
+([WidgetContainer.jsx](../../client/src/components/WidgetContainer.jsx)), the widgets
 themselves (Calendar/Weather/Chore/Photo), the [TabBar](../../client/src/components/TabBar.jsx)
 dock, the screensaver, and the overall app layout. These are meant for the large display and
 should keep behaving as they do today.

@@ -18,18 +18,7 @@ const HELPER_AUTOMATIC = 'Automatic';
 const HELPER_NORMAL = 'Normal';
 
 const isObject = (value) => value && typeof value === 'object' && !Array.isArray(value);
-const { isEntityId, trimState, listEntities } = require('./haEntities');
-
-/** A Home Assistant-style slug: lower case, runs of anything else one _. */
-function slugify(text) {
-  return String(text || '')
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .slice(0, 48) || 'homeglow_display';
-}
+const { isEntityId, listEntities } = require('./haEntities');
 
 /** The helper's options for these modes: Automatic, Normal, then each name. */
 function helperOptions(displayModes) {
@@ -118,13 +107,11 @@ function listModeEntities(states, kind) {
 module.exports = {
   HELPER_AUTOMATIC,
   HELPER_NORMAL,
-  slugify,
   helperOptions,
   haSettings,
   keepHelperLink,
   sensorIdFor,
   entityRefs,
-  trimState,
   listEntities: listModeEntities,
   isEntityId,
 };

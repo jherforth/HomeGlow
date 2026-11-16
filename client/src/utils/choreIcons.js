@@ -133,12 +133,6 @@ export const CHORE_ICONS = CHORE_ICON_GROUPS.flatMap((group) =>
  */
 export const findChoreIcon = (emoji) => CHORE_ICONS.find((icon) => icon.emoji === emoji);
 
-/** Translation key for an emoji's label, falling back to a generic one. */
-export const choreIconLabelKey = (emoji) => {
-  const entry = findChoreIcon(emoji);
-  return entry ? `chores:icons.${entry.key}` : null;
-};
-
 // A chore icon of the household's own (PR #270): one emoji out of whatever
 // was typed or pasted. The server keeps up to 16 UTF-16 units (an emoji can be
 // several code points: skin tones, ZWJ families, flags), so a longer one is

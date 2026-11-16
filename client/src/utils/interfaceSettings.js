@@ -8,8 +8,11 @@ import {
   normalizeExpandOff,
 } from './widgetExpand.js';
 
-// Single source of truth for the "interface" settings that live in localStorage:
-// interface colors, screensaver settings, and auto-dark-mode settings. Also
+// Single source of truth for the "interface" settings: the defaults and
+// normalizers for interface colors, screensaver settings, and auto-dark-mode
+// settings. Only the screensaver settings are still read from localStorage
+// here; colors and auto dark mode are part of the appearance the server stores
+// (utils/appearance.js, which also holds their old localStorage key names). Also
 // the reader for the household vacation setting, which every display follows.
 //
 // These readers/normalizers were previously copy-pasted in both app.jsx (which
@@ -18,9 +21,7 @@ import {
 // this module removes that risk. Widget settings and theme readers intentionally
 // stay in their respective files (they differ between the two).
 
-export const INTERFACE_COLORS_STORAGE_KEY = 'interfaceColors';
 export const SCREENSAVER_SETTINGS_STORAGE_KEY = 'screensaverSettings';
-export const AUTO_DARK_MODE_SETTINGS_STORAGE_KEY = 'autoDarkModeSettings';
 // Where vacation mode lived per display before it became a household setting
 // (issue #230). No longer read; cleared on the next vacation save.
 export const VACATION_MODE_STORAGE_KEY = 'vacationModeSettings';
@@ -178,16 +179,6 @@ export const normalizeAutoDarkModeSettings = (raw) => {
   };
 };
 
-export const readLocalInterfaceColors = () => {
-  try {
-    const raw = localStorage.getItem(INTERFACE_COLORS_STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_INTERFACE_COLORS };
-    return normalizeInterfaceColors(JSON.parse(raw));
-  } catch {
-    return { ...DEFAULT_INTERFACE_COLORS };
-  }
-};
-
 export const readLocalScreensaverSettings = () => {
   try {
     const raw = localStorage.getItem(SCREENSAVER_SETTINGS_STORAGE_KEY);
@@ -195,16 +186,6 @@ export const readLocalScreensaverSettings = () => {
     return normalizeScreensaverSettings(JSON.parse(raw));
   } catch {
     return { ...DEFAULT_SCREENSAVER_SETTINGS };
-  }
-};
-
-export const readLocalAutoDarkModeSettings = () => {
-  try {
-    const raw = localStorage.getItem(AUTO_DARK_MODE_SETTINGS_STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_AUTO_DARK_MODE_SETTINGS };
-    return normalizeAutoDarkModeSettings(JSON.parse(raw));
-  } catch {
-    return { ...DEFAULT_AUTO_DARK_MODE_SETTINGS };
   }
 };
 
