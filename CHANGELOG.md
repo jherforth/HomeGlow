@@ -1,3 +1,165 @@
+# HomeGlow v 2.0 Changelog
+
+## 🎉 Recent Updates
+
+HomeGlow 2.0: 63 changes from four contributors, and a new shape for the parts you use every day.
+
+- **The Admin Panel** is rebuilt, and chores, routines and schedules share one page.
+- **Stacks, display Modes and takeovers** let one wall display do more without moving a widget.
+- **Chores** get a schedule board for each person with a week calendar, a schedule wizard, and "once a week, any day".
+- **Points are Stars ⭐** by default, and a household can give them any name and emoji.
+- **Every display stays in step:** a change on one shows on the others within seconds.
+- **Weather works out of the box** with Open-Meteo, with no API key.
+- **Security:** plugins are walled off from HomeGlow and from each other, and the admin PIN is hardened.
+
+---
+
+## New Features
+
+### The Admin Panel, rebuilt (#342, #343, #344, #360, #361, #365)
+- **One size, a sidebar of sections.** On a phone it's a list you tap into, with a back button. — **@mrramam**
+- **Family → Chores** is one page with five tabs: Chores, Routines, Schedules, History and Settings (#365 — **@mrramam**).
+  - Routines and their steps live here now (#360, #361).
+  - A search, and chips to choose whose rows show.
+  - Old links and bookmarks land on the right tab.
+- **Installed plugins** fold into a list, one open at a time (#376 — **@adamecker**).
+- **Prizes:** search the list, and pause a prize to take it out of the store for a while (#366 — **@mrramam**).
+- **The proxy whitelist** is a list of chips at the top of **System → Connections** (#332).
+- **Mirror mode:** from **Displays → Devices**, open another display's dashboard on your own device and change its layout and settings from there (#375, #381 — **@adamecker**).
+
+### Stacks, display Modes and takeovers (#378, #384) — **@jasonstantler**
+- **Stacks:** several widgets in one spot, flicked between, like a phone's Smart Stack.
+  - Make one by holding a widget over another in **Move/Resize**, or under **Dashboard → Widgets → Stacks**.
+  - A Stack can bring a widget to the front while something in Home Assistant is on: the grill card while the grill is lit.
+- **Move widgets between tabs:** drag one onto a dock tab or to the screen's edge. A long press offers Move to tab, Duplicate to tab, Widget settings, and Remove with Undo.
+- **Display Modes** (**Displays → Modes**): Morning, Dinner, Night…
+  - Each turns on by a schedule or from Home Assistant, such as a phone's next alarm.
+  - A mode can start on a tab, dim the screen, and change what each Stack shows.
+  - Home Assistant can see and set the mode, through a helper HomeGlow creates.
+- **Takeovers:** a widget can take over half or all of the screen while a Home Assistant rule is on, then hand the wall back. Plugins can raise their own.
+
+### Chores
+- **Schedules by person, with a week calendar** (#353, #355 — **@jasonstantler**, **@mrramam**).
+  - Each person's week, Sunday to Saturday, marked ✓ done, ✗ missed and ⏳ waiting.
+  - Their chores are grouped by schedule. Drag a chore to move it.
+- **A schedule wizard** beside the picker, asking "How often?" one step at a time (#364, #367).
+- **Once a week, any day** (#362, #364, #369): due by Saturday, done whichever day suits, and back by itself the next week. It holds up the daily bonus only on its last day. "Any day" also works for longer spans.
+- **Schedule a chore as you create it,** for one person or several (#370). The widget's **Add chore** opens the same dialog as Admin (#382 — **@adamecker**).
+- **Points are Stars ⭐, and yours to name** (#394). **Family → Chores → Settings → Rewards** sets the name and the emoji. A name you choose shows as written in every language.
+- **Give a chore back to the bonus pool** from the widget's Transfer dialog (#372 — **@adamecker**).
+- **Instant taps:** a ticked chore flips at once, with no spinner (#324 — **@adamecker**).
+- **Chore cards** give the description the whole card, and a column cut off at the edge fades out (#341 — **@mrramam**).
+
+### Routines
+- **"Add a step"** searches your steps and chores, and makes a new step on the spot (#357 — **@mrramam**, #358).
+- **The end time is on the card** ("by 7:20"), and a late finish breaks the streak (#359 — **@mrramam**).
+- **Copy a routine** for someone else (#359 — **@mrramam**).
+- **The card's button** finishes the whole routine while steps remain, and folds the steps away once it's done (#374 — **@mrramam**, #380 — **@adamecker**).
+
+### Every display in step (#339, #377)
+- A change on one display (a chore ticked, a prize approved, vacation turned on) shows on the others within 15 seconds, or within a second where the live event stream reaches the browser.
+- Plugins hear about their own storage changes without polling (#377 — **@adamecker**).
+
+### Wall displays
+- **Display dimming** darker than the panel's own backlight, for the night hours you choose, for the household or one display (#334 — **@adamecker**, #352 — **@mrramam**).
+- **Pixel shift:** the dashboard drifts a few pixels every few minutes, against image persistence (#337 — **@adamecker**).
+- **Save layout:** one button ends Move/Resize, instead of Lock Layout in the dock (#336).
+- **The dock hides while a dialog is open** (#383 — **@adamecker**).
+- **One header for every widget,** with quieter refresh rings and buttons (#348 — **@mrramam**).
+- **More room for events and chores:** a one-line day header in the calendar's week view, and less chrome around chores (#349 — **@mrramam**).
+
+### Photos and the screensaver
+- **Coffee Table:** prints drop onto a table one at a time, as if tossed there (#340).
+- **Photo details on Collage** (#340), and **uploaded photos show when and where they were taken**, with the place looked up offline (#354 — **@mrramam**).
+- **Press and hold a photo** to look closer (#373 — **@mrramam**).
+
+### Weather
+- **Open-Meteo** is a provider that needs no API key (#389 — **@adamecker**), and the default for new installs (#390).
+- The forecast carries the chance of rain and the UV index (#385, #389 — **@adamecker**).
+- The demo shows live weather for New York City (#391).
+
+### Home Assistant panels (#345, #346, #371) — **@jasonstantler**
+- Tiles fill the card, with exact sizes down to 1×1, a **Bold** look, and fan speeds (#346).
+- Tiles sit in one row when they fit, up to 12 across (#371).
+- The builder's preview no longer crowds out the tile editors (#345).
+
+### Plugins and themes
+- **A new plugin is switched on and placed on the tab you're viewing** (#388).
+- **Themes:** particles can swing and blur, in theme manifest version 10 (#338 — **@adamecker**). The theme guide covers heading capitals (#351 — **@mrramam**).
+
+---
+
+## Fixes
+
+- **Calendar:** an all-day event shows on the household's date on every display, whatever the display's time zone (#327).
+- **Chores:**
+  - A recurring bonus chore someone took goes back to the bonus pool overnight (#386 — **@adamecker**).
+  - The nightly reset leaves a person's own any-day chore with them (#369).
+  - A new chore's points value can be cleared while typing (#331 — **@adamecker**).
+  - The schedule count on a chore jumps to its schedules (#330 — **@adamecker**).
+- **Plugins:** a plugin page's own scripts load, and it may ask for the location (#323).
+- **Admin:** a renamed tab keeps its label, and other follow-ups to the redesign (#343 — **@mrramam**, #344).
+- **Dimming** keeps the scrollbar's space, so the dock doesn't shift (#352 — **@mrramam**).
+
+## Security
+
+Thanks to **@mrramam** for the reports behind most of these.
+
+- **Plugins are walled off** from HomeGlow and from each other (#320, #326).
+  - Each plugin runs in a sealed frame with a token of its own.
+  - A plugin reaches only its own storage, settings and notifications, the reads the plugin guide lists, and the proxy.
+  - `/widgets/` serves only installed plugins.
+  - Published plugins need no change.
+- **The admin PIN** (#329, #350, #366):
+  - it's stored salted, and five wrong guesses start a wait;
+  - restores and rollbacks check it on the server;
+  - changing or removing it takes the current one;
+  - **Security → Forget PIN on this device** makes one display ask again (**@mrramam**).
+- **Writes from other websites are refused** (#329).
+- **Only the admin PIN chooses a display's Home Assistant mode helper** (#384).
+- **The README says plainly** that HomeGlow is for a trusted home network, not the open internet (#329).
+
+## Maintenance
+
+- A `:latest-test` image is built from `main` each night, when it changed and its tests passed (#379).
+- Dead code removed after a code audit (#395).
+
+## In the plugin and theme repositories
+
+- **New plugins:** Family Lists and Meal Choice (**@adamecker**), Weather Scenes and Grill (**@jasonstantler**).
+- **Updated plugins:**
+  - Weather Glance gets the chance of rain, day summaries, weather alerts and the UV index; Sports Scores can use ESPN with no key (**@adamecker**).
+  - Polls, Countdown and Rolling Weekly Menu get the shared widget header (**@mrramam**).
+  - NewsTicker 1.0.1 works with the walled-off plugins.
+- **New themes:** Morning Paper, Night Owl, Fern, Playroom Pop, Harbor Fog, Glacier, Harvest, Storm and Halloween (**@adamecker**). Reef and Starship get preview pictures (**@mrramam**).
+
+---
+
+## 📝 Notes
+
+**Back up before upgrading.** Migrations run on start. **System → Connections → Download backup** saves everything to one file.
+
+**Upgrading** is still a pull of the new images:
+```bash
+docker compose pull && docker compose up -d
+```
+
+- **Points become Stars ⭐.** To keep clams, open **Family → Chores → Settings → Rewards**, type *Clams* and pick 🥟. The API and plugin events still say `clam`.
+- **Plugins:**
+  - Published plugins keep working, with their saved data.
+  - Update **NewsTicker** to 1.0.1 from the plugin store.
+  - A plugin you wrote yourself may need a change: a call to a core route the plugin guide doesn't list now gets `403`, and its `localStorage` from before the upgrade isn't carried over.
+- **Writes from another website are refused.** Scripts, curl and Home Assistant are unaffected. A dashboard served from another host goes in `CORS_ORIGINS`.
+- **Admin PIN:** your PIN keeps working. Changing or removing it now asks for the current one.
+- **Routines with an end time:** a day finished late no longer counts toward the streak, so a current run that includes one gets shorter.
+- **Weather:** an install with an OpenWeatherMap key keeps using it. One without a key gets Open-Meteo.
+- **Routines in Admin** moved to **Family → Chores → Routines**. Old links land there.
+- **The Harvest theme** needs 2.0 for its falling leaves.
+
+For questions or issues, please visit our [GitHub Issues](https://github.com/jherforth/HomeGlow/issues) page.
+
+---
+
 # HomeGlow v 1.10 Changelog
 
 ## 🎉 Recent Updates
