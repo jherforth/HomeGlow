@@ -27,14 +27,16 @@ const reducedMotion = () => typeof window !== 'undefined'
  * needing attention (`attention`), else `home`. With `rotateSeconds` it
  * turns to the next widget that often instead, while nobody touches it.
  *
- * - items: [{ name, label, content }] in order
+ * - items: [{ name, label, content, expandable }] in order
  * - home: the member it shows first (the mode can choose), else the first
  * - returnSeconds: 0 never goes back on its own
  * - rotateSeconds: 0 never turns on its own
  * - attention: the member name to show now, or null
- * - isActive, expandSize, widgetSize: from the grid, passed to the widget up
+ * - isActive, expandSize, widgetSize, expandMode: from the grid, passed to
+ *   the widget up (expandMode lets a plugin report double-taps, so a Stack
+ *   showing a plugin expands like one showing a built-in widget)
  */
-const StackWidget = ({ items, home = null, returnSeconds = 60, rotateSeconds = 0, attention = null, isActive = true, expandSize, widgetSize, refreshNonce }) => {
+const StackWidget = ({ items, home = null, returnSeconds = 60, rotateSeconds = 0, attention = null, isActive = true, expandSize, widgetSize, expandMode = false, refreshNonce }) => {
   const { t } = useTranslation('common');
   const [index, setIndex] = useState(() => Math.max(0, home ? items.findIndex((item) => item.name === home) : 0));
   const [dotsShown, setDotsShown] = useState(false);
@@ -190,6 +192,7 @@ const StackWidget = ({ items, home = null, returnSeconds = 60, rotateSeconds = 0
               isActive: isActive && i === safeIndex,
               expandSize,
               widgetSize,
+              expandMode: item.expandable === false ? false : expandMode,
               refreshNonce,
               inStack: true,
             })}

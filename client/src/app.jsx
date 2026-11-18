@@ -2352,11 +2352,17 @@ const App = () => {
       const stack = stackInMode(saved, shownMode?.id || null);
       const items = stack.widgets
         .filter((member) => enabledWidgetNames.includes(member) && !takeoverShowing?.has(member))
-        .map((member) => ({
-          name: member,
-          label: stackMemberLabel(member),
-          content: makeWidgetList(tabNumber, (n) => n === member, () => null)[0]?.content || null,
-        }))
+        .map((member) => {
+          const entry = makeWidgetList(tabNumber, (n) => n === member, () => null)[0];
+          return {
+            name: member,
+            label: stackMemberLabel(member),
+            content: entry?.content || null,
+            // A plugin whose manifest says it never expands stays that way
+            // in a Stack too.
+            expandable: entry?.expandable !== false,
+          };
+        })
         .filter((item) => item.content);
       if (items.length === 0) return;
       result.push({
