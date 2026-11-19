@@ -239,3 +239,21 @@ test('a venue name that misses retries with the street address', async () => {
     assert.equal(geocodeHits, 5);
     assert.equal(osrmHits, 3);
 });
+
+// A virtual visit or a room number is not a place: it must never reach
+// the geocoder, which would match it to somewhere far away.
+test('a virtual location has no drive time and is never geocoded', async () => {
+    const result = await api('/api/calendar/drive-time?location=' + encodeURIComponent('Telehealth'));
+    assert.equal(result.status, 200);
+    assert.equal(result.body.minutes, null);
+    assert.equal(geocodeHits, 5);
+    assert.equal(osrmHits, 3);
+});
+
+test('a room number has no drive time and is never geocoded', async () => {
+    const result = await api('/api/calendar/drive-time?location=' + encodeURIComponent('Room 1135 MES'));
+    assert.equal(result.status, 200);
+    assert.equal(result.body.minutes, null);
+    assert.equal(geocodeHits, 5);
+    assert.equal(osrmHits, 3);
+});

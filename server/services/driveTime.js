@@ -131,6 +131,25 @@ function geocodeCandidates(query) {
     return [...new Set(candidates)].slice(0, 3);
 }
 
+// Location strings that name a virtual visit, a call, or a room inside a
+// building rather than a place. Geocoded anyway, they resolve to some
+// unrelated spot far away and the widget would show a confident nonsense
+// drive ("Telehealth · 25 hr 4 min"). Only applied to strings with no
+// comma — a location carrying an address can still fall back to it.
+const NON_PLACE_PATTERNS = [
+    /telehealth/i,
+    /\bvirtual\b/i,
+    /\bzoom\b/i,
+    /\bonline\b/i,
+    /video\s*call/i,
+    /phone\s*call/i,
+    /^room\s+\d+/i,
+];
+
+function isNonPlace(location) {
+    return NON_PLACE_PATTERNS.some((re) => re.test(location));
+}
+
 async function geocodeLocation(query) {
     for (const candidate of geocodeCandidates(query)) {
         const found = await geocodeOne(candidate);
@@ -204,6 +223,10 @@ async function routeDurationMinutes(from, to) {
 async function getDriveTime(db, location, { demoMode = false } = {}) {
     const query = String(location || '').trim();
     if (!query) return null;
+
+    // A bare "Telehealth" or "Room 1135 MES" is not a place: skip it before
+    // the geocoder can match it to somewhere far away.
+    if (!query.includes(',') && isNonPlace(query)) return null;
 
     const key = cacheKey(query);
     const cached = readCache(key);
