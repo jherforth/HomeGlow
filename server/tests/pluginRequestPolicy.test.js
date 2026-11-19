@@ -38,7 +38,7 @@ test('a plugin reaches only its own platform API', () => {
 });
 
 test('core data is read-only, and the rest of the API is closed', () => {
-  for (const url of ['/api/users', '/api/settings', '/api/timezone', '/api/calendar-events?from=1', '/api/devices/Kitchen/tabs', '/api/weather', '/api/weather/condition', '/api/proxy?targetUrl=x', '/api/sun', '/api/chore-history']) {
+  for (const url of ['/api/users', '/api/settings', '/api/timezone', '/api/calendar-events?from=1', '/api/calendar-drive-time?location=x', '/api/devices/Kitchen/tabs', '/api/weather', '/api/weather/condition', '/api/proxy?targetUrl=x', '/api/sun', '/api/chore-history']) {
     assert.equal(routeDecision('GET', url, 'plugin:grill-card').allow, true, url);
   }
   assert.equal(routeDecision('POST', '/api/settings', 'plugin:grill-card').allow, false);
