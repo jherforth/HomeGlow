@@ -41,7 +41,7 @@ const READ_ROUTES = [
   /^\/api\/calendar$/,
   /^\/api\/calendar-events$/,
   /^\/api\/calendar-sources$/,
-  /^\/api\/calendar-drive-time$/,
+  /^\/api\/calendar\/drive-time$/,
   /^\/api\/chore-history$/,
   /^\/api\/chore-history\/(?:user|summary)\/[^/]+$/,
   /^\/api\/chore-history\/recent$/,
