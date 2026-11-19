@@ -2,8 +2,12 @@
 // widget's travel chip ("8 min" next to the event's location).
 //
 // Two keyless upstreams, no API key held:
-//   - Geocoding: Open-Meteo's geocoder (services/weather/openmeteo.js
-//     resolveCoordinates) resolves the location string to coordinates.
+//   - Geocoding: Nominatim (OpenStreetMap) resolves the location string to
+//     coordinates. It handles street addresses and venue names, which a
+//     place-name geocoder does not — calendar locations are almost always
+//     "Venue, street address, city", not a bare city name. Nominatim asks for
+//     at most one request per second; the 24h result cache below makes that
+//     a non-issue for a household's handful of locations.
 //   - Routing: the OSRM demo server (router.project-osrm.org) returns a
 //     free-flow driving duration. That is a typical drive, not a right-now
 //     estimate: OSRM's demo routing has no live traffic.
@@ -20,13 +24,14 @@
 // unresolvable location does not cost an upstream call on every poll. The
 // cache is in-memory only; nothing is logged or persisted beyond the key.
 
-const openMeteo = require('./weather/openmeteo');
 const homeAssistant = require('./homeAssistant');
 const { DEMO_PLACE } = require('./weather/demo');
 
 // Overridable for tests: the route test points the router at a local fake
 // instead of the live demo server, so the suite runs offline and in CI.
 const OSRM_BASE = process.env.OSRM_BASE || 'https://router.project-osrm.org/route/v1/driving';
+// Same pattern for the geocoder.
+const NOMINATIM_BASE = process.env.NOMINATIM_BASE || 'https://nominatim.openstreetmap.org/search';
 
 const REQUEST_TIMEOUT_MS = 10000;
 
@@ -104,6 +109,36 @@ async function getHomeCoordinates(db) {
     return null;
 }
 
+// Coordinates for a free-text location string, or null when it does not
+// resolve. Nominatim answers an array of matches; the first is the best.
+// Nominatim's usage policy asks for a identifying User-Agent, which is sent
+// on every request.
+async function geocodeLocation(query) {
+    const url = `${NOMINATIM_BASE}?format=jsonv2&limit=1&q=${encodeURIComponent(query)}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+        const res = await fetch(url, {
+            signal: controller.signal,
+            headers: {
+                Accept: 'application/json',
+                'User-Agent': 'HomeGlow drive-time (https://github.com/jherforth/HomeGlow)',
+            },
+        });
+        if (!res.ok) return null;
+        const results = await res.json();
+        const first = Array.isArray(results) ? results[0] : null;
+        const lat = first ? Number(first.lat) : NaN;
+        const lon = first ? Number(first.lon) : NaN;
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+        return { lat, lon };
+    } catch (_) {
+        return null;
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 async function osrmFetch(url) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -158,7 +193,7 @@ async function getDriveTime(db, location, { demoMode = false } = {}) {
 
     let destination;
     try {
-        destination = await openMeteo.resolveCoordinates(query);
+        destination = await geocodeLocation(query);
     } catch (_) {
         writeCache(key, null);
         return null;

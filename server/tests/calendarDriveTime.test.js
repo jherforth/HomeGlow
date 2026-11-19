@@ -6,8 +6,8 @@
 // resolve, or OSRM has no route. The widget shows nothing in the null case,
 // so a null is a normal answer, not an error.
 //
-// The Open-Meteo geocoder base is pointed at a local fake via
-// OPENMETEO_GEO_BASE (see openmeteo.js) and the OSRM router via OSRM_BASE
+// The Nominatim geocoder base is pointed at a local fake via
+// NOMINATIM_BASE (see driveTime.js) and the OSRM router via OSRM_BASE
 // (see driveTime.js), so the suite runs offline and in CI — no live API
 // involved. The server is spawned like homeAssistant.test.js does it.
 const test = require('node:test');
@@ -87,30 +87,31 @@ test.before(async () => {
     await usePort();
     fs.mkdirSync(tmpDir, { recursive: true });
 
-    // Stand-in Open-Meteo geocoder. Answers the same shape as the live
-    // /v1/search endpoint: one best result, or none for an unknown place.
+    // Stand-in Nominatim geocoder. Answers the same shape as the live
+    // /search endpoint: an array with one best result, or none for an
+    // unknown place. Lat/lon arrive as strings, as they do live.
     fakeGeocoder = http.createServer((req, res) => {
         geocodeHits += 1;
         res.setHeader('Content-Type', 'application/json');
         const url = new URL(req.url, 'http://127.0.0.1');
-        if (url.pathname !== '/v1/search') {
+        if (url.pathname !== '/search') {
             res.statusCode = 404;
-            return res.end(JSON.stringify({ error: true, reason: 'not found' }));
+            return res.end(JSON.stringify({ error: 'not found' }));
         }
-        if (url.searchParams.get('name') === '3333 Chili Avenue, Rochester, NY') {
-            return res.end(JSON.stringify({
-                results: [{ latitude: 43.1005, longitude: -77.7029, name: 'Chili' }],
-            }));
+        if (url.searchParams.get('q') === '3333 Chili Avenue, Rochester, NY') {
+            return res.end(JSON.stringify([
+                { lat: '43.1005', lon: '-77.7029', display_name: 'Chili, NY' },
+            ]));
         }
-        if (url.searchParams.get('name') === 'NoRoute Town') {
-            return res.end(JSON.stringify({
-                results: [{ latitude: 10, longitude: 10, name: 'NoRoute Town' }],
-            }));
+        if (url.searchParams.get('q') === 'NoRoute Town') {
+            return res.end(JSON.stringify([
+                { lat: '10', lon: '10', display_name: 'NoRoute Town' },
+            ]));
         }
-        return res.end(JSON.stringify({ results: [] }));
+        return res.end(JSON.stringify([]));
     });
     await new Promise((resolve) => fakeGeocoder.listen(0, '127.0.0.1', resolve));
-    fakeGeocoderUrl = `http://127.0.0.1:${fakeGeocoder.address().port}/v1/search`;
+    fakeGeocoderUrl = `http://127.0.0.1:${fakeGeocoder.address().port}/search`;
 
     // Stand-in OSRM demo server. Answers the same shape as the live
     // /route/v1/driving endpoint: an 8-minute route, or NoRoute for the
@@ -145,7 +146,7 @@ test.before(async () => {
             HOMEGLOW_DISABLE_BACKGROUND_JOBS: '1',
             HOMEGLOW_DISABLE_CALENDAR_SYNC: '1',
             ENCRYPTION_KEY: Buffer.alloc(32, 3).toString('base64'),
-            OPENMETEO_GEO_BASE: fakeGeocoderUrl,
+            NOMINATIM_BASE: fakeGeocoderUrl,
             OSRM_BASE: fakeOsrmUrl,
         },
         stdio: ['ignore', 'pipe', 'pipe'],
