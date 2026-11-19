@@ -111,9 +111,35 @@ async function getHomeCoordinates(db) {
 
 // Coordinates for a free-text location string, or null when it does not
 // resolve. Nominatim answers an array of matches; the first is the best.
-// Nominatim's usage policy asks for a identifying User-Agent, which is sent
+// Nominatim's usage policy asks for an identifying User-Agent, which is sent
 // on every request.
+//
+// A calendar location is usually "Venue, street address, city, state" —
+// and Nominatim often matches the venue name to nothing while the street
+// address alone resolves fine, so a miss retries with the leading segment
+// dropped (venue, then street), down to the city. A candidate is only tried
+// if it still holds at least a street and a city, so a bare "WI" is never
+// asked for. At most three lookups for one location, and the result cache
+// means each unique location pays that at most once a day.
+function geocodeCandidates(query) {
+    const parts = query.split(',').map((s) => s.trim()).filter(Boolean);
+    const candidates = [query];
+    for (let i = 1; i < parts.length; i++) {
+        const rest = parts.slice(i).join(', ');
+        if (rest && rest.includes(',') && rest !== query) candidates.push(rest);
+    }
+    return [...new Set(candidates)].slice(0, 3);
+}
+
 async function geocodeLocation(query) {
+    for (const candidate of geocodeCandidates(query)) {
+        const found = await geocodeOne(candidate);
+        if (found) return found;
+    }
+    return null;
+}
+
+async function geocodeOne(query) {
     const url = `${NOMINATIM_BASE}?format=jsonv2&limit=1&q=${encodeURIComponent(query)}`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);

@@ -228,3 +228,14 @@ test('no route means no drive time', async () => {
     assert.equal(result.body.minutes, null);
     assert.equal(osrmHits, 2);
 });
+
+// The venue name itself matches nothing, but the street address it carries
+// does — the geocoder retries with the leading segment dropped.
+test('a venue name that misses retries with the street address', async () => {
+    const result = await api('/api/calendar/drive-time?location=' + encodeURIComponent('Fancy Venue, 3333 Chili Avenue, Rochester, NY'));
+    assert.equal(result.status, 200);
+    assert.equal(result.body.minutes, 8);
+    // Two geocode lookups: the full string, then the street address.
+    assert.equal(geocodeHits, 5);
+    assert.equal(osrmHits, 3);
+});
