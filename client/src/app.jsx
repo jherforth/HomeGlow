@@ -1668,7 +1668,17 @@ const App = () => {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, [requestMirrorEntry]);
 
-  const handlePageRefresh = () => {
+  const handlePageRefresh = async () => {
+    // A plain reload only re-reads the locally cached calendar events, which
+    // the server refreshes from Google on its per-source sync interval — so
+    // events changed since the last sync never appear no matter how often the
+    // page is reloaded. Sync from Google first, then reload. The reload still
+    // happens if the sync fails or takes too long: the button must never hang.
+    try {
+      await axios.post(`${API_BASE_URL}/api/calendar-sync/all`, {}, { timeout: 15000 });
+    } catch (error) {
+      console.error('Error syncing calendar sources before refresh:', error);
+    }
     window.location.reload();
   };
 
