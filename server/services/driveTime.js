@@ -119,16 +119,41 @@ async function getHomeCoordinates(db) {
 // address alone resolves fine, so a miss retries with the leading segment
 // dropped (venue, then street), down to the city. A candidate is only tried
 // if it still holds at least a street and a city, so a bare "WI" is never
-// asked for. At most three lookups for one location, and the result cache
+// asked for. At most four lookups for one location, and the result cache
 // means each unique location pays that at most once a day.
+// Calendar locations often carry trailing notes — "Venue, address -
+// Court 1 (enter on 63rd & 20th)" — which no geocoder matches. Strip
+// parenthetical notes and a trailing " - note" suffix before retrying.
+// A " - " in the middle of the string (as in "Gymnastics Academy -
+// Ballard, 1415 NW 52nd St") is a venue name, not a suffix, and survives.
+function cleanQuery(query) {
+    return query
+        .replace(/\([^)]*\)/g, ' ')
+        .replace(/\s+-\s+[^-]*$/, '')
+        .replace(/\s{2,}/g, ' ')
+        .replace(/\s+,/g, ',')
+        .trim()
+        .replace(/,+$/, '');
+}
+
 function geocodeCandidates(query) {
-    const parts = query.split(',').map((s) => s.trim()).filter(Boolean);
-    const candidates = [query];
-    for (let i = 1; i < parts.length; i++) {
-        const rest = parts.slice(i).join(', ');
-        if (rest && rest.includes(',') && rest !== query) candidates.push(rest);
-    }
-    return [...new Set(candidates)].slice(0, 3);
+    const cleaned = cleanQuery(query);
+    const bases = [...new Set([query, cleaned])];
+    const trims = (base) => {
+        const parts = base.split(',').map((s) => s.trim()).filter(Boolean);
+        const out = [];
+        for (let i = 1; i < parts.length; i++) {
+            const rest = parts.slice(i).join(', ');
+            if (rest && rest.includes(',') && rest !== base) out.push(rest);
+        }
+        return out;
+    };
+    // The cleaned string's trims come before the original's: the original's
+    // trims still carry the trailing note ("... - Court 1 (enter ...)"),
+    // which is what failed in the first place.
+    const candidates = [...bases];
+    for (const base of [...bases].reverse()) candidates.push(...trims(base));
+    return [...new Set(candidates)].slice(0, 4);
 }
 
 // Location strings that name a virtual visit, a call, or a room inside a

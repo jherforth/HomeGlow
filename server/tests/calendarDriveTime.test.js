@@ -257,3 +257,15 @@ test('a room number has no drive time and is never geocoded', async () => {
     assert.equal(geocodeHits, 5);
     assert.equal(osrmHits, 3);
 });
+
+// A trailing " - Court 1 (enter on 63rd)" note breaks the whole string,
+// but the address underneath it still resolves once the note is stripped.
+test('a trailing court note is stripped before geocoding', async () => {
+    const result = await api('/api/calendar/drive-time?location=' + encodeURIComponent('Fancy Venue, 3333 Chili Avenue, Rochester, NY - Court 1 (enter on 63rd)'));
+    assert.equal(result.status, 200);
+    assert.equal(result.body.minutes, 8);
+    // Three geocode lookups: the full string, the note-stripped string,
+    // then the street address.
+    assert.equal(geocodeHits, 8);
+    assert.equal(osrmHits, 4);
+});
